@@ -5,7 +5,6 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using Azure.Storage;
 using Azure.Storage.Blobs;
-using Common;
 using k8s;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.Batch.Models;
@@ -96,6 +95,9 @@ namespace CromwellOnAzureDeployer
         public const string SettingsDelimiter = "=:=";
         public const string StorageAccountKeySecretName = "CoAStorageKey";
         public const string SshNsgRuleName = "SSH";
+        private const string CosmosDbDatabaseId = "TES";
+        private const string CosmosDbContainerId = "Tasks";
+
 
         private readonly CancellationTokenSource cts = new();
 
@@ -628,7 +630,6 @@ namespace CromwellOnAzureDeployer
                         }
 
                         await WaitForDockerComposeAsync(sshConnectionInfo);
-                        await WaitForCromwellAsync(sshConnectionInfo);
                     }
                 }
                 finally
@@ -658,14 +659,14 @@ namespace CromwellOnAzureDeployer
                     }
                     else
                     {
-                        var isTestWorkflowSuccessful = await RunTestWorkflow(storageAccount, usePreemptibleVm: batchAccount.LowPriorityCoreQuota > 0);
+                        //var isTestWorkflowSuccessful = await RunTestWorkflow(storageAccount, usePreemptibleVm: batchAccount.LowPriorityCoreQuota > 0);
 
-                        if (!isTestWorkflowSuccessful)
-                        {
-                            await DeleteResourceGroupIfUserConsentsAsync();
-                        }
+                        //if (isTestWorkflowSuccessful)
+                        //{
+                        //    await DeleteResourceGroupIfUserConsentsAsync();
+                        //}
 
-                        exitCode = isTestWorkflowSuccessful ? 0 : 1;
+                        exitCode = 1; // isTestWorkflowSuccessful ? 0 : 1;
                     }
                 }
                 else
@@ -1119,24 +1120,6 @@ namespace CromwellOnAzureDeployer
                         var (numberOfRunningContainers, _, _) = await ExecuteCommandOnVirtualMachineWithRetriesAsync(sshConnectionInfo, "sudo docker ps -a | grep -c 'Up ' || :");
 
                         if (numberOfRunningContainers == totalNumberOfRunningDockerContainers)
-                        {
-                            break;
-                        }
-
-                        await Task.Delay(5000, cts.Token);
-                    }
-                });
-
-        private Task WaitForCromwellAsync(ConnectionInfo sshConnectionInfo)
-            => Execute(
-                "Waiting for Cromwell to perform one-time database preparation...",
-                async () =>
-                {
-                    while (!cts.IsCancellationRequested)
-                    {
-                        var (isCromwellAvailable, _, _) = await ExecuteCommandOnVirtualMachineWithRetriesAsync(sshConnectionInfo, $"[ $(sudo docker logs cromwellazure_triggerservice_1 | grep -c '{AvailabilityTracker.GetAvailabilityMessage(Constants.CromwellSystemName)}') -gt 0 ] && echo 1 || echo 0");
-
-                        if (isCromwellAvailable == "1")
                         {
                             break;
                         }
@@ -2410,8 +2393,8 @@ namespace CromwellOnAzureDeployer
 
         private async Task SetCosmosDbContainerAutoScaleAsync(ICosmosDBAccount cosmosDb)
         {
-            var tesDb = await cosmosDb.GetSqlDatabaseAsync(Constants.CosmosDbDatabaseId);
-            var taskContainer = await tesDb.GetSqlContainerAsync(Constants.CosmosDbContainerId);
+            var tesDb = await cosmosDb.GetSqlDatabaseAsync(CosmosDbDatabaseId);
+            var taskContainer = await tesDb.GetSqlContainerAsync(CosmosDbContainerId);
             var requestThroughput = await taskContainer.GetThroughputSettingsAsync();
 
             if (requestThroughput is not null && requestThroughput.Throughput is not null && requestThroughput.AutopilotSettings?.MaxThroughput is null)
@@ -2422,7 +2405,7 @@ namespace CromwellOnAzureDeployer
                 // If the container has request throughput setting configured, and it is currently manual, set it to auto
                 await Execute(
                     $"Switching the throughput setting for CosmosDb container 'Tasks' in database 'TES' from Manual to Autoscale...",
-                    () => cosmosClient.SwitchContainerRequestThroughputToAutoAsync(Constants.CosmosDbDatabaseId, Constants.CosmosDbContainerId));
+                    () => cosmosClient.SwitchContainerRequestThroughputToAutoAsync(CosmosDbDatabaseId, CosmosDbContainerId));
             }
         }
 
@@ -2864,66 +2847,9 @@ namespace CromwellOnAzureDeployer
             }
         }
 
-        private async Task<bool> RunTestWorkflow(IStorageAccount storageAccount, bool usePreemptibleVm = true)
-        {
-            var startTime = DateTime.UtcNow;
-            var line = ConsoleEx.WriteLine("Running a test workflow...");
-            var isTestWorkflowSuccessful = await TestWorkflowAsync(storageAccount, usePreemptibleVm);
-            WriteExecutionTime(line, startTime);
-
-            if (isTestWorkflowSuccessful)
-            {
-                ConsoleEx.WriteLine();
-                ConsoleEx.WriteLine($"Test workflow succeeded.", ConsoleColor.Green);
-                ConsoleEx.WriteLine();
-                ConsoleEx.WriteLine("Learn more about how to use Cromwell on Azure: https://github.com/microsoft/CromwellOnAzure");
-                ConsoleEx.WriteLine();
-            }
-            else
-            {
-                ConsoleEx.WriteLine();
-                ConsoleEx.WriteLine($"Test workflow failed.", ConsoleColor.Red);
-                ConsoleEx.WriteLine();
-                WriteGeneralRetryMessageToConsole();
-                ConsoleEx.WriteLine();
-            }
-
-            return isTestWorkflowSuccessful;
-        }
-
         private static void WriteGeneralRetryMessageToConsole()
             => ConsoleEx.WriteLine("Please try deployment again, and create an issue if this continues to fail: https://github.com/microsoft/CromwellOnAzure/issues");
 
-        private async Task<bool> TestWorkflowAsync(IStorageAccount storageAccount, bool usePreemptibleVm = true)
-        {
-            const string testDirectoryName = "test";
-            const string wdlFileName = "test.wdl";
-            const string workflowInputsFileName = "testInputs.json";
-            const string inputFileName = "inputFile.txt";
-            const string inputFileContent = "Hello from inputFile.txt!";
-
-            var id = Guid.NewGuid();
-            var wdlFileContent = Utility.GetFileContent(wdlFileName);
-            var workflowInputsFileContent = Utility.GetFileContent(workflowInputsFileName).Replace("{InputFilePath}", $"/{storageAccount.Name}/{InputsContainerName}/{testDirectoryName}/{inputFileName}");
-
-            if (!usePreemptibleVm)
-            {
-                wdlFileContent = wdlFileContent.Replace("preemptible: true", "preemptible: false", StringComparison.OrdinalIgnoreCase);
-            }
-
-            var workflowTrigger = new Workflow
-            {
-                WorkflowUrl = $"/{storageAccount.Name}/{InputsContainerName}/{testDirectoryName}/{wdlFileName}",
-                WorkflowInputsUrl = $"/{storageAccount.Name}/{InputsContainerName}/{testDirectoryName}/{workflowInputsFileName}"
-            };
-
-            await UploadTextToStorageAccountAsync(storageAccount, InputsContainerName, $"{testDirectoryName}/{wdlFileName}", wdlFileContent);
-            await UploadTextToStorageAccountAsync(storageAccount, InputsContainerName, $"{testDirectoryName}/{workflowInputsFileName}", workflowInputsFileContent);
-            await UploadTextToStorageAccountAsync(storageAccount, InputsContainerName, $"{testDirectoryName}/{inputFileName}", inputFileContent);
-            await UploadTextToStorageAccountAsync(storageAccount, WorkflowsContainerName, $"new/{id}.json", JsonConvert.SerializeObject(workflowTrigger, Formatting.Indented));
-
-            return await IsWorkflowSuccessfulAfterLongPollingAsync(storageAccount, WorkflowsContainerName, id);
-        }
 
         private static async Task<bool> IsWorkflowSuccessfulAfterLongPollingAsync(IStorageAccount storageAccount, string containerName, Guid id)
         {

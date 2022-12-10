@@ -3,9 +3,7 @@
 
 using System;
 using System.IO;
-using System.Linq;
 using System.Reflection;
-using Common;
 using LazyCache;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -28,6 +26,9 @@ namespace TesApi.Web
     public class Startup
     {
         private const string DefaultAzureOfferDurableId = "MS-AZR-0003p";
+        private const string CosmosDbDatabaseId = "TES";
+        private const string CosmosDbContainerId = "Tasks";
+        private const string CosmosDbPartitionId = "01";
 
         private readonly ILogger logger;
         private readonly ILoggerFactory loggerFactory;
@@ -73,7 +74,7 @@ namespace TesApi.Web
             configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync().Wait();
 
             (var cosmosDbEndpoint, var cosmosDbKey) = azureProxy.GetCosmosDbEndpointAndKeyAsync(Configuration["CosmosDbAccountName"]).Result;
-            var cosmosDbRepository = new CosmosDbRepository<TesTask>(cosmosDbEndpoint, cosmosDbKey, Constants.CosmosDbDatabaseId, Constants.CosmosDbContainerId, Constants.CosmosDbPartitionId);
+            var cosmosDbRepository = new CosmosDbRepository<TesTask>(cosmosDbEndpoint, cosmosDbKey, CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId);
 
             return (cache, azureProxy, cachingAzureProxy, storageAccessProvider, cosmosDbRepository);
         }

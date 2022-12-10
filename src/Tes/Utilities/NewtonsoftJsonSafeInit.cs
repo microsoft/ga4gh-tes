@@ -1,4 +1,4 @@
-﻿namespace Common
+﻿namespace Tes.Utilities
 {
     public static class NewtonsoftJsonSafeInit
     {

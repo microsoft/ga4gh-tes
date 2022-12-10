@@ -49,10 +49,6 @@
     <PackageReference Include="SSH.NET" Version="2020.0.2" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.24.0" />
   </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Common\Common.csproj" />
-  </ItemGroup>
   
   <ItemGroup>
     <EmbeddedResource Include="scripts\containers-to-mount" />

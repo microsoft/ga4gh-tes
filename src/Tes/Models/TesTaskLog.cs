@@ -17,6 +17,7 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
 using Newtonsoft.Json;
+using Tes.Utilities;
 
 namespace Tes.Models
 {
@@ -28,7 +29,7 @@ namespace Tes.Models
     {
         public TesTaskLog()
         {
-            Common.NewtonsoftJsonSafeInit.SetDefaultSettings();
+            NewtonsoftJsonSafeInit.SetDefaultSettings();
         }
         /// <summary>
         /// Logs for each executor

@@ -10,6 +10,7 @@ namespace Tes.Repository
     using System.Threading.Tasks;
     using Microsoft.Azure.Cosmos;
     using Microsoft.Azure.Cosmos.Linq;
+    using Tes.Utilities;
 
     /// <summary>
     /// A repository for interacting with an Azure Cosmos DB instance
@@ -33,7 +34,7 @@ namespace Tes.Repository
         /// <param name="partitionKeyValue">Partition key value. Only the items matching this value will be visible.</param>
         public CosmosDbRepository(string endpoint, string key, string databaseId, string containerId, string partitionKeyValue)
         {
-            Common.NewtonsoftJsonSafeInit.SetDefaultSettings();
+            NewtonsoftJsonSafeInit.SetDefaultSettings();
             this.cosmosClient = new CosmosClient(endpoint, key);
             this.container = cosmosClient.GetContainer(databaseId, containerId);
             this.partitionKeyValue = partitionKeyValue;
