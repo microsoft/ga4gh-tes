@@ -1,6 +1,6 @@
 # GA4GH TES
 
-This project is the Microsoft Genomcis supported Azure implementation of the [GA4GH Task Execution Service (TES)](https://github.com/ga4gh/task-execution-schemas).  The Task Execution Service (TES) API is an effort to define a standardized schema and API for describing batch execution tasks. A task defines a set of input files, a set of (Docker) containers and commands to run, a set of output files, and some other logging and metadata.
+This project is the Microsoft Genomcis supported Azure implementation of the [GA4GH Task Execution Service (TES)](https://github.com/ga4gh/task-execution-schemas).  The TES API is an effort to define a standardized schema and API for describing batch execution tasks. A task defines a set of input files, a set of (Docker) containers and commands to run, a set of output files, and some other logging and metadata.
 
 ## Contributing
 
