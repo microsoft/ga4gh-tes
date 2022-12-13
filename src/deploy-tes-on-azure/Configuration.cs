@@ -55,7 +55,7 @@ namespace CromwellOnAzureDeployer
         public string LogAnalyticsArmId { get; set; }
         public string ApplicationInsightsAccountName { get; set; }
         public string VmName { get; set; }
-        public bool UseAks { get; set; }
+        public bool UseAks { get; set; } = true;
         public string AksClusterName { get; set; }
         public string AksCoANamespace { get; set; } = "coa";
         public bool ManualHelmDeployment { get; set; }
