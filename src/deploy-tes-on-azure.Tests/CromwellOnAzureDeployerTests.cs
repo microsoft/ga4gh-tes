@@ -7,10 +7,10 @@ using Microsoft.Rest.Azure;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json;
 
-namespace CromwellOnAzureDeployer.Tests
+namespace TesDeployer.Tests
 {
     [TestClass]
-    public class CromwellOnAzureDeployerTests
+    public class TesOnAzureDeployerTests
     {
         [TestMethod]
         public void SerializeAndDeserializeConfiguration()

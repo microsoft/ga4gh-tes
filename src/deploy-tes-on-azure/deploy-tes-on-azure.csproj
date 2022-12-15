@@ -53,10 +53,6 @@
   <ItemGroup>
     <EmbeddedResource Include="scripts\containers-to-mount" />
     <EmbeddedResource Include="scripts\allowed-vm-sizes" />
-    <EmbeddedResource Include="scripts\cromwell-application.conf" />
-    <EmbeddedResource Include="scripts\cromwellazure.service" />
-    <EmbeddedResource Include="scripts\docker-compose.yml" />
-    <EmbeddedResource Include="scripts\docker-compose.mysql.yml" />
     <EmbeddedResource Include="scripts\env-00-coa-version.txt" />
     <EmbeddedResource Include="scripts\env-01-account-names.txt" />
     <EmbeddedResource Include="scripts\env-02-internal-images.txt" />
@@ -64,13 +60,9 @@
     <EmbeddedResource Include="scripts\env-04-settings.txt" />
     <EmbeddedResource Include="scripts\env-12-local-my-sql-db.txt" />
     <EmbeddedResource Include="scripts\env-13-postgre-sql-db.txt" />
-    <EmbeddedResource Include="scripts\install-cromwellazure.sh" />
     <EmbeddedResource Include="scripts\mount-data-disk.sh" />
     <EmbeddedResource Include="scripts\mount.blobfuse" />
     <EmbeddedResource Include="scripts\mount_containers.sh" />
-    <EmbeddedResource Include="scripts\mysql\init-user.sql" />
-    <EmbeddedResource Include="scripts\mysql\unlock-change-log.sql" />
-    <EmbeddedResource Include="scripts\startup.sh" />
     <EmbeddedResource Include="scripts\wait-for-it.sh" />
     <EmbeddedResource Include="test.wdl" />
     <EmbeddedResource Include="testInputs.json" />
@@ -80,12 +72,10 @@
     <EmbeddedResource Include="scripts\helm\Chart.yaml" />
     <EmbeddedResource Include="scripts\helm\values-template.yaml" />
     <EmbeddedResource Include="scripts\helm\README.md" />
-    <EmbeddedResource Include="scripts\helm\templates\cromwell-deployment.yaml" />
     <EmbeddedResource Include="scripts\helm\templates\identity.yaml" />
     <EmbeddedResource Include="scripts\helm\templates\persistence.yaml" />
     <EmbeddedResource Include="scripts\helm\templates\service.yaml" />
     <EmbeddedResource Include="scripts\helm\templates\tes-deployment.yaml" />
-    <EmbeddedResource Include="scripts\helm\templates\triggerservice-deployment.yaml" />
   </ItemGroup>
 
   <ItemGroup>

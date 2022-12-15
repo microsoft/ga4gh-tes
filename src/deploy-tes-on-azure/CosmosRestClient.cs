@@ -11,7 +11,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 
-namespace CromwellOnAzureDeployer
+namespace TesDeployer
 {
     public class CosmosRestClient
     {

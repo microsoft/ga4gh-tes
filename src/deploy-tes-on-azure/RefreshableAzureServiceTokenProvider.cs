@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Rest;
 
-namespace CromwellOnAzureDeployer
+namespace TesDeployer
 {
     /// <summary>
     /// ITokenProvider implementation based on AzureServiceTokenProvider from Microsoft.Azure.Services.AppAuthentication package.

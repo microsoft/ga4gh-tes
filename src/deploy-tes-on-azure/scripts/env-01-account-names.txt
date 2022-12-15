@@ -3,4 +3,3 @@ CosmosDbAccountName={CosmosDbAccountName}
 BatchAccountName={BatchAccountName}
 ApplicationInsightsAccountName={ApplicationInsightsAccountName}
 ManagedIdentityClientId={ManagedIdentityClientId}
-PostgreSqlServerName={PostgreSqlServerName}

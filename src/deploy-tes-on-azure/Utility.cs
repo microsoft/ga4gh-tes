@@ -9,7 +9,7 @@ using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-namespace CromwellOnAzureDeployer
+namespace TesDeployer
 {
     public static class Utility
     {
