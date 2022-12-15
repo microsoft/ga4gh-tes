@@ -7,16 +7,13 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
 
-namespace CromwellOnAzureDeployer
+namespace TesDeployer
 {
     public class Configuration : UserAccessibleConfiguration
     {
-        public string PostgreSqlCromwellDatabaseName { get; set; } = "cromwell_db";
         public string PostgreSqlTesDatabaseName { get; set; } = "tes_db";
         public string PostgreSqlAdministratorLogin { get; set; } = "coa_admin";
         public string PostgreSqlAdministratorPassword { get; set; }
-        public string PostgreSqlCromwellUserLogin { get; set; } = "cromwell";
-        public string PostgreSqlCromwellUserPassword { get; set; }
         public string PostgreSqlTesUserLogin { get; set; } = "tes";
         public string PostgreSqlTesUserPassword { get; set; }
         public string PostgreSqlSkuName { get; set; } = "Standard_B2s";
@@ -55,7 +52,7 @@ namespace CromwellOnAzureDeployer
         public string LogAnalyticsArmId { get; set; }
         public string ApplicationInsightsAccountName { get; set; }
         public string VmName { get; set; }
-        public bool UseAks { get; set; }
+        public bool UseAks { get; set; } = true;
         public string AksClusterName { get; set; }
         public string AksCoANamespace { get; set; } = "coa";
         public bool ManualHelmDeployment { get; set; }
@@ -64,10 +61,8 @@ namespace CromwellOnAzureDeployer
         public bool? CrossSubscriptionAKSDeployment { get; set; } = null;
         public bool Silent { get; set; }
         public bool DeleteResourceGroupOnFailure { get; set; }
-        public string CromwellVersion { get; set; }
         public string TesImageName { get; set; }
         public string TriggerServiceImageName { get; set; }
-        public string CustomCromwellImagePath { get; set; }
         public string CustomTesImagePath { get; set; }
         public string CustomTriggerServiceImagePath { get; set; }
         public bool SkipTestWorkflow { get; set; } = false;
@@ -85,7 +80,7 @@ namespace CromwellOnAzureDeployer
         public bool? DisableBatchNodesPublicIpAddress { get; set; } = null;
         public bool? KeepSshPortOpen { get; set; } = null;
         public bool DebugLogging { get; set; } = false;
-        public bool? ProvisionPostgreSqlOnAzure { get; set; } = null;
+        public bool? ProvisionPostgreSqlOnAzure { get; set; } = false;
         public string PostgreSqlServerName { get; set; }
         public bool UsePostgreSqlSingleServer { get; set; } = false;
         public string KeyVaultName { get; set; }

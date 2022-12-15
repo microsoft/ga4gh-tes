@@ -1,7 +1,7 @@
 ﻿using System.Reflection;
 
 [assembly: AssemblyCompany("Microsoft Corporation")]
-[assembly: AssemblyProduct("Cromwell on Azure")]
+[assembly: AssemblyProduct("TES on Azure")]
 [assembly: AssemblyCopyright("Copyright © Microsoft Corporation")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]

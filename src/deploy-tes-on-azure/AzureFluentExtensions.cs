@@ -5,7 +5,7 @@ using System;
 using Microsoft.Rest.Azure;
 using Newtonsoft.Json;
 
-namespace CromwellOnAzureDeployer
+namespace TesDeployer
 {
     public static class AzureFluentExtensions
     {

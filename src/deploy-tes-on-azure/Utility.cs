@@ -9,7 +9,7 @@ using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-namespace CromwellOnAzureDeployer
+namespace TesDeployer
 {
     public static class Utility
     {
@@ -132,7 +132,7 @@ namespace CromwellOnAzureDeployer
         }
 
         private static Stream GetBinaryFileContent(params string[] pathComponentsRelativeToAppBase)
-            => typeof(Deployer).Assembly.GetManifestResourceStream($"deploy-cromwell-on-azure.{string.Join(".", pathComponentsRelativeToAppBase)}");
+            => typeof(Deployer).Assembly.GetManifestResourceStream($"deploy-tes-on-azure.{string.Join(".", pathComponentsRelativeToAppBase)}");
 
         /// <summary>
         /// Generates a secure password with one lowercase letter, one uppercase letter, and one number

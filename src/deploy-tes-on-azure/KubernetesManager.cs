@@ -20,7 +20,7 @@ using Microsoft.Azure.Management.Storage.Fluent;
 using Polly;
 using Polly.Retry;
 
-namespace CromwellOnAzureDeployer
+namespace TesDeployer
 {
     /// <summary>
     /// Class to hold all the kubernetes specific deployer logic. 
@@ -99,7 +99,7 @@ namespace CromwellOnAzureDeployer
         {
             // https://helm.sh/docs/helm/helm_upgrade/
             // The chart argument can be either: a chart reference('example/mariadb'), a path to a chart directory, a packaged chart, or a fully qualified URL
-            await ExecHelmProcessAsync($"upgrade --install cromwellonazure ./helm --kubeconfig {kubeConfigPath} --namespace {configuration.AksCoANamespace} --create-namespace",
+            await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig {kubeConfigPath} --namespace {configuration.AksCoANamespace} --create-namespace",
                 workingDirectory: workingDirectoryTemp);
         }
 
@@ -223,14 +223,6 @@ namespace CromwellOnAzureDeployer
             }
         }
 
-        public async Task WaitForCromwellAsync(IKubernetes client)
-        {
-            if (!await WaitForWorkloadAsync(client, "cromwell", cts.Token))
-            {
-                throw new Exception("Timed out waiting for Cromwell to start.");
-            }
-        }
-
         public async Task UpgradeAKSDeploymentAsync(Dictionary<string, string> settings, IStorageAccount storageAccount)
         {
             await UpgradeValuesYamlAsync(storageAccount, settings);
@@ -289,14 +281,12 @@ namespace CromwellOnAzureDeployer
             values.Config["marthaKeyVaultName"] = settings["MarthaKeyVaultName"];
             values.Config["marthaSecretName"] = settings["MarthaSecretName"];
             values.Config["crossSubscriptionAKSDeployment"] = settings["CrossSubscriptionAKSDeployment"];
-            values.Config["postgreSqlServerName"] = settings["PostgreSqlServerName"];
-            values.Config["postgreSqlDatabaseName"] = settings["PostgreSqlDatabaseName"];
-            values.Config["postgreSqlUserLogin"] = settings["PostgreSqlUserLogin"];
-            values.Config["postgreSqlUserPassword"] = settings["PostgreSqlUserPassword"];
-            values.Config["usePostgreSqlSingleServer"] = settings["UsePostgreSqlSingleServer"];
+            //values.Config["postgreSqlServerName"] = settings["PostgreSqlServerName"];
+            //values.Config["postgreSqlDatabaseName"] = settings["PostgreSqlDatabaseName"];
+            //values.Config["postgreSqlUserLogin"] = settings["PostgreSqlUserLogin"];
+            //values.Config["postgreSqlUserPassword"] = settings["PostgreSqlUserPassword"];
+            //values.Config["usePostgreSqlSingleServer"] = settings["UsePostgreSqlSingleServer"];
             values.Images["tes"] = settings["TesImageName"];
-            values.Images["triggerservice"] = settings["TriggerServiceImageName"];
-            values.Images["cromwell"] = settings["CromwellImageName"];
             values.Persistence["storageAccount"] = settings["DefaultStorageAccountName"];
         }
 
@@ -324,15 +314,13 @@ namespace CromwellOnAzureDeployer
             settings["MarthaKeyVaultName"] = values.Config["marthaKeyVaultName"];
             settings["MarthaSecretName"] = values.Config["marthaSecretName"];
             settings["CrossSubscriptionAKSDeployment"] = values.Config["crossSubscriptionAKSDeployment"];
-            settings["PostgreSqlServerName"] = values.Config["postgreSqlServerName"];
-            settings["PostgreSqlDatabaseName"] = values.Config["postgreSqlDatabaseName"];
-            settings["PostgreSqlUserLogin"] = values.Config["postgreSqlUserLogin"];
-            settings["PostgreSqlUserPassword"] = values.Config["postgreSqlUserPassword"];
-            settings["UsePostgreSqlSingleServer"] = values.Config["usePostgreSqlSingleServer"];
+            //settings["PostgreSqlServerName"] = values.Config["postgreSqlServerName"];
+            //settings["PostgreSqlDatabaseName"] = values.Config["postgreSqlDatabaseName"];
+            //settings["PostgreSqlUserLogin"] = values.Config["postgreSqlUserLogin"];
+            //settings["PostgreSqlUserPassword"] = values.Config["postgreSqlUserPassword"];
+            //settings["UsePostgreSqlSingleServer"] = values.Config["usePostgreSqlSingleServer"];
             settings["ManagedIdentityClientId"] = values.Identity["clientId"];
             settings["TesImageName"] = values.Images["tes"];
-            settings["TriggerServiceImageName"] = values.Images["triggerservice"];
-            settings["CromwellImageName"] = values.Images["cromwell"];
             settings["DefaultStorageAccountName"] = values.Persistence["storageAccount"];
             return settings;
         }
