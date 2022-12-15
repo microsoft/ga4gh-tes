@@ -6,15 +6,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using LazyCache;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Tes.Models;
 
 namespace TesApi.Web.Management
 {
     /// <summary>
-    /// Provides pricing and size VM information using the retail pricing API.
+    /// Provides pricing and size VM information using the retail pricing API. 
     /// </summary>
     public class PriceApiBatchSkuInformationProvider : IBatchSkuInformationProvider
     {
@@ -72,6 +68,7 @@ namespace TesApi.Web.Management
 
             foreach (var vm in localVmSizeInfoForBatchSupportedSkus)
             {
+
                 var instancePricingInfo = pricingItems.Where(p => p.armSkuName == vm.VmSize);
                 var normalPriorityInfo = instancePricingInfo.FirstOrDefault(s =>
                     s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase));
@@ -92,6 +89,7 @@ namespace TesApi.Web.Management
             logger.LogInformation("Returning {0} Vm information entries with pricing for Azure Batch Supported Vm types}", vmInfoList.Count);
 
             return vmInfoList;
+
         }
 
         private static VirtualMachineInformation CreateVirtualMachineInfoFromReference(VirtualMachineInformation vmReference, bool isLowPriority, decimal pricePerHour)
@@ -106,8 +104,10 @@ namespace TesApi.Web.Management
                 VmFamily = vmReference.VmFamily,
                 VmSize = vmReference.VmSize
             };
+            return spotVirtualMachineInformation;
+        }
 
-        private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync()
-            => JsonConvert.DeserializeObject<List<VirtualMachineInformation>>(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "BatchSupportedVmSizeInformation.json")));
-    }
+    private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync()
+        => JsonConvert.DeserializeObject<List<VirtualMachineInformation>>(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "BatchSupportedVmSizeInformation.json")));
+}
 }

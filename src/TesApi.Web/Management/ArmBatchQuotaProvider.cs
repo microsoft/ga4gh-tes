@@ -5,19 +5,19 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using LazyCache;
-using Microsoft.Azure.Management.Batch;
-using Microsoft.Extensions.Logging;
-using TesApi.Web.Management.Models.Quotas;
 
 namespace TesApi.Web.Management;
 
 /// <summary>
-/// Quota provider that uses the ARM API.
+/// Quota provider that uses the ARM API. 
 /// </summary>
 public class ArmBatchQuotaProvider : IBatchQuotaProvider
 {
 
+    /// <summary>
+    /// Azure proxy instance
+    /// </summary>
+    private readonly IAzureProxy azureProxy;
     /// <summary>
     /// Logger instance.
     /// </summary>
@@ -25,9 +25,11 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     private readonly IAppCache appCache;
     private readonly AzureManagementClientsFactory clientsFactory;
 
+
     /// <summary>
     /// Constructor of ArmResourceQuotaVerifier
     /// </summary>
+    /// <param name="azureProxy"></param>
     /// <param name="logger"></param>
     /// <param name="appCache"></param>
     /// <param name="clientsFactory"></param>
@@ -40,6 +42,25 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
         this.logger = logger;
         this.clientsFactory = clientsFactory;
         this.appCache = appCache;
+    }
+
+    private BatchVmFamilyQuotas ToVmFamilyBatchAccountQuotas(AzureBatchAccountQuotas batchAccountQuotas, string vmFamily, bool lowPriority, int? coresRequirement)
+    {
+
+        var isDedicated = !lowPriority;
+        var totalCoreQuota = isDedicated ? batchAccountQuotas.DedicatedCoreQuota : batchAccountQuotas.LowPriorityCoreQuota;
+        var isDedicatedAndPerVmFamilyCoreQuotaEnforced =
+            isDedicated && batchAccountQuotas.DedicatedCoreQuotaPerVMFamilyEnforced;
+
+        var vmFamilyCoreQuota = isDedicatedAndPerVmFamilyCoreQuotaEnforced
+            ? batchAccountQuotas.DedicatedCoreQuotaPerVMFamily.FirstOrDefault(q => q.Name.Equals(vmFamily,
+                      StringComparison.OrdinalIgnoreCase))
+                  ?.CoreQuota ??
+              0
+            : coresRequirement ?? 0;
+
+        return new BatchVmFamilyQuotas(totalCoreQuota, vmFamilyCoreQuota, batchAccountQuotas.PoolQuota,
+            batchAccountQuotas.ActiveJobAndJobScheduleQuota, batchAccountQuotas.DedicatedCoreQuotaPerVMFamilyEnforced, vmFamily);
     }
 
     /// <inheritdoc />

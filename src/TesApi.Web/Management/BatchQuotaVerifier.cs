@@ -4,9 +4,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Tes.Models;
-using TesApi.Web.Management.Models.Quotas;
 
 namespace TesApi.Web.Management;
 
@@ -38,6 +35,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
         IAzureProxy azureProxy,
         ILogger<BatchQuotaVerifier> logger)
     {
+        ArgumentNullException.ThrowIfNull(azureProxy);
         ArgumentNullException.ThrowIfNull(batchQuotaProvider);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(batchSkuInformationProvider);
@@ -50,6 +48,8 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
 
         ArgumentNullException.ThrowIfNull(azureProxy);
 
+        this.region = options.Value.Region;
+        this.azureProxy = azureProxy;
         this.logger = logger;
         this.batchAccountInformation = batchAccountInformation;
         this.batchSkuInformationProvider = batchSkuInformationProvider;
@@ -154,4 +154,5 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
 
         return new(activeJobsCount, activePoolsCount, totalCoresInUse, dedicatedCoresInUseInRequestedVmFamily);
     }
+
 }

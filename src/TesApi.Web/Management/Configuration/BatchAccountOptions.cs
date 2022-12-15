@@ -4,7 +4,7 @@
 namespace TesApi.Web.Management.Configuration
 {
     /// <summary>
-    /// Batch account configuration options.
+    /// Batch account configuration options. 
     /// </summary>
     public class BatchAccountOptions
     {
@@ -13,7 +13,7 @@ namespace TesApi.Web.Management.Configuration
         /// </summary>
         public const string BatchAccount = "BatchAccount";
         /// <summary>
-        /// Default Azure offer durable id.
+        /// Default Azure offer durable id. 
         /// </summary>
         public const string DefaultAzureOfferDurableId = "MS-AZR-0003p";
 
@@ -22,7 +22,7 @@ namespace TesApi.Web.Management.Configuration
         /// </summary>
         public string AccountName { get; set; }
         /// <summary>
-        /// Base URl.
+        /// Base URl. 
         /// <remarks>Required if AppKey is provided.</remarks>
         /// </summary>
         public string BaseUrl { get; set; }
@@ -37,17 +37,17 @@ namespace TesApi.Web.Management.Configuration
         /// </summary>
         public string Region { get; set; }
         /// <summary>
-        /// SubscriptionId Id of the batch account.
+        /// Subscription Id of the batch account. 
         /// <remarks>Required if AppKey is provided.</remarks>
         /// </summary>
         public string SubscriptionId { get; set; }
         /// <summary>
-        /// Resource group of the batch account.
+        /// Resource group of the batch account. 
         /// <remarks>Required if AppKey is provided.</remarks>
         /// </summary>
         public string ResourceGroup { get; set; }
         /// <summary>
-        /// Azure offer id.
+        /// Azure offer id. 
         /// </summary>
         public string AzureOfferDurableId { get; set; } = DefaultAzureOfferDurableId;
     }

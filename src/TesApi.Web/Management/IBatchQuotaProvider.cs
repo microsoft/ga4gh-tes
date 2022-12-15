@@ -2,17 +2,16 @@
 // Licensed under the MIT License.
 
 using System.Threading.Tasks;
-using TesApi.Web.Management.Models.Quotas;
 
 namespace TesApi.Web.Management
 {
     /// <summary>
-    /// Provides quota information of Batch VM resources.
+    /// Provides quota information of Batch VM resources. 
     /// </summary>
     public interface IBatchQuotaProvider
     {
         /// <summary>
-        /// Returns the quota information for the VM requirements.
+        /// Returns the quota information for the VM requirements. 
         /// </summary>
         /// <param name="vmFamily"></param>
         /// <param name="lowPriority"></param>

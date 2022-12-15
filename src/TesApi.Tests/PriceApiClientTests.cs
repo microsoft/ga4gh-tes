@@ -3,8 +3,6 @@
 
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using TesApi.Web.Management;
 
 namespace TesApi.Tests
 {
@@ -15,7 +13,9 @@ namespace TesApi.Tests
 
         [TestInitialize]
         public void Initialize()
-            => pricingApiClient = new();
+        {
+            pricingApiClient = new PriceApiClient();
+        }
 
         [TestMethod]
         public async Task GetPricingInformationPageAsync_ReturnsSinglePageWithItemsWithMaxPageSize()
@@ -31,8 +31,10 @@ namespace TesApi.Tests
         {
             var pages = await pricingApiClient.GetAllPricingInformationAsync("westus2").ToListAsync();
 
+
             Assert.IsNotNull(pages);
             Assert.IsTrue(pages.Count > 100);
+
         }
 
         [TestMethod]
@@ -43,6 +45,7 @@ namespace TesApi.Tests
             Assert.IsTrue(pages.Count > 0);
             Assert.IsFalse(pages.Any(r => r.productName.Contains(" Windows")));
             Assert.IsFalse(pages.Any(r => r.productName.Contains(" Spot")));
+
         }
     }
 }

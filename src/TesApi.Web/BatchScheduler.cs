@@ -3,21 +3,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Microsoft.Azure.Batch;
-using Microsoft.Azure.Batch.Common;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Tes.Extensions;
-using Tes.Models;
-using TesApi.Web.Management;
-using TesApi.Web.Management.Models.Quotas;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 using TesException = Tes.Models.TesException;
 using TesFileType = Tes.Models.TesFileType;
@@ -752,7 +742,7 @@ namespace TesApi.Web
             var executor = task.Executors.First();
 
             var volumeMountsOption = $"-v $AZ_BATCH_TASK_WORKING_DIR{batchExecutionPathPrefix}:{batchExecutionPathPrefix}";
-            
+
             var executorImageIsPublic = (await azureProxy.GetContainerRegistryInfoAsync(executor.Image)) is null;
             var dockerInDockerImageIsPublic = (await azureProxy.GetContainerRegistryInfoAsync(dockerInDockerImageName)) is null;
             var blobXferImageIsPublic = (await azureProxy.GetContainerRegistryInfoAsync(blobxferImageName)) is null;

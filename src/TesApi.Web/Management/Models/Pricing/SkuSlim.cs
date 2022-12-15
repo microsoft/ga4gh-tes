@@ -17,7 +17,7 @@ namespace TesApi.Web.Management.Models.Pricing
         /// </summary>
         public string SkuName { get; set; }
         /// <summary>
-        /// Low priority sku flag.
+        /// Low priority sku flag. 
         /// </summary>
         public bool IsLowPriority { get; set; }
         /// <summary>

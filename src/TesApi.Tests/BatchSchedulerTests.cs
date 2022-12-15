@@ -7,17 +7,6 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Microsoft.Azure.Batch;
-using Microsoft.Azure.Batch.Common;
-using Microsoft.Azure.Management.Batch.Models;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
-using Newtonsoft.Json;
-using Tes.Extensions;
-using Tes.Models;
-using TesApi.Web;
-using TesApi.Web.Management;
-using TesApi.Web.Management.Models.Quotas;
 
 namespace TesApi.Tests
 {

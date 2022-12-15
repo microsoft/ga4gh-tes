@@ -4,22 +4,6 @@
 using System;
 using System.IO;
 using System.Reflection;
-using LazyCache;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Microsoft.OpenApi.Models;
-using Newtonsoft.Json.Converters;
-using Newtonsoft.Json.Serialization;
-using Tes.Models;
-using Tes.Repository;
-using TesApi.Filters;
-using TesApi.Web.Management;
-using TesApi.Web.Management.Configuration;
 
 namespace TesApi.Web
 {
@@ -138,7 +122,7 @@ namespace TesApi.Web
 
                         return s;
                     },
-                    s => s.AddApplicationInsightsTelemetry());
+                s => s.AddApplicationInsightsTelemetry());
 
         private IRepository<TesTask> CreateCosmosDbRepositoryFromConfiguration(IServiceProvider services)
         {

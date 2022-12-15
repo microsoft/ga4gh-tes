@@ -11,7 +11,7 @@ namespace TesApi.Web.Management.Models.Pricing
     public class PricingItem
     {
         /// <summary>
-        /// Currency code.
+        /// Currency code. 
         /// </summary>
         public string currencyCode { get; set; }
         /// <summary>
@@ -39,7 +39,7 @@ namespace TesApi.Web.Management.Models.Pricing
         /// </summary>
         public DateTime effectiveStartDate { get; set; }
         /// <summary>
-        /// Meter id.
+        /// Meter id. 
         /// </summary>
         public string meterId { get; set; }
         /// <summary>
@@ -47,11 +47,11 @@ namespace TesApi.Web.Management.Models.Pricing
         /// </summary>
         public string meterName { get; set; }
         /// <summary>
-        /// Product id.
+        /// Product id. 
         /// </summary>
         public string productId { get; set; }
         /// <summary>
-        /// Sku id.
+        /// Sku id. 
         /// </summary>
         public string skuId { get; set; }
         /// <summary>
@@ -67,11 +67,11 @@ namespace TesApi.Web.Management.Models.Pricing
         /// </summary>
         public string serviceName { get; set; }
         /// <summary>
-        /// Service id.
+        /// Service id. 
         /// </summary>
         public string serviceId { get; set; }
         /// <summary>
-        /// Service family.
+        /// Service family. 
         /// </summary>
         public string serviceFamily { get; set; }
         /// <summary>
@@ -87,7 +87,7 @@ namespace TesApi.Web.Management.Models.Pricing
         /// </summary>
         public bool isPrimaryMeterRegion { get; set; }
         /// <summary>
-        /// Sku name.
+        /// Sku name. 
         /// </summary>
         public string armSkuName { get; set; }
         /// <summary>

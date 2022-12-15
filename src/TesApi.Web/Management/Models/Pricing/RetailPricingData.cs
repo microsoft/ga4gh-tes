@@ -4,7 +4,7 @@
 namespace TesApi.Web.Management.Models.Pricing
 {
     /// <summary>
-    /// A page of retail pricing data from the retail princing API.
+    /// A page of retail pricing data from the retail princing API. 
     /// </summary>
     public class RetailPricingData
     {
@@ -13,7 +13,7 @@ namespace TesApi.Web.Management.Models.Pricing
         /// </summary>
         public string BillingCurrency { get; set; }
         /// <summary>
-        /// Customer entity id.
+        /// Customer entity id. 
         /// </summary>
         public string CustomerEntityId { get; set; }
         /// <summary>
@@ -21,15 +21,15 @@ namespace TesApi.Web.Management.Models.Pricing
         /// </summary>
         public string CustomerEntityType { get; set; }
         /// <summary>
-        /// List of items in the page.
+        /// List of items in the page. 
         /// </summary>
         public PricingItem[] Items { get; set; }
         /// <summary>
-        /// Next page link.
+        /// Next page link. 
         /// </summary>
         public string NextPageLink { get; set; }
         /// <summary>
-        /// Count of items.
+        /// Count of items. 
         /// </summary>
         public int Count { get; set; }
     }
