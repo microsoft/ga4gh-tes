@@ -4,19 +4,6 @@
 using System;
 using System.IO;
 using System.Reflection;
-using LazyCache;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.OpenApi.Models;
-using Newtonsoft.Json.Converters;
-using Newtonsoft.Json.Serialization;
-using Tes.Models;
-using Tes.Repository;
-using TesApi.Filters;
 
 namespace TesApi.Web
 {
@@ -25,7 +12,6 @@ namespace TesApi.Web
     /// </summary>
     public class Startup
     {
-        private const string DefaultAzureOfferDurableId = "MS-AZR-0003p";
         private const string CosmosDbDatabaseId = "TES";
         private const string CosmosDbContainerId = "Tasks";
         private const string CosmosDbPartitionId = "01";
@@ -33,7 +19,6 @@ namespace TesApi.Web
         private readonly ILogger logger;
         private readonly ILoggerFactory loggerFactory;
         private readonly IWebHostEnvironment hostingEnvironment;
-        private readonly string azureOfferDurableId;
 
         /// <summary>
         /// Startup class for ASP.NET core
@@ -44,7 +29,6 @@ namespace TesApi.Web
             this.hostingEnvironment = hostingEnvironment;
             logger = loggerFactory.CreateLogger<Startup>();
             this.loggerFactory = loggerFactory;
-            azureOfferDurableId = Configuration.GetValue("AzureOfferDurableId", DefaultAzureOfferDurableId);
         }
 
         /// <summary>
@@ -58,32 +42,20 @@ namespace TesApi.Web
         /// <param name="services">The Microsoft.Extensions.DependencyInjection.IServiceCollection to add the services to.</param>
         public void ConfigureServices(IServiceCollection services)
         {
-            var (cache, azureProxy, cachingAzureProxy, storageAccessProvider, repository) = ConfigureServices();
-            ConfigureServices(services, cache, azureProxy, cachingAzureProxy, storageAccessProvider, repository);
+            ConfigureServicesImpl(services);
         }
 
-        private (IAppCache cache, AzureProxy azureProxy, IAzureProxy cachingAzureProxy, IStorageAccessProvider storageAccessProvider, IRepository<TesTask> repository) ConfigureServices()
+        private void ConfigureServicesImpl(IServiceCollection services)
         {
-            var cache = new CachingService();
+            services
+                .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.BatchAccount))
+                .Configure<CosmosDbOptions>(Configuration.GetSection(CosmosDbOptions.CosmosDbAccount))
+                .AddSingleton<IAppCache>(s => new CachingService())
+                .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
+                .AddSingleton<AzureProxy, AzureProxy>()
+                .AddSingleton<IAzureProxy>(s => new CachingWithRetriesAzureProxy(s.GetRequiredService<AzureProxy>(), s.GetRequiredService<IAppCache>()))
+                .AddSingleton<IStorageAccessProvider, StorageAccessProvider>()
 
-            var azureProxy = new AzureProxy(Configuration["BatchAccountName"], azureOfferDurableId, loggerFactory.CreateLogger<AzureProxy>());
-            IAzureProxy cachingAzureProxy = new CachingWithRetriesAzureProxy(azureProxy, cache);
-            IStorageAccessProvider storageAccessProvider = new StorageAccessProvider(loggerFactory.CreateLogger<StorageAccessProvider>(), Configuration, cachingAzureProxy);
-
-            var configurationUtils = new ConfigurationUtils(Configuration, cachingAzureProxy, storageAccessProvider, loggerFactory.CreateLogger<ConfigurationUtils>());
-            configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync().Wait();
-
-            (var cosmosDbEndpoint, var cosmosDbKey) = azureProxy.GetCosmosDbEndpointAndKeyAsync(Configuration["CosmosDbAccountName"]).Result;
-            var cosmosDbRepository = new CosmosDbRepository<TesTask>(cosmosDbEndpoint, cosmosDbKey, CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId);
-
-            return (cache, azureProxy, cachingAzureProxy, storageAccessProvider, cosmosDbRepository);
-        }
-
-        private void ConfigureServices(IServiceCollection services, IAppCache cache, AzureProxy azureProxy, IAzureProxy cachingAzureProxy, IStorageAccessProvider storageAccessProvider, IRepository<TesTask> repository)
-            => services.AddSingleton(cache)
-
-                .AddSingleton(cachingAzureProxy)
-                .AddSingleton(azureProxy)
 
                 .AddControllers()
                 .AddNewtonsoftJson(opts =>
@@ -92,8 +64,11 @@ namespace TesApi.Web
                     opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
                 }).Services
 
-                .AddSingleton<IRepository<TesTask>>(new CachingWithRetriesRepository<TesTask>(repository))
-                .AddSingleton<IBatchScheduler>(new BatchScheduler(loggerFactory.CreateLogger<BatchScheduler>(), Configuration, cachingAzureProxy, storageAccessProvider))
+                .AddLogging()
+                .AddSingleton<IBatchQuotaProvider, ArmBatchQuotaProvider>()
+                .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
+                .AddSingleton<IBatchScheduler, BatchScheduler>()
+                .AddSingleton<IBatchSkuInformationProvider, ArmBatchSkuInformationProvider>()
 
                 .AddSwaggerGen(c =>
                 {
@@ -109,36 +84,58 @@ namespace TesApi.Web
                         },
                     });
                     c.CustomSchemaIds(type => type.FullName);
-                    c.IncludeXmlComments($"{AppContext.BaseDirectory}{Path.DirectorySeparatorChar}{Assembly.GetEntryAssembly().GetName().Name}.xml");
+                    c.IncludeXmlComments(
+                        $"{AppContext.BaseDirectory}{Path.DirectorySeparatorChar}{Assembly.GetEntryAssembly().GetName().Name}.xml");
                     c.OperationFilter<GeneratePathParamsValidationFilter>();
                 })
 
-                .AddHostedService<Scheduler>()
-                .AddHostedService<DeleteCompletedBatchJobsHostedService>()
-                .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
-                .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
-                .AddHostedService<RefreshVMSizesAndPricesHostedService>()
+            .AddHostedService<Scheduler>()
+            .AddHostedService<DeleteCompletedBatchJobsHostedService>()
+            .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
+            .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
+            .AddHostedService<RefreshVMSizesAndPricesHostedService>()
 
-                // Configure AppInsights Azure Service when in PRODUCTION environment
-                .IfThenElse(hostingEnvironment.IsProduction(),
-                    s =>
+            //Configure AppInsights Azure Service when in PRODUCTION environment
+            .IfThenElse(hostingEnvironment.IsProduction(),
+                s =>
+                {
+                    var applicationInsightsAccountName = Configuration["ApplicationInsightsAccountName"];
+                    var instrumentationKey = AzureProxy.GetAppInsightsInstrumentationKeyAsync(applicationInsightsAccountName).Result;
+
+                    if (instrumentationKey is not null)
                     {
-                        var applicationInsightsAccountName = Configuration["ApplicationInsightsAccountName"];
-                        var instrumentationKey = AzureProxy.GetAppInsightsInstrumentationKeyAsync(applicationInsightsAccountName).Result;
-
-                        if (instrumentationKey is not null)
+                        var connectionString = $"InstrumentationKey={instrumentationKey}";
+                        return s.AddApplicationInsightsTelemetry(options =>
                         {
-                            var connectionString = $"InstrumentationKey={instrumentationKey}";
-                            return s.AddApplicationInsightsTelemetry(options =>
-                                {
-                                    options.ConnectionString = connectionString;
-                                });
-                        }
+                            options.ConnectionString = connectionString;
+                        });
+                    }
 
-                        return s;
-                    },
-                    s => s.AddApplicationInsightsTelemetry());
+                    return s;
+                },
+                s => s.AddApplicationInsightsTelemetry());
 
+        }
+
+        private IRepository<TesTask> CreateCosmosDbRepositoryFromConfiguration(IServiceProvider services)
+        {
+            var options = services.GetRequiredService<IOptions<CosmosDbOptions>>();
+
+            if (!string.IsNullOrWhiteSpace(options.Value.CosmosDbKey))
+            {
+                return new CachingWithRetriesRepository<TesTask>(
+                    new CosmosDbRepository<TesTask>(options.Value.CosmosDbEndpoint, options.Value.CosmosDbKey,
+                        CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId));
+            }
+
+            var azureProxy = services.GetRequiredService<IAzureProxy>();
+
+            (var cosmosDbEndpoint, var cosmosDbKey) = azureProxy.GetCosmosDbEndpointAndKeyAsync(options.Value.AccountName).Result;
+
+            return new CachingWithRetriesRepository<TesTask>(new CosmosDbRepository<TesTask>(cosmosDbEndpoint, cosmosDbKey,
+                CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId));
+
+        }
         /// <summary>
         /// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         /// </summary>

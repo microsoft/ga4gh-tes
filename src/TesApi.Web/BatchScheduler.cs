@@ -8,18 +8,19 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Microsoft.Azure.Batch;
-using Microsoft.Azure.Batch.Common;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Tes.Extensions;
-using Tes.Models;
+using TesException = Tes.Models.TesException;
+using TesFileType = Tes.Models.TesFileType;
+using TesInput = Tes.Models.TesInput;
+using TesOutput = Tes.Models.TesOutput;
+using TesResources = Tes.Models.TesResources;
+using TesState = Tes.Models.TesState;
+using TesTask = Tes.Models.TesTask;
+using VirtualMachineInformation = Tes.Models.VirtualMachineInformation;
 
 namespace TesApi.Web
 {
     /// <summary>
-    /// Orchestrates <see cref="TesTask"/>s on Azure Batch
+    /// Orchestrates <see cref="Tes.Models.TesTask"/>s on Azure Batch
     /// </summary>
     public class BatchScheduler : IBatchScheduler
     {
@@ -43,6 +44,8 @@ namespace TesApi.Web
         private readonly IAzureProxy azureProxy;
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly IEnumerable<string> allowedVmSizes;
+        private readonly IBatchQuotaVerifier quotaVerifier;
+        private readonly IBatchSkuInformationProvider skuInformationProvider;
         private readonly List<TesTaskStateTransition> tesTaskStateTransitions;
         private readonly bool usePreemptibleVmsOnly;
         private readonly string batchNodesSubnetId;
@@ -54,20 +57,26 @@ namespace TesApi.Web
         private readonly string defaultStorageAccountName;
         private readonly string globalStartTaskPath;
         private readonly string globalManagedIdentity;
+
         private HashSet<string> onlyLogBatchTaskStateOnce = new HashSet<string>();
 
+
         /// <summary>
-        /// Orchestrates <see cref="TesTask"/>s on Azure Batch
+        /// Orchestrates <see cref="Tes.Models.TesTask"/>s on Azure Batch
         /// </summary>
         /// <param name="logger">Logger <see cref="ILogger"/></param>
         /// <param name="configuration">Configuration <see cref="IConfiguration"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         /// <param name="storageAccessProvider">Storage access provider <see cref="IStorageAccessProvider"/></param>
-        public BatchScheduler(ILogger logger, IConfiguration configuration, IAzureProxy azureProxy, IStorageAccessProvider storageAccessProvider)
+        /// <param name="quotaVerifier">Quota verifier <see cref="IBatchQuotaVerifier"/>></param>
+        /// <param name="skuInformationProvider">Sku informatoin provider <see cref="IBatchSkuInformationProvider"/></param>
+        public BatchScheduler(ILogger<BatchScheduler> logger, IConfiguration configuration, IAzureProxy azureProxy, IStorageAccessProvider storageAccessProvider, IBatchQuotaVerifier quotaVerifier, IBatchSkuInformationProvider skuInformationProvider)
         {
-            this.logger = logger;
-            this.azureProxy = azureProxy;
-            this.storageAccessProvider = storageAccessProvider;
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.azureProxy = azureProxy ?? throw new ArgumentNullException(nameof(azureProxy));
+            this.storageAccessProvider = storageAccessProvider ?? throw new ArgumentNullException(nameof(storageAccessProvider));
+            this.quotaVerifier = quotaVerifier ?? throw new ArgumentNullException(nameof(quotaVerifier));
+            this.skuInformationProvider = skuInformationProvider ?? throw new ArgumentNullException(nameof(skuInformationProvider));
 
             static bool GetBoolValue(IConfiguration configuration, string key, bool defaultValue) => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : bool.Parse(configuration[key]);
             static string GetStringValue(IConfiguration configuration, string key, string defaultValue = "") => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : configuration[key];
@@ -284,9 +293,9 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Determines if the <see cref="TesInput"/> file is a Cromwell command script
+        /// Determines if the <see cref="Tes.Models.TesInput"/> file is a Cromwell command script
         /// </summary>
-        /// <param name="inputFile"><see cref="TesInput"/> file</param>
+        /// <param name="inputFile"><see cref="Tes.Models.TesInput"/> file</param>
         /// <returns>True if the file is a Cromwell command script</returns>
         private static bool IsCromwellCommandScript(TesInput inputFile)
             => inputFile.Name.Equals("commandScript");
@@ -317,7 +326,7 @@ namespace TesApi.Web
                 var jobId = await azureProxy.GetNextBatchJobIdAsync(tesTask.Id);
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask);
 
-                await CheckBatchAccountQuotas(virtualMachineInfo);
+                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo);
 
                 var tesTaskLog = tesTask.AddTesTaskLog();
                 tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
@@ -996,80 +1005,6 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Check quotas for available active jobs, pool and CPU cores.
-        /// </summary>
-        /// <param name="vmInfo">Dedicated virtual machine information.</param>
-        private async Task CheckBatchAccountQuotas(VirtualMachineInformation vmInfo)
-        {
-            var workflowCoresRequirement = vmInfo.NumberOfCores.Value;
-            var isDedicated = !vmInfo.LowPriority;
-            var vmFamily = vmInfo.VmFamily;
-
-            var batchQuotas = await azureProxy.GetBatchAccountQuotasAsync();
-            var totalCoreQuota = isDedicated ? batchQuotas.DedicatedCoreQuota : batchQuotas.LowPriorityCoreQuota;
-            var isDedicatedAndPerVmFamilyCoreQuotaEnforced = isDedicated && batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced;
-
-            var vmFamilyCoreQuota = isDedicatedAndPerVmFamilyCoreQuotaEnforced
-                ? batchQuotas.DedicatedCoreQuotaPerVMFamily.FirstOrDefault(q => vmFamily.Equals(q.Name, StringComparison.OrdinalIgnoreCase))?.CoreQuota ?? 0
-                : workflowCoresRequirement;
-
-            var poolQuota = batchQuotas.PoolQuota;
-            var activeJobAndJobScheduleQuota = batchQuotas.ActiveJobAndJobScheduleQuota;
-
-            var activeJobsCount = azureProxy.GetBatchActiveJobCount();
-            var activePoolsCount = azureProxy.GetBatchActivePoolCount();
-            var activeNodeCountByVmSize = azureProxy.GetBatchActiveNodeCountByVmSize().ToList();
-            var virtualMachineInfoList = await azureProxy.GetVmSizesAndPricesAsync();
-
-            var totalCoresInUse = activeNodeCountByVmSize
-                .Sum(x =>
-                    virtualMachineInfoList
-                        .FirstOrDefault(vm => vm.VmSize.Equals(x.VirtualMachineSize, StringComparison.OrdinalIgnoreCase))?
-                        .NumberOfCores * (isDedicated ? x.DedicatedNodeCount : x.LowPriorityNodeCount));
-
-            if (workflowCoresRequirement > totalCoreQuota)
-            {
-                // The workflow task requires more cores than the total Batch account's cores quota - FAIL
-                throw new AzureBatchLowQuotaException($"Azure Batch Account does not have enough {(isDedicated ? "dedicated" : "low priority")} cores quota to run a workflow with cpu core requirement of {workflowCoresRequirement}. Please submit an Azure Support request to increase your quota: {AzureSupportUrl}");
-            }
-
-            if (isDedicatedAndPerVmFamilyCoreQuotaEnforced && workflowCoresRequirement > vmFamilyCoreQuota)
-            {
-                // The workflow task requires more cores than the total Batch account's dedicated family quota - FAIL
-                throw new AzureBatchLowQuotaException($"Azure Batch Account does not have enough dedicated {vmFamily} cores quota to run a workflow with cpu core requirement of {workflowCoresRequirement}. Please submit an Azure Support request to increase your quota: {AzureSupportUrl}");
-            }
-
-            if (activeJobsCount + 1 > activeJobAndJobScheduleQuota)
-            {
-                throw new AzureBatchQuotaMaxedOutException($"No remaining active jobs quota available. There are {activeJobsCount} active jobs out of {activeJobAndJobScheduleQuota}.");
-            }
-
-            if (activePoolsCount + 1 > poolQuota)
-            {
-                throw new AzureBatchQuotaMaxedOutException($"No remaining pool quota available. There are {activePoolsCount} pools in use out of {poolQuota}.");
-            }
-
-            if ((totalCoresInUse + workflowCoresRequirement) > totalCoreQuota)
-            {
-                throw new AzureBatchQuotaMaxedOutException($"Not enough core quota remaining to schedule task requiring {workflowCoresRequirement} {(isDedicated ? "dedicated" : "low priority")} cores. There are {totalCoresInUse} cores in use out of {totalCoreQuota}.");
-            }
-
-            if (isDedicatedAndPerVmFamilyCoreQuotaEnforced)
-            {
-                var vmSizesInRequestedFamily = virtualMachineInfoList.Where(vm => vm.VmFamily.Equals(vmFamily, StringComparison.OrdinalIgnoreCase)).Select(vm => vm.VmSize).ToList();
-                var activeNodeCountByVmSizeInRequestedFamily = activeNodeCountByVmSize.Where(x => vmSizesInRequestedFamily.Contains(x.VirtualMachineSize, StringComparer.OrdinalIgnoreCase));
-
-                var dedicatedCoresInUseInRequestedVmFamily = activeNodeCountByVmSizeInRequestedFamily
-                    .Sum(x => virtualMachineInfoList.FirstOrDefault(vm => vm.VmSize.Equals(x.VirtualMachineSize, StringComparison.OrdinalIgnoreCase))?.NumberOfCores * x.DedicatedNodeCount);
-
-                if (dedicatedCoresInUseInRequestedVmFamily + workflowCoresRequirement > vmFamilyCoreQuota)
-                {
-                    throw new AzureBatchQuotaMaxedOutException($"Not enough core quota remaining to schedule task requiring {workflowCoresRequirement} dedicated {vmFamily} cores. There are {dedicatedCoresInUseInRequestedVmFamily} cores in use out of {vmFamilyCoreQuota}.");
-                }
-            }
-        }
-
-        /// <summary>
         /// Gets the cheapest available VM size that satisfies the <see cref="TesTask"/> execution requirements
         /// </summary>
         /// <param name="tesTask"><see cref="TesTask"/></param>
@@ -1087,7 +1022,7 @@ namespace TesApi.Web
                 .Distinct()
                 .ToList();
 
-            var virtualMachineInfoList = await azureProxy.GetVmSizesAndPricesAsync();
+            var virtualMachineInfoList = await skuInformationProvider.GetVmSizesAndPricesAsync(azureProxy.GetArmRegion());
             var preemptible = forcePreemptibleVmsOnly || usePreemptibleVmsOnly || tesResources.Preemptible.GetValueOrDefault(true);
 
             var eligibleVms = new List<VirtualMachineInformation>();
@@ -1122,25 +1057,24 @@ namespace TesApi.Web
                 noVmFoundMessage = $"No VM (out of {virtualMachineInfoList.Count}) available with the required resources (cores: {requiredNumberOfCores}, memory: {requiredMemoryInGB} GB, disk: {requiredDiskSizeInGB} GB, preemptible: {preemptible}) for task id {tesTask.Id}.";
             }
 
-            var batchQuotas = await azureProxy.GetBatchAccountQuotasAsync();
+
+            var coreQuota = await quotaVerifier
+                .GetBatchQuotaProvider()
+                .GetVmCoresPerFamilyAsync(preemptible);
 
             var selectedVm = eligibleVms
                 .Where(allowedVmSizesFilter)
-                .Where(vm => !(previouslyFailedVmSizes?.Contains(vm.VmSize, StringComparer.OrdinalIgnoreCase) ?? false))
-                .Where(vm => preemptible
-                    ? batchQuotas.LowPriorityCoreQuota >= vm.NumberOfCores
-                    : batchQuotas.DedicatedCoreQuota >= vm.NumberOfCores
-                        && (!batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced || batchQuotas.DedicatedCoreQuotaPerVMFamily.FirstOrDefault(x => vm.VmFamily.Equals(x.Name, StringComparison.OrdinalIgnoreCase))?.CoreQuota >= vm.NumberOfCores))
-                .OrderBy(x => x.PricePerHour)
-                .FirstOrDefault();
+                .Where(vm => IsThereSufficientCoreQuota(coreQuota, vm))
+                .Where(vm =>
+                    !(previouslyFailedVmSizes?.Contains(vm.VmSize, StringComparer.OrdinalIgnoreCase) ?? false))
+                .MinBy(vm => vm.PricePerHour);
 
             if (!preemptible && !(selectedVm is null))
             {
                 var idealVm = eligibleVms
                     .Where(allowedVmSizesFilter)
                     .Where(vm => !(previouslyFailedVmSizes?.Contains(vm.VmSize, StringComparer.OrdinalIgnoreCase) ?? false))
-                    .OrderBy(x => x.PricePerHour)
-                    .FirstOrDefault();
+                    .MinBy(x => x.PricePerHour);
 
                 if (selectedVm.PricePerHour >= idealVm.PricePerHour * 2)
                 {
@@ -1177,7 +1111,26 @@ namespace TesApi.Web
             throw new AzureBatchVirtualMachineAvailabilityException(noVmFoundMessage);
         }
 
-        private async Task<(BatchNodeMetrics BatchNodeMetrics, DateTimeOffset? TaskStartTime, DateTimeOffset? TaskEndTime, int? CromwellRcCode)> GetBatchNodeMetricsAndCromwellResultCodeAsync(TesTask tesTask)
+        private bool IsThereSufficientCoreQuota(BatchVmCoreQuota coreQuota, VirtualMachineInformation vm)
+        {
+
+            if (coreQuota.IsDedicatedAndPerVmFamilyCoreQuotaEnforced)
+            {
+                var result = coreQuota.DedicatedCoreQuotas?.FirstOrDefault(q => q.VmFamilyName.Equals(vm.VmFamily,
+                    StringComparison.OrdinalIgnoreCase));
+
+                if (result is null)
+                {
+                    return false;
+                }
+
+                return result?.CoreQuota >= vm.NumberOfCores;
+            }
+
+            return coreQuota.NumberOfCores >= vm.NumberOfCores;
+        }
+
+        private async Task<(Tes.Models.BatchNodeMetrics BatchNodeMetrics, DateTimeOffset? TaskStartTime, DateTimeOffset? TaskEndTime, int? CromwellRcCode)> GetBatchNodeMetricsAndCromwellResultCodeAsync(TesTask tesTask)
         {
             var bytesInGB = Math.Pow(1000, 3);
             var kiBInGB = Math.Pow(1000, 3) / 1024;
