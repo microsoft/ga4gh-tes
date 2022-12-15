@@ -35,6 +35,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
         IAzureProxy azureProxy,
         ILogger<BatchQuotaVerifier> logger)
     {
+        ArgumentNullException.ThrowIfNull(azureProxy);
         ArgumentNullException.ThrowIfNull(batchQuotaProvider);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(batchSkuInformationProvider);
@@ -150,6 +151,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
 
         var dedicatedCoresInUseInRequestedVmFamily = activeNodeCountByVmSizeInRequestedFamily
             .Sum(x => virtualMachineInfoList.FirstOrDefault(vm => vm.VmSize.Equals(x.VirtualMachineSize, StringComparison.OrdinalIgnoreCase))?.NumberOfCores * x.DedicatedNodeCount) ?? 0;
+
 
         return new BatchAccountUtilization(activeJobsCount, activePoolsCount, totalCoresInUse, dedicatedCoresInUseInRequestedVmFamily);
 

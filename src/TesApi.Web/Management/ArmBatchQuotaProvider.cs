@@ -15,15 +15,21 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
 {
 
     /// <summary>
+    /// Azure proxy instance
+    /// </summary>
+    private readonly IAzureProxy azureProxy;
+    /// <summary>
     /// Logger instance.
     /// </summary>
     private readonly ILogger logger;
     private readonly IAppCache appCache;
     private readonly AzureManagementClientsFactory clientsFactory;
 
+
     /// <summary>
     /// Constructor of ArmResourceQuotaVerifier
     /// </summary>
+    /// <param name="azureProxy"></param>
     /// <param name="logger"></param>
     /// <param name="appCache"></param>
     /// <param name="clientsFactory"></param>

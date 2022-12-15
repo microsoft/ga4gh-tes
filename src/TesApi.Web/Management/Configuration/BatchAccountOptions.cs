@@ -37,7 +37,7 @@ namespace TesApi.Web.Management.Configuration
         /// </summary>
         public string Region { get; set; }
         /// <summary>
-        /// SubscriptionId Id of the batch account. 
+        /// Subscription Id of the batch account. 
         /// <remarks>Required if AppKey is provided.</remarks>
         /// </summary>
         public string SubscriptionId { get; set; }

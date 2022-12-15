@@ -20,6 +20,10 @@ public class BatchQuotaVerifierTests
 
     private const string Region = "eastus";
     private const string VmFamily = "StandardDSeries";
+    private BatchAccountOptions batchAccountOptions;
+    private List<VirtualMachineInformation> vmSizeAndPriceList;
+
+    public BatchQuotaVerifierTests() { }
 
     [TestInitialize]
     public void BeforeEach()
