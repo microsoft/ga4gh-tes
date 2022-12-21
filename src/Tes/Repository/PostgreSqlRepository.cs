@@ -26,12 +26,12 @@ namespace Tes.Repository
         /// <param name="host">Azure PostgreSQL Server host name</param>
         /// <param name="user">Azure PostgreSQL Server user name</param>
         /// <param name="database">Azure PostgreSQL Server database name</param>
-        /// <param name="token">User's authentication token for Azure PostgreSQL Server</param>
+        /// <param name="token">User's password or authentication token for Azure PostgreSQL Server</param>
         public PostgreSqlRepository(string host, string user, string database, string token)
         {
             connectionString =
                 String.Format(
-                 "Server={0}; User Id={1}; Database={2}; Port={3}; Password={4}; SSLMode=Prefer",
+                 "Server={0}; User Id={1}.postgres.database.azure.com; Database={2}; Port={3}; Password={4}; SSLMode=Prefer",
                  host,
                  user,
                  database,
