@@ -15,6 +15,7 @@ using System;
 using System.Runtime.Serialization;
 using System.Text;
 using Newtonsoft.Json;
+using Tes.Utilities;
 
 namespace Tes.Models
 {
@@ -25,7 +26,7 @@ namespace Tes.Models
     public partial class TesCreateTaskResponse : IEquatable<TesCreateTaskResponse>
     {
         public TesCreateTaskResponse()
-            => Common.NewtonsoftJsonSafeInit.SetDefaultSettings();
+            => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         /// <summary>
         /// Task identifier assigned by the server.

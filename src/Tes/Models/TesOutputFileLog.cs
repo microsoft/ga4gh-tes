@@ -15,6 +15,7 @@ using System;
 using System.Runtime.Serialization;
 using System.Text;
 using Newtonsoft.Json;
+using Tes.Utilities;
 
 namespace Tes.Models
 {
@@ -25,7 +26,7 @@ namespace Tes.Models
     public partial class TesOutputFileLog : IEquatable<TesOutputFileLog>
     {
         public TesOutputFileLog()
-            => Common.NewtonsoftJsonSafeInit.SetDefaultSettings();
+            => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         /// <summary>
         /// URL of the file in storage, e.g. s3://bucket/file.txt

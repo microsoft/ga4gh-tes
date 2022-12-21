@@ -17,6 +17,7 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
 using Newtonsoft.Json;
+using Tes.Utilities;
 
 namespace Tes.Models
 {
@@ -27,7 +28,7 @@ namespace Tes.Models
     public partial class TesResources : IEquatable<TesResources>
     {
         public TesResources()
-            => Common.NewtonsoftJsonSafeInit.SetDefaultSettings();
+            => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         public enum SupportedBackendParameters { vm_size, workflow_execution_identity };
 

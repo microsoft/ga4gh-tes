@@ -15,6 +15,7 @@ using System;
 using System.Runtime.Serialization;
 using System.Text;
 using Newtonsoft.Json;
+using Tes.Utilities;
 
 namespace Tes.Models
 {
@@ -25,7 +26,7 @@ namespace Tes.Models
     public partial class TesExecutorLog : IEquatable<TesExecutorLog>
     {
         public TesExecutorLog()
-            => Common.NewtonsoftJsonSafeInit.SetDefaultSettings();
+            => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         /// <summary>
         /// Time the executor started, in RFC 3339 format.

@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-namespace Common
+namespace Tes.Utilities
 {
     public static class NewtonsoftJsonSafeInit
     {

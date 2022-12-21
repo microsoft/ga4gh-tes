@@ -17,6 +17,7 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
 using Newtonsoft.Json;
+using Tes.Utilities;
 
 namespace Tes.Models
 {
@@ -27,7 +28,7 @@ namespace Tes.Models
     public partial class TesListTasksResponse : IEquatable<TesListTasksResponse>
     {
         public TesListTasksResponse()
-            => Common.NewtonsoftJsonSafeInit.SetDefaultSettings();
+            => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         /// <summary>
         /// List of tasks.

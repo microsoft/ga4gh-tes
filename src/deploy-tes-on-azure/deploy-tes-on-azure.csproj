@@ -12,9 +12,9 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <AssemblyName Condition="'$(Configuration)' == 'win'">deploy-cromwell-on-azure-win</AssemblyName>
-    <AssemblyName Condition="'$(Configuration)' == 'linux'">deploy-cromwell-on-azure-linux</AssemblyName>
-    <AssemblyName Condition="'$(Configuration)' == 'osx'">deploy-cromwell-on-azure-osx.app</AssemblyName>
+    <AssemblyName Condition="'$(Configuration)' == 'win'">deploy-tes-on-azure-win</AssemblyName>
+    <AssemblyName Condition="'$(Configuration)' == 'linux'">deploy-tes-on-azure-linux</AssemblyName>
+    <AssemblyName Condition="'$(Configuration)' == 'osx'">deploy-tes-on-azure-osx.app</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
@@ -48,10 +48,6 @@
     <PackageReference Include="Polly" Version="7.2.3" />
     <PackageReference Include="SSH.NET" Version="2020.0.2" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.24.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Common\Common.csproj" />
   </ItemGroup>
   
   <ItemGroup>

@@ -49,7 +49,6 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Common\Common.csproj" />
     <ProjectReference Include="..\Tes\Tes.csproj" />
   </ItemGroup>
 </Project>

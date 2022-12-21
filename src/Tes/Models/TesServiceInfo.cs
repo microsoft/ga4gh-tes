@@ -17,6 +17,7 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
 using Newtonsoft.Json;
+using Tes.Utilities;
 
 namespace Tes.Models
 {
@@ -27,7 +28,7 @@ namespace Tes.Models
     public partial class TesServiceInfo : IEquatable<TesServiceInfo>
     {
         public TesServiceInfo()
-            => Common.NewtonsoftJsonSafeInit.SetDefaultSettings();
+            => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         /// <summary>
         /// Returns the name of the service, e.g. \&quot;ohsu-compbio-funnel\&quot;.

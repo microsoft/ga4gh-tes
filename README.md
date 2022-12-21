@@ -1,14 +1,8 @@
-# Project
+# GA4GH TES on Azure
 
-> This repo has been populated by an initial template to help get you started. Please
-> make sure to update the content to build a great experience for community-building.
+This project is the Microsoft Genomics supported Azure implementation of the [GA4GH Task Execution Service (TES)](https://github.com/ga4gh/task-execution-schemas).  The TES API is an effort to define a standardized schema and API for describing batch execution tasks. A task defines a set of input files, a set of (Docker) containers and commands to run, a set of output files, and some other logging and metadata.
 
-As the maintainer of this project, please make a few updates:
-
-- Improving this README.MD file to provide a great experience
-- Updating SUPPORT.MD with content about this project's support experience
-- Understanding the security reporting process in SECURITY.MD
-- Remove this section from the README
+In the future, a publicly-hosted Docker image, likely named `mcr.microsoft.com/ga4gh/tes` will be built from this project.
 
 ## Contributing
 

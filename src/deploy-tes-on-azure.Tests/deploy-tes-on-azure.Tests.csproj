@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\deploy-cromwell-on-azure\deploy-tes-on-azure.csproj" />
+    <ProjectReference Include="..\deploy-tes-on-azure\deploy-tes-on-azure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -15,6 +15,7 @@ using System;
 using System.Runtime.Serialization;
 using System.Text;
 using Newtonsoft.Json;
+using Tes.Utilities;
 
 namespace Tes.Models
 {
@@ -25,7 +26,7 @@ namespace Tes.Models
     public partial class TesInput : IEquatable<TesInput>
     {
         public TesInput()
-            => Common.NewtonsoftJsonSafeInit.SetDefaultSettings();
+            => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         /// <summary>
         /// Gets or Sets Name
