@@ -1,4 +1,7 @@
-﻿namespace TesApi.Web
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+namespace TesApi.Web
 {
     /// <summary>
     /// Batch node image and sku info
