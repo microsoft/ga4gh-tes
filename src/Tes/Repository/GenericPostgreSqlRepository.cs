@@ -5,22 +5,21 @@ namespace Tes.Repository
 {
     using System;
     using System.Collections.Generic;
-    using System.ComponentModel.DataAnnotations.Schema;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Threading.Tasks;
     using Microsoft.EntityFrameworkCore;
 
 
+
     /// <summary>
     /// A repository for interacting with an Azure PostgreSql Server. 
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class PostgreSqlRepository<T> : IRepository<T> where T : RepositoryItem<T>
+    public class GenericPostgreSqlRepository<T> : IRepository<T> where T : RepositoryItem<T>
     {
-        private readonly string connectionString;
-        private readonly RepositoryDb context;
-        private readonly DbSet<DatabaseItem> items;
+        protected readonly string connectionString;
+        protected readonly RepositoryDb context;
 
         /// <summary>
         /// Default constructor
@@ -29,7 +28,7 @@ namespace Tes.Repository
         /// <param name="user">Azure PostgreSQL Server user name</param>
         /// <param name="database">Azure PostgreSQL Server database name</param>
         /// <param name="token">User's password or authentication token for Azure PostgreSQL Server</param>
-        public PostgreSqlRepository(string host, string user, string database, string token)
+        public GenericPostgreSqlRepository(string host, string user, string database, string token)
         {
             connectionString =
                 String.Format(
@@ -40,21 +39,18 @@ namespace Tes.Repository
                  5432,
                  token);
             context = new RepositoryDb(connectionString);
-            items = database.Contains("tes") ? context.TesTasks : context.PoolItems;
-
         }
 
         /// <inheritdoc/>
         public async Task<bool> TryGetItemAsync(string id, Action<T> onSuccess = null)
         {
             await context.Database.EnsureCreatedAsync();
-
-            // Search for Id within the JSON
-            var task = await items.FirstOrDefaultAsync(t => t.Json.GetId().Contains(id));
+            // Search for Id in the Set (Which would the outer model, not the JSON)
+            var task = await context.Set<T>().FirstOrDefaultAsync(t => t.GetId() == id);
 
             if (task is not null)
             {
-                onSuccess?.Invoke(task.Json);
+                onSuccess?.Invoke(task);
                 return true;
             }
             return false;
@@ -64,9 +60,8 @@ namespace Tes.Repository
         public async Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate)
         {
             await context.Database.EnsureCreatedAsync();
-
-            // Search for items in the JSON
-            return await items.Select(t => t.Json).Where(predicate).ToListAsync<T>();
+            // Search for items in the outer model, not the JSON
+            return await context.Set<T>().Where(predicate).ToListAsync<T>();
         }
 
         /// <inheritdoc/>
@@ -80,8 +75,7 @@ namespace Tes.Repository
         public async Task<T> CreateItemAsync(T item)
         {
             await context.Database.EnsureCreatedAsync();
-            var dbItem = new DatabaseItem { Json = item };
-            items.Add(dbItem);
+            context.Set<T>().Add(item);
             await context.SaveChangesAsync();
             return item;
         }
@@ -91,14 +85,15 @@ namespace Tes.Repository
         {
             await context.Database.EnsureCreatedAsync();
 
-            var task = await items.FirstOrDefaultAsync(t => t.Json.GetId == item.GetId);
+            // Get outer model Id
+            var task = await context.Set<T>().FirstOrDefaultAsync(t => t.GetId() == item.GetId());
 
             // Update Properties
             if (task is not null)
             {
-                task.Json = item;
+                task = item;
                 await context.SaveChangesAsync();
-                return task.Json;
+                return task;
             }
             return null;
         }
@@ -107,41 +102,14 @@ namespace Tes.Repository
         public async Task DeleteItemAsync(string id)
         {
             await context.Database.EnsureCreatedAsync();
-            var task = await items.FirstOrDefaultAsync(t => t.Id == (long)Convert.ToDouble(id));
+            // Searches outer model, not JSON
+            var task = await context.Set<T>().FirstOrDefaultAsync(t => t.GetId() == id);
 
             if (task is not null)
             {
-                items.Remove(task);
+                context.Set<T>().Remove(task);
                 await context.SaveChangesAsync();
             }
-        }
-
-        public class RepositoryDb : DbContext
-        {
-            public string connectionString;
-            public RepositoryDb(string connectionString = null)
-            {
-                this.connectionString = connectionString;
-            }
-
-            public DbSet<DatabaseItem> TesTasks { get; set; }
-            public DbSet<DatabaseItem> PoolItems { get; set; }
-            protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-            {
-                optionsBuilder.UseNpgsql(connectionString).UseLowerCaseNamingConvention();
-            }
-        }
-
-        /// <summary>
-        /// Database schema for encapsulating a RepositoryItem<T> as Json.
-        /// </summary>
-        [Table("databaseitem")]
-        public class DatabaseItem
-        {
-            [Column("id")]
-            public long Id { get; set; }
-            [Column("json", TypeName = "jsonb")]
-            public T Json { get; set; }
         }
     }
 }
