@@ -19,6 +19,8 @@ namespace Tes.Repository
     public class PostgreSqlRepository<T> : IRepository<T> where T : RepositoryItem<T>
     {
         private readonly string connectionString;
+        private readonly RepositoryDb context;
+        private readonly DbSet<DatabaseItem> items;
 
         /// <summary>
         /// Default constructor
@@ -37,16 +39,18 @@ namespace Tes.Repository
                  database,
                  5432,
                  token);
+            context = new RepositoryDb(connectionString);
+            items = database.Contains("tes") ? context.TesTasks : context.PoolItems;
+
         }
 
         /// <inheritdoc/>
         public async Task<bool> TryGetItemAsync(string id, Action<T> onSuccess = null)
         {
-            using var context = new RepositoryDb();
             await context.Database.EnsureCreatedAsync();
 
             // Search for Id within the JSON
-            var task = await context.Items.FirstOrDefaultAsync(t => t.Json.GetId().Contains(id));
+            var task = await items.FirstOrDefaultAsync(t => t.Json.GetId().Contains(id));
 
             if (task is not null)
             {
@@ -59,11 +63,10 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate)
         {
-            using var context = new RepositoryDb();
             await context.Database.EnsureCreatedAsync();
 
             // Search for items in the JSON
-            return await context.Items.Select(t => t.Json).Where(predicate).ToListAsync<T>();
+            return await items.Select(t => t.Json).Where(predicate).ToListAsync<T>();
         }
 
         /// <inheritdoc/>
@@ -76,10 +79,9 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task<T> CreateItemAsync(T item)
         {
-            using var context = new RepositoryDb(connectionString);
             await context.Database.EnsureCreatedAsync();
             var dbItem = new DatabaseItem { Json = item };
-            context.Items.Add(dbItem);
+            items.Add(dbItem);
             await context.SaveChangesAsync();
             return item;
         }
@@ -87,10 +89,9 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task<T> UpdateItemAsync(T item)
         {
-            using var context = new RepositoryDb();
             await context.Database.EnsureCreatedAsync();
 
-            var task = await context.Items.FirstOrDefaultAsync(t => t.Json.GetId == item.GetId);
+            var task = await items.FirstOrDefaultAsync(t => t.Json.GetId == item.GetId);
 
             // Update Properties
             if (task is not null)
@@ -105,26 +106,26 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task DeleteItemAsync(string id)
         {
-            using var context = new RepositoryDb();
             await context.Database.EnsureCreatedAsync();
-            var task = await context.Items.FirstOrDefaultAsync(t => t.Id == (long)Convert.ToDouble(id));
+            var task = await items.FirstOrDefaultAsync(t => t.Id == (long)Convert.ToDouble(id));
 
             if (task is not null)
             {
-                context.Items.Remove(task);
+                items.Remove(task);
                 await context.SaveChangesAsync();
             }
         }
 
         public class RepositoryDb : DbContext
         {
-            private readonly string connectionString;
+            public string connectionString;
             public RepositoryDb(string connectionString = null)
             {
                 this.connectionString = connectionString;
             }
 
-            public DbSet<DatabaseItem> Items { get; set; }
+            public DbSet<DatabaseItem> TesTasks { get; set; }
+            public DbSet<DatabaseItem> PoolItems { get; set; }
             protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
             {
                 optionsBuilder.UseNpgsql(connectionString).UseLowerCaseNamingConvention();
