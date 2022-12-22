@@ -12,7 +12,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CromwellOnAzureDeployer
+namespace TesDeployer
 {
     internal static class ConsoleEx
     {

@@ -97,11 +97,11 @@ namespace TesApi.Web
 
                 .AddSwaggerGen(c =>
                 {
-                    c.SwaggerDoc("0.3.2", new OpenApiInfo
+                    c.SwaggerDoc("0.3.3", new OpenApiInfo
                     {
-                        Version = "0.3.2",
+                        Version = "0.3.3",
                         Title = "Task Execution Service",
-                        Description = "Task Execution Service (ASP.NET Core 6.0)",
+                        Description = "Task Execution Service (ASP.NET Core 7.0)",
                         Contact = new OpenApiContact()
                         {
                             Name = "Microsoft Biomedical Platforms and Genomics",

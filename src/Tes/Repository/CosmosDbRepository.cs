@@ -35,10 +35,10 @@ namespace Tes.Repository
         public CosmosDbRepository(string endpoint, string key, string databaseId, string containerId, string partitionKeyValue)
         {
             NewtonsoftJsonSafeInit.SetDefaultSettings();
-            this.cosmosClient = new CosmosClient(endpoint, key);
+            this.cosmosClient = new(endpoint, key);
             this.container = cosmosClient.GetContainer(databaseId, containerId);
             this.partitionKeyValue = partitionKeyValue;
-            this.partitionKey = new PartitionKey(partitionKeyValue);
+            this.partitionKey = new(partitionKeyValue);
             CreateDatabaseIfNotExistsAsync().Wait();
             CreateContainerIfNotExistsAsync().Wait();
         }
@@ -142,7 +142,7 @@ namespace Tes.Repository
         private async Task CreateContainerIfNotExistsAsync()
         {
             var database = this.cosmosClient.GetDatabase(container.Database.Id);
-            await database.CreateContainerIfNotExistsAsync(new ContainerProperties { Id = container.Id, PartitionKeyPath = $"/{RepositoryItem<T>.PartitionKeyFieldName}" });
+            await database.CreateContainerIfNotExistsAsync(new() { Id = container.Id, PartitionKeyPath = $"/{RepositoryItem<T>.PartitionKeyFieldName}" });
 
             var existingPartitionKeyPath = (await container.ReadContainerAsync()).Resource.PartitionKeyPath;
 

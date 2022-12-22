@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Rest;
 
-namespace CromwellOnAzureDeployer
+namespace TesDeployer
 {
     /// <summary>
     /// ITokenProvider implementation based on AzureServiceTokenProvider from Microsoft.Azure.Services.AppAuthentication package.
@@ -35,7 +35,7 @@ namespace CromwellOnAzureDeployer
             this.resource = resource;
             this.tenantId = tenantId;
 
-            this.tokenProvider = new AzureServiceTokenProvider("RunAs=Developer; DeveloperTool=AzureCli", azureAdInstance: azureAdInstance);
+            this.tokenProvider = new("RunAs=Developer; DeveloperTool=AzureCli", azureAdInstance: azureAdInstance);
         }
 
         /// <summary>
@@ -48,7 +48,7 @@ namespace CromwellOnAzureDeployer
             // AzureServiceTokenProvider caches tokens internally and refreshes them before expiry.
             // This method usually gets called on every request to set the authentication header. This ensures that we cache tokens, and also that we always get a valid one.
             var token = await tokenProvider.GetAccessTokenAsync(resource, tenantId, cancellationToken).ConfigureAwait(false);
-            return new AuthenticationHeaderValue("Bearer", token);
+            return new("Bearer", token);
         }
     }
 }

@@ -4,7 +4,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace CromwellOnAzureDeployer
+namespace TesDeployer
 {
     internal class Program
     {
@@ -42,9 +42,9 @@ namespace CromwellOnAzureDeployer
             Console.WriteLine("Privacy & Cookies: https://go.microsoft.com/fwlink/?LinkId=521839");
             Console.WriteLine();
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("Cromwell on Azure");
+            Console.WriteLine("TES on Azure");
             Console.ResetColor();
-            Console.WriteLine("https://github.com/microsoft/CromwellOnAzure");
+            Console.WriteLine("https://github.com/microsoft/ga4gh-tes");
             Console.WriteLine();
         }
     }

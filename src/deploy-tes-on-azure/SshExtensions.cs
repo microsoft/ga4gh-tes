@@ -9,7 +9,7 @@ using Polly.Retry;
 using Renci.SshNet;
 using Renci.SshNet.Common;
 
-namespace CromwellOnAzureDeployer
+namespace TesDeployer
 {
     public static class SshExtensions
     {
