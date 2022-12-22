@@ -17,8 +17,6 @@ namespace Tes.Repository
     /// <typeparam name="TesTask"></typeparam>
     public class TesTaskPostgreSqlRepository : GenericPostgreSqlRepository<TesTask>
     {
-        private readonly DbSet<TeskTaskDatabaseItem> items;
-
         /// <summary>
         /// Default constructor
         /// </summary>
@@ -28,7 +26,6 @@ namespace Tes.Repository
         /// <param name="token">User's password or authentication token for Azure PostgreSQL Server</param>
         public TesTaskPostgreSqlRepository(string host, string user, string database, string token) : base(host, user, database, token)
         {
-            items = context.TesTasks;
         }
 
         /// Base class searches within model, this method searches within the JSON
@@ -37,7 +34,7 @@ namespace Tes.Repository
             await context.Database.EnsureCreatedAsync();
 
             // Search for Id within the JSON
-            var task = await items.FirstOrDefaultAsync(t => t.Json.GetId().Contains(id));
+            var task = await context.TesTasks.FirstOrDefaultAsync(t => t.Json.GetId().Contains(id));
 
             if (task is not null)
             {
@@ -53,7 +50,7 @@ namespace Tes.Repository
             await context.Database.EnsureCreatedAsync();
 
             // Search for items in the JSON
-            return await items.Select(t => t.Json).Where(predicate).ToListAsync<TesTask>();
+            return await context.TesTasks.Select(t => t.Json).Where(predicate).ToListAsync<TesTask>();
         }
 
         /// Encapsulates a TesTask as JSON
@@ -61,7 +58,7 @@ namespace Tes.Repository
         {
             await context.Database.EnsureCreatedAsync();
             var dbItem = new TeskTaskDatabaseItem { Json = item };
-            items.Add(dbItem);
+            context.TesTasks.Add(dbItem);
             await context.SaveChangesAsync();
             return item;
         }
@@ -71,7 +68,7 @@ namespace Tes.Repository
         {
             await context.Database.EnsureCreatedAsync();
 
-            var task = await items.FirstOrDefaultAsync(t => t.Json.GetId == item.GetId);
+            var task = await context.TesTasks.FirstOrDefaultAsync(t => t.Json.GetId == item.GetId);
 
             // Update Properties
             if (task is not null)
@@ -87,11 +84,11 @@ namespace Tes.Repository
         public new async Task DeleteItemAsync(string id)
         {
             await context.Database.EnsureCreatedAsync();
-            var task = await items.FirstOrDefaultAsync(t => t.Id == (long)Convert.ToDouble(id));
+            var task = await context.TesTasks.FirstOrDefaultAsync(t => t.Id == (long)Convert.ToDouble(id));
 
             if (task is not null)
             {
-                items.Remove(task);
+                context.TesTasks.Remove(task);
                 await context.SaveChangesAsync();
             }
         }
