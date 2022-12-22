@@ -157,7 +157,7 @@ namespace Tes.Models
                     hashCode = hashCode * 59 + Storage.GetHashCode();
                 }
 
-                if (TesResourcesSupportedBackendParameters != null)
+                if (TesResourcesSupportedBackendParameters is not null)
                 {
                     hashCode = hashCode * 59 + TesResourcesSupportedBackendParameters.GetHashCode();
                 }

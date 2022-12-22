@@ -207,12 +207,12 @@ namespace Tes.Models
                     hashCode = hashCode * 59 + Zones.GetHashCode();
                 }
 
-                if (BackendParameters != null)
+                if (BackendParameters is not null)
                 {
                     hashCode = hashCode * 59 + BackendParameters.GetHashCode();
                 }
 
-                if (BackendParametersStrict != null)
+                if (BackendParametersStrict is not null)
                 {
                     hashCode = hashCode * 59 + BackendParametersStrict.GetHashCode();
                 }
