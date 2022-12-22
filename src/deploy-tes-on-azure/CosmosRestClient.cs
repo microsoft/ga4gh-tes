@@ -48,8 +48,8 @@ namespace CromwellOnAzureDeployer
             var authHeader = GenerateAuthToken("GET", resourceType, resourceId, dateString, key, "master", "1.0");
 
             var client = new HttpClient();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(authHeader);
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.Authorization = new(authHeader);
+            client.DefaultRequestHeaders.Accept.Add(new("application/json"));
             client.DefaultRequestHeaders.Add("x-ms-version", "2018-12-31");
             client.DefaultRequestHeaders.Add("x-ms-date", dateString);
 
@@ -62,8 +62,8 @@ namespace CromwellOnAzureDeployer
             var authHeader = GenerateAuthToken("POST", resourceType, resourceId, dateString, key, "master", "1.0");
 
             var client = new HttpClient();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(authHeader);
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.Authorization = new(authHeader);
+            client.DefaultRequestHeaders.Accept.Add(new("application/json"));
             client.DefaultRequestHeaders.Add("x-ms-version", "2018-12-31");
             client.DefaultRequestHeaders.Add("x-ms-date", dateString);
             client.DefaultRequestHeaders.Add("x-ms-documentdb-isquery", "True");
@@ -81,8 +81,8 @@ namespace CromwellOnAzureDeployer
             var authHeader = GenerateAuthToken("PUT", resourceType, resourceId, dateString, key, "master", "1.0");
 
             var client = new HttpClient();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(authHeader);
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.Authorization = new(authHeader);
+            client.DefaultRequestHeaders.Accept.Add(new("application/json"));
             client.DefaultRequestHeaders.Add("x-ms-version", "2018-12-31");
             client.DefaultRequestHeaders.Add("x-ms-date", dateString);
 

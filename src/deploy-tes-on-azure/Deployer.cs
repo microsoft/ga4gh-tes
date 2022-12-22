@@ -29,26 +29,21 @@ using Microsoft.Azure.Management.CosmosDB.Fluent;
 using Microsoft.Azure.Management.CosmosDB.Fluent.Models;
 using Microsoft.Azure.Management.Fluent;
 using Microsoft.Azure.Management.Graph.RBAC.Fluent;
-using Microsoft.Azure.Management.Graph.RBAC.Fluent.Models;
 using Microsoft.Azure.Management.KeyVault;
 using Microsoft.Azure.Management.KeyVault.Fluent;
 using Microsoft.Azure.Management.KeyVault.Models;
 using Microsoft.Azure.Management.Msi.Fluent;
 using Microsoft.Azure.Management.Network;
 using Microsoft.Azure.Management.Network.Fluent;
-using Microsoft.Azure.Management.Network.Models;
 using Microsoft.Azure.Management.PostgreSQL;
 using Microsoft.Azure.Management.PrivateDns.Fluent;
 using Microsoft.Azure.Management.ResourceGraph;
-using Microsoft.Azure.Management.ResourceGraph.Models;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Azure.Management.Storage.Fluent;
 using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Rest;
-using Microsoft.Rest.Azure.OData;
-using Newtonsoft.Json;
 using Polly;
 using Polly.Retry;
 using Renci.SshNet;
@@ -64,7 +59,6 @@ using IResource = Microsoft.Azure.Management.ResourceManager.Fluent.Core.IResour
 using KeyVaultManagementClient = Microsoft.Azure.Management.KeyVault.KeyVaultManagementClient;
 using SingleServer = Microsoft.Azure.Management.PostgreSQL;
 using SingleServerModel = Microsoft.Azure.Management.PostgreSQL.Models;
-using Sku = Microsoft.Azure.Management.PostgreSQL.FlexibleServers.Models.Sku;
 
 namespace CromwellOnAzureDeployer
 {
@@ -146,8 +140,8 @@ namespace CromwellOnAzureDeployer
 
                 await ValidateTokenProviderAsync();
 
-                tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider("https://management.azure.com/"));
-                azureCredentials = new AzureCredentials(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
+                tokenCredentials = new(new RefreshableAzureServiceTokenProvider("https://management.azure.com/"));
+                azureCredentials = new(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
                 azureClient = GetAzureClient(azureCredentials);
                 azureSubscriptionClient = azureClient.WithSubscription(configuration.SubscriptionId);
                 subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
@@ -158,7 +152,7 @@ namespace CromwellOnAzureDeployer
 
                 if (configuration.UseAks)
                 {
-                    kubernetesManager = new KubernetesManager(configuration, azureCredentials, cts);
+                    kubernetesManager = new(configuration, azureCredentials, cts);
                 }
 
                 await ValidateSubscriptionAndResourceGroupAsync(configuration);
@@ -314,8 +308,10 @@ namespace CromwellOnAzureDeployer
                         {
                             if (accountNames.TryGetValue("CrossSubscriptionAKSDeployment", out var crossSubscriptionAKSDeployment))
                             {
-                                bool.TryParse(crossSubscriptionAKSDeployment, out var parsed);
-                                configuration.CrossSubscriptionAKSDeployment = parsed;
+                                if (bool.TryParse(crossSubscriptionAKSDeployment, out var parsed))
+                                {
+                                    configuration.CrossSubscriptionAKSDeployment = parsed;
+                                }
                             }
 
                             if (accountNames.TryGetValue("KeyVaultName", out var keyVaultName))
@@ -489,7 +485,7 @@ namespace CromwellOnAzureDeployer
                             });
                         }
 
-                        if (configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault() && postgreSqlFlexServer == null)
+                        if (configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault() && postgreSqlFlexServer is null)
                         {
                             postgreSqlDnsZone = await CreatePrivateDnsZoneAsync(vnetAndSubnet.Value.virtualNetwork, $"privatelink.postgres.database.azure.com", "PostgreSQL Server");
                         }
@@ -499,7 +495,7 @@ namespace CromwellOnAzureDeployer
                             await AssignVmAsBillingReaderToSubscriptionAsync(managedIdentity);
                         }
 
-                        await Task.WhenAll(new Task[]
+                        await Task.WhenAll(new[]
                         {
                             Task.Run(async () =>
                             {
@@ -540,7 +536,7 @@ namespace CromwellOnAzureDeployer
                                 var clientId = managedIdentity.ClientId;
                                 var settings = ConfigureSettings(clientId);
 
-                                if (aksCluster == null && !configuration.ManualHelmDeployment)
+                                if (aksCluster is null && !configuration.ManualHelmDeployment)
                                 {
                                     await ProvisionManagedCluster(resourceGroup, managedIdentity, logAnalyticsWorkspace, vnetAndSubnet?.virtualNetwork, vnetAndSubnet?.vmSubnet.Name, configuration.PrivateNetworking.GetValueOrDefault());
                                 }
@@ -808,11 +804,11 @@ namespace CromwellOnAzureDeployer
             {
                 AddonProfiles = new Dictionary<string, ManagedClusterAddonProfile>
                 {
-                    { "omsagent", new ManagedClusterAddonProfile(true, new Dictionary<string, string>() { { "logAnalyticsWorkspaceResourceID", logAnalyticsWorkspace.Id } }) }
+                    { "omsagent", new(true, new Dictionary<string, string>() { { "logAnalyticsWorkspaceResourceID", logAnalyticsWorkspace.Id } }) }
                 },
                 Location = configuration.RegionName,
                 DnsPrefix = configuration.AksClusterName,
-                NetworkProfile = new ContainerServiceNetworkProfile
+                NetworkProfile = new()
                 {
                     NetworkPlugin = NetworkPlugin.Azure,
                     ServiceCidr = configuration.KubernetesServiceCidr,
@@ -820,19 +816,19 @@ namespace CromwellOnAzureDeployer
                     DockerBridgeCidr = configuration.KubernetesDockerBridgeCidr,
                     NetworkPolicy = NetworkPolicy.Azure
                 },
-                Identity = new ManagedClusterIdentity(managedIdentity.PrincipalId, managedIdentity.TenantId, Microsoft.Azure.Management.ContainerService.Models.ResourceIdentityType.UserAssigned)
+                Identity = new(managedIdentity.PrincipalId, managedIdentity.TenantId, Microsoft.Azure.Management.ContainerService.Models.ResourceIdentityType.UserAssigned)
                 {
                     UserAssignedIdentities = new Dictionary<string, ManagedClusterIdentityUserAssignedIdentitiesValue>()
                 }
             };
-            cluster.Identity.UserAssignedIdentities.Add(managedIdentity.Id, new ManagedClusterIdentityUserAssignedIdentitiesValue(managedIdentity.PrincipalId, managedIdentity.ClientId));
+            cluster.Identity.UserAssignedIdentities.Add(managedIdentity.Id, new(managedIdentity.PrincipalId, managedIdentity.ClientId));
             cluster.IdentityProfile = new Dictionary<string, ManagedClusterPropertiesIdentityProfileValue>
             {
-                { "kubeletidentity", new ManagedClusterPropertiesIdentityProfileValue(managedIdentity.Id, managedIdentity.ClientId, managedIdentity.PrincipalId) }
+                { "kubeletidentity", new(managedIdentity.Id, managedIdentity.ClientId, managedIdentity.PrincipalId) }
             };
             cluster.AgentPoolProfiles = new List<ManagedClusterAgentPoolProfile>
             {
-                new ManagedClusterAgentPoolProfile()
+                new()
                 {
                     Name = nodePoolName,
                     Count = configuration.AksPoolSize,
@@ -850,7 +846,7 @@ namespace CromwellOnAzureDeployer
 
             if (privateNetworking)
             {
-                cluster.ApiServerAccessProfile = new ManagedClusterAPIServerAccessProfile()
+                cluster.ApiServerAccessProfile = new()
                 {
                     EnablePrivateCluster = true,
                     EnablePrivateClusterPublicFQDN = true
@@ -902,35 +898,35 @@ namespace CromwellOnAzureDeployer
 
             var installedVersion = await GetInstalledCromwellOnAzureVersionAsync(sshConnectionInfo);
 
-            if (installedVersion == null)
+            if (installedVersion is null)
             {
                 // If upgrading from pre-2.1 version, patch the installed Cromwell configuration file (disable call caching and default to preemptible)
                 await PatchCromwellConfigurationFileV200Async(storageAccount);
                 await SetCosmosDbContainerAutoScaleAsync(cosmosDb);
             }
 
-            if (installedVersion == null || installedVersion < new Version(2, 1))
+            if (installedVersion is null || installedVersion < new Version(2, 1))
             {
                 await PatchContainersToMountFileV210Async(storageAccount, managedIdentity.Name);
             }
 
-            if (installedVersion == null || installedVersion < new Version(2, 2))
+            if (installedVersion is null || installedVersion < new Version(2, 2))
             {
                 await PatchContainersToMountFileV220Async(storageAccount);
             }
 
-            if (installedVersion == null || installedVersion < new Version(2, 4))
+            if (installedVersion is null || installedVersion < new Version(2, 4))
             {
                 await PatchContainersToMountFileV240Async(storageAccount);
                 await PatchAccountNamesFileV240Async(sshConnectionInfo, managedIdentity);
             }
 
-            if (installedVersion == null || installedVersion < new Version(2, 5))
+            if (installedVersion is null || installedVersion < new Version(2, 5))
             {
                 await MitigateChaosDbV250Async(cosmosDb);
             }
 
-            if (installedVersion == null || installedVersion < new Version(3, 0))
+            if (installedVersion is null || installedVersion < new Version(3, 0))
             {
                 await PatchCromwellConfigurationFileV300Async(storageAccount);
                 await AddNewSettingsV300Async(sshConnectionInfo);
@@ -1336,14 +1332,14 @@ namespace CromwellOnAzureDeployer
 
             var uploadList = new List<(string, string, bool)>
             {
-                (Utility.PersonalizeContent(new []
+                (Utility.PersonalizeContent(new Utility.ConfigReplaceTextItem[]
                 {
-                    new Utility.ConfigReplaceTextItem("{DefaultStorageAccountName}", configuration.StorageAccountName),
-                    new Utility.ConfigReplaceTextItem("{CosmosDbAccountName}", configuration.CosmosDbAccountName),
-                    new Utility.ConfigReplaceTextItem("{BatchAccountName}", configuration.BatchAccountName),
-                    new Utility.ConfigReplaceTextItem("{ApplicationInsightsAccountName}", configuration.ApplicationInsightsAccountName),
-                    new Utility.ConfigReplaceTextItem("{ManagedIdentityClientId}", managedIdentity.ClientId),
-                    new Utility.ConfigReplaceTextItem("{PostgreSqlServerName}", configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault() ? configuration.PostgreSqlServerName : String.Empty),
+                    new("{DefaultStorageAccountName}", configuration.StorageAccountName),
+                    new("{CosmosDbAccountName}", configuration.CosmosDbAccountName),
+                    new("{BatchAccountName}", configuration.BatchAccountName),
+                    new("{ApplicationInsightsAccountName}", configuration.ApplicationInsightsAccountName),
+                    new("{ManagedIdentityClientId}", managedIdentity.ClientId),
+                    new("{PostgreSqlServerName}", configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault() ? configuration.PostgreSqlServerName : String.Empty),
                 }, "scripts", "env-01-account-names.txt"),
                 $"{CromwellAzureRootDir}/env-01-account-names.txt", false),
 
@@ -1352,14 +1348,14 @@ namespace CromwellOnAzureDeployer
 
             if (configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault())
             {
-                uploadList.Add((Utility.PersonalizeContent(new[]
+                uploadList.Add((Utility.PersonalizeContent(new Utility.ConfigReplaceTextItem[]
                 {
-                    new Utility.ConfigReplaceTextItem("{PostgreSqlCromwellDatabaseName}", configuration.PostgreSqlCromwellDatabaseName),
-                    new Utility.ConfigReplaceTextItem("{PostgreSqlTesDatabaseName}", configuration.PostgreSqlTesDatabaseName),
-                    new Utility.ConfigReplaceTextItem("{PostgreSqlCromwellUserLogin}", configuration.PostgreSqlCromwellUserLogin),
-                    new Utility.ConfigReplaceTextItem("{PostgreSqlCromwellUserPassword}", configuration.PostgreSqlCromwellUserPassword),
-                    new Utility.ConfigReplaceTextItem("{PostgreSqlTesUserLogin}", configuration.PostgreSqlTesUserLogin),
-                    new Utility.ConfigReplaceTextItem("{PostgreSqlTesUserPassword}", configuration.PostgreSqlTesUserPassword),
+                    new("{PostgreSqlCromwellDatabaseName}", configuration.PostgreSqlCromwellDatabaseName),
+                    new("{PostgreSqlTesDatabaseName}", configuration.PostgreSqlTesDatabaseName),
+                    new("{PostgreSqlCromwellUserLogin}", configuration.PostgreSqlCromwellUserLogin),
+                    new("{PostgreSqlCromwellUserPassword}", configuration.PostgreSqlCromwellUserPassword),
+                    new("{PostgreSqlTesUserLogin}", configuration.PostgreSqlTesUserLogin),
+                    new("{PostgreSqlTesUserPassword}", configuration.PostgreSqlTesUserPassword),
                 }, "scripts", "env-13-postgre-sql-db.txt"),
                 $"{CromwellAzureRootDir}/env-13-postgre-sql-db.txt", false));
             }
@@ -1594,33 +1590,33 @@ namespace CromwellOnAzureDeployer
                 $"Writing {ContainersToMountFileName} and {CromwellConfigurationFileName} files to '{ConfigurationContainerName}' storage container...",
                 async () =>
                 {
-                    await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, ContainersToMountFileName, Utility.PersonalizeContent(new[]
+                    await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, ContainersToMountFileName, Utility.PersonalizeContent(new Utility.ConfigReplaceTextItem[]
                     {
-                        new Utility.ConfigReplaceTextItem("{DefaultStorageAccountName}", configuration.StorageAccountName),
-                        new Utility.ConfigReplaceTextItem("{ManagedIdentityName}", managedIdentityName)
+                        new("{DefaultStorageAccountName}", configuration.StorageAccountName),
+                        new("{ManagedIdentityName}", managedIdentityName)
                     }, "scripts", ContainersToMountFileName));
 
                     // Configure Cromwell config file for Docker Mysql or PostgreSQL on Azure.
                     if (configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault())
                     {
-                        await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, CromwellConfigurationFileName, Utility.PersonalizeContent(new[]
+                        await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, CromwellConfigurationFileName, Utility.PersonalizeContent(new Utility.ConfigReplaceTextItem[]
                         {
-                            new Utility.ConfigReplaceTextItem("{DatabaseUrl}", $"\"jdbc:postgresql://{configuration.PostgreSqlServerName}.postgres.database.azure.com/{configuration.PostgreSqlCromwellDatabaseName}?sslmode=require\""),
-                            new Utility.ConfigReplaceTextItem("{DatabaseUser}", configuration.UsePostgreSqlSingleServer ? $"\"{configuration.PostgreSqlCromwellUserLogin}@{configuration.PostgreSqlServerName}\"": $"\"{configuration.PostgreSqlCromwellUserLogin}\""),
-                            new Utility.ConfigReplaceTextItem("{DatabasePassword}", $"\"{configuration.PostgreSqlCromwellUserPassword}\""),
-                            new Utility.ConfigReplaceTextItem("{DatabaseDriver}", $"\"org.postgresql.Driver\""),
-                            new Utility.ConfigReplaceTextItem("{DatabaseProfile}", "\"slick.jdbc.PostgresProfile$\""),
+                            new("{DatabaseUrl}", $"\"jdbc:postgresql://{configuration.PostgreSqlServerName}.postgres.database.azure.com/{configuration.PostgreSqlCromwellDatabaseName}?sslmode=require\""),
+                            new("{DatabaseUser}", configuration.UsePostgreSqlSingleServer ? $"\"{configuration.PostgreSqlCromwellUserLogin}@{configuration.PostgreSqlServerName}\"": $"\"{configuration.PostgreSqlCromwellUserLogin}\""),
+                            new("{DatabasePassword}", $"\"{configuration.PostgreSqlCromwellUserPassword}\""),
+                            new("{DatabaseDriver}", $"\"org.postgresql.Driver\""),
+                            new("{DatabaseProfile}", "\"slick.jdbc.PostgresProfile$\""),
                         }, "scripts", CromwellConfigurationFileName));
                     }
                     else
                     {
-                        await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, CromwellConfigurationFileName, Utility.PersonalizeContent(new[]
+                        await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, CromwellConfigurationFileName, Utility.PersonalizeContent(new Utility.ConfigReplaceTextItem[]
                         {
-                            new Utility.ConfigReplaceTextItem("{DatabaseUrl}", $"\"jdbc:mysql://mysqldb/cromwell_db?useSSL=false&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true\""),
-                            new Utility.ConfigReplaceTextItem("{DatabaseUser}", $"\"cromwell\""),
-                            new Utility.ConfigReplaceTextItem("{DatabasePassword}", $"\"cromwell\""),
-                            new Utility.ConfigReplaceTextItem("{DatabaseDriver}", $"\"com.mysql.cj.jdbc.Driver\""),
-                        new Utility.ConfigReplaceTextItem("{DatabaseProfile}", "\"slick.jdbc.MySQLProfile$\""),
+                            new("{DatabaseUrl}", $"\"jdbc:mysql://mysqldb/cromwell_db?useSSL=false&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true\""),
+                            new("{DatabaseUser}", $"\"cromwell\""),
+                            new("{DatabasePassword}", $"\"cromwell\""),
+                            new("{DatabaseDriver}", $"\"com.mysql.cj.jdbc.Driver\""),
+                            new("{DatabaseProfile}", "\"slick.jdbc.MySQLProfile$\""),
                         }, "scripts", CromwellConfigurationFileName));
                     }
 
@@ -1677,15 +1673,15 @@ namespace CromwellOnAzureDeployer
                 {
                     server = await postgresManagementClient.Servers.CreateAsync(
                         configuration.ResourceGroupName, configuration.PostgreSqlServerName,
-                        new FlexibleServerModel.Server(
+                        new(
                            location: configuration.RegionName,
                            version: configuration.PostgreSqlVersion,
-                           sku: new Sku(configuration.PostgreSqlSkuName, configuration.PostgreSqlTier),
-                           storage: new FlexibleServerModel.Storage(configuration.PostgreSqlStorageSize),
+                           sku: new(configuration.PostgreSqlSkuName, configuration.PostgreSqlTier),
+                           storage: new(configuration.PostgreSqlStorageSize),
                            administratorLogin: configuration.PostgreSqlAdministratorLogin,
                            administratorLoginPassword: configuration.PostgreSqlAdministratorPassword,
-                           network: new FlexibleServerModel.Network(publicNetworkAccess: "Disabled", delegatedSubnetResourceId: subnet.Inner.Id, privateDnsZoneArmResourceId: postgreSqlDnsZone.Id),
-                           highAvailability: new FlexibleServerModel.HighAvailability("Disabled")
+                           network: new(publicNetworkAccess: "Disabled", delegatedSubnetResourceId: subnet.Inner.Id, privateDnsZoneArmResourceId: postgreSqlDnsZone.Id),
+                           highAvailability: new("Disabled")
                         ));
                 });
 
@@ -1693,13 +1689,13 @@ namespace CromwellOnAzureDeployer
                 $"Creating PostgreSQL cromwell database: {configuration.PostgreSqlCromwellDatabaseName}...",
                 () => postgresManagementClient.Databases.CreateAsync(
                     configuration.ResourceGroupName, configuration.PostgreSqlServerName, configuration.PostgreSqlCromwellDatabaseName,
-                    new FlexibleServerModel.Database()));
+                    new()));
 
             await Execute(
                 $"Creating PostgreSQL tes database: {configuration.PostgreSqlTesDatabaseName}...",
                 () => postgresManagementClient.Databases.CreateAsync(
                     configuration.ResourceGroupName, configuration.PostgreSqlServerName, configuration.PostgreSqlTesDatabaseName,
-                    new FlexibleServerModel.Database()));
+                    new()));
 
             return server;
         }
@@ -1714,25 +1710,25 @@ namespace CromwellOnAzureDeployer
                 {
                     server = await postgresManagementClient.Servers.CreateAsync(
                         configuration.ResourceGroupName, configuration.PostgreSqlServerName,
-                        new SingleServerModel.ServerForCreate(
+                        new(
                            new SingleServerModel.ServerPropertiesForDefaultCreate(
                                administratorLogin: configuration.PostgreSqlAdministratorLogin,
                                administratorLoginPassword: configuration.PostgreSqlAdministratorPassword,
                                version: configuration.PostgreSqlVersion,
                                publicNetworkAccess: "Disabled",
-                               storageProfile: new Microsoft.Azure.Management.PostgreSQL.Models.StorageProfile(
+                               storageProfile: new(
                                    storageMB: configuration.PostgreSqlStorageSize * 1000)),
                            configuration.RegionName,
-                           sku: new Microsoft.Azure.Management.PostgreSQL.Models.Sku("GP_Gen5_4")
+                           sku: new("GP_Gen5_4")
                        ));
 
                     var privateEndpoint = await networkManagementClient.PrivateEndpoints.CreateOrUpdateAsync(configuration.ResourceGroupName, "pe-postgres1",
-                        new Microsoft.Azure.Management.Network.Models.PrivateEndpoint(
+                        new(
                             name: "pe-coa-postgresql",
                             location: configuration.RegionName,
                             privateLinkServiceConnections: new List<Microsoft.Azure.Management.Network.Models.PrivateLinkServiceConnection>()
-                            { new PrivateLinkServiceConnection(name: "pe-coa-postgresql", privateLinkServiceId: server.Id, groupIds: new List<string>(){"postgresqlServer"}) },
-                            subnet: new Subnet(subnet.Inner.Id)));
+                            { new(name: "pe-coa-postgresql", privateLinkServiceId: server.Id, groupIds: new List<string>(){"postgresqlServer"}) },
+                            subnet: new(subnet.Inner.Id)));
                     var networkInterfaceName = privateEndpoint.NetworkInterfaces.First().Id.Split("/").Last();
                     var networkInterface = await networkManagementClient.NetworkInterfaces.GetAsync(configuration.ResourceGroupName, networkInterfaceName);
 
@@ -1748,13 +1744,13 @@ namespace CromwellOnAzureDeployer
                 $"Creating PostgreSQL cromwell database: {configuration.PostgreSqlCromwellDatabaseName}...",
                 async () => await postgresManagementClient.Databases.CreateOrUpdateAsync(
                     configuration.ResourceGroupName, configuration.PostgreSqlServerName, configuration.PostgreSqlCromwellDatabaseName,
-                    new SingleServerModel.Database()));
+                    new()));
 
             await Execute(
                 $"Creating PostgreSQL tes database: {configuration.PostgreSqlTesDatabaseName}...",
                 () => postgresManagementClient.Databases.CreateOrUpdateAsync(
                     configuration.ResourceGroupName, configuration.PostgreSqlServerName, configuration.PostgreSqlTesDatabaseName,
-                    new SingleServerModel.Database()));
+                    new()));
             return server;
         }
 
@@ -1968,9 +1964,9 @@ namespace CromwellOnAzureDeployer
                     }
 
                     var commands = new List<string[]> {
-                        new string[] { "bash", "-lic", $"echo {configuration.PostgreSqlServerName}.postgres.database.azure.com:5432:{configuration.PostgreSqlCromwellDatabaseName}:{username}:{configuration.PostgreSqlAdministratorPassword} > ~/.pgpass" },
-                        new string[] { "chmod", "0600", "/home/tes/.pgpass" },
-                        new string[] { "/usr/bin/psql", "-h", serverPath, "-U", username, "-d", configuration.PostgreSqlCromwellDatabaseName, "-c", initScript }
+                        new[] { "bash", "-lic", $"echo {configuration.PostgreSqlServerName}.postgres.database.azure.com:5432:{configuration.PostgreSqlCromwellDatabaseName}:{username}:{configuration.PostgreSqlAdministratorPassword} > ~/.pgpass" },
+                        new[] { "chmod", "0600", "/home/tes/.pgpass" },
+                        new[] { "/usr/bin/psql", "-h", serverPath, "-U", username, "-d", configuration.PostgreSqlCromwellDatabaseName, "-c", initScript }
                     };
 
                     await kubernetesManager.ExecuteCommandsOnPodAsync(kubernetesClient, "tes", commands);
@@ -1978,7 +1974,7 @@ namespace CromwellOnAzureDeployer
 
         private static async Task SetStorageKeySecret(string vaultUrl, string secretName, string secretValue)
         {
-            var client = new SecretClient(new Uri(vaultUrl), new DefaultAzureCredential());
+            var client = new SecretClient(new(vaultUrl), new DefaultAzureCredential());
             await client.SetSecretAsync(secretName, secretValue);
         }
 
@@ -2010,30 +2006,30 @@ namespace CromwellOnAzureDeployer
                     var properties = new VaultCreateOrUpdateParameters()
                     {
                         Location = configuration.RegionName,
-                        Properties = new VaultProperties()
+                        Properties = new()
                         {
-                            TenantId = new Guid(tenantId),
-                            Sku = new Microsoft.Azure.Management.KeyVault.Models.Sku(SkuName.Standard),
-                            NetworkAcls = new NetworkRuleSet()
+                            TenantId = new(tenantId),
+                            Sku = new(SkuName.Standard),
+                            NetworkAcls = new()
                             {
                                 DefaultAction = configuration.PrivateNetworking.GetValueOrDefault() ? "Deny" : "Allow"
                             },
                             AccessPolicies = new List<AccessPolicyEntry>()
                             {
-                                new AccessPolicyEntry()
+                                new()
                                 {
-                                    TenantId = new Guid(tenantId),
+                                    TenantId = new(tenantId),
                                     ObjectId = await GetUserObjectId(),
-                                    Permissions = new Permissions()
+                                    Permissions = new()
                                     {
                                         Secrets = secrets
                                     }
                                 },
-                                new AccessPolicyEntry()
+                                new()
                                 {
-                                    TenantId = new Guid(tenantId),
+                                    TenantId = new(tenantId),
                                     ObjectId = managedIdentity.PrincipalId,
-                                    Permissions = new Permissions()
+                                    Permissions = new()
                                     {
                                         Secrets = secrets
                                     }
@@ -2047,12 +2043,12 @@ namespace CromwellOnAzureDeployer
                     if (configuration.PrivateNetworking.GetValueOrDefault())
                     {
                         var privateEndpoint = await networkManagementClient.PrivateEndpoints.CreateOrUpdateAsync(configuration.ResourceGroupName, "pe-keyvault",
-                            new Microsoft.Azure.Management.Network.Models.PrivateEndpoint(
+                            new(
                                 name: "pe-coa-keyvault",
                                 location: configuration.RegionName,
                                 privateLinkServiceConnections: new List<Microsoft.Azure.Management.Network.Models.PrivateLinkServiceConnection>()
-                                { new PrivateLinkServiceConnection(name: "pe-coa-keyvault", privateLinkServiceId: vault.Id, groupIds: new List<string>(){"vault"}) },
-                                subnet: new Subnet(subnet.Inner.Id)));
+                                { new(name: "pe-coa-keyvault", privateLinkServiceId: vault.Id, groupIds: new List<string>(){"vault"}) },
+                                subnet: new(subnet.Inner.Id)));
 
                         var networkInterfaceName = privateEndpoint.NetworkInterfaces.First().Id.Split("/").Last();
                         var networkInterface = await networkManagementClient.NetworkInterfaces.GetAsync(configuration.ResourceGroupName, networkInterfaceName);
@@ -2124,9 +2120,9 @@ namespace CromwellOnAzureDeployer
                     .CreateAsync(
                         configuration.ResourceGroupName,
                         configuration.BatchAccountName,
-                        new BatchAccountCreateParameters(
+                        new(
                             configuration.RegionName,
-                            autoStorage: configuration.PrivateNetworking.GetValueOrDefault() ? new AutoStorageBaseProperties { StorageAccountId = storageAccountId } : null),
+                            autoStorage: configuration.PrivateNetworking.GetValueOrDefault() ? new() { StorageAccountId = storageAccountId } : null),
                         cts.Token));
 
         private Task<IResourceGroup> CreateResourceGroupAsync()
@@ -2168,7 +2164,7 @@ namespace CromwellOnAzureDeployer
 
                     var existingVmRoles = (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeWithHttpMessagesAsync(
                             $"/subscriptions/{configuration.SubscriptionId}",
-                            new ODataQuery<RoleAssignmentFilter>($"assignedTo('{linuxVm.SystemAssignedManagedServiceIdentityPrincipalId}')"))).Body
+                            new($"assignedTo('{linuxVm.SystemAssignedManagedServiceIdentityPrincipalId}')"))).Body
                         .AsContinuousCollection(link => Extensions.Synchronize(() => azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeNextWithHttpMessagesAsync(link)).Body)
                         .ToList();
 
@@ -2207,10 +2203,10 @@ namespace CromwellOnAzureDeployer
                 $"Patching '{CromwellConfigurationFileName}' in '{ConfigurationContainerName}' storage container...",
                 async () =>
                 {
-                    await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, CromwellConfigurationFileName, Utility.PersonalizeContent(new[]
+                    await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, CromwellConfigurationFileName, Utility.PersonalizeContent(new Utility.ConfigReplaceTextItemBase[]
                     {
                         // Replace "enabled = true" with "enabled = false" in call-caching element
-                        (Utility.ConfigReplaceTextItemBase)new Utility.ConfigReplaceRegExItemText(@"^(\s*call-caching\s*{[^}]*enabled\s*[=:]{1}\s*)(true)$", "$1false", RegexOptions.Multiline),
+                        new Utility.ConfigReplaceRegExItemText(@"^(\s*call-caching\s*{[^}]*enabled\s*[=:]{1}\s*)(true)$", "$1false", RegexOptions.Multiline),
                         // Add "preemptible: true" to default-runtime-attributes element, if preemptible is not already present
                         new Utility.ConfigReplaceRegExItemEvaluator(@"(?![\s\S]*preemptible)^(\s*default-runtime-attributes\s*{)([^}]*$)(\s*})$", match => $"{match.Groups[1].Value}{match.Groups[2].Value}\n          preemptible: true{match.Groups[3].Value}", RegexOptions.Multiline),
                     }, (await DownloadTextFromStorageAccountAsync(storageAccount, ConfigurationContainerName, CromwellConfigurationFileName, cts)) ?? Utility.GetFileContent("scripts", CromwellConfigurationFileName)));
@@ -2402,7 +2398,7 @@ namespace CromwellOnAzureDeployer
         {
             var publicIPAddress = linuxVm.GetPrimaryPublicIPAddress();
 
-            return new ConnectionInfo(
+            return new(
                 publicIPAddress is not null ? publicIPAddress.Fqdn : linuxVm.GetPrimaryNetworkInterface().PrimaryPrivateIP,
                 vmUsername,
                 new PasswordAuthenticationMethod(vmUsername, vmPassword));
@@ -2461,7 +2457,7 @@ namespace CromwellOnAzureDeployer
             var token = await new AzureServiceTokenProvider().GetAccessTokenAsync("https://management.azure.com/");
             var currentPrincipalObjectId = new JwtSecurityTokenHandler().ReadJwtToken(token).Claims.FirstOrDefault(c => c.Type == "oid").Value;
 
-            var currentPrincipalSubscriptionRoleIds = (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeWithHttpMessagesAsync($"/subscriptions/{configuration.SubscriptionId}", new ODataQuery<RoleAssignmentFilter>($"atScope() and assignedTo('{currentPrincipalObjectId}')")))
+            var currentPrincipalSubscriptionRoleIds = (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeWithHttpMessagesAsync($"/subscriptions/{configuration.SubscriptionId}", new($"atScope() and assignedTo('{currentPrincipalObjectId}')")))
                 .Body.AsContinuousCollection(link => Extensions.Synchronize(() => azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeNextWithHttpMessagesAsync(link)).Body)
                 .Select(b => b.RoleDefinitionId.Split(new[] { '/' }).Last());
 
@@ -2474,7 +2470,7 @@ namespace CromwellOnAzureDeployer
                     throw new ValidationException($"Insufficient access to deploy. You must be: 1) Owner of the subscription, or 2) Contributor and User Access Administrator of the subscription, or 3) Owner of the resource group", displayExample: false);
                 }
 
-                var currentPrincipalRgRoleIds = (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeWithHttpMessagesAsync($"/subscriptions/{configuration.SubscriptionId}/resourceGroups/{configuration.ResourceGroupName}", new ODataQuery<RoleAssignmentFilter>($"atScope() and assignedTo('{currentPrincipalObjectId}')")))
+                var currentPrincipalRgRoleIds = (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeWithHttpMessagesAsync($"/subscriptions/{configuration.SubscriptionId}/resourceGroups/{configuration.ResourceGroupName}", new($"atScope() and assignedTo('{currentPrincipalObjectId}')")))
                     .Body.AsContinuousCollection(link => Extensions.Synchronize(() => azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeNextWithHttpMessagesAsync(link)).Body)
                     .Select(b => b.RoleDefinitionId.Split(new[] { '/' }).Last());
 
@@ -2568,7 +2564,7 @@ namespace CromwellOnAzureDeployer
 
             var vmSubnet = vnet.Subnets.FirstOrDefault(s => s.Key.Equals(configuration.VmSubnetName, StringComparison.OrdinalIgnoreCase)).Value;
 
-            if (vmSubnet == null)
+            if (vmSubnet is null)
             {
                 throw new ValidationException($"Virtual network '{configuration.VnetName}' does not contain subnet '{configuration.VmSubnetName}'");
             }
@@ -2578,7 +2574,7 @@ namespace CromwellOnAzureDeployer
 
             if (configuration.ProvisionPostgreSqlOnAzure == true)
             {
-                if (postgreSqlSubnet == null)
+                if (postgreSqlSubnet is null)
                 {
                     throw new ValidationException($"Virtual network '{configuration.VnetName}' does not contain subnet '{configuration.PostgreSqlSubnetName}'");
                 }
@@ -2593,7 +2589,7 @@ namespace CromwellOnAzureDeployer
                 }
 
                 var resourcesInPostgreSqlSubnetQuery = $"where type =~ 'Microsoft.Network/networkInterfaces' | where properties.ipConfigurations[0].properties.subnet.id == '{postgreSqlSubnet.Inner.Id}'";
-                var resourcesExist = (await resourceGraphClient.ResourcesAsync(new QueryRequest(new[] { configuration.SubscriptionId }, resourcesInPostgreSqlSubnetQuery))).TotalRecords > 0;
+                var resourcesExist = (await resourceGraphClient.ResourcesAsync(new(new[] { configuration.SubscriptionId }, resourcesInPostgreSqlSubnetQuery))).TotalRecords > 0;
 
                 if (hasNoDelegations && resourcesExist)
                 {
@@ -2637,7 +2633,7 @@ namespace CromwellOnAzureDeployer
 
         private static async Task<BlobServiceClient> GetBlobClientAsync(IStorageAccount storageAccount)
             => new(
-                new Uri($"https://{storageAccount.Name}.blob.core.windows.net"),
+                new($"https://{storageAccount.Name}.blob.core.windows.net"),
                 new StorageSharedKeyCredential(
                     storageAccount.Name,
                     (await storageAccount.GetKeysAsync())[0].Value));
@@ -2646,7 +2642,7 @@ namespace CromwellOnAzureDeployer
         {
             try
             {
-                await Execute("Retrieving Azure management token...", () => new AzureServiceTokenProvider("RunAs=Developer; DeveloperTool=AzureCli").GetAccessTokenAsync("https://management.azure.com/"));
+                _ = await Execute("Retrieving Azure management token...", () => new AzureServiceTokenProvider("RunAs=Developer; DeveloperTool=AzureCli").GetAccessTokenAsync("https://management.azure.com/"));
             }
             catch (AzureServiceTokenProviderException ex)
             {

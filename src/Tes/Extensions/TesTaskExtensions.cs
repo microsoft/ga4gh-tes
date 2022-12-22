@@ -22,7 +22,7 @@ namespace Tes.Extensions
             if (logEntries is not null && logEntries.Any(e => !string.IsNullOrEmpty(e)))
             {
                 var tesTaskLog = tesTask.GetOrAddTesTaskLog();
-                tesTaskLog.SystemLogs ??= new List<string>();
+                tesTaskLog.SystemLogs ??= new();
                 tesTaskLog.SystemLogs.AddRange(logEntries);
             }
         }
@@ -70,7 +70,7 @@ namespace Tes.Extensions
         {
             if (tesTask.Logs is null || !tesTask.Logs.Any())
             {
-                tesTask.Logs = new List<TesTaskLog> { new TesTaskLog() };
+                tesTask.Logs = new() { new() };
             }
 
             return tesTask.Logs.Last();
@@ -83,8 +83,8 @@ namespace Tes.Extensions
         /// <returns>Last <see cref="TesTaskLog"/></returns>
         public static TesTaskLog AddTesTaskLog(this TesTask tesTask)
         {
-            tesTask.Logs ??= new List<TesTaskLog>();
-            tesTask.Logs.Add(new TesTaskLog());
+            tesTask.Logs ??= new();
+            tesTask.Logs.Add(new());
 
             return tesTask.Logs.Last();
         }
@@ -95,7 +95,7 @@ namespace Tes.Extensions
         /// <param name="tesTaskLog"><see cref="TesTaskLog"/></param>
         /// <returns>Initialized <see cref="BatchNodeMetrics"/></returns>
         public static BatchNodeMetrics GetOrAddBatchNodeMetrics(this TesTaskLog tesTaskLog)
-            => tesTaskLog.BatchNodeMetrics ??= new BatchNodeMetrics();
+            => tesTaskLog.BatchNodeMetrics ??= new();
 
         /// <summary>
         /// Returns the Metadata property of <see cref="TesTaskLog"/>. Adds it if it doesn't exist.
@@ -103,7 +103,7 @@ namespace Tes.Extensions
         /// <param name="tesTaskLog"><see cref="TesTaskLog"/></param>
         /// <returns>Initialized Metadata property</returns>
         public static Dictionary<string, string> GetOrAddMetadata(this TesTaskLog tesTaskLog)
-            => tesTaskLog.Metadata ??= new Dictionary<string, string>();
+            => tesTaskLog.Metadata ??= new();
 
         /// <summary>
         /// Returns the last <see cref="TesExecutorLog"/>. Adds it if none exist.
@@ -114,7 +114,7 @@ namespace Tes.Extensions
         {
             if (tesTaskLog.Logs is null || !tesTaskLog.Logs.Any())
             {
-                tesTaskLog.Logs = new List<TesExecutorLog> { new TesExecutorLog() };
+                tesTaskLog.Logs = new() { new() };
             }
 
             return tesTaskLog.Logs.Last();
@@ -125,19 +125,13 @@ namespace Tes.Extensions
         /// </summary>
         /// <returns>The value if it exists; null otherwise</returns>
         public static string GetBackendParameterValue(this TesResources resources, TesResources.SupportedBackendParameters parameter)
-        {
-            string backendParameterValue = null;
-            resources.BackendParameters?.TryGetValue(parameter.ToString(), out backendParameterValue);
-            return backendParameterValue;
-        }
+            => resources.BackendParameters?.TryGetValue(parameter.ToString(), out var backendParameterValue) ?? false ? backendParameterValue : null;
 
         /// <summary>
         /// Checks if a backend parameter was present
         /// </summary>
         /// <returns>True if the parameter value is not null or whitespace; false otherwise</returns>
         public static bool ContainsBackendParameterValue(this TesResources resources, TesResources.SupportedBackendParameters parameter)
-        {
-            return !string.IsNullOrWhiteSpace(resources.GetBackendParameterValue(parameter));
-        }
+            => !string.IsNullOrWhiteSpace(resources.GetBackendParameterValue(parameter));
     }
 }

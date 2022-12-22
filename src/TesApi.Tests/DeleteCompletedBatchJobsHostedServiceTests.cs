@@ -28,7 +28,7 @@ namespace TesApi.Tests
         {
             azureProxy = new Mock<IAzureProxy>();
             mockRepo = new Mock<IRepository<TesTask>>();
-            deleteCompletedBatchJobsHostedService = new DeleteCompletedBatchJobsHostedService(
+            deleteCompletedBatchJobsHostedService = new(
                 new ConfigurationBuilder().Build(),
                 azureProxy.Object,
                 mockRepo.Object,
