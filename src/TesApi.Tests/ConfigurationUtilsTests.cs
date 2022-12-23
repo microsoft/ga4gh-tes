@@ -74,30 +74,32 @@ namespace TesApi.Tests
         private static Mock<IAzureProxy> GetMockAzureProxy()
         {
             var vmInfos = new List<VirtualMachineInformation> {
-                    new VirtualMachineInformation { VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = false, NumberOfCores = 2, MemoryInGB = 3, ResourceDiskSizeInGB = 20, PricePerHour = 11 },
-                    new VirtualMachineInformation { VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = true, NumberOfCores = 2, MemoryInGB = 3, ResourceDiskSizeInGB = 20, PricePerHour = 22 },
-                    new VirtualMachineInformation { VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = false, NumberOfCores = 4, MemoryInGB = 6, ResourceDiskSizeInGB = 40, PricePerHour = 33 },
-                    new VirtualMachineInformation { VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = true, NumberOfCores = 4, MemoryInGB = 6, ResourceDiskSizeInGB = 40, PricePerHour = 44 },
-                    new VirtualMachineInformation { VmSize = "VmSize3", VmFamily = "VmFamily3", LowPriority = false, NumberOfCores = 8, MemoryInGB = 12, ResourceDiskSizeInGB = 80, PricePerHour = 55 }
+                    new() { VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = false, NumberOfCores = 2, MemoryInGB = 3, ResourceDiskSizeInGB = 20, PricePerHour = 11 },
+                    new() { VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = true, NumberOfCores = 2, MemoryInGB = 3, ResourceDiskSizeInGB = 20, PricePerHour = 22 },
+                    new() { VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = false, NumberOfCores = 4, MemoryInGB = 6, ResourceDiskSizeInGB = 40, PricePerHour = 33 },
+                    new() { VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = true, NumberOfCores = 4, MemoryInGB = 6, ResourceDiskSizeInGB = 40, PricePerHour = 44 },
+                    new() { VmSize = "VmSize3", VmFamily = "VmFamily3", LowPriority = false, NumberOfCores = 8, MemoryInGB = 12, ResourceDiskSizeInGB = 80, PricePerHour = 55 }
                 };
 
-            var dedicatedCoreQuotaPerVMFamily = new[] { new VirtualMachineFamilyCoreQuota("VmFamily1", 100), new VirtualMachineFamilyCoreQuota("VmFamily2", 0), new VirtualMachineFamilyCoreQuota("VmFamily3", 300) };
+            var dedicatedCoreQuotaPerVMFamily = new VirtualMachineFamilyCoreQuota[] { new("VmFamily1", 100), new("VmFamily2", 0), new("VmFamily3", 300) };
 
-            var batchQuotas = new AzureBatchAccountQuotas { 
-                ActiveJobAndJobScheduleQuota = 1, 
-                PoolQuota = 1, 
-                DedicatedCoreQuota = 5, 
-                LowPriorityCoreQuota = 10, 
-                DedicatedCoreQuotaPerVMFamilyEnforced = true, 
-                DedicatedCoreQuotaPerVMFamily = dedicatedCoreQuotaPerVMFamily };
+            var batchQuotas = new AzureBatchAccountQuotas
+            {
+                ActiveJobAndJobScheduleQuota = 1,
+                PoolQuota = 1,
+                DedicatedCoreQuota = 5,
+                LowPriorityCoreQuota = 10,
+                DedicatedCoreQuotaPerVMFamilyEnforced = true,
+                DedicatedCoreQuotaPerVMFamily = dedicatedCoreQuotaPerVMFamily
+            };
 
             var allowedVmSizesFileContent = "VmSize1\n#SomeComment\nVmSize2\nVmSizeNonExistent\nVmFamily3";
 
             var storageAccountInfos = new Dictionary<string, StorageAccountInfo> {
-                { 
-                    "defaultstorageaccount", 
-                    new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount.blob.core.windows.net/", SubscriptionId = "SubId" }
-                } 
+                {
+                    "defaultstorageaccount",
+                    new() { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount.blob.core.windows.net/", SubscriptionId = "SubId" }
+                }
              };
 
             var azureProxy = new Mock<IAzureProxy>();

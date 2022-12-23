@@ -33,8 +33,8 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } },
-                Resources = new TesResources { BackendParameters = backendParameters, BackendParametersStrict = true }
+                Executors = new() { new() { Image = "ubuntu" } },
+                Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
             var repository = new Mock<IRepository<TesTask>>();
@@ -63,8 +63,8 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } },
-                Resources = new TesResources { BackendParameters = backendParameters, BackendParametersStrict = true }
+                Executors = new() { new() { Image = "ubuntu" } },
+                Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
             var repository = new Mock<IRepository<TesTask>>();
@@ -93,8 +93,8 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } },
-                Resources = new TesResources { BackendParameters = backendParameters }
+                Executors = new() { new() { Image = "ubuntu" } },
+                Resources = new() { BackendParameters = backendParameters }
             };
 
             var repository = new Mock<IRepository<TesTask>>();
@@ -125,8 +125,8 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } },
-                Resources = new TesResources { BackendParameters = backendParameters, BackendParametersStrict = true }
+                Executors = new() { new() { Image = "ubuntu" } },
+                Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
             var controller = GetTaskServiceApiController();
@@ -156,8 +156,8 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } },
-                Resources = new TesResources { BackendParameters = backendParameters, BackendParametersStrict = true }
+                Executors = new() { new() { Image = "ubuntu" } },
+                Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
             var controller = GetTaskServiceApiController();
@@ -172,7 +172,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsBadRequest_ForInvalidId()
         {
-            var tesTask = new TesTask { Id = "ClientProvidedId", Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } } };
+            var tesTask = new TesTask { Id = "ClientProvidedId", Executors = new() { new() { Image = "ubuntu" } } };
             var controller = GetTaskServiceApiController();
 
             var result = await controller.CreateTaskAsync(tesTask) as BadRequestObjectResult;
@@ -196,7 +196,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsTesCreateTaskResponse()
         {
-            var tesTask = new TesTask() { Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } } };
+            var tesTask = new TesTask() { Executors = new() { new() { Image = "ubuntu" } } };
 
             var repository = new Mock<IRepository<TesTask>>();
             var controller = GetTaskServiceApiController(repository.Object);
@@ -220,8 +220,8 @@ namespace TesApi.Tests
             var tesTask = new TesTask()
             {
                 Description = taskDescription,
-                Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } },
-                Inputs = new List<TesInput> { new TesInput { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" } }
+                Executors = new() { new() { Image = "ubuntu" } },
+                Inputs = new() { new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" } }
             };
 
             var controller = GetTaskServiceApiController();
@@ -402,8 +402,8 @@ namespace TesApi.Tests
             var tesTask = new TesTask()
             {
                 Description = taskDescription,
-                Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } },
-                Inputs = new List<TesInput> { new TesInput { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" } }
+                Executors = new() { new() { Image = "ubuntu" } },
+                Inputs = new() { new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" } }
             };
 
             var controller = GetTaskServiceApiController();
@@ -422,7 +422,7 @@ namespace TesApi.Tests
             var tesTask1 = new TesTask()
             {
                 Description = taskDescription,
-                Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } }
+                Executors = new() { new() { Image = "ubuntu" } }
             };
 
             var controller = GetTaskServiceApiController();
@@ -434,8 +434,8 @@ namespace TesApi.Tests
             var tesTask2 = new TesTask()
             {
                 Description = taskDescription,
-                Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } },
-                Inputs = new List<TesInput> { new TesInput { Path = "/cromwell-executions/" } }
+                Executors = new() { new() { Image = "ubuntu" } },
+                Inputs = new() { new() { Path = "/cromwell-executions/" } }
             };
 
             await controller.CreateTaskAsync(tesTask2);
@@ -445,8 +445,8 @@ namespace TesApi.Tests
             var tesTask3 = new TesTask()
             {
                 Description = taskDescription,
-                Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } },
-                Inputs = new List<TesInput> { new TesInput { Path = "/cromwell-executions/" } }
+                Executors = new() { new() { Image = "ubuntu" } },
+                Inputs = new() { new() { Path = "/cromwell-executions/" } }
             };
 
             await controller.CreateTaskAsync(tesTask3);
@@ -456,8 +456,8 @@ namespace TesApi.Tests
             var tesTask4 = new TesTask()
             {
                 Description = taskDescription,
-                Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } },
-                Inputs = new List<TesInput> { new TesInput { Path = "/cromwell-executions/test/" } }
+                Executors = new() { new() { Image = "ubuntu" } },
+                Inputs = new() { new() { Path = "/cromwell-executions/test/" } }
             };
 
             await controller.CreateTaskAsync(tesTask4);
@@ -527,7 +527,7 @@ namespace TesApi.Tests
                     outdirMin: 2048
                     disk: 15 GB";
 
-            var tesTask = await CreateCwlTesTaskAsync(cwlFileContent, tesResourcesReceivedFromCromwell: new TesResources { DiskGb = 5 });
+            var tesTask = await CreateCwlTesTaskAsync(cwlFileContent, tesResourcesReceivedFromCromwell: new() { DiskGb = 5 });
 
             Assert.AreEqual(5, tesTask.Resources.DiskGb);
         }
@@ -541,7 +541,7 @@ namespace TesApi.Tests
                     cpu: 11
                     memory: 22 GB";
 
-            var tesTask = await CreateCwlTesTaskAsync(cwlFileContent, tesResourcesReceivedFromCromwell: new TesResources { CpuCores = 33, RamGb = 44 });
+            var tesTask = await CreateCwlTesTaskAsync(cwlFileContent, tesResourcesReceivedFromCromwell: new() { CpuCores = 33, RamGb = 44 });
 
             Assert.AreEqual(33, tesTask.Resources.CpuCores);
             Assert.AreEqual(44, tesTask.Resources.RamGb);
@@ -558,7 +558,7 @@ namespace TesApi.Tests
                   - class: ResourceRequirement
                     preemptible: false";
 
-            var tesTask = await CreateCwlTesTaskAsync(cwlFileContent, tesResourcesReceivedFromCromwell: new TesResources { Preemptible = true });
+            var tesTask = await CreateCwlTesTaskAsync(cwlFileContent, tesResourcesReceivedFromCromwell: new() { Preemptible = true });
 
             Assert.AreEqual(false, tesTask.Resources.Preemptible);
 
@@ -567,7 +567,7 @@ namespace TesApi.Tests
                   - class: ResourceRequirement
                     preemptible: true";
 
-            tesTask = await CreateCwlTesTaskAsync(cwlFileContent, tesResourcesReceivedFromCromwell: new TesResources { Preemptible = false });
+            tesTask = await CreateCwlTesTaskAsync(cwlFileContent, tesResourcesReceivedFromCromwell: new() { Preemptible = false });
 
             Assert.AreEqual(true, tesTask.Resources.Preemptible);
 
@@ -584,7 +584,7 @@ namespace TesApi.Tests
                 hints:
                   - class: ResourceRequirement";
 
-            tesTask = await CreateCwlTesTaskAsync(cwlFileContent, tesResourcesReceivedFromCromwell: new TesResources { Preemptible = true });
+            tesTask = await CreateCwlTesTaskAsync(cwlFileContent, tesResourcesReceivedFromCromwell: new() { Preemptible = true });
 
             Assert.AreEqual(true, tesTask.Resources.Preemptible);
         }
@@ -606,8 +606,8 @@ namespace TesApi.Tests
             var tesTask = new TesTask()
             {
                 Name = "test.cwl",
-                Executors = new List<TesExecutor> { new TesExecutor { Image = "ubuntu" } },
-                Inputs = new List<TesInput> { new TesInput { Name = "commandScript", Path = "/cromwell-executions/test.cwl/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/execution/script" } },
+                Executors = new() { new() { Image = "ubuntu" } },
+                Inputs = new() { new() { Name = "commandScript", Path = "/cromwell-executions/test.cwl/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/execution/script" } },
                 Resources = tesResourcesReceivedFromCromwell
             };
 

@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -25,7 +28,7 @@ namespace TesApi.Tests
         {
             azureProxy = new Mock<IAzureProxy>();
             mockRepo = new Mock<IRepository<TesTask>>();
-            deleteCompletedBatchJobsHostedService = new DeleteCompletedBatchJobsHostedService(
+            deleteCompletedBatchJobsHostedService = new(
                 new ConfigurationBuilder().Build(),
                 azureProxy.Object,
                 mockRepo.Object,
