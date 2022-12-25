@@ -7,6 +7,7 @@ using System.Reflection;
 using LazyCache;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -34,6 +35,7 @@ namespace TesApi.Web
         private readonly ILoggerFactory loggerFactory;
         private readonly IWebHostEnvironment hostingEnvironment;
         private readonly string azureOfferDurableId;
+        private AzureEnvironment azEnv;
 
         /// <summary>
         /// Startup class for ASP.NET core
@@ -41,6 +43,13 @@ namespace TesApi.Web
         public Startup(IConfiguration configuration, ILoggerFactory loggerFactory, IWebHostEnvironment hostingEnvironment)
         {
             Configuration = configuration;
+            var AzureName = Configuration.GetValue("AzureName", "AzureGlobalCloud");
+            if(!IsAvailableAzureEnvironmentName(AzureName))
+            {
+                Console.WriteLine($"Specified cloud name {AzureName} does not exist.");
+                return;
+            }
+            this.azEnv = AzureEnvironment.FromName(AzureName);
             this.hostingEnvironment = hostingEnvironment;
             logger = loggerFactory.CreateLogger<Startup>();
             this.loggerFactory = loggerFactory;
@@ -66,7 +75,7 @@ namespace TesApi.Web
         {
             var cache = new CachingService();
 
-            var azureProxy = new AzureProxy(Configuration["BatchAccountName"], azureOfferDurableId, loggerFactory.CreateLogger<AzureProxy>());
+            var azureProxy = new AzureProxy(this.azEnv, Configuration["BatchAccountName"], azureOfferDurableId, loggerFactory.CreateLogger<AzureProxy>());
             IAzureProxy cachingAzureProxy = new CachingWithRetriesAzureProxy(azureProxy, cache);
             IStorageAccessProvider storageAccessProvider = new StorageAccessProvider(loggerFactory.CreateLogger<StorageAccessProvider>(), Configuration, cachingAzureProxy);
 
@@ -124,7 +133,7 @@ namespace TesApi.Web
                     s =>
                     {
                         var applicationInsightsAccountName = Configuration["ApplicationInsightsAccountName"];
-                        var instrumentationKey = AzureProxy.GetAppInsightsInstrumentationKeyAsync(applicationInsightsAccountName).Result;
+                        var instrumentationKey = AzureProxy.GetAppInsightsInstrumentationKeyAsync(this.azEnv, applicationInsightsAccountName).Result;
 
                         if (instrumentationKey is not null)
                         {
@@ -176,6 +185,18 @@ namespace TesApi.Web
                         logger.LogInformation("Configuring for Production environment");
                         return r;
                     });
+
+        private static bool IsAvailableAzureEnvironmentName(string azureName)
+        {
+            foreach (var env in AzureEnvironment.KnownEnvironments)
+            {
+                if (0 == string.Compare(azureName, env.Name))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     internal static class BooleanMethodSelectorExtensions

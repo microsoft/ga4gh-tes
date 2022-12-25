@@ -4,6 +4,49 @@ This project is the Microsoft Genomics supported Azure implementation of the [GA
 
 In the future, a publicly-hosted Docker image, likely named `mcr.microsoft.com/ga4gh/tes` will be built from this project.
 
+# Install TES on Azure
+
+To install TES on Azure, you need to meet below pre-requirements:
+
++ Install [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
++ Install [Helm](https://helm.sh/docs/intro/install/)
++ An Azure subscription
+
+## Install TES on Azure
+1. **Linux and OS X only**: assign execute permissions to the file by running the following command on the terminal:<br/>
+`chmod +x <fileName>`. Replace `<fileName>` with the correct name: `deploy--on-azure-linux` or `deploy-tes-on-azure-osx.app`
+1. You must specify the following parameters:
+   1. `SubscriptionId` (**required**)
+      1.  This can be obtained by navigating to the [subscriptions blade in the Azure portal](https://portal.azure.com/#blade/Microsoft_Azure_Billing/SubscriptionsBlade)
+   1. `RegionName` (**required**)
+      1. Specifies the region you would like to use for your TES on Azure instance. To find a list of all available regions, run `az account list-locations` on the command line or in PowerShell and use the desired region's "name" property for `RegionName`.
+   1. `MainIdentifierPrefix` (*optional*)
+      1. This string will be used to prefix the name of your TES on Azure resource group and associated resources. If not specified, the default value of "coa" followed by random characters is used as a prefix for the resource group and all Azure resources created for your TES on Azure instance. After installation, you can search for your resources using the `MainIdentifierPrefix` value.<br/>
+   1. `ResourceGroupName` (*optional*, **required** when you only have owner-level access of the *resource group*)
+      1. Specifies the name of a pre-existing resource group that you wish to deploy into.
+      1. Specifies the name of a pre-existing resource group that you wish to deploy into.
+   1. `AzureName` (*optional*, **required** when you only deploy services on sovereign cloud like AzureChinaCloud)
+   2. `HelmBinaryPath` (*optional*)
+      1. Specify path of Helm binary to help install identify Helm location.
+
+Run the following at the command line or terminal after navigating to where your executable is saved:
+```
+.\deploy-tes-on-azure.exe --SubscriptionId <Your subscription ID> --RegionName <Your region> --MainIdentifierPrefix <Your string>  
+```
+
+**Example:**
+```
+.\deploy-tes-on-azure.exe --SubscriptionId 00000000-0000-0000-0000-000000000000 --RegionName westus2 --MainIdentifierPrefix coa --HelmBinaryPath /opt/homebrew/bin/helm
+```
+
+**Sovereign Cloud deployment example:**
+```
+az cloud set -n AzureChinaCloud
+
+.\deploy-tes-on-azure.exe --SubscriptionId 00000000-0000-0000-0000-000000000000 --RegionName chinanorth3 --MainIdentifierPrefix coa --HelmBinaryPath /opt/homebrew/bin/helm --AzureName AzureChinaCloud
+```
+
+
 ## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a

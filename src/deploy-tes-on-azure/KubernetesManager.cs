@@ -14,6 +14,7 @@ using k8s;
 using Microsoft.Azure.Management.ContainerService;
 using Microsoft.Azure.Management.ContainerService.Fluent;
 using Microsoft.Azure.Management.Msi.Fluent;
+using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Azure.Management.Storage.Fluent;
@@ -51,9 +52,11 @@ namespace TesDeployer
         private string valuesTemplatePath { get; set; }
         private string helmScriptsRootDirectory { get; set; }
         public string TempHelmValuesYamlPath { get; set; }
+        private AzureEnvironment azEnv;
 
-        public KubernetesManager(Configuration config, AzureCredentials credentials, CancellationTokenSource cts)
+        public KubernetesManager(AzureEnvironment env, Configuration config, AzureCredentials credentials, CancellationTokenSource cts)
         {
+            this.azEnv = env;
             this.cts = cts;
             configuration = config;
             azureCredentials = credentials;
@@ -64,7 +67,10 @@ namespace TesDeployer
         public async Task<IKubernetes> GetKubernetesClientAsync(IResource resourceGroupObject)
         {
             var resourceGroup = resourceGroupObject.Name;
-            var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
+            var containerServiceClient = new ContainerServiceClient(new Uri(this.azEnv.ResourceManagerEndpoint), azureCredentials)
+            {
+                SubscriptionId = configuration.SubscriptionId
+            };
 
             // Write kubeconfig in the working directory, because KubernetesClientConfiguration needs to read from a file, TODO figure out how to pass this directly. 
             var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(resourceGroup, configuration.AksClusterName);
@@ -148,21 +154,21 @@ namespace TesDeployer
 
             var valuesString = KubernetesYaml.Serialize(values);
             await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString);
-            await Deployer.UploadTextToStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cts.Token);
+            await Deployer.UploadTextToStorageAccountAsync(this.azEnv, storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cts.Token);
         }
 
         public async Task UpgradeValuesYamlAsync(IStorageAccount storageAccount, Dictionary<string, string> settings)
         {
-            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", cts));
+            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(this.azEnv, storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", cts));
             UpdateValuesFromSettings(values, settings);
             var valuesString = KubernetesYaml.Serialize(values);
             await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString);
-            await Deployer.UploadTextToStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cts.Token);
+            await Deployer.UploadTextToStorageAccountAsync(this.azEnv, storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cts.Token);
         }
 
         public async Task<Dictionary<string, string>> GetAKSSettingsAsync(IStorageAccount storageAccount)
         {
-            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", cts));
+            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(this.azEnv, storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", cts));
             return ValuesToSettings(values);
         }
 
@@ -281,6 +287,7 @@ namespace TesDeployer
             values.Config["marthaKeyVaultName"] = settings["MarthaKeyVaultName"];
             values.Config["marthaSecretName"] = settings["MarthaSecretName"];
             values.Config["crossSubscriptionAKSDeployment"] = settings["CrossSubscriptionAKSDeployment"];
+            values.Config["AzureName"] = settings["AzureName"];
             //values.Config["postgreSqlServerName"] = settings["PostgreSqlServerName"];
             //values.Config["postgreSqlDatabaseName"] = settings["PostgreSqlDatabaseName"];
             //values.Config["postgreSqlUserLogin"] = settings["PostgreSqlUserLogin"];
