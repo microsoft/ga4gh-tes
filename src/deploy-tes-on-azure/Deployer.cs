@@ -744,7 +744,7 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "BatchAccountName", configuration.BatchAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ApplicationInsightsAccountName", configuration.ApplicationInsightsAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ManagedIdentityClientId", managedIdentityClientId, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString", managedIdentityClientId, s => $"RunAs=App;AppId={s}", ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString", configuration.AzureServicesAuthConnectionString, defaultValue: $"RunAs=App;AppId={managedIdentityClientId}", ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "KeyVaultName", configuration.KeyVaultName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "AksCoANamespace", configuration.AksCoANamespace, ignoreDefaults: true);
                 var provisionPostgreSqlOnAzure = configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault();
