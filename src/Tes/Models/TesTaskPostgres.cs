@@ -6,7 +6,7 @@ namespace Tes.Models
     /// <summary>
     /// Database schema for encapsulating a TesTask as Json for Postgresql.
     /// </summary>
-    [Table("tesktaskdatabaseitem")]
+    [Table("tesktaskdatabaseitems")]
     public class TeskTaskDatabaseItem
     {
         [Column("id")]

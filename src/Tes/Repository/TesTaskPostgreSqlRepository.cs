@@ -36,11 +36,11 @@ namespace Tes.Repository
             using var dbContext = createDbContext();
 
             // Search for Id within the JSON
-            var task = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.GetId().Contains(id));
+            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.GetId().Contains(id));
 
-            if (task is not null)
+            if (item is not null)
             {
-                onSuccess?.Invoke(task.Json);
+                onSuccess?.Invoke(item.Json);
                 return true;
             }
             return false;
@@ -81,27 +81,31 @@ namespace Tes.Repository
         public new async Task<TesTask> UpdateItemAsync(TesTask item)
         {
             using var dbContext = createDbContext();
-            var task = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.GetId == item.GetId);
+            var dbItem = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.GetId == item.GetId);
 
             // Update Properties
-            if (task is not null)
+            if (dbItem is not null)
             {
-                task.Json = item;
+                dbItem.Json = item;
                 await dbContext.SaveChangesAsync();
-                return task.Json;
+                return dbItem.Json;
             }
             return null;
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Base class deletes by TesTaskDatabaseItem Id, this allows deleting by TesTask Id.
+        /// </summary>
+        /// <param name="id">TesTask Id</param>
+        /// <returns></returns>
         public new async Task DeleteItemAsync(string id)
         {
             using var dbContext = createDbContext();
-            var task = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Id == (long)Convert.ToDouble(id));
+            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id);
 
-            if (task is not null)
+            if (item is not null)
             {
-                dbContext.TesTasks.Remove(task);
+                dbContext.TesTasks.Remove(item);
                 await dbContext.SaveChangesAsync();
             }
         }

@@ -34,11 +34,11 @@ namespace Tes.Repository
         {
             using var dbContext = createDbContext();
             // Search for Id in the Set (Which would the outer model, not the JSON)
-            var task = await dbContext.Set<T>().FirstOrDefaultAsync(t => t.GetId() == id);
+            var item = await dbContext.Set<T>().FirstOrDefaultAsync(t => t.GetId() == id);
 
-            if (task is not null)
+            if (item is not null)
             {
-                onSuccess?.Invoke(task);
+                onSuccess?.Invoke(item);
                 return true;
             }
             return false;
@@ -74,14 +74,14 @@ namespace Tes.Repository
             using var dbContext = createDbContext();
 
             // Get outer model Id
-            var task = await dbContext.Set<T>().FirstOrDefaultAsync(t => t.GetId() == item.GetId());
+            var dbItem = await dbContext.Set<T>().FirstOrDefaultAsync(t => t.GetId() == item.GetId());
 
             // Update Properties
-            if (task is not null)
+            if (dbItem is not null)
             {
-                task = item;
+                dbItem = item;
                 await dbContext.SaveChangesAsync();
-                return task;
+                return dbItem;
             }
             return null;
         }
@@ -91,11 +91,11 @@ namespace Tes.Repository
         {
             using var dbContext = createDbContext();
             // Searches outer model, not JSON
-            var task = await dbContext.Set<T>().FirstOrDefaultAsync(t => t.GetId() == id);
+            var item = await dbContext.Set<T>().FirstOrDefaultAsync(t => t.GetId() == id);
 
-            if (task is not null)
+            if (item is not null)
             {
-                dbContext.Set<T>().Remove(task);
+                dbContext.Set<T>().Remove(item);
                 await dbContext.SaveChangesAsync();
             }
         }

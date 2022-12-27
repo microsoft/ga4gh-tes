@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Threading.Tasks;
 using LazyCache;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -34,23 +35,23 @@ namespace TesApi.Web
         private readonly ILoggerFactory loggerFactory;
         private readonly IWebHostEnvironment hostingEnvironment;
         private readonly string azureOfferDurableId;
+        private static readonly string postgresConnectionString =
+            $"Server={Environment.GetEnvironmentVariable("PostgreSqlServerName")}; " +
+            $"User Id={Environment.GetEnvironmentVariable("PostgreSqlTesUserLogin")}.postgres.database.azure.com; " +
+            $"Database={Environment.GetEnvironmentVariable("PostgreSqlTesDatabaseName")}; " +
+            $"Port={Environment.GetEnvironmentVariable("PostgreSqlTesDatabasePort")}; " +
+            $"Password={Environment.GetEnvironmentVariable("PostgreSqlTesUserPassword")}; " +
+            $"SSLMode=Prefer";
 
         static readonly Func<RepositoryDb> createDbContext = () =>
         {
-            var connectionString =
-                    $"Server={Environment.GetEnvironmentVariable("PostgreSqlServerName")}; " +
-                    $"User Id={Environment.GetEnvironmentVariable("PostgreSqlTesUserLogin")}.postgres.database.azure.com; " +
-                    $"Database={Environment.GetEnvironmentVariable("PostgreSqlTesDatabaseName")}; " +
-                    $"Port={Environment.GetEnvironmentVariable("PostgreSqlTesDatabasePort")}; " +
-                    $"Password={Environment.GetEnvironmentVariable("PostgreSqlTesUserPassword")}; " +
-                    $"SSLMode=Prefer";
-            return new RepositoryDb(connectionString);
+            return new RepositoryDb(postgresConnectionString);
         };
 
-        public static void InitializeDb()
+        private static async Task InitializeDbAsync()
         {
             using var dbContext = createDbContext();
-            dbContext.Database.EnsureCreated();
+            await dbContext.Database.EnsureCreatedAsync();
         }
 
         /// <summary>
@@ -96,7 +97,7 @@ namespace TesApi.Web
 
             if (postgreSqlServerName is not null)
             {
-                InitializeDb();
+                InitializeDbAsync().Wait();
             }
 
             IRepository<TesTask> database = (postgreSqlServerName is null)
