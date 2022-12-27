@@ -35,6 +35,24 @@ namespace TesApi.Web
         private readonly IWebHostEnvironment hostingEnvironment;
         private readonly string azureOfferDurableId;
 
+        static readonly Func<RepositoryDb> createDbContext = () =>
+        {
+            var connectionString =
+                    $"Server={Environment.GetEnvironmentVariable("PostgreSqlServerName")}; " +
+                    $"User Id={Environment.GetEnvironmentVariable("PostgreSqlTesUserLogin")}.postgres.database.azure.com; " +
+                    $"Database={Environment.GetEnvironmentVariable("PostgreSqlTesDatabaseName")}; " +
+                    $"Port={Environment.GetEnvironmentVariable("PostgreSqlTesDatabasePort")}; " +
+                    $"Password={Environment.GetEnvironmentVariable("PostgreSqlTesUserPassword")}; " +
+                    $"SSLMode=Prefer";
+            return new RepositoryDb(connectionString);
+        };
+
+        public static void InitializeDb()
+        {
+            using var dbContext = createDbContext();
+            dbContext.Database.EnsureCreated();
+        }
+
         /// <summary>
         /// Startup class for ASP.NET core
         /// </summary>
@@ -75,6 +93,12 @@ namespace TesApi.Web
             configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync().Wait();
 
             (var cosmosDbEndpoint, var cosmosDbKey) = (postgreSqlServerName is null) ? azureProxy.GetCosmosDbEndpointAndKeyAsync(Configuration["CosmosDbAccountName"]).Result : (null, null);
+
+            if (postgreSqlServerName is not null)
+            {
+                InitializeDb();
+            }
+
             IRepository<TesTask> database = (postgreSqlServerName is null)
                 ? new CosmosDbRepository<TesTask>(
                     cosmosDbEndpoint,
@@ -82,18 +106,7 @@ namespace TesApi.Web
                     CosmosDbDatabaseId,
                     CosmosDbContainerId,
                     CosmosDbPartitionId)
-                : new TesTaskPostgreSqlRepository(() =>
-                {
-                    var connectionString =
-                        String.Format(
-                            "Server={0}; User Id={1}.postgres.database.azure.com; Database={2}; Port={3}; Password={4}; SSLMode=Prefer",
-                            Environment.GetEnvironmentVariable("PostgreSqlServerName"),
-                            Environment.GetEnvironmentVariable("PostgreSqlTesUserLogin"),
-                            Environment.GetEnvironmentVariable("PostgreSqlTesDatabaseName"),
-                            5432,
-                            Environment.GetEnvironmentVariable("PostgreSqlTesUserPassword"));
-                    return new RepositoryDb(connectionString);
-                });
+                : new TesTaskPostgreSqlRepository(createDbContext);
 
             return (cache, azureProxy, cachingAzureProxy, storageAccessProvider, database);
         }

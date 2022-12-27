@@ -18,7 +18,7 @@ namespace Tes.Repository
     /// <typeparam name="T"></typeparam>
     public class GenericPostgreSqlRepository<T> : IRepository<T> where T : RepositoryItem<T>
     {
-        protected readonly RepositoryDb context;
+        protected readonly Func<RepositoryDb> createDbContext;
 
         /// <summary>
         /// Default constructor
@@ -26,15 +26,15 @@ namespace Tes.Repository
         /// <param name="createDbContext">A delegate that creates a RepositoryDb context</param>
         public GenericPostgreSqlRepository(Func<RepositoryDb> createDbContext)
         {
-            this.context = createDbContext.Invoke();
+            this.createDbContext = createDbContext;
         }
 
         /// <inheritdoc/>
         public async Task<bool> TryGetItemAsync(string id, Action<T> onSuccess = null)
         {
-            await context.Database.EnsureCreatedAsync();
+            using var dbContext = createDbContext();
             // Search for Id in the Set (Which would the outer model, not the JSON)
-            var task = await context.Set<T>().FirstOrDefaultAsync(t => t.GetId() == id);
+            var task = await dbContext.Set<T>().FirstOrDefaultAsync(t => t.GetId() == id);
 
             if (task is not null)
             {
@@ -47,9 +47,9 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate)
         {
-            await context.Database.EnsureCreatedAsync();
+            using var dbContext = createDbContext();
             // Search for items in the outer model, not the JSON
-            return await context.Set<T>().Where(predicate).ToListAsync<T>();
+            return await dbContext.Set<T>().Where(predicate).ToListAsync<T>();
         }
 
         /// <inheritdoc/>
@@ -62,25 +62,25 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task<T> CreateItemAsync(T item)
         {
-            await context.Database.EnsureCreatedAsync();
-            context.Set<T>().Add(item);
-            await context.SaveChangesAsync();
+            using var dbContext = createDbContext();
+            dbContext.Set<T>().Add(item);
+            await dbContext.SaveChangesAsync();
             return item;
         }
 
         /// <inheritdoc/>
         public async Task<T> UpdateItemAsync(T item)
         {
-            await context.Database.EnsureCreatedAsync();
+            using var dbContext = createDbContext();
 
             // Get outer model Id
-            var task = await context.Set<T>().FirstOrDefaultAsync(t => t.GetId() == item.GetId());
+            var task = await dbContext.Set<T>().FirstOrDefaultAsync(t => t.GetId() == item.GetId());
 
             // Update Properties
             if (task is not null)
             {
                 task = item;
-                await context.SaveChangesAsync();
+                await dbContext.SaveChangesAsync();
                 return task;
             }
             return null;
@@ -89,14 +89,14 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task DeleteItemAsync(string id)
         {
-            await context.Database.EnsureCreatedAsync();
+            using var dbContext = createDbContext();
             // Searches outer model, not JSON
-            var task = await context.Set<T>().FirstOrDefaultAsync(t => t.GetId() == id);
+            var task = await dbContext.Set<T>().FirstOrDefaultAsync(t => t.GetId() == id);
 
             if (task is not null)
             {
-                context.Set<T>().Remove(task);
-                await context.SaveChangesAsync();
+                dbContext.Set<T>().Remove(task);
+                await dbContext.SaveChangesAsync();
             }
         }
     }

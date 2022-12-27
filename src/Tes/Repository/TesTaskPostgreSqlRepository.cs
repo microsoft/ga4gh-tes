@@ -33,10 +33,10 @@ namespace Tes.Repository
         /// <returns></returns>
         public new async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess = null)
         {
-            await context.Database.EnsureCreatedAsync();
+            using var dbContext = createDbContext();
 
             // Search for Id within the JSON
-            var task = await context.TesTasks.FirstOrDefaultAsync(t => t.Json.GetId().Contains(id));
+            var task = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.GetId().Contains(id));
 
             if (task is not null)
             {
@@ -53,10 +53,10 @@ namespace Tes.Repository
         /// <returns></returns>
         public new async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate)
         {
-            await context.Database.EnsureCreatedAsync();
+            using var dbContext = createDbContext();
 
             // Search for items in the JSON
-            return await context.TesTasks.Select(t => t.Json).Where(predicate).ToListAsync<TesTask>();
+            return await dbContext.TesTasks.Select(t => t.Json).Where(predicate).ToListAsync<TesTask>();
         }
 
         /// <summary>
@@ -66,10 +66,10 @@ namespace Tes.Repository
         /// <returns></returns>
         public new async Task<TesTask> CreateItemAsync(TesTask item)
         {
-            await context.Database.EnsureCreatedAsync();
+            using var dbContext = createDbContext();
             var dbItem = new TeskTaskDatabaseItem { Json = item };
-            context.TesTasks.Add(dbItem);
-            await context.SaveChangesAsync();
+            dbContext.TesTasks.Add(dbItem);
+            await dbContext.SaveChangesAsync();
             return item;
         }
 
@@ -80,15 +80,14 @@ namespace Tes.Repository
         /// <returns></returns>
         public new async Task<TesTask> UpdateItemAsync(TesTask item)
         {
-            await context.Database.EnsureCreatedAsync();
-
-            var task = await context.TesTasks.FirstOrDefaultAsync(t => t.Json.GetId == item.GetId);
+            using var dbContext = createDbContext();
+            var task = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.GetId == item.GetId);
 
             // Update Properties
             if (task is not null)
             {
                 task.Json = item;
-                await context.SaveChangesAsync();
+                await dbContext.SaveChangesAsync();
                 return task.Json;
             }
             return null;
@@ -97,13 +96,13 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public new async Task DeleteItemAsync(string id)
         {
-            await context.Database.EnsureCreatedAsync();
-            var task = await context.TesTasks.FirstOrDefaultAsync(t => t.Id == (long)Convert.ToDouble(id));
+            using var dbContext = createDbContext();
+            var task = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Id == (long)Convert.ToDouble(id));
 
             if (task is not null)
             {
-                context.TesTasks.Remove(task);
-                await context.SaveChangesAsync();
+                dbContext.TesTasks.Remove(task);
+                await dbContext.SaveChangesAsync();
             }
         }
     }
