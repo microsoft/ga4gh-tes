@@ -21,7 +21,7 @@ namespace TesDeployer
             {
                 configuration = Configuration.BuildConfiguration(args);
             }
-            catch(ArgumentException ex)
+            catch (ArgumentException ex)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine(ex.Message);

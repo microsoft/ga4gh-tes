@@ -20,7 +20,6 @@ using k8s;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.Batch.Models;
 using Microsoft.Azure.Management.Compute.Fluent;
-using Microsoft.Azure.Management.Compute.Fluent.Models;
 using Microsoft.Azure.Management.ContainerRegistry.Fluent;
 using Microsoft.Azure.Management.ContainerService;
 using Microsoft.Azure.Management.ContainerService.Fluent;
@@ -35,7 +34,6 @@ using Microsoft.Azure.Management.KeyVault.Models;
 using Microsoft.Azure.Management.Msi.Fluent;
 using Microsoft.Azure.Management.Network;
 using Microsoft.Azure.Management.Network.Fluent;
-using Microsoft.Azure.Management.Network.Models;
 using Microsoft.Azure.Management.PostgreSQL;
 using Microsoft.Azure.Management.PrivateDns.Fluent;
 using Microsoft.Azure.Management.ResourceGraph;
@@ -62,7 +60,6 @@ using IResource = Microsoft.Azure.Management.ResourceManager.Fluent.Core.IResour
 using KeyVaultManagementClient = Microsoft.Azure.Management.KeyVault.KeyVaultManagementClient;
 using SingleServer = Microsoft.Azure.Management.PostgreSQL;
 using SingleServerModel = Microsoft.Azure.Management.PostgreSQL.Models;
-using Sku = Microsoft.Azure.Management.PostgreSQL.FlexibleServers.Models.Sku;
 
 namespace TesDeployer
 {
@@ -120,7 +117,7 @@ namespace TesDeployer
         private IEnumerable<string> subscriptionIds { get; set; }
         private bool SkipBillingReaderRoleAssignment { get; set; }
         private bool isResourceGroupCreated { get; set; }
-        private KubernetesManager kubernetesManager {get; set;}
+        private KubernetesManager kubernetesManager { get; set; }
         private IKubernetes kubernetesClient { get; set; }
         private AzureEnvironment azEnv { get; set; }
 
@@ -142,8 +139,8 @@ namespace TesDeployer
 
                 await ValidateTokenProviderAsync();
 
-                tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider(this.azEnv.ResourceManagerEndpoint), null, this.azEnv.AuthenticationEndpoint);
-                azureCredentials = new AzureCredentials(tokenCredentials, null, null, this.azEnv);
+                tokenCredentials = new (new RefreshableAzureServiceTokenProvider(this.azEnv.ResourceManagerEndpoint), null, this.azEnv.AuthenticationEndpoint);
+                azureCredentials = new (tokenCredentials, null, null, this.azEnv);
                 azureClient = GetAzureClient(azureCredentials);
                 azureSubscriptionClient = azureClient.WithSubscription(configuration.SubscriptionId);
                 subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
@@ -208,7 +205,7 @@ namespace TesDeployer
                         else
                         {
                             var storageAccounts = await azureSubscriptionClient.StorageAccounts.ListByResourceGroupAsync(configuration.ResourceGroupName);
-                                
+
                             if (!storageAccounts.Any())
                             {
                                 throw new ValidationException($"Update was requested but resource group {configuration.ResourceGroupName} does not contain any storage accounts.");
@@ -222,7 +219,7 @@ namespace TesDeployer
                             storageAccount = storageAccounts.First();
                         }
 
-                        accountNames = await kubernetesManager.GetAKSSettingsAsync(storageAccount); 
+                        accountNames = await kubernetesManager.GetAKSSettingsAsync(storageAccount);
 
                         if (!accountNames.Any())
                         {
@@ -259,8 +256,10 @@ namespace TesDeployer
                         {
                             if (accountNames.TryGetValue("CrossSubscriptionAKSDeployment", out var crossSubscriptionAKSDeployment))
                             {
-                                bool.TryParse(crossSubscriptionAKSDeployment, out var parsed);
-                                configuration.CrossSubscriptionAKSDeployment = parsed;
+                                if (bool.TryParse(crossSubscriptionAKSDeployment, out var parsed))
+                                {
+                                    configuration.CrossSubscriptionAKSDeployment = parsed;
+                                }
                             }
 
                             if (accountNames.TryGetValue("KeyVaultName", out var keyVaultName))
@@ -434,7 +433,7 @@ namespace TesDeployer
                             });
                         }
 
-                        if (configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault() && postgreSqlFlexServer == null)
+                        if (configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault() && postgreSqlFlexServer is null)
                         {
                             postgreSqlDnsZone = await CreatePrivateDnsZoneAsync(vnetAndSubnet.Value.virtualNetwork,
                                 $"privatelink.postgres.database.azure.com", "PostgreSQL Server");
@@ -445,7 +444,7 @@ namespace TesDeployer
                             await AssignVmAsBillingReaderToSubscriptionAsync(managedIdentity);
                         }
 
-                        await Task.WhenAll(new Task[]
+                        await Task.WhenAll(new[]
                         {
                             Task.Run(async () =>
                             {
@@ -482,7 +481,7 @@ namespace TesDeployer
                         var clientId = managedIdentity.ClientId;
                         var settings = ConfigureSettings(clientId);
 
-                        if (aksCluster == null && !configuration.ManualHelmDeployment)
+                        if (aksCluster is null && !configuration.ManualHelmDeployment)
                         {
                             await ProvisionManagedCluster(resourceGroup, managedIdentity,
                                 logAnalyticsWorkspace, vnetAndSubnet?.virtualNetwork,
@@ -594,7 +593,7 @@ namespace TesDeployer
                     ConsoleEx.WriteLine();
                     ConsoleEx.WriteLine($"{exc.GetType().Name}: {exc.Message}", ConsoleColor.Red);
                 }
-                
+
                 ConsoleEx.WriteLine();
                 Debugger.Break();
                 WriteGeneralRetryMessageToConsole();
@@ -638,7 +637,7 @@ namespace TesDeployer
                 ?? throw new ValidationException($"If AKS cluster name is provided, the cluster must already exist in region {configuration.RegionName}, " +
                 $"and be accessible to the current user.", displayExample: false);
         }
-        
+
         private async Task<FlexibleServerModel.Server> GetExistingPostgresqlService(string serverName)
         {
             return (await Task.WhenAll(subscriptionIds.Select(async s =>
@@ -694,11 +693,11 @@ namespace TesDeployer
             {
                 AddonProfiles = new Dictionary<string, ManagedClusterAddonProfile>
                 {
-                    { "omsagent", new ManagedClusterAddonProfile(true, new Dictionary<string, string>() { { "logAnalyticsWorkspaceResourceID", logAnalyticsWorkspace.Id } }) }
+                    { "omsagent", new(true, new Dictionary<string, string>() { { "logAnalyticsWorkspaceResourceID", logAnalyticsWorkspace.Id } }) }
                 },
                 Location = configuration.RegionName,
                 DnsPrefix = configuration.AksClusterName,
-                NetworkProfile = new ContainerServiceNetworkProfile
+                NetworkProfile = new()
                 {
                     NetworkPlugin = NetworkPlugin.Azure,
                     ServiceCidr = configuration.KubernetesServiceCidr,
@@ -706,21 +705,21 @@ namespace TesDeployer
                     DockerBridgeCidr = configuration.KubernetesDockerBridgeCidr,
                     NetworkPolicy = NetworkPolicy.Azure
                 },
-                Identity = new ManagedClusterIdentity(managedIdentity.PrincipalId, managedIdentity.TenantId,
+                Identity = new(managedIdentity.PrincipalId, managedIdentity.TenantId, 
                 Microsoft.Azure.Management.ContainerService.Models.ResourceIdentityType.UserAssigned)
                 {
                     UserAssignedIdentities = new Dictionary<string, ManagedClusterIdentityUserAssignedIdentitiesValue>()
                 }
             };
-            cluster.Identity.UserAssignedIdentities.Add(managedIdentity.Id,
-                new ManagedClusterIdentityUserAssignedIdentitiesValue(managedIdentity.PrincipalId, managedIdentity.ClientId));
+
+            cluster.Identity.UserAssignedIdentities.Add(managedIdentity.Id, new(managedIdentity.PrincipalId, managedIdentity.ClientId));
             cluster.IdentityProfile = new Dictionary<string, ManagedClusterPropertiesIdentityProfileValue>
             {
-                { "kubeletidentity", new ManagedClusterPropertiesIdentityProfileValue(managedIdentity.Id, managedIdentity.ClientId, managedIdentity.PrincipalId) }
+                { "kubeletidentity", new(managedIdentity.Id, managedIdentity.ClientId, managedIdentity.PrincipalId) }
             };
             cluster.AgentPoolProfiles = new List<ManagedClusterAgentPoolProfile>
             {
-                new ManagedClusterAgentPoolProfile()
+                new()
                 {
                     Name = nodePoolName,
                     Count = configuration.AksPoolSize,
@@ -738,7 +737,7 @@ namespace TesDeployer
 
             if (privateNetworking)
             {
-                cluster.ApiServerAccessProfile = new ManagedClusterAPIServerAccessProfile()
+                cluster.ApiServerAccessProfile = new()
                 {
                     EnablePrivateCluster = true,
                     EnablePrivateClusterPublicFQDN = true
@@ -1069,11 +1068,13 @@ namespace TesDeployer
                 $"Writing {ContainersToMountFileName} file to '{ConfigurationContainerName}' storage container...",
                 async () =>
                 {
-                    await UploadTextToStorageAccountAsync(this.azEnv, storageAccount, ConfigurationContainerName, ContainersToMountFileName, Utility.PersonalizeContent(new[]
+                    await UploadTextToStorageAccountAsync(this.azEnv, storageAccount, ConfigurationContainerName, ContainersToMountFileName, 
+                    Utility.PersonalizeContent(new Utility.ConfigReplaceTextItem[]
                     {
-                        new Utility.ConfigReplaceTextItem("{DefaultStorageAccountName}", configuration.StorageAccountName),
-                        new Utility.ConfigReplaceTextItem("{ManagedIdentityName}", managedIdentityName)
-                    }, "scripts", ContainersToMountFileName));
+                        new("{DefaultStorageAccountName}", configuration.StorageAccountName),
+                        new("{ManagedIdentityName}", managedIdentityName)
+                    }, 
+                    "scripts", ContainersToMountFileName));
 
                     await UploadTextToStorageAccountAsync(this.azEnv, storageAccount,
                         ConfigurationContainerName, AllowedVmSizesFileName, Utility.GetFileContent("scripts", AllowedVmSizesFileName));
@@ -1130,15 +1131,19 @@ namespace TesDeployer
                 {
                     server = await postgresManagementClient.Servers.CreateAsync(
                         configuration.ResourceGroupName, configuration.PostgreSqlServerName,
-                        new FlexibleServerModel.Server(
+                        new(
                            location: configuration.RegionName,
                            version: configuration.PostgreSqlVersion,
-                           sku: new Sku(configuration.PostgreSqlSkuName, configuration.PostgreSqlTier),
-                           storage: new FlexibleServerModel.Storage(configuration.PostgreSqlStorageSize),
+                           sku: new(configuration.PostgreSqlSkuName, configuration.PostgreSqlTier),
+                           storage: new(configuration.PostgreSqlStorageSize),
                            administratorLogin: configuration.PostgreSqlAdministratorLogin,
                            administratorLoginPassword: configuration.PostgreSqlAdministratorPassword,
-                           network: new FlexibleServerModel.Network(publicNetworkAccess: "Disabled",
-                           delegatedSubnetResourceId: subnet.Inner.Id, privateDnsZoneArmResourceId: postgreSqlDnsZone.Id),
+                           network: new FlexibleServerModel.Network
+                            (
+                                publicNetworkAccess: "Disabled",
+                                delegatedSubnetResourceId: subnet.Inner.Id, 
+                                privateDnsZoneArmResourceId: postgreSqlDnsZone.Id
+                            ),
                            highAvailability: new FlexibleServerModel.HighAvailability("Disabled")
                         ));
                 });
@@ -1147,7 +1152,7 @@ namespace TesDeployer
                 $"Creating PostgreSQL tes database: {configuration.PostgreSqlTesDatabaseName}...",
                 () => postgresManagementClient.Databases.CreateAsync(
                     configuration.ResourceGroupName, configuration.PostgreSqlServerName, configuration.PostgreSqlTesDatabaseName,
-                    new FlexibleServerModel.Database()));
+                    new()));
 
             return server;
         }
@@ -1163,25 +1168,25 @@ namespace TesDeployer
                 {
                     server = await postgresManagementClient.Servers.CreateAsync(
                         configuration.ResourceGroupName, configuration.PostgreSqlServerName,
-                        new SingleServerModel.ServerForCreate(
+                        new(
                            new SingleServerModel.ServerPropertiesForDefaultCreate(
                                administratorLogin: configuration.PostgreSqlAdministratorLogin,
                                administratorLoginPassword: configuration.PostgreSqlAdministratorPassword,
                                version: configuration.PostgreSqlVersion,
                                publicNetworkAccess: "Disabled",
-                               storageProfile: new Microsoft.Azure.Management.PostgreSQL.Models.StorageProfile(
+                               storageProfile: new(
                                    storageMB: configuration.PostgreSqlStorageSize * 1000)),
                            configuration.RegionName,
-                           sku: new Microsoft.Azure.Management.PostgreSQL.Models.Sku("GP_Gen5_4")
+                           sku: new("GP_Gen5_4")
                        ));
 
                     var privateEndpoint = await networkManagementClient.PrivateEndpoints.CreateOrUpdateAsync(configuration.ResourceGroupName, "pe-postgres1",
-                        new Microsoft.Azure.Management.Network.Models.PrivateEndpoint(
+                        new(
                             name: "pe-coa-postgresql",
                             location: configuration.RegionName,
                             privateLinkServiceConnections: new List<Microsoft.Azure.Management.Network.Models.PrivateLinkServiceConnection>()
-                            { new PrivateLinkServiceConnection(name: "pe-coa-postgresql", privateLinkServiceId: server.Id, groupIds: new List<string>(){"postgresqlServer"}) },
-                            subnet: new Subnet(subnet.Inner.Id)));
+                            { new(name: "pe-coa-postgresql", privateLinkServiceId: server.Id, groupIds: new List<string>(){"postgresqlServer"}) },
+                            subnet: new(subnet.Inner.Id)));
                     var networkInterfaceName = privateEndpoint.NetworkInterfaces.First().Id.Split("/").Last();
                     var networkInterface = await networkManagementClient.NetworkInterfaces.GetAsync(configuration.ResourceGroupName, networkInterfaceName);
 
@@ -1191,13 +1196,19 @@ namespace TesDeployer
                         .WithIPv4Address(networkInterface.IpConfigurations.First().PrivateIPAddress)
                         .Attach()
                         .ApplyAsync();
-               });
+                });
+
+            //await Execute(
+            //    $"Creating PostgreSQL cromwell database: {configuration.PostgreSqlCromwellDatabaseName}...",
+            //    async () => await postgresManagementClient.Databases.CreateOrUpdateAsync(
+            //        configuration.ResourceGroupName, configuration.PostgreSqlServerName, configuration.PostgreSqlCromwellDatabaseName,
+            //        new()));
 
             await Execute(
                 $"Creating PostgreSQL tes database: {configuration.PostgreSqlTesDatabaseName}...",
                 () => postgresManagementClient.Databases.CreateOrUpdateAsync(
                     configuration.ResourceGroupName, configuration.PostgreSqlServerName, configuration.PostgreSqlTesDatabaseName,
-                    new SingleServerModel.Database()));
+                    new()));
             return server;
         }
 
@@ -1235,26 +1246,34 @@ namespace TesDeployer
         private Task<(INetwork virtualNetwork, ISubnet vmSubnet, ISubnet postgreSqlSubnet)> CreateVnetAndSubnetsAsync(IResourceGroup resourceGroup)
           => Execute(
                 $"Creating virtual network and subnets: {configuration.VnetName}...",
-            async () =>
-            {
-                var vnetDefinition = azureSubscriptionClient.Networks
-                    .Define(configuration.VnetName)
-                    .WithRegion(configuration.RegionName)
-                    .WithExistingResourceGroup(resourceGroup)
-                    .WithAddressSpace(configuration.VnetAddressSpace)
-                    .DefineSubnet(configuration.VmSubnetName).WithAddressPrefix(configuration.VmSubnetAddressSpace).Attach();
+                async () =>
+                {
+                    var vnetDefinition = azureSubscriptionClient.Networks
+                        .Define(configuration.VnetName)
+                        .WithRegion(configuration.RegionName)
+                        .WithExistingResourceGroup(resourceGroup)
+                        .WithAddressSpace(configuration.VnetAddressSpace)
+                        .DefineSubnet(configuration.VmSubnetName).WithAddressPrefix(configuration.VmSubnetAddressSpace).Attach();
 
-                vnetDefinition = configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault()
-                    ? vnetDefinition.DefineSubnet(configuration.PostgreSqlSubnetName).WithAddressPrefix(
-                        configuration.PostgreSqlSubnetAddressSpace).WithDelegation("Microsoft.DBforPostgreSQL/flexibleServers").Attach()
-                    : vnetDefinition;
+                    vnetDefinition = configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault()
+                        ? vnetDefinition.DefineSubnet(configuration.PostgreSqlSubnetName)
+                        .WithAddressPrefix(configuration.PostgreSqlSubnetAddressSpace)
+                        .WithDelegation("Microsoft.DBforPostgreSQL/flexibleServers").Attach()
+                        : vnetDefinition;
 
-                var vnet = await vnetDefinition.CreateAsync();
+                    var vnet = await vnetDefinition.CreateAsync();
 
-                return (vnet, vnet.Subnets.FirstOrDefault(s => s.Key.Equals(
-                    configuration.VmSubnetName, StringComparison.OrdinalIgnoreCase)).Value, vnet.Subnets.FirstOrDefault(
-                        s => s.Key.Equals(configuration.PostgreSqlSubnetName, StringComparison.OrdinalIgnoreCase)).Value);
-            });
+                    return (vnet, vnet.Subnets.FirstOrDefault
+                    (
+                        s => s.Key.Equals(configuration.VmSubnetName, 
+                        StringComparison.OrdinalIgnoreCase
+                    )).Value, 
+                    vnet.Subnets.FirstOrDefault
+                    (
+                        s => s.Key.Equals(configuration.PostgreSqlSubnetName, 
+                        StringComparison.OrdinalIgnoreCase
+                    )).Value);
+                });
 
         private Task<INetworkSecurityGroup> CreateNetworkSecurityGroupAsync(IResourceGroup resourceGroup, string networkSecurityGroupName)
         {
@@ -1304,7 +1323,7 @@ namespace TesDeployer
 
         private static async Task SetStorageKeySecret(string vaultUrl, string secretName, string secretValue)
         {
-            var client = new SecretClient(new Uri(vaultUrl), new DefaultAzureCredential());
+            var client = new SecretClient(new(vaultUrl), new DefaultAzureCredential());
             await client.SetSecretAsync(secretName, secretValue);
         }
 
@@ -1336,30 +1355,30 @@ namespace TesDeployer
                     var properties = new VaultCreateOrUpdateParameters()
                     {
                         Location = configuration.RegionName,
-                        Properties = new VaultProperties()
+                        Properties = new()
                         {
-                            TenantId = new Guid(tenantId),
-                            Sku = new Microsoft.Azure.Management.KeyVault.Models.Sku(SkuName.Standard),
-                            NetworkAcls = new NetworkRuleSet()
+                            TenantId = new(tenantId),
+                            Sku = new(SkuName.Standard),
+                            NetworkAcls = new()
                             {
                                 DefaultAction = configuration.PrivateNetworking.GetValueOrDefault() ? "Deny" : "Allow"
                             },
-                            AccessPolicies = new List<AccessPolicyEntry> ()
-                            { 
-                                new AccessPolicyEntry()
+                            AccessPolicies = new List<AccessPolicyEntry>()
+                            {
+                                new()
                                 {
-                                    TenantId = new Guid(tenantId),
+                                    TenantId = new(tenantId),
                                     ObjectId = await GetUserObjectId(),
-                                    Permissions = new Permissions()
+                                    Permissions = new()
                                     {
                                         Secrets = secrets
                                     }
                                 },
-                                new AccessPolicyEntry()
+                                new()
                                 {
-                                    TenantId = new Guid(tenantId),
+                                    TenantId = new(tenantId),
                                     ObjectId = managedIdentity.PrincipalId,
-                                    Permissions = new Permissions()
+                                    Permissions = new()
                                     {
                                         Secrets = secrets
                                     }
@@ -1373,12 +1392,12 @@ namespace TesDeployer
                     if (configuration.PrivateNetworking.GetValueOrDefault())
                     {
                         var privateEndpoint = await networkManagementClient.PrivateEndpoints.CreateOrUpdateAsync(configuration.ResourceGroupName, "pe-keyvault",
-                            new Microsoft.Azure.Management.Network.Models.PrivateEndpoint(
+                            new(
                                 name: "pe-coa-keyvault",
                                 location: configuration.RegionName,
                                 privateLinkServiceConnections: new List<Microsoft.Azure.Management.Network.Models.PrivateLinkServiceConnection>()
-                                { new PrivateLinkServiceConnection(name: "pe-coa-keyvault", privateLinkServiceId: vault.Id, groupIds: new List<string>(){"vault"}) },
-                                subnet: new Subnet(subnet.Inner.Id)));
+                                { new(name: "pe-coa-keyvault", privateLinkServiceId: vault.Id, groupIds: new List<string>(){"vault"}) },
+                                subnet: new(subnet.Inner.Id)));
 
                         var networkInterfaceName = privateEndpoint.NetworkInterfaces.First().Id.Split("/").Last();
                         var networkInterface = await networkManagementClient.NetworkInterfaces.GetAsync(configuration.ResourceGroupName, networkInterfaceName);
@@ -1452,9 +1471,9 @@ namespace TesDeployer
                     .CreateAsync(
                         configuration.ResourceGroupName,
                         configuration.BatchAccountName,
-                        new BatchAccountCreateParameters(
+                        new(
                             configuration.RegionName,
-                            autoStorage: configuration.PrivateNetworking.GetValueOrDefault() ? new AutoStorageBaseProperties { StorageAccountId = storageAccountId } : null),
+                            autoStorage: configuration.PrivateNetworking.GetValueOrDefault() ? new() { StorageAccountId = storageAccountId } : null),
                         cts.Token));
 
         private Task<IResourceGroup> CreateResourceGroupAsync()
@@ -1479,21 +1498,12 @@ namespace TesDeployer
             var managedIdentityName = $"{resourceGroup.Name.Replace(".", "-").Replace("(", "-").Replace(")", "-")}-identity";
 
             return Execute(
-                $"Creating user-managed identity: {managedIdentityName}...",
-                async () =>
-                {
-                    var identity = await azureSubscriptionClient.Identities.GetByResourceGroupAsync(configuration.ResourceGroupName, managedIdentityName);
-
-                    if (identity != null)
-                    {
-                        return identity;
-                    }
-
-                    return await azureSubscriptionClient.Identities.Define(managedIdentityName)
+                $"Obtaining user-managed identity: {managedIdentityName}...",
+                async () => await azureSubscriptionClient.Identities.GetByResourceGroupAsync(configuration.ResourceGroupName, managedIdentityName)
+                    ?? await azureSubscriptionClient.Identities.Define(managedIdentityName)
                         .WithRegion(configuration.RegionName)
                         .WithExistingResourceGroup(resourceGroup)
-                        .CreateAsync();
-                });
+                        .CreateAsync());
         }
         private async Task DeleteResourceGroupAsync()
         {
@@ -1706,7 +1716,7 @@ namespace TesDeployer
 
             var vmSubnet = vnet.Subnets.FirstOrDefault(s => s.Key.Equals(configuration.VmSubnetName, StringComparison.OrdinalIgnoreCase)).Value;
 
-            if (vmSubnet == null)
+            if (vmSubnet is null)
             {
                 throw new ValidationException($"Virtual network '{configuration.VnetName}' does not contain subnet '{configuration.VmSubnetName}'");
             }
@@ -1716,7 +1726,7 @@ namespace TesDeployer
 
             if (configuration.ProvisionPostgreSqlOnAzure == true)
             {
-                if (postgreSqlSubnet == null)
+                if (postgreSqlSubnet is null)
                 {
                     throw new ValidationException($"Virtual network '{configuration.VnetName}' does not contain subnet '{configuration.PostgreSqlSubnetName}'");
                 }
@@ -1765,9 +1775,9 @@ namespace TesDeployer
 
         private async Task ValidateVmAsync()
         {
-            var computeSkus = (await generalRetryPolicy.ExecuteAsync(() => 
+            var computeSkus = (await generalRetryPolicy.ExecuteAsync(() =>
                 azureSubscriptionClient.ComputeSkus.ListbyRegionAndResourceTypeAsync(
-                    Region.Create(configuration.RegionName), 
+                    Region.Create(configuration.RegionName),
                     ComputeResourceType.VirtualMachines)))
                 .Where(s => !s.Restrictions.Any())
                 .Select(s => s.Name.Value)
@@ -1926,7 +1936,7 @@ namespace TesDeployer
             ThrowIfBothProvided(configuration.UseAks, nameof(configuration.UseAks), configuration.CustomTriggerServiceImagePath != null,
                 nameof(configuration.CustomTriggerServiceImagePath));
             ThrowIfNotProvidedForUpdate(configuration.AksClusterName, nameof(configuration.AksClusterName));
-                
+
             if (!configuration.ManualHelmDeployment)
             {
                 ValidateDependantFeature(configuration.UseAks,

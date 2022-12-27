@@ -11,8 +11,6 @@ namespace Tes.Models
         public string Name { get; private set; }
 
         public TesTaskLogMetadataKeyAttribute(string name)
-        {
-            Name = name;
-        }
+            => Name = name;
     }
 }
