@@ -12,7 +12,7 @@ namespace Tes.Repository
     using Tes.Models;
 
     /// <summary>
-    /// A repository for interacting with an Azure PostgreSql Server. 
+    /// A TesTask specific repository for CRUD-ing the JSON TesTask stored in a TeskTaskDatabaseItem.
     /// </summary>
     /// <typeparam name="TesTask"></typeparam>
     public class TesTaskPostgreSqlRepository : GenericPostgreSqlRepository<TesTask>
@@ -20,15 +20,17 @@ namespace Tes.Repository
         /// <summary>
         /// Default constructor
         /// </summary>
-        /// <param name="host">Azure PostgreSQL Server host name</param>
-        /// <param name="user">Azure PostgreSQL Server user name</param>
-        /// <param name="database">Azure PostgreSQL Server database name</param>
-        /// <param name="token">User's password or authentication token for Azure PostgreSQL Server</param>
-        public TesTaskPostgreSqlRepository(string host, string user, string database, string token) : base(host, user, database, token)
+        /// <param name="createDbContext">A delegate that creates a RepositoryDb context</param>
+        public TesTaskPostgreSqlRepository(Func<RepositoryDb> createDbContext) : base(createDbContext)
         {
         }
 
+        /// <summary>
         /// Base class searches within model, this method searches within the JSON
+        /// </summary>
+        /// <param name="id">The TesTask Id stored in the TesTaskDatabaseItem JSON</param>
+        /// <param name="onSuccess">Delegate to run on success</param>
+        /// <returns></returns>
         public new async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess = null)
         {
             await context.Database.EnsureCreatedAsync();
@@ -44,7 +46,11 @@ namespace Tes.Repository
             return false;
         }
 
+        /// <summary>
         /// Base class searches within model, this method searches within the JSON
+        /// </summary>
+        /// <param name="predicate">Predicate to run on the JSON</param>
+        /// <returns></returns>
         public new async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate)
         {
             await context.Database.EnsureCreatedAsync();
@@ -53,7 +59,11 @@ namespace Tes.Repository
             return await context.TesTasks.Select(t => t.Json).Where(predicate).ToListAsync<TesTask>();
         }
 
+        /// <summary>
         /// Encapsulates a TesTask as JSON
+        /// </summary>
+        /// <param name="item">TesTask to store as JSON in the database</param>
+        /// <returns></returns>
         public new async Task<TesTask> CreateItemAsync(TesTask item)
         {
             await context.Database.EnsureCreatedAsync();
@@ -63,7 +73,11 @@ namespace Tes.Repository
             return item;
         }
 
+        /// <summary>
         /// Base class searches within model, this method searches within the JSON
+        /// </summary>
+        /// <param name="item"></param>
+        /// <returns></returns>
         public new async Task<TesTask> UpdateItemAsync(TesTask item)
         {
             await context.Database.EnsureCreatedAsync();

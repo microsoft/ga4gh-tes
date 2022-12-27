@@ -65,6 +65,7 @@ namespace TesApi.Web
         private (IAppCache cache, AzureProxy azureProxy, IAzureProxy cachingAzureProxy, IStorageAccessProvider storageAccessProvider, IRepository<TesTask> repository) ConfigureServices()
         {
             var cache = new CachingService();
+            var postgreSqlServerName = Environment.GetEnvironmentVariable("PostgreSqlServerName");
 
             var azureProxy = new AzureProxy(Configuration["BatchAccountName"], azureOfferDurableId, loggerFactory.CreateLogger<AzureProxy>());
             IAzureProxy cachingAzureProxy = new CachingWithRetriesAzureProxy(azureProxy, cache);
@@ -73,10 +74,28 @@ namespace TesApi.Web
             var configurationUtils = new ConfigurationUtils(Configuration, cachingAzureProxy, storageAccessProvider, loggerFactory.CreateLogger<ConfigurationUtils>());
             configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync().Wait();
 
-            (var cosmosDbEndpoint, var cosmosDbKey) = azureProxy.GetCosmosDbEndpointAndKeyAsync(Configuration["CosmosDbAccountName"]).Result;
-            var cosmosDbRepository = new CosmosDbRepository<TesTask>(cosmosDbEndpoint, cosmosDbKey, CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId);
+            (var cosmosDbEndpoint, var cosmosDbKey) = (postgreSqlServerName is null) ? azureProxy.GetCosmosDbEndpointAndKeyAsync(Configuration["CosmosDbAccountName"]).Result : (null, null);
+            IRepository<TesTask> database = (postgreSqlServerName is null)
+                ? new CosmosDbRepository<TesTask>(
+                    cosmosDbEndpoint,
+                    cosmosDbKey,
+                    CosmosDbDatabaseId,
+                    CosmosDbContainerId,
+                    CosmosDbPartitionId)
+                : new TesTaskPostgreSqlRepository(() =>
+                {
+                    var connectionString =
+                        String.Format(
+                            "Server={0}; User Id={1}.postgres.database.azure.com; Database={2}; Port={3}; Password={4}; SSLMode=Prefer",
+                            Environment.GetEnvironmentVariable("PostgreSqlServerName"),
+                            Environment.GetEnvironmentVariable("PostgreSqlTesUserLogin"),
+                            Environment.GetEnvironmentVariable("PostgreSqlTesDatabaseName"),
+                            5432,
+                            Environment.GetEnvironmentVariable("PostgreSqlTesUserPassword"));
+                    return new RepositoryDb(connectionString);
+                });
 
-            return (cache, azureProxy, cachingAzureProxy, storageAccessProvider, cosmosDbRepository);
+            return (cache, azureProxy, cachingAzureProxy, storageAccessProvider, database);
         }
 
         private void ConfigureServices(IServiceCollection services, IAppCache cache, AzureProxy azureProxy, IAzureProxy cachingAzureProxy, IStorageAccessProvider storageAccessProvider, IRepository<TesTask> repository)

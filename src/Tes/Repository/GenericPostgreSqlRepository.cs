@@ -18,27 +18,15 @@ namespace Tes.Repository
     /// <typeparam name="T"></typeparam>
     public class GenericPostgreSqlRepository<T> : IRepository<T> where T : RepositoryItem<T>
     {
-        protected readonly string connectionString;
         protected readonly RepositoryDb context;
 
         /// <summary>
         /// Default constructor
         /// </summary>
-        /// <param name="host">Azure PostgreSQL Server host name</param>
-        /// <param name="user">Azure PostgreSQL Server user name</param>
-        /// <param name="database">Azure PostgreSQL Server database name</param>
-        /// <param name="token">User's password or authentication token for Azure PostgreSQL Server</param>
-        public GenericPostgreSqlRepository(string host, string user, string database, string token)
+        /// <param name="createDbContext">A delegate that creates a RepositoryDb context</param>
+        public GenericPostgreSqlRepository(Func<RepositoryDb> createDbContext)
         {
-            connectionString =
-                String.Format(
-                 "Server={0}; User Id={1}.postgres.database.azure.com; Database={2}; Port={3}; Password={4}; SSLMode=Prefer",
-                 host,
-                 user,
-                 database,
-                 5432,
-                 token);
-            context = new RepositoryDb(connectionString);
+            this.context = createDbContext.Invoke();
         }
 
         /// <inheritdoc/>

@@ -12,7 +12,8 @@ namespace Tes.Repository
         }
 
         public DbSet<TeskTaskDatabaseItem> TesTasks { get; set; }
-        public DbSet<PoolDatabaseItem> PoolItems { get; set; }
+        // TODO (bmurri): Create DbSet for Pool items
+        //public DbSet<PoolDatabaseItem> PoolItems { get; set; }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             optionsBuilder.UseNpgsql(connectionString).UseLowerCaseNamingConvention();
