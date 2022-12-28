@@ -34,23 +34,6 @@ defaultContainers:
   - inputs
   - outputs
 
-internalContainersMIAuth:
-#  - accountName: storageAccount
-#    containerName: dataset1
-#    resourceGroup: resourceGroup1    
-
-internalContainersKeyVaultAuth:
-#  - accountName: storageAccount
-#    containerName: dataset1
-#    keyVaultURL: 
-#    keyVaultSecretName:
-
-externalContainers:
-#  - accountName: storageAccount
-#    accountKey: <key>
-#    containerName: dataset1
-#    resourceGroup: resourceGroup1
-
 externalSasContainers:
   - accountName: datasettestinputs
 # [SuppressMessage("Microsoft.Security", "CS002:SecretInNextLine", Justification="Public example, not confidential")]

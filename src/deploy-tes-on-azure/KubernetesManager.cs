@@ -13,7 +13,10 @@ using System.Threading.Tasks;
 using k8s;
 using Microsoft.Azure.Management.ContainerService;
 using Microsoft.Azure.Management.ContainerService.Fluent;
+using Microsoft.Azure.Management.Fluent;
 using Microsoft.Azure.Management.Msi.Fluent;
+using Microsoft.Azure.Management.Network.Models;
+using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Azure.Management.Storage.Fluent;
@@ -36,9 +39,7 @@ namespace TesDeployer
             .WaitAndRetryAsync(8, retryAttempt => TimeSpan.FromSeconds(5));
 
         // "master" is used despite not being a best practice: https://github.com/kubernetes-sigs/blob-csi-driver/issues/783
-        private const string BlobCsiDriverGithubReleaseBranch = "master";
-        private const string BlobCsiDriverGithubReleaseVersion = "v1.18.0";
-        private const string BlobCsiRepo = $"https://raw.githubusercontent.com/kubernetes-sigs/blob-csi-driver/{BlobCsiDriverGithubReleaseBranch}/charts";
+        private const string NginxIngressRepo = "https://kubernetes.github.io/ingress-nginx";
         private const string AadPluginGithubReleaseVersion = "v1.8.13";
         private const string AadPluginRepo = $"https://raw.githubusercontent.com/Azure/aad-pod-identity/{AadPluginGithubReleaseVersion}/charts";
         private const string AadPluginVersion = "4.1.14";
@@ -76,7 +77,7 @@ namespace TesDeployer
             return new Kubernetes(k8sClientConfiguration);
         }
 
-        public async Task DeployCoADependenciesAsync()
+        public async Task DeployCoADependenciesAsync(IResourceGroup resourceGroup)
         {
             var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
 
@@ -85,20 +86,22 @@ namespace TesDeployer
                 await ExecHelmProcessAsync($"repo add aad-pod-identity {AadPluginRepo}");
             }
 
-            if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("blob-csi-driver", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("aad-pod-identity", StringComparison.OrdinalIgnoreCase))
             {
-                await ExecHelmProcessAsync($"repo add blob-csi-driver {BlobCsiRepo}");
+                await ExecHelmProcessAsync($"repo add ingress-nginx {NginxIngressRepo}");
             }
-            
+
             await ExecHelmProcessAsync($"repo update");
             await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig {kubeConfigPath}");
-            await ExecHelmProcessAsync($"install blob-csi-driver blob-csi-driver/blob-csi-driver --set node.enableBlobfuseProxy=true --namespace kube-system --version {BlobCsiDriverGithubReleaseVersion} --kubeconfig {kubeConfigPath}");
-        }
+            await ExecHelmProcessAsync($"install ingress-nginx ingress-nginx/ingress-nginx --namespace kube-system --set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-load-balancer-health-probe-request-path\"=/healthz --kubeconfig {kubeConfigPath}");
+            var client = await GetKubernetesClientAsync(resourceGroup);
+            await WaitForWorkloadAsync(client, "ingress-nginx-controller", cts.Token, "kube-system");
+    }
 
-        public async Task DeployHelmChartToClusterAsync()
-        {
-            // https://helm.sh/docs/helm/helm_upgrade/
-            // The chart argument can be either: a chart reference('example/mariadb'), a path to a chart directory, a packaged chart, or a fully qualified URL
+    public async Task DeployHelmChartToClusterAsync()
+    {
+        // https://helm.sh/docs/helm/helm_upgrade/
+        // The chart argument can be either: a chart reference('example/mariadb'), a path to a chart directory, a packaged chart, or a fully qualified URL
             await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig {kubeConfigPath} --namespace {configuration.AksCoANamespace} --create-namespace",
                 workingDirectory: workingDirectoryTemp);
         }
@@ -166,7 +169,7 @@ namespace TesDeployer
             return ValuesToSettings(values);
         }
 
-        public async Task ExecuteCommandsOnPodAsync(IKubernetes client, string podName, IEnumerable<string[]> commands)
+        public async Task ExecuteCommandsOnPodAsync(IKubernetes client, string podName, IEnumerable<string[]> commands, string podNamespace)
         {
             var printHandler = new ExecAsyncCallback(async (stdIn, stdOut, stdError) =>
             {
@@ -199,10 +202,10 @@ namespace TesDeployer
                 }
             });
 
-            var pods = await client.CoreV1.ListNamespacedPodAsync(configuration.AksCoANamespace);
+            var pods = await client.CoreV1.ListNamespacedPodAsync(podNamespace);
             var workloadPod = pods.Items.Where(x => x.Metadata.Name.Contains(podName)).FirstOrDefault();
 
-            if (!await WaitForWorkloadAsync(client, podName, cts.Token))
+            if (!await WaitForWorkloadAsync(client, podName, cts.Token, podNamespace))
             {
                 throw new Exception($"Timed out waiting for {podName} to start.");
             }
@@ -213,7 +216,7 @@ namespace TesDeployer
             {
                 foreach (var command in commands)
                 {
-                    await client.NamespacedPodExecAsync(workloadPod.Metadata.Name, configuration.AksCoANamespace, podName, command, true, printHandler, CancellationToken.None);
+                    await client.NamespacedPodExecAsync(workloadPod.Metadata.Name, podNamespace, podName, command, true, printHandler, CancellationToken.None);
                 }
             });
 
@@ -392,14 +395,14 @@ namespace TesDeployer
             return output;
         }
 
-        private async Task<bool> WaitForWorkloadAsync(IKubernetes client, string deploymentName, CancellationToken cancellationToken)
+        private async Task<bool> WaitForWorkloadAsync(IKubernetes client, string deploymentName, CancellationToken cancellationToken, string deploymentNamespace)
         {
-            var deployments = await client.AppsV1.ListNamespacedDeploymentAsync(configuration.AksCoANamespace, cancellationToken: cancellationToken);
+            var deployments = await client.AppsV1.ListNamespacedDeploymentAsync(deploymentNamespace, cancellationToken: cancellationToken);
             var deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
 
             var result = await WorkloadReadyRetryPolicy.ExecuteAndCaptureAsync(async () => 
             {
-                deployments = await client.AppsV1.ListNamespacedDeploymentAsync(configuration.AksCoANamespace, cancellationToken: cancellationToken);
+                deployments = await client.AppsV1.ListNamespacedDeploymentAsync(deploymentNamespace, cancellationToken: cancellationToken);
                 deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
                 
                 if ((deployment?.Status?.ReadyReplicas ?? 0) < 1)

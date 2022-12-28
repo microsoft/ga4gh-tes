@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.WebSockets;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -180,7 +181,7 @@ namespace TesDeployer
                         ConsoleEx.WriteLine($"Upgrading TES on Azure instance in resource group '{resourceGroup.Name}' to version {targetVersion}...");
 
                         var existingAksCluster = await ValidateAndGetExistingAKSClusterAsync();
-                        configuration.UseAks = existingAksCluster is not null;
+
 
                         Dictionary<string, string> accountNames = null;
 
@@ -423,6 +424,11 @@ namespace TesDeployer
                         {
                             Task.Run(async () =>
                             {
+                                networkSecurityGroup = await CreateNetworkSecurityGroupAsync(resourceGroup, configuration.NetworkSecurityGroupName);
+                                await vnetAndSubnet.Value.virtualNetwork.Update().UpdateSubnet(configuration.VmSubnetName).WithExistingNetworkSecurityGroup(networkSecurityGroup).Parent().ApplyAsync();
+                            }),
+                            Task.Run(async () =>
+                            {
                                 batchAccount ??= await CreateBatchAccountAsync(storageAccount.Id);
                                 await AssignVmAsContributorToBatchAccountAsync(managedIdentity, batchAccount);
                             }),
@@ -447,6 +453,7 @@ namespace TesDeployer
                                     {
                                         postgreSqlFlexServer ??= await CreatePostgreSqlServerAndDatabaseAsync(postgreSqlFlexManagementClient, vnetAndSubnet.Value.postgreSqlSubnet, postgreSqlDnsZone);
                                     }
+                                    await vnetAndSubnet.Value.virtualNetwork.Update().UpdateSubnet(configuration.PostgreSqlSubnetName).WithExistingNetworkSecurityGroup(networkSecurityGroup).Parent().ApplyAsync();
                                 }
                             })
                         });
@@ -471,9 +478,21 @@ namespace TesDeployer
                         else
                         {
                             kubernetesClient = await kubernetesManager.GetKubernetesClientAsync(resourceGroup);
-                            await kubernetesManager.DeployCoADependenciesAsync();
+                            await kubernetesManager.DeployCoADependenciesAsync(resourceGroup);
                             await kubernetesManager.DeployHelmChartToClusterAsync();
                         }
+
+                        string externalIpString = new WebClient().DownloadString("http://icanhazip.com").Replace("\\r\\n", "").Replace("\\n", "").Trim();
+                        var ingresses = await kubernetesClient.NetworkingV1.ListNamespacedIngressAsync(configuration.AksCoANamespace);
+                        var tesIngress = ingresses.Items.Where(x => x.Metadata.Name.Equals("tes-ingress", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                        await networkSecurityGroup.Update().DefineRule("TES_RULE")
+                            .AllowInbound()
+                            .FromAddress(externalIpString)
+                            .FromAnyPort()
+                            .ToAddress(tesIngress.Status.LoadBalancer.Ingress.FirstOrDefault().Ip)
+                            .ToPort(80)
+                            .WithProtocol(Microsoft.Azure.Management.Network.Fluent.Models.SecurityRuleProtocol.Tcp)
+                            .WithPriority(301).Attach().ApplyAsync();
 
                         if (configuration.ProvisionPostgreSqlOnAzure == true)
                         {
@@ -744,7 +763,7 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "BatchAccountName", configuration.BatchAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ApplicationInsightsAccountName", configuration.ApplicationInsightsAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ManagedIdentityClientId", managedIdentityClientId, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString", managedIdentityClientId, s => $"RunAs=App;AppId={s}", ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString", configuration.AzureServicesAuthConnectionString, defaultValue: $"RunAs=App;AppId={managedIdentityClientId}", ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "KeyVaultName", configuration.KeyVaultName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "AksCoANamespace", configuration.AksCoANamespace, ignoreDefaults: true);
                 var provisionPostgreSqlOnAzure = configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault();
@@ -1837,28 +1856,16 @@ namespace TesDeployer
             ThrowIfProvidedForUpdate(configuration.Tags, nameof(configuration.Tags));
             ThrowIfTagsFormatIsUnacceptable(configuration.Tags, nameof(configuration.Tags));
 
-            if (!configuration.Update)
-            {
-                ValidateDependantFeature(configuration.CrossSubscriptionAKSDeployment.GetValueOrDefault(), nameof(configuration.CrossSubscriptionAKSDeployment), configuration.UseAks, nameof(configuration.UseAks));
-            }
-
-            ThrowIfBothProvided(configuration.UseAks, nameof(configuration.UseAks), configuration.CustomTesImagePath != null, nameof(configuration.CustomTesImagePath));
-            ThrowIfBothProvided(configuration.UseAks, nameof(configuration.UseAks), configuration.CustomTriggerServiceImagePath != null, nameof(configuration.CustomTriggerServiceImagePath));
             ThrowIfNotProvidedForUpdate(configuration.AksClusterName, nameof(configuration.AksClusterName));
                 
             if (!configuration.ManualHelmDeployment)
             {
-                ValidateDependantFeature(configuration.UseAks, nameof(configuration.UseAks), !string.IsNullOrWhiteSpace(configuration.HelmBinaryPath), nameof(configuration.HelmBinaryPath));
                 ValidateHelmInstall(configuration.HelmBinaryPath, nameof(configuration.HelmBinaryPath));
             }
 
             if (configuration.ProvisionPostgreSqlOnAzure is null)
             {
                 configuration.ProvisionPostgreSqlOnAzure = true;
-            }
-            else if (!configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault())
-            {
-                //ValidateDependantFeature(configuration.UseAks, nameof(configuration.UseAks), configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault(), nameof(configuration.ProvisionPostgreSqlOnAzure));
             }
         }
 
