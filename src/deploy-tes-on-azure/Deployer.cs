@@ -15,6 +15,7 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using Azure.Storage;
 using Azure.Storage.Blobs;
+using deploytesonazure;
 using k8s;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.Batch.Models;
@@ -26,6 +27,7 @@ using Microsoft.Azure.Management.ContainerService.Models;
 using Microsoft.Azure.Management.CosmosDB.Fluent;
 using Microsoft.Azure.Management.Fluent;
 using Microsoft.Azure.Management.Graph.RBAC.Fluent;
+using Microsoft.Azure.Management.Graph.RBAC.Fluent.Models;
 using Microsoft.Azure.Management.KeyVault;
 using Microsoft.Azure.Management.KeyVault.Fluent;
 using Microsoft.Azure.Management.KeyVault.Models;
@@ -35,12 +37,14 @@ using Microsoft.Azure.Management.Network.Fluent;
 using Microsoft.Azure.Management.PostgreSQL;
 using Microsoft.Azure.Management.PrivateDns.Fluent;
 using Microsoft.Azure.Management.ResourceGraph;
+using Microsoft.Azure.Management.ResourceGraph.Models;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Azure.Management.Storage.Fluent;
 using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Rest;
+using Microsoft.Rest.Azure.OData;
 using Polly;
 using Polly.Retry;
 using Renci.SshNet;
@@ -115,34 +119,47 @@ namespace TesDeployer
         private bool isResourceGroupCreated { get; set; }
         private KubernetesManager kubernetesManager { get; set; }
         private IKubernetes kubernetesClient { get; set; }
+        private AzureEnvironment azEnv { get; set; }
 
         public Deployer(Configuration configuration)
         {
             this.configuration = configuration;
         }
 
-        public async Task<int> DeployAsync()
+        public async Task<int> DeployAsync(AzureEnvironment env)
         {
             var mainTimer = Stopwatch.StartNew();
-
+            this.azEnv = env;
             try
             {
                 ValidateInitialCommandLineArgsAsync();
 
                 ConsoleEx.WriteLine("Running...");
+                ConsoleEx.WriteLine($"Current Azure Environment: {this.azEnv.Name}");
 
                 await ValidateTokenProviderAsync();
 
-                tokenCredentials = new(new RefreshableAzureServiceTokenProvider("https://management.azure.com/"));
-                azureCredentials = new(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
+                tokenCredentials = new (new RefreshableAzureServiceTokenProvider(this.azEnv.ResourceManagerEndpoint), null, this.azEnv.AuthenticationEndpoint);
+                azureCredentials = new (tokenCredentials, null, null, this.azEnv);
                 azureClient = GetAzureClient(azureCredentials);
                 azureSubscriptionClient = azureClient.WithSubscription(configuration.SubscriptionId);
                 subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
                 resourceManagerClient = GetResourceManagerClient(azureCredentials);
-                networkManagementClient = new Microsoft.Azure.Management.Network.NetworkManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
-                postgreSqlFlexManagementClient = new FlexibleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, LongRunningOperationRetryTimeout = 1200 };
-                postgreSqlSingleManagementClient = new SingleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, LongRunningOperationRetryTimeout = 1200 };
-                kubernetesManager = new(configuration, azureCredentials, cts);
+                networkManagementClient = new Microsoft.Azure.Management.Network.NetworkManagementClient(new Uri(this.azEnv.ResourceManagerEndpoint), azureCredentials)
+                {
+                    SubscriptionId = configuration.SubscriptionId
+                };
+                postgreSqlFlexManagementClient = new FlexibleServer.PostgreSQLManagementClient(new Uri(this.azEnv.ResourceManagerEndpoint), azureCredentials)
+                {
+                    SubscriptionId = configuration.SubscriptionId,
+                    LongRunningOperationRetryTimeout = 1200
+                };
+                postgreSqlSingleManagementClient = new SingleServer.PostgreSQLManagementClient(new Uri(this.azEnv.ResourceManagerEndpoint), azureCredentials)
+                {
+                    SubscriptionId = configuration.SubscriptionId,
+                    LongRunningOperationRetryTimeout = 1200
+                };
+                kubernetesManager = new KubernetesManager(this.azEnv, configuration, azureCredentials, cts);
 
                 await ValidateSubscriptionAndResourceGroupAsync(configuration);
 
@@ -156,10 +173,10 @@ namespace TesDeployer
                 SingleServerModel.Server postgreSqlSingleServer = null;
                 IStorageAccount storageAccount = null;
                 var keyVaultUri = string.Empty;
-                IVirtualMachine linuxVm = null;
-                INetworkSecurityGroup networkSecurityGroup = null;
+                // IVirtualMachine linuxVm = null;
+                // INetworkSecurityGroup networkSecurityGroup = null;
                 IIdentity managedIdentity = null;
-                ConnectionInfo sshConnectionInfo = null;
+                // ConnectionInfo sshConnectionInfo = null;
                 IPrivateDnsZone postgreSqlDnsZone = null;
 
                 try
@@ -169,7 +186,8 @@ namespace TesDeployer
                         resourceGroup = await azureSubscriptionClient.ResourceGroups.GetByNameAsync(configuration.ResourceGroupName);
                         configuration.RegionName = resourceGroup.RegionName;
 
-                        var targetVersion = Utility.DelimitedTextToDictionary(Utility.GetFileContent("scripts", "env-00-coa-version.txt")).GetValueOrDefault("TESOnAzureVersion");
+                        var targetVersion = Utility.DelimitedTextToDictionary(
+                            Utility.GetFileContent("scripts", "env-00-coa-version.txt")).GetValueOrDefault("TESOnAzureVersion");
 
                         ConsoleEx.WriteLine($"Upgrading TES on Azure instance in resource group '{resourceGroup.Name}' to version {targetVersion}...");
 
@@ -181,7 +199,8 @@ namespace TesDeployer
                         if (!string.IsNullOrEmpty(configuration.StorageAccountName))
                         {
                             storageAccount = await GetExistingStorageAccountAsync(configuration.StorageAccountName)
-                                ?? throw new ValidationException($"Storage account {configuration.StorageAccountName}, does not exist in region {configuration.RegionName} or is not accessible to the current user.");
+                                ?? throw new ValidationException($"Storage account {configuration.StorageAccountName}, " +
+                                $"does not exist in region {configuration.RegionName} or is not accessible to the current user.");
                         }
                         else
                         {
@@ -193,7 +212,8 @@ namespace TesDeployer
                             }
                             if (storageAccounts.Count() > 1)
                             {
-                                throw new ValidationException($"Resource group {configuration.ResourceGroupName} contains multiple storage accounts. {nameof(configuration.StorageAccountName)} must be provided.");
+                                throw new ValidationException($"Resource group {configuration.ResourceGroupName} contains multiple storage accounts. " +
+                                    $"{nameof(configuration.StorageAccountName)} must be provided.");
                             }
 
                             storageAccount = storageAccounts.First();
@@ -212,7 +232,8 @@ namespace TesDeployer
                         }
 
                         batchAccount = await GetExistingBatchAccountAsync(batchAccountName)
-                            ?? throw new ValidationException($"Batch account {batchAccountName}, referenced by the VM configuration, does not exist in region {configuration.RegionName} or is not accessible to the current user.");
+                            ?? throw new ValidationException($"Batch account {batchAccountName}, " +
+                            $"referenced by the VM configuration, does not exist in region {configuration.RegionName} or is not accessible to the current user.");
 
                         configuration.BatchAccountName = batchAccountName;
 
@@ -222,7 +243,8 @@ namespace TesDeployer
                         }
 
                         cosmosDb = await GetExistingCosmosDbAccountAsync(cosmosDbAccountName)
-                            ?? throw new ValidationException($"CosmosDb account {cosmosDbAccountName}, referenced by the VM configuration, does not exist in region {configuration.RegionName}");
+                            ?? throw new ValidationException($"CosmosDb account {cosmosDbAccountName}, referenced by the VM configuration, " +
+                            $"does not exist in region {configuration.RegionName}");
 
                         configuration.CosmosDbAccountName = cosmosDbAccountName;
 
@@ -250,9 +272,12 @@ namespace TesDeployer
                             {
                                 throw new ValidationException($"Could not retrieve ManagedIdentityClientId.");
                             }
-
-                            managedIdentity = azureSubscriptionClient.Identities.ListByResourceGroup(configuration.ResourceGroupName).Where(id => id.ClientId == managedIdentityClientId).FirstOrDefault()
-                                ?? throw new ValidationException($"Managed Identity {managedIdentityClientId} does not exist in region {configuration.RegionName} or is not accessible to the current user.");
+                            
+                            managedIdentity = azureSubscriptionClient.Identities
+                                .ListByResourceGroup(configuration.ResourceGroupName)
+                                .Where(id => id.ClientId == managedIdentityClientId).FirstOrDefault()
+                                ?? throw new ValidationException($"Managed Identity {managedIdentityClientId} " +
+                                $"does not exist in region {configuration.RegionName} or is not accessible to the current user.");
 
                             // Override any configuration that is used by the update.
                             var aksValues = await kubernetesManager.GetAKSSettingsAsync(storageAccount);
@@ -356,7 +381,8 @@ namespace TesDeployer
 
                         if (vnetAndSubnet is not null)
                         {
-                            ConsoleEx.WriteLine($"Creating VM in existing virtual network {vnetAndSubnet.Value.virtualNetwork.Name} and subnet {vnetAndSubnet.Value.vmSubnet.Name}");
+                            ConsoleEx.WriteLine($"Creating VM in existing virtual network {vnetAndSubnet.Value.virtualNetwork.Name} " +
+                                $"and subnet {vnetAndSubnet.Value.vmSubnet.Name}");
                         }
 
                         if (storageAccount is not null)
@@ -372,7 +398,9 @@ namespace TesDeployer
                         if (vnetAndSubnet is null)
                         {
                             configuration.VnetName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
-                            configuration.PostgreSqlSubnetName = String.IsNullOrEmpty(configuration.PostgreSqlSubnetName) && configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault() ? configuration.DefaultPostgreSqlSubnetName : configuration.PostgreSqlSubnetName;
+                            configuration.PostgreSqlSubnetName = String.IsNullOrEmpty(configuration.PostgreSqlSubnetName)
+                                && configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault() ?
+                                configuration.DefaultPostgreSqlSubnetName : configuration.PostgreSqlSubnetName;
                             configuration.VmSubnetName = String.IsNullOrEmpty(configuration.VmSubnetName) ? configuration.DefaultVmSubnetName : configuration.VmSubnetName;
                             vnetAndSubnet = await CreateVnetAndSubnetsAsync(resourceGroup);
                         }
@@ -407,7 +435,8 @@ namespace TesDeployer
 
                         if (configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault() && postgreSqlFlexServer is null)
                         {
-                            postgreSqlDnsZone = await CreatePrivateDnsZoneAsync(vnetAndSubnet.Value.virtualNetwork, $"privatelink.postgres.database.azure.com", "PostgreSQL Server");
+                            postgreSqlDnsZone = await CreatePrivateDnsZoneAsync(vnetAndSubnet.Value.virtualNetwork,
+                                $"privatelink.postgres.database.azure.com", "PostgreSQL Server");
                         }
 
                         if (!SkipBillingReaderRoleAssignment)
@@ -437,11 +466,13 @@ namespace TesDeployer
                                 {
                                     if (configuration.UsePostgreSqlSingleServer)
                                     {
-                                        postgreSqlSingleServer ??= await CreateSinglePostgreSqlServerAndDatabaseAsync(postgreSqlSingleManagementClient, vnetAndSubnet.Value.vmSubnet, postgreSqlDnsZone);
+                                        postgreSqlSingleServer ??= await CreateSinglePostgreSqlServerAndDatabaseAsync(
+                                            postgreSqlSingleManagementClient, vnetAndSubnet.Value.vmSubnet, postgreSqlDnsZone);
                                     }
                                     else
                                     {
-                                        postgreSqlFlexServer ??= await CreatePostgreSqlServerAndDatabaseAsync(postgreSqlFlexManagementClient, vnetAndSubnet.Value.postgreSqlSubnet, postgreSqlDnsZone);
+                                        postgreSqlFlexServer ??= await CreatePostgreSqlServerAndDatabaseAsync(
+                                            postgreSqlFlexManagementClient, vnetAndSubnet.Value.postgreSqlSubnet, postgreSqlDnsZone);
                                     }
                                 }
                             })
@@ -452,7 +483,9 @@ namespace TesDeployer
 
                         if (aksCluster is null && !configuration.ManualHelmDeployment)
                         {
-                            await ProvisionManagedCluster(resourceGroup, managedIdentity, logAnalyticsWorkspace, vnetAndSubnet?.virtualNetwork, vnetAndSubnet?.vmSubnet.Name, configuration.PrivateNetworking.GetValueOrDefault());
+                            await ProvisionManagedCluster(resourceGroup, managedIdentity,
+                                logAnalyticsWorkspace, vnetAndSubnet?.virtualNetwork,
+                                vnetAndSubnet?.vmSubnet.Name, configuration.PrivateNetworking.GetValueOrDefault());
                         }
 
                         await kubernetesManager.UpdateHelmValuesAsync(storageAccount, keyVaultUri, resourceGroup.Name, settings, managedIdentity);
@@ -486,7 +519,8 @@ namespace TesDeployer
                 }
 
                 batchAccount = await GetExistingBatchAccountAsync(configuration.BatchAccountName);
-                var maxPerFamilyQuota = batchAccount.DedicatedCoreQuotaPerVMFamilyEnforced ? batchAccount.DedicatedCoreQuotaPerVMFamily.Select(q => q.CoreQuota).Where(q => 0 != q) : Enumerable.Repeat(batchAccount.DedicatedCoreQuota ?? 0, 1);
+                var maxPerFamilyQuota = batchAccount.DedicatedCoreQuotaPerVMFamilyEnforced ?
+                    batchAccount.DedicatedCoreQuotaPerVMFamily.Select(q => q.CoreQuota).Where(q => 0 != q) : Enumerable.Repeat(batchAccount.DedicatedCoreQuota ?? 0, 1);
                 var isBatchQuotaAvailable = batchAccount.LowPriorityCoreQuota > 0 || (batchAccount.DedicatedCoreQuota > 0 && maxPerFamilyQuota.Append(0).Max() > 0);
 
                 int exitCode;
@@ -517,7 +551,8 @@ namespace TesDeployer
                         ConsoleEx.WriteLine($"Could not run the test workflow.", ConsoleColor.Yellow);
                     }
 
-                    ConsoleEx.WriteLine($"Deployment was successful, but Batch account {configuration.BatchAccountName} does not have sufficient core quota to run workflows.", ConsoleColor.Yellow);
+                    ConsoleEx.WriteLine($"Deployment was successful, but Batch account {configuration.BatchAccountName} " +
+                        $"does not have sufficient core quota to run workflows.", ConsoleColor.Yellow);
                     ConsoleEx.WriteLine($"Request Batch core quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
                     ConsoleEx.WriteLine($"After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
                     exitCode = 2;
@@ -575,7 +610,8 @@ namespace TesDeployer
             }
 
             return (await GetKeyVaultAsync(configuration.KeyVaultName))
-                ?? throw new ValidationException($"If key vault name is provided, it must already exist in region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
+                ?? throw new ValidationException($"If key vault name is provided, it must already exist in region {configuration.RegionName}, " +
+                $"and be accessible to the current user.", displayExample: false);
         }
 
         private async Task<FlexibleServerModel.Server> ValidateAndGetExistingPostgresqlServer()
@@ -586,7 +622,8 @@ namespace TesDeployer
             }
 
             return (await GetExistingPostgresqlService(configuration.PostgreSqlServerName))
-                ?? throw new ValidationException($"If Postgresql server name is provided, the server must already exist in region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
+                ?? throw new ValidationException($"If Postgresql server name is provided, the server must already exist in region {configuration.RegionName}, " +
+                $"and be accessible to the current user.", displayExample: false);
         }
 
         private async Task<ManagedCluster> ValidateAndGetExistingAKSClusterAsync()
@@ -597,7 +634,8 @@ namespace TesDeployer
             }
 
             return (await GetExistingAKSClusterAsync(configuration.AksClusterName))
-                ?? throw new ValidationException($"If AKS cluster name is provided, the cluster must already exist in region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
+                ?? throw new ValidationException($"If AKS cluster name is provided, the cluster must already exist in region {configuration.RegionName}, " +
+                $"and be accessible to the current user.", displayExample: false);
         }
 
         private async Task<FlexibleServerModel.Server> GetExistingPostgresqlService(string serverName)
@@ -617,7 +655,8 @@ namespace TesDeployer
             })))
                 .Where(a => a is not null)
                 .SelectMany(a => a)
-                .SingleOrDefault(a => a.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase) && Regex.Replace(a.Location, @"\s+", "").Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
+                .SingleOrDefault(a => a.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase)
+                && Regex.Replace(a.Location, @"\s+", "").Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
         }
 
         private async Task<ManagedCluster> GetExistingAKSClusterAsync(string aksClusterName)
@@ -626,7 +665,7 @@ namespace TesDeployer
             {
                 try
                 {
-                    var client = new ContainerServiceClient(tokenCredentials) { SubscriptionId = s };
+                    var client = new ContainerServiceClient(new Uri(this.azEnv.ResourceManagerEndpoint), tokenCredentials) { SubscriptionId = s };
                     return await client.ManagedClusters.ListAsync();
                 }
                 catch (Exception e)
@@ -637,14 +676,19 @@ namespace TesDeployer
             })))
                 .Where(a => a is not null)
                 .SelectMany(a => a)
-                .SingleOrDefault(a => a.Name.Equals(aksClusterName, StringComparison.OrdinalIgnoreCase) && a.Location.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
+                .SingleOrDefault(a => a.Name.Equals(aksClusterName, StringComparison.OrdinalIgnoreCase)
+                && a.Location.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
         }
 
-        private async Task<ManagedCluster> ProvisionManagedCluster(IResource resourceGroupObject, IIdentity managedIdentity, IGenericResource logAnalyticsWorkspace, INetwork virtualNetwork, string subnetName, bool privateNetworking)
+        private async Task<ManagedCluster> ProvisionManagedCluster(IResource resourceGroupObject,
+            IIdentity managedIdentity, IGenericResource logAnalyticsWorkspace, INetwork virtualNetwork, string subnetName, bool privateNetworking)
         {
             var resourceGroup = resourceGroupObject.Name;
             var nodePoolName = "nodepool1";
-            var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
+            var containerServiceClient = new ContainerServiceClient(new Uri(this.azEnv.ResourceManagerEndpoint), azureCredentials)
+            {
+                SubscriptionId = configuration.SubscriptionId
+            };
             var cluster = new ManagedCluster
             {
                 AddonProfiles = new Dictionary<string, ManagedClusterAddonProfile>
@@ -661,11 +705,13 @@ namespace TesDeployer
                     DockerBridgeCidr = configuration.KubernetesDockerBridgeCidr,
                     NetworkPolicy = NetworkPolicy.Azure
                 },
-                Identity = new(managedIdentity.PrincipalId, managedIdentity.TenantId, Microsoft.Azure.Management.ContainerService.Models.ResourceIdentityType.UserAssigned)
+                Identity = new(managedIdentity.PrincipalId, managedIdentity.TenantId, 
+                Microsoft.Azure.Management.ContainerService.Models.ResourceIdentityType.UserAssigned)
                 {
                     UserAssignedIdentities = new Dictionary<string, ManagedClusterIdentityUserAssignedIdentitiesValue>()
                 }
             };
+
             cluster.Identity.UserAssignedIdentities.Add(managedIdentity.Id, new(managedIdentity.PrincipalId, managedIdentity.ClientId));
             cluster.IdentityProfile = new Dictionary<string, ManagedClusterPropertiesIdentityProfileValue>
             {
@@ -731,7 +777,9 @@ namespace TesDeployer
             UpdateSetting(settings, defaults, "BatchNodesSubnetId", configuration.BatchNodesSubnetId);
             UpdateSetting(settings, defaults, "DockerInDockerImageName", configuration.DockerInDockerImageName);
             UpdateSetting(settings, defaults, "BlobxferImageName", configuration.BlobxferImageName);
-            UpdateSetting(settings, defaults, "DisableBatchNodesPublicIpAddress", configuration.DisableBatchNodesPublicIpAddress, b => b.GetValueOrDefault().ToString(), configuration.DisableBatchNodesPublicIpAddress.GetValueOrDefault().ToString());
+            UpdateSetting(settings, defaults, "DisableBatchNodesPublicIpAddress",
+                configuration.DisableBatchNodesPublicIpAddress, b => b.GetValueOrDefault().ToString(),
+                configuration.DisableBatchNodesPublicIpAddress.GetValueOrDefault().ToString());
 
             if (installedVersion is null)
             {
@@ -745,15 +793,10 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "AksCoANamespace", configuration.AksCoANamespace, ignoreDefaults: true);
                 var provisionPostgreSqlOnAzure = configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault();
                 UpdateSetting(settings, defaults, "CrossSubscriptionAKSDeployment", configuration.CrossSubscriptionAKSDeployment);
-                //UpdateSetting(settings, defaults, "PostgreSqlServerName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlServerName : string.Empty, ignoreDefaults: true);
-                //UpdateSetting(settings, defaults, "PostgreSqlDatabaseName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesDatabaseName : string.Empty, ignoreDefaults: true);
-                //UpdateSetting(settings, defaults, "PostgreSqlUserLogin", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserLogin : string.Empty, ignoreDefaults: true);
-                //UpdateSetting(settings, defaults, "PostgreSqlUserPassword", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserPassword : string.Empty, ignoreDefaults: true);
-                //UpdateSetting(settings, defaults, "UsePostgreSqlSingleServer", provisionPostgreSqlOnAzure ? configuration.UsePostgreSqlSingleServer.ToString() : string.Empty, ignoreDefaults: true);
             }
 
-            //if (installedVersion is null || installedVersion < new Version(3, 3))
-            //{ }
+            // Set Azure Environment Name for supporting sovereign cloud.
+            UpdateSetting(settings, default, "AzureName", configuration.AzureName, ignoreDefaults: true);
 
             BackFillSettings(settings, defaults);
             return settings;
@@ -788,7 +831,8 @@ namespace TesDeployer
         /// If value is null, keep the value already in settings. If the key is not in settings, set the corresponding value from defaults. If key is not found in defaults, use defaultValue.
         /// Otherwise, convert value to a string using convertValue().
         /// </remarks>
-        private static void UpdateSetting<T>(Dictionary<string, string> settings, Dictionary<string, string> defaults, string key, T value, Func<T, string> ConvertValue = default, string defaultValue = "", bool? ignoreDefaults = null)
+        private static void UpdateSetting<T>(Dictionary<string, string> settings,
+            Dictionary<string, string> defaults, string key, T value, Func<T, string> ConvertValue = default, string defaultValue = "", bool? ignoreDefaults = null)
         {
             ConvertValue ??= new(v => v switch
             {
@@ -955,7 +999,8 @@ namespace TesDeployer
         private async Task<IStorageAccount> GetExistingStorageAccountAsync(string storageAccountName)
             => await GetExistingStorageAccountAsync(storageAccountName, azureClient, subscriptionIds, configuration);
 
-        public static async Task<IStorageAccount> GetExistingStorageAccountAsync(string storageAccountName, Microsoft.Azure.Management.Fluent.Azure.IAuthenticated azureClient, IEnumerable<string> subscriptionIds, Configuration configuration)
+        public static async Task<IStorageAccount> GetExistingStorageAccountAsync(string storageAccountName,
+            Microsoft.Azure.Management.Fluent.Azure.IAuthenticated azureClient, IEnumerable<string> subscriptionIds, Configuration configuration)
             => (await Task.WhenAll(subscriptionIds.Select(async s =>
             {
                 try
@@ -970,14 +1015,15 @@ namespace TesDeployer
             })))
                 .Where(a => a is not null)
                 .SelectMany(a => a)
-                .SingleOrDefault(a => a.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase) && a.RegionName.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
+                .SingleOrDefault(a => a.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase)
+                && a.RegionName.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
 
         private async Task<BatchAccount> GetExistingBatchAccountAsync(string batchAccountName)
             => (await Task.WhenAll(subscriptionIds.Select(async s =>
             {
                 try
                 {
-                    var client = new BatchManagementClient(tokenCredentials) { SubscriptionId = s };
+                    var client = new BatchManagementClient(new Uri(this.azEnv.ResourceManagerEndpoint), tokenCredentials) { SubscriptionId = s };
                     return await client.BatchAccount.ListAsync();
                 }
                 catch (Exception e)
@@ -988,7 +1034,8 @@ namespace TesDeployer
             })))
                 .Where(a => a is not null)
                 .SelectMany(a => a)
-                .SingleOrDefault(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase) && a.Location.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
+                .SingleOrDefault(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase)
+                && a.Location.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
 
         private async Task<ICosmosDBAccount> GetExistingCosmosDbAccountAsync(string cosmosDbAccountName)
             => (await Task.WhenAll(subscriptionIds.Select(async s =>
@@ -1005,11 +1052,12 @@ namespace TesDeployer
             })))
                 .Where(a => a is not null)
                 .SelectMany(a => a)
-                .SingleOrDefault(a => a.Name.Equals(cosmosDbAccountName, StringComparison.OrdinalIgnoreCase) && a.Region.Name.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
+                .SingleOrDefault(a => a.Name.Equals(cosmosDbAccountName, StringComparison.OrdinalIgnoreCase)
+                && a.Region.Name.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
 
         private async Task CreateDefaultStorageContainersAsync(IStorageAccount storageAccount)
         {
-            var blobClient = await GetBlobClientAsync(storageAccount);
+            var blobClient = await GetBlobClientAsync(this.azEnv, storageAccount);
 
             var defaultContainers = new List<string> { WorkflowsContainerName, InputsContainerName, "outputs", ConfigurationContainerName };
             await Task.WhenAll(defaultContainers.Select(c => blobClient.GetBlobContainerClient(c).CreateIfNotExistsAsync(cancellationToken: cts.Token)));
@@ -1020,37 +1068,16 @@ namespace TesDeployer
                 $"Writing {ContainersToMountFileName} file to '{ConfigurationContainerName}' storage container...",
                 async () =>
                 {
-                    await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, ContainersToMountFileName, Utility.PersonalizeContent(new Utility.ConfigReplaceTextItem[]
+                    await UploadTextToStorageAccountAsync(this.azEnv, storageAccount, ConfigurationContainerName, ContainersToMountFileName, 
+                    Utility.PersonalizeContent(new Utility.ConfigReplaceTextItem[]
                     {
                         new("{DefaultStorageAccountName}", configuration.StorageAccountName),
                         new("{ManagedIdentityName}", managedIdentityName)
-                    }, "scripts", ContainersToMountFileName));
+                    }, 
+                    "scripts", ContainersToMountFileName));
 
-                    // Configure Cromwell config file for Docker Mysql or PostgreSQL on Azure.
-                    //if (configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault())
-                    //{
-                    //    await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, CromwellConfigurationFileName, Utility.PersonalizeContent(new Utility.ConfigReplaceTextItem[]
-                    //    {
-                    //        new("{DatabaseUrl}", $"\"jdbc:postgresql://{configuration.PostgreSqlServerName}.postgres.database.azure.com/{configuration.PostgreSqlCromwellDatabaseName}?sslmode=require\""),
-                    //        new("{DatabaseUser}", configuration.UsePostgreSqlSingleServer ? $"\"{configuration.PostgreSqlCromwellUserLogin}@{configuration.PostgreSqlServerName}\"": $"\"{configuration.PostgreSqlCromwellUserLogin}\""),
-                    //        new("{DatabasePassword}", $"\"{configuration.PostgreSqlCromwellUserPassword}\""),
-                    //        new("{DatabaseDriver}", $"\"org.postgresql.Driver\""),
-                    //        new("{DatabaseProfile}", "\"slick.jdbc.PostgresProfile$\""),
-                    //    }, "scripts", CromwellConfigurationFileName));
-                    //}
-                    //else
-                    //{
-                    //    await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, CromwellConfigurationFileName, Utility.PersonalizeContent(new Utility.ConfigReplaceTextItem[]
-                    //    {
-                    //        new("{DatabaseUrl}", $"\"jdbc:mysql://mysqldb/cromwell_db?useSSL=false&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true\""),
-                    //        new("{DatabaseUser}", $"\"cromwell\""),
-                    //        new("{DatabasePassword}", $"\"cromwell\""),
-                    //        new("{DatabaseDriver}", $"\"com.mysql.cj.jdbc.Driver\""),
-                    //        new("{DatabaseProfile}", "\"slick.jdbc.MySQLProfile$\""),
-                    //    }, "scripts", CromwellConfigurationFileName));
-                    //}
-
-                    await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, AllowedVmSizesFileName, Utility.GetFileContent("scripts", AllowedVmSizesFileName));
+                    await UploadTextToStorageAccountAsync(this.azEnv, storageAccount,
+                        ConfigurationContainerName, AllowedVmSizesFileName, Utility.GetFileContent("scripts", AllowedVmSizesFileName));
                 });
 
         private Task AssignVmAsContributorToBatchAccountAsync(IIdentity managedIdentity, BatchAccount batchAccount)
@@ -1087,7 +1114,8 @@ namespace TesDeployer
                     .WithWriteReplication(Region.Create(configuration.RegionName))
                     .CreateAsync(cts.Token));
 
-        private async Task<FlexibleServerModel.Server> CreatePostgreSqlServerAndDatabaseAsync(FlexibleServer.IPostgreSQLManagementClient postgresManagementClient, ISubnet subnet, IPrivateDnsZone postgreSqlDnsZone)
+        private async Task<FlexibleServerModel.Server> CreatePostgreSqlServerAndDatabaseAsync(
+            FlexibleServer.IPostgreSQLManagementClient postgresManagementClient, ISubnet subnet, IPrivateDnsZone postgreSqlDnsZone)
         {
             if (!subnet.Inner.Delegations.Any())
             {
@@ -1110,17 +1138,16 @@ namespace TesDeployer
                            storage: new(configuration.PostgreSqlStorageSize),
                            administratorLogin: configuration.PostgreSqlAdministratorLogin,
                            administratorLoginPassword: configuration.PostgreSqlAdministratorPassword,
-                           network: new(publicNetworkAccess: "Disabled", delegatedSubnetResourceId: subnet.Inner.Id, privateDnsZoneArmResourceId: postgreSqlDnsZone.Id),
-                           highAvailability: new("Disabled")
+                           network: new FlexibleServerModel.Network
+                            (
+                                publicNetworkAccess: "Disabled",
+                                delegatedSubnetResourceId: subnet.Inner.Id, 
+                                privateDnsZoneArmResourceId: postgreSqlDnsZone.Id
+                            ),
+                           highAvailability: new FlexibleServerModel.HighAvailability("Disabled")
                         ));
                 });
-
-            //await Execute(
-            //    $"Creating PostgreSQL cromwell database: {configuration.PostgreSqlCromwellDatabaseName}...",
-            //    () => postgresManagementClient.Databases.CreateAsync(
-            //        configuration.ResourceGroupName, configuration.PostgreSqlServerName, configuration.PostgreSqlCromwellDatabaseName,
-            //        new()));
-
+                    
             await Execute(
                 $"Creating PostgreSQL tes database: {configuration.PostgreSqlTesDatabaseName}...",
                 () => postgresManagementClient.Databases.CreateAsync(
@@ -1130,7 +1157,8 @@ namespace TesDeployer
             return server;
         }
 
-        private async Task<SingleServerModel.Server> CreateSinglePostgreSqlServerAndDatabaseAsync(SingleServer.IPostgreSQLManagementClient postgresManagementClient, ISubnet subnet, IPrivateDnsZone postgreSqlDnsZone)
+        private async Task<SingleServerModel.Server> CreateSinglePostgreSqlServerAndDatabaseAsync(
+            SingleServer.IPostgreSQLManagementClient postgresManagementClient, ISubnet subnet, IPrivateDnsZone postgreSqlDnsZone)
         {
             SingleServerModel.Server server = null;
 
@@ -1228,12 +1256,23 @@ namespace TesDeployer
                         .DefineSubnet(configuration.VmSubnetName).WithAddressPrefix(configuration.VmSubnetAddressSpace).Attach();
 
                     vnetDefinition = configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault()
-                        ? vnetDefinition.DefineSubnet(configuration.PostgreSqlSubnetName).WithAddressPrefix(configuration.PostgreSqlSubnetAddressSpace).WithDelegation("Microsoft.DBforPostgreSQL/flexibleServers").Attach()
+                        ? vnetDefinition.DefineSubnet(configuration.PostgreSqlSubnetName)
+                        .WithAddressPrefix(configuration.PostgreSqlSubnetAddressSpace)
+                        .WithDelegation("Microsoft.DBforPostgreSQL/flexibleServers").Attach()
                         : vnetDefinition;
 
                     var vnet = await vnetDefinition.CreateAsync();
 
-                    return (vnet, vnet.Subnets.FirstOrDefault(s => s.Key.Equals(configuration.VmSubnetName, StringComparison.OrdinalIgnoreCase)).Value, vnet.Subnets.FirstOrDefault(s => s.Key.Equals(configuration.PostgreSqlSubnetName, StringComparison.OrdinalIgnoreCase)).Value);
+                    return (vnet, vnet.Subnets.FirstOrDefault
+                    (
+                        s => s.Key.Equals(configuration.VmSubnetName, 
+                        StringComparison.OrdinalIgnoreCase
+                    )).Value, 
+                    vnet.Subnets.FirstOrDefault
+                    (
+                        s => s.Key.Equals(configuration.PostgreSqlSubnetName, 
+                        StringComparison.OrdinalIgnoreCase
+                    )).Value);
                 });
 
         private Task<INetworkSecurityGroup> CreateNetworkSecurityGroupAsync(IResourceGroup resourceGroup, string networkSecurityGroupName)
@@ -1376,9 +1415,11 @@ namespace TesDeployer
 
                     async ValueTask<string> GetUserObjectId()
                     {
-                        const string graphUri = "https://graph.windows.net";
-                        var credentials = new AzureCredentials(default, new TokenCredentials(new RefreshableAzureServiceTokenProvider(graphUri)), tenantId, AzureEnvironment.AzureGlobalCloud);
-                        using GraphRbacManagementClient rbacClient = new(Configure().WithEnvironment(AzureEnvironment.AzureGlobalCloud).WithCredentials(credentials).WithBaseUri(graphUri).Build()) { TenantID = tenantId };
+                        string graphUri = this.azEnv.GraphEndpoint;
+                        var credentials = new AzureCredentials(default, new TokenCredentials(new RefreshableAzureServiceTokenProvider(
+                            this.azEnv.ResourceManagerEndpoint, null, graphUri)), tenantId, this.azEnv);
+                        using GraphRbacManagementClient rbacClient = new(Configure().WithEnvironment(this.azEnv)
+                            .WithCredentials(credentials).WithBaseUri(graphUri).Build()) { TenantID = tenantId };
                         credentials.InitializeServiceClient(rbacClient);
                         return (await rbacClient.SignedInUser.GetAsync()).ObjectId;
                     }
@@ -1425,7 +1466,7 @@ namespace TesDeployer
         private Task<BatchAccount> CreateBatchAccountAsync(string storageAccountId)
             => Execute(
                 $"Creating Batch Account: {configuration.BatchAccountName}...",
-                () => new BatchManagementClient(tokenCredentials) { SubscriptionId = configuration.SubscriptionId }
+                () => new BatchManagementClient(new Uri(this.azEnv.ResourceManagerEndpoint), tokenCredentials) { SubscriptionId = configuration.SubscriptionId }
                     .BatchAccount
                     .CreateAsync(
                         configuration.ResourceGroupName,
@@ -1508,43 +1549,74 @@ namespace TesDeployer
                 .WithLogLevel(HttpLoggingDelegatingHandler.Level.Basic)
                 .Authenticate(azureCredentials);
 
-            var subscriptionExists = (await azure.Subscriptions.ListAsync()).Any(sub => sub.SubscriptionId.Equals(configuration.SubscriptionId, StringComparison.OrdinalIgnoreCase));
+            var subscriptionExists = (await azure.Subscriptions.ListAsync())
+                .Any(sub => sub.SubscriptionId.Equals(configuration.SubscriptionId, StringComparison.OrdinalIgnoreCase));
 
             if (!subscriptionExists)
             {
-                throw new ValidationException($"Invalid or inaccessible subcription id '{configuration.SubscriptionId}'. Make sure that subscription exists and that you are either an Owner or have Contributor and User Access Administrator roles on the subscription.", displayExample: false);
+                throw new ValidationException($"Invalid or inaccessible subcription id '{configuration.SubscriptionId}'. " +
+                    $"Make sure that subscription exists and that you are either an Owner or have Contributor and User Access Administrator roles on the subscription.",
+                    displayExample: false);
             }
 
-            var rgExists = !string.IsNullOrEmpty(configuration.ResourceGroupName) && await azureSubscriptionClient.ResourceGroups.ContainAsync(configuration.ResourceGroupName);
+            var rgExists = !string.IsNullOrEmpty(configuration.ResourceGroupName)
+                && await azureSubscriptionClient.ResourceGroups.ContainAsync(configuration.ResourceGroupName);
 
             if (!string.IsNullOrEmpty(configuration.ResourceGroupName) && !rgExists)
             {
                 throw new ValidationException($"If ResourceGroupName is provided, the resource group must already exist.", displayExample: false);
             }
 
-            var token = await new AzureServiceTokenProvider().GetAccessTokenAsync("https://management.azure.com/");
+            var token = await new AzureServiceTokenProvider("RunAs=Developer;DeveloperTool=AzureCli", this.azEnv.AuthenticationEndpoint)
+                .GetAccessTokenAsync(this.azEnv.ResourceManagerEndpoint);
             var currentPrincipalObjectId = new JwtSecurityTokenHandler().ReadJwtToken(token).Claims.FirstOrDefault(c => c.Type == "oid").Value;
 
-            var currentPrincipalSubscriptionRoleIds = (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeWithHttpMessagesAsync($"/subscriptions/{configuration.SubscriptionId}", new($"atScope() and assignedTo('{currentPrincipalObjectId}')")))
-                .Body.AsContinuousCollection(link => Extensions.Synchronize(() => azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeNextWithHttpMessagesAsync(link)).Body)
-                .Select(b => b.RoleDefinitionId.Split(new[] { '/' }).Last());
+            IEnumerable<string> currentPrincipalSubscriptionRoleIds = null;
+            if (this.azEnv == AzureEnvironment.AzureChinaCloud)
+            {
+                // At China Mooncake, this API does not support scope. Don't know why.
+                currentPrincipalSubscriptionRoleIds = (await azureSubscriptionClient.AccessManagement.RoleAssignments
+                    .Inner.ListForScopeWithHttpMessagesAsync($"/subscriptions/{configuration.SubscriptionId}", new ODataQuery<RoleAssignmentFilter>($"")))
+                    .Body.AsContinuousCollection(link => Extensions.Synchronize(() =>
+                    azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeNextWithHttpMessagesAsync(link)).Body)
+                    .Select(b => b.RoleDefinitionId.Split(new[] { '/' }).Last());
+            }
+            else
+            {
+                currentPrincipalSubscriptionRoleIds = (await azureSubscriptionClient.AccessManagement.RoleAssignments
+                    .Inner.ListForScopeWithHttpMessagesAsync($"/subscriptions/{configuration.SubscriptionId}",
+                    new ODataQuery<RoleAssignmentFilter>($"atScope() and assignedTo('{currentPrincipalObjectId}')")))
+                    .Body.AsContinuousCollection(link => Extensions.Synchronize(() =>
+                    azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeNextWithHttpMessagesAsync(link)).Body)
+                    .Select(b => b.RoleDefinitionId.Split(new[] { '/' }).Last());
+            }
 
-            var isuserAccessAdministrator = currentPrincipalSubscriptionRoleIds.Contains(userAccessAdministratorRoleId);
+            var isuserAccessAdministrator = currentPrincipalSubscriptionRoleIds.Contains(userAccessAdministratorRoleId) ||
+                currentPrincipalSubscriptionRoleIds.Contains(ownerRoleId); // China Mooncake don't return userAccessAdministratorRoleId, have to compare with ownerRoleId.
 
-            if (!currentPrincipalSubscriptionRoleIds.Contains(ownerRoleId) && !(currentPrincipalSubscriptionRoleIds.Contains(contributorRoleId) && isuserAccessAdministrator))
+            if (!currentPrincipalSubscriptionRoleIds.Contains(ownerRoleId)
+                && !(currentPrincipalSubscriptionRoleIds.Contains(contributorRoleId) && isuserAccessAdministrator))
             {
                 if (!rgExists)
                 {
-                    throw new ValidationException($"Insufficient access to deploy. You must be: 1) Owner of the subscription, or 2) Contributor and User Access Administrator of the subscription, or 3) Owner of the resource group", displayExample: false);
+                    throw new ValidationException($"Insufficient access to deploy. You must be: 1) Owner of the subscription, or " +
+                        $"2) Contributor and User Access Administrator of the subscription, or " +
+                        $"3) Owner of the resource group", displayExample: false);
                 }
 
-                var currentPrincipalRgRoleIds = (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeWithHttpMessagesAsync($"/subscriptions/{configuration.SubscriptionId}/resourceGroups/{configuration.ResourceGroupName}", new($"atScope() and assignedTo('{currentPrincipalObjectId}')")))
-                    .Body.AsContinuousCollection(link => Extensions.Synchronize(() => azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeNextWithHttpMessagesAsync(link)).Body)
+                var currentPrincipalRgRoleIds = (
+                    await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner
+                    .ListForScopeWithHttpMessagesAsync($"/subscriptions/{configuration.SubscriptionId}/resourceGroups/{configuration.ResourceGroupName}",
+                    new ODataQuery<RoleAssignmentFilter>($"atScope() and assignedTo('{currentPrincipalObjectId}')")))
+                    .Body.AsContinuousCollection(link => Extensions.Synchronize(() =>
+                    azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeNextWithHttpMessagesAsync(link)).Body)
                     .Select(b => b.RoleDefinitionId.Split(new[] { '/' }).Last());
 
                 if (!currentPrincipalRgRoleIds.Contains(ownerRoleId))
                 {
-                    throw new ValidationException($"Insufficient access to deploy. You must be: 1) Owner of the subscription, or 2) Contributor and User Access Administrator of the subscription, or 3) Owner of the resource group", displayExample: false);
+                    throw new ValidationException($"Insufficient access to deploy. You must be: 1) Owner of the subscription, or " +
+                        $"2) Contributor and User Access Administrator of the subscription, or " +
+                        $"3) Owner of the resource group", displayExample: false);
                 }
 
                 if (!isuserAccessAdministrator)
@@ -1563,7 +1635,9 @@ namespace TesDeployer
             }
 
             return (await GetExistingStorageAccountAsync(configuration.StorageAccountName))
-                ?? throw new ValidationException($"If StorageAccountName is provided, the storage account must already exist in region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
+                ?? throw new ValidationException($"If StorageAccountName is provided, " +
+                $"the storage account must already exist in region {configuration.RegionName}, " +
+                $"and be accessible to the current user.", displayExample: false);
         }
 
         private async Task<BatchAccount> ValidateAndGetExistingBatchAccountAsync()
@@ -1574,7 +1648,8 @@ namespace TesDeployer
             }
 
             return (await GetExistingBatchAccountAsync(configuration.BatchAccountName))
-                ?? throw new ValidationException($"If BatchAccountName is provided, the batch account must already exist in region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
+                ?? throw new ValidationException($"If BatchAccountName is provided, the batch account must already exist in " +
+                $"region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
         }
 
         private async Task<ICosmosDBAccount> ValidateAndGetExistingCosmosDbAccountAsync()
@@ -1585,7 +1660,8 @@ namespace TesDeployer
             }
 
             return (await GetExistingCosmosDbAccountAsync(configuration.CosmosDbAccountName))
-                ?? throw new ValidationException($"If CosmosDbAccountName is provided, the account must already exist in region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
+                ?? throw new ValidationException($"If CosmosDbAccountName is provided, the account must already exist in " +
+                $"region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
         }
 
         private async Task<(INetwork virtualNetwork, ISubnet vmSubnet, ISubnet postgreSqlSubnet)?> ValidateAndGetExistingVirtualNetworkAsync()
@@ -1597,23 +1673,29 @@ namespace TesDeployer
             {
                 if (configuration.PrivateNetworking.GetValueOrDefault())
                 {
-                    throw new ValidationException($"{nameof(configuration.VnetResourceGroupName)}, {nameof(configuration.VnetName)} and {nameof(configuration.VmSubnetName)} are required when using private networking.");
+                    throw new ValidationException($"{nameof(configuration.VnetResourceGroupName)}, " +
+                        $"{nameof(configuration.VnetName)} and {nameof(configuration.VmSubnetName)} are required when using private networking.");
                 }
 
                 return null;
             }
 
-            if (configuration.ProvisionPostgreSqlOnAzure == true && !AllOrNoneSet(configuration.VnetResourceGroupName, configuration.VnetName, configuration.VmSubnetName, configuration.PostgreSqlSubnetName))
+            if (configuration.ProvisionPostgreSqlOnAzure == true && !AllOrNoneSet(configuration.VnetResourceGroupName,
+                configuration.VnetName, configuration.VmSubnetName, configuration.PostgreSqlSubnetName))
             {
-                throw new ValidationException($"{nameof(configuration.VnetResourceGroupName)}, {nameof(configuration.VnetName)}, {nameof(configuration.VmSubnetName)} and {nameof(configuration.PostgreSqlSubnetName)} are required when using an existing virtual network and {nameof(configuration.ProvisionPostgreSqlOnAzure)} is set.");
+                throw new ValidationException($"{nameof(configuration.VnetResourceGroupName)}, {nameof(configuration.VnetName)}, " +
+                    $"{nameof(configuration.VmSubnetName)} and {nameof(configuration.PostgreSqlSubnetName)} " +
+                    $"are required when using an existing virtual network and {nameof(configuration.ProvisionPostgreSqlOnAzure)} is set.");
             }
 
             if (!AllOrNoneSet(configuration.VnetResourceGroupName, configuration.VnetName, configuration.VmSubnetName))
             {
-                throw new ValidationException($"{nameof(configuration.VnetResourceGroupName)}, {nameof(configuration.VnetName)} and {nameof(configuration.VmSubnetName)} are required when using an existing virtual network.");
+                throw new ValidationException($"{nameof(configuration.VnetResourceGroupName)}, " +
+                    $"{nameof(configuration.VnetName)} and {nameof(configuration.VmSubnetName)} are required when using an existing virtual network.");
             }
 
-            if (!(await azureSubscriptionClient.ResourceGroups.ListAsync(true)).Any(rg => rg.Name.Equals(configuration.VnetResourceGroupName, StringComparison.OrdinalIgnoreCase)))
+            if (!(await azureSubscriptionClient.ResourceGroups.ListAsync(true)).Any(rg =>
+                rg.Name.Equals(configuration.VnetResourceGroupName, StringComparison.OrdinalIgnoreCase)))
             {
                 throw new ValidationException($"Resource group '{configuration.VnetResourceGroupName}' does not exist.");
             }
@@ -1622,12 +1704,14 @@ namespace TesDeployer
 
             if (vnet is null)
             {
-                throw new ValidationException($"Virtual network '{configuration.VnetName}' does not exist in resource group '{configuration.VnetResourceGroupName}'.");
+                throw new ValidationException($"Virtual network '{configuration.VnetName}' " +
+                    $"does not exist in resource group '{configuration.VnetResourceGroupName}'.");
             }
 
             if (!vnet.RegionName.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase))
             {
-                throw new ValidationException($"Virtual network '{configuration.VnetName}' must be in the same region that you are deploying to ({configuration.RegionName}).");
+                throw new ValidationException($"Virtual network '{configuration.VnetName}' " +
+                    $"must be in the same region that you are deploying to ({configuration.RegionName}).");
             }
 
             var vmSubnet = vnet.Subnets.FirstOrDefault(s => s.Key.Equals(configuration.VmSubnetName, StringComparison.OrdinalIgnoreCase)).Value;
@@ -1656,12 +1740,15 @@ namespace TesDeployer
                     throw new ValidationException($"Subnet '{configuration.PostgreSqlSubnetName}' can have 'Microsoft.DBforPostgreSQL/flexibleServers' delegation only.");
                 }
 
-                var resourcesInPostgreSqlSubnetQuery = $"where type =~ 'Microsoft.Network/networkInterfaces' | where properties.ipConfigurations[0].properties.subnet.id == '{postgreSqlSubnet.Inner.Id}'";
-                var resourcesExist = (await resourceGraphClient.ResourcesAsync(new(new[] { configuration.SubscriptionId }, resourcesInPostgreSqlSubnetQuery))).TotalRecords > 0;
+                var resourcesInPostgreSqlSubnetQuery =
+                    $"where type =~ 'Microsoft.Network/networkInterfaces' | where properties.ipConfigurations[0].properties.subnet.id == '{postgreSqlSubnet.Inner.Id}'";
+                var resourcesExist = (await resourceGraphClient.ResourcesAsync(
+                    new QueryRequest(new[] { configuration.SubscriptionId }, resourcesInPostgreSqlSubnetQuery))).TotalRecords > 0;
 
                 if (hasNoDelegations && resourcesExist)
                 {
-                    throw new ValidationException($"Subnet '{configuration.PostgreSqlSubnetName}' must be either empty or have 'Microsoft.DBforPostgreSQL/flexibleServers' delegation.");
+                    throw new ValidationException($"Subnet '{configuration.PostgreSqlSubnetName}' must be either empty or " +
+                        $"have 'Microsoft.DBforPostgreSQL/flexibleServers' delegation.");
                 }
             }
 
@@ -1670,12 +1757,19 @@ namespace TesDeployer
 
         private async Task ValidateBatchAccountQuotaAsync()
         {
-            var accountQuota = (await new BatchManagementClient(tokenCredentials) { SubscriptionId = configuration.SubscriptionId }.Location.GetQuotasAsync(configuration.RegionName)).AccountQuota;
-            var existingBatchAccountCount = (await new BatchManagementClient(tokenCredentials) { SubscriptionId = configuration.SubscriptionId }.BatchAccount.ListAsync()).AsEnumerable().Count(b => b.Location.Equals(configuration.RegionName));
+            var accountQuota = (await new BatchManagementClient(new Uri(this.azEnv.ResourceManagerEndpoint), tokenCredentials)
+            {
+                SubscriptionId = configuration.SubscriptionId
+            }.Location.GetQuotasAsync(configuration.RegionName)).AccountQuota;
+            var existingBatchAccountCount = (await new BatchManagementClient(new Uri(this.azEnv.ResourceManagerEndpoint), tokenCredentials)
+            {
+                SubscriptionId = configuration.SubscriptionId
+            }.BatchAccount.ListAsync()).AsEnumerable().Count(b => b.Location.Equals(configuration.RegionName));
 
             if (existingBatchAccountCount >= accountQuota)
             {
-                throw new ValidationException($"The regional Batch account quota ({accountQuota} account(s) per region) for the specified subscription has been reached. Submit a support request to increase the quota or choose another region.", displayExample: false);
+                throw new ValidationException($"The regional Batch account quota ({accountQuota} account(s) per region) " +
+                    $"for the specified subscription has been reached. Submit a support request to increase the quota or choose another region.", displayExample: false);
             }
         }
 
@@ -1691,17 +1785,20 @@ namespace TesDeployer
 
             if (!computeSkus.Any())
             {
-                throw new ValidationException($"Your subscription doesn't support virtual machine creation in {configuration.RegionName}.  Please create an Azure Support case: https://docs.microsoft.com/en-us/azure/azure-portal/supportability/how-to-create-azure-support-request", displayExample: false);
+                throw new ValidationException($"Your subscription doesn't support virtual machine creation in {configuration.RegionName}. " +
+                    $"Please create an Azure Support case: https://docs.microsoft.com/en-us/azure/azure-portal/supportability/how-to-create-azure-support-request",
+                    displayExample: false);
             }
             else if (!computeSkus.Any(s => s.Equals(configuration.VmSize, StringComparison.OrdinalIgnoreCase)))
             {
-                throw new ValidationException($"The VmSize {configuration.VmSize} is not available or does not exist in {configuration.RegionName}.  You can use 'az vm list-skus --location {configuration.RegionName} --output table' to find an available VM.", displayExample: false);
+                throw new ValidationException($"The VmSize {configuration.VmSize} is not available or does not exist in {configuration.RegionName}.  " +
+                    $"You can use 'az vm list-skus --location {configuration.RegionName} --output table' to find an available VM.", displayExample: false);
             }
         }
 
-        private static async Task<BlobServiceClient> GetBlobClientAsync(IStorageAccount storageAccount)
+        private static async Task<BlobServiceClient> GetBlobClientAsync(AzureEnvironment env, IStorageAccount storageAccount)
             => new(
-                new($"https://{storageAccount.Name}.blob.core.windows.net"),
+                new Uri($"https://{storageAccount.Name}" + env.GetBlobEndPointSuffix()),
                 new StorageSharedKeyCredential(
                     storageAccount.Name,
                     (await storageAccount.GetKeysAsync())[0].Value));
@@ -1710,7 +1807,8 @@ namespace TesDeployer
         {
             try
             {
-                _ = await Execute("Retrieving Azure management token...", () => new AzureServiceTokenProvider("RunAs=Developer; DeveloperTool=AzureCli").GetAccessTokenAsync("https://management.azure.com/"));
+                await Execute("Retrieving Azure management token...", () => new AzureServiceTokenProvider("RunAs=Developer; DeveloperTool=AzureCli",
+                    this.azEnv.AuthenticationEndpoint).GetAccessTokenAsync(this.azEnv.ResourceManagerEndpoint));
             }
             catch (AzureServiceTokenProviderException ex)
             {
@@ -1776,7 +1874,8 @@ namespace TesDeployer
                 }
                 catch
                 {
-                    throw new ValidationException($"{attributeName} is specified in incorrect format. Try as TagName=TagValue,TagName=TagValue in double quotes", false);
+                    throw new ValidationException($"{attributeName} is specified in " +
+                        $"incorrect format. Try as TagName=TagValue,TagName=TagValue in double quotes", false);
                 }
             }
 
@@ -1800,7 +1899,8 @@ namespace TesDeployer
             {
                 if (!File.Exists(helmPath))
                 {
-                    throw new ValidationException($"Helm must be installed and set with the {featureName} flag. You can find instructions for install Helm here: https://helm.sh/docs/intro/install/");
+                    throw new ValidationException($"Helm must be installed and set with the {featureName} flag. " +
+                        $"You can find instructions for install Helm here: https://helm.sh/docs/intro/install/");
                 }
             }
 
@@ -1809,7 +1909,8 @@ namespace TesDeployer
             ThrowIfNotProvidedForInstall(configuration.RegionName, nameof(configuration.RegionName));
 
             ThrowIfNotProvidedForUpdate(configuration.ResourceGroupName, nameof(configuration.ResourceGroupName));
-            ThrowIfEitherNotProvidedForUpdate(configuration.VmPassword, nameof(configuration.VmPassword), configuration.AksClusterName, nameof(configuration.AksClusterName));
+            ThrowIfEitherNotProvidedForUpdate(configuration.VmPassword, nameof(configuration.VmPassword),
+                configuration.AksClusterName, nameof(configuration.AksClusterName));
 
             ThrowIfProvidedForUpdate(configuration.RegionName, nameof(configuration.RegionName));
             ThrowIfProvidedForUpdate(configuration.BatchAccountName, nameof(configuration.BatchAccountName));
@@ -1826,16 +1927,20 @@ namespace TesDeployer
 
             if (!configuration.Update)
             {
-                ValidateDependantFeature(configuration.CrossSubscriptionAKSDeployment.GetValueOrDefault(), nameof(configuration.CrossSubscriptionAKSDeployment), configuration.UseAks, nameof(configuration.UseAks));
+                ValidateDependantFeature(configuration.CrossSubscriptionAKSDeployment.GetValueOrDefault(),
+                    nameof(configuration.CrossSubscriptionAKSDeployment), configuration.UseAks, nameof(configuration.UseAks));
             }
 
-            ThrowIfBothProvided(configuration.UseAks, nameof(configuration.UseAks), configuration.CustomTesImagePath is not null, nameof(configuration.CustomTesImagePath));
-            ThrowIfBothProvided(configuration.UseAks, nameof(configuration.UseAks), configuration.CustomTriggerServiceImagePath is not null, nameof(configuration.CustomTriggerServiceImagePath));
+            ThrowIfBothProvided(configuration.UseAks, nameof(configuration.UseAks),
+                configuration.CustomTesImagePath != null, nameof(configuration.CustomTesImagePath));
+            ThrowIfBothProvided(configuration.UseAks, nameof(configuration.UseAks), configuration.CustomTriggerServiceImagePath != null,
+                nameof(configuration.CustomTriggerServiceImagePath));
             ThrowIfNotProvidedForUpdate(configuration.AksClusterName, nameof(configuration.AksClusterName));
 
             if (!configuration.ManualHelmDeployment)
             {
-                ValidateDependantFeature(configuration.UseAks, nameof(configuration.UseAks), !string.IsNullOrWhiteSpace(configuration.HelmBinaryPath), nameof(configuration.HelmBinaryPath));
+                ValidateDependantFeature(configuration.UseAks,
+                    nameof(configuration.UseAks), !string.IsNullOrWhiteSpace(configuration.HelmBinaryPath), nameof(configuration.HelmBinaryPath));
                 ValidateHelmInstall(configuration.HelmBinaryPath, nameof(configuration.HelmBinaryPath));
             }
 
@@ -1845,7 +1950,7 @@ namespace TesDeployer
             }
             else if (!configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault())
             {
-                //ValidateDependantFeature(configuration.UseAks, nameof(configuration.UseAks), configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault(), nameof(configuration.ProvisionPostgreSqlOnAzure));
+                //TODO: support Azure postgresql deployment.
             }
         }
 
@@ -1866,7 +1971,8 @@ namespace TesDeployer
             if (validationException.DisplayExample)
             {
                 ConsoleEx.WriteLine();
-                ConsoleEx.WriteLine($"Example: ", ConsoleColor.Green).Write($"deploy-tes-on-azure --subscriptionid {Guid.NewGuid()} --regionname westus2 --mainidentifierprefix coa", ConsoleColor.White);
+                ConsoleEx.WriteLine($"Example: ", ConsoleColor.Green).Write($"deploy-tes-on-azure --subscriptionid {Guid.NewGuid()} " +
+                    $"--regionname westus2 --mainidentifierprefix coa", ConsoleColor.White);
             }
 
             Environment.Exit(1);
@@ -1940,20 +2046,23 @@ namespace TesDeployer
         private static void WriteExecutionTime(ConsoleEx.Line line, DateTime startTime)
             => line.Write($" Completed in {DateTime.UtcNow.Subtract(startTime).TotalSeconds:n0}s", ConsoleColor.Green);
 
-        public static async Task<string> DownloadTextFromStorageAccountAsync(IStorageAccount storageAccount, string containerName, string blobName, CancellationTokenSource cts)
+        public static async Task<string> DownloadTextFromStorageAccountAsync(AzureEnvironment env,
+            IStorageAccount storageAccount, string containerName, string blobName, CancellationTokenSource cts)
         {
-            var blobClient = await GetBlobClientAsync(storageAccount);
+            var blobClient = await GetBlobClientAsync(env, storageAccount);
             var container = blobClient.GetBlobContainerClient(containerName);
 
             return (await container.GetBlobClient(blobName).DownloadContentAsync(cts.Token)).Value.Content.ToString();
         }
 
-        private async Task UploadTextToStorageAccountAsync(IStorageAccount storageAccount, string containerName, string blobName, string content)
-            => await UploadTextToStorageAccountAsync(storageAccount, containerName, blobName, content, cts.Token);
+        private async Task UploadTextToStorageAccountAsync(AzureEnvironment env,
+            IStorageAccount storageAccount, string containerName, string blobName, string content)
+            => await UploadTextToStorageAccountAsync(env, storageAccount, containerName, blobName, content, cts.Token);
 
-        public static async Task UploadTextToStorageAccountAsync(IStorageAccount storageAccount, string containerName, string blobName, string content, CancellationToken token)
+        public static async Task UploadTextToStorageAccountAsync(AzureEnvironment env,
+            IStorageAccount storageAccount, string containerName, string blobName, string content, CancellationToken token)
         {
-            var blobClient = await GetBlobClientAsync(storageAccount);
+            var blobClient = await GetBlobClientAsync(env, storageAccount);
             var container = blobClient.GetBlobContainerClient(containerName);
 
             await container.CreateIfNotExistsAsync();

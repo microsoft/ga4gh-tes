@@ -8,6 +8,7 @@
     <AssemblyName>tesapi</AssemblyName>
   </PropertyGroup>
 
+  <PropertyGroup Condition=" '$(RunConfiguration)' == 'WebApplication1' " />
   <ItemGroup>
     <None Remove="Scripts\start-task.sh" />
   </ItemGroup>
