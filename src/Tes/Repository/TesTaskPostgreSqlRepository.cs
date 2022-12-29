@@ -31,7 +31,7 @@ namespace Tes.Repository
         /// <param name="id">The TesTask Id stored in the TesTaskDatabaseItem JSON</param>
         /// <param name="onSuccess">Delegate to run on success</param>
         /// <returns></returns>
-        public new async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess = null)
+        public override async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess = null)
         {
             using var dbContext = createDbContext();
 
@@ -51,7 +51,7 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="predicate">Predicate to run on the JSON</param>
         /// <returns></returns>
-        public new async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate)
+        public override async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate)
         {
             using var dbContext = createDbContext();
 
@@ -64,7 +64,7 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="item">TesTask to store as JSON in the database</param>
         /// <returns></returns>
-        public new async Task<TesTask> CreateItemAsync(TesTask item)
+        public override async Task<TesTask> CreateItemAsync(TesTask item)
         {
             using var dbContext = createDbContext();
             var dbItem = new TeskTaskDatabaseItem { Json = item };
@@ -78,7 +78,7 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="item"></param>
         /// <returns></returns>
-        public new async Task<TesTask> UpdateItemAsync(TesTask item)
+        public override async Task<TesTask> UpdateItemAsync(TesTask item)
         {
             using var dbContext = createDbContext();
             var dbItem = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.GetId == item.GetId);
@@ -98,7 +98,7 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="id">TesTask Id</param>
         /// <returns></returns>
-        public new async Task DeleteItemAsync(string id)
+        public override async Task DeleteItemAsync(string id)
         {
             using var dbContext = createDbContext();
             var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id);

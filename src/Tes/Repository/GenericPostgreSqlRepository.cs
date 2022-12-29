@@ -30,7 +30,7 @@ namespace Tes.Repository
         }
 
         /// <inheritdoc/>
-        public async Task<bool> TryGetItemAsync(string id, Action<T> onSuccess = null)
+        public virtual async Task<bool> TryGetItemAsync(string id, Action<T> onSuccess = null)
         {
             using var dbContext = createDbContext();
             // Search for Id in the Set (Which would the outer model, not the JSON)
@@ -45,7 +45,7 @@ namespace Tes.Repository
         }
 
         /// <inheritdoc/>
-        public async Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate)
+        public virtual async Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate)
         {
             using var dbContext = createDbContext();
             // Search for items in the outer model, not the JSON
@@ -53,14 +53,14 @@ namespace Tes.Repository
         }
 
         /// <inheritdoc/>
-        public async Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken)
+        public virtual async Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken)
         {
             // Paging in PostgreSql is inefficient and should not be implemented unless absolutely necessary.
             throw new NotImplementedException();
         }
 
         /// <inheritdoc/>
-        public async Task<T> CreateItemAsync(T item)
+        public virtual async Task<T> CreateItemAsync(T item)
         {
             using var dbContext = createDbContext();
             dbContext.Set<T>().Add(item);
@@ -69,7 +69,7 @@ namespace Tes.Repository
         }
 
         /// <inheritdoc/>
-        public async Task<T> UpdateItemAsync(T item)
+        public virtual async Task<T> UpdateItemAsync(T item)
         {
             using var dbContext = createDbContext();
 
@@ -87,7 +87,7 @@ namespace Tes.Repository
         }
 
         /// <inheritdoc/>
-        public async Task DeleteItemAsync(string id)
+        public virtual async Task DeleteItemAsync(string id)
         {
             using var dbContext = createDbContext();
             // Searches outer model, not JSON
