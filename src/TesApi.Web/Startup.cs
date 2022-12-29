@@ -36,8 +36,8 @@ namespace TesApi.Web
         private readonly IWebHostEnvironment hostingEnvironment;
         private readonly string azureOfferDurableId;
         private static readonly string postgresConnectionString =
-            $"Server={Environment.GetEnvironmentVariable("PostgreSqlServerName")}; " +
-            $"User Id={Environment.GetEnvironmentVariable("PostgreSqlTesUserLogin")}.postgres.database.azure.com; " +
+            $"Server={Environment.GetEnvironmentVariable("PostgreSqlServerName")}.postgres.database.azure.com; " +
+            $"User Id={Environment.GetEnvironmentVariable("PostgreSqlTesUserLogin")}; " +
             $"Database={Environment.GetEnvironmentVariable("PostgreSqlTesDatabaseName")}; " +
             $"Port={Environment.GetEnvironmentVariable("PostgreSqlTesDatabasePort")}; " +
             $"Password={Environment.GetEnvironmentVariable("PostgreSqlTesUserPassword")}; " +
