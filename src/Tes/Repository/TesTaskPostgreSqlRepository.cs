@@ -36,7 +36,7 @@ namespace Tes.Repository
             using var dbContext = createDbContext();
 
             // Search for Id within the JSON
-            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.GetId().Equals(id));
+            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id);
 
             if (item is not null)
             {
