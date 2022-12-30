@@ -81,7 +81,7 @@ namespace Tes.Repository
         public override async Task<TesTask> UpdateItemAsync(TesTask item)
         {
             using var dbContext = createDbContext();
-            var dbItem = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.GetId() == item.GetId());
+            var dbItem = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == item.Id);
 
             // Update Properties
             if (dbItem is not null)
