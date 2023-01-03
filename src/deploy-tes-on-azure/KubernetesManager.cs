@@ -258,7 +258,7 @@ namespace TesDeployer
 
         private static void UpdateValuesFromSettings(HelmValues values, Dictionary<string, string> settings)
         {
-            values.Config["cromwellOnAzureVersion"] = settings["CromwellOnAzureVersion"];
+            values.Config["tesOnAzureVersion"] = settings["TesOnAzureVersion"];
             values.Config["azureServicesAuthConnectionString"] = settings["AzureServicesAuthConnectionString"];
             values.Config["applicationInsightsAccountName"] = settings["ApplicationInsightsAccountName"];
             values.Config["cosmosDbAccountName"] = settings["CosmosDbAccountName"];
@@ -291,7 +291,7 @@ namespace TesDeployer
         private static Dictionary<string, string> ValuesToSettings(HelmValues values)
             => new()
             {
-                ["CromwellOnAzureVersion"] = values.Config["cromwellOnAzureVersion"],
+                ["TesOnAzureVersion"] = values.Config["tesOnAzureVersion"],
                 ["AzureServicesAuthConnectionString"] = values.Config["azureServicesAuthConnectionString"],
                 ["ApplicationInsightsAccountName"] = values.Config["applicationInsightsAccountName"],
                 ["CosmosDbAccountName"] = values.Config["cosmosDbAccountName"],
