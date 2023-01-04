@@ -42,7 +42,7 @@ namespace TesApi.Web.Management.Configuration
         /// </summary>
         public string SubscriptionId { get; set; }
         /// <summary>
-        /// Resource group of the batch account. 
+        /// ResourceApiResponse group of the batch account. 
         /// <remarks>Required if AppKey is provided.</remarks>
         /// </summary>
         public string ResourceGroup { get; set; }
