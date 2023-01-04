@@ -5,6 +5,7 @@ namespace Tes.Repository
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Threading.Tasks;
@@ -12,7 +13,7 @@ namespace Tes.Repository
     using Tes.Models;
 
     /// <summary>
-    /// A TesTask specific repository for CRUD-ing the JSON TesTask stored in a TeskTaskDatabaseItem.
+    /// A TesTask specific repository for CRUD-ing the JSON TesTask stored in a TesTaskDatabaseItem
     /// </summary>
     /// <typeparam name="TesTask"></typeparam>
     public class TesTaskPostgreSqlRepository : GenericPostgreSqlRepository<TesTask>
@@ -20,8 +21,8 @@ namespace Tes.Repository
         /// <summary>
         /// Default constructor
         /// </summary>
-        /// <param name="createDbContext">A delegate that creates a RepositoryDb context</param>
-        public TesTaskPostgreSqlRepository(Func<RepositoryDb> createDbContext) : base(createDbContext)
+        /// <param name="createDbContext">A delegate that creates a TesTaskPostgreSqlRepository context</param>
+        public TesTaskPostgreSqlRepository(Func<TesDbContext> createDbContext) : base(createDbContext)
         {
         }
 
@@ -38,12 +39,13 @@ namespace Tes.Repository
             // Search for Id within the JSON
             var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id);
 
-            if (item is not null)
+            if (item is null)
             {
-                onSuccess?.Invoke(item.Json);
-                return true;
+                return false;
             }
-            return false;
+
+            onSuccess?.Invoke(item.Json);
+            return true;
         }
 
         /// <summary>
@@ -55,8 +57,12 @@ namespace Tes.Repository
         {
             using var dbContext = createDbContext();
 
+            // TODO verify that this does not return all TesTasks and then execute the predicate locally on all items
             // Search for items in the JSON
-            return await dbContext.TesTasks.Select(t => t.Json).Where(predicate).ToListAsync<TesTask>();
+            var query = dbContext.TesTasks.Select(t => t.Json).Where(predicate);
+            var sqlQuery = query.ToQueryString();
+            Debugger.Break();
+            return await query.ToListAsync();
         }
 
         /// <summary>
@@ -67,7 +73,7 @@ namespace Tes.Repository
         public override async Task<TesTask> CreateItemAsync(TesTask item)
         {
             using var dbContext = createDbContext();
-            var dbItem = new TeskTaskDatabaseItem { Json = item };
+            var dbItem = new TesTaskDatabaseItem { Json = item };
             dbContext.TesTasks.Add(dbItem);
             await dbContext.SaveChangesAsync();
             return item;
@@ -76,25 +82,25 @@ namespace Tes.Repository
         /// <summary>
         /// Base class searches within model, this method searches within the JSON
         /// </summary>
-        /// <param name="item"></param>
+        /// <param name="tesTask"></param>
         /// <returns></returns>
-        public override async Task<TesTask> UpdateItemAsync(TesTask item)
+        public override async Task<TesTask> UpdateItemAsync(TesTask tesTask)
         {
             using var dbContext = createDbContext();
-            var dbItem = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == item.Id);
+            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == tesTask.Id);
 
-            // Update Properties
-            if (dbItem is not null)
+            if (item is null)
             {
-                dbItem.Json = item;
-                await dbContext.SaveChangesAsync();
-                return dbItem.Json;
+                throw new Exception($"No TesTask with Json.Id = {tesTask.Id} found in the database.");
             }
-            return null;
+
+            item.Json = tesTask;
+            await dbContext.SaveChangesAsync();
+            return item.Json;
         }
 
         /// <summary>
-        /// Base class deletes by TesTaskDatabaseItem Id, this allows deleting by TesTask Id.
+        /// Base class delets by Item.Id, this method deletes by Item.Json.Id
         /// </summary>
         /// <param name="id">TesTask Id</param>
         /// <returns></returns>
@@ -103,11 +109,13 @@ namespace Tes.Repository
             using var dbContext = createDbContext();
             var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id);
 
-            if (item is not null)
+            if (item is null)
             {
-                dbContext.TesTasks.Remove(item);
-                await dbContext.SaveChangesAsync();
+                throw new Exception($"No TesTask with Json.Id = {item.Id} found in the database.");
             }
+
+            dbContext.TesTasks.Remove(item);
+            await dbContext.SaveChangesAsync();
         }
     }
 }

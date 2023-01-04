@@ -10,21 +10,19 @@ namespace Tes.Repository
     using System.Threading.Tasks;
     using Microsoft.EntityFrameworkCore;
 
-
-
     /// <summary>
     /// A repository for interacting with an Azure PostgreSql Server. 
     /// </summary>
     /// <typeparam name="T"></typeparam>
     public class GenericPostgreSqlRepository<T> : IRepository<T> where T : RepositoryItem<T>
     {
-        protected readonly Func<RepositoryDb> createDbContext;
+        protected readonly Func<TesDbContext> createDbContext;
 
         /// <summary>
         /// Default constructor
         /// </summary>
         /// <param name="createDbContext">A delegate that creates a RepositoryDb context</param>
-        public GenericPostgreSqlRepository(Func<RepositoryDb> createDbContext)
+        public GenericPostgreSqlRepository(Func<TesDbContext> createDbContext)
         {
             this.createDbContext = createDbContext;
         }

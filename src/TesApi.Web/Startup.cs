@@ -41,11 +41,11 @@ namespace TesApi.Web
             $"Database={Environment.GetEnvironmentVariable("PostgreSqlTesDatabaseName")}; " +
             $"Port={Environment.GetEnvironmentVariable("PostgreSqlTesDatabasePort")}; " +
             $"Password={Environment.GetEnvironmentVariable("PostgreSqlTesUserPassword")}; " +
-            $"SSLMode=Prefer";
+            "SSLMode=Prefer";
 
-        static readonly Func<RepositoryDb> createDbContext = () =>
+        static readonly Func<TesDbContext> createDbContext = () =>
         {
-            return new RepositoryDb(postgresConnectionString);
+            return new TesDbContext(postgresConnectionString);
         };
 
         private static async Task InitializeDbAsync()
