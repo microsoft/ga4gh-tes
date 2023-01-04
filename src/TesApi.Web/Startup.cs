@@ -68,7 +68,8 @@ namespace TesApi.Web
                 .AddSingleton<IBatchQuotaProvider, ArmBatchQuotaProvider>()
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
-                .AddSingleton<IBatchSkuInformationProvider, ArmBatchSkuInformationProvider>()
+                .AddSingleton<PriceApiClient, PriceApiClient>()
+                .AddSingleton<IBatchSkuInformationProvider, PriceApiBatchSkuInformationProvider>()
 
                 .AddSwaggerGen(c =>
                 {
