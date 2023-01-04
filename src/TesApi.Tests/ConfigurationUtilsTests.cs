@@ -5,15 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using LazyCache;
-using Microsoft.Azure.Management.Batch.Models;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
-using Tes.Models;
-using TesApi.Web;
-using TesApi.Web.Management;
 
 namespace TesApi.Tests
 {
