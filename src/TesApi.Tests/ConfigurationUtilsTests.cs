@@ -4,13 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Microsoft.Azure.Management.Batch.Models;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
-using Tes.Models;
-using TesApi.Web;
 
 namespace TesApi.Tests
 {
@@ -22,7 +15,7 @@ namespace TesApi.Tests
         {
             var configuration = GetInMemoryConfig();
             var mockAzureProxy = GetMockAzureProxy();
-            var mockLogger = new Mock<ILogger>().Object;
+            var mockLogger = new Mock<ILogger<StorageAccessProvider>>().Object;
             var storageAccessProvider = new StorageAccessProvider(mockLogger, configuration, mockAzureProxy.Object);
 
             var configurationUtils = new ConfigurationUtils(configuration, mockAzureProxy.Object, storageAccessProvider, mockLogger);
@@ -44,7 +37,7 @@ namespace TesApi.Tests
         {
             var configuration = GetInMemoryConfig();
             var mockAzureProxy = GetMockAzureProxy();
-            var mockLogger = new Mock<ILogger>().Object;
+            var mockLogger = new Mock<ILogger<StorageAccessProvider>>().Object;
             var storageAccessProvider = new StorageAccessProvider(mockLogger, configuration, mockAzureProxy.Object);
 
             var configurationUtils = new ConfigurationUtils(configuration, mockAzureProxy.Object, storageAccessProvider, mockLogger);
@@ -98,7 +91,7 @@ namespace TesApi.Tests
             var storageAccountInfos = new Dictionary<string, StorageAccountInfo> {
                 {
                     "defaultstorageaccount",
-                    new() { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount.blob.core.windows.net/", SubscriptionId = "SubId" }
+                    new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount.blob.core.windows.net/", SubscriptionId = "SubId" }
                 }
              };
 
