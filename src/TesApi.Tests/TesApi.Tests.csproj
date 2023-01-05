@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TesApi.Web\TesApi.Web.csproj" />
+    <ProjectReference Include="..\Tes\Tes.csproj" />
   </ItemGroup>
 
   <ItemGroup>

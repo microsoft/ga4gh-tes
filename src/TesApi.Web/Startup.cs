@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using LazyCache;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore.Scaffolding.Metadata;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -17,6 +18,7 @@ using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Serialization;
 using Tes.Models;
 using Tes.Repository;
+using Tes.Utilities;
 using TesApi.Filters;
 
 namespace TesApi.Web
@@ -35,24 +37,6 @@ namespace TesApi.Web
         private readonly ILoggerFactory loggerFactory;
         private readonly IWebHostEnvironment hostingEnvironment;
         private readonly string azureOfferDurableId;
-        private static readonly string postgresConnectionString =
-            $"Server={Environment.GetEnvironmentVariable("PostgreSqlServerName")}.postgres.database.azure.com; " +
-            $"User Id={Environment.GetEnvironmentVariable("PostgreSqlTesUserLogin")}; " +
-            $"Database={Environment.GetEnvironmentVariable("PostgreSqlTesDatabaseName")}; " +
-            $"Port={Environment.GetEnvironmentVariable("PostgreSqlTesDatabasePort")}; " +
-            $"Password={Environment.GetEnvironmentVariable("PostgreSqlTesUserPassword")}; " +
-            "SSLMode=Prefer";
-
-        static readonly Func<TesDbContext> createDbContext = () =>
-        {
-            return new TesDbContext(postgresConnectionString);
-        };
-
-        private static async Task InitializeDbAsync()
-        {
-            using var dbContext = createDbContext();
-            await dbContext.Database.EnsureCreatedAsync();
-        }
 
         /// <summary>
         /// Startup class for ASP.NET core
@@ -95,19 +79,31 @@ namespace TesApi.Web
 
             (var cosmosDbEndpoint, var cosmosDbKey) = (postgreSqlServerName is null) ? azureProxy.GetCosmosDbEndpointAndKeyAsync(Configuration["CosmosDbAccountName"]).Result : (null, null);
 
+            IRepository<TesTask> database = null;
+
             if (postgreSqlServerName is not null)
             {
-                InitializeDbAsync().Wait();
-            }
+                // Use PostgreSql implementation
 
-            IRepository<TesTask> database = (postgreSqlServerName is null)
-                ? new CosmosDbRepository<TesTask>(
+                string postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(
+                    postgreSqlServerName: Environment.GetEnvironmentVariable("PostgreSqlServerName"),
+                    postgreSqlTesDatabaseName: Environment.GetEnvironmentVariable("PostgreSqlTesDatabaseName"),
+                    postgreSqlTesDatabasePort: Environment.GetEnvironmentVariable("PostgreSqlTesDatabasePort"),
+                    postgreSqlTesUserLogin: Environment.GetEnvironmentVariable("PostgreSqlTesUserLogin"),
+                    postgreSqlTesUserPassword: Environment.GetEnvironmentVariable("PostgreSqlTesUserPassword"));
+                
+                database = new TesTaskPostgreSqlRepository(postgresConnectionString);
+            }
+            else
+            {
+                // Use Cosmos DB implementation
+                database = new CosmosDbRepository<TesTask>(
                     cosmosDbEndpoint,
                     cosmosDbKey,
                     CosmosDbDatabaseId,
                     CosmosDbContainerId,
-                    CosmosDbPartitionId)
-                : new TesTaskPostgreSqlRepository(createDbContext);
+                    CosmosDbPartitionId);
+            }
 
             return (cache, azureProxy, cachingAzureProxy, storageAccessProvider, database);
         }

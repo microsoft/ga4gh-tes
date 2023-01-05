@@ -16,14 +16,29 @@ namespace Tes.Repository
     /// A TesTask specific repository for CRUD-ing the JSON TesTask stored in a TesTaskDatabaseItem
     /// </summary>
     /// <typeparam name="TesTask"></typeparam>
-    public class TesTaskPostgreSqlRepository : GenericPostgreSqlRepository<TesTask>
+    public class TesTaskPostgreSqlRepository : IRepository<TesTask>
     {
+        private readonly Func<TesDbContext> createDbContext;
+
         /// <summary>
         /// Default constructor
         /// </summary>
-        /// <param name="createDbContext">A delegate that creates a TesTaskPostgreSqlRepository context</param>
-        public TesTaskPostgreSqlRepository(Func<TesDbContext> createDbContext) : base(createDbContext)
+        /// <param name="connectionString">The PostgreSql connection string</param>
+        public TesTaskPostgreSqlRepository(string connectionString)
         {
+            createDbContext = () => { return new TesDbContext(connectionString); };
+            using var dbContext = createDbContext();
+            dbContext.Database.EnsureCreatedAsync().Wait();
+        }
+        /// <summary>
+        /// Constructor for testing to enable mocking DbContext 
+        /// </summary>
+        /// <param name="createDbContext">A delegate that creates a TesTaskPostgreSqlRepository context</param>
+        public TesTaskPostgreSqlRepository(Func<TesDbContext> createDbContext)
+        {
+            this.createDbContext = createDbContext;
+            using var dbContext = createDbContext();
+            dbContext.Database.EnsureCreatedAsync().Wait();
         }
 
         /// <summary>
@@ -32,7 +47,7 @@ namespace Tes.Repository
         /// <param name="id">The TesTask Id stored in the TesTaskDatabaseItem JSON</param>
         /// <param name="onSuccess">Delegate to run on success</param>
         /// <returns></returns>
-        public override async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess = null)
+        public async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess = null)
         {
             using var dbContext = createDbContext();
 
@@ -53,7 +68,7 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="predicate">Predicate to run on the JSON</param>
         /// <returns></returns>
-        public override async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate)
+        public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate)
         {
             using var dbContext = createDbContext();
 
@@ -70,7 +85,7 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="item">TesTask to store as JSON in the database</param>
         /// <returns></returns>
-        public override async Task<TesTask> CreateItemAsync(TesTask item)
+        public async Task<TesTask> CreateItemAsync(TesTask item)
         {
             using var dbContext = createDbContext();
             var dbItem = new TesTaskDatabaseItem { Json = item };
@@ -84,7 +99,7 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="tesTask"></param>
         /// <returns></returns>
-        public override async Task<TesTask> UpdateItemAsync(TesTask tesTask)
+        public async Task<TesTask> UpdateItemAsync(TesTask tesTask)
         {
             using var dbContext = createDbContext();
             var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == tesTask.Id);
@@ -104,7 +119,7 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="id">TesTask Id</param>
         /// <returns></returns>
-        public override async Task DeleteItemAsync(string id)
+        public async Task DeleteItemAsync(string id)
         {
             using var dbContext = createDbContext();
             var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id);
@@ -116,6 +131,11 @@ namespace Tes.Repository
 
             dbContext.TesTasks.Remove(item);
             await dbContext.SaveChangesAsync();
+        }
+
+        public Task<(string, IEnumerable<TesTask>)> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken)
+        {
+            throw new NotImplementedException();
         }
     }
 }
