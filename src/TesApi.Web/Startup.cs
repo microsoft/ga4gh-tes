@@ -68,25 +68,21 @@ namespace TesApi.Web
         private (IAppCache cache, AzureProxy azureProxy, IAzureProxy cachingAzureProxy, IStorageAccessProvider storageAccessProvider, IRepository<TesTask> repository) ConfigureServices()
         {
             var cache = new CachingService();
-            var postgreSqlServerName = Environment.GetEnvironmentVariable("PostgreSqlServerName");
-
             var azureProxy = new AzureProxy(Configuration["BatchAccountName"], azureOfferDurableId, loggerFactory.CreateLogger<AzureProxy>());
             IAzureProxy cachingAzureProxy = new CachingWithRetriesAzureProxy(azureProxy, cache);
             IStorageAccessProvider storageAccessProvider = new StorageAccessProvider(loggerFactory.CreateLogger<StorageAccessProvider>(), Configuration, cachingAzureProxy);
-
             var configurationUtils = new ConfigurationUtils(Configuration, cachingAzureProxy, storageAccessProvider, loggerFactory.CreateLogger<ConfigurationUtils>());
             configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync().Wait();
 
-            (var cosmosDbEndpoint, var cosmosDbKey) = (postgreSqlServerName is null) ? azureProxy.GetCosmosDbEndpointAndKeyAsync(Configuration["CosmosDbAccountName"]).Result : (null, null);
-
             IRepository<TesTask> database = null;
+
+            var postgreSqlServerName = Environment.GetEnvironmentVariable("PostgreSqlServerName");
 
             if (postgreSqlServerName is not null)
             {
                 // Use PostgreSql implementation
-
                 string postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(
-                    postgreSqlServerName: Environment.GetEnvironmentVariable("PostgreSqlServerName"),
+                    postgreSqlServerName: postgreSqlServerName,
                     postgreSqlTesDatabaseName: Environment.GetEnvironmentVariable("PostgreSqlTesDatabaseName"),
                     postgreSqlTesDatabasePort: Environment.GetEnvironmentVariable("PostgreSqlTesDatabasePort"),
                     postgreSqlTesUserLogin: Environment.GetEnvironmentVariable("PostgreSqlTesUserLogin"),
@@ -97,6 +93,7 @@ namespace TesApi.Web
             else
             {
                 // Use Cosmos DB implementation
+                (var cosmosDbEndpoint, var cosmosDbKey) = azureProxy.GetCosmosDbEndpointAndKeyAsync(Configuration["CosmosDbAccountName"]).Result;
                 database = new CosmosDbRepository<TesTask>(
                     cosmosDbEndpoint,
                     cosmosDbKey,
