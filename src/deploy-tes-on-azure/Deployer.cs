@@ -234,10 +234,7 @@ namespace TesDeployer
 
                         if (aksValues.TryGetValue("CrossSubscriptionAKSDeployment", out var crossSubscriptionAKSDeployment))
                         {
-                            if (bool.TryParse(crossSubscriptionAKSDeployment, out var parsed))
-                            {
-                                configuration.CrossSubscriptionAKSDeployment = parsed;
-                            }
+                            configuration.CrossSubscriptionAKSDeployment = bool.TryParse(crossSubscriptionAKSDeployment, out var parsed) ? parsed : null;
                         }
 
                         if (aksValues.TryGetValue("KeyVaultName", out var keyVaultName))
@@ -390,7 +387,7 @@ namespace TesDeployer
                                 keyVault ??= await CreateKeyVaultAsync(configuration.KeyVaultName, managedIdentity, vnetAndSubnet.Value.vmSubnet);
                                 keyVaultUri = keyVault.Properties.VaultUri;
                                 var keys = await storageAccount.GetKeysAsync();
-                                await SetStorageKeySecret(keyVaultUri, StorageAccountKeySecretName, keys.First().Value);
+                                await SetStorageKeySecret(keyVaultUri, StorageAccountKeySecretName, keys[0].Value);
                             });
                         }
 
@@ -590,6 +587,7 @@ namespace TesDeployer
 
         private async Task<FlexibleServerModel.Server> GetExistingPostgresqlServiceAsync(string serverName)
         {
+            var regex = new Regex(@"\s+");
             return (await Task.WhenAll(subscriptionIds.Select(async s =>
             {
                 try
@@ -605,7 +603,7 @@ namespace TesDeployer
             })))
                 .Where(a => a is not null)
                 .SelectMany(a => a)
-                .SingleOrDefault(a => a.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase) && Regex.Replace(a.Location, @"\s+", "").Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
+                .SingleOrDefault(a => a.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase) && regex.Replace(a.Location, "").Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
         }
 
         private async Task<ManagedCluster> GetExistingAKSClusterAsync(string aksClusterName)
@@ -706,7 +704,7 @@ namespace TesDeployer
         private Dictionary<string, string> ConfigureSettings(string managedIdentityClientId, Dictionary<string, string> settings = null, Version installedVersion = null)
         {
             settings ??= new();
-            var defaults = GetDefaultValues(new [] { "env-00-coa-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt" });
+            var defaults = GetDefaultValues(new[] { "env-00-coa-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt" });
 
             // We always overwrite the CoA version
             UpdateSetting(settings, defaults, "TesOnAzureVersion", default(string), ignoreDefaults: false);
@@ -732,7 +730,7 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "AksCoANamespace", configuration.AksCoANamespace, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ProvisionPostgreSqlOnAzure", configuration.ProvisionPostgreSqlOnAzure, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "CrossSubscriptionAKSDeployment", configuration.CrossSubscriptionAKSDeployment);
-                var provisionPostgreSqlOnAzure = bool.TryParse(settings["ProvisionPostgreSqlOnAzure"], out var _provisionPostgreSqlOnAzure) ? _provisionPostgreSqlOnAzure : false;
+                var provisionPostgreSqlOnAzure = bool.TryParse(settings["ProvisionPostgreSqlOnAzure"], out var _provisionPostgreSqlOnAzure) && _provisionPostgreSqlOnAzure;
                 //UpdateSetting(settings, defaults, "PostgreSqlServerName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlServerName : string.Empty, ignoreDefaults: true);
                 //UpdateSetting(settings, defaults, "PostgreSqlDatabaseName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesDatabaseName : string.Empty, ignoreDefaults: true);
                 //UpdateSetting(settings, defaults, "PostgreSqlUserLogin", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserLogin : string.Empty, ignoreDefaults: true);
@@ -1940,7 +1938,7 @@ namespace TesDeployer
             var blobClient = await GetBlobClientAsync(storageAccount);
             var container = blobClient.GetBlobContainerClient(containerName);
 
-            await container.CreateIfNotExistsAsync();
+            await container.CreateIfNotExistsAsync(cancellationToken: token);
             await container.GetBlobClient(blobName).UploadAsync(BinaryData.FromString(content), true, token);
         }
 

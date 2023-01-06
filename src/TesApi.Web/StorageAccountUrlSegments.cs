@@ -10,10 +10,17 @@ namespace TesApi.Web
     /// <summary>
     /// Represents segments of Azure Blob Storage URL
     /// </summary>
-    public class StorageAccountUrlSegments
+    public partial class StorageAccountUrlSegments
     {
-        private static readonly Regex localPathRegex = new(@"/?([^/]+)/([^/]+)/?(.+)?");
-        private static readonly Regex accountNameRegex = new(@"^https*://([^\.]*).*");
+
+        [GeneratedRegex("^https*://([^\\.]*).*")]
+        private static partial Regex GetAccountNameRegex();
+
+        [GeneratedRegex("/?([^/]+)/([^/]+)/?(.+)?")]
+        private static partial Regex GetLocalPathRegex();
+
+        private static readonly Regex localPathRegex = GetLocalPathRegex();
+        private static readonly Regex accountNameRegex = GetAccountNameRegex();
 
         /// <summary>
         /// Create from provided segments
@@ -24,11 +31,11 @@ namespace TesApi.Web
         /// <param name="sasToken">SAS token</param>
         public StorageAccountUrlSegments(string blobEndpoint, string containerName, string blobName = "", string sasToken = "")
         {
-            this.AccountName = accountNameRegex.Replace(blobEndpoint, "$1");
-            this.BlobEndpoint = blobEndpoint.TrimEnd('/');
-            this.ContainerName = containerName;
-            this.BlobName = blobName;
-            this.SasToken = sasToken;
+            AccountName = accountNameRegex.Replace(blobEndpoint, "$1");
+            BlobEndpoint = blobEndpoint.TrimEnd('/');
+            ContainerName = containerName;
+            BlobName = blobName;
+            SasToken = sasToken;
         }
 
         private StorageAccountUrlSegments()
@@ -116,18 +123,18 @@ namespace TesApi.Web
         /// </summary>
         /// <returns>Blob URL</returns>
         public string ToUriString()
-            => $"{this.BlobEndpoint}/{this.ContainerName}/{this.BlobName}{this.SasToken}".TrimEnd('/');
+            => $"{BlobEndpoint}/{ContainerName}/{BlobName}{SasToken}".TrimEnd('/');
 
         /// <summary>
         /// Returns the Blob URI
         /// </summary>
         /// <returns>Blob URI</returns>
         public Uri ToUri()
-            => new(this.ToUriString());
+            => new(ToUriString());
 
         /// <summary>
         /// Returns true if the segments represent a container
         /// </summary>
-        public bool IsContainer => !string.IsNullOrEmpty(this.ContainerName) && string.IsNullOrEmpty(this.BlobName);
+        public bool IsContainer => !string.IsNullOrEmpty(ContainerName) && string.IsNullOrEmpty(BlobName);
     }
 }
