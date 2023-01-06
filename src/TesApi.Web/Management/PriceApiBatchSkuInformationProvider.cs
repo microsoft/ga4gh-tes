@@ -53,20 +53,20 @@ namespace TesApi.Web.Management
                 return await GetVmSizesAndPricesAsyncImpl(region);
             }
 
-            logger.LogInformation("Trying to get pricing information from the cache.");
+            logger.LogInformation($"Trying to get pricing information from the cache for region: {region}.");
 
-            return await appCache.GetOrAddAsync<List<VirtualMachineInformation>>(region, async () => await GetVmSizesAndPricesAsync(region));
+            return await appCache.GetOrAddAsync<List<VirtualMachineInformation>>(region, async () => await GetVmSizesAndPricesAsyncImpl(region));
 
         }
 
         private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsyncImpl(string region)
         {
-            logger.LogInformation("Getting VM sizes and price information for region:{0}", region);
+            logger.LogInformation($"Getting VM sizes and price information for region:{region}");
 
             var localVmSizeInfoForBatchSupportedSkus = await GetLocalVmSizeInformationForBatchSupportedSkusAsync();
             var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region).ToListAsync();
 
-            logger.LogInformation("Received {0} pricing items}", pricingItems.Count);
+            logger.LogInformation($"Received {pricingItems.Count} pricing items");
 
             var vmInfoList = new List<VirtualMachineInformation>();
 
