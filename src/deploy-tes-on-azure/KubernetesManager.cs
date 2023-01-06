@@ -11,16 +11,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using k8s;
-using k8s.Models;
-using Microsoft.Azure.Management.ContainerService;
-using Microsoft.Azure.Management.ContainerService.Fluent;
-using Microsoft.Azure.Management.Msi.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Azure.Management.Storage.Fluent;
-using Polly;
-using Polly.Retry;
 
 namespace TesDeployer
 {
@@ -380,8 +370,8 @@ namespace TesDeployer
             values.Config["tesOnAzureVersion"] = settings["TesOnAzureVersion"];
             values.Config["azureServicesAuthConnectionString"] = settings["AzureServicesAuthConnectionString"];
             values.Config["applicationInsightsAccountName"] = settings["ApplicationInsightsAccountName"];
-            values.Config["cosmosDbAccountName"] = settings["CosmosDbAccountName"];
-            values.Config["batchAccountName"] = settings["BatchAccountName"];
+            values.Config["cosmosDb__accountName"] = settings["CosmosDbAccountName"];
+            values.Config["batchAccount__accountName"] = settings["BatchAccountName"];
             values.Config["batchNodesSubnetId"] = settings["BatchNodesSubnetId"];
             values.Config["coaNamespace"] = settings["AksCoANamespace"];
             values.Config["disableBatchNodesPublicIpAddress"] = settings["DisableBatchNodesPublicIpAddress"];
