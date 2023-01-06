@@ -76,17 +76,17 @@ namespace TesApi.Web
 
             IRepository<TesTask> database = null;
 
-            var postgreSqlServerName = Environment.GetEnvironmentVariable("PostgreSqlServerName");
+            var postgreSqlTesUserPassword = Environment.GetEnvironmentVariable("PostgreSqlTesUserPassword");
 
-            if (postgreSqlServerName is not null)
+            if (!string.IsNullOrWhiteSpace(postgreSqlTesUserPassword))
             {
                 // Use PostgreSql implementation
                 string postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(
-                    postgreSqlServerName: postgreSqlServerName,
+                    postgreSqlServerName: Environment.GetEnvironmentVariable("PostgreSqlServerName"),
                     postgreSqlTesDatabaseName: Environment.GetEnvironmentVariable("PostgreSqlTesDatabaseName"),
                     postgreSqlTesDatabasePort: Environment.GetEnvironmentVariable("PostgreSqlTesDatabasePort"),
                     postgreSqlTesUserLogin: Environment.GetEnvironmentVariable("PostgreSqlTesUserLogin"),
-                    postgreSqlTesUserPassword: Environment.GetEnvironmentVariable("PostgreSqlTesUserPassword"));
+                    postgreSqlTesUserPassword: postgreSqlTesUserPassword);
                 
                 database = new TesTaskPostgreSqlRepository(postgresConnectionString);
             }

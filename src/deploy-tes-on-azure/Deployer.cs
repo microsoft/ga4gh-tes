@@ -24,7 +24,6 @@ using Microsoft.Azure.Management.ContainerRegistry.Fluent;
 using Microsoft.Azure.Management.ContainerService;
 using Microsoft.Azure.Management.ContainerService.Fluent;
 using Microsoft.Azure.Management.ContainerService.Models;
-using Microsoft.Azure.Management.CosmosDB.Fluent;
 using Microsoft.Azure.Management.Fluent;
 using Microsoft.Azure.Management.Graph.RBAC.Fluent;
 using Microsoft.Azure.Management.Graph.RBAC.Fluent.Models;
@@ -89,8 +88,6 @@ namespace TesDeployer
         public const string SettingsDelimiter = "=:=";
         public const string StorageAccountKeySecretName = "CoAStorageKey";
         public const string SshNsgRuleName = "SSH";
-        private const string CosmosDbDatabaseId = "TES";
-        private const string CosmosDbContainerId = "Tasks";
 
         private readonly CancellationTokenSource cts = new();
 
@@ -157,7 +154,6 @@ namespace TesDeployer
                 BatchAccount batchAccount = null;
                 IGenericResource logAnalyticsWorkspace = null;
                 IGenericResource appInsights = null;
-                ICosmosDBAccount cosmosDb = null;
                 FlexibleServerModel.Server postgreSqlFlexServer = null;
                 SingleServerModel.Server postgreSqlSingleServer = null;
                 IStorageAccount storageAccount = null;
@@ -222,16 +218,6 @@ namespace TesDeployer
 
                         configuration.BatchAccountName = batchAccountName;
 
-                        if (!accountNames.TryGetValue("CosmosDbAccountName", out var cosmosDbAccountName))
-                        {
-                            throw new ValidationException($"Could not retrieve the CosmosDb account name from virtual machine {configuration.VmName}.");
-                        }
-
-                        cosmosDb = await GetExistingCosmosDbAccountAsync(cosmosDbAccountName)
-                            ?? throw new ValidationException($"CosmosDb account {cosmosDbAccountName}, referenced by the VM configuration, does not exist in region {configuration.RegionName}");
-
-                        configuration.CosmosDbAccountName = cosmosDbAccountName;
-
                         // Note: Current behavior is to block switching from Docker MySQL to Azure PostgreSql on Update.
                         // However we do ancitipate including this change, this code is here to facilitate this future behavior.
                         configuration.PostgreSqlServerName = accountNames.GetValueOrDefault("PostgreSqlServerName");
@@ -276,7 +262,6 @@ namespace TesDeployer
                         ValidateMainIdentifierPrefix(configuration.MainIdentifierPrefix);
                         storageAccount = await ValidateAndGetExistingStorageAccountAsync();
                         batchAccount = await ValidateAndGetExistingBatchAccountAsync();
-                        cosmosDb = await ValidateAndGetExistingCosmosDbAccountAsync();
                         aksCluster = await ValidateAndGetExistingAKSClusterAsync();
                         postgreSqlFlexServer = await ValidateAndGetExistingPostgresqlServer();
                         var keyVault = await ValidateAndGetExistingKeyVault();
@@ -303,11 +288,6 @@ namespace TesDeployer
                         if (string.IsNullOrWhiteSpace(configuration.NetworkSecurityGroupName))
                         {
                             configuration.NetworkSecurityGroupName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}", 15);
-                        }
-
-                        if (string.IsNullOrWhiteSpace(configuration.CosmosDbAccountName))
-                        {
-                            configuration.CosmosDbAccountName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
                         }
 
                         if (string.IsNullOrWhiteSpace(configuration.ApplicationInsightsAccountName))
@@ -430,11 +410,6 @@ namespace TesDeployer
                             {
                                 appInsights = await CreateAppInsightsResourceAsync(configuration.LogAnalyticsArmId);
                                 await AssignVmAsContributorToAppInsightsAsync(managedIdentity, appInsights);
-                            }),
-                            Task.Run(async () =>
-                            {
-                                cosmosDb ??= await CreateCosmosDbAsync();
-                                await AssignVmAsContributorToCosmosDb(managedIdentity, cosmosDb);
                             }),
                             Task.Run(async () => {
                                 if (configuration.ProvisionPostgreSqlOnAzure == true)
@@ -994,23 +969,6 @@ namespace TesDeployer
                 .SelectMany(a => a)
                 .SingleOrDefault(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase) && a.Location.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
 
-        private async Task<ICosmosDBAccount> GetExistingCosmosDbAccountAsync(string cosmosDbAccountName)
-            => (await Task.WhenAll(subscriptionIds.Select(async s =>
-            {
-                try
-                {
-                    return await azureClient.WithSubscription(s).CosmosDBAccounts.ListAsync();
-                }
-                catch (Exception e)
-                {
-                    ConsoleEx.WriteLine(e.Message);
-                    return null;
-                }
-            })))
-                .Where(a => a is not null)
-                .SelectMany(a => a)
-                .SingleOrDefault(a => a.Name.Equals(cosmosDbAccountName, StringComparison.OrdinalIgnoreCase) && a.Region.Name.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
-
         private async Task CreateDefaultStorageContainersAsync(IStorageAccount storageAccount)
         {
             var blobClient = await GetBlobClientAsync(storageAccount);
@@ -1067,29 +1025,6 @@ namespace TesDeployer
                         .WithBuiltInRole(BuiltInRole.Contributor)
                         .WithScope(batchAccount.Id)
                         .CreateAsync(cts.Token)));
-
-        private Task AssignVmAsContributorToCosmosDb(IIdentity managedIdentity, IResource cosmosDb)
-            => Execute(
-                $"Assigning {BuiltInRole.Contributor} role for user-managed identity to Cosmos DB resource scope...",
-                () => roleAssignmentHashConflictRetryPolicy.ExecuteAsync(
-                    () => azureSubscriptionClient.AccessManagement.RoleAssignments
-                        .Define(Guid.NewGuid().ToString())
-                        .ForObjectId(managedIdentity.PrincipalId)
-                        .WithBuiltInRole(BuiltInRole.Contributor)
-                        .WithResourceScope(cosmosDb)
-                        .CreateAsync(cts.Token)));
-
-        private Task<ICosmosDBAccount> CreateCosmosDbAsync()
-            => Execute(
-                $"Creating Cosmos DB: {configuration.CosmosDbAccountName}...",
-                () => azureSubscriptionClient.CosmosDBAccounts
-                    .Define(configuration.CosmosDbAccountName)
-                    .WithRegion(configuration.RegionName)
-                    .WithExistingResourceGroup(configuration.ResourceGroupName)
-                    .WithDataModelSql()
-                    .WithSessionConsistency()
-                    .WithWriteReplication(Region.Create(configuration.RegionName))
-                    .CreateAsync(cts.Token));
 
         private async Task<FlexibleServerModel.Server> CreatePostgreSqlServerAndDatabaseAsync(FlexibleServer.IPostgreSQLManagementClient postgresManagementClient, ISubnet subnet, IPrivateDnsZone postgreSqlDnsZone)
         {
@@ -1590,17 +1525,6 @@ namespace TesDeployer
                 ?? throw new ValidationException($"If BatchAccountName is provided, the batch account must already exist in region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
         }
 
-        private async Task<ICosmosDBAccount> ValidateAndGetExistingCosmosDbAccountAsync()
-        {
-            if (configuration.CosmosDbAccountName is null)
-            {
-                return null;
-            }
-
-            return (await GetExistingCosmosDbAccountAsync(configuration.CosmosDbAccountName))
-                ?? throw new ValidationException($"If CosmosDbAccountName is provided, the account must already exist in region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
-        }
-
         private async Task<(INetwork virtualNetwork, ISubnet vmSubnet, ISubnet postgreSqlSubnet)?> ValidateAndGetExistingVirtualNetworkAsync()
         {
             static bool AllOrNoneSet(params string[] values) => values.All(v => !string.IsNullOrEmpty(v)) || values.All(v => string.IsNullOrEmpty(v));
@@ -1826,7 +1750,6 @@ namespace TesDeployer
 
             ThrowIfProvidedForUpdate(configuration.RegionName, nameof(configuration.RegionName));
             ThrowIfProvidedForUpdate(configuration.BatchAccountName, nameof(configuration.BatchAccountName));
-            ThrowIfProvidedForUpdate(configuration.CosmosDbAccountName, nameof(configuration.CosmosDbAccountName));
             ThrowIfProvidedForUpdate(configuration.CrossSubscriptionAKSDeployment, nameof(configuration.CrossSubscriptionAKSDeployment));
             ThrowIfProvidedForUpdate(configuration.ProvisionPostgreSqlOnAzure, nameof(configuration.ProvisionPostgreSqlOnAzure));
             ThrowIfProvidedForUpdate(configuration.ApplicationInsightsAccountName, nameof(configuration.ApplicationInsightsAccountName));
