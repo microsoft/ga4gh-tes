@@ -417,6 +417,13 @@ namespace TesDeployer
                         {
                             Task.Run(async () =>
                             {
+                                if (aksCluster is null && !configuration.ManualHelmDeployment)
+                                {
+                                    await ProvisionManagedClusterAsync(resourceGroup, managedIdentity, logAnalyticsWorkspace, vnetAndSubnet?.virtualNetwork, vnetAndSubnet?.vmSubnet.Name, configuration.PrivateNetworking.GetValueOrDefault());
+                                }
+                            }),
+                            Task.Run(async () =>
+                            {
                                 batchAccount ??= await CreateBatchAccountAsync(storageAccount.Id);
                                 await AssignVmAsContributorToBatchAccountAsync(managedIdentity, batchAccount);
                             }),
@@ -448,11 +455,6 @@ namespace TesDeployer
                         var clientId = managedIdentity.ClientId;
                         var settings = ConfigureSettings(clientId);
                         tesEndpoint = settings["TesHostname"];
-
-                        if (aksCluster is null && !configuration.ManualHelmDeployment)
-                        {
-                            await ProvisionManagedClusterAsync(resourceGroup, managedIdentity, logAnalyticsWorkspace, vnetAndSubnet?.virtualNetwork, vnetAndSubnet?.vmSubnet.Name, configuration.PrivateNetworking.GetValueOrDefault());
-                        }
 
                         await kubernetesManager.UpdateHelmValuesAsync(storageAccount, keyVaultUri, resourceGroup.Name, settings, managedIdentity);
 
