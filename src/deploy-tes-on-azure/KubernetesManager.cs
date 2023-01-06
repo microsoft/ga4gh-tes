@@ -18,7 +18,6 @@ using Microsoft.Azure.Management.ContainerService.Fluent;
 using Microsoft.Azure.Management.Msi.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Azure.Management.Storage.Fluent;
 using Polly;
 using Polly.Retry;
@@ -65,13 +64,12 @@ namespace TesDeployer
             CreateAndInitializeWorkingDirectoriesAsync().Wait();
         }
 
-        public async Task<IKubernetes> GetKubernetesClientAsync(IResource resourceGroupObject)
+        public async Task<IKubernetes> GetKubernetesClientAsync()
         {
-            var resourceGroup = resourceGroupObject.Name;
             var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
 
             // Write kubeconfig in the working directory, because KubernetesClientConfiguration needs to read from a file, TODO figure out how to pass this directly. 
-            var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(resourceGroup, configuration.AksClusterName);
+            var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(configuration.ResourceGroupName, configuration.AksClusterName);
             var kubeConfigFile = new FileInfo(kubeConfigPath);
             await File.WriteAllTextAsync(kubeConfigFile.FullName, Encoding.Default.GetString(creds.Kubeconfigs.First().Value));
 
@@ -100,7 +98,7 @@ namespace TesDeployer
             var certImageWebhook = $"{certManagerRegistry}/jetstack/cert-manager-webhook";
             var certImageCainjector = $"{certManagerRegistry}/jetstack/cert-manager-cainjector";
 
-            var client = await GetKubernetesClientAsync(resourceGroup);
+            var client = await GetKubernetesClientAsync();
 
             await client.CoreV1.CreateNamespaceAsync(new V1Namespace()
             {
@@ -192,10 +190,16 @@ namespace TesDeployer
         }
 
         public async Task DeployHelmChartToClusterAsync()
+        {
+            var client = await GetKubernetesClientAsync();
+
             // https://helm.sh/docs/helm/helm_upgrade/
             // The chart argument can be either: a chart reference('example/mariadb'), a path to a chart directory, a packaged chart, or a fully qualified URL
-            => await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig {kubeConfigPath} --namespace {configuration.AksCoANamespace} --create-namespace",
+            await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig {kubeConfigPath} --namespace {configuration.AksCoANamespace} --create-namespace",
                 workingDirectory: workingDirectoryTemp);
+            await WaitForWorkloadAsync(client, "tes", cts.Token, configuration.AksCoANamespace);
+        }
+
 
         public async Task UpdateHelmValuesAsync(IStorageAccount storageAccount, string keyVaultUrl, string resourceGroupName, Dictionary<string, string> settings, IIdentity managedId)
         {

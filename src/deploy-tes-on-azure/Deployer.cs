@@ -72,6 +72,10 @@ namespace TesDeployer
             .Handle<Exception>()
             .WaitAndRetryAsync(3, retryAttempt => System.TimeSpan.FromSeconds(1));
 
+        private static readonly AsyncRetryPolicy longRetryPolicy = Policy
+            .Handle<Exception>()
+            .WaitAndRetryAsync(8, retryAttempt => System.TimeSpan.FromSeconds(15));
+
         public const string ConfigurationContainerName = "configuration";
         public const string ContainersToMountFileName = "containers-to-mount";
         public const string AllowedVmSizesFileName = "allowed-vm-sizes";
@@ -263,7 +267,7 @@ namespace TesDeployer
                         var installedVersion = !string.IsNullOrEmpty(versionString) && Version.TryParse(versionString, out var version) ? version : null;
                         var settings = ConfigureSettings(managedIdentity.ClientId, aksValues, installedVersion);
 
-                        kubernetesClient = await kubernetesManager.GetKubernetesClientAsync(resourceGroup);
+                        kubernetesClient = await kubernetesManager.GetKubernetesClientAsync();
                         await kubernetesManager.UpgradeAKSDeploymentAsync(
                             settings,
                             storageAccount);
@@ -467,7 +471,7 @@ namespace TesDeployer
                         }
                         else
                         {
-                            kubernetesClient = await kubernetesManager.GetKubernetesClientAsync(resourceGroup);
+                            kubernetesClient = await kubernetesManager.GetKubernetesClientAsync();
                             await kubernetesManager.DeployCoADependenciesAsync(resourceGroup);
                             if (configuration.EnableIngress.GetValueOrDefault())
                             {
@@ -608,7 +612,7 @@ namespace TesDeployer
             var content = new StringContent(JsonConvert.SerializeObject(task), Encoding.UTF8, "application/json");
             var requestUri = $"https://{tesEndpoint}/v1/tasks";
             Dictionary<string, string> response = null;
-            await generalRetryPolicy.ExecuteAsync(
+            await longRetryPolicy.ExecuteAsync(
                     async () =>
                     {
                         var responseBody = await client.PostAsync(requestUri, content);
