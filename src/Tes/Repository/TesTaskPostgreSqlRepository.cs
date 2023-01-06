@@ -30,6 +30,7 @@ namespace Tes.Repository
             using var dbContext = createDbContext();
             dbContext.Database.EnsureCreatedAsync().Wait();
         }
+
         /// <summary>
         /// Constructor for testing to enable mocking DbContext 
         /// </summary>
@@ -72,11 +73,10 @@ namespace Tes.Repository
         {
             using var dbContext = createDbContext();
 
-            // TODO verify that this does not return all TesTasks and then execute the predicate locally on all items
             // Search for items in the JSON
             var query = dbContext.TesTasks.Select(t => t.Json).Where(predicate);
-            //var sqlQuery = query.ToQueryString();
             
+            //var sqlQuery = query.ToQueryString();
             //Debugger.Break();
             return await query.ToListAsync();
         }

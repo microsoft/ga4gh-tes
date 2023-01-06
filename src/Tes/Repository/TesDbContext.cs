@@ -20,7 +20,10 @@ namespace Tes.Repository
         {
             if (!optionsBuilder.IsConfigured)
             {
-                optionsBuilder.UseNpgsql(ConnectionString, options => options.MaxBatchSize(1000)).UseLowerCaseNamingConvention();
+                // use PostgreSQL
+                optionsBuilder
+                    .UseNpgsql(ConnectionString, options => options.MaxBatchSize(1000))
+                    .UseLowerCaseNamingConvention();
             }
         }
     }
