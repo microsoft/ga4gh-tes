@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Azure.Management.AppService.Fluent;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Tes.Utilities;
 
@@ -18,6 +17,7 @@ namespace Tes.Repository.Tests
     /// 5.  Remove the "[Ignore]" attribute from this class
     /// 6.  Run the tests
     /// </summary>
+    [Ignore]
     [TestClass]
     public class TesTaskPostgreSqlRepositoryTests
     {
