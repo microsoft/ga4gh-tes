@@ -75,8 +75,9 @@ namespace Tes.Repository
             // TODO verify that this does not return all TesTasks and then execute the predicate locally on all items
             // Search for items in the JSON
             var query = dbContext.TesTasks.Select(t => t.Json).Where(predicate);
-            var sqlQuery = query.ToQueryString();
-            Debugger.Break();
+            //var sqlQuery = query.ToQueryString();
+            
+            //Debugger.Break();
             return await query.ToListAsync();
         }
 
@@ -92,6 +93,25 @@ namespace Tes.Repository
             dbContext.TesTasks.Add(dbItem);
             await dbContext.SaveChangesAsync();
             return item;
+        }
+
+        /// <summary>
+        /// Encapsulates a TesTask as JSON
+        /// </summary>
+        /// <param name="item">TesTask to store as JSON in the database</param>
+        /// <returns></returns>
+        public async Task<List<TesTask>> CreateItemsAsync(List<TesTask> items)
+        {
+            using var dbContext = createDbContext();
+
+            foreach (var item in items) 
+            {
+                var dbItem = new TesTaskDatabaseItem { Json = item };
+                dbContext.TesTasks.Add(dbItem);
+            }
+
+            await dbContext.SaveChangesAsync();
+            return items;
         }
 
         /// <summary>

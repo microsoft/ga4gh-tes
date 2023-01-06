@@ -14,10 +14,14 @@ namespace Tes.Repository
 
         public string ConnectionString { get; set; }
         public DbSet<TesTaskDatabaseItem> TesTasks { get; set; }
+        //public DbSet<Pool> Pools { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseNpgsql(ConnectionString).UseLowerCaseNamingConvention();
+            if (!optionsBuilder.IsConfigured)
+            {
+                optionsBuilder.UseNpgsql(ConnectionString, options => options.MaxBatchSize(1000)).UseLowerCaseNamingConvention();
+            }
         }
     }
 }
