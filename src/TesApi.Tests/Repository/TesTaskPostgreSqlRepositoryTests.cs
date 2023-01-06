@@ -83,6 +83,7 @@ namespace Tes.Repository.Tests
                     items.Add(new Models.TesTask
                     {
                         Id = Guid.NewGuid().ToString(),
+                        Description = Guid.NewGuid().ToString(),
                         CreationTime = DateTime.UtcNow,
                         State = randomState
                     });
@@ -113,7 +114,7 @@ namespace Tes.Repository.Tests
 
             var task = await repository.CreateItemAsync(new Models.TesTask { 
                 Id = itemId,
-                Description= string.Empty,
+                Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
                 Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
             });
