@@ -185,8 +185,6 @@ namespace TesDeployer
                         ConsoleEx.WriteLine($"Upgrading TES on Azure instance in resource group '{resourceGroup.Name}' to version {targetVersion}...");
 
                         var existingAksCluster = await ValidateAndGetExistingAKSClusterAsync();
-
-
                         Dictionary<string, string> accountNames = null;
 
                         if (!string.IsNullOrEmpty(configuration.StorageAccountName))
