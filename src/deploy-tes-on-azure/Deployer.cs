@@ -4,54 +4,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IdentityModel.Tokens.Jwt;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure.Identity;
-using Azure.Security.KeyVault.Secrets;
-using Azure.Storage;
-using Azure.Storage.Blobs;
-using IdentityModel.Client;
-using k8s;
-using Microsoft.Azure.Management.Batch;
-using Microsoft.Azure.Management.Batch.Models;
-using Microsoft.Azure.Management.Compute.Fluent;
-using Microsoft.Azure.Management.ContainerRegistry.Fluent;
-using Microsoft.Azure.Management.ContainerService;
-using Microsoft.Azure.Management.ContainerService.Fluent;
-using Microsoft.Azure.Management.ContainerService.Models;
-using Microsoft.Azure.Management.CosmosDB.Fluent;
-using Microsoft.Azure.Management.Fluent;
-using Microsoft.Azure.Management.Graph.RBAC.Fluent;
-using Microsoft.Azure.Management.KeyVault;
-using Microsoft.Azure.Management.KeyVault.Fluent;
-using Microsoft.Azure.Management.KeyVault.Models;
-using Microsoft.Azure.Management.Msi.Fluent;
-using Microsoft.Azure.Management.Network;
-using Microsoft.Azure.Management.Network.Fluent;
-using Microsoft.Azure.Management.PostgreSQL;
-using Microsoft.Azure.Management.PrivateDns.Fluent;
-using Microsoft.Azure.Management.ResourceGraph;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
-using Microsoft.Azure.Management.Storage.Fluent;
-using Microsoft.Azure.Services.AppAuthentication;
-using Microsoft.Rest;
-using Newtonsoft.Json;
-using Polly;
-using Polly.Retry;
-using Tes.Models;
-using static Microsoft.Azure.Management.PostgreSQL.FlexibleServers.DatabasesOperationsExtensions;
-using static Microsoft.Azure.Management.PostgreSQL.FlexibleServers.ServersOperationsExtensions;
-using static Microsoft.Azure.Management.PostgreSQL.ServersOperationsExtensions;
-using static Microsoft.Azure.Management.ResourceManager.Fluent.Core.RestClient;
 using Extensions = Microsoft.Azure.Management.ResourceManager.Fluent.Core.Extensions;
 using FlexibleServer = Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 using FlexibleServerModel = Microsoft.Azure.Management.PostgreSQL.FlexibleServers.Models;
@@ -591,17 +550,17 @@ namespace TesDeployer
             using var client = new HttpClient();
             client.SetBasicAuthentication(tesUsername, tesPassword);
 
-            var task = new TesTask() 
-            { 
+            var task = new TesTask()
+            {
                 Inputs = new List<TesInput>(),
                 Outputs = new List<TesOutput>(),
-                Executors = new List<TesExecutor> 
-                { 
-                    new TesExecutor() 
-                    { 
+                Executors = new List<TesExecutor>
+                {
+                    new TesExecutor()
+                    {
                         Image = "ubuntu:22.04",
                         Command = new List<string>{"echo 'hello world'" },
-                    } 
+                    }
                 },
                 Resources = new TesResources()
                 {
@@ -659,7 +618,7 @@ namespace TesDeployer
                     var responseBody = await client.GetAsync(taskEndpoint);
                     var content = await responseBody.Content.ReadAsStringAsync();
                     var response = JsonConvert.DeserializeObject<TesTask>(content);
-                    
+
                     if (response.State == TesState.COMPLETEEnum)
                     {
                         if (string.IsNullOrWhiteSpace(response.FailureReason))
@@ -837,7 +796,7 @@ namespace TesDeployer
         private Dictionary<string, string> ConfigureSettings(string managedIdentityClientId, Dictionary<string, string> settings = null, Version installedVersion = null)
         {
             settings ??= new();
-            var defaults = GetDefaultValues(new [] { "env-00-coa-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt" });
+            var defaults = GetDefaultValues(new[] { "env-00-coa-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt" });
 
             // We always overwrite the CoA version
             UpdateSetting(settings, defaults, "TesOnAzureVersion", default(string), ignoreDefaults: false);
@@ -856,11 +815,11 @@ namespace TesDeployer
             if (installedVersion is null)
             {
                 UpdateSetting(settings, defaults, "DefaultStorageAccountName", configuration.StorageAccountName, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "CosmosDbAccountName", configuration.CosmosDbAccountName, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "BatchAccountName", configuration.BatchAccountName, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "CosmosDb__AccountName", configuration.CosmosDbAccountName, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "BatchAccount__AccountName", configuration.BatchAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ApplicationInsightsAccountName", configuration.ApplicationInsightsAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ManagedIdentityClientId", managedIdentityClientId, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString",  $"RunAs=App;AppId={managedIdentityClientId}", ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString", $"RunAs=App;AppId={managedIdentityClientId}", ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "KeyVaultName", configuration.KeyVaultName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "AksCoANamespace", configuration.AksCoANamespace, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ProvisionPostgreSqlOnAzure", configuration.ProvisionPostgreSqlOnAzure, ignoreDefaults: true);
