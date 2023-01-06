@@ -83,6 +83,10 @@ namespace TesDeployer
         public string PostgreSqlServerName { get; set; }
         public bool UsePostgreSqlSingleServer { get; set; } = false;
         public string KeyVaultName { get; set; }
+        public bool? EnableIngress { get; set; } = null;
+        public string LetsEncryptEmail { get; set; } = null;
+        public string TesUsername { get; set; } = "tes";
+        public string TesPassword { get; set; }
 
         public static Configuration BuildConfiguration(string[] args)
         {

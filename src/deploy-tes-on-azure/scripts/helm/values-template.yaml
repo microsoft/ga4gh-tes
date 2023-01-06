@@ -1,5 +1,7 @@
 ﻿service:
   tesPort: 80
+  tesHostname: RUNTIME_PARAMETER
+  enableIngress: false
 
 config:
   coaNamespace: RUNTIME_PARAMETER
@@ -25,6 +27,7 @@ config:
   marthaSecretName: RUNTIME_PARAMETER
   globalStartTaskPath: /configuration/start-task.sh
   batchManagedIdentity:
+  letsEncryptEmail: RUNTIME_PARAMETER
 
 images:
   tes: RUNTIME_PARAMETER

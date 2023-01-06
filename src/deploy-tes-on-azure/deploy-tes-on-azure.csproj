@@ -82,4 +82,8 @@
     <Folder Include="Properties\PublishProfiles\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Tes\Tes.csproj" />
+  </ItemGroup>
+
 </Project>

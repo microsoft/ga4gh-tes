@@ -7,15 +7,15 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.WebSockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using k8s;
+using k8s.Models;
 using Microsoft.Azure.Management.ContainerService;
 using Microsoft.Azure.Management.ContainerService.Fluent;
-using Microsoft.Azure.Management.Fluent;
 using Microsoft.Azure.Management.Msi.Fluent;
-using Microsoft.Azure.Management.Network.Models;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
@@ -40,6 +40,9 @@ namespace TesDeployer
 
         // "master" is used despite not being a best practice: https://github.com/kubernetes-sigs/blob-csi-driver/issues/783
         private const string NginxIngressRepo = "https://kubernetes.github.io/ingress-nginx";
+        private const string NginxIngressVersion = "4.4.2";
+        private const string CertManagerRepo = "https://charts.jetstack.io";
+        private const string CertManagerVersion = "v1.8.0";
         private const string AadPluginGithubReleaseVersion = "v1.8.13";
         private const string AadPluginRepo = $"https://raw.githubusercontent.com/Azure/aad-pod-identity/{AadPluginGithubReleaseVersion}/charts";
         private const string AadPluginVersion = "4.1.14";
@@ -86,19 +89,109 @@ namespace TesDeployer
                 await ExecHelmProcessAsync($"repo add aad-pod-identity {AadPluginRepo}");
             }
 
-            if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("aad-pod-identity", StringComparison.OrdinalIgnoreCase))
+            await ExecHelmProcessAsync($"repo update");
+            await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig {kubeConfigPath}");
+        }
+
+        public async Task EnableIngress(IResourceGroup resourceGroup, string tesUsername, string tesPassword)
+        {
+            var certManagerRegistry = "quay.io";
+            var certImageController = $"{certManagerRegistry}/jetstack/cert-manager-controller";
+            var certImageWebhook = $"{certManagerRegistry}/jetstack/cert-manager-webhook";
+            var certImageCainjector = $"{certManagerRegistry}/jetstack/cert-manager-cainjector";
+
+            var client = await GetKubernetesClientAsync(resourceGroup);
+
+            await client.CoreV1.CreateNamespaceAsync(new V1Namespace()
+            {
+                Metadata = new V1ObjectMeta
+                {
+                    Name = configuration.AksCoANamespace
+                },
+            });
+
+            V1Namespace coaNamespace = null;
+            try
+            {
+                coaNamespace = await client.CoreV1.ReadNamespaceAsync(configuration.AksCoANamespace);
+            }
+            catch { }
+
+            var coaNamespaceBody = new V1Namespace()
+            {
+                Metadata = new V1ObjectMeta
+                {
+                    Name = configuration.AksCoANamespace,
+                    Labels = new Dictionary<string, string>()
+                    {
+                        { "cert-manager.io/disable-validation", "true" }
+                    }
+                },
+            };
+
+            if (coaNamespace == null)
+            {
+                await client.CoreV1.CreateNamespaceAsync(coaNamespaceBody);
+            }
+            else
+            {
+                await client.CoreV1.PatchNamespaceAsync(new V1Patch(coaNamespaceBody, V1Patch.PatchType.MergePatch), configuration.AksCoANamespace);
+            }
+
+            // Encryption options: https://httpd.apache.org/docs/2.4/misc/password_encryptions.html
+            // APR1 is would be better,but need to find a c# library for it. http://svn.apache.org/viewvc/apr/apr/trunk/crypto/apr_md5.c?view=markup
+            var format = "{SHA}";
+            using (var sha1 = SHA1.Create())
+            {
+                var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(tesPassword));
+                var data = Encoding.UTF8.GetBytes($"{tesUsername}:{format}{Convert.ToBase64String(hash)}");
+
+                await client.CoreV1.CreateNamespacedSecretAsync(new V1Secret()
+                {
+                    Metadata = new V1ObjectMeta()
+                    {
+                        Name = "tes-basic-auth"
+                    },
+                    Data = new Dictionary<string, byte[]>()
+                    {
+                        { "auth", data}
+                    },
+                    Type = "Opaque"
+                }, configuration.AksCoANamespace);
+            }
+
+            var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
+
+            if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("ingress-nginx", StringComparison.OrdinalIgnoreCase))
             {
                 await ExecHelmProcessAsync($"repo add ingress-nginx {NginxIngressRepo}");
             }
 
-            await ExecHelmProcessAsync($"repo update");
-            await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig {kubeConfigPath}");
-            await ExecHelmProcessAsync($"install ingress-nginx ingress-nginx/ingress-nginx --namespace kube-system --set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-load-balancer-health-probe-request-path\"=/healthz --kubeconfig {kubeConfigPath}");
-            var client = await GetKubernetesClientAsync(resourceGroup);
-            await WaitForWorkloadAsync(client, "ingress-nginx-controller", cts.Token, "kube-system");
-    }
+            if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("jetstack", StringComparison.OrdinalIgnoreCase))
+            {
+                await ExecHelmProcessAsync($"repo add jetstack {CertManagerRepo}");
+            }
 
-    public async Task DeployHelmChartToClusterAsync()
+            await ExecHelmProcessAsync($"repo update");
+
+            var dnsAnnotation = $"--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-dns-label-name\"={configuration.ResourceGroupName}";
+            var healthProbeAnnotation = "--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-load-balancer-health-probe-request-path\"=/healthz";
+            await ExecHelmProcessAsync($"install ingress-nginx ingress-nginx/ingress-nginx --namespace {configuration.AksCoANamespace} --kubeconfig {kubeConfigPath} --version {NginxIngressVersion} {healthProbeAnnotation} {dnsAnnotation}");
+            await ExecHelmProcessAsync("install cert-manager jetstack/cert-manager " +
+                    $"--namespace {configuration.AksCoANamespace} --kubeconfig {kubeConfigPath} " +
+                    $"--version {CertManagerVersion} --set installCRDs=true " +
+                    "--set nodeSelector.\"kubernetes\\.io/os\"=linux " +
+                    $"--set image.repository={certImageController}  " +
+                    $"--set image.tag={CertManagerVersion} " +
+                    $"--set webhook.image.repository={certImageWebhook} " +
+                    $"--set webhook.image.tag={CertManagerVersion} " +
+                    $"--set cainjector.image.repository={certImageCainjector} " +  
+                    $"--set cainjector.image.tag={CertManagerVersion}");
+
+            await WaitForWorkloadAsync(client, "ingress-nginx-controller", cts.Token, configuration.AksCoANamespace);
+        }
+
+        public async Task DeployHelmChartToClusterAsync()
     {
         // https://helm.sh/docs/helm/helm_upgrade/
         // The chart argument can be either: a chart reference('example/mariadb'), a path to a chart directory, a packaged chart, or a fully qualified URL
@@ -290,6 +383,9 @@ namespace TesDeployer
             //values.Config["postgreSqlUserPassword"] = settings["PostgreSqlUserPassword"];
             //values.Config["usePostgreSqlSingleServer"] = settings["UsePostgreSqlSingleServer"];
             values.Images["tes"] = settings["TesImageName"];
+            values.Service["tesHostname"] = settings["TesHostname"];
+            values.Service["enableIngress"] = settings["EnableIngress"];
+            values.Config["letsEncryptEmail"] = settings["LetsEncryptEmail"];
             values.Persistence["storageAccount"] = settings["DefaultStorageAccountName"];
         }
 
