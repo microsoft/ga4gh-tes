@@ -13,6 +13,8 @@ namespace TesApi.Tests
         private PriceApiClient pricingApiClient;
         private Mock<ILogger<PriceApiBatchSkuInformationProvider>> loggerMock;
         private PriceApiBatchSkuInformationProvider provider;
+        private PriceApiBatchSkuInformationProvider providerWithCache;
+        private IAppCache appCache;
 
         [TestInitialize]
         public void Initialize()
@@ -21,6 +23,8 @@ namespace TesApi.Tests
             loggerMock = new Mock<ILogger<PriceApiBatchSkuInformationProvider>>();
             provider = new PriceApiBatchSkuInformationProvider(pricingApiClient,
                 loggerMock.Object);
+            appCache = new CachingService();
+            providerWithCache = new PriceApiBatchSkuInformationProvider(appCache, pricingApiClient, loggerMock.Object);
         }
 
         [TestMethod]
