@@ -7,7 +7,9 @@ using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Net.WebSockets;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +17,7 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using Azure.Storage;
 using Azure.Storage.Blobs;
+using IdentityModel.Client;
 using k8s;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.Batch.Models;
@@ -41,8 +44,10 @@ using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Azure.Management.Storage.Fluent;
 using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Rest;
+using Newtonsoft.Json;
 using Polly;
 using Polly.Retry;
+using Tes.Models;
 using static Microsoft.Azure.Management.PostgreSQL.FlexibleServers.DatabasesOperationsExtensions;
 using static Microsoft.Azure.Management.PostgreSQL.FlexibleServers.ServersOperationsExtensions;
 using static Microsoft.Azure.Management.PostgreSQL.ServersOperationsExtensions;
@@ -66,6 +71,10 @@ namespace TesDeployer
         private static readonly AsyncRetryPolicy generalRetryPolicy = Policy
             .Handle<Exception>()
             .WaitAndRetryAsync(3, retryAttempt => System.TimeSpan.FromSeconds(1));
+
+        private static readonly AsyncRetryPolicy longRetryPolicy = Policy
+            .Handle<Exception>()
+            .WaitAndRetryAsync(8, retryAttempt => System.TimeSpan.FromSeconds(15));
 
         public const string ConfigurationContainerName = "configuration";
         public const string ContainersToMountFileName = "containers-to-mount";
@@ -111,9 +120,6 @@ namespace TesDeployer
         {
             var mainTimer = Stopwatch.StartNew();
 
-            // Currently, we always use AKS
-            configuration.UseAks = true;
-
             try
             {
                 ValidateInitialCommandLineArgs();
@@ -150,6 +156,7 @@ namespace TesDeployer
                 var keyVaultUri = string.Empty;
                 IIdentity managedIdentity = null;
                 IPrivateDnsZone postgreSqlDnsZone = null;
+                string tesEndpoint = null;
 
                 try
                 {
@@ -162,6 +169,7 @@ namespace TesDeployer
 
                         ConsoleEx.WriteLine($"Upgrading TES on Azure instance in resource group '{resourceGroup.Name}' to version {targetVersion}...");
 
+                        Dictionary<string, string> accountNames = null;
                         ManagedCluster existingAksCluster = default;
 
                         if (!string.IsNullOrEmpty(configuration.StorageAccountName))
@@ -256,7 +264,7 @@ namespace TesDeployer
                         var installedVersion = !string.IsNullOrEmpty(versionString) && Version.TryParse(versionString, out var version) ? version : null;
                         var settings = ConfigureSettings(managedIdentity.ClientId, aksValues, installedVersion);
 
-                        kubernetesClient = await kubernetesManager.GetKubernetesClientAsync(resourceGroup);
+                        kubernetesClient = await kubernetesManager.GetKubernetesClientAsync();
                         await kubernetesManager.UpgradeAKSDeploymentAsync(
                             settings,
                             storageAccount);
@@ -305,6 +313,11 @@ namespace TesDeployer
                         if (string.IsNullOrWhiteSpace(configuration.ApplicationInsightsAccountName))
                         {
                             configuration.ApplicationInsightsAccountName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
+                        }
+
+                        if (string.IsNullOrWhiteSpace(configuration.TesPassword))
+                        {
+                            configuration.TesPassword = Utility.GeneratePassword();
                         }
 
                         if (string.IsNullOrWhiteSpace(configuration.AksClusterName))
@@ -405,6 +418,13 @@ namespace TesDeployer
                         {
                             Task.Run(async () =>
                             {
+                                if (aksCluster is null && !configuration.ManualHelmDeployment)
+                                {
+                                    await ProvisionManagedClusterAsync(resourceGroup, managedIdentity, logAnalyticsWorkspace, vnetAndSubnet?.virtualNetwork, vnetAndSubnet?.vmSubnet.Name, configuration.PrivateNetworking.GetValueOrDefault());
+                                }
+                            }),
+                            Task.Run(async () =>
+                            {
                                 batchAccount ??= await CreateBatchAccountAsync(storageAccount.Id);
                                 await AssignVmAsContributorToBatchAccountAsync(managedIdentity, batchAccount);
                             }),
@@ -435,11 +455,7 @@ namespace TesDeployer
 
                         var clientId = managedIdentity.ClientId;
                         var settings = ConfigureSettings(clientId);
-
-                        if (aksCluster is null && !configuration.ManualHelmDeployment)
-                        {
-                            await ProvisionManagedClusterAsync(resourceGroup, managedIdentity, logAnalyticsWorkspace, vnetAndSubnet?.virtualNetwork, vnetAndSubnet?.vmSubnet.Name, configuration.PrivateNetworking.GetValueOrDefault());
-                        }
+                        tesEndpoint = settings["TesHostname"];
 
                         await kubernetesManager.UpdateHelmValuesAsync(storageAccount, keyVaultUri, resourceGroup.Name, settings, managedIdentity);
 
@@ -452,8 +468,12 @@ namespace TesDeployer
                         }
                         else
                         {
-                            kubernetesClient = await kubernetesManager.GetKubernetesClientAsync(resourceGroup);
-                            await kubernetesManager.DeployCoADependenciesAsync();
+                            kubernetesClient = await kubernetesManager.GetKubernetesClientAsync();
+                            await kubernetesManager.DeployCoADependenciesAsync(resourceGroup);
+                            if (configuration.EnableIngress.GetValueOrDefault())
+                            {
+                                await kubernetesManager.EnableIngress(resourceGroup, configuration.TesUsername, configuration.TesPassword);
+                            }
                             await kubernetesManager.DeployHelmChartToClusterAsync();
                         }
 
@@ -476,35 +496,45 @@ namespace TesDeployer
 
                 int exitCode;
 
-                if (isBatchQuotaAvailable)
+                if (configuration.EnableIngress.GetValueOrDefault())
                 {
-                    if (configuration.SkipTestWorkflow)
+                    ConsoleEx.WriteLine($"TES ingress is enabled.");
+                    ConsoleEx.WriteLine($"TES is secured with basic auth at {tesEndpoint}");
+                    ConsoleEx.WriteLine($"TES username: '{configuration.TesUsername}' password: '{configuration.TesPassword}'");
+
+                    if (isBatchQuotaAvailable)
                     {
-                        exitCode = 0;
+                        if (configuration.SkipTestWorkflow)
+                        {
+                            exitCode = 0;
+                        }
+                        else
+                        {
+                            var isTestWorkflowSuccessful = await RunTestTask(tesEndpoint, batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+
+                            if (isTestWorkflowSuccessful)
+                            {
+                                await DeleteResourceGroupIfUserConsentsAsync();
+                            }
+                            exitCode = isTestWorkflowSuccessful ? 0 : 1;
+                        }
                     }
                     else
                     {
-                        // TODO submit test TES task
-                        //var isTestWorkflowSuccessful = await RunTestWorkflow(storageAccount, usePreemptibleVm: batchAccount.LowPriorityCoreQuota > 0);
+                        if (!configuration.SkipTestWorkflow)
+                        {
+                            ConsoleEx.WriteLine($"Could not run the test task.", ConsoleColor.Yellow);
+                        }
 
-                        //if (isTestWorkflowSuccessful)
-                        //{
-                        //    await DeleteResourceGroupIfUserConsentsAsync();
-                        //}
-                        exitCode = 0;
-                        //exitCode = 1; // isTestWorkflowSuccessful ? 0 : 1;
+                        ConsoleEx.WriteLine($"Deployment was successful, but Batch account {configuration.BatchAccountName} does not have sufficient core quota to run workflows.", ConsoleColor.Yellow);
+                        ConsoleEx.WriteLine($"Request Batch core quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
+                        ConsoleEx.WriteLine($"After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
+                        exitCode = 2;
                     }
                 }
                 else
                 {
-                    if (!configuration.SkipTestWorkflow)
-                    {
-                        ConsoleEx.WriteLine($"Could not run the test workflow.", ConsoleColor.Yellow);
-                    }
-
-                    ConsoleEx.WriteLine($"Deployment was successful, but Batch account {configuration.BatchAccountName} does not have sufficient core quota to run workflows.", ConsoleColor.Yellow);
-                    ConsoleEx.WriteLine($"Request Batch core quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
-                    ConsoleEx.WriteLine($"After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
+                    ConsoleEx.WriteLine($"TES ingress is not enabled, skipping test tasks.");
                     exitCode = 2;
                 }
 
@@ -549,6 +579,107 @@ namespace TesDeployer
                 WriteGeneralRetryMessageToConsole();
                 await DeleteResourceGroupIfUserConsentsAsync();
                 return 1;
+            }
+        }
+
+        // Currently fails with "Could not identify Cromwell execution directory path for task {task.Id}. This TES instance supports Cromwell tasks only."
+        private static async Task<int> TestTaskAsync(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
+        {
+            using var client = new HttpClient();
+            client.SetBasicAuthentication(tesUsername, tesPassword);
+
+            var task = new TesTask() 
+            { 
+                Inputs = new List<TesInput>(),
+                Outputs = new List<TesOutput>(),
+                Executors = new List<TesExecutor> 
+                { 
+                    new TesExecutor() 
+                    { 
+                        Image = "ubuntu:22.04",
+                        Command = new List<string>{"echo 'hello world'" },
+                    } 
+                },
+                Resources = new TesResources()
+                {
+                    Preemptible = preemptible
+                }
+            };
+
+            var content = new StringContent(JsonConvert.SerializeObject(task), Encoding.UTF8, "application/json");
+            var requestUri = $"https://{tesEndpoint}/v1/tasks";
+            Dictionary<string, string> response = null;
+            await longRetryPolicy.ExecuteAsync(
+                    async () =>
+                    {
+                        var responseBody = await client.PostAsync(requestUri, content);
+                        var body = await responseBody.Content.ReadAsStringAsync();
+                        response = JsonConvert.DeserializeObject<Dictionary<string, string>>(body);
+                    });
+
+            return await IsTaskSuccessfulAfterLongPollingAsync(client, $"{requestUri}/{response["id"]}") ? 0 : 1;
+        }
+
+        private async Task<bool> RunTestTask(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
+        {
+            var startTime = DateTime.UtcNow;
+            var line = ConsoleEx.WriteLine("Running a test task...");
+            var isTestWorkflowSuccessful = (await TestTaskAsync(tesEndpoint, preemptible, tesUsername, tesPassword)) < 1;
+            WriteExecutionTime(line, startTime);
+
+            if (isTestWorkflowSuccessful)
+            {
+                ConsoleEx.WriteLine();
+                ConsoleEx.WriteLine($"Test task succeeded.", ConsoleColor.Green);
+                ConsoleEx.WriteLine();
+                ConsoleEx.WriteLine("Learn more about how to use Tes on Azure: https://github.com/microsoft/ga4gh-tes");
+                ConsoleEx.WriteLine();
+            }
+            else
+            {
+                ConsoleEx.WriteLine();
+                ConsoleEx.WriteLine($"Test task failed.", ConsoleColor.Red);
+                ConsoleEx.WriteLine();
+                WriteGeneralRetryMessageToConsole();
+                ConsoleEx.WriteLine();
+            }
+
+            return isTestWorkflowSuccessful;
+        }
+
+        private static async Task<bool> IsTaskSuccessfulAfterLongPollingAsync(HttpClient client, string taskEndpoint)
+        {
+            while (true)
+            {
+                try
+                {
+                    var responseBody = await client.GetAsync(taskEndpoint);
+                    var content = await responseBody.Content.ReadAsStringAsync();
+                    var response = JsonConvert.DeserializeObject<TesTask>(content);
+                    
+                    if (response.State == TesState.COMPLETEEnum)
+                    {
+                        if (string.IsNullOrWhiteSpace(response.FailureReason))
+                        {
+                            return true;
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    }
+                    else if (response.State == TesState.EXECUTORERROREnum || response.State == TesState.SYSTEMERROREnum || response.State == TesState.CANCELEDEnum)
+                    {
+                        return false;
+                    }
+                }
+                catch (Exception exc)
+                {
+                    // "Server is busy" occasionally can be ignored
+                    ConsoleEx.WriteLine(exc.Message);
+                }
+
+                await Task.Delay(System.TimeSpan.FromSeconds(10));
             }
         }
 
@@ -708,6 +839,8 @@ namespace TesDeployer
 
             // We always overwrite the CoA version
             UpdateSetting(settings, defaults, "TesOnAzureVersion", default(string), ignoreDefaults: false);
+            UpdateSetting(settings, defaults, "ResourceGroupName", configuration.ResourceGroupName, ignoreDefaults: false);
+            UpdateSetting(settings, defaults, "RegionName", configuration.RegionName, ignoreDefaults: false);
 
             // Process images
             UpdateSetting(settings, defaults, "TesImageName", configuration.TesImageName);
@@ -725,7 +858,7 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "BatchAccountName", configuration.BatchAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ApplicationInsightsAccountName", configuration.ApplicationInsightsAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ManagedIdentityClientId", managedIdentityClientId, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString", managedIdentityClientId, s => $"RunAs=App;AppId={s}", ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString",  $"RunAs=App;AppId={managedIdentityClientId}", ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "KeyVaultName", configuration.KeyVaultName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "AksCoANamespace", configuration.AksCoANamespace, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ProvisionPostgreSqlOnAzure", configuration.ProvisionPostgreSqlOnAzure, ignoreDefaults: true);
@@ -736,6 +869,10 @@ namespace TesDeployer
                 //UpdateSetting(settings, defaults, "PostgreSqlUserLogin", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserLogin : string.Empty, ignoreDefaults: true);
                 //UpdateSetting(settings, defaults, "PostgreSqlUserPassword", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserPassword : string.Empty, ignoreDefaults: true);
                 //UpdateSetting(settings, defaults, "UsePostgreSqlSingleServer", provisionPostgreSqlOnAzure ? configuration.UsePostgreSqlSingleServer.ToString() : string.Empty, ignoreDefaults: true);
+
+                UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
+                UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
+                UpdateSetting(settings, defaults, "TesHostname", $"{configuration.ResourceGroupName}.{configuration.RegionName}.cloudapp.azure.com", ignoreDefaults: true);
             }
 
             //if (installedVersion is null || installedVersion < new Version(3, 3))
@@ -1808,18 +1945,12 @@ namespace TesDeployer
 
             ThrowIfTagsFormatIsUnacceptable(configuration.Tags, nameof(configuration.Tags));
 
-            if (!configuration.Update)
-            {
-                ValidateDependantFeature(configuration.CrossSubscriptionAKSDeployment.GetValueOrDefault(), nameof(configuration.CrossSubscriptionAKSDeployment), configuration.UseAks, nameof(configuration.UseAks));
-            }
-
-            ThrowIfBothProvided(configuration.UseAks, nameof(configuration.UseAks), configuration.CustomTesImagePath is not null, nameof(configuration.CustomTesImagePath));
-
             if (!configuration.ManualHelmDeployment)
             {
-                ValidateDependantFeature(configuration.UseAks, nameof(configuration.UseAks), !string.IsNullOrWhiteSpace(configuration.HelmBinaryPath), nameof(configuration.HelmBinaryPath));
                 ValidateHelmInstall(configuration.HelmBinaryPath, nameof(configuration.HelmBinaryPath));
             }
+
+            ValidateDependantFeature(configuration.EnableIngress.GetValueOrDefault(), nameof(configuration.EnableIngress), !string.IsNullOrEmpty(configuration.LetsEncryptEmail), nameof(configuration.LetsEncryptEmail));
 
             //if (configuration.ProvisionPostgreSqlOnAzure is null)
             //{

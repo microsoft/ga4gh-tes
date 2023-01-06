@@ -45,7 +45,6 @@ namespace TesDeployer
         public string CosmosDbAccountName { get; set; }
         public string LogAnalyticsArmId { get; set; }
         public string ApplicationInsightsAccountName { get; set; }
-        public bool UseAks { get; set; } = true;
         public string AksClusterName { get; set; }
         public string AksCoANamespace { get; set; } = "coa";
         public bool ManualHelmDeployment { get; set; }
@@ -74,6 +73,10 @@ namespace TesDeployer
         public string PostgreSqlServerName { get; set; }
         public bool UsePostgreSqlSingleServer { get; set; } = false;
         public string KeyVaultName { get; set; }
+        public bool? EnableIngress { get; set; } = null;
+        public string LetsEncryptEmail { get; set; } = null;
+        public string TesUsername { get; set; } = "tes";
+        public string TesPassword { get; set; }
 
         public static Configuration BuildConfiguration(string[] args)
         {
