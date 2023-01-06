@@ -26,7 +26,7 @@ using Polly.Retry;
 namespace TesDeployer
 {
     /// <summary>
-    /// Class to hold all the kubernetes specific deployer logic. 
+    /// Class to hold all the kubernetes specific deployer logic.
     /// </summary>
     internal class KubernetesManager
     {
@@ -192,12 +192,10 @@ namespace TesDeployer
         }
 
         public async Task DeployHelmChartToClusterAsync()
-    {
-        // https://helm.sh/docs/helm/helm_upgrade/
-        // The chart argument can be either: a chart reference('example/mariadb'), a path to a chart directory, a packaged chart, or a fully qualified URL
-            await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig {kubeConfigPath} --namespace {configuration.AksCoANamespace} --create-namespace",
+            // https://helm.sh/docs/helm/helm_upgrade/
+            // The chart argument can be either: a chart reference('example/mariadb'), a path to a chart directory, a packaged chart, or a fully qualified URL
+            => await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig {kubeConfigPath} --namespace {configuration.AksCoANamespace} --create-namespace",
                 workingDirectory: workingDirectoryTemp);
-        }
 
         public async Task UpdateHelmValuesAsync(IStorageAccount storageAccount, string keyVaultUrl, string resourceGroupName, Dictionary<string, string> settings, IIdentity managedId)
         {
@@ -270,7 +268,7 @@ namespace TesDeployer
                 {
                     var line = await reader.ReadLineAsync();
 
-                    while (line != null)
+                    while (line is not null)
                     {
                         if (configuration.DebugLogging)
                         {
@@ -284,7 +282,7 @@ namespace TesDeployer
                 {
                     var line = await reader.ReadLineAsync();
 
-                    while (line != null)
+                    while (line is not null)
                     {
                         if (configuration.DebugLogging)
                         {
@@ -304,7 +302,7 @@ namespace TesDeployer
             }
 
             // Pod Exec can fail even after the pod is marked ready.
-            // Retry on WebSocketExceptions for up to 40 secs. 
+            // Retry on WebSocketExceptions for up to 40 secs.
             var result = await KubeExecRetryPolicy.ExecuteAndCaptureAsync(async () =>
             {
                 foreach (var command in commands)
@@ -313,7 +311,7 @@ namespace TesDeployer
                 }
             });
 
-            if (result.Outcome != OutcomeType.Successful && result.FinalException != null)
+            if (result.Outcome != OutcomeType.Successful && result.FinalException is not null)
             {
                 throw result.FinalException;
             }
@@ -324,7 +322,7 @@ namespace TesDeployer
             await UpgradeValuesYamlAsync(storageAccount, settings);
             await DeployHelmChartToClusterAsync();
         }
-        
+
         public void DeleteTempFiles()
         {
             if (Directory.Exists(workingDirectoryTemp))
@@ -356,7 +354,7 @@ namespace TesDeployer
 
         private static void UpdateValuesFromSettings(HelmValues values, Dictionary<string, string> settings)
         {
-            values.Config["cromwellOnAzureVersion"] = settings["CromwellOnAzureVersion"];
+            values.Config["tesOnAzureVersion"] = settings["TesOnAzureVersion"];
             values.Config["azureServicesAuthConnectionString"] = settings["AzureServicesAuthConnectionString"];
             values.Config["applicationInsightsAccountName"] = settings["ApplicationInsightsAccountName"];
             values.Config["cosmosDbAccountName"] = settings["CosmosDbAccountName"];
@@ -390,39 +388,38 @@ namespace TesDeployer
         }
 
         private static Dictionary<string, string> ValuesToSettings(HelmValues values)
-        {
-            var settings = new Dictionary<string, string>();
-            settings["CromwellOnAzureVersion"] = values.Config["cromwellOnAzureVersion"];
-            settings["AzureServicesAuthConnectionString"] = values.Config["azureServicesAuthConnectionString"];
-            settings["ApplicationInsightsAccountName"] = values.Config["applicationInsightsAccountName"];
-            settings["CosmosDbAccountName"] = values.Config["cosmosDbAccountName"];
-            settings["BatchAccountName"] = values.Config["batchAccountName"];
-            settings["BatchNodesSubnetId"] = values.Config["batchNodesSubnetId"];
-            settings["AksCoANamespace"] = values.Config["coaNamespace"];
-            settings["DisableBatchNodesPublicIpAddress"] = values.Config["disableBatchNodesPublicIpAddress"];
-            settings["DisableBatchScheduling"] = values.Config["disableBatchScheduling"];
-            settings["UsePreemptibleVmsOnly"] = values.Config["usePreemptibleVmsOnly"];
-            settings["BlobxferImageName"] = values.Config["blobxferImageName"];
-            settings["DockerInDockerImageName"] = values.Config["dockerInDockerImageName"];
-            settings["BatchImageOffer"] = values.Config["batchImageOffer"];
-            settings["BatchImagePublisher"] = values.Config["batchImagePublisher"];
-            settings["BatchImageSku"] = values.Config["batchImageSku"];
-            settings["BatchImageVersion"] = values.Config["batchImageVersion"];
-            settings["BatchNodeAgentSkuId"] = values.Config["batchNodeAgentSkuId"];
-            settings["MarthaUrl"] = values.Config["marthaUrl"];
-            settings["MarthaKeyVaultName"] = values.Config["marthaKeyVaultName"];
-            settings["MarthaSecretName"] = values.Config["marthaSecretName"];
-            settings["CrossSubscriptionAKSDeployment"] = values.Config["crossSubscriptionAKSDeployment"];
-            //settings["PostgreSqlServerName"] = values.Config["postgreSqlServerName"];
-            //settings["PostgreSqlDatabaseName"] = values.Config["postgreSqlDatabaseName"];
-            //settings["PostgreSqlUserLogin"] = values.Config["postgreSqlUserLogin"];
-            //settings["PostgreSqlUserPassword"] = values.Config["postgreSqlUserPassword"];
-            //settings["UsePostgreSqlSingleServer"] = values.Config["usePostgreSqlSingleServer"];
-            settings["ManagedIdentityClientId"] = values.Identity["clientId"];
-            settings["TesImageName"] = values.Images["tes"];
-            settings["DefaultStorageAccountName"] = values.Persistence["storageAccount"];
-            return settings;
-        }
+            => new()
+            {
+                ["TesOnAzureVersion"] = values.Config["tesOnAzureVersion"],
+                ["AzureServicesAuthConnectionString"] = values.Config["azureServicesAuthConnectionString"],
+                ["ApplicationInsightsAccountName"] = values.Config["applicationInsightsAccountName"],
+                ["CosmosDbAccountName"] = values.Config["cosmosDbAccountName"],
+                ["BatchAccountName"] = values.Config["batchAccountName"],
+                ["BatchNodesSubnetId"] = values.Config["batchNodesSubnetId"],
+                ["AksCoANamespace"] = values.Config["coaNamespace"],
+                ["DisableBatchNodesPublicIpAddress"] = values.Config["disableBatchNodesPublicIpAddress"],
+                ["DisableBatchScheduling"] = values.Config["disableBatchScheduling"],
+                ["UsePreemptibleVmsOnly"] = values.Config["usePreemptibleVmsOnly"],
+                ["BlobxferImageName"] = values.Config["blobxferImageName"],
+                ["DockerInDockerImageName"] = values.Config["dockerInDockerImageName"],
+                ["BatchImageOffer"] = values.Config["batchImageOffer"],
+                ["BatchImagePublisher"] = values.Config["batchImagePublisher"],
+                ["BatchImageSku"] = values.Config["batchImageSku"],
+                ["BatchImageVersion"] = values.Config["batchImageVersion"],
+                ["BatchNodeAgentSkuId"] = values.Config["batchNodeAgentSkuId"],
+                ["MarthaUrl"] = values.Config["marthaUrl"],
+                ["MarthaKeyVaultName"] = values.Config["marthaKeyVaultName"],
+                ["MarthaSecretName"] = values.Config["marthaSecretName"],
+                ["CrossSubscriptionAKSDeployment"] = values.Config["crossSubscriptionAKSDeployment"],
+                //["PostgreSqlServerName"] = values.Config["postgreSqlServerName"],
+                //["PostgreSqlDatabaseName"] = values.Config["postgreSqlDatabaseName"],
+                //["PostgreSqlUserLogin"] = values.Config["postgreSqlUserLogin"],
+                //["PostgreSqlUserPassword"] = values.Config["postgreSqlUserPassword"],
+                //["UsePostgreSqlSingleServer"] = values.Config["usePostgreSqlSingleServer"],
+                ["ManagedIdentityClientId"] = values.Identity["clientId"],
+                ["TesImageName"] = values.Images["tes"],
+                ["DefaultStorageAccountName"] = values.Persistence["storageAccount"],
+            };
 
         private async Task<string> ExecHelmProcessAsync(string command, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
         {
@@ -446,7 +443,7 @@ namespace TesDeployer
             {
                 var line = (await process.StandardOutput.ReadLineAsync())?.Trim();
 
-                while (line != null)
+                while (line is not null)
                 {
                     if (configuration.DebugLogging)
                     {
@@ -462,7 +459,7 @@ namespace TesDeployer
             {
                 var line = (await process.StandardError.ReadLineAsync())?.Trim();
 
-                while (line != null)
+                while (line is not null)
                 {
                     if (configuration.DebugLogging)
                     {
@@ -496,11 +493,11 @@ namespace TesDeployer
             var deployments = await client.AppsV1.ListNamespacedDeploymentAsync(deploymentNamespace, cancellationToken: cancellationToken);
             var deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
 
-            var result = await WorkloadReadyRetryPolicy.ExecuteAndCaptureAsync(async () => 
+            var result = await WorkloadReadyRetryPolicy.ExecuteAndCaptureAsync(async () =>
             {
                 deployments = await client.AppsV1.ListNamespacedDeploymentAsync(deploymentNamespace, cancellationToken: cancellationToken);
                 deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-                
+
                 if ((deployment?.Status?.ReadyReplicas ?? 0) < 1)
                 {
                     throw new Exception("Workload not ready.");

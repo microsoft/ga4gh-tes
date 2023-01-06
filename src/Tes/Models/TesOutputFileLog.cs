@@ -26,9 +26,7 @@ namespace Tes.Models
     public partial class TesOutputFileLog : IEquatable<TesOutputFileLog>
     {
         public TesOutputFileLog()
-        {
-            NewtonsoftJsonSafeInit.SetDefaultSettings();
-        }
+            => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         /// <summary>
         /// URL of the file in storage, e.g. s3://bucket/file.txt

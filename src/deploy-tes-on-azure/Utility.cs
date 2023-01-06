@@ -13,6 +13,9 @@ namespace TesDeployer
 {
     public static class Utility
     {
+        public static string DictionaryToDelimitedText(Dictionary<string, string> dictionary, string fieldDelimiter = "=", string rowDelimiter = "\n")
+            => string.Join(rowDelimiter, dictionary.Select(kv => $"{kv.Key}{fieldDelimiter}{kv.Value}"));
+
         public static Dictionary<string, string> DelimitedTextToDictionary(string text, string fieldDelimiter = "=", string rowDelimiter = "\n")
             => text.Trim().Split(rowDelimiter)
                 .Select(r => r.Trim().Split(fieldDelimiter))
@@ -83,9 +86,6 @@ namespace TesDeployer
 
             public override string Replace(string input) => Skip ? input : Regex.Replace(input, _match, _replacement, _options);
         }
-
-        public static string DictionaryToDelimitedText(Dictionary<string, string> dictionary, string fieldDelimiter = "=", string rowDelimiter = "\n")
-            => string.Join(rowDelimiter, dictionary.Select(kv => $"{kv.Key}{fieldDelimiter}{kv.Value}"));
 
         /// <summary>
         /// Writes all embedded resource files that start with pathComponentsRelativeToAppBase to the output base path,
