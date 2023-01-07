@@ -78,7 +78,7 @@ namespace TesDeployer
             return new Kubernetes(k8sClientConfiguration);
         }
 
-        public async Task DeployCoADependenciesAsync(IResourceGroup resourceGroup)
+        public async Task DeployCoADependenciesAsync(IResourceGroup _/*resourceGroup*/) //TODO: use or remove resourceGroup
         {
             var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
 
@@ -91,14 +91,14 @@ namespace TesDeployer
             await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig {kubeConfigPath}");
         }
 
-        public async Task EnableIngress(IResourceGroup resourceGroup, string tesUsername, string tesPassword)
+        public async Task EnableIngress(IResourceGroup _/*resourceGroup*/, string tesUsername, string tesPassword, IKubernetes client = default) //TODO: use or remove resourceGroup
         {
             var certManagerRegistry = "quay.io";
             var certImageController = $"{certManagerRegistry}/jetstack/cert-manager-controller";
             var certImageWebhook = $"{certManagerRegistry}/jetstack/cert-manager-webhook";
             var certImageCainjector = $"{certManagerRegistry}/jetstack/cert-manager-cainjector";
 
-            var client = await GetKubernetesClientAsync();
+            client ??= await GetKubernetesClientAsync();
 
             await client.CoreV1.CreateNamespaceAsync(new V1Namespace()
             {
@@ -139,24 +139,21 @@ namespace TesDeployer
             // Encryption options: https://httpd.apache.org/docs/2.4/misc/password_encryptions.html
             // APR1 is would be better,but need to find a c# library for it. http://svn.apache.org/viewvc/apr/apr/trunk/crypto/apr_md5.c?view=markup
             var format = "{SHA}";
-            using (var sha1 = SHA1.Create())
-            {
-                var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(tesPassword));
-                var data = Encoding.UTF8.GetBytes($"{tesUsername}:{format}{Convert.ToBase64String(hash)}");
+            var hash = SHA1.HashData(Encoding.UTF8.GetBytes(tesPassword));
+            var data = Encoding.UTF8.GetBytes($"{tesUsername}:{format}{Convert.ToBase64String(hash)}");
 
-                await client.CoreV1.CreateNamespacedSecretAsync(new V1Secret()
+            await client.CoreV1.CreateNamespacedSecretAsync(new V1Secret()
+            {
+                Metadata = new V1ObjectMeta()
                 {
-                    Metadata = new V1ObjectMeta()
-                    {
-                        Name = "tes-basic-auth"
-                    },
-                    Data = new Dictionary<string, byte[]>()
+                    Name = "tes-basic-auth"
+                },
+                Data = new Dictionary<string, byte[]>()
                     {
                         { "auth", data}
                     },
-                    Type = "Opaque"
-                }, configuration.AksCoANamespace);
-            }
+                Type = "Opaque"
+            }, configuration.AksCoANamespace);
 
             var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
 
@@ -183,21 +180,21 @@ namespace TesDeployer
                     $"--set image.tag={CertManagerVersion} " +
                     $"--set webhook.image.repository={certImageWebhook} " +
                     $"--set webhook.image.tag={CertManagerVersion} " +
-                    $"--set cainjector.image.repository={certImageCainjector} " +  
+                    $"--set cainjector.image.repository={certImageCainjector} " +
                     $"--set cainjector.image.tag={CertManagerVersion}");
 
-            await WaitForWorkloadAsync(client, "ingress-nginx-controller", cts.Token, configuration.AksCoANamespace);
+            await WaitForWorkloadAsync(client, "ingress-nginx-controller", configuration.AksCoANamespace, cts.Token);
         }
 
-        public async Task DeployHelmChartToClusterAsync()
+        public async Task DeployHelmChartToClusterAsync(IKubernetes client = default)
         {
-            var client = await GetKubernetesClientAsync();
+            client ??= await GetKubernetesClientAsync();
 
             // https://helm.sh/docs/helm/helm_upgrade/
             // The chart argument can be either: a chart reference('example/mariadb'), a path to a chart directory, a packaged chart, or a fully qualified URL
             await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig {kubeConfigPath} --namespace {configuration.AksCoANamespace} --create-namespace",
                 workingDirectory: workingDirectoryTemp);
-            await WaitForWorkloadAsync(client, "tes", cts.Token, configuration.AksCoANamespace);
+            await WaitForWorkloadAsync(client, "tes", configuration.AksCoANamespace, cts.Token);
         }
 
 
@@ -300,7 +297,7 @@ namespace TesDeployer
             var pods = await client.CoreV1.ListNamespacedPodAsync(podNamespace);
             var workloadPod = pods.Items.Where(x => x.Metadata.Name.Contains(podName)).FirstOrDefault();
 
-            if (!await WaitForWorkloadAsync(client, podName, cts.Token, podNamespace))
+            if (!await WaitForWorkloadAsync(client, podName, podNamespace, cts.Token))
             {
                 throw new Exception($"Timed out waiting for {podName} to start.");
             }
@@ -492,7 +489,7 @@ namespace TesDeployer
             return output;
         }
 
-        private async Task<bool> WaitForWorkloadAsync(IKubernetes client, string deploymentName, CancellationToken cancellationToken, string deploymentNamespace)
+        private static async Task<bool> WaitForWorkloadAsync(IKubernetes client, string deploymentName, string deploymentNamespace, CancellationToken cancellationToken)
         {
             var deployments = await client.AppsV1.ListNamespacedDeploymentAsync(deploymentNamespace, cancellationToken: cancellationToken);
             var deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();

@@ -111,7 +111,6 @@ namespace TesDeployer
         private bool SkipBillingReaderRoleAssignment { get; set; }
         private bool isResourceGroupCreated { get; set; }
         private KubernetesManager kubernetesManager { get; set; }
-        private IKubernetes kubernetesClient { get; set; }
 
         public Deployer(Configuration configuration)
             => this.configuration = configuration;
@@ -169,7 +168,6 @@ namespace TesDeployer
 
                         ConsoleEx.WriteLine($"Upgrading TES on Azure instance in resource group '{resourceGroup.Name}' to version {targetVersion}...");
 
-                        Dictionary<string, string> accountNames = null;
                         ManagedCluster existingAksCluster = default;
 
                         if (!string.IsNullOrEmpty(configuration.StorageAccountName))
@@ -264,7 +262,6 @@ namespace TesDeployer
                         var installedVersion = !string.IsNullOrEmpty(versionString) && Version.TryParse(versionString, out var version) ? version : null;
                         var settings = ConfigureSettings(managedIdentity.ClientId, aksValues, installedVersion);
 
-                        kubernetesClient = await kubernetesManager.GetKubernetesClientAsync();
                         await kubernetesManager.UpgradeAKSDeploymentAsync(
                             settings,
                             storageAccount);
@@ -468,13 +465,15 @@ namespace TesDeployer
                         }
                         else
                         {
-                            kubernetesClient = await kubernetesManager.GetKubernetesClientAsync();
                             await kubernetesManager.DeployCoADependenciesAsync(resourceGroup);
+                            var kubernetesClient = await kubernetesManager.GetKubernetesClientAsync();
+
                             if (configuration.EnableIngress.GetValueOrDefault())
                             {
-                                await kubernetesManager.EnableIngress(resourceGroup, configuration.TesUsername, configuration.TesPassword);
+                                await kubernetesManager.EnableIngress(resourceGroup, configuration.TesUsername, configuration.TesPassword, kubernetesClient);
                             }
-                            await kubernetesManager.DeployHelmChartToClusterAsync();
+
+                            await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
                         }
 
                         if (configuration.ProvisionPostgreSqlOnAzure == true)
@@ -588,17 +587,17 @@ namespace TesDeployer
             using var client = new HttpClient();
             client.SetBasicAuthentication(tesUsername, tesPassword);
 
-            var task = new TesTask() 
-            { 
+            var task = new TesTask()
+            {
                 Inputs = new List<TesInput>(),
                 Outputs = new List<TesOutput>(),
-                Executors = new List<TesExecutor> 
-                { 
-                    new TesExecutor() 
-                    { 
+                Executors = new List<TesExecutor>
+                {
+                    new TesExecutor()
+                    {
                         Image = "ubuntu:22.04",
                         Command = new List<string>{"echo 'hello world'" },
-                    } 
+                    }
                 },
                 Resources = new TesResources()
                 {
@@ -620,7 +619,7 @@ namespace TesDeployer
             return await IsTaskSuccessfulAfterLongPollingAsync(client, $"{requestUri}/{response["id"]}") ? 0 : 1;
         }
 
-        private async Task<bool> RunTestTask(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
+        private static async Task<bool> RunTestTask(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
         {
             var startTime = DateTime.UtcNow;
             var line = ConsoleEx.WriteLine("Running a test task...");
@@ -656,7 +655,7 @@ namespace TesDeployer
                     var responseBody = await client.GetAsync(taskEndpoint);
                     var content = await responseBody.Content.ReadAsStringAsync();
                     var response = JsonConvert.DeserializeObject<TesTask>(content);
-                    
+
                     if (response.State == TesState.COMPLETEEnum)
                     {
                         if (string.IsNullOrWhiteSpace(response.FailureReason))
@@ -858,7 +857,7 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "BatchAccountName", configuration.BatchAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ApplicationInsightsAccountName", configuration.ApplicationInsightsAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ManagedIdentityClientId", managedIdentityClientId, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString",  $"RunAs=App;AppId={managedIdentityClientId}", ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString", $"RunAs=App;AppId={managedIdentityClientId}", ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "KeyVaultName", configuration.KeyVaultName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "AksCoANamespace", configuration.AksCoANamespace, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ProvisionPostgreSqlOnAzure", configuration.ProvisionPostgreSqlOnAzure, ignoreDefaults: true);
@@ -1909,13 +1908,13 @@ namespace TesDeployer
                 }
             }
 
-            void ThrowIfBothProvided(bool feature1Enabled, string feature1Name, bool feature2Enabled, string feature2Name)
-            {
-                if (feature1Enabled && feature2Enabled)
-                {
-                    throw new ValidationException($"{feature2Name} is incompatible with {feature1Name}");
-                }
-            }
+            //void ThrowIfBothProvided(bool feature1Enabled, string feature1Name, bool feature2Enabled, string feature2Name)
+            //{
+            //    if (feature1Enabled && feature2Enabled)
+            //    {
+            //        throw new ValidationException($"{feature2Name} is incompatible with {feature1Name}");
+            //    }
+            //}
 
             void ValidateHelmInstall(string helmPath, string featureName)
             {
