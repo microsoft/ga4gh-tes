@@ -351,8 +351,8 @@ namespace TesDeployer
             values.Config["tesOnAzureVersion"] = settings["TesOnAzureVersion"];
             values.Config["azureServicesAuthConnectionString"] = settings["AzureServicesAuthConnectionString"];
             values.Config["applicationInsightsAccountName"] = settings["ApplicationInsightsAccountName"];
-            values.Config["cosmosDb__accountName"] = settings["CosmosDbAccountName"];
-            values.Config["batchAccount__accountName"] = settings["BatchAccountName"];
+            values.Config["cosmosDbAccountName"] = settings["CosmosDbAccountName"];
+            values.Config["batchAccountName"] = settings["BatchAccountName"];
             values.Config["batchNodesSubnetId"] = settings["BatchNodesSubnetId"];
             values.Config["coaNamespace"] = settings["AksCoANamespace"];
             values.Config["disableBatchNodesPublicIpAddress"] = settings["DisableBatchNodesPublicIpAddress"];
