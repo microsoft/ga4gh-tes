@@ -47,7 +47,7 @@ namespace TesApi.Tests
                 .ReturnsAsync(GetNewVmSizeAndPricingList);
 
             var configurationUtils = new ConfigurationUtils(configuration, storageAccessProvider, mockArmQuotaProvider.Object,
-                mockSkuProvider.Object, batchResourceInfo, mockLogger);
+                mockSkuProvider.Object, batchResourceInfo, new Mock<ILogger<ConfigurationUtils>>().Object);
             return configurationUtils;
         }
 
