@@ -48,13 +48,12 @@ namespace TesApi.Web.Management
 
         /// <summary>
         /// Creates Batch Account management client using AAD authentication.
+        /// Configure to the subscription id that contains the batch account. 
         /// </summary>
         /// <returns></returns>
         public async Task<BatchManagementClient> CreateBatchAccountManagementClient()
         {
-
-            return new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync()));
-
+            return new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync())) { SubscriptionId = batchAccountInformation.SubscriptionId };
         }
 
         /// <summary>
