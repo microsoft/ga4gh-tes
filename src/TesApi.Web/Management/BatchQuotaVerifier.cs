@@ -5,9 +5,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Tes.Models;
-using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Quotas;
 
 namespace TesApi.Web.Management;
@@ -23,31 +21,38 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
     private readonly ILogger logger;
     private readonly IBatchQuotaProvider batchQuotaProvider;
     private readonly IBatchSkuInformationProvider batchSkuInformationProvider;
-    private readonly string region;
+    private readonly BatchAccountResourceInformation batchAccountInformation;
 
 
     /// <summary>
     /// Constructor of BatchQuotaVerifier
     /// </summary>
-    /// <param name="azureProxy"></param>
-    /// <param name="batchQuotaProvider"></param>
-    /// <param name="batchSkuInformationProvider"></param>
-    /// <param name="options"></param>
-    /// <param name="logger"></param>
-    public BatchQuotaVerifier(IAzureProxy azureProxy, IBatchQuotaProvider batchQuotaProvider,
-        IBatchSkuInformationProvider batchSkuInformationProvider, IOptions<BatchAccountOptions> options, ILogger<BatchQuotaVerifier> logger)
+    /// <param name="batchQuotaProvider"><see cref="IBatchQuotaProvider"/></param>
+    /// <param name="batchSkuInformationProvider"><see cref="IBatchSkuInformationProvider"/></param>
+    /// <param name="batchAccountInformation"><see cref="BatchAccountResourceInformation"/></param>
+    /// <param name="azureProxy"><see cref="IAzureProxy"/></param>
+    /// <param name="logger"><see cref="ILogger"/></param>
+    /// 
+    public BatchQuotaVerifier(BatchAccountResourceInformation batchAccountInformation,
+        IBatchQuotaProvider batchQuotaProvider,
+        IBatchSkuInformationProvider batchSkuInformationProvider,
+        IAzureProxy azureProxy,
+        ILogger<BatchQuotaVerifier> logger)
     {
-        ArgumentNullException.ThrowIfNull(azureProxy);
         ArgumentNullException.ThrowIfNull(batchQuotaProvider);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(batchSkuInformationProvider);
-        ArgumentNullException.ThrowIfNull(options);
-
-        this.region = options.Value.Region;
-        this.azureProxy = azureProxy;
+        ArgumentNullException.ThrowIfNull(batchAccountInformation);
+        if (string.IsNullOrEmpty(batchAccountInformation.Region))
+        {
+            throw new ArgumentException($"The batch account information does not include the region. Batch information provided:{batchAccountInformation}");
+        }
+        ArgumentNullException.ThrowIfNull(azureProxy);
         this.logger = logger;
+        this.batchAccountInformation = batchAccountInformation;
         this.batchSkuInformationProvider = batchSkuInformationProvider;
         this.batchQuotaProvider = batchQuotaProvider;
+        this.azureProxy = azureProxy;
     }
 
     /// <summary>
@@ -132,7 +137,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
         var activeJobsCount = azureProxy.GetBatchActiveJobCount();
         var activePoolsCount = azureProxy.GetBatchActivePoolCount();
         var activeNodeCountByVmSize = azureProxy.GetBatchActiveNodeCountByVmSize().ToList();
-        var virtualMachineInfoList = await batchSkuInformationProvider.GetVmSizesAndPricesAsync(region);
+        var virtualMachineInfoList = await batchSkuInformationProvider.GetVmSizesAndPricesAsync(batchAccountInformation.Region);
 
         var totalCoresInUse = activeNodeCountByVmSize
             .Sum(x =>
@@ -146,7 +151,6 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
 
         var dedicatedCoresInUseInRequestedVmFamily = activeNodeCountByVmSizeInRequestedFamily
             .Sum(x => virtualMachineInfoList.FirstOrDefault(vm => vm.VmSize.Equals(x.VirtualMachineSize, StringComparison.OrdinalIgnoreCase))?.NumberOfCores * x.DedicatedNodeCount) ?? 0;
-
 
         return new BatchAccountUtilization(activeJobsCount, activePoolsCount, totalCoresInUse, dedicatedCoresInUseInRequestedVmFamily);
 

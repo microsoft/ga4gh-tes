@@ -4,7 +4,7 @@
 namespace TesApi.Web
 {
     /// <summary>
-    /// A representation associating an Azure Storage account with an Azure Subscription
+    /// A representation associating an Azure Storage account with an Azure SubscriptionId
     /// </summary>
     public class StorageAccountInfo
     {

@@ -9,7 +9,6 @@ using LazyCache;
 using Microsoft.Azure.Batch;
 using Polly;
 using Polly.Retry;
-using Tes.Models;
 
 namespace TesApi.Web
 {
@@ -57,11 +56,6 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task<IEnumerable<string>> GetActivePoolIdsAsync(string prefix, TimeSpan minAge, CancellationToken cancellationToken) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetActivePoolIdsAsync(prefix, minAge, cancellationToken));
-
-        /// <inheritdoc/>
-        public Task<AzureBatchAccountQuotas> GetBatchAccountQuotasAsync()
-            => cache.GetOrAddAsync("batchAccountQuotas", () =>
-                asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetBatchAccountQuotasAsync()), DateTimeOffset.Now.AddHours(1));
 
         /// <inheritdoc/>
         public int GetBatchActiveJobCount() => retryPolicy.Execute(() => azureProxy.GetBatchActiveJobCount());
@@ -121,10 +115,6 @@ namespace TesApi.Web
 
             return storageAccountInfo;
         }
-
-        /// <inheritdoc/>
-        public Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync()
-            => cache.GetOrAddAsync("vmSizesAndPrices", () => azureProxy.GetVmSizesAndPricesAsync(), DateTimeOffset.MaxValue);
 
         /// <inheritdoc/>
         public Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.ListBlobsAsync(directoryUri));

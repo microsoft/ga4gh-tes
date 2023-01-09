@@ -70,7 +70,8 @@ namespace TesApi.Web
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
                 .AddSingleton<PriceApiClient, PriceApiClient>()
                 .AddSingleton<IBatchSkuInformationProvider, PriceApiBatchSkuInformationProvider>()
-
+                .AddSingleton(CreateBatchAccountResourceInformation)
+                .AddSingleton<AzureManagementClientsFactory, AzureManagementClientsFactory>()
                 .AddSwaggerGen(c =>
                 {
                     c.SwaggerDoc("0.3.3", new OpenApiInfo
@@ -96,6 +97,7 @@ namespace TesApi.Web
             .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
             .AddHostedService<RefreshVMSizesAndPricesHostedService>()
 
+
             //Configure AppInsights Azure Service when in PRODUCTION environment
             .IfThenElse(hostingEnvironment.IsProduction(),
                 s =>
@@ -118,6 +120,7 @@ namespace TesApi.Web
 
         }
 
+
         private IRepository<TesTask> CreateCosmosDbRepositoryFromConfiguration(IServiceProvider services)
         {
             var options = services.GetRequiredService<IOptions<CosmosDbOptions>>();
@@ -137,6 +140,39 @@ namespace TesApi.Web
                 CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId));
 
         }
+
+        private BatchAccountResourceInformation CreateBatchAccountResourceInformation(IServiceProvider services)
+        {
+            var options = services.GetRequiredService<IOptions<BatchAccountOptions>>();
+
+            if (string.IsNullOrEmpty(options.Value.AccountName))
+            {
+                throw new InvalidOperationException(
+                    "The batch account name is missing. Please check your configuration.");
+            }
+
+
+            if (string.IsNullOrWhiteSpace(options.Value.AppKey))
+            {
+                //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
+                var task = AzureManagementClientsFactory.TryGetResourceInformationFromAccountNameAsync(options.Value
+                        .AccountName);
+
+                task.Wait();
+
+                if (task.Result == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to get the resource information for the Batch account using ARM. Please check the options provided. Provided Batch account name:{options.Value.AccountName}");
+                }
+
+                return task.Result;
+            }
+
+            //assume the information was provided via configuration
+            return new BatchAccountResourceInformation(options.Value.AccountName, options.Value.ResourceGroup, options.Value.SubscriptionId, options.Value.Region);
+        }
+
         /// <summary>
         /// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         /// </summary>

@@ -1113,21 +1113,21 @@ namespace TesApi.Web
 
         private bool IsThereSufficientCoreQuota(BatchVmCoreQuota coreQuota, VirtualMachineInformation vm)
         {
-
-            if (coreQuota.IsDedicatedAndPerVmFamilyCoreQuotaEnforced)
+            if (coreQuota.IsLowPriority || !coreQuota.IsDedicatedAndPerVmFamilyCoreQuotaEnforced)
             {
-                var result = coreQuota.DedicatedCoreQuotas?.FirstOrDefault(q => q.VmFamilyName.Equals(vm.VmFamily,
-                    StringComparison.OrdinalIgnoreCase));
-
-                if (result is null)
-                {
-                    return false;
-                }
-
-                return result?.CoreQuota >= vm.NumberOfCores;
+                return coreQuota.NumberOfCores >= vm.NumberOfCores;
             }
 
-            return coreQuota.NumberOfCores >= vm.NumberOfCores;
+            var result = coreQuota.DedicatedCoreQuotas?.FirstOrDefault(q => q.VmFamilyName.Equals(vm.VmFamily,
+                StringComparison.OrdinalIgnoreCase));
+
+            if (result is null)
+            {
+                return false;
+            }
+
+            return result?.CoreQuota >= vm.NumberOfCores;
+
         }
 
         private async Task<(Tes.Models.BatchNodeMetrics BatchNodeMetrics, DateTimeOffset? TaskStartTime, DateTimeOffset? TaskEndTime, int? CromwellRcCode)> GetBatchNodeMetricsAndCromwellResultCodeAsync(TesTask tesTask)
