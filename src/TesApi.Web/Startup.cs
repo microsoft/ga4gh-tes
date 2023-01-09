@@ -72,6 +72,8 @@ namespace TesApi.Web
                 .AddSingleton<IBatchSkuInformationProvider, PriceApiBatchSkuInformationProvider>()
                 .AddSingleton(CreateBatchAccountResourceInformation)
                 .AddSingleton<AzureManagementClientsFactory, AzureManagementClientsFactory>()
+                .AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
+                .AddSingleton<ConfigurationUtils, ConfigurationUtils>() //this should not be call if running in terra.
                 .AddSwaggerGen(c =>
                 {
                     c.SwaggerDoc("0.3.3", new OpenApiInfo
@@ -96,6 +98,7 @@ namespace TesApi.Web
             .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
             .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
             .AddHostedService<RefreshVMSizesAndPricesHostedService>()
+            .AddHostedService<DoOnceAtStartUpService>()
 
 
             //Configure AppInsights Azure Service when in PRODUCTION environment

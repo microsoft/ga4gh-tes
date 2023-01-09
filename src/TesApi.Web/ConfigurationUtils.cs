@@ -19,7 +19,7 @@ namespace TesApi.Web
     {
         private readonly IConfiguration configuration;
         private readonly IStorageAccessProvider storageAccessProvider;
-        private readonly ILogger logger;
+        private readonly ILogger<ConfigurationUtils> logger;
         //TODO: refactor this to use the interface, which will require to rework the logic below to use not azure specific types. 
         private readonly ArmBatchQuotaProvider quotaProvider;
         private readonly IBatchSkuInformationProvider skuInformationProvider;
@@ -39,7 +39,7 @@ namespace TesApi.Web
             ArmBatchQuotaProvider quotaProvider,
             IBatchSkuInformationProvider skuInformationProvider,
             BatchAccountResourceInformation batchAccountResourceInformation,
-            ILogger logger)
+            ILogger<ConfigurationUtils> logger)
         {
 
             ArgumentNullException.ThrowIfNull(configuration);
