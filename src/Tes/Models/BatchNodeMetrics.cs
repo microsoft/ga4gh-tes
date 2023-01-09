@@ -1,7 +1,10 @@
-﻿namespace Tes.Models
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+namespace Tes.Models
 {
     /// <summary>
-    /// Contains task execution metrics when task is handled by Azure Batch 
+    /// Contains task execution metrics when task is handled by Azure Batch
     /// </summary>
     public class BatchNodeMetrics
     {

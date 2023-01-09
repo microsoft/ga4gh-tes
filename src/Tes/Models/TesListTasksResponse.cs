@@ -28,9 +28,7 @@ namespace Tes.Models
     public partial class TesListTasksResponse : IEquatable<TesListTasksResponse>
     {
         public TesListTasksResponse()
-        {
-            NewtonsoftJsonSafeInit.SetDefaultSettings();
-        }
+            => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         /// <summary>
         /// List of tasks.

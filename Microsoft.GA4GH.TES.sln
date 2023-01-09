@@ -17,6 +17,9 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes", "src\Tes\Tes.csproj", "{63C91E1C-640C-4281-8388-971908009CAE}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "deploy-tes-on-azure", "src\deploy-tes-on-azure\deploy-tes-on-azure.csproj", "{3B690BDA-3390-442C-A8A6-0EAEEB0E98AD}"
+	ProjectSection(ProjectDependencies) = postProject
+		{63C91E1C-640C-4281-8388-971908009CAE} = {63C91E1C-640C-4281-8388-971908009CAE}
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "deploy-tes-on-azure.Tests", "src\deploy-tes-on-azure.Tests\deploy-tes-on-azure.Tests.csproj", "{19A5D64F-5252-4FE7-B7CD-49BDC9185A1B}"
 EndProject

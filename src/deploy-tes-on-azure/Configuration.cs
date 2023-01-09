@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
@@ -23,15 +22,12 @@ namespace TesDeployer
         public string DefaultPostgreSqlSubnetName { get; set; } = "sqlsubnet";
         public int PostgreSqlStorageSize { get; set; } = 128;  // GiB
     }
-    
+
     public abstract class UserAccessibleConfiguration
     {
         public string SubscriptionId { get; set; }
         public string RegionName { get; set; }
         public string MainIdentifierPrefix { get; set; } = "coa";
-        public string VmOsProvider { get; set; } = "Canonical";
-        public string VmOsName { get; set; } = "UbuntuServer";
-        public string VmOsVersion { get; set; } = "18.04-LTS";
         public string VmSize { get; set; } = "Standard_D3_v2";
         public string VnetAddressSpace { get; set; } = "10.1.0.0/16"; // 10.1.0.0 - 10.1.255.255, 65536 IPs
         // Address space for CoA services.
@@ -42,16 +38,13 @@ namespace TesDeployer
         public string KubernetesDnsServiceIP = "10.1.4.10";
         public string KubernetesDockerBridgeCidr = "172.17.0.1/16"; // 172.17.0.0 - 172.17.255.255, 65536 IPs
 
-        public string VmUsername { get; set; } = "vmadmin";
-        public string VmPassword { get; set; }
         public string ResourceGroupName { get; set; }
         public string BatchAccountName { get; set; }
         public string StorageAccountName { get; set; }
-        public string NetworkSecurityGroupName { get; set; }
+        //public string NetworkSecurityGroupName { get; set; }
+        public string CosmosDbAccountName { get; set; }
         public string LogAnalyticsArmId { get; set; }
         public string ApplicationInsightsAccountName { get; set; }
-        public string VmName { get; set; }
-        public bool UseAks { get; set; } = true;
         public string AksClusterName { get; set; }
         public string AksCoANamespace { get; set; } = "coa";
         public bool ManualHelmDeployment { get; set; }
@@ -61,9 +54,7 @@ namespace TesDeployer
         public bool Silent { get; set; }
         public bool DeleteResourceGroupOnFailure { get; set; }
         public string TesImageName { get; set; }
-        public string TriggerServiceImageName { get; set; }
         public string CustomTesImagePath { get; set; }
-        public string CustomTriggerServiceImagePath { get; set; }
         public bool SkipTestWorkflow { get; set; } = false;
         public bool Update { get; set; } = false;
         public string VnetResourceGroupName { get; set; }
@@ -77,12 +68,15 @@ namespace TesDeployer
         public string DockerInDockerImageName { get; set; } = null;
         public string BlobxferImageName { get; set; } = null;
         public bool? DisableBatchNodesPublicIpAddress { get; set; } = null;
-        public bool? KeepSshPortOpen { get; set; } = null;
         public bool DebugLogging { get; set; } = false;
         public bool? ProvisionPostgreSqlOnAzure { get; set; } = true;
         public string PostgreSqlServerName { get; set; }
         public bool UsePostgreSqlSingleServer { get; set; } = false;
         public string KeyVaultName { get; set; }
+        public bool? EnableIngress { get; set; } = null;
+        public string LetsEncryptEmail { get; set; } = null;
+        public string TesUsername { get; set; } = "tes";
+        public string TesPassword { get; set; }
 
         public static Configuration BuildConfiguration(string[] args)
         {
@@ -99,7 +93,7 @@ namespace TesDeployer
             var configurationProperties = typeof(UserAccessibleConfiguration).GetTypeInfo().DeclaredProperties.Select(p => p.Name).ToList();
 
             var invalidArguments = configurationSource.Providers
-                .SelectMany(p => p.GetChildKeys(new List<string>(), null))
+                .SelectMany(p => p.GetChildKeys(Enumerable.Empty<string>(), null))
                 .Where(k => !configurationProperties.Contains(k, StringComparer.OrdinalIgnoreCase));
 
             if (invalidArguments.Any())

@@ -26,9 +26,8 @@ namespace Tes.Models
     public partial class TesExecutorLog : IEquatable<TesExecutorLog>
     {
         public TesExecutorLog()
-        {
-            NewtonsoftJsonSafeInit.SetDefaultSettings();
-        }
+            => NewtonsoftJsonSafeInit.SetDefaultSettings();
+
         /// <summary>
         /// Time the executor started, in RFC 3339 format.
         /// </summary>
