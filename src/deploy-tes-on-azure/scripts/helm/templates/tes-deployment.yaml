@@ -40,7 +40,7 @@ spec:
             - name: AzureOfferDurableId
               value: {{ .Values.config.azureOfferDurableId }}
             - name: BatchAccount__AccountName
-              value: {{ .Values.config.batchAccount__accountName }}
+              value: {{ .Values.config.batchAccountName }}
             - name: BatchNodesSubnetId
               value: {{ .Values.config.batchNodesSubnetId }}
             - name: BlobxferImageName
