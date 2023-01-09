@@ -54,9 +54,7 @@ namespace TesApi.Web.Management
         /// <returns></returns>
         public async Task<BatchManagementClient> CreateBatchAccountManagementClient()
         {
-
-            return new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync()));
-
+            return new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync())) { SubscriptionId = batchAccountInformation.SubscriptionId };
         }
 
         /// <summary>
