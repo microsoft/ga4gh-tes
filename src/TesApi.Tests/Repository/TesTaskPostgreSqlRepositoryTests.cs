@@ -17,6 +17,7 @@ namespace Tes.Repository.Tests
     /// 5.  Remove the "[Ignore]" attribute from this class
     /// 6.  Run the tests
     /// </summary>
+
     [Ignore]
     [TestClass]
     public class TesTaskPostgreSqlRepositoryTests
@@ -69,7 +70,6 @@ namespace Tes.Repository.Tests
             const bool createItems = true;
 
             var sw = Stopwatch.StartNew();
-
             if (createItems)
             {
                 var rng = new Random(Guid.NewGuid().GetHashCode());
@@ -94,12 +94,25 @@ namespace Tes.Repository.Tests
                 sw.Restart();
             }
 
-            var queriedItems = await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum);
-            Console.WriteLine($"Total seconds to query 1m items: {sw.Elapsed.TotalSeconds:n2}s");
-            Assert.IsTrue(queriedItems.Count() > 0);
+            sw.Restart();
+            var runningTasks = await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum);
 
-            // In manual testing, this takes about 5s the first time
+            // Ensure performance is decent.  In manual testing on fast internet, this takes less than 5s typically
             Assert.IsTrue(sw.Elapsed.TotalSeconds < 10);
+            Console.WriteLine($"Retrieved {runningTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
+            sw.Restart();
+            var allOtherTasks = await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum);
+            Console.WriteLine($"Retrieved {allOtherTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
+            Console.WriteLine($"Total running tasks: {runningTasks.Count()}");
+            Console.WriteLine($"Total other tasks: {allOtherTasks.Count()}");
+
+
+            Assert.IsTrue(runningTasks.Count() > 0);
+            Assert.IsTrue(allOtherTasks.Count() > 0);
+            Assert.IsTrue(runningTasks.Count() != allOtherTasks.Count());
+            Assert.IsTrue(runningTasks.All(c => c.State == Models.TesState.RUNNINGEnum));
+            Assert.IsTrue(allOtherTasks.All(c => c.State != Models.TesState.RUNNINGEnum));
+            
         }
 
         [TestMethod]
