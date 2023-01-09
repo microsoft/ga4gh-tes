@@ -16,26 +16,22 @@ public class BatchQuotaVerifierTests
     private Mock<IAzureProxy> azureProxy;
     private Mock<ILogger<BatchQuotaVerifier>> logger;
     private Mock<IBatchSkuInformationProvider> skuInfoProvider;
-    private Mock<IOptions<BatchAccountOptions>> accountOptions;
+    private BatchAccountResourceInformation batchAccountResourceInformation;
 
     private const string Region = "eastus";
     private const string VmFamily = "StandardDSeries";
-    private BatchAccountOptions batchAccountOptions;
-
-    public BatchQuotaVerifierTests() { }
 
     [TestInitialize]
     public void BeforeEach()
     {
         azureProxy = new Mock<IAzureProxy>();
+        azureProxy.Setup(p => p.GetArmRegion()).Returns(Region);
         logger = new Mock<ILogger<BatchQuotaVerifier>>();
         quotaProvider = new Mock<IBatchQuotaProvider>();
         skuInfoProvider = new Mock<IBatchSkuInformationProvider>();
-        batchAccountOptions = new BatchAccountOptions() { Region = Region };
-        accountOptions = new Mock<IOptions<BatchAccountOptions>>();
-        accountOptions.Setup(o => o.Value).Returns(batchAccountOptions);
+        batchAccountResourceInformation = new BatchAccountResourceInformation("batchaccount", "mrg", "subid", "eastus");
 
-        batchQuotaVerifier = new BatchQuotaVerifier(azureProxy.Object, quotaProvider.Object, skuInfoProvider.Object, accountOptions.Object, logger.Object);
+        batchQuotaVerifier = new BatchQuotaVerifier(batchAccountResourceInformation, quotaProvider.Object, skuInfoProvider.Object, azureProxy.Object, logger.Object);
 
     }
 

@@ -5,18 +5,13 @@ using System;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Microsoft.Azure.Management.Batch;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Azure.Services.AppAuthentication;
-using Microsoft.Rest;
 using FluentAzure = Microsoft.Azure.Management.Fluent.Azure;
 
 
 namespace TesApi.Web.Management
 {
     /// <summary>
-    /// Factory if ARM management clients.
+    /// Factory if ARM management clients. 
     /// </summary>
     public class AzureManagementClientsFactory
     {
@@ -58,7 +53,11 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <returns></returns>
         public async Task<BatchManagementClient> CreateBatchAccountManagementClient()
-            => new(new TokenCredentials(await GetAzureAccessTokenAsync())) { SubscriptionId = batchAccountInformation.SubscriptionId };
+        {
+
+            return new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync()));
+
+        }
 
         /// <summary>
         /// Attempts to get the batch resource information using the ARM api.
@@ -80,6 +79,7 @@ namespace TesApi.Web.Management
 
                 var batchAccount = (await batchClient.BatchAccount.ListAsync())
                     .FirstOrDefault(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase));
+
 
                 if (batchAccount is not null)
                 {

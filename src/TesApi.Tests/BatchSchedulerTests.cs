@@ -71,6 +71,8 @@ namespace TesApi.Tests
 
             (_, _, var poolInformation, _) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(task, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), AzureProxyReturnValues.Defaults);
 
+            (_, _, var poolInformation) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(task, GetMockConfig(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
+
             Assert.IsNull(poolInformation.AutoPoolSpecification);
             Assert.IsFalse(string.IsNullOrWhiteSpace(poolInformation.PoolId));
         }

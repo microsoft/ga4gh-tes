@@ -4,10 +4,6 @@
 
 using System;
 using System.Threading.Tasks;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
-using Polly.Utilities;
-using TesApi.Web;
 
 namespace TesApi.Tests
 {
