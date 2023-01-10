@@ -27,15 +27,15 @@ spec:
         supplementalGroups: [1000]
       containers:
         - env:
-            - name: PostgreSqlServerName
+            - name: PostgreSql__PostgreSqlServerName
               value: {{ .Values.database.postgreSqlServerName }}
-            - name: PostgreSqlTesDatabaseName
+            - name: PostgreSql__PostgreSqlTesDatabaseName
               value: {{ .Values.database.postgreSqlTesDatabaseName }}
-            - name: PostgreSqlTesDatabasePort
+            - name: PostgreSql__PostgreSqlTesDatabasePort
               value: {{ .Values.database.postgreSqlTesDatabasePort | quote }}
-            - name: PostgreSqlTesUserLogin
+            - name: PostgreSql__PostgreSqlTesUserLogin
               value: {{ .Values.database.postgreSqlTesUserLogin }}
-            - name: PostgreSqlTesUserPassword
+            - name: PostgreSql__PostgreSqlTesUserPassword
               value: {{ .Values.database.postgreSqlTesUserPassword }}
             - name: ASPNETCORE_URLS
               value: http://0.0.0.0:{{ .Values.service.tesPort }}/
@@ -45,8 +45,6 @@ spec:
               value: {{ .Values.config.azureServicesAuthConnectionString }}
             - name: ApplicationInsightsAccountName
               value: {{ .Values.config.applicationInsightsAccountName }}
-            - name: PostgreSql__PostgreSqlServerName
-              value: {{ .Values.config.postgreSqlServerName }}
             - name: AzureOfferDurableId
               value: {{ .Values.config.azureOfferDurableId }}
             - name: BatchAccount__AccountName
