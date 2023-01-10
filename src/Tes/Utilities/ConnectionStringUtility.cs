@@ -5,16 +5,23 @@ namespace Tes.Utilities
 {
     public class ConnectionStringUtility
     {
-        public string GetPostgresConnectionString(string postgreSqlServerName, string postgreSqlTesDatabaseName, string postgreSqlTesDatabasePort, string postgreSqlTesUserLogin, string postgreSqlTesUserPassword)
+        public string GetPostgresConnectionString(
+            string postgreSqlServerName, 
+            string postgreSqlTesDatabaseName, 
+            string postgreSqlTesDatabasePort, 
+            string postgreSqlTesUserLogin, 
+            string postgreSqlTesUserPassword,
+            string postgreSqlServerNameSuffix = ".postgres.database.azure.com",
+            string sslMode = "VerifyFull")
         {
             if (string.IsNullOrEmpty(postgreSqlServerName))
             {
                 throw new ArgumentException($"'{nameof(postgreSqlServerName)}' cannot be null or empty.", nameof(postgreSqlServerName));
             }
 
-            if (postgreSqlServerName.Contains(".postgres.database.azure.com", StringComparison.OrdinalIgnoreCase))
+            if (postgreSqlServerName.Contains(postgreSqlServerNameSuffix, StringComparison.OrdinalIgnoreCase))
             {
-                throw new ArgumentException($"'{nameof(postgreSqlServerName)}' should only contain the name of the server like 'myserver' and NOT the full host name like 'myserver.postgres.database.azure.com'", nameof(postgreSqlServerName));
+                throw new ArgumentException($"'{nameof(postgreSqlServerName)}' should only contain the name of the server like 'myserver' and NOT the full host name like 'myserver{postgreSqlServerNameSuffix}'", nameof(postgreSqlServerName));
             }
 
             if (string.IsNullOrEmpty(postgreSqlTesDatabaseName))
@@ -38,12 +45,12 @@ namespace Tes.Utilities
             }
 
             var connectionStringBuilder = new StringBuilder();
-            connectionStringBuilder.Append($"Server={postgreSqlServerName}.postgres.database.azure.com;");
+            connectionStringBuilder.Append($"Server={postgreSqlServerName}{postgreSqlServerNameSuffix};");
             connectionStringBuilder.Append($"Database={postgreSqlTesDatabaseName};");
             connectionStringBuilder.Append($"Port={postgreSqlTesDatabasePort};");
             connectionStringBuilder.Append($"User Id={postgreSqlTesUserLogin};");
             connectionStringBuilder.Append($"Password={postgreSqlTesUserPassword};");
-            connectionStringBuilder.Append("SSL Mode=VerifyFull;"); // TODO, setting "SSL Mode=Require" results in: One or more errors occurred. (To validate server certificates, please use VerifyFull or VerifyCA instead of Require. To disable validation, explicitly set 'Trust Server Certificate' to true. See https://www.npgsql.org/doc/release-notes/6.0.html for more details.
+            connectionStringBuilder.Append($"SSL Mode={sslMode};");
             return connectionStringBuilder.ToString();
         }
     }

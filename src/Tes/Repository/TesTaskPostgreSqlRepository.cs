@@ -12,7 +12,7 @@ namespace Tes.Repository
     using Tes.Models;
 
     /// <summary>
-    /// A TesTask specific repository for CRUD-ing the JSON TesTask stored in a TesTaskDatabaseItem
+    /// A TesTask specific repository for storing the TesTask as JSON within an Entity Framework Postgres table
     /// </summary>
     /// <typeparam name="TesTask"></typeparam>
     public class TesTaskPostgreSqlRepository : IRepository<TesTask>
@@ -42,10 +42,10 @@ namespace Tes.Repository
         }
 
         /// <summary>
-        /// Base class searches within model, this method searches within the JSON
+        /// Get a TesTask by the TesTask.ID
         /// </summary>
-        /// <param name="id">The TesTask Id stored in the TesTaskDatabaseItem JSON</param>
-        /// <param name="onSuccess">Delegate to run on success</param>
+        /// <param name="id">The TesTask's ID</param>
+        /// <param name="onSuccess">Delegate to be invoked on success</param>
         /// <returns></returns>
         public async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess = null)
         {
@@ -64,9 +64,9 @@ namespace Tes.Repository
         }
 
         /// <summary>
-        /// Base class searches within model, this method searches within the JSON
+        /// Get TesTask items
         /// </summary>
-        /// <param name="predicate">Predicate to run on the JSON</param>
+        /// <param name="predicate">Predicate to query the TesTasks</param>
         /// <returns></returns>
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate)
         {
@@ -95,7 +95,7 @@ namespace Tes.Repository
         }
 
         /// <summary>
-        /// Encapsulates a TesTask as JSON
+        /// Encapsulates TesTasks as JSON
         /// </summary>
         /// <param name="item">TesTask to store as JSON in the database</param>
         /// <returns></returns>
@@ -125,7 +125,7 @@ namespace Tes.Repository
 
             if (item is null)
             {
-                throw new Exception($"No TesTask with Json.Id = {tesTask.Id} found in the database.");
+                throw new Exception($"No TesTask with ID {tesTask.Id} found in the database.");
             }
 
             item.Json = tesTask;
@@ -134,7 +134,7 @@ namespace Tes.Repository
         }
 
         /// <summary>
-        /// Base class delets by Item.Id, this method deletes by Item.Json.Id
+        /// Base class deletes by Item.Id, this method deletes by Item.Json.Id
         /// </summary>
         /// <param name="id">TesTask Id</param>
         /// <returns></returns>
@@ -145,16 +145,25 @@ namespace Tes.Repository
 
             if (item is null)
             {
-                throw new Exception($"No TesTask with Json.Id = {item.Id} found in the database.");
+                throw new Exception($"No TesTask with ID {item.Id} found in the database.");
             }
 
             dbContext.TesTasks.Remove(item);
             await dbContext.SaveChangesAsync();
         }
 
-        public Task<(string, IEnumerable<TesTask>)> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken)
+        /// <summary>
+        /// Identical to GetItemsAsync, paging is not supported. All items are returned
+        /// </summary>
+        /// <param name="predicate">Predicate to query the TesTasks</param>
+        /// <param name="pageSize">Ignored and has no effect</param>
+        /// <param name="continuationToken">Ignored and has no effect</param>
+        /// <returns></returns>
+        public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken)
         {
-            throw new NotImplementedException();
+            // TODO paging support
+            var results = await GetItemsAsync(predicate);
+            return (null, results);
         }
     }
 }
