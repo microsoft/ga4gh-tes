@@ -5,9 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
+//using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,23 +14,27 @@ using Microsoft.Azure.Batch.Auth;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Azure.Management.ApplicationInsights.Management;
 using Microsoft.Azure.Management.Batch;
-using Microsoft.Azure.Management.Compute.Fluent;
 using Microsoft.Azure.Management.ContainerRegistry.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.Rest;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Polly;
 using Polly.Retry;
-using Tes.Models;
-
+using TesApi.Web.Management.Configuration;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
+using CloudTask = Microsoft.Azure.Batch.CloudTask;
+using ComputeNodeState = Microsoft.Azure.Batch.Common.ComputeNodeState;
 using FluentAzure = Microsoft.Azure.Management.Fluent.Azure;
+using JobState = Microsoft.Azure.Batch.Common.JobState;
+using OnAllTasksComplete = Microsoft.Azure.Batch.Common.OnAllTasksComplete;
+using PoolInformation = Microsoft.Azure.Batch.PoolInformation;
+using TaskExecutionInformation = Microsoft.Azure.Batch.TaskExecutionInformation;
+using TaskState = Microsoft.Azure.Batch.Common.TaskState;
 
 namespace TesApi.Web
 {
@@ -42,52 +44,70 @@ namespace TesApi.Web
     public class AzureProxy : IAzureProxy
     {
         private const char BatchJobAttemptSeparator = '-';
-        private const string DefaultAzureBillingRegionName = "US West";
+        //private const string DefaultAzureBillingRegionName = "US West";
 
-        private static readonly HttpClient httpClient = new();
+        //private static readonly HttpClient httpClient = new();
         private static readonly AsyncRetryPolicy batchRaceConditionJobNotFoundRetryPolicy = Policy
             .Handle<BatchException>(ex => ex.RequestInformation.BatchError.Code == BatchErrorCodeStrings.JobNotFound)
             .WaitAndRetryAsync(10, retryAttempt => TimeSpan.FromSeconds(1));
 
         private readonly ILogger logger;
-        private readonly Func<Task<BatchModels.BatchAccount>> getBatchAccountFunc;
         private readonly BatchClient batchClient;
         private readonly string subscriptionId;
         private readonly string location;
-        private readonly string billingRegionName;
-        private readonly string azureOfferDurableId;
+        //private readonly string billingRegionName;
+        //private readonly string azureOfferDurableId;
         private readonly string batchResourceGroupName;
         private readonly string batchAccountName;
 
 
         /// <summary>
-        /// The constructor
+        /// Constructor of AzureProxy
         /// </summary>
-        /// <param name="batchAccountName">Batch account name</param>
-        /// <param name="azureOfferDurableId">Azure offer id</param>
+        /// <param name="batchAccountOptions">The Azure Batch Account options</param>
         /// <param name="logger">The logger</param>
-        public AzureProxy(string batchAccountName, string azureOfferDurableId, ILogger<AzureProxy> logger)
+        /// <exception cref="InvalidOperationException"></exception>
+        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, ILogger<AzureProxy> logger)
         {
-            this.logger = logger;
-            this.batchAccountName = batchAccountName;
-            var (SubscriptionId, ResourceGroupName, Location, BatchAccountEndpoint) = FindBatchAccountAsync(batchAccountName).Result;
-            batchResourceGroupName = ResourceGroupName;
-            subscriptionId = SubscriptionId;
-            location = Location;
-            batchClient = BatchClient.Open(new BatchTokenCredentials($"https://{BatchAccountEndpoint}", () => GetAzureAccessTokenAsync("https://batch.core.windows.net/")));
 
-            getBatchAccountFunc = async () =>
-                await new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync())) { SubscriptionId = SubscriptionId }
-                    .BatchAccount
-                    .GetAsync(ResourceGroupName, batchAccountName);
+            ArgumentNullException.ThrowIfNull(batchAccountOptions);
+            ArgumentNullException.ThrowIfNull(logger);
 
-            this.azureOfferDurableId = azureOfferDurableId;
-
-            if (!AzureRegionUtils.TryGetBillingRegionName(location, out billingRegionName))
+            if (string.IsNullOrWhiteSpace(batchAccountOptions.Value.AccountName))
             {
-                logger.LogWarning($"Azure ARM location '{location}' does not have a corresponding Azure Billing Region.  Prices from the fallback billing region '{DefaultAzureBillingRegionName}' will be used instead.");
-                billingRegionName = DefaultAzureBillingRegionName;
+                //TODO: check if there's a better exception for this scenario or we need to create a custom one.
+                throw new InvalidOperationException("The batch account name is missing from the the configuration.");
             }
+
+            this.logger = logger;
+
+            if (!string.IsNullOrWhiteSpace(batchAccountOptions.Value.AppKey))
+            {
+                //If the key is provided assume we won't use ARM and the information will be provided via config
+                batchClient = BatchClient.Open(new BatchSharedKeyCredentials(batchAccountOptions.Value.BaseUrl,
+                    batchAccountOptions.Value.AccountName, batchAccountOptions.Value.AppKey));
+                location = batchAccountOptions.Value.Region;
+                subscriptionId = batchAccountOptions.Value.SubscriptionId;
+                batchResourceGroupName = batchAccountOptions.Value.ResourceGroup;
+
+            }
+            else
+            {
+                this.batchAccountName = batchAccountOptions.Value.AccountName;
+                var (SubscriptionId, ResourceGroupName, Location, BatchAccountEndpoint) = FindBatchAccountAsync(batchAccountName).Result;
+                batchResourceGroupName = ResourceGroupName;
+                subscriptionId = SubscriptionId;
+                location = Location;
+                batchClient = BatchClient.Open(new BatchTokenCredentials($"https://{BatchAccountEndpoint}", () => GetAzureAccessTokenAsync("https://batch.core.windows.net/")));
+            }
+
+            //azureOfferDurableId = batchAccountOptions.Value.AzureOfferDurableId;
+
+            //if (!AzureRegionUtils.TryGetBillingRegionName(location, out billingRegionName))
+            //{
+            //    logger.LogWarning($"Azure ARM location '{location}' does not have a corresponding Azure Billing Region.  Prices from the fallback billing region '{DefaultAzureBillingRegionName}' will be used instead.");
+            //    billingRegionName = DefaultAzureBillingRegionName;
+            //}
         }
 
         // TODO: Static method because the instrumentation key is needed in both Program.cs and Startup.cs and we wanted to avoid intializing the batch client twice.
@@ -196,31 +216,6 @@ namespace TesApi.Web
             };
 
             return batchClient.JobOperations.ListJobs(activeJobsFilter).Count();
-        }
-
-        /// <inheritdoc/>
-        public async Task<AzureBatchAccountQuotas> GetBatchAccountQuotasAsync()
-        {
-            try
-            {
-                var batchAccount = await getBatchAccountFunc();
-
-                return new AzureBatchAccountQuotas
-                {
-                    ActiveJobAndJobScheduleQuota = batchAccount.ActiveJobAndJobScheduleQuota,
-                    DedicatedCoreQuota = batchAccount.DedicatedCoreQuota.Value,
-                    DedicatedCoreQuotaPerVMFamily = batchAccount.DedicatedCoreQuotaPerVMFamily,
-                    DedicatedCoreQuotaPerVMFamilyEnforced = batchAccount.DedicatedCoreQuotaPerVMFamilyEnforced,
-                    LowPriorityCoreQuota = batchAccount.LowPriorityCoreQuota.Value,
-                    PoolQuota = batchAccount.PoolQuota,
-
-                };
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, $"An exception occurred when getting the batch account.");
-                throw;
-            }
         }
 
         /// <inheritdoc/>
@@ -595,10 +590,6 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync()
-            => (await GetVmSizesAndPricesRawAsync()).ToList();
-
-        /// <inheritdoc/>
         public bool LocalFileExists(string path)
             => File.Exists(path);
 
@@ -626,135 +617,9 @@ namespace TesApi.Web
             return false;
         }
 
-        private async Task<string> GetPricingContentJsonAsync()
-        {
-            var pricingUrl = $"https://management.azure.com/subscriptions/{subscriptionId}/providers/Microsoft.Commerce/RateCard?api-version=2016-08-31-preview&$filter=OfferDurableId eq '{azureOfferDurableId}' and Currency eq 'USD' and Locale eq 'en-US' and RegionInfo eq 'US'";
-
-            try
-            {
-                var accessToken = await GetAzureAccessTokenAsync();
-                var pricingRequest = new HttpRequestMessage(HttpMethod.Get, pricingUrl);
-                pricingRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-                var pricingResponse = await httpClient.SendAsync(pricingRequest);
-                var content = await pricingResponse.Content.ReadAsByteArrayAsync();
-                return Encoding.UTF8.GetString(content).TrimStart('\ufeff');
-            }
-            catch (Exception ex)
-            {
-                logger.LogInformation($"GetPricingContentJsonAsync URL: {pricingUrl}");
-                logger.LogError(ex, $"Could not retrieve VM pricing info. Make sure that TES service principal has Billing Reader role on the subscription");
-                throw;
-            }
-        }
-
-        private IEnumerable<VmPrice> ExtractVmPricesFromRateCardResponse(List<(string VmSize, string MeterName, string MeterSubCategory)> supportedVmSizes, string pricingContent)
-        {
-            var rateCardMeters = JObject.Parse(pricingContent)["Meters"]
-                .Where(m => m["MeterCategory"].ToString() == "Virtual Machines" && m["MeterStatus"].ToString() == "Active" && m["MeterRegion"].ToString().Equals(billingRegionName, StringComparison.OrdinalIgnoreCase))
-                .Select(m => new { MeterName = m["MeterName"].ToString(), MeterSubCategory = m["MeterSubCategory"].ToString(), MeterRate = m["MeterRates"]["0"].ToString() })
-                .Where(m => !m.MeterSubCategory.Contains("Windows"))
-                .Select(m => new
-                {
-                    MeterName = m.MeterName.Replace(" Low Priority", string.Empty, StringComparison.OrdinalIgnoreCase),
-                    m.MeterSubCategory,
-                    MeterRate = decimal.Parse(m.MeterRate),
-                    IsLowPriority = m.MeterName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase)
-                })
-                .ToList();
-
-            return supportedVmSizes
-                .Select(v => new
-                {
-                    v.VmSize,
-                    RateCardMeters = rateCardMeters.Where(m => m.MeterName.Equals(v.MeterName, StringComparison.OrdinalIgnoreCase) && m.MeterSubCategory.Equals(v.MeterSubCategory, StringComparison.OrdinalIgnoreCase))
-                })
-                .Select(v => new VmPrice
-                {
-                    VmSize = v.VmSize,
-                    PricePerHourDedicated = v.RateCardMeters.FirstOrDefault(m => !m.IsLowPriority)?.MeterRate,
-                    PricePerHourLowPriority = v.RateCardMeters.FirstOrDefault(m => m.IsLowPriority)?.MeterRate
-                })
-                .Where(v => v.PricePerHourDedicated is not null);
-        }
-
-        /// <summary>
-        /// Get the price and resource summary of all available VMs in a region for the <see cref="BatchModels.BatchAccount"/>.
-        /// </summary>
-        /// <returns><see cref="VirtualMachineInformation"/> for available VMs in a region.</returns>
-        private async Task<IEnumerable<VirtualMachineInformation>> GetVmSizesAndPricesRawAsync()
-        {
-            static double ConvertMiBToGiB(int value) => Math.Round(value / 1024.0, 2);
-
-            var azureClient = await GetAzureManagementClientAsync();
-
-            var vmSizesAvailableAtLocation = (await azureClient.WithSubscription(subscriptionId).ComputeSkus.ListbyRegionAndResourceTypeAsync(Region.Create(location), ComputeResourceType.VirtualMachines))
-                .Select(vm => new { VmSize = vm.Name.Value, VmFamily = vm.Inner.Family, Capabilities = vm.Capabilities.ToDictionary(c => c.Name, c => c.Value) })
-                .Select(vm => new
-                {
-                    VmSize = vm.VmSize,
-                    VmFamily = vm.VmFamily,
-                    NumberOfCores = int.Parse(vm.Capabilities.GetValueOrDefault("vCPUsAvailable", vm.Capabilities["vCPUs"])),
-                    MemoryGiB = double.Parse(vm.Capabilities["MemoryGB"]),
-                    DiskGiB = ConvertMiBToGiB(int.Parse(vm.Capabilities["MaxResourceVolumeMB"])),
-                    MaxDataDiskCount = int.Parse(vm.Capabilities.GetValueOrDefault("MaxDataDiskCount", "0"))
-                });
-
-            IEnumerable<VmPrice> vmPrices;
-
-            var supportedVmSizes = AzureBillingUtils.GetVmSizesSupportedByBatch().ToList();
-
-            try
-            {
-                var pricingContent = await GetPricingContentJsonAsync();
-                vmPrices = ExtractVmPricesFromRateCardResponse(supportedVmSizes, pricingContent);
-            }
-            catch
-            {
-                logger.LogWarning("Using default VM prices. Please see: https://github.com/microsoft/CromwellOnAzure/blob/master/docs/troubleshooting-guide.md#dynamic-cost-optimization-and-ratecard-api-access");
-                vmPrices = JsonConvert.DeserializeObject<IEnumerable<VmPrice>>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "DefaultVmPrices.json")));
-            }
-
-            var vmInfos = new List<VirtualMachineInformation>();
-
-            foreach (var (vmSize, _, _) in supportedVmSizes)
-            {
-                var vmSpecification = vmSizesAvailableAtLocation.SingleOrDefault(vm => vm.VmSize.Equals(vmSize, StringComparison.OrdinalIgnoreCase));
-                var vmPrice = vmPrices.SingleOrDefault(vm => vm.VmSize.Equals(vmSize, StringComparison.OrdinalIgnoreCase));
-
-                if (vmSpecification is not null && vmPrice is not null)
-                {
-                    vmInfos.Add(new VirtualMachineInformation
-                    {
-                        VmSize = vmSize,
-                        MemoryInGB = vmSpecification.MemoryGiB,
-                        NumberOfCores = vmSpecification.NumberOfCores,
-                        ResourceDiskSizeInGB = vmSpecification.DiskGiB,
-                        MaxDataDiskCount = vmSpecification.MaxDataDiskCount,
-                        VmFamily = vmSpecification.VmFamily,
-                        LowPriority = false,
-                        PricePerHour = vmPrice.PricePerHourDedicated
-                    });
-
-                    if (vmPrice.LowPriorityAvailable)
-                    {
-                        vmInfos.Add(new VirtualMachineInformation
-                        {
-                            VmSize = vmSize,
-                            MemoryInGB = vmSpecification.MemoryGiB,
-                            NumberOfCores = vmSpecification.NumberOfCores,
-                            ResourceDiskSizeInGB = vmSpecification.DiskGiB,
-                            MaxDataDiskCount = vmSpecification.MaxDataDiskCount,
-                            VmFamily = vmSpecification.VmFamily,
-                            LowPriority = true,
-                            PricePerHour = vmPrice.PricePerHourLowPriority
-                        });
-                    }
-                }
-            }
-
-            // TODO: Check if pricing API did not return the list and vmInfos is null
-            return vmInfos;
-        }
+        /// <inheritdoc />
+        public string GetArmRegion()
+            => location;
 
         private static Task<string> GetAzureAccessTokenAsync(string resource = "https://management.azure.com/")
             => new AzureServiceTokenProvider().GetAccessTokenAsync(resource);
@@ -829,15 +694,5 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudJob> ListJobsAsync(DetailLevel detailLevel = null)
             => batchClient.JobOperations.ListJobs(detailLevel: detailLevel).ToAsyncEnumerable();
-
-        private class VmPrice
-        {
-            public string VmSize { get; set; }
-            public decimal? PricePerHourDedicated { get; set; }
-            public decimal? PricePerHourLowPriority { get; set; }
-
-            [JsonIgnore]
-            public bool LowPriorityAvailable => PricePerHourLowPriority is not null;
-        }
     }
 }

@@ -11,12 +11,15 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Serialization;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Filters;
+using TesApi.Web.Management;
+using TesApi.Web.Management.Configuration;
 
 namespace TesApi.Web
 {
@@ -25,14 +28,12 @@ namespace TesApi.Web
     /// </summary>
     public class Startup
     {
-        private const string DefaultAzureOfferDurableId = "MS-AZR-0003p";
         private const string CosmosDbDatabaseId = "TES";
         private const string CosmosDbContainerId = "Tasks";
         private const string CosmosDbPartitionId = "01";
 
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
-        private readonly string azureOfferDurableId;
 
         /// <summary>
         /// Startup class for ASP.NET core
@@ -42,7 +43,6 @@ namespace TesApi.Web
             Configuration = configuration;
             this.hostingEnvironment = hostingEnvironment;
             this.logger = logger;
-            azureOfferDurableId = Configuration.GetValue("AzureOfferDurableId", DefaultAzureOfferDurableId);
         }
 
         /// <summary>
@@ -55,16 +55,16 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="services">The Microsoft.Extensions.DependencyInjection.IServiceCollection to add the services to.</param>
         public void ConfigureServices(IServiceCollection services)
-            => services.AddSingleton<IAppCache>(sp => new CachingService())
+            => services
+                .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.BatchAccount))
+                .Configure<CosmosDbOptions>(Configuration.GetSection(CosmosDbOptions.CosmosDbAccount))
 
-            .AddSingleton(sp => (IAzureProxy)ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetService(typeof(AzureProxy))))
-            .AddSingleton(sp => ActivatorUtilities.CreateInstance<AzureProxy>(sp, Configuration["BatchAccountName"], azureOfferDurableId))
+                .AddSingleton<IAppCache, CachingService>()
 
-            .AddSingleton<CosmosCredentials>(sp =>
-            {
-                (var cosmosDbEndpoint, var cosmosDbKey) = ((IAzureProxy)sp.GetService(typeof(IAzureProxy))).GetCosmosDbEndpointAndKeyAsync(Configuration["CosmosDbAccountName"]).Result;
-                return new(cosmosDbEndpoint, cosmosDbKey);
-            })
+                .AddSingleton<AzureProxy, AzureProxy>()
+                .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
+
+                .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
 
                 .AddControllers()
                 .AddNewtonsoftJson(opts =>
@@ -73,14 +73,19 @@ namespace TesApi.Web
                     opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
                 }).Services
 
-            .AddSingleton(sp =>
-            {
-                var cosmos = sp.GetService<CosmosCredentials>();
-                return (IRepository<TesTask>)ActivatorUtilities.CreateInstance<CachingWithRetriesRepository<TesTask>>(sp, new CosmosDbRepository<TesTask>(cosmos.CosmosDbEndpoint, cosmos.CosmosDbKey, CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId));
-            })
+                .AddSingleton<IBatchScheduler, BatchScheduler>()
+                .AddSingleton<IStorageAccessProvider, StorageAccessProvider>()
 
-            .AddSingleton<IBatchScheduler, BatchScheduler>()
-            .AddSingleton<IStorageAccessProvider, StorageAccessProvider>()
+                .AddLogging()
+                .AddSingleton<IBatchQuotaProvider, ArmBatchQuotaProvider>()
+                .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
+                .AddSingleton<IBatchScheduler, BatchScheduler>()
+                .AddSingleton<PriceApiClient, PriceApiClient>()
+                .AddSingleton<IBatchSkuInformationProvider>(sp => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(sp))
+                .AddSingleton(CreateBatchAccountResourceInformation)
+                .AddSingleton<AzureManagementClientsFactory, AzureManagementClientsFactory>()
+                .AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
+                .AddSingleton<ConfigurationUtils, ConfigurationUtils>() //this should not be call if running in terra.
 
                 .AddSwaggerGen(c =>
                 {
@@ -102,7 +107,8 @@ namespace TesApi.Web
                         },
                     });
                     c.CustomSchemaIds(type => type.FullName);
-                    c.IncludeXmlComments($"{AppContext.BaseDirectory}{Path.DirectorySeparatorChar}{Assembly.GetEntryAssembly().GetName().Name}.xml");
+                    c.IncludeXmlComments(
+                        $"{AppContext.BaseDirectory}{Path.DirectorySeparatorChar}{Assembly.GetEntryAssembly().GetName().Name}.xml");
                     c.OperationFilter<GeneratePathParamsValidationFilter>();
                 })
 
@@ -110,9 +116,11 @@ namespace TesApi.Web
                 .AddHostedService<DeleteCompletedBatchJobsHostedService>()
                 .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
                 .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
-                .AddHostedService<RefreshVMSizesAndPricesHostedService>()
+                //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
+                .AddHostedService<DoOnceAtStartUpService>()
 
-                // Configure AppInsights Azure Service when in PRODUCTION environment
+
+                //Configure AppInsights Azure Service when in PRODUCTION environment
                 .IfThenElse(hostingEnvironment.IsProduction(),
                     s =>
                     {
@@ -123,14 +131,65 @@ namespace TesApi.Web
                         {
                             var connectionString = $"InstrumentationKey={instrumentationKey}";
                             return s.AddApplicationInsightsTelemetry(options =>
-                                {
-                                    options.ConnectionString = connectionString;
-                                });
+                            {
+                                options.ConnectionString = connectionString;
+                            });
                         }
 
                         return s;
                     },
                     s => s.AddApplicationInsightsTelemetry());
+
+        private IRepository<TesTask> CreateCosmosDbRepositoryFromConfiguration(IServiceProvider services)
+        {
+            var options = services.GetRequiredService<IOptions<CosmosDbOptions>>();
+
+            if (!string.IsNullOrWhiteSpace(options.Value.CosmosDbKey))
+            {
+                return WrapService(ActivatorUtilities.CreateInstance<CosmosDbRepository<TesTask>>(services,
+                    options.Value.CosmosDbEndpoint, options.Value.CosmosDbKey, CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId));
+            }
+
+            var azureProxy = services.GetRequiredService<IAzureProxy>();
+
+            (var cosmosDbEndpoint, var cosmosDbKey) = azureProxy.GetCosmosDbEndpointAndKeyAsync(options.Value.AccountName).Result;
+
+            return WrapService(ActivatorUtilities.CreateInstance<CosmosDbRepository<TesTask>>(services,
+                cosmosDbEndpoint, cosmosDbKey, CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId));
+
+            IRepository<TesTask> WrapService(IRepository<TesTask> service)
+                => ActivatorUtilities.CreateInstance<CachingWithRetriesRepository<TesTask>>(services, service);
+        }
+
+        private BatchAccountResourceInformation CreateBatchAccountResourceInformation(IServiceProvider services)
+        {
+            var options = services.GetRequiredService<IOptions<BatchAccountOptions>>();
+
+            if (string.IsNullOrEmpty(options.Value.AccountName))
+            {
+                throw new InvalidOperationException(
+                    "The batch account name is missing. Please check your configuration.");
+            }
+
+
+            if (string.IsNullOrWhiteSpace(options.Value.AppKey))
+            {
+                //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
+                var task = AzureManagementClientsFactory.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName);
+                task.Wait();
+
+                if (task.Result == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to get the resource information for the Batch account using ARM. Please check the options provided. Provided Batch account name:{options.Value.AccountName}");
+                }
+
+                return task.Result;
+            }
+
+            //assume the information was provided via configuration
+            return new BatchAccountResourceInformation(options.Value.AccountName, options.Value.ResourceGroup, options.Value.SubscriptionId, options.Value.Region);
+        }
 
         /// <summary>
         /// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -176,34 +235,6 @@ namespace TesApi.Web
                 configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync().Wait();
                 return s;
             });
-    }
-
-    /// <summary>
-    /// Metadata to access an Azure Cosmos DB.
-    /// </summary>
-    public sealed class CosmosCredentials
-    {
-        /// <summary>
-        /// Creates a <see cref="CosmosCredentials"/>.
-        /// </summary>
-        /// <param name="cosmosDbEndpoint">The connection endpoint for the CosmosDB database account</param>
-        /// <param name="cosmosDbKey">The Base 64 encoded value of the primary read-write key</param>
-        /// <exception cref="ArgumentNullException"></exception>
-        public CosmosCredentials(string cosmosDbEndpoint, string cosmosDbKey)
-        {
-            CosmosDbEndpoint = cosmosDbEndpoint ?? throw new ArgumentNullException(nameof(cosmosDbEndpoint));
-            CosmosDbKey = cosmosDbKey ?? throw new ArgumentNullException(nameof(cosmosDbKey));
-        }
-
-        /// <summary>
-        /// Gets the connection endpoint for the CosmosDB database account.
-        /// </summary>
-        public string CosmosDbEndpoint { get; }
-
-        /// <summary>
-        /// Gets Base 64 encoded value of the primary read-write key.
-        /// </summary>
-        public string CosmosDbKey { get; }
     }
 
     internal static class BooleanMethodSelectorExtensions

@@ -5,11 +5,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using LazyCache;
 using Microsoft.Azure.Management.Batch.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
 using TesApi.Web;
+using TesApi.Web.Management;
 
 namespace TesApi.Tests
 {
@@ -19,7 +23,12 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task ValidateSupportedVmSizesFileContent()
         {
-            using var serviceProvider = new TestServices.TestServiceProvider<ConfigurationUtils>(configuration: GetInMemoryConfig(), azureProxy: PrepareAzureProxy);
+            using var serviceProvider = new TestServices.TestServiceProvider<ConfigurationUtils>(
+                configuration: GetInMemoryConfig(),
+                azureProxy: PrepareAzureProxy,
+                accountResourceInformation: GetResourceInformation(),
+                batchSkuInformationProvider: GetMockSkuInformationProvider(),
+                armBatchQuotaProvider: (GetMockQuotaProviderExpression, GetMockQuotaProvider()));
             var configurationUtils = serviceProvider.GetT();
 
             await configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync();
@@ -34,10 +43,34 @@ namespace TesApi.Tests
             serviceProvider.AzureProxy.Verify(m => m.UploadBlobAsync(It.Is<Uri>(x => x.AbsoluteUri.Contains("supported-vm-sizes")), It.Is<string>(s => s.Equals(expectedSupportedVmSizesFileContent))), Times.Exactly(1));
         }
 
+        private static BatchAccountResourceInformation GetResourceInformation()
+            => new("batchAccount", "mrg", "sub-id", "eastus");
+
+        private static System.Linq.Expressions.Expression<Func<ArmBatchQuotaProvider>> GetMockQuotaProviderExpression(IServiceProvider provider)
+            => () => new ArmBatchQuotaProvider(
+                provider.GetRequiredService<IAppCache>(),
+                new AzureManagementClientsFactory(GetResourceInformation()),
+                provider.GetRequiredService<ILogger<ArmBatchQuotaProvider>>());
+
+        private static Action<Mock<ArmBatchQuotaProvider>> GetMockQuotaProvider()
+            => new(mockArmQuotaProvider =>
+                mockArmQuotaProvider.Setup(p => p.GetBatchAccountQuotasAsync())
+                    .ReturnsAsync(GetNewAzureBatchAccountQuotas));
+
+        private static Action<Mock<IBatchSkuInformationProvider>> GetMockSkuInformationProvider()
+            => new(mockSkuProvider =>
+                mockSkuProvider.Setup(p => p.GetVmSizesAndPricesAsync(It.IsAny<string>()))
+                    .ReturnsAsync(GetNewVmSizeAndPricingList));
+
         [TestMethod]
         public async Task UnsupportedVmSizeInAllowedVmSizesFileIsIgnoredAndTaggedWithWarning()
         {
-            using var serviceProvider = new TestServices.TestServiceProvider<ConfigurationUtils>(configuration: GetInMemoryConfig(), azureProxy: PrepareAzureProxy);
+            using var serviceProvider = new TestServices.TestServiceProvider<ConfigurationUtils>(
+                configuration: GetInMemoryConfig(),
+                azureProxy: PrepareAzureProxy,
+                accountResourceInformation: GetResourceInformation(),
+                batchSkuInformationProvider: GetMockSkuInformationProvider(),
+                armBatchQuotaProvider: (GetMockQuotaProviderExpression, GetMockQuotaProvider()));
             var configurationUtils = serviceProvider.GetT();
 
             await configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync();
@@ -59,26 +92,6 @@ namespace TesApi.Tests
 
         private static void PrepareAzureProxy(Mock<IAzureProxy> azureProxy)
         {
-            var vmInfos = new List<VirtualMachineInformation> {
-                    new() { VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = false, NumberOfCores = 2, MemoryInGB = 3, ResourceDiskSizeInGB = 20, PricePerHour = 11 },
-                    new() { VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = true, NumberOfCores = 2, MemoryInGB = 3, ResourceDiskSizeInGB = 20, PricePerHour = 22 },
-                    new() { VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = false, NumberOfCores = 4, MemoryInGB = 6, ResourceDiskSizeInGB = 40, PricePerHour = 33 },
-                    new() { VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = true, NumberOfCores = 4, MemoryInGB = 6, ResourceDiskSizeInGB = 40, PricePerHour = 44 },
-                    new() { VmSize = "VmSize3", VmFamily = "VmFamily3", LowPriority = false, NumberOfCores = 8, MemoryInGB = 12, ResourceDiskSizeInGB = 80, PricePerHour = 55 }
-                };
-
-            var dedicatedCoreQuotaPerVMFamily = new[] { new VirtualMachineFamilyCoreQuota("VmFamily1", 100), new VirtualMachineFamilyCoreQuota("VmFamily2", 0), new VirtualMachineFamilyCoreQuota("VmFamily3", 300) };
-
-            var batchQuotas = new AzureBatchAccountQuotas
-            {
-                ActiveJobAndJobScheduleQuota = 1,
-                PoolQuota = 1,
-                DedicatedCoreQuota = 5,
-                LowPriorityCoreQuota = 10,
-                DedicatedCoreQuotaPerVMFamilyEnforced = true,
-                DedicatedCoreQuotaPerVMFamily = dedicatedCoreQuotaPerVMFamily
-            };
-
             var allowedVmSizesFileContent = "VmSize1\n#SomeComment\nVmSize2\nVmSizeNonExistent\nVmFamily3";
 
             var storageAccountInfos = new Dictionary<string, StorageAccountInfo> {
@@ -88,11 +101,61 @@ namespace TesApi.Tests
                 }
              };
 
-            azureProxy.Setup(a => a.GetVmSizesAndPricesAsync()).Returns(Task.FromResult(vmInfos));
-            azureProxy.Setup(a => a.GetBatchAccountQuotasAsync()).Returns(Task.FromResult(batchQuotas));
             azureProxy.Setup(a => a.DownloadBlobAsync(It.IsAny<Uri>())).Returns(Task.FromResult(allowedVmSizesFileContent));
             azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount")).Returns(Task.FromResult(storageAccountInfos["defaultstorageaccount"]));
             azureProxy.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>())).Returns(Task.FromResult("Key1"));
+        }
+
+        private static List<VirtualMachineInformation> GetNewVmSizeAndPricingList()
+        {
+            return new List<VirtualMachineInformation>
+            {
+                new VirtualMachineInformation
+                {
+                    VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = false, NumberOfCores = 2, MemoryInGB = 3,
+                    ResourceDiskSizeInGB = 20, PricePerHour = 11
+                },
+                new VirtualMachineInformation
+                {
+                    VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = true, NumberOfCores = 2, MemoryInGB = 3,
+                    ResourceDiskSizeInGB = 20, PricePerHour = 22
+                },
+                new VirtualMachineInformation
+                {
+                    VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = false, NumberOfCores = 4, MemoryInGB = 6,
+                    ResourceDiskSizeInGB = 40, PricePerHour = 33
+                },
+                new VirtualMachineInformation
+                {
+                    VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = true, NumberOfCores = 4, MemoryInGB = 6,
+                    ResourceDiskSizeInGB = 40, PricePerHour = 44
+                },
+                new VirtualMachineInformation
+                {
+                    VmSize = "VmSize3", VmFamily = "VmFamily3", LowPriority = false, NumberOfCores = 8, MemoryInGB = 12,
+                    ResourceDiskSizeInGB = 80, PricePerHour = 55
+                }
+            };
+        }
+
+        private static AzureBatchAccountQuotas GetNewAzureBatchAccountQuotas()
+        {
+            var dedicatedCoreQuotaPerVmFamily = new[]
+            {
+                new VirtualMachineFamilyCoreQuota("VmFamily1", 100), new VirtualMachineFamilyCoreQuota("VmFamily2", 0),
+                new VirtualMachineFamilyCoreQuota("VmFamily3", 300)
+            };
+
+            var batchQuotas = new AzureBatchAccountQuotas
+            {
+                ActiveJobAndJobScheduleQuota = 1,
+                PoolQuota = 1,
+                DedicatedCoreQuota = 5,
+                LowPriorityCoreQuota = 10,
+                DedicatedCoreQuotaPerVMFamilyEnforced = true,
+                DedicatedCoreQuotaPerVMFamily = dedicatedCoreQuotaPerVmFamily
+            };
+            return batchQuotas;
         }
     }
 }

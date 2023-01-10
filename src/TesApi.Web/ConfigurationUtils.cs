@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
+using TesApi.Web.Management;
 
 namespace TesApi.Web
 {
@@ -17,23 +18,48 @@ namespace TesApi.Web
     public class ConfigurationUtils
     {
         private readonly IConfiguration configuration;
-        private readonly IAzureProxy azureProxy;
         private readonly IStorageAccessProvider storageAccessProvider;
-        private readonly ILogger logger;
+        private readonly ILogger<ConfigurationUtils> logger;
+        //TODO: refactor this to use the interface, which will require to rework the logic below to use not azure specific types. 
+        private readonly ArmBatchQuotaProvider quotaProvider;
+        private readonly IBatchSkuInformationProvider skuInformationProvider;
+        private readonly BatchAccountResourceInformation batchAccountResourceInformation;
 
         /// <summary>
         /// The constructor
         /// </summary>
         /// <param name="configuration"><see cref="IConfiguration"/></param>
-        /// <param name="azureProxy"><see cref="IAzureProxy"/></param>
         /// <param name="storageAccessProvider"><see cref="IStorageAccessProvider"/></param>
+        /// <param name="quotaProvider"><see cref="ArmBatchQuotaProvider"/>></param>
+        /// <param name="skuInformationProvider"><see cref="IBatchSkuInformationProvider"/>></param>
+        /// <param name="batchAccountResourceInformation"><see cref="BatchAccountResourceInformation"/></param>
         /// <param name="logger"><see cref="ILogger"/></param>
-        public ConfigurationUtils(IConfiguration configuration, IAzureProxy azureProxy, IStorageAccessProvider storageAccessProvider, ILogger<ConfigurationUtils> logger)
+        public ConfigurationUtils(
+            IConfiguration configuration,
+            IStorageAccessProvider storageAccessProvider,
+            ArmBatchQuotaProvider quotaProvider,
+            IBatchSkuInformationProvider skuInformationProvider,
+            BatchAccountResourceInformation batchAccountResourceInformation,
+            ILogger<ConfigurationUtils> logger)
         {
+
+            ArgumentNullException.ThrowIfNull(configuration);
+            ArgumentNullException.ThrowIfNull(storageAccessProvider);
+            ArgumentNullException.ThrowIfNull(quotaProvider);
+            ArgumentNullException.ThrowIfNull(batchAccountResourceInformation);
+            if (string.IsNullOrEmpty(batchAccountResourceInformation.Region))
+            {
+                throw new ArgumentException(
+                    $"The batch information provided does not include region. Batch information:{batchAccountResourceInformation}");
+            }
+            ArgumentNullException.ThrowIfNull(logger);
+
             this.configuration = configuration;
-            this.azureProxy = azureProxy;
             this.storageAccessProvider = storageAccessProvider;
             this.logger = logger;
+            this.quotaProvider = quotaProvider;
+            this.skuInformationProvider = skuInformationProvider;
+            this.batchAccountResourceInformation = batchAccountResourceInformation;
         }
 
         /// <summary>
@@ -47,8 +73,8 @@ namespace TesApi.Web
             var supportedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/supported-vm-sizes";
             var allowedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/allowed-vm-sizes";
 
-            var supportedVmSizes = (await azureProxy.GetVmSizesAndPricesAsync()).ToList();
-            var batchAccountQuotas = await azureProxy.GetBatchAccountQuotasAsync();
+            var supportedVmSizes = (await skuInformationProvider.GetVmSizesAndPricesAsync(batchAccountResourceInformation.Region)).ToList();
+            var batchAccountQuotas = await quotaProvider.GetBatchAccountQuotasAsync();
             var supportedVmSizesFileContent = VirtualMachineInfoToFixedWidthColumns(supportedVmSizes.OrderBy(v => v.VmFamily).ThenBy(v => v.VmSize), batchAccountQuotas);
 
             try

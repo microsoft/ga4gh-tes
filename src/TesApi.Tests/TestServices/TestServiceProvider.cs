@@ -17,6 +17,7 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Web;
+using TesApi.Web.Management;
 
 namespace TesApi.Tests.TestServices
 {
@@ -27,27 +28,51 @@ namespace TesApi.Tests.TestServices
         internal TestServiceProvider(
             bool mockStorageAccessProvider = false,
             bool wrapAzureProxy = false,
+            //bool wrapBatchSkuInformationProvider = true,
             IEnumerable<(string Key, string Value)> configuration = default,
+            BatchAccountResourceInformation accountResourceInformation = default,
             Action<Mock<IAzureProxy>> azureProxy = default,
             Action<Mock<IRepository<TesTask>>> tesTaskRepository = default,
             (string endpoint, string key, string databaseId, string containerId, string partitionKeyValue) batchPoolRepositoryArgs = default,
-            Action<Mock<IStorageAccessProvider>> storageAccessProvider = default)
+            Action<Mock<IStorageAccessProvider>> storageAccessProvider = default,
+            Action<Mock<IBatchSkuInformationProvider>> batchSkuInformationProvider = default,
+            Action<Mock<IBatchQuotaProvider>> batchQuotaProvider = default,
+            (Func<IServiceProvider, System.Linq.Expressions.Expression<Func<ArmBatchQuotaProvider>>> expression, Action<Mock<ArmBatchQuotaProvider>> action) armBatchQuotaProvider = default, //added so config utils gets the arm implementation, to be removed once config utils is refactored.
+            Action<IServiceCollection> additionalActions = default)
             => provider = new ServiceCollection()
                 .AddSingleton(_ => GetConfiguration(configuration))
                 .AddSingleton(s => wrapAzureProxy ? ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(s, GetAzureProxy(azureProxy).Object) : GetAzureProxy(azureProxy).Object)
                 .AddSingleton(_ => GetTesTaskRepository(tesTaskRepository).Object)
-                .AddSingleton(_ => new CosmosCredentials(batchPoolRepositoryArgs.endpoint ?? "endpoint", batchPoolRepositoryArgs.key ?? "key"))
+                //.AddSingleton(_ => new CosmosCredentials(batchPoolRepositoryArgs.endpoint ?? "endpoint", batchPoolRepositoryArgs.key ?? "key"))
                 .AddSingleton(s => mockStorageAccessProvider ? GetStorageAccessProvider(storageAccessProvider).Object : ActivatorUtilities.CreateInstance<StorageAccessProvider>(s))
                 .AddSingleton<IAppCache>(_ => new CachingService(new MemoryCacheProvider(new MemoryCache(new MemoryCacheOptions()))))
+                .IfThenElse(accountResourceInformation is null, s => s, s => s.AddSingleton(accountResourceInformation))
                 .AddTransient<ILogger<T>>(_ => NullLogger<T>.Instance)
                 .IfThenElse(mockStorageAccessProvider, s => s, s => s.AddTransient<ILogger<StorageAccessProvider>>(_ => NullLogger<StorageAccessProvider>.Instance))
+                .IfThenElse(batchSkuInformationProvider is null,
+                    s => s.AddSingleton<IBatchSkuInformationProvider>(sp => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(sp))
+                        .AddSingleton(sp => new PriceApiBatchSkuInformationProvider(sp.GetRequiredService<PriceApiClient>(), sp.GetRequiredService<ILogger<PriceApiBatchSkuInformationProvider>>())),
+                    s => s.AddSingleton(_ => GetBatchSkuInformationProvider(batchSkuInformationProvider).Object))
+                .AddSingleton(_ => GetBatchQuotaProvider(batchQuotaProvider).Object)
                 .AddTransient<ILogger<BatchScheduler>>(_ => NullLogger<BatchScheduler>.Instance)
+                .AddTransient<ILogger<ArmBatchQuotaProvider>>(_ => NullLogger<ArmBatchQuotaProvider>.Instance)
+                .AddTransient<ILogger<BatchQuotaVerifier>>(_ => NullLogger<BatchQuotaVerifier>.Instance)
+                .AddTransient<ILogger<ConfigurationUtils>>(_ => NullLogger<ConfigurationUtils>.Instance)
+                .AddTransient<ILogger<PriceApiBatchSkuInformationProvider>>(_ => NullLogger<PriceApiBatchSkuInformationProvider>.Instance)
                 .AddSingleton<TestRepositoryStorage>()
+                .AddSingleton<PriceApiClient>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
+                .AddSingleton(s => GetArmBatchQuotaProvider(s, armBatchQuotaProvider)) //added so config utils gets the arm implementation, to be removed once config utils is refactored.
+                //.AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
+                .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
+                .IfThenElse(additionalActions is null, s => s, s => { additionalActions(s); return s; })
             .BuildServiceProvider();
 
         internal IConfiguration Configuration { get; private set; }
         internal Mock<IAzureProxy> AzureProxy { get; private set; }
+        internal Mock<IBatchSkuInformationProvider> BatchSkuInformationProvider { get; private set; }
+        internal Mock<IBatchQuotaProvider> BatchQuotaProvider { get; private set; }
+        internal Mock<ArmBatchQuotaProvider> ArmBatchQuotaProvider { get; private set; } //added so config utils gets the arm implementation, to be removed once config utils is refactored.
         internal Mock<IRepository<TesTask>> TesTaskRepository { get; private set; }
         internal Mock<IStorageAccessProvider> StorageAccessProvider { get; private set; }
 
@@ -86,11 +111,14 @@ namespace TesApi.Tests.TestServices
                 }
             }
 
-            return (T)ActivatorUtilities.CreateFactory(typeof(T), types)(provider, args);
+            return args.Length == 0 ? ActivatorUtilities.GetServiceOrCreateInstance<T>(provider) : (T)ActivatorUtilities.CreateFactory(typeof(T), types)(provider, args);
         }
 
         internal TService GetService<TService>()
             => provider.GetService<TService>();
+
+        internal TInstance GetServiceOrCreateInstance<TInstance>()
+            => ActivatorUtilities.GetServiceOrCreateInstance<TInstance>(provider);
 
         private IConfiguration GetConfiguration(IEnumerable<(string Key, string Value)> configuration)
             => Configuration = new ConfigurationBuilder().AddInMemoryCollection(configuration?.Select(t => new KeyValuePair<string, string>(t.Key, t.Value)) ?? Enumerable.Empty<KeyValuePair<string, string>>()).Build();
@@ -100,6 +128,29 @@ namespace TesApi.Tests.TestServices
             var proxy = new Mock<IAzureProxy>();
             action?.Invoke(proxy);
             return AzureProxy = proxy;
+        }
+
+        private Mock<IBatchSkuInformationProvider> GetBatchSkuInformationProvider(Action<Mock<IBatchSkuInformationProvider>> action)
+        {
+            var proxy = new Mock<IBatchSkuInformationProvider>();
+            action?.Invoke(proxy);
+            return BatchSkuInformationProvider = proxy;
+        }
+
+        private Mock<IBatchQuotaProvider> GetBatchQuotaProvider(Action<Mock<IBatchQuotaProvider>> action)
+        {
+            var proxy = new Mock<IBatchQuotaProvider>();
+            action?.Invoke(proxy);
+            return BatchQuotaProvider = proxy;
+        }
+
+        private ArmBatchQuotaProvider GetArmBatchQuotaProvider(IServiceProvider provider, (Func<IServiceProvider, System.Linq.Expressions.Expression<Func<ArmBatchQuotaProvider>>> expression, Action<Mock<ArmBatchQuotaProvider>> action) configure) //added so config utils gets the arm implementation, to be removed once config utils is refactored.
+        {
+            var constructor = configure.expression is null ? null : configure.expression(provider);
+            var proxy = constructor is null ? new Mock<ArmBatchQuotaProvider>() : new Mock<ArmBatchQuotaProvider>(constructor);
+            configure.action?.Invoke(proxy);
+            ArmBatchQuotaProvider = proxy;
+            return proxy.Object;
         }
 
         private Mock<IRepository<TesTask>> GetTesTaskRepository(Action<Mock<IRepository<TesTask>>> action)

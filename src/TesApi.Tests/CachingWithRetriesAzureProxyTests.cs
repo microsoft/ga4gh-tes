@@ -1,13 +1,12 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Polly.Utilities;
-using Tes.Models;
 using TesApi.Web;
 
 namespace TesApi.Tests
@@ -15,41 +14,6 @@ namespace TesApi.Tests
     [TestClass]
     public class CachingWithRetriesAzureProxyTests
     {
-        [TestMethod]
-        public async Task GetBatchAccountQuotasAsync_ThrowsException_DoesNotSetCache()
-        {
-            SystemClock.SleepAsync = (_, __) => Task.FromResult(true);
-            SystemClock.Sleep = (_, __) => { };
-            using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
-            {
-                PrepareAzureProxy(a);
-                a.Setup(a => a.GetBatchAccountQuotasAsync()).Throws<Exception>();
-            });
-            var cachingAzureProxy = serviceProvider.GetT();
-
-            await Assert.ThrowsExceptionAsync<Exception>(async () => await cachingAzureProxy.GetBatchAccountQuotasAsync());
-            serviceProvider.AzureProxy.Verify(mock => mock.GetBatchAccountQuotasAsync(), Times.Exactly(4));
-        }
-
-        [TestMethod]
-        public async Task GetBatchAccountQuotasAsync_UsesCache()
-        {
-            var batchQuotas = new AzureBatchAccountQuotas { ActiveJobAndJobScheduleQuota = 1, PoolQuota = 1, DedicatedCoreQuota = 5, LowPriorityCoreQuota = 10 };
-            using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
-            {
-                PrepareAzureProxy(a);
-                a.Setup(a => a.GetBatchAccountQuotasAsync()).Returns(Task.FromResult(batchQuotas));
-            });
-            var cachingAzureProxy = serviceProvider.GetT();
-
-            var quotas1 = await cachingAzureProxy.GetBatchAccountQuotasAsync();
-            var quotas2 = await cachingAzureProxy.GetBatchAccountQuotasAsync();
-
-            serviceProvider.AzureProxy.Verify(mock => mock.GetBatchAccountQuotasAsync(), Times.Once());
-            Assert.AreEqual(batchQuotas, quotas1);
-            Assert.AreEqual(quotas1, quotas2);
-        }
-
         [TestMethod]
         public async Task GetStorageAccountKeyAsync_UsesCache()
         {
@@ -68,20 +32,6 @@ namespace TesApi.Tests
             serviceProvider.AzureProxy.Verify(mock => mock.GetStorageAccountKeyAsync(storageAccountInfo), Times.Once());
             Assert.AreEqual(storageAccountKey, key1);
             Assert.AreEqual(key1, key2);
-        }
-
-        [TestMethod]
-        public async Task GetVMSizesAndPricesAsync_UsesCache()
-        {
-            using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: PrepareAzureProxy);
-            var cachingAzureProxy = serviceProvider.GetT();
-
-            var vmSizesAndPrices1 = await cachingAzureProxy.GetVmSizesAndPricesAsync();
-            var vmSizesAndPrices2 = await cachingAzureProxy.GetVmSizesAndPricesAsync();
-
-            serviceProvider.AzureProxy.Verify(mock => mock.GetVmSizesAndPricesAsync(), Times.Once());
-            Assert.AreEqual(vmSizesAndPrices1, vmSizesAndPrices2);
-            Assert.AreEqual(4, vmSizesAndPrices1.Count);
         }
 
         [TestMethod]
@@ -213,13 +163,13 @@ namespace TesApi.Tests
 
         private static void PrepareAzureProxy(Mock<IAzureProxy> azureProxy)
         {
-            azureProxy.Setup(a => a.GetVmSizesAndPricesAsync()).Returns(Task.FromResult(
-                new List<VirtualMachineInformation> {
-                    new() { VmSize = "VmSizeLowPri1", LowPriority = true, NumberOfCores = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 1 },
-                    new() { VmSize = "VmSizeLowPri2", LowPriority = true, NumberOfCores = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 2 },
-                    new() { VmSize = "VmSizeDedicated1", LowPriority = false, NumberOfCores = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 11 },
-                    new() { VmSize = "VmSizeDedicated2", LowPriority = false, NumberOfCores = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 22 }
-                }));
+            //azureProxy.Setup(a => a.GetVmSizesAndPricesAsync()).Returns(Task.FromResult(
+            //    new List<VirtualMachineInformation> {
+            //        new() { VmSize = "VmSizeLowPri1", LowPriority = true, NumberOfCores = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 1 },
+            //        new() { VmSize = "VmSizeLowPri2", LowPriority = true, NumberOfCores = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 2 },
+            //        new() { VmSize = "VmSizeDedicated1", LowPriority = false, NumberOfCores = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 11 },
+            //        new() { VmSize = "VmSizeDedicated2", LowPriority = false, NumberOfCores = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 22 }
+            //    }));
         }
     }
 }
