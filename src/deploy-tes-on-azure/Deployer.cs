@@ -168,12 +168,10 @@ namespace TesDeployer
 
                         ConsoleEx.WriteLine($"Upgrading TES on Azure instance in resource group '{resourceGroup.Name}' to version {targetVersion}...");
 
-                        ManagedCluster existingAksCluster = default;
-
                         if (!string.IsNullOrEmpty(configuration.StorageAccountName))
                         {
                             storageAccount = await GetExistingStorageAccountAsync(configuration.StorageAccountName)
-                                ?? throw new ValidationException($"Storage account {configuration.StorageAccountName} does not exist in region {configuration.RegionName} or is not accessible to the current user.");
+                                ?? throw new ValidationException($"Storage account {configuration.StorageAccountName} does not exist in region {configuration.RegionName} or is not accessible to the current user.", displayExample: false);
                         }
                         else
                         {
@@ -181,16 +179,18 @@ namespace TesDeployer
 
                             storageAccount = storageAccounts.Count switch
                             {
-                                0 => throw new ValidationException($"Update was requested but resource group {configuration.ResourceGroupName} does not contain any storage accounts."),
-                                1 => storageAccounts.First(),
-                                _ => throw new ValidationException($"Resource group {configuration.ResourceGroupName} contains multiple storage accounts. {nameof(configuration.StorageAccountName)} must be provided."),
+                                0 => throw new ValidationException($"Update was requested but resource group {configuration.ResourceGroupName} does not contain any storage accounts.", displayExample: false),
+                                1 => storageAccounts.Single(),
+                                _ => throw new ValidationException($"Resource group {configuration.ResourceGroupName} contains multiple storage accounts. {nameof(configuration.StorageAccountName)} must be provided.", displayExample: false),
                             };
                         }
+
+                        ManagedCluster existingAksCluster = default;
 
                         if (!string.IsNullOrWhiteSpace(configuration.AksClusterName))
                         {
                             existingAksCluster = (await GetExistingAKSClusterAsync(configuration.AksClusterName))
-                                ?? throw new ValidationException($"AKS cluster {configuration.AksClusterName} does not exist in region {configuration.RegionName} or is not accessible to the current user.");
+                                ?? throw new ValidationException($"AKS cluster {configuration.AksClusterName} does not exist in region {configuration.RegionName} or is not accessible to the current user.", displayExample: false);
                         }
                         else
                         {
@@ -199,9 +199,9 @@ namespace TesDeployer
 
                             existingAksCluster = aksClusters.Count switch
                             {
-                                0 => throw new ValidationException($"Update was requested but resource group {configuration.ResourceGroupName} does not contain any AKS clusters."),
-                                1 => aksClusters.First(),
-                                _ => throw new ValidationException($"Resource group {configuration.ResourceGroupName} contains multiple AKS clusters. {nameof(configuration.AksClusterName)} must be provided."),
+                                0 => throw new ValidationException($"Update was requested but resource group {configuration.ResourceGroupName} does not contain any AKS clusters.", displayExample: false),
+                                1 => aksClusters.Single(),
+                                _ => throw new ValidationException($"Resource group {configuration.ResourceGroupName} contains multiple AKS clusters. {nameof(configuration.AksClusterName)} must be provided.", displayExample: false),
                             };
 
                             configuration.AksClusterName = existingAksCluster.Name;
@@ -211,26 +211,26 @@ namespace TesDeployer
 
                         if (!aksValues.Any())
                         {
-                            throw new ValidationException($"Could not retrieve account names from stored configuration in {storageAccount.Name}.");
+                            throw new ValidationException($"Could not retrieve account names from stored configuration in {storageAccount.Name}.", displayExample: false);
                         }
 
                         if (!aksValues.TryGetValue("BatchAccountName", out var batchAccountName))
                         {
-                            throw new ValidationException($"Could not retrieve the Batch account name from stored configuration in {storageAccount.Name}.");
+                            throw new ValidationException($"Could not retrieve the Batch account name from stored configuration in {storageAccount.Name}.", displayExample: false);
                         }
 
                         batchAccount = await GetExistingBatchAccountAsync(batchAccountName)
-                            ?? throw new ValidationException($"Batch account {batchAccountName}, referenced by the stored configuration, does not exist in region {configuration.RegionName} or is not accessible to the current user.");
+                            ?? throw new ValidationException($"Batch account {batchAccountName}, referenced by the stored configuration, does not exist in region {configuration.RegionName} or is not accessible to the current user.", displayExample: false);
 
                         configuration.BatchAccountName = batchAccountName;
 
                         if (!aksValues.TryGetValue("CosmosDbAccountName", out var cosmosDbAccountName))
                         {
-                            throw new ValidationException($"Could not retrieve the CosmosDb account name from stored configuration in {storageAccount.Name}.");
+                            throw new ValidationException($"Could not retrieve the CosmosDb account name from stored configuration in {storageAccount.Name}.", displayExample: false);
                         }
 
                         cosmosDb = await GetExistingCosmosDbAccountAsync(cosmosDbAccountName)
-                            ?? throw new ValidationException($"CosmosDb account {cosmosDbAccountName}, referenced by the stored configuration, does not exist in region {configuration.RegionName}");
+                            ?? throw new ValidationException($"CosmosDb account {cosmosDbAccountName}, referenced by the stored configuration, does not exist in region {configuration.RegionName}", displayExample: false);
 
                         configuration.CosmosDbAccountName = cosmosDbAccountName;
 
@@ -251,11 +251,11 @@ namespace TesDeployer
 
                         if (!aksValues.TryGetValue("ManagedIdentityClientId", out var managedIdentityClientId))
                         {
-                            throw new ValidationException($"Could not retrieve ManagedIdentityClientId.");
+                            throw new ValidationException($"Could not retrieve ManagedIdentityClientId.", displayExample: false);
                         }
 
                         managedIdentity = azureSubscriptionClient.Identities.ListByResourceGroup(configuration.ResourceGroupName).Where(id => id.ClientId == managedIdentityClientId).FirstOrDefault()
-                            ?? throw new ValidationException($"Managed Identity {managedIdentityClientId} does not exist in region {configuration.RegionName} or is not accessible to the current user.");
+                            ?? throw new ValidationException($"Managed Identity {managedIdentityClientId} does not exist in region {configuration.RegionName} or is not accessible to the current user.", displayExample: false);
 
                         // Override any configuration that is used by the update.
                         var versionString = aksValues["TesOnAzureVersion"];
@@ -265,6 +265,12 @@ namespace TesDeployer
                         await kubernetesManager.UpgradeAKSDeploymentAsync(
                             settings,
                             storageAccount);
+                        tesEndpoint = settings["TesHostname"];
+
+                        if (aksValues.TryGetValue("EnableIngress", out var enableIngress))
+                        {
+                            configuration.EnableIngress = bool.TryParse(enableIngress, out var parsed) ? parsed : null;
+                        }
                     }
 
                     if (!configuration.Update)
@@ -465,15 +471,14 @@ namespace TesDeployer
                         }
                         else
                         {
-                            await kubernetesManager.DeployCoADependenciesAsync(resourceGroup);
-                            var kubernetesClient = await kubernetesManager.GetKubernetesClientAsync();
+                            var kubernetesClient = await kubernetesManager.DeployCoADependenciesAsync(resourceGroup);
 
                             if (configuration.EnableIngress.GetValueOrDefault())
                             {
-                                await kubernetesManager.EnableIngress(resourceGroup, configuration.TesUsername, configuration.TesPassword, kubernetesClient);
+                                _ = await kubernetesManager.EnableIngress(resourceGroup, configuration.TesUsername, configuration.TesPassword, kubernetesClient);
                             }
 
-                            await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
+                            _ = await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
                         }
 
                         if (configuration.ProvisionPostgreSqlOnAzure == true)
@@ -511,10 +516,11 @@ namespace TesDeployer
                         {
                             var isTestWorkflowSuccessful = await RunTestTask(tesEndpoint, batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
 
-                            if (isTestWorkflowSuccessful)
+                            if (!isTestWorkflowSuccessful)
                             {
                                 await DeleteResourceGroupIfUserConsentsAsync();
                             }
+
                             exitCode = isTestWorkflowSuccessful ? 0 : 1;
                         }
                     }
@@ -1937,6 +1943,7 @@ namespace TesDeployer
             ThrowIfProvidedForUpdate(configuration.ProvisionPostgreSqlOnAzure, nameof(configuration.ProvisionPostgreSqlOnAzure));
             ThrowIfProvidedForUpdate(configuration.ApplicationInsightsAccountName, nameof(configuration.ApplicationInsightsAccountName));
             ThrowIfProvidedForUpdate(configuration.PrivateNetworking, nameof(configuration.PrivateNetworking));
+            ThrowIfProvidedForUpdate(configuration.EnableIngress, nameof(configuration.EnableIngress));
             ThrowIfProvidedForUpdate(configuration.VnetName, nameof(configuration.VnetName));
             ThrowIfProvidedForUpdate(configuration.VnetResourceGroupName, nameof(configuration.VnetResourceGroupName));
             ThrowIfProvidedForUpdate(configuration.SubnetName, nameof(configuration.SubnetName));
@@ -1949,7 +1956,8 @@ namespace TesDeployer
                 ValidateHelmInstall(configuration.HelmBinaryPath, nameof(configuration.HelmBinaryPath));
             }
 
-            ValidateDependantFeature(configuration.EnableIngress.GetValueOrDefault(), nameof(configuration.EnableIngress), !string.IsNullOrEmpty(configuration.LetsEncryptEmail), nameof(configuration.LetsEncryptEmail));
+            ValidateDependantFeature(!string.IsNullOrEmpty(configuration.LetsEncryptEmail), nameof(configuration.LetsEncryptEmail), configuration.EnableIngress.GetValueOrDefault(), nameof(configuration.EnableIngress));
+            ValidateDependantFeature(configuration.EnableIngress.GetValueOrDefault(), nameof(configuration.EnableIngress), !string.IsNullOrEmpty(configuration.LetsEncryptEmail), nameof(configuration.LetsEncryptEmail)); //TODO: is LetsEncryptEmail required when EnableIngress is enabled?
 
             //if (configuration.ProvisionPostgreSqlOnAzure is null)
             //{

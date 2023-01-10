@@ -72,14 +72,17 @@ namespace TesDeployer
             var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(configuration.ResourceGroupName, configuration.AksClusterName);
             var kubeConfigFile = new FileInfo(kubeConfigPath);
             await File.WriteAllTextAsync(kubeConfigFile.FullName, Encoding.Default.GetString(creds.Kubeconfigs.First().Value));
+            kubeConfigFile.Refresh();
 
             var k8sConfiguration = KubernetesClientConfiguration.LoadKubeConfig(kubeConfigFile, false);
             var k8sClientConfiguration = KubernetesClientConfiguration.BuildConfigFromConfigObject(k8sConfiguration);
             return new Kubernetes(k8sClientConfiguration);
         }
 
-        public async Task DeployCoADependenciesAsync(IResourceGroup _/*resourceGroup*/) //TODO: use or remove resourceGroup
+        public async Task<IKubernetes> DeployCoADependenciesAsync(IResourceGroup _/*resourceGroup*/, IKubernetes client = default) //TODO: use or remove resourceGroup
         {
+            client ??= await GetKubernetesClientAsync();
+
             var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
 
             if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("aad-pod-identity", StringComparison.OrdinalIgnoreCase))
@@ -89,9 +92,11 @@ namespace TesDeployer
 
             await ExecHelmProcessAsync($"repo update");
             await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig {kubeConfigPath}");
+
+            return client;
         }
 
-        public async Task EnableIngress(IResourceGroup _/*resourceGroup*/, string tesUsername, string tesPassword, IKubernetes client = default) //TODO: use or remove resourceGroup
+        public async Task<IKubernetes> EnableIngress(IResourceGroup _/*resourceGroup*/, string tesUsername, string tesPassword, IKubernetes client = default) //TODO: use or remove resourceGroup
         {
             var certManagerRegistry = "quay.io";
             var certImageController = $"{certManagerRegistry}/jetstack/cert-manager-controller";
@@ -184,9 +189,11 @@ namespace TesDeployer
                     $"--set cainjector.image.tag={CertManagerVersion}");
 
             await WaitForWorkloadAsync(client, "ingress-nginx-controller", configuration.AksCoANamespace, cts.Token);
+
+            return client;
         }
 
-        public async Task DeployHelmChartToClusterAsync(IKubernetes client = default)
+        public async Task<IKubernetes> DeployHelmChartToClusterAsync(IKubernetes client = default)
         {
             client ??= await GetKubernetesClientAsync();
 
@@ -195,6 +202,8 @@ namespace TesDeployer
             await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig {kubeConfigPath} --namespace {configuration.AksCoANamespace} --create-namespace",
                 workingDirectory: workingDirectoryTemp);
             await WaitForWorkloadAsync(client, "tes", configuration.AksCoANamespace, cts.Token);
+
+            return client;
         }
 
 
@@ -321,7 +330,7 @@ namespace TesDeployer
         public async Task UpgradeAKSDeploymentAsync(Dictionary<string, string> settings, IStorageAccount storageAccount)
         {
             await UpgradeValuesYamlAsync(storageAccount, settings);
-            await DeployHelmChartToClusterAsync();
+            _ = await DeployHelmChartToClusterAsync();
         }
 
         public void DeleteTempFiles()
@@ -419,6 +428,9 @@ namespace TesDeployer
                 //["UsePostgreSqlSingleServer"] = values.Config["usePostgreSqlSingleServer"],
                 ["ManagedIdentityClientId"] = values.Identity["clientId"],
                 ["TesImageName"] = values.Images["tes"],
+                ["TesHostname"] = values.Service["tesHostname"],
+                ["EnableIngress"] = values.Service["enableIngress"],
+                ["LetsEncryptEmail"] = values.Config["letsEncryptEmail"],
                 ["DefaultStorageAccountName"] = values.Persistence["storageAccount"],
             };
 
