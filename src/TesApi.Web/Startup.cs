@@ -145,7 +145,7 @@ namespace TesApi.Web
                 .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
                 .AddHostedService<RefreshVMSizesAndPricesHostedService>()
 
-            // Configure AppInsights Azure Service when in PRODUCTION environment
+                // Configure AppInsights Azure Service when in PRODUCTION environment
                 .IfThenElse(hostingEnvironment.IsProduction(),
                     s =>
                     {
@@ -186,7 +186,7 @@ namespace TesApi.Web
                 })
                 .UseSwaggerUI(c =>
                 {
-                    c.SwaggerEndpoint("/swagger/0.3.0/openapi.json", "Task Execution Service");
+                    c.SwaggerEndpoint("/swagger/0.3.3/openapi.json", "Task Execution Service");
                 })
 
                 .IfThenElse(hostingEnvironment.IsDevelopment(),

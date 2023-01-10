@@ -28,9 +28,7 @@ namespace Tes.Models
     public partial class TesServiceInfo : IEquatable<TesServiceInfo>
     {
         public TesServiceInfo()
-        {
-            NewtonsoftJsonSafeInit.SetDefaultSettings();
-        }
+            => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         /// <summary>
         /// Returns the name of the service, e.g. \&quot;ohsu-compbio-funnel\&quot;.
@@ -159,7 +157,7 @@ namespace Tes.Models
                     hashCode = hashCode * 59 + Storage.GetHashCode();
                 }
 
-                if (TesResourcesSupportedBackendParameters != null)
+                if (TesResourcesSupportedBackendParameters is not null)
                 {
                     hashCode = hashCode * 59 + TesResourcesSupportedBackendParameters.GetHashCode();
                 }
