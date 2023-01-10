@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
-using Tes.Models;
 
 namespace TesApi.Web
 {
@@ -84,12 +83,6 @@ namespace TesApi.Web
         Task DeleteBatchJobAsync(string taskId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Get Batch account quota
-        /// </summary>
-        /// <returns><see cref="AzureBatchAccountQuotas"/></returns>
-        Task<AzureBatchAccountQuotas> GetBatchAccountQuotasAsync();
-
-        /// <summary>
         /// Gets the counts of active batch nodes, grouped by VmSize
         /// </summary>
         /// <returns>Batch node counts</returns>
@@ -107,11 +100,11 @@ namespace TesApi.Web
         /// <returns>Count of active batch jobs</returns>
         int GetBatchActiveJobCount();
 
-        /// <summary>
-        /// Gets the price and resource summary of all available VMs in a region
-        /// </summary>
-        /// <returns><see cref="Tes.Models.VirtualMachineInformation"/> for available VMs in a region.</returns>
-        Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync();
+        ///// <summary>
+        ///// Gets the price and resource summary of all available VMs in a region
+        ///// </summary>
+        ///// <returns><see cref="Tes.Models.VirtualMachineInformation"/> for available VMs in a region.</returns>
+        //Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync();
 
         /// <summary>
         /// Gets the primary key of the given storage account.
@@ -203,5 +196,11 @@ namespace TesApi.Web
         /// <param name="content">Content of the file</param>
         /// <returns>True if file was found</returns>
         bool TryReadCwlFile(string workflowId, out string content);
+
+        /// <summary>
+        /// Gets the configured arm region.
+        /// </summary>
+        /// <returns>arm region</returns>
+        string GetArmRegion();
     }
 }

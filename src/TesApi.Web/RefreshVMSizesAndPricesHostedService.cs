@@ -5,7 +5,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using LazyCache;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -82,8 +81,8 @@ namespace TesApi.Web
         private async Task RefreshVMSizesAndPricesAsync() // TODO: implement
         {
             logger.LogInformation("VM list cache refresh call to Azure started.");
-            var virtualMachineInfos = await azureProxy.GetVmSizesAndPricesAsync();
-            cache.Add("vmSizesAndPrices", virtualMachineInfos, DateTimeOffset.MaxValue);
+            //var virtualMachineInfos = await azureProxy.GetVmSizesAndPricesAsync();
+            //cache.Add("vmSizesAndPrices", virtualMachineInfos, DateTimeOffset.MaxValue);
             logger.LogInformation("VM list cache refresh call to Azure completed.");
         }
     }
