@@ -461,7 +461,7 @@ namespace TesDeployer
                         {
                             if (!configuration.ManualHelmDeployment)
                             {
-                                //await ExecuteQueriesOnAzurePostgreSQLDbFromK8();
+                                await ExecuteQueriesOnAzurePostgreSQLDbFromK8();
                             }
                         }
                     }
@@ -843,15 +843,19 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "ProvisionPostgreSqlOnAzure", configuration.ProvisionPostgreSqlOnAzure, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "CrossSubscriptionAKSDeployment", configuration.CrossSubscriptionAKSDeployment);
                 var provisionPostgreSqlOnAzure = bool.TryParse(settings["ProvisionPostgreSqlOnAzure"], out var _provisionPostgreSqlOnAzure) ? _provisionPostgreSqlOnAzure : false;
-                //UpdateSetting(settings, defaults, "PostgreSqlServerName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlServerName : string.Empty, ignoreDefaults: true);
-                //UpdateSetting(settings, defaults, "PostgreSqlDatabaseName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesDatabaseName : string.Empty, ignoreDefaults: true);
-                //UpdateSetting(settings, defaults, "PostgreSqlUserLogin", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserLogin : string.Empty, ignoreDefaults: true);
-                //UpdateSetting(settings, defaults, "PostgreSqlUserPassword", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserPassword : string.Empty, ignoreDefaults: true);
-                //UpdateSetting(settings, defaults, "UsePostgreSqlSingleServer", provisionPostgreSqlOnAzure ? configuration.UsePostgreSqlSingleServer.ToString() : string.Empty, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlServerName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlServerName : string.Empty, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlDatabaseName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesDatabaseName : string.Empty, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlUserLogin", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserLogin : string.Empty, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlUserPassword", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserPassword : string.Empty, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "UsePostgreSqlSingleServer", provisionPostgreSqlOnAzure ? configuration.UsePostgreSqlSingleServer.ToString() : string.Empty, ignoreDefaults: true);
 
                 UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
                 UpdateSetting(settings, defaults, "TesHostname", $"{configuration.ResourceGroupName}.{configuration.RegionName}.cloudapp.azure.com", ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlTesDatabaseName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesDatabaseName : string.Empty, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlTesUserLogin", GetFormattedPostgresqlUser(), ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlTesUserPassword", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserPassword : string.Empty, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlTesDatabasePort", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesDatabasePort.ToString() : string.Empty, ignoreDefaults: true);
             }
 
             //if (installedVersion is null || installedVersion < new Version(3, 3))
@@ -1242,6 +1246,63 @@ namespace TesDeployer
                     new()));
             return server;
         }
+
+        private string GetFormattedPostgresqlUser()
+        {
+            if (!configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault())
+            {
+                return string.Empty;
+            }
+
+            if (configuration.UsePostgreSqlSingleServer)
+            {
+                return $"{configuration.PostgreSqlTesUserLogin}@{configuration.PostgreSqlServerName}";
+            }
+            else
+            {
+                return configuration.PostgreSqlTesUserLogin;
+            }
+        }
+
+        private string GetCreateTesUserString()
+        {
+            return $"CREATE USER {configuration.PostgreSqlTesUserLogin} WITH PASSWORD '{configuration.PostgreSqlTesUserPassword}'; GRANT ALL PRIVILEGES ON DATABASE {configuration.PostgreSqlTesDatabaseName} TO {configuration.PostgreSqlTesUserLogin};";
+        }
+
+        private string GetPostgreSQLCreateUserCommand(bool useSingleServer, string dbName, string sqlCommand)
+        {
+            if (useSingleServer)
+            {
+                return $"PGPASSWORD={configuration.PostgreSqlAdministratorPassword} psql -U {configuration.PostgreSqlAdministratorLogin}@{configuration.PostgreSqlServerName} -h {configuration.PostgreSqlServerName}.postgres.database.azure.com -d {dbName}  -v sslmode=true -c \"{sqlCommand}\"";
+            }
+            else
+            {
+                return $"psql postgresql://{configuration.PostgreSqlAdministratorLogin}:{configuration.PostgreSqlAdministratorPassword}@{configuration.PostgreSqlServerName}.postgres.database.azure.com/{dbName} -c \"{sqlCommand}\"";
+            }
+        }
+
+        private Task ExecuteQueriesOnAzurePostgreSQLDbFromK8()
+            => Execute(
+                $"Executing scripts on postgresql...",
+                async () =>
+                {
+                    var tesScript = GetCreateTesUserString();
+                    var serverPath = $"{configuration.PostgreSqlServerName}.postgres.database.azure.com";
+                    var adminUser = configuration.PostgreSqlAdministratorLogin;
+
+                    if (configuration.UsePostgreSqlSingleServer)
+                    {
+                        adminUser = $"{configuration.PostgreSqlAdministratorLogin}@{configuration.PostgreSqlServerName}";
+                    }
+
+                    var commands = new List<string[]> {
+                        new string[] { "bash", "-lic", $"echo {configuration.PostgreSqlServerName}.postgres.database.azure.com:5432:{configuration.PostgreSqlTesDatabaseName}:{adminUser}:{configuration.PostgreSqlAdministratorPassword} >> ~/.pgpass" },
+                        new string[] { "chmod", "0600", "/home/tes/.pgpass" },
+                        new string[] { "/usr/bin/psql", "-h", serverPath, "-U", adminUser, "-d", configuration.PostgreSqlTesDatabaseName, "-c", tesScript }
+                    };
+
+                    await kubernetesManager.ExecuteCommandsOnPodAsync(kubernetesClient, "tes", commands, configuration.AksCoANamespace);
+                });
 
         private async Task AssignVmAsBillingReaderToSubscriptionAsync(IIdentity managedIdentity)
         {

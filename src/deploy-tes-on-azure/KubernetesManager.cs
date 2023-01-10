@@ -389,6 +389,11 @@ namespace TesDeployer
             values.Service["enableIngress"] = settings["EnableIngress"];
             values.Config["letsEncryptEmail"] = settings["LetsEncryptEmail"];
             values.Persistence["storageAccount"] = settings["DefaultStorageAccountName"];
+            values.Database["postgreSqlServerName"] = settings["PostgreSqlServerName"];
+            values.Database["postgreSqlTesDatabaseName"] = settings["PostgreSqlTesDatabaseName"];
+            values.Database["postgreSqlTesDatabasePort"] = settings["PostgreSqlTesDatabasePort"];
+            values.Database["postgreSqlTesUserLogin"] = settings["PostgreSqlTesUserLogin"];
+            values.Database["postgreSqlTesUserPassword"] = settings["PostgreSqlTesUserPassword"];
         }
 
         private static Dictionary<string, string> ValuesToSettings(HelmValues values)
@@ -423,6 +428,11 @@ namespace TesDeployer
                 ["ManagedIdentityClientId"] = values.Identity["clientId"],
                 ["TesImageName"] = values.Images["tes"],
                 ["DefaultStorageAccountName"] = values.Persistence["storageAccount"],
+                ["PostgreSqlServerName"] = values.Database["postgreSqlServerName"],
+                ["PostgreSqlTesDatabaseName"] = values.Database["postgreSqlTesDatabaseName"],
+                ["PostgreSqlTesDatabasePort"] = values.Database["postgreSqlTesDatabasePort"],
+                ["PostgreSqlTesUserLogin"] = values.Database["postgreSqlTesUserLogin"],
+                ["PostgreSqlTesUserPassword"] = values.Database["postgreSqlTesUserPassword"],
             };
 
         private async Task<string> ExecHelmProcessAsync(string command, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
@@ -515,6 +525,7 @@ namespace TesDeployer
         {
             public Dictionary<string, string> Service { get; set; }
             public Dictionary<string, string> Config { get; set; }
+            public Dictionary<string, string> Database { get; set; }
             public Dictionary<string, string> Images { get; set; }
             public List<string> DefaultContainers { get; set; }
             public List<Dictionary<string, string>> InternalContainersMIAuth { get; set; }
