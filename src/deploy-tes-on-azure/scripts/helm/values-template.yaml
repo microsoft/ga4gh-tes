@@ -8,7 +8,7 @@ config:
   resourceGroup: RUNTIME_PARAMETER
   azureServicesAuthConnectionString: RUNTIME_PARAMETER
   applicationInsightsAccountName: RUNTIME_PARAMETER
-  cosmosDb__accountName: RUNTIME_PARAMETER
+  postgreSql__postgreSqlServerName: RUNTIME_PARAMETER
   azureOfferDurableId: MS-AZR-0003p
   batchAccount__accountName: RUNTIME_PARAMETER
   batchNodesSubnetId: RUNTIME_PARAMETER

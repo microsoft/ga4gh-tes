@@ -361,7 +361,6 @@ namespace TesDeployer
             values.Config["tesOnAzureVersion"] = settings["TesOnAzureVersion"];
             values.Config["azureServicesAuthConnectionString"] = settings["AzureServicesAuthConnectionString"];
             values.Config["applicationInsightsAccountName"] = settings["ApplicationInsightsAccountName"];
-            values.Config["cosmosDbAccountName"] = settings["CosmosDbAccountName"];
             values.Config["batchAccountName"] = settings["BatchAccountName"];
             values.Config["batchNodesSubnetId"] = settings["BatchNodesSubnetId"];
             values.Config["coaNamespace"] = settings["AksCoANamespace"];
@@ -379,11 +378,6 @@ namespace TesDeployer
             values.Config["marthaKeyVaultName"] = settings["MarthaKeyVaultName"];
             values.Config["marthaSecretName"] = settings["MarthaSecretName"];
             values.Config["crossSubscriptionAKSDeployment"] = settings["CrossSubscriptionAKSDeployment"];
-            //values.Config["postgreSqlServerName"] = settings["PostgreSqlServerName"];
-            //values.Config["postgreSqlDatabaseName"] = settings["PostgreSqlDatabaseName"];
-            //values.Config["postgreSqlUserLogin"] = settings["PostgreSqlUserLogin"];
-            //values.Config["postgreSqlUserPassword"] = settings["PostgreSqlUserPassword"];
-            //values.Config["usePostgreSqlSingleServer"] = settings["UsePostgreSqlSingleServer"];
             values.Images["tes"] = settings["TesImageName"];
             values.Service["tesHostname"] = settings["TesHostname"];
             values.Service["enableIngress"] = settings["EnableIngress"];
@@ -402,7 +396,6 @@ namespace TesDeployer
                 ["TesOnAzureVersion"] = values.Config["tesOnAzureVersion"],
                 ["AzureServicesAuthConnectionString"] = values.Config["azureServicesAuthConnectionString"],
                 ["ApplicationInsightsAccountName"] = values.Config["applicationInsightsAccountName"],
-                ["CosmosDbAccountName"] = values.Config["cosmosDbAccountName"],
                 ["BatchAccountName"] = values.Config["batchAccountName"],
                 ["BatchNodesSubnetId"] = values.Config["batchNodesSubnetId"],
                 ["AksCoANamespace"] = values.Config["coaNamespace"],

@@ -45,8 +45,8 @@ spec:
               value: {{ .Values.config.azureServicesAuthConnectionString }}
             - name: ApplicationInsightsAccountName
               value: {{ .Values.config.applicationInsightsAccountName }}
-            - name: CosmosDb__AccountName
-              value: {{ .Values.config.cosmosDbAccountName }}
+            - name: PostgreSql__PostgreSqlServerName
+              value: {{ .Values.config.postgreSqlServerName }}
             - name: AzureOfferDurableId
               value: {{ .Values.config.azureOfferDurableId }}
             - name: BatchAccount__AccountName

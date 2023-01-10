@@ -31,10 +31,6 @@ namespace TesApi.Web
     /// </summary>
     public class Startup
     {
-        private const string CosmosDbDatabaseId = "TES";
-        private const string CosmosDbContainerId = "Tasks";
-        private const string CosmosDbPartitionId = "01";
-
         private readonly ILogger logger;
         private readonly ILoggerFactory loggerFactory;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -68,9 +64,9 @@ namespace TesApi.Web
         {
             services
                 .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.BatchAccount))
-                .Configure<CosmosDbOptions>(Configuration.GetSection(CosmosDbOptions.CosmosDbAccount))
+                .Configure<PostgreSqlOptions>(Configuration.GetSection(PostgreSqlOptions.PostgreSqlAccount))
                 .AddSingleton<IAppCache>(s => new CachingService())
-                .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
+                .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
                 .AddSingleton<AzureProxy, AzureProxy>()
                 .AddSingleton<IAzureProxy>(s => new CachingWithRetriesAzureProxy(s.GetRequiredService<AzureProxy>(), s.GetRequiredService<IAppCache>()))
                 .AddSingleton<IStorageAccessProvider, StorageAccessProvider>()
@@ -142,25 +138,18 @@ namespace TesApi.Web
 
         }
 
-
-        private IRepository<TesTask> CreateCosmosDbRepositoryFromConfiguration(IServiceProvider services)
+        private IRepository<TesTask> CreatePostgresSqlRepositoryFromConfiguration(IServiceProvider services)
         {
-            var options = services.GetRequiredService<IOptions<CosmosDbOptions>>();
+            var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
 
-            if (!string.IsNullOrWhiteSpace(options.Value.CosmosDbKey))
-            {
-                return new CachingWithRetriesRepository<TesTask>(
-                    new CosmosDbRepository<TesTask>(options.Value.CosmosDbEndpoint, options.Value.CosmosDbKey,
-                        CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId));
-            }
+            string postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(
+                postgreSqlServerName: options.Value.PostgreSqlServerName,
+                postgreSqlTesDatabaseName: options.Value.PostgreSqlTesDatabaseName,
+                postgreSqlTesDatabasePort: options.Value.PostgreSqlTesDatabasePort,
+                postgreSqlTesUserLogin: options.Value.PostgreSqlTesUserLogin,
+                postgreSqlTesUserPassword: options.Value.PostgreSqlTesUserPassword);
 
-            var azureProxy = services.GetRequiredService<IAzureProxy>();
-
-            (var cosmosDbEndpoint, var cosmosDbKey) = azureProxy.GetCosmosDbEndpointAndKeyAsync(options.Value.AccountName).Result;
-
-            return new CachingWithRetriesRepository<TesTask>(new CosmosDbRepository<TesTask>(cosmosDbEndpoint, cosmosDbKey,
-                CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId));
-
+            return new TesTaskPostgreSqlRepository(postgresConnectionString);
         }
 
         private BatchAccountResourceInformation CreateBatchAccountResourceInformation(IServiceProvider services)
