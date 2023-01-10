@@ -183,7 +183,7 @@ namespace TesDeployer
                     $"--set image.tag={CertManagerVersion} " +
                     $"--set webhook.image.repository={certImageWebhook} " +
                     $"--set webhook.image.tag={CertManagerVersion} " +
-                    $"--set cainjector.image.repository={certImageCainjector} " +  
+                    $"--set cainjector.image.repository={certImageCainjector} " +
                     $"--set cainjector.image.tag={CertManagerVersion}");
 
             await WaitForWorkloadAsync(client, "ingress-nginx-controller", cts.Token, configuration.AksCoANamespace);

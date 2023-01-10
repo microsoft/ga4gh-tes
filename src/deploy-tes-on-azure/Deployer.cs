@@ -591,17 +591,17 @@ namespace TesDeployer
             using var client = new HttpClient();
             client.SetBasicAuthentication(tesUsername, tesPassword);
 
-            var task = new TesTask() 
-            { 
+            var task = new TesTask()
+            {
                 Inputs = new List<TesInput>(),
                 Outputs = new List<TesOutput>(),
-                Executors = new List<TesExecutor> 
-                { 
-                    new TesExecutor() 
-                    { 
+                Executors = new List<TesExecutor>
+                {
+                    new TesExecutor()
+                    {
                         Image = "ubuntu:22.04",
                         Command = new List<string>{"echo 'hello world'" },
-                    } 
+                    }
                 },
                 Resources = new TesResources()
                 {
@@ -659,7 +659,7 @@ namespace TesDeployer
                     var responseBody = await client.GetAsync(taskEndpoint);
                     var content = await responseBody.Content.ReadAsStringAsync();
                     var response = JsonConvert.DeserializeObject<TesTask>(content);
-                    
+
                     if (response.State == TesState.COMPLETEEnum)
                     {
                         if (string.IsNullOrWhiteSpace(response.FailureReason))
@@ -837,7 +837,7 @@ namespace TesDeployer
         private Dictionary<string, string> ConfigureSettings(string managedIdentityClientId, Dictionary<string, string> settings = null, Version installedVersion = null)
         {
             settings ??= new();
-            var defaults = GetDefaultValues(new [] { "env-00-coa-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt" });
+            var defaults = GetDefaultValues(new[] { "env-00-coa-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt" });
 
             // We always overwrite the CoA version
             UpdateSetting(settings, defaults, "TesOnAzureVersion", default(string), ignoreDefaults: false);
@@ -860,7 +860,7 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "BatchAccountName", configuration.BatchAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ApplicationInsightsAccountName", configuration.ApplicationInsightsAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ManagedIdentityClientId", managedIdentityClientId, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString",  $"RunAs=App;AppId={managedIdentityClientId}", ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "AzureServicesAuthConnectionString", $"RunAs=App;AppId={managedIdentityClientId}", ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "KeyVaultName", configuration.KeyVaultName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "AksCoANamespace", configuration.AksCoANamespace, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ProvisionPostgreSqlOnAzure", configuration.ProvisionPostgreSqlOnAzure, ignoreDefaults: true);

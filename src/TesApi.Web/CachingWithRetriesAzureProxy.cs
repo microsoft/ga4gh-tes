@@ -9,7 +9,6 @@ using LazyCache;
 using Microsoft.Azure.Batch;
 using Polly;
 using Polly.Retry;
-using Tes.Models;
 
 namespace TesApi.Web
 {
@@ -57,11 +56,6 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task<IEnumerable<string>> GetActivePoolIdsAsync(string prefix, TimeSpan minAge, CancellationToken cancellationToken) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetActivePoolIdsAsync(prefix, minAge, cancellationToken));
-
-        /// <inheritdoc/>
-        public Task<AzureBatchAccountQuotas> GetBatchAccountQuotasAsync()
-            => cache.GetOrAddAsync("batchAccountQuotas", () =>
-                asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetBatchAccountQuotasAsync()), DateTimeOffset.Now.AddHours(1));
 
         /// <inheritdoc/>
         public int GetBatchActiveJobCount() => retryPolicy.Execute(() => azureProxy.GetBatchActiveJobCount());
@@ -123,10 +117,6 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync()
-            => cache.GetOrAddAsync("vmSizesAndPrices", () => azureProxy.GetVmSizesAndPricesAsync(), DateTimeOffset.MaxValue);
-
-        /// <inheritdoc/>
         public Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.ListBlobsAsync(directoryUri));
 
         /// <inheritdoc/>
@@ -149,6 +139,9 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public bool TryReadCwlFile(string workflowId, out string content) => azureProxy.TryReadCwlFile(workflowId, out content);
+
+        /// <inheritdoc/>
+        public string GetArmRegion() => azureProxy.GetArmRegion();
 
         /// <inheritdoc/>
         public Task<ManualBatchPoolCreationResult> CreateManualBatchPoolAsync(string poolName, string vmSize, bool isLowPriority, string executorImage, BatchNodeInfo nodeInfo, string dockerInDockerImageName, string blobxferImageName, IEnumerable<string> identityResourceIds, bool disableBatchNodesPublicIpAddress, string batchNodesSubnetId, string startTaskSasUrl, string startTaskPath)
