@@ -43,7 +43,7 @@ namespace Tes.Utilities
             connectionStringBuilder.Append($"Port={postgreSqlTesDatabasePort};");
             connectionStringBuilder.Append($"User Id={postgreSqlTesUserLogin};");
             connectionStringBuilder.Append($"Password={postgreSqlTesUserPassword};");
-            connectionStringBuilder.Append("SSL Mode=Prefer;"); // TODO, setting "SSL Mode=Require" results in: One or more errors occurred. (To validate server certificates, please use VerifyFull or VerifyCA instead of Require. To disable validation, explicitly set 'Trust Server Certificate' to true. See https://www.npgsql.org/doc/release-notes/6.0.html for more details.
+            connectionStringBuilder.Append("SSL Mode=VerifyFull;"); // TODO, setting "SSL Mode=Require" results in: One or more errors occurred. (To validate server certificates, please use VerifyFull or VerifyCA instead of Require. To disable validation, explicitly set 'Trust Server Certificate' to true. See https://www.npgsql.org/doc/release-notes/6.0.html for more details.
             return connectionStringBuilder.ToString();
         }
     }
