@@ -356,7 +356,7 @@ namespace TesDeployer
 
                         if (string.IsNullOrWhiteSpace(configuration.TesHostname))
                         {
-                            string cname = SdkContext.RandomResourceName($"{configuration.ResourceGroupName.Replace(".", "")}-", 63).TrimEnd('-').ToLowerInvariant();
+                            string cname = SdkContext.RandomResourceName($"{configuration.ResourceGroupName.Replace(".", "")}-", 60).TrimEnd('-').ToLowerInvariant();
                             configuration.TesHostname = $"{cname}.{configuration.RegionName}.cloudapp.azure.com";
                         }
 
