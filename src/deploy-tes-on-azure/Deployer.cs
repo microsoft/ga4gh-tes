@@ -156,7 +156,7 @@ namespace TesDeployer
                 IIdentity managedIdentity = null;
                 IPrivateDnsZone postgreSqlDnsZone = null;
                 string tesEndpoint = null;
-
+                
                 try
                 {
                     if (configuration.Update)
@@ -354,6 +354,12 @@ namespace TesDeployer
                             resourceGroup = await azureSubscriptionClient.ResourceGroups.GetByNameAsync(configuration.ResourceGroupName);
                         }
 
+                        if (string.IsNullOrWhiteSpace(configuration.TesHostname))
+                        {
+                            string cname = SdkContext.RandomResourceName($"{configuration.ResourceGroupName.Replace(".", "")}-", 63).TrimEnd('-').ToLowerInvariant();
+                            configuration.TesHostname = $"{cname}.{configuration.RegionName}.cloudapp.azure.com";
+                        }
+
                         managedIdentity = await CreateUserManagedIdentityAsync(resourceGroup);
 
                         if (vnetAndSubnet is not null)
@@ -475,7 +481,7 @@ namespace TesDeployer
 
                             if (configuration.EnableIngress.GetValueOrDefault())
                             {
-                                _ = await kubernetesManager.EnableIngress(resourceGroup, configuration.TesUsername, configuration.TesPassword, kubernetesClient);
+                                _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
                             }
 
                             _ = await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
@@ -877,7 +883,7 @@ namespace TesDeployer
 
                 UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
-                UpdateSetting(settings, defaults, "TesHostname", $"{configuration.ResourceGroupName.Replace(".", "")}.{configuration.RegionName}.cloudapp.azure.com", ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "TesHostname", configuration.TesHostname, ignoreDefaults: true);
             }
 
             //if (installedVersion is null || installedVersion < new Version(3, 3))

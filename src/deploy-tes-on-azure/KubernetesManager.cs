@@ -96,7 +96,7 @@ namespace TesDeployer
             return client;
         }
 
-        public async Task<IKubernetes> EnableIngress(IResourceGroup _/*resourceGroup*/, string tesUsername, string tesPassword, IKubernetes client = default) //TODO: use or remove resourceGroup
+        public async Task<IKubernetes> EnableIngress(string tesUsername, string tesPassword, IKubernetes client = default)
         {
             var certManagerRegistry = "quay.io";
             var certImageController = $"{certManagerRegistry}/jetstack/cert-manager-controller";
@@ -174,7 +174,7 @@ namespace TesDeployer
 
             await ExecHelmProcessAsync($"repo update");
 
-            var dnsAnnotation = $"--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-dns-label-name\"={configuration.ResourceGroupName}";
+            var dnsAnnotation = $"--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-dns-label-name\"={configuration.TesHostname}";
             var healthProbeAnnotation = "--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-load-balancer-health-probe-request-path\"=/healthz";
             await ExecHelmProcessAsync($"install ingress-nginx ingress-nginx/ingress-nginx --namespace {configuration.AksCoANamespace} --kubeconfig {kubeConfigPath} --version {NginxIngressVersion} {healthProbeAnnotation} {dnsAnnotation}");
             await ExecHelmProcessAsync("install cert-manager jetstack/cert-manager " +
