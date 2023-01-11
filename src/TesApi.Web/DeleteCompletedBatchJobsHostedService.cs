@@ -38,7 +38,6 @@ namespace TesApi.Web
             this.isDisabled = configuration.GetValue("DisableBatchJobCleanup", false);
         }
 
-
         /// <inheritdoc />
         public override Task StartAsync(CancellationToken cancellationToken)
         {
@@ -95,7 +94,7 @@ namespace TesApi.Web
             logger.LogInformation("Batch Job cleanup gracefully stopped.");
         }
 
-        private async Task DeleteOldBatchJobs(CancellationToken cancellationToken) // TODO: implement
+        private async Task DeleteOldBatchJobs(CancellationToken cancellationToken)
         {
             var jobsToDelete = await azureProxy.ListOldJobsToDeleteAsync(oldestJobAge);
 

@@ -16,7 +16,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="tesTask"><see cref="TesTask"/> to schedule on the batch system</param>
         /// <returns>Whether the <see cref="TesTask"/> was modified.</returns>
-        Task<bool> ProcessTesTaskAsync(TesTask tesTask);
+        ValueTask<bool> ProcessTesTaskAsync(TesTask tesTask);
 
         /// <summary>
         /// Garbage collects the old batch task state log hashset

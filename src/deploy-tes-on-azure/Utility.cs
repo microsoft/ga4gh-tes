@@ -101,7 +101,7 @@ namespace TesDeployer
 
             // Assembly is renamed by the build process, so get it from the first resource name
             var firstResourceName = resourceNames.First();
-            var assemblyName = firstResourceName.Substring(0, firstResourceName.IndexOf('.'));
+            var assemblyName = firstResourceName[..firstResourceName.IndexOf('.')];
             var componentSubstring = $"{assemblyName}.{string.Join(".", pathComponentsRelativeToAppBase)}";
 
             foreach (var file in resourceNames.Where(r => r.StartsWith(componentSubstring)))
@@ -114,8 +114,8 @@ namespace TesDeployer
                 if (lastPeriodBeforeFilename > 0)
                 {
                     // There are subdirectories present
-                    var subdirectories = pathSeparatedByPeriods.Substring(0, lastPeriodBeforeFilename).Replace('.', Path.DirectorySeparatorChar);
-                    var filename = pathSeparatedByPeriods.Substring(lastPeriodBeforeFilename + 1);
+                    var subdirectories = pathSeparatedByPeriods[..lastPeriodBeforeFilename].Replace('.', Path.DirectorySeparatorChar);
+                    var filename = pathSeparatedByPeriods[(lastPeriodBeforeFilename + 1)..];
                     outputPath = Path.Join(outputBasePath, subdirectories, filename);
                 }
 
@@ -151,7 +151,7 @@ namespace TesDeployer
                 var password = Convert.ToBase64String(buffer)
                     .Replace("+", "-")
                     .Replace("/", "_")
-                    .Substring(0, length);
+                    [..length];
 
                 if (regex.IsMatch(password))
                 {

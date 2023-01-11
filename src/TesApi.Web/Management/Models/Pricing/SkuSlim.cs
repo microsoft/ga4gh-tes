@@ -1,4 +1,7 @@
-﻿namespace TesApi.Web.Management.Models.Pricing
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+namespace TesApi.Web.Management.Models.Pricing
 {
     /// <summary>
     /// Sku information from the retail pricing API.
@@ -14,7 +17,7 @@
         /// </summary>
         public string SkuName { get; set; }
         /// <summary>
-        /// Low priority sku flag. 
+        /// Low priority sku flag.
         /// </summary>
         public bool IsLowPriority { get; set; }
         /// <summary>
