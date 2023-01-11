@@ -174,7 +174,7 @@ namespace TesDeployer
 
             await ExecHelmProcessAsync($"repo update");
 
-            var dnsAnnotation = $"--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-dns-label-name\"={configuration.TesHostname}";
+            var dnsAnnotation = $"--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-dns-label-name\"={configuration.TesHostname[0..configuration.TesHostname.IndexOf(".")]}";
             var healthProbeAnnotation = "--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-load-balancer-health-probe-request-path\"=/healthz";
             await ExecHelmProcessAsync($"install ingress-nginx ingress-nginx/ingress-nginx --namespace {configuration.AksCoANamespace} --kubeconfig {kubeConfigPath} --version {NginxIngressVersion} {healthProbeAnnotation} {dnsAnnotation}");
             await ExecHelmProcessAsync("install cert-manager jetstack/cert-manager " +
