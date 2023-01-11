@@ -14,7 +14,6 @@ namespace Tes.Repository
 
         public string ConnectionString { get; set; }
         public DbSet<TesTaskDatabaseItem> TesTasks { get; set; }
-        //public DbSet<Pool> Pools { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
