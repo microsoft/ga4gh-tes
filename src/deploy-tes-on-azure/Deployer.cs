@@ -1937,7 +1937,10 @@ namespace TesDeployer
                 ValidateHelmInstall(configuration.HelmBinaryPath, nameof(configuration.HelmBinaryPath));
             }
 
-            ValidateDependantFeature(configuration.EnableIngress.GetValueOrDefault(), nameof(configuration.EnableIngress), !string.IsNullOrEmpty(configuration.LetsEncryptEmail), nameof(configuration.LetsEncryptEmail));
+            if (configuration.EnableIngress.GetValueOrDefault())
+            {
+                ThrowIfNotProvided(configuration.LetsEncryptEmail, nameof(configuration.LetsEncryptEmail));
+            }
 
             //if (configuration.ProvisionPostgreSqlOnAzure is null)
             //{
