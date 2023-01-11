@@ -564,7 +564,7 @@ namespace TesApi.Tests
             Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
             Assert.AreEqual($"InvalidInputFilePath", failureReason);
             Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
-            Assert.AreEqual($"Unsupported input path 'xyz/path' for task Id {tesTask.Id}. Must start with '/cromwell-executions/'.", systemLog[1]);
+            Assert.AreEqual($"Unsupported input path 'xyz/path' for task Id {tesTask.Id}. Must start with '/cromwell-executions' or '/executions'.", systemLog[1]);
         }
 
         [TestMethod]
