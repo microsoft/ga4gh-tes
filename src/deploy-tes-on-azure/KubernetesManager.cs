@@ -361,7 +361,6 @@ namespace TesDeployer
             values.Config["tesOnAzureVersion"] = settings["TesOnAzureVersion"];
             values.Config["azureServicesAuthConnectionString"] = settings["AzureServicesAuthConnectionString"];
             values.Config["applicationInsightsAccountName"] = settings["ApplicationInsightsAccountName"];
-            values.Config["cosmosDbAccountName"] = settings["CosmosDbAccountName"];
             values.Config["batchAccountName"] = settings["BatchAccountName"];
             values.Config["batchNodesSubnetId"] = settings["BatchNodesSubnetId"];
             values.Config["coaNamespace"] = settings["AksCoANamespace"];
@@ -379,16 +378,16 @@ namespace TesDeployer
             values.Config["marthaKeyVaultName"] = settings["MarthaKeyVaultName"];
             values.Config["marthaSecretName"] = settings["MarthaSecretName"];
             values.Config["crossSubscriptionAKSDeployment"] = settings["CrossSubscriptionAKSDeployment"];
-            //values.Config["postgreSqlServerName"] = settings["PostgreSqlServerName"];
-            //values.Config["postgreSqlDatabaseName"] = settings["PostgreSqlDatabaseName"];
-            //values.Config["postgreSqlUserLogin"] = settings["PostgreSqlUserLogin"];
-            //values.Config["postgreSqlUserPassword"] = settings["PostgreSqlUserPassword"];
-            //values.Config["usePostgreSqlSingleServer"] = settings["UsePostgreSqlSingleServer"];
             values.Images["tes"] = settings["TesImageName"];
             values.Service["tesHostname"] = settings["TesHostname"];
             values.Service["enableIngress"] = settings["EnableIngress"];
             values.Config["letsEncryptEmail"] = settings["LetsEncryptEmail"];
             values.Persistence["storageAccount"] = settings["DefaultStorageAccountName"];
+            values.Database["postgreSqlServerName"] = settings["PostgreSqlServerName"];
+            values.Database["postgreSqlTesDatabaseName"] = settings["PostgreSqlTesDatabaseName"];
+            values.Database["postgreSqlTesDatabasePort"] = settings["PostgreSqlTesDatabasePort"];
+            values.Database["postgreSqlTesUserLogin"] = settings["PostgreSqlTesUserLogin"];
+            values.Database["postgreSqlTesUserPassword"] = settings["PostgreSqlTesUserPassword"];
         }
 
         private static Dictionary<string, string> ValuesToSettings(HelmValues values)
@@ -397,7 +396,6 @@ namespace TesDeployer
                 ["TesOnAzureVersion"] = values.Config["tesOnAzureVersion"],
                 ["AzureServicesAuthConnectionString"] = values.Config["azureServicesAuthConnectionString"],
                 ["ApplicationInsightsAccountName"] = values.Config["applicationInsightsAccountName"],
-                ["CosmosDbAccountName"] = values.Config["cosmosDbAccountName"],
                 ["BatchAccountName"] = values.Config["batchAccountName"],
                 ["BatchNodesSubnetId"] = values.Config["batchNodesSubnetId"],
                 ["AksCoANamespace"] = values.Config["coaNamespace"],
@@ -423,6 +421,11 @@ namespace TesDeployer
                 ["ManagedIdentityClientId"] = values.Identity["clientId"],
                 ["TesImageName"] = values.Images["tes"],
                 ["DefaultStorageAccountName"] = values.Persistence["storageAccount"],
+                ["PostgreSqlServerName"] = values.Database["postgreSqlServerName"],
+                ["PostgreSqlTesDatabaseName"] = values.Database["postgreSqlTesDatabaseName"],
+                ["PostgreSqlTesDatabasePort"] = values.Database["postgreSqlTesDatabasePort"],
+                ["PostgreSqlTesUserLogin"] = values.Database["postgreSqlTesUserLogin"],
+                ["PostgreSqlTesUserPassword"] = values.Database["postgreSqlTesUserPassword"],
             };
 
         private async Task<string> ExecHelmProcessAsync(string command, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
@@ -515,6 +518,7 @@ namespace TesDeployer
         {
             public Dictionary<string, string> Service { get; set; }
             public Dictionary<string, string> Config { get; set; }
+            public Dictionary<string, string> Database { get; set; }
             public Dictionary<string, string> Images { get; set; }
             public List<string> DefaultContainers { get; set; }
             public List<Dictionary<string, string>> InternalContainersMIAuth { get; set; }

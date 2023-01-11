@@ -144,30 +144,6 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Gets CosmosDB endpoint and key
-        /// </summary>
-        /// <param name="cosmosDbAccountName"></param>
-        /// <returns>The CosmosDB endpoint and key of the specified account</returns>
-        public async Task<(string, string)> GetCosmosDbEndpointAndKeyAsync(string cosmosDbAccountName)
-        {
-            var azureClient = await GetAzureManagementClientAsync();
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
-
-            var account = (await Task.WhenAll(subscriptionIds.Select(async subId => await azureClient.WithSubscription(subId).CosmosDBAccounts.ListAsync())))
-                .SelectMany(a => a)
-                .FirstOrDefault(a => a.Name.Equals(cosmosDbAccountName, StringComparison.OrdinalIgnoreCase));
-
-            if (account is null)
-            {
-                throw new Exception($"CosmosDB account '{cosmosDbAccountName} does not exist or the TES app service does not have Account Reader role on the account.");
-            }
-
-            var key = (await azureClient.WithSubscription(account.Manager.SubscriptionId).CosmosDBAccounts.ListKeysAsync(account.ResourceGroupName, account.Name)).PrimaryMasterKey;
-
-            return (account.DocumentEndpoint, key);
-        }
-
-        /// <summary>
         /// Gets a new Azure Batch job id to schedule another task
         /// </summary>
         /// <param name="tesTaskId">The unique TES task ID</param>

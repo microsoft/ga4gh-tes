@@ -27,6 +27,16 @@ spec:
         supplementalGroups: [1000]
       containers:
         - env:
+            - name: PostgreSql__PostgreSqlServerName
+              value: {{ .Values.database.postgreSqlServerName }}
+            - name: PostgreSql__PostgreSqlTesDatabaseName
+              value: {{ .Values.database.postgreSqlTesDatabaseName }}
+            - name: PostgreSql__PostgreSqlTesDatabasePort
+              value: {{ .Values.database.postgreSqlTesDatabasePort | quote }}
+            - name: PostgreSql__PostgreSqlTesUserLogin
+              value: {{ .Values.database.postgreSqlTesUserLogin }}
+            - name: PostgreSql__PostgreSqlTesUserPassword
+              value: {{ .Values.database.postgreSqlTesUserPassword }}
             - name: ASPNETCORE_URLS
               value: http://0.0.0.0:{{ .Values.service.tesPort }}/
             - name: DefaultStorageAccountName
@@ -35,8 +45,6 @@ spec:
               value: {{ .Values.config.azureServicesAuthConnectionString }}
             - name: ApplicationInsightsAccountName
               value: {{ .Values.config.applicationInsightsAccountName }}
-            - name: CosmosDb__AccountName
-              value: {{ .Values.config.cosmosDbAccountName }}
             - name: AzureOfferDurableId
               value: {{ .Values.config.azureOfferDurableId }}
             - name: BatchAccount__AccountName
