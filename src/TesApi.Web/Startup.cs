@@ -229,12 +229,12 @@ namespace TesApi.Web
                         return r;
                     })
 
-            .IfThenElse(false, s => s, s =>
-            {
-                var configurationUtils = ActivatorUtilities.GetServiceOrCreateInstance<ConfigurationUtils>(s.ApplicationServices);
-                configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync().Wait();
-                return s;
-            });
+                .IfThenElse(false, s => s, s =>
+                {
+                    var configurationUtils = ActivatorUtilities.GetServiceOrCreateInstance<ConfigurationUtils>(s.ApplicationServices);
+                    configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync().Wait();
+                    return s;
+                });
     }
 
     internal static class BooleanMethodSelectorExtensions
