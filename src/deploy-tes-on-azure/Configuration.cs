@@ -11,7 +11,7 @@ namespace TesDeployer
     public class Configuration : UserAccessibleConfiguration
     {
         public string PostgreSqlTesDatabaseName { get; set; } = "tes_db";
-        public string PostgreSqlAdministratorLogin { get; set; } = "coa_admin";
+        public string PostgreSqlAdministratorLogin { get; set; } = "tes_admin";
         public string PostgreSqlAdministratorPassword { get; set; }
         public string PostgreSqlTesUserLogin { get; set; } = "tes";
         public string PostgreSqlTesUserPassword { get; set; }
@@ -28,10 +28,10 @@ namespace TesDeployer
     {
         public string SubscriptionId { get; set; }
         public string RegionName { get; set; }
-        public string MainIdentifierPrefix { get; set; } = "coa";
+        public string MainIdentifierPrefix { get; set; } = "tes";
         public string VmSize { get; set; } = "Standard_D3_v2";
         public string VnetAddressSpace { get; set; } = "10.1.0.0/16"; // 10.1.0.0 - 10.1.255.255, 65536 IPs
-        // Address space for CoA services.
+        // Address space for TES services.
         public string VmSubnetAddressSpace { get; set; } = "10.1.0.0/24"; // 10.1.0.0 - 10.1.0.255, 256 IPs
         public string PostgreSqlSubnetAddressSpace { get; set; } = "10.1.1.0/24"; // 10.1.1.0 - 10.1.1.255, 256 IPs
         // Address space for kubernetes system services, must not overlap with any subnet.
@@ -46,7 +46,7 @@ namespace TesDeployer
         public string LogAnalyticsArmId { get; set; }
         public string ApplicationInsightsAccountName { get; set; }
         public string AksClusterName { get; set; }
-        public string AksCoANamespace { get; set; } = "coa";
+        public string AksCoANamespace { get; set; } = "tes";
         public bool ManualHelmDeployment { get; set; }
         public string HelmBinaryPath { get; set; } = OperatingSystem.IsWindows() ? @"C:\ProgramData\chocolatey\bin\helm.exe" : "/usr/local/bin/helm";
         public int AksPoolSize { get; set; } = 2;
