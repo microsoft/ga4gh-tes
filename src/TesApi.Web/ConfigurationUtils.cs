@@ -34,7 +34,8 @@ namespace TesApi.Web
         /// <param name="skuInformationProvider"><see cref="IBatchSkuInformationProvider"/>></param>
         /// <param name="batchAccountResourceInformation"><see cref="BatchAccountResourceInformation"/></param>
         /// <param name="logger"><see cref="ILogger"/></param>
-        public ConfigurationUtils(IConfiguration configuration,
+        public ConfigurationUtils(
+            IConfiguration configuration,
             IStorageAccessProvider storageAccessProvider,
             ArmBatchQuotaProvider quotaProvider,
             IBatchSkuInformationProvider skuInformationProvider,

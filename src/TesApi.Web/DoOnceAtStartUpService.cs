@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -11,7 +14,7 @@ namespace TesApi.Web
     /// </summary>
     public class DoOnceAtStartUpService : IHostedService
     {
-        private readonly ILogger<DoOnceAtStartUpService> logger;
+        private readonly ILogger logger;
         private readonly IServiceProvider serviceProvider;
         /// <summary>
         /// Hosted service that executes one-time set-up tasks at start up.

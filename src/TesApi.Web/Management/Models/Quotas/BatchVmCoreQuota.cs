@@ -1,4 +1,7 @@
-﻿using System.Collections.Generic;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System.Collections.Generic;
 
 namespace TesApi.Web.Management.Models.Quotas
 {
@@ -9,8 +12,9 @@ namespace TesApi.Web.Management.Models.Quotas
     /// <param name="IsLowPriority">If the cores apply to low priority</param>
     /// <param name="IsDedicatedAndPerVmFamilyCoreQuotaEnforced">If dedicate core quota is enforced</param>
     /// <param name="DedicatedCoreQuotas">Dedicated core quota list</param>
-    public record BatchVmCoreQuota(int NumberOfCores, bool IsLowPriority, bool IsDedicatedAndPerVmFamilyCoreQuotaEnforced
-        , List<BatchVmCoresPerFamily> DedicatedCoreQuotas)
-    {
-    }
+    public record BatchVmCoreQuota(
+        int NumberOfCores,
+        bool IsLowPriority,
+        bool IsDedicatedAndPerVmFamilyCoreQuotaEnforced,
+        List<BatchVmCoresPerFamily> DedicatedCoreQuotas);
 }

@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -11,7 +14,7 @@ using Tes.Models;
 namespace TesApi.Web.Management
 {
     /// <summary>
-    /// Provides pricing and size VM information using the retail pricing API. 
+    /// Provides pricing and size VM information using the retail pricing API.
     /// </summary>
     public class PriceApiBatchSkuInformationProvider : IBatchSkuInformationProvider
     {
@@ -40,10 +43,8 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <param name="priceApiClient">Retail pricing API client.</param>
         /// <param name="logger">Logger instance.</param>
-        public PriceApiBatchSkuInformationProvider(PriceApiClient priceApiClient, ILogger<PriceApiBatchSkuInformationProvider> logger) : this(null,
-            priceApiClient, logger)
-        {
-        }
+        public PriceApiBatchSkuInformationProvider(PriceApiClient priceApiClient, ILogger<PriceApiBatchSkuInformationProvider> logger)
+            : this(null, priceApiClient, logger) { }
 
         /// <inheritdoc />
         public async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync(string region)
@@ -55,8 +56,7 @@ namespace TesApi.Web.Management
 
             logger.LogInformation($"Trying to get pricing information from the cache for region: {region}.");
 
-            return await appCache.GetOrAddAsync<List<VirtualMachineInformation>>(region, async () => await GetVmSizesAndPricesAsyncImpl(region));
-
+            return await appCache.GetOrAddAsync(region, async () => await GetVmSizesAndPricesAsyncImpl(region));
         }
 
         private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsyncImpl(string region)
@@ -72,7 +72,6 @@ namespace TesApi.Web.Management
 
             foreach (var vm in localVmSizeInfoForBatchSupportedSkus)
             {
-
                 var instancePricingInfo = pricingItems.Where(p => p.armSkuName == vm.VmSize);
                 var normalPriorityInfo = instancePricingInfo.FirstOrDefault(s =>
                     s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase));
@@ -89,15 +88,14 @@ namespace TesApi.Web.Management
                     vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, false, Convert.ToDecimal(normalPriorityInfo.unitPrice)));
                 }
             }
+
             logger.LogInformation("Returning {0} Vm information entries with pricing for Azure Batch Supported Vm types}", vmInfoList.Count);
 
             return vmInfoList;
-
         }
 
-        private VirtualMachineInformation CreateVirtualMachineInfoFromReference(VirtualMachineInformation vmReference, bool isLowPriority, decimal pricePerHour)
-        {
-            var spotVirtualMachineInformation = new VirtualMachineInformation()
+        private static VirtualMachineInformation CreateVirtualMachineInfoFromReference(VirtualMachineInformation vmReference, bool isLowPriority, decimal pricePerHour)
+            => new()
             {
                 LowPriority = isLowPriority,
                 MaxDataDiskCount = vmReference.MaxDataDiskCount,
@@ -108,12 +106,8 @@ namespace TesApi.Web.Management
                 VmFamily = vmReference.VmFamily,
                 VmSize = vmReference.VmSize
             };
-            return spotVirtualMachineInformation;
-        }
 
-        private async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync()
-        {
-            return JsonConvert.DeserializeObject<List<VirtualMachineInformation>>(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "BatchSupportedVmSizeInformation.json")));
-        }
+        private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync()
+            => JsonConvert.DeserializeObject<List<VirtualMachineInformation>>(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "BatchSupportedVmSizeInformation.json")));
     }
 }

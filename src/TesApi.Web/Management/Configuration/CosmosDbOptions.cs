@@ -1,4 +1,7 @@
-﻿namespace TesApi.Web.Management.Configuration
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+namespace TesApi.Web.Management.Configuration
 {
     /// <summary>
     /// Cosmos DB configuration options
@@ -18,7 +21,7 @@
         /// </summary>
         public string CosmosDbEndpoint { get; set; }
         /// <summary>
-        /// Cosmos db account name. 
+        /// Cosmos db account name.
         /// </summary>
         public string AccountName { get; set; }
     }
