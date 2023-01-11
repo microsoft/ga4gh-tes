@@ -874,7 +874,7 @@ namespace TesDeployer
 
                 UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
-                UpdateSetting(settings, defaults, "TesHostname", $"{configuration.ResourceGroupName}.{configuration.RegionName}.cloudapp.azure.com", ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "TesHostname", $"{configuration.ResourceGroupName.Replace(".", "")}.{configuration.RegionName}.cloudapp.azure.com", ignoreDefaults: true);
             }
 
             //if (installedVersion is null || installedVersion < new Version(3, 3))
