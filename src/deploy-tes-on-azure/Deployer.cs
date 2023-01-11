@@ -849,7 +849,7 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "UsePostgreSqlSingleServer", provisionPostgreSqlOnAzure ? configuration.UsePostgreSqlSingleServer.ToString() : string.Empty, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
-                UpdateSetting(settings, defaults, "TesHostname", $"{configuration.ResourceGroupName.Replace(".","")}.{configuration.RegionName}.cloudapp.azure.com", ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "TesHostname", $"{configuration.ResourceGroupName.Replace(".", "")}.{configuration.RegionName}.cloudapp.azure.com", ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "PostgreSqlTesDatabaseName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesDatabaseName : string.Empty, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "PostgreSqlTesUserLogin", GetFormattedPostgresqlUser(), ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "PostgreSqlTesUserPassword", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserPassword : string.Empty, ignoreDefaults: true);
