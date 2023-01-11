@@ -287,9 +287,8 @@ namespace TesApi.Web
             }
             else
             {
-                return $"{ExecutionsPathPrefix}/{task.Id}";
+                return $"{ExecutionsPathPrefix.TrimStart('/')}/{task.Id}";
             }
-
         }
 
         /// <summary>
