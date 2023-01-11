@@ -886,7 +886,7 @@ namespace TesApi.Web
                 && !inputFile.Path.StartsWith($"{CromwellPathPrefix}/", StringComparison.OrdinalIgnoreCase)
                 && !inputFile.Path.StartsWith($"{ExecutionsPathPrefix}/", StringComparison.OrdinalIgnoreCase))
             {
-                throw new TesException("InvalidInputFilePath", $"Unsupported input path '{inputFile.Path}' for task Id {taskId}. Must start with '{CromwellPathPrefix}'.");
+                throw new TesException("InvalidInputFilePath", $"Unsupported input path '{inputFile.Path}' for task Id {taskId}. Must start with '{CromwellPathPrefix}' or '{ExecutionsPathPrefix}'.");
             }
 
             if (inputFile.Url is not null && inputFile.Content is not null)
