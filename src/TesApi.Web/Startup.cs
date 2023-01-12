@@ -65,6 +65,7 @@ namespace TesApi.Web
                 .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
 
                 .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
+                .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
 
                 .AddControllers()
                 .AddNewtonsoftJson(opts =>
@@ -113,6 +114,7 @@ namespace TesApi.Web
                 })
 
                 .AddHostedService<Scheduler>()
+                .AddHostedService<BatchPoolService>()
                 .AddHostedService<DeleteCompletedBatchJobsHostedService>()
                 .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
                 .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()

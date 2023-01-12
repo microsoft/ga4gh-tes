@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
 using System.Threading.Tasks;
 using Tes.Models;
 
@@ -12,17 +13,24 @@ namespace TesApi.Web.Management
     public interface IBatchQuotaVerifier
     {
         /// <summary>
-        /// Checks if the current quota allows fullfiment of the requested VM SKU.
+        /// Checks if the current quota allows fullfilment of the requested VM SKU.
         /// </summary>
         /// <param name="virtualMachineInformation"></param>
+        /// <param name="needPoolQuotaCheck">A <see cref="Func{Boolean}"/> to enable checking pool quota.</param>
         /// <returns></returns>
         /// <exception cref="AzureBatchQuotaMaxedOutException">Thrown when a max quota condition was identified</exception>
-        Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation);
+        Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, Func<bool> needPoolQuotaCheck);
 
         /// <summary>
         /// Gets the instance of the batch quota provider.
         /// </summary>
         /// <returns>Batch quota provider <see cref="IBatchQuotaProvider"/></returns>
         IBatchQuotaProvider GetBatchQuotaProvider();
+
+        /// <summary>
+        /// Checks if the current quota allows fulfillment of an additional batch pool.
+        /// </summary>
+        /// <returns></returns>
+        Task CheckBatchPoolAvailabilityQuotaAsync();
     }
 }

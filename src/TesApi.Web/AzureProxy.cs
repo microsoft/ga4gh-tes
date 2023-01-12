@@ -219,10 +219,11 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task CreateBatchJobAsync(string jobId, CloudTask cloudTask, PoolInformation poolInformation)
+        public async Task CreateBatchJobAsync(string jobId, CloudTask cloudTask, PoolInformation poolInformation, JobPreparationTask jobPreparationTask)
         {
             logger.LogInformation($"TES task: {cloudTask.Id} - creating Batch job");
             var job = batchClient.JobOperations.CreateJob(jobId, poolInformation);
+            job.JobPreparationTask = jobPreparationTask;
             job.OnAllTasksComplete = OnAllTasksComplete.TerminateJob;
             await job.CommitAsync();
             logger.LogInformation($"TES task: {cloudTask.Id} - Batch job committed successfully.");
@@ -242,13 +243,6 @@ namespace TesApi.Web
                 logger.LogError(ex, $"TES task: {cloudTask.Id} deleting {job.Id} because adding task to it failed. Batch error: {batchError}");
 
                 await batchClient.JobOperations.DeleteJobAsync(job.Id);
-
-                if (!string.IsNullOrWhiteSpace(poolInformation?.PoolId))
-                {
-                    // With manual pools, the PoolId property is set
-                    await DeleteBatchPoolIfExistsAsync(poolInformation.PoolId);
-                }
-
                 throw;
             }
         }
@@ -265,16 +259,19 @@ namespace TesApi.Web
                 var activeJobWithMissingAutoPool = false;
                 ComputeNodeState? nodeState = null;
                 TaskState? taskState = null;
+                string poolId = null;
                 TaskExecutionInformation taskExecutionInformation = null;
 
+                // Normally, we will only find one job. If we find more, we always want the latest one. Thus, we use ListJobs()
                 var jobFilter = new ODATADetailLevel
                 {
                     FilterClause = $"startswith(id,'{tesTaskId}{BatchJobAttemptSeparator}')",
                     SelectClause = "*"
                 };
 
-                var jobInfos = (await batchClient.JobOperations.ListJobs(jobFilter).ToListAsync())
-                    .Select(j => new { Job = j, AttemptNumber = int.Parse(j.Id.Split(BatchJobAttemptSeparator)[1]) });
+                var jobInfos = await batchClient.JobOperations.ListJobs(jobFilter).ToAsyncEnumerable()
+                    .Select(j => new { Job = j, AttemptNumber = int.Parse(j.Id.Split(BatchJobAttemptSeparator)[1]) })
+                    .ToListAsync();
 
                 if (!jobInfos.Any())
                 {
@@ -290,7 +287,7 @@ namespace TesApi.Web
 
                 var job = lastJobInfo.Job;
                 var attemptNumber = lastJobInfo.AttemptNumber;
-                var poolId = job.ExecutionInformation?.PoolId;
+                poolId = job.ExecutionInformation?.PoolId;
 
                 if (job.State == JobState.Active && poolId is not null)
                 {
@@ -350,6 +347,7 @@ namespace TesApi.Web
                     JobEndTime = job.ExecutionInformation?.EndTime,
                     JobSchedulingError = job.ExecutionInformation?.SchedulingError,
                     TaskState = taskState,
+                    PoolId = poolId,
                     TaskExecutionResult = taskExecutionInformation?.Result,
                     TaskStartTime = taskExecutionInformation?.StartTime,
                     TaskEndTime = taskExecutionInformation?.EndTime,
@@ -431,18 +429,33 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
+        public IAsyncEnumerable<CloudPool> GetActivePoolsAsync(string hostName)
+        {
+            var activePoolsFilter = new ODATADetailLevel
+            {
+                FilterClause = $"state eq 'active'",
+                SelectClause = BatchPool.CloudPoolSelectClause
+            };
+
+            return batchClient.PoolOperations.ListPools(activePoolsFilter).ToAsyncEnumerable()
+                .Where(p => hostName.Equals(p.Metadata?.FirstOrDefault(m => BatchScheduler.PoolHostName.Equals(m.Name, StringComparison.Ordinal))?.Value, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <inheritdoc/>
         public async Task<IEnumerable<string>> GetPoolIdsReferencedByJobsAsync(CancellationToken cancellationToken = default)
             => (await batchClient.JobOperations.ListJobs(new ODATADetailLevel(selectClause: "executionInfo")).ToListAsync(cancellationToken))
                 .Where(j => !string.IsNullOrEmpty(j.ExecutionInformation?.PoolId))
                 .Select(j => j.ExecutionInformation.PoolId);
 
         /// <inheritdoc/>
+        public Task DeleteBatchComputeNodesAsync(string poolId, IEnumerable<ComputeNode> computeNodes, CancellationToken cancellationToken = default)
+            => batchClient.PoolOperations.RemoveFromPoolAsync(poolId, computeNodes, deallocationOption: ComputeNodeDeallocationOption.TaskCompletion, cancellationToken: cancellationToken);
+
+        /// <inheritdoc/>
         public Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken = default)
             => batchClient.PoolOperations.DeletePoolAsync(poolId, cancellationToken: cancellationToken);
 
-        /// <summary>
-        /// Deletes the specified pool
-        /// </summary>
+        /// <inheritdoc/>
         public async Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken = default)
         {
             try
@@ -477,6 +490,32 @@ namespace TesApi.Web
                 throw;
             }
         }
+
+        /// <inheritdoc/>
+        public Task<CloudPool> GetBatchPoolAsync(string poolId, DetailLevel detailLevel = default, CancellationToken cancellationToken = default)
+            => batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: detailLevel, cancellationToken: cancellationToken);
+
+        /// <inheritdoc/>
+        public Task CommitBatchPoolChangesAsync(CloudPool pool, CancellationToken cancellationToken = default)
+            => pool.CommitChangesAsync(cancellationToken: cancellationToken);
+
+        /// <inheritdoc/>
+        public async Task<(int? lowPriorityNodes, int? dedicatedNodes)> GetCurrentComputeNodesAsync(string poolId, CancellationToken cancellationToken = default)
+        {
+            var pool = await batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: new ODATADetailLevel(selectClause: "currentLowPriorityNodes,currentDedicatedNodes"), cancellationToken: cancellationToken);
+            return (pool.CurrentLowPriorityComputeNodes, pool.CurrentDedicatedComputeNodes);
+        }
+
+        /// <inheritdoc/>
+        public async Task<(AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? TargetDedicated)> GetComputeNodeAllocationStateAsync(string poolId, CancellationToken cancellationToken = default)
+        {
+            var pool = await batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: new ODATADetailLevel(selectClause: "allocationState,enableAutoScale,targetLowPriorityNodes,targetDedicatedNodes"), cancellationToken: cancellationToken);
+            return (pool.AllocationState, pool.AutoScaleEnabled, pool.TargetLowPriorityComputeNodes, pool.TargetDedicatedComputeNodes);
+        }
+
+        /// <inheritdoc/>
+        public async Task SetComputeNodeTargetsAsync(string poolId, int? targetLowPriorityComputeNodes, int? targetDedicatedComputeNodes, CancellationToken cancellationToken = default)
+            => await batchClient.PoolOperations.ResizePoolAsync(poolId, targetDedicatedComputeNodes: targetDedicatedComputeNodes, targetLowPriorityComputeNodes: targetLowPriorityComputeNodes, cancellationToken: cancellationToken);
 
         /// <summary>
         /// Gets the list of container registries that the TES server has access to
@@ -692,7 +731,38 @@ namespace TesApi.Web
                 .FirstOrDefault(storageAccount => storageAccount.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase));
 
         /// <inheritdoc/>
+        public IAsyncEnumerable<ComputeNode> ListComputeNodesAsync(string poolId, DetailLevel detailLevel = null)
+            => batchClient.PoolOperations.ListComputeNodes(poolId, detailLevel: detailLevel).ToAsyncEnumerable();
+
+        /// <inheritdoc/>
         public IAsyncEnumerable<CloudJob> ListJobsAsync(DetailLevel detailLevel = null)
             => batchClient.JobOperations.ListJobs(detailLevel: detailLevel).ToAsyncEnumerable();
+
+        /// <inheritdoc/>
+        public async Task DisableBatchPoolAutoScaleAsync(string poolId, CancellationToken cancellationToken)
+            => await batchClient.PoolOperations.DisableAutoScaleAsync(poolId, cancellationToken: cancellationToken);
+
+        /// <inheritdoc/>
+        public async Task EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, IAzureProxy.BatchPoolAutoScaleFormulaFactory formulaFactory, CancellationToken cancellationToken)
+        {
+            var state = await GetComputeNodeAllocationStateAsync(poolId, cancellationToken);
+
+            if (state.AllocationState != AllocationState.Steady)
+            {
+                throw new InvalidOperationException();
+            }
+
+            await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formulaFactory(preemptable, preemptable ? state.TargetLowPriority.Value : state.TargetDedicated.Value), interval, cancellationToken: cancellationToken);
+        }
+
+        private class VmPrice
+        {
+            public string VmSize { get; set; }
+            public decimal? PricePerHourDedicated { get; set; }
+            public decimal? PricePerHourLowPriority { get; set; }
+
+            [JsonIgnore]
+            public bool LowPriorityAvailable => PricePerHourLowPriority is not null;
+        }
     }
 }

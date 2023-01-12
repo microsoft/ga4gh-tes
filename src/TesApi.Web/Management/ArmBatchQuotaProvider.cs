@@ -17,7 +17,6 @@ namespace TesApi.Web.Management;
 /// </summary>
 public class ArmBatchQuotaProvider : IBatchQuotaProvider
 {
-
     /// <summary>
     /// Logger instance.
     /// </summary>
@@ -66,6 +65,10 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
         return new(numberOfCores, lowPriority, isDedicatedAndPerVmFamilyCoreQuotaEnforced, dedicatedCoresPerFamilies);
     }
 
+    /// <inheritdoc />
+    public async Task<int> GetBatchAccountPoolQuotaAsync()
+        => (await GetBatchAccountQuotasAsync()).PoolQuota;
+
     /// <summary>
     /// Getting the batch account quota.
     /// </summary>
@@ -105,7 +108,7 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
         }
     }
 
-    private BatchVmFamilyQuotas ToVmFamilyBatchAccountQuotas(AzureBatchAccountQuotas batchAccountQuotas, string vmFamily, bool lowPriority, int? coresRequirement)
+    private static BatchVmFamilyQuotas ToVmFamilyBatchAccountQuotas(AzureBatchAccountQuotas batchAccountQuotas, string vmFamily, bool lowPriority, int? coresRequirement)
     {
         var isDedicated = !lowPriority;
         var totalCoreQuota = isDedicated ? batchAccountQuotas.DedicatedCoreQuota : batchAccountQuotas.LowPriorityCoreQuota;

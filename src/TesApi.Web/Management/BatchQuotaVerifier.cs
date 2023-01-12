@@ -57,13 +57,8 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
         this.azureProxy = azureProxy;
     }
 
-    /// <summary>
-    /// Verifies if the batch account can fulfill the compute requirements
-    /// </summary>
-    /// <param name="virtualMachineInformation"></param>
-    /// <exception cref="AzureBatchLowQuotaException"></exception>
-    /// <exception cref="AzureBatchQuotaMaxedOutException"></exception>
-    public async Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation)
+    /// <inheritdoc cref="IBatchQuotaProvider"/>
+    public async Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, Func<bool> needPoolQuotaCheck)
     {
         var workflowCoresRequirement = virtualMachineInformation.NumberOfCores ?? 0;
         var isDedicated = !virtualMachineInformation.LowPriority;
@@ -77,7 +72,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
                 virtualMachineInformation.LowPriority,
                 virtualMachineInformation.NumberOfCores);
 
-            if (batchVmFamilyBatchQuotas == null)
+            if (batchVmFamilyBatchQuotas is null)
             {
                 throw new InvalidOperationException(
                     "Could not obtain quota information from the management service. The return value is null");
@@ -110,7 +105,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
             throw new AzureBatchQuotaMaxedOutException($"No remaining active jobs quota available. There are {batchUtilization.ActivePoolsCount} active jobs out of {batchVmFamilyBatchQuotas.ActiveJobAndJobScheduleQuota}.");
         }
 
-        if (batchUtilization.ActivePoolsCount + 1 > batchVmFamilyBatchQuotas.PoolQuota)
+        if (needPoolQuotaCheck() && batchUtilization.ActivePoolsCount + 1 > batchVmFamilyBatchQuotas.PoolQuota)
         {
             throw new AzureBatchQuotaMaxedOutException($"No remaining pool quota available. There are {batchUtilization.ActivePoolsCount} pools in use out of {batchVmFamilyBatchQuotas.PoolQuota}.");
         }
@@ -130,6 +125,19 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
     /// <inheritdoc cref="IBatchQuotaProvider"/>
     public IBatchQuotaProvider GetBatchQuotaProvider()
         => batchQuotaProvider;
+
+
+    /// <inheritdoc cref="IBatchQuotaProvider"/>
+    public async Task CheckBatchPoolAvailabilityQuotaAsync()
+    {
+        var activePoolsCount = azureProxy.GetBatchActivePoolCount();
+        var poolQuota = await batchQuotaProvider.GetBatchAccountPoolQuotaAsync();
+
+        if (activePoolsCount + 1 > poolQuota)
+        {
+            throw new AzureBatchQuotaMaxedOutException($"No remaining pool quota available. There are {activePoolsCount} pools in use out of {poolQuota}.");
+        }
+    }
 
     private async Task<BatchAccountUtilization> GetBatchAccountUtilizationAsync(VirtualMachineInformation vmInfo)
     {

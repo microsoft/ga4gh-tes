@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
+using Microsoft.Azure.Batch.Common;
+using Tes.Models;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
 namespace TesApi.Web
@@ -35,7 +37,8 @@ namespace TesApi.Web
         /// <param name="jobId"></param>
         /// <param name="cloudTask"></param>
         /// <param name="poolInformation"></param>
-        Task CreateBatchJobAsync(string jobId, CloudTask cloudTask, PoolInformation poolInformation);
+        /// <param name="jobPreparationTask"></param>
+        Task CreateBatchJobAsync(string jobId, CloudTask cloudTask, PoolInformation poolInformation, JobPreparationTask jobPreparationTask);
 
         /// <summary>
         /// Gets the <see cref="ContainerRegistryInfo"/> for the given image name
@@ -166,6 +169,13 @@ namespace TesApi.Web
         Task<IEnumerable<string>> GetActivePoolIdsAsync(string prefix, TimeSpan minAge, CancellationToken cancellationToken);
 
         /// <summary>
+        /// Gets the list of active pools matching the hostname in the metadata
+        /// </summary>
+        /// <param name="hostName"></param>
+        /// <returns>List of <see cref="CloudPool"/> managed by the host.</returns>
+        IAsyncEnumerable<CloudPool> GetActivePoolsAsync(string hostName);
+
+        /// <summary>
         /// Gets the list of pool ids referenced by the jobs
         /// </summary>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
@@ -183,6 +193,73 @@ namespace TesApi.Web
         /// Deletes the specified pool if it exists
         /// </summary>
         Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Retrieves the specified pool
+        /// </summary>
+        /// <param name="poolId">The <see cref="CloudPool.Id"/> of the pool to retrieve.</param>
+        /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for controlling which properties are retrieved from the service.</param>
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns><see cref="CloudPool"/></returns>
+        Task<CloudPool> GetBatchPoolAsync(string poolId, DetailLevel detailLevel = default, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Commits all pending changes to this Microsoft.Azure.Batch.CloudPool to the Azure Batch service.
+        /// </summary>
+        /// <param name="pool">The <see cref="CloudPool"/> to change.</param>
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        Task CommitBatchPoolChangesAsync(CloudPool pool, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Lists compute nodes in batch pool <paramref name="poolId"/>
+        /// </summary>
+        /// <param name="poolId">The id of the pool.</param>
+        /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for filtering the list and for controlling which properties are retrieved from the service.</param>
+        /// <returns></returns>
+        IAsyncEnumerable<ComputeNode> ListComputeNodesAsync(string poolId, DetailLevel detailLevel = null);
+
+        /// <summary>
+        /// Lists jobs in the batch account
+        /// </summary>
+        /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for filtering the list and for controlling which properties are retrieved from the service.</param>
+        /// <returns></returns>
+        IAsyncEnumerable<CloudJob> ListJobsAsync(DetailLevel detailLevel = null);
+
+        /// <summary>
+        /// Deletes the specified ComputeNodes
+        /// </summary>
+        /// <param name="poolId">The id of the pool.</param>
+        /// <param name="computeNodes">Enumerable list of <see cref="ComputeNode"/>s to delete.</param>
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        Task DeleteBatchComputeNodesAsync(string poolId, IEnumerable<ComputeNode> computeNodes, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets the allocation state and numbers of targeted compute nodes
+        /// </summary>
+        /// <param name="poolId">The id of the pool.</param>
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        Task<(AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? TargetDedicated)> GetComputeNodeAllocationStateAsync(string poolId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Resizes the specified pool
+        /// </summary>
+        /// <param name="poolId">The id of the pool.</param>
+        /// <param name="targetLowPriorityComputeNodes"></param>
+        /// <param name="targetDedicatedComputeNodes"></param>
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        Task SetComputeNodeTargetsAsync(string poolId, int? targetLowPriorityComputeNodes, int? targetDedicatedComputeNodes, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets the numbers of compute nodes currently in the pool
+        /// </summary>
+        /// <param name="poolId">The id of the pool.</param>
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        Task<(int? lowPriorityNodes, int? dedicatedNodes)> GetCurrentComputeNodesAsync(string poolId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Checks if a local file exists
@@ -204,5 +281,32 @@ namespace TesApi.Web
         /// </summary>
         /// <returns>arm region</returns>
         string GetArmRegion();
+
+        /// <summary>
+        /// Disables AutoScale in a Batch Pool
+        /// </summary>
+        /// <param name="poolId">The id of the pool.</param>
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        Task DisableBatchPoolAutoScaleAsync(string poolId, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Enables AutoScale in a Batch Pool
+        /// </summary>
+        /// <param name="poolId">The id of the pool.</param>
+        /// <param name="preemptable">Type of compute nodes: false if dedicated, otherwise true.</param>
+        /// <param name="interval">The interval for periodic reevaluation of the formula.</param>
+        /// <param name="formulaFactory">A factory function that generates an auto-scale formula.</param>
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        Task EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, BatchPoolAutoScaleFormulaFactory formulaFactory, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Describes a function to generate autoscale formulas
+        /// </summary>
+        /// <param name="preemptable">Type of compute nodes: false if dedicated, otherwise true.</param>
+        /// <param name="currentTarget">Current number of compute nodes.</param>
+        /// <returns></returns>
+        delegate string BatchPoolAutoScaleFormulaFactory(bool preemptable, int currentTarget);
     }
 }
