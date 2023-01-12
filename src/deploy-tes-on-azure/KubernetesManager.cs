@@ -54,6 +54,9 @@ namespace TesDeployer
         private string valuesTemplatePath { get; set; }
         private string helmScriptsRootDirectory { get; set; }
         public string TempHelmValuesYamlPath { get; set; }
+        public string TesCname { get; set; }
+        public string TesHostname { get; set; }
+        public string AzureDnsLabelName { get; set; }
 
         public KubernetesManager(Configuration config, AzureCredentials credentials, CancellationTokenSource cts)
         {
@@ -64,6 +67,12 @@ namespace TesDeployer
             CreateAndInitializeWorkingDirectoriesAsync().Wait();
         }
 
+        public void SetTesIngressNetworkingConfiguration(string prefix)
+        {
+            TesCname = GetTesCname(prefix);
+            TesHostname = $"{TesCname}.{configuration.RegionName}.cloudapp.azure.com";
+            AzureDnsLabelName = TesCname;
+        }
         public async Task<IKubernetes> GetKubernetesClientAsync()
         {
             var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
@@ -174,7 +183,7 @@ namespace TesDeployer
 
             await ExecHelmProcessAsync($"repo update");
 
-            var dnsAnnotation = $"--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-dns-label-name\"={configuration.TesHostname[0..configuration.TesHostname.IndexOf(".")]}";
+            var dnsAnnotation = $"--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-dns-label-name\"={AzureDnsLabelName}";
             var healthProbeAnnotation = "--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-load-balancer-health-probe-request-path\"=/healthz";
             await ExecHelmProcessAsync($"install ingress-nginx ingress-nginx/ingress-nginx --namespace {configuration.AksCoANamespace} --kubeconfig {kubeConfigPath} --version {NginxIngressVersion} {healthProbeAnnotation} {dnsAnnotation}");
             await ExecHelmProcessAsync("install cert-manager jetstack/cert-manager " +
@@ -433,6 +442,16 @@ namespace TesDeployer
                 ["LetsEncryptEmail"] = values.Config["letsEncryptEmail"],
                 ["DefaultStorageAccountName"] = values.Persistence["storageAccount"],
             };
+
+        /// <summary>
+        /// Return a cname derived from the resource group name
+        /// </summary>
+        /// <param name="maxLength">Max length of the cname</param>
+        /// <returns></returns>
+        private string GetTesCname(string prefix, int maxLength = 60) => SdkContext
+            .RandomResourceName($"{prefix.Replace(".", "")}-", maxLength)[0..maxLength]
+            .TrimEnd('-')
+            .ToLowerInvariant();
 
         private async Task<string> ExecHelmProcessAsync(string command, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
         {

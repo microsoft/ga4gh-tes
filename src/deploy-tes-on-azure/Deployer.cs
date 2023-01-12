@@ -155,7 +155,6 @@ namespace TesDeployer
                 var keyVaultUri = string.Empty;
                 IIdentity managedIdentity = null;
                 IPrivateDnsZone postgreSqlDnsZone = null;
-                string tesEndpoint = null;
                 
                 try
                 {
@@ -265,7 +264,6 @@ namespace TesDeployer
                         await kubernetesManager.UpgradeAKSDeploymentAsync(
                             settings,
                             storageAccount);
-                        tesEndpoint = settings["TesHostname"];
 
                         if (aksValues.TryGetValue("EnableIngress", out var enableIngress))
                         {
@@ -354,11 +352,8 @@ namespace TesDeployer
                             resourceGroup = await azureSubscriptionClient.ResourceGroups.GetByNameAsync(configuration.ResourceGroupName);
                         }
 
-                        if (string.IsNullOrWhiteSpace(configuration.TesHostname))
-                        {
-                            string cname = SdkContext.RandomResourceName($"{configuration.ResourceGroupName.Replace(".", "")}-", 60).TrimEnd('-').ToLowerInvariant();
-                            configuration.TesHostname = $"{cname}.{configuration.RegionName}.cloudapp.azure.com";
-                        }
+                        // Derive TES ingress URL from resource group name
+                        kubernetesManager.SetTesIngressNetworkingConfiguration(configuration.ResourceGroupName);
 
                         managedIdentity = await CreateUserManagedIdentityAsync(resourceGroup);
 
@@ -464,7 +459,6 @@ namespace TesDeployer
 
                         var clientId = managedIdentity.ClientId;
                         var settings = ConfigureSettings(clientId);
-                        tesEndpoint = settings["TesHostname"];
 
                         await kubernetesManager.UpdateHelmValuesAsync(storageAccount, keyVaultUri, resourceGroup.Name, settings, managedIdentity);
 
@@ -509,7 +503,7 @@ namespace TesDeployer
                 if (configuration.EnableIngress.GetValueOrDefault())
                 {
                     ConsoleEx.WriteLine($"TES ingress is enabled.");
-                    ConsoleEx.WriteLine($"TES is secured with basic auth at {tesEndpoint}");
+                    ConsoleEx.WriteLine($"TES is secured with basic auth at {kubernetesManager.TesHostname}");
                     ConsoleEx.WriteLine($"TES username: '{configuration.TesUsername}' password: '{configuration.TesPassword}'");
 
                     if (isBatchQuotaAvailable)
@@ -520,7 +514,7 @@ namespace TesDeployer
                         }
                         else
                         {
-                            var isTestWorkflowSuccessful = await RunTestTask(tesEndpoint, batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+                            var isTestWorkflowSuccessful = await RunTestTask(kubernetesManager.TesHostname, batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
 
                             if (!isTestWorkflowSuccessful)
                             {
@@ -883,7 +877,7 @@ namespace TesDeployer
 
                 UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
-                UpdateSetting(settings, defaults, "TesHostname", configuration.TesHostname, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "TesHostname", kubernetesManager.TesHostname, ignoreDefaults: true);
             }
 
             //if (installedVersion is null || installedVersion < new Version(3, 3))
