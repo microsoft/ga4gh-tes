@@ -4,6 +4,13 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
+using Tes.Models;
+using TesApi.Web;
+using TesApi.Web.Management;
+using TesApi.Web.Management.Models.Quotas;
 
 namespace TesApi.Tests;
 
@@ -20,10 +27,6 @@ public class BatchQuotaVerifierTests
 
     private const string Region = "eastus";
     private const string VmFamily = "StandardDSeries";
-    private BatchAccountOptions batchAccountOptions;
-    private List<VirtualMachineInformation> vmSizeAndPriceList;
-
-    public BatchQuotaVerifierTests() { }
 
     [TestInitialize]
     public void BeforeEach()

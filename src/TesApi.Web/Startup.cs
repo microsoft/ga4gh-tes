@@ -180,7 +180,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="app">An Microsoft.AspNetCore.Builder.IApplicationBuilder for the app to configure.</param>
         public void Configure(IApplicationBuilder app)
-            => app.UseRouting()
+        => app.UseRouting()
                 .UseEndpoints(endpoints =>
                 {
                     endpoints.MapControllers();

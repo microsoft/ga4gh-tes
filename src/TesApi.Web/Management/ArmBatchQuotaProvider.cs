@@ -13,15 +13,11 @@ namespace TesApi.Web.Management;
 /// </summary>
 public class ArmBatchQuotaProvider : IBatchQuotaProvider
 {
-
-    /// <summary>
-    /// Azure proxy instance
-    /// </summary>
-    private readonly IAzureProxy azureProxy;
     /// <summary>
     /// Logger instance.
     /// </summary>
     private readonly ILogger logger;
+
     private readonly IAppCache appCache;
     private readonly AzureManagementClientsFactory clientsFactory;
 
@@ -29,11 +25,11 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     /// <summary>
     /// Constructor of ArmResourceQuotaVerifier
     /// </summary>
-    /// <param name="azureProxy"></param>
     /// <param name="logger"></param>
     /// <param name="appCache"></param>
     /// <param name="clientsFactory"></param>
-    public ArmBatchQuotaProvider(IAppCache appCache, AzureManagementClientsFactory clientsFactory, ILogger<ArmBatchQuotaProvider> logger)
+    public ArmBatchQuotaProvider(IAppCache appCache, AzureManagementClientsFactory clientsFactory,
+        ILogger<ArmBatchQuotaProvider> logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(appCache);

@@ -7,7 +7,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
-using LazyCache;
 using Microsoft.Extensions.Logging;
 
 namespace TesApi.Web.Management
@@ -19,7 +18,7 @@ namespace TesApi.Web.Management
     {
         private readonly HttpClient httpClient;
         private readonly TokenCredential tokenCredential;
-        private readonly CacheAndRetryPolicies cacheAndRetryPolicies;
+        private readonly CacheAndRetryHandler cacheAndRetryPolicies;
         private readonly SHA256 sha256 = SHA256.Create();
         private readonly ILogger<HttpClientWrapper> logger;
         private readonly string tokenScope;
@@ -37,7 +36,7 @@ namespace TesApi.Web.Management
         /// <param name="cacheAndRetryPolicies"></param>
         /// <param name="logger"></param>
         /// <param name="tokenScope"></param>
-        public HttpClientWrapper(HttpClient httpClient, TokenCredential tokenCredential, CacheAndRetryPolicies cacheAndRetryPolicies, string tokenScope, ILogger<HttpClientWrapper> logger)
+        public HttpClientWrapper(HttpClient httpClient, TokenCredential tokenCredential, CacheAndRetryHandler cacheAndRetryPolicies, string tokenScope, ILogger<HttpClientWrapper> logger)
         {
             ArgumentNullException.ThrowIfNull(httpClient);
             ArgumentNullException.ThrowIfNull(tokenCredential);
@@ -65,7 +64,7 @@ namespace TesApi.Web.Management
                 await AddAuthorizationHeaderToRequestAsync(httpRequest);
             }
 
-            return await cacheAndRetryPolicies.AsyncRetryPolicy.ExecuteAsync(() => httpClient.SendAsync(httpRequest));
+            return await cacheAndRetryPolicies.ExecuteWithRetryAsync(() => httpClient.SendAsync(httpRequest));
         }
 
         /// <summary>
@@ -83,26 +82,7 @@ namespace TesApi.Web.Management
 
             var cacheKey = ToCacheKey(httpRequest);
 
-            if (cacheAndRetryPolicies.AppCache.TryGetValue(cacheKey, out HttpResponseMessage response))
-            {
-                return response;
-            }
-
-            try
-            {
-                response = await SendRequestWithRetryPolicyAsync(httpRequest);
-                response.EnsureSuccessStatusCode();
-            }
-            catch (Exception e)
-            {
-                logger.LogError("Failed to execute HTTP request.", e);
-                throw;
-            }
-
-            //only add to cache if successful.
-            cacheAndRetryPolicies.AppCache.Add(cacheKey, response);
-
-            return response;
+            return await cacheAndRetryPolicies.ExecuteWithRetryAndCachingAsync(cacheKey, () => httpClient.SendAsync(httpRequest));
         }
 
         private async Task AddAuthorizationHeaderToRequestAsync(HttpRequestMessage requestMessage)
@@ -110,7 +90,11 @@ namespace TesApi.Web.Management
             logger.LogInformation("Getting token for scope:{}", tokenScope);
             try
             {
-                var accessToken = await tokenCredential.GetTokenAsync(new TokenRequestContext(new string[] { tokenScope }), CancellationToken.None);
+                var accessToken = await tokenCredential.GetTokenAsync(new TokenRequestContext(new string[]
+                    {
+                        tokenScope
+                    }),
+                    CancellationToken.None);
                 requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.Token);
 
             }

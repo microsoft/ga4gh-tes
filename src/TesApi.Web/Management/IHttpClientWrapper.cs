@@ -3,6 +3,9 @@ using System.Threading.Tasks;
 
 namespace TesApi.Web.Management;
 
+/// <summary>
+/// Wraps the HTTP client with retry and caching capabilities
+/// </summary>
 public interface IHttpClientWrapper
 {
     /// <summary>

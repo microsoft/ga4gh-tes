@@ -14,7 +14,7 @@ namespace TesApi.Web.Management
         private static readonly HttpClient httpClient = new();
         private static readonly Uri apiEndpoint = new($"https://prices.azure.com/api/retail/prices");
         private static readonly HttpClient httpClient = new HttpClient();
-        private static readonly Uri apiEndpoint = new Uri($"https://prices.azure.com/api/retail/prices");
+        private static readonly Uri apiEndpoint = new Uri("https://prices.azure.com/api/retail/prices");
 
         /// <summary>
         /// Get pricing information in a region. 
@@ -65,12 +65,7 @@ namespace TesApi.Web.Management
     /// <returns></returns>
     public async Task<RetailPricingData> GetPricingInformationPageAsync(int skip, string region)
     {
-        var builder = new UriBuilder(apiEndpoint)
-        {
-            Query = BuildRequestQueryString(skip, region)
-        };
-        var builder = new UriBuilder(apiEndpoint);
-        builder.Query = BuildRequestQueryString(skip, region);
+        var builder = new UriBuilder(apiEndpoint) { Query = BuildRequestQueryString(skip, region) };
 
         var response = await httpClient.GetStringAsync(builder.Uri);
 

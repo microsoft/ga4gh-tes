@@ -4,6 +4,9 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Tes.Models;
+using TesApi.Web.Management.Models.Quotas;
 
 namespace TesApi.Web.Management;
 
@@ -13,7 +16,7 @@ namespace TesApi.Web.Management;
 /// </summary>
 public class BatchQuotaVerifier : IBatchQuotaVerifier
 {
-    private const string AzureSupportUrl = $"https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
+    private const string AzureSupportUrl = "https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
     private readonly IAzureProxy azureProxy;
     private readonly ILogger logger;
     private readonly IBatchQuotaProvider batchQuotaProvider;
@@ -85,7 +88,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
         }
         catch (Exception e)
         {
-            logger.LogError("Failed to retrieve quota information for the management provider", e);
+            logger.LogError(e, "Failed to retrieve quota information for the management provider");
             throw;
         }
 

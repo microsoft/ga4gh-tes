@@ -69,7 +69,7 @@ namespace TesApi.Web.Management
             foreach (var vm in localVmSizeInfoForBatchSupportedSkus)
             {
 
-                var instancePricingInfo = pricingItems.Where(p => p.armSkuName == vm.VmSize);
+                var instancePricingInfo = pricingItems.Where(p => p.armSkuName == vm.VmSize).ToList();
                 var normalPriorityInfo = instancePricingInfo.FirstOrDefault(s =>
                     s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase));
                 var lowPriorityInfo = instancePricingInfo.FirstOrDefault(s =>
@@ -85,8 +85,7 @@ namespace TesApi.Web.Management
                     vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, false, Convert.ToDecimal(normalPriorityInfo.unitPrice)));
                 }
             }
-
-            logger.LogInformation("Returning {0} Vm information entries with pricing for Azure Batch Supported Vm types}", vmInfoList.Count);
+            logger.LogInformation($"Returning {vmInfoList.Count} Vm information entries with pricing for Azure Batch Supported Vm types");
 
             return vmInfoList;
 
