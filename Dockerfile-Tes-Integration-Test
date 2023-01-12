@@ -3,15 +3,21 @@
 
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build-env
 WORKDIR /app
-
+# 1.1 Copy solution & nuget config file (if exists)
+COPY ./* ./
+# 1.2 Copy csproj and create folders for projects
+COPY ./*/*/*.csproj ./src/
+WORKDIR /app/src
+# 1.3 Create folders for projects
+RUN for file in $(ls *.csproj); do mkdir -p ${file%.*} && mv $file ${file%.*}/; done
+WORKDIR /app
 # Restore packages in separate layer
-COPY TesApi.Web/TesApi.Web.csproj TesApi.Web/
-COPY Tes/Tes.csproj Tes/
-RUN dotnet restore TesApi.Web/TesApi.Web.csproj
+RUN dotnet restore
 
 # Copy the rest of the files and publish
 COPY . ./
-RUN dotnet publish -c Release -o out --no-restore TesApi.Web/TesApi.Web.csproj
+RUN dotnet build -c Release
+RUN dotnet publish TesApi.Web -c Release -o /app/out
 
 # Build runtime image
 FROM mcr.microsoft.com/dotnet/aspnet:7.0
