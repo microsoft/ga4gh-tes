@@ -61,8 +61,8 @@ namespace TesApi.Tests.TestServices
                 .AddTransient<ILogger<ConfigurationUtils>>(_ => NullLogger<ConfigurationUtils>.Instance)
                 .AddTransient<ILogger<PriceApiBatchSkuInformationProvider>>(_ => NullLogger<PriceApiBatchSkuInformationProvider>.Instance)
                 .AddSingleton<TestRepositoryStorage>()
-                .AddSingleton<BatchPoolFactory>()
                 .AddSingleton<PriceApiClient>()
+                .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
                 .AddSingleton(s => GetArmBatchQuotaProvider(s, armBatchQuotaProvider)) //added so config utils gets the arm implementation, to be removed once config utils is refactored.
                 //.AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.

@@ -89,7 +89,7 @@ namespace TesApi.Web
         /// <param name="quotaVerifier">Quota verifier <see cref="IBatchQuotaVerifier"/>></param>
         /// <param name="skuInformationProvider">Sku informatoin provider <see cref="IBatchSkuInformationProvider"/></param>
         /// <param name="poolFactory"></param>
-        public BatchScheduler(ILogger<BatchScheduler> logger, IConfiguration configuration, IAzureProxy azureProxy, IStorageAccessProvider storageAccessProvider, IBatchQuotaVerifier quotaVerifier, IBatchSkuInformationProvider skuInformationProvider, BatchPoolFactory poolFactory)
+        public BatchScheduler(ILogger<BatchScheduler> logger, IConfiguration configuration, IAzureProxy azureProxy, IStorageAccessProvider storageAccessProvider, IBatchQuotaVerifier quotaVerifier, IBatchSkuInformationProvider skuInformationProvider, IBatchPoolFactory poolFactory)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(configuration);
