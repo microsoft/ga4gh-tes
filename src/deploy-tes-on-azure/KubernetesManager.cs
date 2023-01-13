@@ -449,7 +449,9 @@ namespace TesDeployer
         /// <param name="maxLength">Max length of the cname</param>
         /// <returns></returns>
         private string GetTesCname(string prefix, int maxLength = 60) => SdkContext
-            .RandomResourceName($"{prefix.Replace(".", "")}-", maxLength)[0..maxLength]
+            .RandomResourceName($"{prefix.Replace(".", "")}-", maxLength)
+            .Take(maxLength)
+            .ToString()
             .TrimEnd('-')
             .ToLowerInvariant();
 
