@@ -449,7 +449,7 @@ namespace TesDeployer
         /// </summary>
         /// <param name="maxLength">Max length of the cname</param>
         /// <returns></returns>
-        private string GetTesCname(string prefix, int maxLength = 60)
+        private string GetTesCname(string prefix, int maxLength = 50)
         {
             var tempCname = SdkContext.RandomResourceName($"{prefix.Replace(".", "")}-", maxLength);
 
