@@ -69,8 +69,11 @@ namespace TesDeployer
 
         public void SetTesIngressNetworkingConfiguration(string prefix)
         {
-            TesCname = GetTesCname(prefix);
-            TesHostname = $"{TesCname}.{configuration.RegionName}.cloudapp.azure.com";
+            const int maxCnLength = 64;
+            var suffix = $".{configuration.RegionName}.cloudapp.azure.com";
+            var prefixMaxLength = maxCnLength - suffix.Length;
+            TesCname = GetTesCname(prefix, prefixMaxLength);
+            TesHostname = $"{TesCname}.{suffix}";
             AzureDnsLabelName = TesCname;
         }
 
