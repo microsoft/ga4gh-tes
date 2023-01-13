@@ -73,6 +73,7 @@ namespace TesDeployer
             TesHostname = $"{TesCname}.{configuration.RegionName}.cloudapp.azure.com";
             AzureDnsLabelName = TesCname;
         }
+
         public async Task<IKubernetes> GetKubernetesClientAsync()
         {
             var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
@@ -448,12 +449,17 @@ namespace TesDeployer
         /// </summary>
         /// <param name="maxLength">Max length of the cname</param>
         /// <returns></returns>
-        private string GetTesCname(string prefix, int maxLength = 60) => SdkContext
-            .RandomResourceName($"{prefix.Replace(".", "")}-", maxLength)
-            .Take(maxLength)
-            .ToString()
-            .TrimEnd('-')
-            .ToLowerInvariant();
+        private string GetTesCname(string prefix, int maxLength = 60)
+        {
+            var tempCname = SdkContext.RandomResourceName($"{prefix.Replace(".", "")}-", maxLength);
+
+            if (tempCname.Length > maxLength)
+            {
+                tempCname = tempCname.Substring(0, maxLength);
+            }
+
+            return tempCname.TrimEnd('-').ToLowerInvariant();
+        }
 
         private async Task<string> ExecHelmProcessAsync(string command, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
         {
