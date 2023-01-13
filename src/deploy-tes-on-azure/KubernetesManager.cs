@@ -73,7 +73,7 @@ namespace TesDeployer
             var suffix = $".{configuration.RegionName}.cloudapp.azure.com";
             var prefixMaxLength = maxCnLength - suffix.Length;
             TesCname = GetTesCname(prefix, prefixMaxLength);
-            TesHostname = $"{TesCname}.{suffix}";
+            TesHostname = $"{TesCname}{suffix}";
             AzureDnsLabelName = TesCname;
         }
 
