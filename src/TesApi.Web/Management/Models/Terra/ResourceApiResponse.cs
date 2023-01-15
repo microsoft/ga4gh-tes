@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace TesApi.Web.Management.Terra;
+namespace TesApi.Web.Management.Models.Terra;
 
 public class ResourceApiResponse
 {

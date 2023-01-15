@@ -5,11 +5,12 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
+using Azure.Core;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using TesApi.Web.Management;
-using TesApi.Web.Management.Terra;
+using TesApi.Web.Management.Clients;
 
 namespace TesApi.Tests
 {
@@ -27,29 +28,30 @@ namespace TesApi.Tests
 
         private TerraLandingZoneApiClient terraLandingZoneApiClient;
         private Mock<IHttpClientWrapper> httpClientWrapper;
-        private Mock<ILogger> logger;
         private Mock<HttpResponseMessage> response;
         private StubHttpContent httpContent;
-
+        private Mock<TokenCredential> tokenCredential;
+        private Mock<CacheAndRetryHandler> cacheAndRetryHandler;
         [TestInitialize]
         public void SetUp()
         {
-            httpClientWrapper = new Mock<IHttpClientWrapper>();
-            logger = new Mock<ILogger>();
             response = new Mock<HttpResponseMessage>();
             httpContent = new StubHttpContent();
             response.Object.Content = httpContent;
-            httpClientWrapper
-                .Setup(x => x.SendRequestWithCachingAndRetryPolicyAsync(It.IsAny<HttpRequestMessage>(), It.IsAny<bool>()))
-                .ReturnsAsync(response.Object);
-            terraLandingZoneApiClient = new TerraLandingZoneApiClient(httpClientWrapper.Object, ApiHost, logger.Object);
+            tokenCredential = new Mock<TokenCredential>();
+            cacheAndRetryHandler = new Mock<CacheAndRetryHandler>();
+            terraLandingZoneApiClient = new TerraLandingZoneApiClient(ApiHost, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
         }
 
         [TestMethod]
         public async Task GetResourceQuotaAsync_ValidResourceIdReturnsQuotaInformation()
         {
-            httpContent.Content = GetResourceQuotaApiResponseInJson();
-            var quota = await terraLandingZoneApiClient.GetResourceQuotaAsync(LandingZoneId, batchAccountId);
+            var body = GetResourceQuotaApiResponseInJson();
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
+                    It.IsAny<Func<Task<string>>>()))
+                .ReturnsAsync(body);
+
+            var quota = await terraLandingZoneApiClient.GetResourceQuotaAsync(LandingZoneId, batchAccountId, cacheResults: true);
 
             Assert.IsNotNull(quota);
             Assert.AreEqual(LandingZoneId, quota.LandingZoneId);
@@ -68,8 +70,13 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetLandingZoneResourcesAsync_ListOfLandingZoneResources()
         {
-            httpContent.Content = GetResourceApiResponseInJson();
+            var body = GetResourceApiResponseInJson();
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
+                    It.IsAny<Func<Task<string>>>()))
+                .ReturnsAsync(body);
+
             var resources = await terraLandingZoneApiClient.GetLandingZoneResourcesAsync(LandingZoneId);
+
 
             Assert.IsNotNull(resources);
             Assert.AreEqual(LandingZoneId, resources.Id);

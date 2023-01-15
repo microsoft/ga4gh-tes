@@ -18,6 +18,7 @@ using Tes.Models;
 using Tes.Repository;
 using TesApi.Web;
 using TesApi.Web.Management;
+using TesApi.Web.Management.Clients;
 
 namespace TesApi.Tests.TestServices
 {

@@ -7,7 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using LazyCache;
 using Microsoft.Azure.Management.Batch.Models;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
@@ -104,58 +104,6 @@ namespace TesApi.Tests
             azureProxy.Setup(a => a.DownloadBlobAsync(It.IsAny<Uri>())).Returns(Task.FromResult(allowedVmSizesFileContent));
             azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount")).Returns(Task.FromResult(storageAccountInfos["defaultstorageaccount"]));
             azureProxy.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>())).Returns(Task.FromResult("Key1"));
-        }
-
-        private static List<VirtualMachineInformation> GetNewVmSizeAndPricingList()
-        {
-            return new List<VirtualMachineInformation>
-            {
-                new VirtualMachineInformation
-                {
-                    VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = false, NumberOfCores = 2, MemoryInGB = 3,
-                    ResourceDiskSizeInGB = 20, PricePerHour = 11
-                },
-                new VirtualMachineInformation
-                {
-                    VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = true, NumberOfCores = 2, MemoryInGB = 3,
-                    ResourceDiskSizeInGB = 20, PricePerHour = 22
-                },
-                new VirtualMachineInformation
-                {
-                    VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = false, NumberOfCores = 4, MemoryInGB = 6,
-                    ResourceDiskSizeInGB = 40, PricePerHour = 33
-                },
-                new VirtualMachineInformation
-                {
-                    VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = true, NumberOfCores = 4, MemoryInGB = 6,
-                    ResourceDiskSizeInGB = 40, PricePerHour = 44
-                },
-                new VirtualMachineInformation
-                {
-                    VmSize = "VmSize3", VmFamily = "VmFamily3", LowPriority = false, NumberOfCores = 8, MemoryInGB = 12,
-                    ResourceDiskSizeInGB = 80, PricePerHour = 55
-                }
-            };
-        }
-
-        private static AzureBatchAccountQuotas GetNewAzureBatchAccountQuotas()
-        {
-            var dedicatedCoreQuotaPerVmFamily = new[]
-            {
-                new VirtualMachineFamilyCoreQuota("VmFamily1", 100), new VirtualMachineFamilyCoreQuota("VmFamily2", 0),
-                new VirtualMachineFamilyCoreQuota("VmFamily3", 300)
-            };
-
-            var batchQuotas = new AzureBatchAccountQuotas
-            {
-                ActiveJobAndJobScheduleQuota = 1,
-                PoolQuota = 1,
-                DedicatedCoreQuota = 5,
-                LowPriorityCoreQuota = 10,
-                DedicatedCoreQuotaPerVMFamilyEnforced = true,
-                DedicatedCoreQuotaPerVMFamily = dedicatedCoreQuotaPerVmFamily
-            };
-            return batchQuotas;
         }
 
         private static List<VirtualMachineInformation> GetNewVmSizeAndPricingList()

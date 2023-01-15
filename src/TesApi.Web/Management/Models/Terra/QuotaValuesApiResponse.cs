@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace TesApi.Web.Management.Terra;
+namespace TesApi.Web.Management.Models.Terra;
 
 public class QuotaValuesApiResponse
 {
@@ -19,5 +19,8 @@ public class QuotaValuesApiResponse
 
     [JsonPropertyName("dedicatedCoreQuota")]
     public int DedicatedCoreQuota { get; set; }
+
+    [JsonPropertyName("lowPriorityCoreQuota")]
+    public int LowPriorityCoreQuota { get; set; }
 
 }

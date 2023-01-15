@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
@@ -39,7 +40,6 @@ public class BatchQuotaVerifierTests
         batchAccountResourceInformation = new BatchAccountResourceInformation("batchaccount", "mrg", "subid", "eastus");
 
         batchQuotaVerifier = new BatchQuotaVerifier(batchAccountResourceInformation, quotaProvider.Object, skuInfoProvider.Object, azureProxy.Object, logger.Object);
-
     }
 
     [TestMethod]

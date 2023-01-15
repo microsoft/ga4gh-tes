@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Text.Json.Serialization;
 
-namespace TesApi.Web.Management.Terra;
+namespace TesApi.Web.Management.Models.Terra;
 
 /// <summary>
 /// Terra quota api response

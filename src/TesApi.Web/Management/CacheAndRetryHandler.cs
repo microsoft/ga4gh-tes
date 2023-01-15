@@ -43,6 +43,11 @@ namespace TesApi.Web.Management
                         attempt)));
         }
 
+        /// <summary>
+        /// Protected parameterless constructor
+        /// </summary>
+        protected CacheAndRetryHandler() { }
+
 
         /// <summary>
         /// Executes a delegate with the specified async policy. 
@@ -50,7 +55,7 @@ namespace TesApi.Web.Management
         /// <param name="action">Action to execute</param>
         /// <typeparam name="TResult">Result type</typeparam>
         /// <returns>Result instance</returns>
-        public Task<TResult> ExecuteWithRetryAsync<TResult>(Func<Task<TResult>> action)
+        public virtual Task<TResult> ExecuteWithRetryAsync<TResult>(Func<Task<TResult>> action)
         {
             ArgumentNullException.ThrowIfNull(action);
 
@@ -74,7 +79,7 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <param name="action">Action to execute</param>
         /// <returns>Result HttpResponse</returns>
-        public async Task<HttpResponseMessage> ExecuteHttpRequestWithRetryAsync(Func<Task<HttpResponseMessage>> action)
+        public virtual async Task<HttpResponseMessage> ExecuteHttpRequestWithRetryAsync(Func<Task<HttpResponseMessage>> action)
         {
             ArgumentNullException.ThrowIfNull(action);
 
@@ -87,7 +92,7 @@ namespace TesApi.Web.Management
         /// <param name="cacheKey"></param>
         /// <param name="action"></param>
         /// <returns></returns>
-        public async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<Task<TResult>> action)
+        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<Task<TResult>> action)
         {
             ValidateArgs(cacheKey, action);
 
@@ -100,7 +105,7 @@ namespace TesApi.Web.Management
         /// <param name="cacheKey"></param>
         /// <param name="action"></param>
         /// <returns></returns>
-        public async Task<HttpResponseMessage> ExecuteHttpRequestWithRetryAndCachingAsync(string cacheKey, Func<Task<HttpResponseMessage>> action)
+        public virtual async Task<HttpResponseMessage> ExecuteHttpRequestWithRetryAndCachingAsync(string cacheKey, Func<Task<HttpResponseMessage>> action)
         {
             ValidateArgs(cacheKey, action);
 

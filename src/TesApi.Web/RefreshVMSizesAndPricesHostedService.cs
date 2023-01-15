@@ -1,8 +1,12 @@
 ﻿//// Copyright (c) Microsoft Corporation.
 //// Licensed under the MIT License.
 
-using System;
-using System.Threading.Tasks;
+//using System;
+//using System.Threading;
+//using System.Threading.Tasks;
+//using LazyCache;
+//using Microsoft.Extensions.Hosting;
+//using Microsoft.Extensions.Logging;
 
 //namespace TesApi.Web
 //{
@@ -74,12 +78,12 @@ using System.Threading.Tasks;
 //            logger.LogInformation("VM list refresh task gracefully stopped.");
 //        }
 
-private async Task RefreshVMSizesAndPricesAsync() // TODO: implement
-{
-    logger.LogInformation("VM list cache refresh call to Azure started.");
-    var virtualMachineInfos = await azureProxy.GetVmSizesAndPricesAsync();
-    cache.Add("vmSizesAndPrices", virtualMachineInfos, DateTimeOffset.MaxValue);
-    logger.LogInformation("VM list cache refresh call to Azure completed.");
-}
-    }
-}
+//        private async Task RefreshVMSizesAndPricesAsync()
+//        {
+//            logger.LogInformation("VM list cache refresh call to Azure started.");
+//            //var virtualMachineInfos = await azureProxy.GetVmSizesAndPricesAsync();
+//            //cache.Add("vmSizesAndPrices", virtualMachineInfos, DateTimeOffset.MaxValue);
+//            logger.LogInformation("VM list cache refresh call to Azure completed.");
+//        }
+//    }
+//}

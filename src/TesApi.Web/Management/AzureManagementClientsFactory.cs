@@ -5,6 +5,11 @@ using System;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Microsoft.Azure.Management.Batch;
+using Microsoft.Azure.Management.ResourceManager.Fluent;
+using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
+using Microsoft.Azure.Services.AppAuthentication;
+using Microsoft.Rest;
 using FluentAzure = Microsoft.Azure.Management.Fluent.Azure;
 
 

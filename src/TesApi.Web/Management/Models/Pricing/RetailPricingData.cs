@@ -4,7 +4,7 @@
 namespace TesApi.Web.Management.Models.Pricing
 {
     /// <summary>
-    /// A page of retail pricing data from the retail princing API. 
+    /// A page of retail pricing data from the retail pricing API. 
     /// </summary>
     public class RetailPricingData
     {
@@ -32,5 +32,10 @@ namespace TesApi.Web.Management.Models.Pricing
         /// Count of items. 
         /// </summary>
         public int Count { get; set; }
+
+        /// <summary>
+        /// Request link
+        /// </summary>
+        public string RequestLink { get; set; }
     }
 }

@@ -6,6 +6,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using LazyCache;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Tes.Models;
+using TesApi.Web.Management.Clients;
 
 namespace TesApi.Web.Management
 {
@@ -24,7 +29,8 @@ namespace TesApi.Web.Management
         /// <param name="appCache">Cache instance. If null, calls to the retail pricing API won't be cached.</param>
         /// <param name="priceApiClient">Retail pricing API client.</param>
         /// <param name="logger">Logger instance. </param>
-        public PriceApiBatchSkuInformationProvider(IAppCache appCache, PriceApiClient priceApiClient, ILogger<PriceApiBatchSkuInformationProvider> logger)
+        public PriceApiBatchSkuInformationProvider(IAppCache appCache, PriceApiClient priceApiClient,
+            ILogger<PriceApiBatchSkuInformationProvider> logger)
         {
             ArgumentNullException.ThrowIfNull(priceApiClient);
             ArgumentNullException.ThrowIfNull(logger);
@@ -39,8 +45,11 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <param name="priceApiClient">Retail pricing API client.</param>
         /// <param name="logger">Logger instance.</param>
-        public PriceApiBatchSkuInformationProvider(PriceApiClient priceApiClient, ILogger<PriceApiBatchSkuInformationProvider> logger)
-            : this(null, priceApiClient, logger) { }
+        public PriceApiBatchSkuInformationProvider(PriceApiClient priceApiClient,
+            ILogger<PriceApiBatchSkuInformationProvider> logger)
+            : this(null, priceApiClient, logger)
+        {
+        }
 
         /// <inheritdoc />
         public async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync(string region)
@@ -60,7 +69,8 @@ namespace TesApi.Web.Management
             logger.LogInformation($"Getting VM sizes and price information for region:{region}");
 
             var localVmSizeInfoForBatchSupportedSkus = await GetLocalVmSizeInformationForBatchSupportedSkusAsync();
-            var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region).ToListAsync();
+            var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region)
+                .ToListAsync();
 
             logger.LogInformation($"Received {pricingItems.Count} pricing items");
 
@@ -77,21 +87,26 @@ namespace TesApi.Web.Management
 
                 if (lowPriorityInfo is not null)
                 {
-                    vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, true, Convert.ToDecimal(lowPriorityInfo.unitPrice)));
+                    vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, true,
+                        Convert.ToDecimal(lowPriorityInfo.unitPrice)));
                 }
 
                 if (normalPriorityInfo is not null)
                 {
-                    vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, false, Convert.ToDecimal(normalPriorityInfo.unitPrice)));
+                    vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, false,
+                        Convert.ToDecimal(normalPriorityInfo.unitPrice)));
                 }
             }
-            logger.LogInformation($"Returning {vmInfoList.Count} Vm information entries with pricing for Azure Batch Supported Vm types");
+
+            logger.LogInformation(
+                $"Returning {vmInfoList.Count} Vm information entries with pricing for Azure Batch Supported Vm types");
 
             return vmInfoList;
 
         }
 
-        private static VirtualMachineInformation CreateVirtualMachineInfoFromReference(VirtualMachineInformation vmReference, bool isLowPriority, decimal pricePerHour)
+        private static VirtualMachineInformation CreateVirtualMachineInfoFromReference(
+            VirtualMachineInformation vmReference, bool isLowPriority, decimal pricePerHour)
             => new()
             {
                 LowPriority = isLowPriority,
@@ -103,10 +118,12 @@ namespace TesApi.Web.Management
                 VmFamily = vmReference.VmFamily,
                 VmSize = vmReference.VmSize
             };
-            return spotVirtualMachineInformation;
-        }
 
-    private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync()
-        => JsonConvert.DeserializeObject<List<VirtualMachineInformation>>(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "BatchSupportedVmSizeInformation.json")));
-}
+        private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync()
+        {
+            return JsonConvert.DeserializeObject<List<VirtualMachineInformation>>(
+                await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,
+                    "BatchSupportedVmSizeInformation.json")));
+        }
+    }
 }

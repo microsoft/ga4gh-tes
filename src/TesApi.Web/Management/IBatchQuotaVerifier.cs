@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Threading.Tasks;
+using Tes.Models;
 
 namespace TesApi.Web.Management
 {
@@ -11,7 +12,7 @@ namespace TesApi.Web.Management
     public interface IBatchQuotaVerifier
     {
         /// <summary>
-        /// Checks if the current quota allows fullfiment of the requested VM SKU. 
+        /// Checks if the current quota allows fulfillment of the requested VM SKU. 
         /// </summary>
         /// <param name="virtualMachineInformation"></param>
         /// <returns></returns>

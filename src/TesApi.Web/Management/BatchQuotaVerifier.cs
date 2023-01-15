@@ -51,7 +51,6 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
 
         ArgumentNullException.ThrowIfNull(azureProxy);
 
-        this.region = options.Value.Region;
         this.azureProxy = azureProxy;
         this.logger = logger;
         this.batchAccountInformation = batchAccountInformation;
