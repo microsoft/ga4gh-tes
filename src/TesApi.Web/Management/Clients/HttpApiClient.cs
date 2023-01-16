@@ -60,6 +60,11 @@ namespace TesApi.Web.Management.Clients
         }
 
         /// <summary>
+        /// Protected parameter-less constructor of HttpApiClient
+        /// </summary>
+        protected HttpApiClient() { }
+
+        /// <summary>
         /// Sends request with a retry policy.
         /// </summary>
         /// <param name="httpRequest"></param>

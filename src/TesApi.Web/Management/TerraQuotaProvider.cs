@@ -44,14 +44,8 @@ namespace TesApi.Web.Management
             landingZoneId = Guid.Parse(terraOptions.Value.LandingZoneId);
         }
 
-        /// <summary>
-        /// Returns Batch Account quota requirements.
-        /// </summary>
-        /// <param name="vmFamily"></param>
-        /// <param name="lowPriority"></param>
-        /// <param name="coresRequirement"></param>
-        /// <returns></returns>
-        public async Task<BatchVmFamilyQuotas> GetBatchAccountQuotaForRequirementAsync(string vmFamily, bool lowPriority, int? coresRequirement)
+        /// <inheritdoc />
+        public async Task<BatchVmFamilyQuotas> GetQuotaForRequirementAsync(string vmFamily, bool lowPriority, int? coresRequirement)
         {
             ArgumentException.ThrowIfNullOrEmpty(vmFamily);
 
@@ -60,12 +54,8 @@ namespace TesApi.Web.Management
             return ToVmFamilyBatchAccountQuotas(quotas, vmFamily, lowPriority, coresRequirement);
         }
 
-        /// <summary>
-        /// Gets the Vm cores per family using the Terra resource quota API
-        /// </summary>
-        /// <param name="lowPriority">if true, low priority quota is returned</param>
-        /// <returns></returns>
-        public async Task<BatchVmCoreQuota> GetVmCoresPerFamilyAsync(bool lowPriority)
+        /// <inheritdoc />
+        public async Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority)
         {
             var isDedicated = !lowPriority;
             var batchQuota = await GetBatchAccountQuotaFromTerraAsync();

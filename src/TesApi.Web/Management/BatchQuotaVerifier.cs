@@ -74,7 +74,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
 
         try
         {
-            batchVmFamilyBatchQuotas = await batchQuotaProvider.GetBatchAccountQuotaForRequirementAsync(
+            batchVmFamilyBatchQuotas = await batchQuotaProvider.GetQuotaForRequirementAsync(
                 virtualMachineInformation.VmFamily,
                 virtualMachineInformation.LowPriority,
                 virtualMachineInformation.NumberOfCores);

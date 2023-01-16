@@ -32,6 +32,10 @@ namespace TesApi.Web.Management.Clients
             this.baseApiUrl = apiHost.TrimEnd('/') + LandingZonesApiSegments;
         }
 
+        /// <summary>
+        /// Protected parameter-less constructor of TerraLandingZoneApiClient
+        /// </summary>
+        protected TerraLandingZoneApiClient() { }
 
         /// <summary>
         /// Gets quota information for a given resource. 
@@ -41,7 +45,7 @@ namespace TesApi.Web.Management.Clients
         /// Use the format, /subscriptions/{guid}/resourceGroups/{resource-group-name}/{resource-provider-namespace}/{resource-type}/{resource-name}.</param>
         /// <param name="cacheResults"></param>
         /// <returns></returns>
-        public async Task<QuotaApiResponse> GetResourceQuotaAsync(Guid landingZoneId, string resourceId, bool cacheResults)
+        public virtual async Task<QuotaApiResponse> GetResourceQuotaAsync(Guid landingZoneId, string resourceId, bool cacheResults)
         {
             ArgumentNullException.ThrowIfNull(landingZoneId);
             ArgumentException.ThrowIfNullOrEmpty(resourceId);
@@ -58,7 +62,7 @@ namespace TesApi.Web.Management.Clients
         /// <param name="landingZoneId"></param>
         /// <param name="cacheResults"></param>
         /// <returns></returns>
-        public async Task<LandingZoneResourcesApiResponse> GetLandingZoneResourcesAsync(Guid landingZoneId, bool cacheResults = true)
+        public virtual async Task<LandingZoneResourcesApiResponse> GetLandingZoneResourcesAsync(Guid landingZoneId, bool cacheResults = true)
         {
             ArgumentNullException.ThrowIfNull(landingZoneId);
 

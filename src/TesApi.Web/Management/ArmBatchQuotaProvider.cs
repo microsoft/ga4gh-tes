@@ -45,14 +45,14 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchVmFamilyQuotas> GetBatchAccountQuotaForRequirementAsync(string vmFamily, bool lowPriority,
+    public async Task<BatchVmFamilyQuotas> GetQuotaForRequirementAsync(string vmFamily, bool lowPriority,
         int? coresRequirement)
     {
         return ToVmFamilyBatchAccountQuotas(await GetBatchAccountQuotasAsync(), vmFamily, lowPriority, coresRequirement);
     }
 
     /// <inheritdoc />
-    public async Task<BatchVmCoreQuota> GetVmCoresPerFamilyAsync(bool lowPriority)
+    public async Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority)
     {
         var isDedicated = !lowPriority;
         var batchQuota = await GetBatchAccountQuotasAsync();

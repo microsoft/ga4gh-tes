@@ -56,7 +56,7 @@ public class BatchQuotaVerifierTests
         var vmInfo = new VirtualMachineInformation();
 
         BatchVmFamilyQuotas batchVmFamilyQuotas = null;
-        services.BatchQuotaProvider.Setup(p => p.GetBatchAccountQuotaForRequirementAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>()))
+        services.BatchQuotaProvider.Setup(p => p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>()))
             .ReturnsAsync(batchVmFamilyQuotas);
 
         await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo);
@@ -94,7 +94,7 @@ public class BatchQuotaVerifierTests
 
         var batchAccountQuotas = new BatchVmFamilyQuotas(totalCoreQuota, vmFamilyQuota, poolQuota, activeJobAndJobScheduleQuota, true, VmFamily);
 
-        services.BatchQuotaProvider.Setup(p => p.GetBatchAccountQuotaForRequirementAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>()))
+        services.BatchQuotaProvider.Setup(p => p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>()))
             .ReturnsAsync(batchAccountQuotas);
 
         services.BatchSkuInformationProvider.Setup(p => p.GetVmSizesAndPricesAsync(It.IsAny<string>())).ReturnsAsync(CreateVmSkuList(10));

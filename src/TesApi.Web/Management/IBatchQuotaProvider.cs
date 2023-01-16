@@ -18,7 +18,7 @@ namespace TesApi.Web.Management
         /// <param name="lowPriority"></param>
         /// <param name="coresRequirement"></param>
         /// <returns></returns>
-        public Task<BatchVmFamilyQuotas> GetBatchAccountQuotaForRequirementAsync(
+        public Task<BatchVmFamilyQuotas> GetQuotaForRequirementAsync(
             string vmFamily,
             bool lowPriority,
             int? coresRequirement);
@@ -29,6 +29,6 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <param name="lowPriority"></param>
         /// <returns></returns>
-        public Task<BatchVmCoreQuota> GetVmCoresPerFamilyAsync(bool lowPriority);
+        public Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority);
     }
 }

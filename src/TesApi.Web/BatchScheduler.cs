@@ -1277,7 +1277,7 @@ namespace TesApi.Web
 
             var coreQuota = await quotaVerifier
                 .GetBatchQuotaProvider()
-                .GetVmCoresPerFamilyAsync(preemptible);
+                .GetVmCoreQuotaAsync(preemptible);
 
             var selectedVm = eligibleVms
                 .Where(allowedVmSizesFilter)
