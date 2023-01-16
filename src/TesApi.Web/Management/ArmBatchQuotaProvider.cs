@@ -68,7 +68,11 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
                          .ToList();
         }
 
-        return new(numberOfCores, lowPriority, isDedicatedAndPerVmFamilyCoreQuotaEnforced, dedicatedCoresPerFamilies);
+        return new BatchVmCoreQuota(numberOfCores,
+            lowPriority,
+            isDedicatedAndPerVmFamilyCoreQuotaEnforced,
+            dedicatedCoresPerFamilies,
+            new AccountQuota(batchQuota.ActiveJobAndJobScheduleQuota, batchQuota.PoolQuota, batchQuota.DedicatedCoreQuota, batchQuota.LowPriorityCoreQuota));
     }
 
     /// <summary>

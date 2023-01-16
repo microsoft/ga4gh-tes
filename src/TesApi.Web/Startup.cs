@@ -60,6 +60,7 @@ namespace TesApi.Web
                 .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.BatchAccount))
                 .Configure<CosmosDbOptions>(Configuration.GetSection(CosmosDbOptions.CosmosDbAccount))
                 .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.RetryPolicy))
+                .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.Terra))
                 .AddSingleton<IAppCache, CachingService>()
 
                 .AddSingleton<AzureProxy, AzureProxy>()
@@ -78,6 +79,7 @@ namespace TesApi.Web
                 .AddSingleton<IStorageAccessProvider, StorageAccessProvider>()
 
                 .AddLogging()
+                .AddSingleton<CacheAndRetryHandler, CacheAndRetryHandler>()
                 .AddSingleton<IBatchQuotaProvider, ArmBatchQuotaProvider>()
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
@@ -86,7 +88,7 @@ namespace TesApi.Web
                 .AddSingleton(CreateBatchAccountResourceInformation)
                 .AddSingleton<AzureManagementClientsFactory, AzureManagementClientsFactory>()
                 .AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
-                .AddSingleton<ConfigurationUtils, ConfigurationUtils>() //this should not be call if running in terra.
+                .AddSingleton<ConfigurationUtils, ConfigurationUtils>()
 
                 .AddSwaggerGen(c =>
                 {

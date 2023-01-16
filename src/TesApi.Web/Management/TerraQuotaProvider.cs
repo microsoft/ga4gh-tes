@@ -71,7 +71,14 @@ namespace TesApi.Web.Management
                     .ToList();
             }
 
-            return new BatchVmCoreQuota(numberOfCores, lowPriority, isDedicatedAndPerVmFamilyCoreQuotaEnforced, dedicatedCoresPerFamilies);
+            return new BatchVmCoreQuota(numberOfCores,
+                lowPriority,
+                isDedicatedAndPerVmFamilyCoreQuotaEnforced,
+                dedicatedCoresPerFamilies,
+                new AccountQuota(batchQuota.QuotaValues.ActiveJobAndJobScheduleQuota,
+                    batchQuota.QuotaValues.PoolQuota,
+                    batchQuota.QuotaValues.DedicatedCoreQuota,
+                    batchQuota.QuotaValues.LowPriorityCoreQuota));
         }
 
         private async Task<QuotaApiResponse> GetBatchAccountQuotaFromTerraAsync()

@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using LazyCache;
-using Microsoft.Azure.Management.Batch.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -14,6 +13,7 @@ using Moq;
 using Tes.Models;
 using TesApi.Web;
 using TesApi.Web.Management;
+using TesApi.Web.Management.Models.Quotas;
 
 namespace TesApi.Tests
 {
@@ -26,9 +26,11 @@ namespace TesApi.Tests
             using var serviceProvider = new TestServices.TestServiceProvider<ConfigurationUtils>(
                 configuration: GetInMemoryConfig(),
                 azureProxy: PrepareAzureProxy,
+                batchQuotaProvider: GetMockQuotaProvider(),
                 accountResourceInformation: GetResourceInformation(),
-                batchSkuInformationProvider: GetMockSkuInformationProvider(),
-                armBatchQuotaProvider: (GetMockQuotaProviderExpression, GetMockQuotaProvider()));
+                batchSkuInformationProvider: GetMockSkuInformationProvider());
+
+            //  armBatchQuotaProvider: (GetMockQuotaProviderExpression, GetMockQuotaProvider()));
             var configurationUtils = serviceProvider.GetT();
 
             await configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync();
@@ -52,9 +54,9 @@ namespace TesApi.Tests
                 new AzureManagementClientsFactory(GetResourceInformation()),
                 provider.GetRequiredService<ILogger<ArmBatchQuotaProvider>>());
 
-        private static Action<Mock<ArmBatchQuotaProvider>> GetMockQuotaProvider()
+        private static Action<Mock<IBatchQuotaProvider>> GetMockQuotaProvider()
             => new(mockArmQuotaProvider =>
-                mockArmQuotaProvider.Setup(p => p.GetBatchAccountQuotasAsync())
+                mockArmQuotaProvider.Setup(p => p.GetVmCoreQuotaAsync(It.IsAny<bool>()))
                     .ReturnsAsync(GetNewAzureBatchAccountQuotas));
 
         private static Action<Mock<IBatchSkuInformationProvider>> GetMockSkuInformationProvider()
@@ -70,7 +72,7 @@ namespace TesApi.Tests
                 azureProxy: PrepareAzureProxy,
                 accountResourceInformation: GetResourceInformation(),
                 batchSkuInformationProvider: GetMockSkuInformationProvider(),
-                armBatchQuotaProvider: (GetMockQuotaProviderExpression, GetMockQuotaProvider()));
+                batchQuotaProvider: GetMockQuotaProvider());
             var configurationUtils = serviceProvider.GetT();
 
             await configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync();
@@ -138,23 +140,27 @@ namespace TesApi.Tests
             };
         }
 
-        private static AzureBatchAccountQuotas GetNewAzureBatchAccountQuotas()
+        private static BatchVmCoreQuota GetNewAzureBatchAccountQuotas()
         {
-            var dedicatedCoreQuotaPerVmFamily = new[]
+            var dedicatedCoreQuotaPerVmFamily = new List<BatchVmCoresPerFamily>()
             {
-                new VirtualMachineFamilyCoreQuota("VmFamily1", 100), new VirtualMachineFamilyCoreQuota("VmFamily2", 0),
-                new VirtualMachineFamilyCoreQuota("VmFamily3", 300)
+                new BatchVmCoresPerFamily("VmFamily1", 100),
+                new BatchVmCoresPerFamily("VmFamily2", 0),
+                new BatchVmCoresPerFamily("VmFamily3", 300)
             };
 
-            var batchQuotas = new AzureBatchAccountQuotas
-            {
-                ActiveJobAndJobScheduleQuota = 1,
-                PoolQuota = 1,
-                DedicatedCoreQuota = 5,
-                LowPriorityCoreQuota = 10,
-                DedicatedCoreQuotaPerVMFamilyEnforced = true,
-                DedicatedCoreQuotaPerVMFamily = dedicatedCoreQuotaPerVmFamily
-            };
+            var batchQuotas = new BatchVmCoreQuota
+            (
+                NumberOfCores: 5,
+                IsLowPriority: false,
+                IsDedicatedAndPerVmFamilyCoreQuotaEnforced: true,
+                DedicatedCoreQuotas: dedicatedCoreQuotaPerVmFamily,
+                AccountQuota: new AccountQuota(
+                    ActiveJobAndJobScheduleQuota: 1,
+                    DedicatedCoreQuota: 5,
+                    PoolQuota: 1,
+                    LowPriorityCoreQuota: 10)
+            );
             return batchQuotas;
         }
     }

@@ -64,7 +64,7 @@ namespace TesApi.Tests.TestServices
                 .AddSingleton<PriceApiClient>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
                 .AddSingleton(s => GetArmBatchQuotaProvider(s, armBatchQuotaProvider)) //added so config utils gets the arm implementation, to be removed once config utils is refactored.
-                //.AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
+                                                                                       //.AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .IfThenElse(additionalActions is null, s => s, s => { additionalActions(s); return s; })
             .BuildServiceProvider();
