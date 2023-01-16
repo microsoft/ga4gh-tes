@@ -80,12 +80,12 @@ namespace TesApi.Web
 
                 .AddLogging()
                 .AddSingleton<CacheAndRetryHandler, CacheAndRetryHandler>()
-                .AddSingleton<IBatchQuotaProvider, ArmBatchQuotaProvider>()
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
                 .AddSingleton<PriceApiClient, PriceApiClient>()
                 .AddSingleton<IBatchSkuInformationProvider>(sp => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(sp))
                 .AddSingleton(CreateBatchAccountResourceInformation)
+                .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
                 .AddSingleton<AzureManagementClientsFactory, AzureManagementClientsFactory>()
                 .AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
                 .AddSingleton<ConfigurationUtils, ConfigurationUtils>()
@@ -142,6 +142,18 @@ namespace TesApi.Web
                         return s;
                     },
                 s => s.AddApplicationInsightsTelemetry());
+
+        private IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
+        {
+            var terraOptions = services.GetService<IOptions<TerraOptions>>();
+
+            if (!string.IsNullOrEmpty(terraOptions?.Value.LandingZoneApiHost))
+            {
+                return ActivatorUtilities.CreateInstance<TerraQuotaProvider>(services);
+            }
+
+            return ActivatorUtilities.CreateInstance<ArmBatchQuotaProvider>(services);
+        }
 
         private IRepository<TesTask> CreateCosmosDbRepositoryFromConfiguration(IServiceProvider services)
         {
