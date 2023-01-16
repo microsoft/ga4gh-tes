@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
@@ -18,11 +19,8 @@ namespace TesApi.Tests;
 [TestClass]
 public class BatchQuotaVerifierTests
 {
-
-    private BatchQuotaVerifier batchQuotaVerifier;
     private Mock<IBatchQuotaProvider> quotaProvider;
     private Mock<IAzureProxy> azureProxy;
-    private Mock<ILogger<BatchQuotaVerifier>> logger;
     private Mock<IBatchSkuInformationProvider> skuInfoProvider;
     private BatchAccountResourceInformation batchAccountResourceInformation;
 
@@ -34,12 +32,11 @@ public class BatchQuotaVerifierTests
     {
         azureProxy = new Mock<IAzureProxy>();
         azureProxy.Setup(p => p.GetArmRegion()).Returns(Region);
-        logger = new Mock<ILogger<BatchQuotaVerifier>>();
         quotaProvider = new Mock<IBatchQuotaProvider>();
         skuInfoProvider = new Mock<IBatchSkuInformationProvider>();
         batchAccountResourceInformation = new BatchAccountResourceInformation("batchaccount", "mrg", "subid", "eastus");
 
-        batchQuotaVerifier = new BatchQuotaVerifier(batchAccountResourceInformation, quotaProvider.Object, skuInfoProvider.Object, azureProxy.Object, logger.Object);
+        new BatchQuotaVerifier(batchAccountResourceInformation, quotaProvider.Object, skuInfoProvider.Object, azureProxy.Object, new NullLogger<BatchQuotaVerifier>());
     }
 
     [TestMethod]

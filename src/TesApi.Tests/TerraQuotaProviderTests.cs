@@ -46,8 +46,8 @@ namespace TesApi.Tests
 
             Assert.IsFalse(quota.IsLowPriority);
             Assert.AreEqual(quotaApiResponse.QuotaValues.DedicatedCoreQuota, quota.NumberOfCores);
-            Assert.AreEqual(quotaApiResponse.QuotaValues.DedicatedCoreQuotaPerVMFamilyEnforced, quota.IsDedicatedAndPerVmFamilyCoreQuotaEnforced);
-            Assert.AreEqual(quotaApiResponse.QuotaValues.DedicatedCoreQuotaPerVMFamily.Count, quota.DedicatedCoreQuotas.Count);
+            Assert.AreEqual(quotaApiResponse.QuotaValues.DedicatedCoreQuotaPerVmFamilyEnforced, quota.IsDedicatedAndPerVmFamilyCoreQuotaEnforced);
+            Assert.AreEqual(quotaApiResponse.QuotaValues.DedicatedCoreQuotaPerVmFamily.Count, quota.DedicatedCoreQuotas.Count);
         }
 
         [TestMethod]
@@ -79,7 +79,7 @@ namespace TesApi.Tests
         public async Task GetQuotaForRequirementAsync_DedicatedQuotaIsNotEnforcedReturnsCoreRequirements()
         {
             var vmFamily = "standardDSv2Family";
-            quotaApiResponse.QuotaValues.DedicatedCoreQuotaPerVMFamilyEnforced = false;
+            quotaApiResponse.QuotaValues.DedicatedCoreQuotaPerVmFamilyEnforced = false;
             var quota = await terraQuotaProvider.GetQuotaForRequirementAsync(vmFamily, lowPriority: false, 10);
 
             Assert.AreEqual(vmFamily, quota.VmFamily);

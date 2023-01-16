@@ -43,12 +43,12 @@ namespace TesApi.Tests
             Assert.AreEqual(terraApiStubData.BatchAccountId, quota.AzureResourceId);
             Assert.AreEqual("Microsoft.Batch/batchAccounts", quota.ResourceType);
             Assert.AreEqual(100, quota.QuotaValues.PoolQuota);
-            Assert.IsTrue(quota.QuotaValues.DedicatedCoreQuotaPerVMFamilyEnforced);
+            Assert.IsTrue(quota.QuotaValues.DedicatedCoreQuotaPerVmFamilyEnforced);
             Assert.AreEqual(300, quota.QuotaValues.ActiveJobAndJobScheduleQuota);
             Assert.AreEqual(350, quota.QuotaValues.DedicatedCoreQuota);
-            Assert.AreEqual(59, quota.QuotaValues.DedicatedCoreQuotaPerVMFamily.Count);
-            Assert.AreEqual("standardLSv2Family", quota.QuotaValues.DedicatedCoreQuotaPerVMFamily.Keys.First());
-            Assert.AreEqual(0, quota.QuotaValues.DedicatedCoreQuotaPerVMFamily.Values.First());
+            Assert.AreEqual(59, quota.QuotaValues.DedicatedCoreQuotaPerVmFamily.Count);
+            Assert.AreEqual("standardLSv2Family", quota.QuotaValues.DedicatedCoreQuotaPerVmFamily.Keys.First());
+            Assert.AreEqual(0, quota.QuotaValues.DedicatedCoreQuotaPerVmFamily.Values.First());
             tokenCredential.Verify(t => t.GetTokenAsync(It.IsAny<TokenRequestContext>(),
                     It.IsAny<CancellationToken>()),
                 Times.Once);

@@ -60,13 +60,13 @@ namespace TesApi.Web.Management
             var isDedicated = !lowPriority;
             var batchQuota = await GetBatchAccountQuotaFromTerraAsync();
             var isDedicatedAndPerVmFamilyCoreQuotaEnforced =
-                isDedicated && batchQuota.QuotaValues.DedicatedCoreQuotaPerVMFamilyEnforced;
+                isDedicated && batchQuota.QuotaValues.DedicatedCoreQuotaPerVmFamilyEnforced;
             var numberOfCores = lowPriority ? batchQuota.QuotaValues.LowPriorityCoreQuota : batchQuota.QuotaValues.DedicatedCoreQuota;
 
             List<BatchVmCoresPerFamily> dedicatedCoresPerFamilies = null;
             if (isDedicatedAndPerVmFamilyCoreQuotaEnforced)
             {
-                dedicatedCoresPerFamilies = batchQuota.QuotaValues.DedicatedCoreQuotaPerVMFamily
+                dedicatedCoresPerFamilies = batchQuota.QuotaValues.DedicatedCoreQuotaPerVmFamily
                     .Select(r => new BatchVmCoresPerFamily(r.Key, r.Value))
                     .ToList();
             }
@@ -117,16 +117,16 @@ namespace TesApi.Web.Management
             var isDedicated = !lowPriority;
             var totalCoreQuota = isDedicated ? batchAccountQuotas.QuotaValues.DedicatedCoreQuota : batchAccountQuotas.QuotaValues.LowPriorityCoreQuota;
             var isDedicatedAndPerVmFamilyCoreQuotaEnforced =
-                isDedicated && batchAccountQuotas.QuotaValues.DedicatedCoreQuotaPerVMFamilyEnforced;
+                isDedicated && batchAccountQuotas.QuotaValues.DedicatedCoreQuotaPerVmFamilyEnforced;
 
             var vmFamilyCoreQuota = isDedicatedAndPerVmFamilyCoreQuotaEnforced
-                ? batchAccountQuotas.QuotaValues.DedicatedCoreQuotaPerVMFamily.FirstOrDefault(q => q.Key.Equals(vmFamily,
+                ? batchAccountQuotas.QuotaValues.DedicatedCoreQuotaPerVmFamily.FirstOrDefault(q => q.Key.Equals(vmFamily,
                           StringComparison.OrdinalIgnoreCase))
                       .Value
                 : coresRequirement ?? 0;
 
             return new BatchVmFamilyQuotas(totalCoreQuota, vmFamilyCoreQuota, batchAccountQuotas.QuotaValues.PoolQuota,
-                batchAccountQuotas.QuotaValues.ActiveJobAndJobScheduleQuota, batchAccountQuotas.QuotaValues.DedicatedCoreQuotaPerVMFamilyEnforced, vmFamily);
+                batchAccountQuotas.QuotaValues.ActiveJobAndJobScheduleQuota, batchAccountQuotas.QuotaValues.DedicatedCoreQuotaPerVmFamilyEnforced, vmFamily);
         }
 
     }
