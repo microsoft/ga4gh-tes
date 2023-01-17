@@ -54,7 +54,7 @@ namespace TesApi.Web
         public void ConfigureServices(IServiceCollection services)
             => services
                 .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.BatchAccount))
-                .Configure<Tes.Models.PostgreSqlOptions>(Configuration.GetSection(Tes.Models.PostgreSqlOptions.PostgreSqlAccount))
+                .Configure<PostgreSqlOptions>(Configuration.GetSection(PostgreSqlOptions.PostgreSqlAccount))
                 .AddSingleton<IAppCache, CachingService>()
                 .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
                 .AddSingleton<AzureProxy, AzureProxy>()
@@ -137,10 +137,8 @@ namespace TesApi.Web
 
         private IRepository<TesTask> CreatePostgresSqlRepositoryFromConfiguration(IServiceProvider services)
         {
-            var options = services.GetRequiredService<IOptions<Tes.Models.PostgreSqlOptions>>();
-
-            string postgresConnectionString = new PostgresConnectionStringUtility(options).GetPostgresConnectionString();
-
+            var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
+            string postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
             return new TesTaskPostgreSqlRepository(postgresConnectionString);
         }
 

@@ -5,15 +5,9 @@ using Tes.Models;
 
 namespace Tes.Utilities
 {
-    public class PostgresConnectionStringUtility
+    public class ConnectionStringUtility
     {
-        private readonly IOptions<PostgreSqlOptions> options;
-
-        public PostgresConnectionStringUtility(IOptions<PostgreSqlOptions> options)
-        {
-            this.options = options;
-        }
-        public string GetPostgresConnectionString()
+        public string GetPostgresConnectionString(IOptions<PostgreSqlOptions> options)
         {
             ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlServerName, nameof(options.Value.PostgreSqlServerName));
             ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlTesDatabaseName, nameof(options.Value.PostgreSqlTesDatabaseName));
