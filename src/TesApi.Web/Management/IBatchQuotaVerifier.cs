@@ -12,7 +12,7 @@ namespace TesApi.Web.Management
     public interface IBatchQuotaVerifier
     {
         /// <summary>
-        /// Checks if the current quota allows fullfiment of the requested VM SKU.
+        /// Checks if the current quota allows fulfillment of the requested VM SKU. 
         /// </summary>
         /// <param name="virtualMachineInformation"></param>
         /// <returns></returns>
@@ -20,7 +20,7 @@ namespace TesApi.Web.Management
         Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation);
 
         /// <summary>
-        /// Gets the instance of the batch quota provider.
+        /// Gets the instance of the batch quota provider. 
         /// </summary>
         /// <returns>Batch quota provider <see cref="IBatchQuotaProvider"/></returns>
         IBatchQuotaProvider GetBatchQuotaProvider();
