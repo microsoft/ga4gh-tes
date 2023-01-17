@@ -165,5 +165,10 @@ namespace Tes.Repository
             var results = await GetItemsAsync(predicate);
             return (null, results);
         }
+
+        public void Dispose()
+        {
+
+        }
     }
 }

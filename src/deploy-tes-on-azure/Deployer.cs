@@ -456,13 +456,11 @@ namespace TesDeployer
                             }
 
                             _ = await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
-                        }
 
-                        if (configuration.ProvisionPostgreSqlOnAzure == true)
-                        {
-                            if (!configuration.ManualHelmDeployment)
+                            // TODO is this the correct time jsaun?
+                            if (configuration.ProvisionPostgreSqlOnAzure == true)
                             {
-                                await ExecuteQueriesOnAzurePostgreSQLDbFromK8();
+                                await ExecuteQueriesOnAzurePostgreSQLDbFromK8(kubernetesClient);
                             }
                         }
                     }
@@ -1279,13 +1277,13 @@ namespace TesDeployer
             }
         }
 
-        private Task ExecuteQueriesOnAzurePostgreSQLDbFromK8()
+        private Task ExecuteQueriesOnAzurePostgreSQLDbFromK8(IKubernetes kubernetesClient)
             => Execute(
                 $"Executing scripts on postgresql...",
                 async () =>
                 {
                     var tesScript = GetCreateTesUserString();
-                    var serverPath = $"{configuration.PostgreSqlServerName}.postgres.database.azure.com";
+                    var serverPath = $"{configuration.PostgreSqlServerName}{configuration.PostgreSqlServerName}";
                     var adminUser = configuration.PostgreSqlAdministratorLogin;
 
                     if (configuration.UsePostgreSqlSingleServer)
@@ -1294,7 +1292,7 @@ namespace TesDeployer
                     }
 
                     var commands = new List<string[]> {
-                        new string[] { "bash", "-lic", $"echo {configuration.PostgreSqlServerName}.postgres.database.azure.com:5432:{configuration.PostgreSqlTesDatabaseName}:{adminUser}:{configuration.PostgreSqlAdministratorPassword} >> ~/.pgpass" },
+                        new string[] { "bash", "-lic", $"echo {configuration.PostgreSqlServerName}.postgres.database.azure.com:{configuration.PostgreSqlTesDatabasePort}:{configuration.PostgreSqlTesDatabaseName}:{adminUser}:{configuration.PostgreSqlAdministratorPassword} >> ~/.pgpass" },
                         new string[] { "chmod", "0600", "/home/tes/.pgpass" },
                         new string[] { "/usr/bin/psql", "-h", serverPath, "-U", adminUser, "-d", configuration.PostgreSqlTesDatabaseName, "-c", tesScript }
                     };

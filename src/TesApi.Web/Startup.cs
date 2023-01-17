@@ -55,13 +55,10 @@ namespace TesApi.Web
             => services
                 .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.BatchAccount))
                 .Configure<Tes.Models.PostgreSqlOptions>(Configuration.GetSection(Tes.Models.PostgreSqlOptions.PostgreSqlAccount))
-                .AddSingleton<IAppCache>(s => new CachingService())
+                .AddSingleton<IAppCache, CachingService>()
                 .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
                 .AddSingleton<AzureProxy, AzureProxy>()
                 .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
-
-                .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
-
                 .AddControllers()
                 .AddNewtonsoftJson(opts =>
                 {
@@ -136,7 +133,7 @@ namespace TesApi.Web
                     },
                     s => s.AddApplicationInsightsTelemetry());
 
-        }
+        
 
         private IRepository<TesTask> CreatePostgresSqlRepositoryFromConfiguration(IServiceProvider services)
         {
