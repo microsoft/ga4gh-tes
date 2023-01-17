@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using Azure.Identity;
 using LazyCache;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -149,7 +150,15 @@ namespace TesApi.Web
 
             if (!string.IsNullOrEmpty(terraOptions?.Value.LandingZoneApiHost))
             {
-                return ActivatorUtilities.CreateInstance<TerraQuotaProvider>(services);
+                var cacheAndRetryHandler = services.GetRequiredService<CacheAndRetryHandler>();
+                var serviceLogger = services.GetService<ILogger<TerraLandingZoneApiClient>>();
+                var credentials = new DefaultAzureCredential();
+
+                var terraApiClient = new TerraLandingZoneApiClient(terraOptions.Value.LandingZoneApiHost,
+                    credentials,
+                    cacheAndRetryHandler,
+                    serviceLogger);
+                return new TerraQuotaProvider(terraApiClient, terraOptions);
             }
 
             return ActivatorUtilities.CreateInstance<ArmBatchQuotaProvider>(services);
