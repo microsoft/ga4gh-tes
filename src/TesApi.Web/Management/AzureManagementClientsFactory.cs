@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -13,11 +16,12 @@ using FluentAzure = Microsoft.Azure.Management.Fluent.Azure;
 namespace TesApi.Web.Management
 {
     /// <summary>
-    /// Factory if ARM management clients. 
+    /// Factory if ARM management clients.
     /// </summary>
     public class AzureManagementClientsFactory
     {
         private readonly BatchAccountResourceInformation batchAccountInformation;
+
         /// <summary>
         /// Batch account resource information.
         /// </summary>
@@ -34,27 +38,27 @@ namespace TesApi.Web.Management
 
             if (string.IsNullOrEmpty(batchAccountInformation.SubscriptionId))
             {
-                throw new ArgumentException("Batch account information does not contain the subscription id. ");
+                throw new ArgumentException("Batch account information does not contain the subscription id. ", nameof(batchAccountInformation));
             }
 
             if (string.IsNullOrEmpty(batchAccountInformation.ResourceGroupName))
             {
-                throw new ArgumentException("Batch account information does not contain the resource group name.");
+                throw new ArgumentException("Batch account information does not contain the resource group name.", nameof(batchAccountInformation));
             }
 
             this.batchAccountInformation = batchAccountInformation;
         }
-        private static Task<string> GetAzureAccessTokenAsync(string resource = "https://management.azure.com/") => new AzureServiceTokenProvider().GetAccessTokenAsync(resource);
+
+        private static Task<string> GetAzureAccessTokenAsync(string resource = "https://management.azure.com/")
+            => new AzureServiceTokenProvider().GetAccessTokenAsync(resource);
 
         /// <summary>
         /// Creates Batch Account management client using AAD authentication.
-        /// Configure to the subscription id that contains the batch account. 
+        /// Configure to the subscription id that contains the batch account.
         /// </summary>
         /// <returns></returns>
         public async Task<BatchManagementClient> CreateBatchAccountManagementClient()
-        {
-            return new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync())) { SubscriptionId = batchAccountInformation.SubscriptionId };
-        }
+            => new(new TokenCredentials(await GetAzureAccessTokenAsync())) { SubscriptionId = batchAccountInformation.SubscriptionId };
 
         /// <summary>
         /// Attempts to get the batch resource information using the ARM api.
@@ -72,11 +76,10 @@ namespace TesApi.Web.Management
 
             foreach (var subId in subscriptionIds)
             {
-                var batchClient = new BatchManagementClient(tokenCredentials) { SubscriptionId = subId };
+                using var batchClient = new BatchManagementClient(tokenCredentials) { SubscriptionId = subId };
 
                 var batchAccount = (await batchClient.BatchAccount.ListAsync())
                     .FirstOrDefault(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase));
-
 
                 if (batchAccount is not null)
                 {

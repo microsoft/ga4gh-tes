@@ -32,7 +32,6 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
     /// <param name="batchAccountInformation"><see cref="BatchAccountResourceInformation"/></param>
     /// <param name="azureProxy"><see cref="IAzureProxy"/></param>
     /// <param name="logger"><see cref="ILogger"/></param>
-    /// 
     public BatchQuotaVerifier(BatchAccountResourceInformation batchAccountInformation,
         IBatchQuotaProvider batchQuotaProvider,
         IBatchSkuInformationProvider batchSkuInformationProvider,
@@ -43,11 +42,14 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(batchSkuInformationProvider);
         ArgumentNullException.ThrowIfNull(batchAccountInformation);
+
         if (string.IsNullOrEmpty(batchAccountInformation.Region))
         {
-            throw new ArgumentException($"The batch account information does not include the region. Batch information provided:{batchAccountInformation}");
+            throw new ArgumentException($"The batch account information does not include the region. Batch information provided:{batchAccountInformation}", nameof(batchAccountInformation));
         }
+
         ArgumentNullException.ThrowIfNull(azureProxy);
+
         this.logger = logger;
         this.batchAccountInformation = batchAccountInformation;
         this.batchSkuInformationProvider = batchSkuInformationProvider;
@@ -127,9 +129,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
 
     /// <inheritdoc cref="IBatchQuotaProvider"/>
     public IBatchQuotaProvider GetBatchQuotaProvider()
-    {
-        return batchQuotaProvider;
-    }
+        => batchQuotaProvider;
 
     private async Task<BatchAccountUtilization> GetBatchAccountUtilizationAsync(VirtualMachineInformation vmInfo)
     {
@@ -152,8 +152,6 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
         var dedicatedCoresInUseInRequestedVmFamily = activeNodeCountByVmSizeInRequestedFamily
             .Sum(x => virtualMachineInfoList.FirstOrDefault(vm => vm.VmSize.Equals(x.VirtualMachineSize, StringComparison.OrdinalIgnoreCase))?.NumberOfCores * x.DedicatedNodeCount) ?? 0;
 
-        return new BatchAccountUtilization(activeJobsCount, activePoolsCount, totalCoresInUse, dedicatedCoresInUseInRequestedVmFamily);
-
+        return new(activeJobsCount, activePoolsCount, totalCoresInUse, dedicatedCoresInUseInRequestedVmFamily);
     }
-
 }

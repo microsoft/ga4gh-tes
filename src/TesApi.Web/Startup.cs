@@ -30,45 +30,37 @@ namespace TesApi.Web
     public class Startup
     {
         private readonly ILogger logger;
-        private readonly ILoggerFactory loggerFactory;
         private readonly IWebHostEnvironment hostingEnvironment;
 
         /// <summary>
         /// Startup class for ASP.NET core
         /// </summary>
-        public Startup(IConfiguration configuration, ILoggerFactory loggerFactory, IWebHostEnvironment hostingEnvironment)
+        public Startup(IConfiguration configuration, ILogger<Startup> logger, IWebHostEnvironment hostingEnvironment)
         {
             Configuration = configuration;
             this.hostingEnvironment = hostingEnvironment;
-            logger = loggerFactory.CreateLogger<Startup>();
-            this.loggerFactory = loggerFactory;
+            this.logger = logger;
         }
 
         /// <summary>
         /// The application configuration
         /// </summary>
-        public IConfiguration Configuration { get; }
+        private IConfiguration Configuration { get; }
 
         /// <summary>
         /// This method gets called by the runtime. Use this method to add services to the container.
         /// </summary>
         /// <param name="services">The Microsoft.Extensions.DependencyInjection.IServiceCollection to add the services to.</param>
         public void ConfigureServices(IServiceCollection services)
-        {
-            ConfigureServicesImpl(services);
-        }
-
-        private void ConfigureServicesImpl(IServiceCollection services)
-        {
-            services
+            => services
                 .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.BatchAccount))
                 .Configure<Tes.Models.PostgreSqlOptions>(Configuration.GetSection(Tes.Models.PostgreSqlOptions.PostgreSqlAccount))
                 .AddSingleton<IAppCache>(s => new CachingService())
                 .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
                 .AddSingleton<AzureProxy, AzureProxy>()
-                .AddSingleton<IAzureProxy>(s => new CachingWithRetriesAzureProxy(s.GetRequiredService<AzureProxy>(), s.GetRequiredService<IAppCache>()))
-                .AddSingleton<IStorageAccessProvider, StorageAccessProvider>()
+                .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
 
+                .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
 
                 .AddControllers()
                 .AddNewtonsoftJson(opts =>
@@ -77,16 +69,20 @@ namespace TesApi.Web
                     opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
                 }).Services
 
+                .AddSingleton<IBatchScheduler, BatchScheduler>()
+                .AddSingleton<IStorageAccessProvider, StorageAccessProvider>()
+
                 .AddLogging()
                 .AddSingleton<IBatchQuotaProvider, ArmBatchQuotaProvider>()
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
                 .AddSingleton<PriceApiClient, PriceApiClient>()
-                .AddSingleton<IBatchSkuInformationProvider, PriceApiBatchSkuInformationProvider>()
+                .AddSingleton<IBatchSkuInformationProvider>(sp => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(sp))
                 .AddSingleton(CreateBatchAccountResourceInformation)
                 .AddSingleton<AzureManagementClientsFactory, AzureManagementClientsFactory>()
                 .AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
                 .AddSingleton<ConfigurationUtils, ConfigurationUtils>() //this should not be call if running in terra.
+
                 .AddSwaggerGen(c =>
                 {
                     c.SwaggerDoc("0.3.3", new OpenApiInfo
@@ -99,6 +95,12 @@ namespace TesApi.Web
                             Name = "Microsoft Biomedical Platforms and Genomics",
                             Url = new Uri("https://github.com/microsoft/CromwellOnAzure")
                         },
+                        License = new OpenApiLicense()
+                        {
+                            Name = "MIT License",
+                            // Identifier = "MIT" //TODO: when available, remove Url -- https://spec.openapis.org/oas/v3.1.0#fixed-fields-2
+                            Url = new("https://spdx.org/licenses/MIT", UriKind.Absolute)
+                        },
                     });
                     c.CustomSchemaIds(type => type.FullName);
                     c.IncludeXmlComments(
@@ -106,33 +108,33 @@ namespace TesApi.Web
                     c.OperationFilter<GeneratePathParamsValidationFilter>();
                 })
 
-            .AddHostedService<Scheduler>()
-            .AddHostedService<DeleteCompletedBatchJobsHostedService>()
-            .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
-            .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
-            .AddHostedService<RefreshVMSizesAndPricesHostedService>()
-            .AddHostedService<DoOnceAtStartUpService>()
+                .AddHostedService<Scheduler>()
+                .AddHostedService<DeleteCompletedBatchJobsHostedService>()
+                .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
+                .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
+                //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
+                .AddHostedService<DoOnceAtStartUpService>()
 
 
-            //Configure AppInsights Azure Service when in PRODUCTION environment
-            .IfThenElse(hostingEnvironment.IsProduction(),
-                s =>
-                {
-                    var applicationInsightsAccountName = Configuration["ApplicationInsightsAccountName"];
-                    var instrumentationKey = AzureProxy.GetAppInsightsInstrumentationKeyAsync(applicationInsightsAccountName).Result;
-
-                    if (instrumentationKey is not null)
+                //Configure AppInsights Azure Service when in PRODUCTION environment
+                .IfThenElse(hostingEnvironment.IsProduction(),
+                    s =>
                     {
-                        var connectionString = $"InstrumentationKey={instrumentationKey}";
-                        return s.AddApplicationInsightsTelemetry(options =>
-                        {
-                            options.ConnectionString = connectionString;
-                        });
-                    }
+                        var applicationInsightsAccountName = Configuration["ApplicationInsightsAccountName"];
+                        var instrumentationKey = AzureProxy.GetAppInsightsInstrumentationKeyAsync(applicationInsightsAccountName).Result;
 
-                    return s;
-                },
-                s => s.AddApplicationInsightsTelemetry());
+                        if (instrumentationKey is not null)
+                        {
+                            var connectionString = $"InstrumentationKey={instrumentationKey}";
+                            return s.AddApplicationInsightsTelemetry(options =>
+                            {
+                                options.ConnectionString = connectionString;
+                            });
+                        }
+
+                        return s;
+                    },
+                    s => s.AddApplicationInsightsTelemetry());
 
         }
 
@@ -159,9 +161,7 @@ namespace TesApi.Web
             if (string.IsNullOrWhiteSpace(options.Value.AppKey))
             {
                 //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
-                var task = AzureManagementClientsFactory.TryGetResourceInformationFromAccountNameAsync(options.Value
-                        .AccountName);
-
+                var task = AzureManagementClientsFactory.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName);
                 task.Wait();
 
                 if (task.Result == null)
@@ -213,7 +213,14 @@ namespace TesApi.Web
                         var r = s.UseHsts();
                         logger.LogInformation("Configuring for Production environment");
                         return r;
-                    });
+                    })
+
+                .IfThenElse(false, s => s, s =>
+                {
+                    var configurationUtils = ActivatorUtilities.GetServiceOrCreateInstance<ConfigurationUtils>(s.ApplicationServices);
+                    configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync().Wait();
+                    return s;
+                });
     }
 
     internal static class BooleanMethodSelectorExtensions

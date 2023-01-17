@@ -1,4 +1,7 @@
-﻿namespace TesApi.Web.Management.Models.Quotas;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+namespace TesApi.Web.Management.Models.Quotas;
 
 /// <summary>
 /// Cores of a vm family.

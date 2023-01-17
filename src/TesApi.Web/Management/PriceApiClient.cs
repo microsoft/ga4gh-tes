@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -9,15 +12,15 @@ using TesApi.Web.Management.Models.Pricing;
 namespace TesApi.Web.Management
 {
     /// <summary>
-    /// Azure Retail Price API client. 
+    /// Azure Retail Price API client.
     /// </summary>
     public class PriceApiClient
     {
-        private static readonly HttpClient httpClient = new HttpClient();
-        private static readonly Uri apiEndpoint = new Uri($"https://prices.azure.com/api/retail/prices");
+        private static readonly HttpClient httpClient = new();
+        private static readonly Uri apiEndpoint = new($"https://prices.azure.com/api/retail/prices");
 
         /// <summary>
-        /// Get pricing information in a region. 
+        /// Get pricing information in a region.
         /// </summary>
         /// <param name="region">arm region</param>
         /// <returns>pricing items</returns>
@@ -33,26 +36,23 @@ namespace TesApi.Web.Management
                     yield break;
                 }
 
-
                 foreach (var pricingItem in page.Items)
                 {
                     yield return pricingItem;
                 }
 
-                skip = skip + 100;
+                skip += 100;
             }
         }
 
         /// <summary>
-        /// Returns pricing information for non Windows and non spot VM . 
+        /// Returns pricing information for non Windows and non spot VM.
         /// </summary>
         /// <param name="region">arm region.</param>
         /// <returns></returns>
         public IAsyncEnumerable<PricingItem> GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(string region)
-        {
-            return GetAllPricingInformationAsync(region)
+            => GetAllPricingInformationAsync(region)
                 .WhereAwait(p => ValueTask.FromResult(!p.productName.Contains(" Windows") && !p.meterName.Contains(" Spot")));
-        }
 
         /// <summary>
         /// Returns a page of pricing information starting at the requested position for a given region.
@@ -62,8 +62,10 @@ namespace TesApi.Web.Management
         /// <returns></returns>
         public async Task<RetailPricingData> GetPricingInformationPageAsync(int skip, string region)
         {
-            var builder = new UriBuilder(apiEndpoint);
-            builder.Query = BuildRequestQueryString(skip, region);
+            var builder = new UriBuilder(apiEndpoint)
+            {
+                Query = BuildRequestQueryString(skip, region)
+            };
 
             var response = await httpClient.GetStringAsync(builder.Uri);
 
@@ -75,8 +77,7 @@ namespace TesApi.Web.Management
             return JsonSerializer.Deserialize<RetailPricingData>(response);
         }
 
-
-        private string BuildRequestQueryString(int skip, string region)
+        private static string BuildRequestQueryString(int skip, string region)
         {
             var filter = ParseFilterCondition("and",
                 ParseEq("serviceName", "Virtual Machines"),
@@ -91,24 +92,16 @@ namespace TesApi.Web.Management
 
         }
 
-        private string ParseFilterCondition(string conditionOperator, params string[] condition)
-        {
-            return $"$filter={String.Join($" {conditionOperator} ", condition)}";
-        }
+        private static string ParseFilterCondition(string conditionOperator, params string[] condition)
+            => $"$filter={String.Join($" {conditionOperator} ", condition)}";
 
-        private string ParseQueryStringKeyIntValue(string key, int value)
-        {
-            return $"{key}={value}";
-        }
+        private static string ParseQueryStringKeyIntValue(string key, int value)
+            => $"{key}={value}";
 
-        private string ParseEq(string name, string value)
-        {
-            return $"{name} eq '{value}'";
-        }
-        private string ParseEq(string name, bool value)
-        {
-            return $"{name} eq {value.ToString().ToLowerInvariant()}";
-        }
+        private static string ParseEq(string name, string value)
+            => $"{name} eq '{value}'";
 
+        private static string ParseEq(string name, bool value)
+            => $"{name} eq {value.ToString().ToLowerInvariant()}";
     }
 }

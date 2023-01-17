@@ -1,4 +1,7 @@
-﻿namespace TesApi.Web.Management
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+namespace TesApi.Web.Management
 {
     /// <summary>
     /// A record containing utilization information for a batch account
