@@ -443,7 +443,7 @@ namespace TesDeployer
                         {
                             ConsoleEx.WriteLine($"Please modify: {kubernetesManager.TempHelmValuesYamlPath}");
                             ConsoleEx.WriteLine($"Then, deploy the helm chart, and press Enter to continue.");
-                            //ConsoleEx.WriteLine("\tPostgreSQL command: " + GetPostgreSQLCreateCromwellUserCommand(configuration.UsePostgreSqlSingleServer));
+                            ConsoleEx.WriteLine("\tPostgreSQL command: " + GetPostgreSQLCreateUserCommand(configuration.UsePostgreSqlSingleServer, configuration.PostgreSqlTesDatabaseName, GetCreateTesUserString()));
                             ConsoleEx.ReadLine();
                         }
                         else
