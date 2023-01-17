@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System;
+using Microsoft.EntityFrameworkCore;
 using Tes.Models;
 
 namespace Tes.Repository
@@ -7,8 +8,9 @@ namespace Tes.Repository
     {
         public const string TesTasksPostgresTableName = "testasks";
 
-        public TesDbContext(string connectionString = null)
+        public TesDbContext(string connectionString)
         {
+            ArgumentException.ThrowIfNullOrEmpty(connectionString, nameof(connectionString));
             ConnectionString = connectionString;
         }
 

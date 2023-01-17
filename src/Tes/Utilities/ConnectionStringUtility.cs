@@ -14,34 +14,15 @@ namespace Tes.Utilities
             string postgreSqlServerNameSuffix = ".postgres.database.azure.com",
             string sslMode = "VerifyFull")
         {
-            if (string.IsNullOrEmpty(postgreSqlServerName))
-            {
-                throw new ArgumentException($"'{nameof(postgreSqlServerName)}' cannot be null or empty.", nameof(postgreSqlServerName));
-            }
+            ArgumentException.ThrowIfNullOrEmpty(postgreSqlServerName, nameof(postgreSqlServerName));
+            ArgumentException.ThrowIfNullOrEmpty(postgreSqlTesDatabaseName, nameof(postgreSqlTesDatabaseName));
+            ArgumentException.ThrowIfNullOrEmpty(postgreSqlTesDatabasePort, nameof(postgreSqlTesDatabasePort));
+            ArgumentException.ThrowIfNullOrEmpty(postgreSqlTesUserLogin, nameof(postgreSqlTesUserLogin));
+            ArgumentException.ThrowIfNullOrEmpty(postgreSqlTesUserPassword, nameof(postgreSqlTesUserPassword));
 
             if (postgreSqlServerName.Contains(postgreSqlServerNameSuffix, StringComparison.OrdinalIgnoreCase))
             {
                 throw new ArgumentException($"'{nameof(postgreSqlServerName)}' should only contain the name of the server like 'myserver' and NOT the full host name like 'myserver{postgreSqlServerNameSuffix}'", nameof(postgreSqlServerName));
-            }
-
-            if (string.IsNullOrEmpty(postgreSqlTesDatabaseName))
-            {
-                throw new ArgumentException($"'{nameof(postgreSqlTesDatabaseName)}' cannot be null or empty.", nameof(postgreSqlTesDatabaseName));
-            }
-
-            if (string.IsNullOrEmpty(postgreSqlTesDatabasePort))
-            {
-                throw new ArgumentException($"'{nameof(postgreSqlTesDatabasePort)}' cannot be null or empty.", nameof(postgreSqlTesDatabasePort));
-            }
-
-            if (string.IsNullOrEmpty(postgreSqlTesUserLogin))
-            {
-                throw new ArgumentException($"'{nameof(postgreSqlTesUserLogin)}' cannot be null or empty.", nameof(postgreSqlTesUserLogin));
-            }
-
-            if (string.IsNullOrEmpty(postgreSqlTesUserPassword))
-            {
-                throw new ArgumentException($"'{nameof(postgreSqlTesUserPassword)}' cannot be null or empty.", nameof(postgreSqlTesUserPassword));
             }
 
             var connectionStringBuilder = new StringBuilder();
