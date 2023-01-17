@@ -26,13 +26,7 @@ namespace Tes.Repository.Tests
 
         public TesTaskPostgreSqlRepositoryTests()
         {
-            var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(
-                postgreSqlServerName: "",
-                postgreSqlTesDatabaseName: "tes_db",
-                postgreSqlTesDatabasePort: "5432",
-                postgreSqlTesUserLogin: "",
-                postgreSqlTesUserPassword: "");
-
+            var connectionString = new PostgresConnectionStringUtility(null).GetPostgresConnectionString();
             repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(connectionString));
         }
 

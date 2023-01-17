@@ -62,7 +62,7 @@ namespace TesApi.Web
         {
             services
                 .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.BatchAccount))
-                .Configure<PostgreSqlOptions>(Configuration.GetSection(PostgreSqlOptions.PostgreSqlAccount))
+                .Configure<Tes.Models.PostgreSqlOptions>(Configuration.GetSection(Tes.Models.PostgreSqlOptions.PostgreSqlAccount))
                 .AddSingleton<IAppCache>(s => new CachingService())
                 .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
                 .AddSingleton<AzureProxy, AzureProxy>()
@@ -138,14 +138,9 @@ namespace TesApi.Web
 
         private IRepository<TesTask> CreatePostgresSqlRepositoryFromConfiguration(IServiceProvider services)
         {
-            var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
+            var options = services.GetRequiredService<IOptions<Tes.Models.PostgreSqlOptions>>();
 
-            string postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(
-                postgreSqlServerName: options.Value.PostgreSqlServerName,
-                postgreSqlTesDatabaseName: options.Value.PostgreSqlTesDatabaseName,
-                postgreSqlTesDatabasePort: options.Value.PostgreSqlTesDatabasePort,
-                postgreSqlTesUserLogin: options.Value.PostgreSqlTesUserLogin,
-                postgreSqlTesUserPassword: options.Value.PostgreSqlTesUserPassword);
+            string postgresConnectionString = new PostgresConnectionStringUtility(options).GetPostgresConnectionString();
 
             return new TesTaskPostgreSqlRepository(postgresConnectionString);
         }
