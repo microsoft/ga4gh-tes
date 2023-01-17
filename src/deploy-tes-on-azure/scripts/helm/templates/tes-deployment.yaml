@@ -37,6 +37,8 @@ spec:
               value: {{ .Values.database.postgreSqlTesUserLogin }}
             - name: PostgreSql__PostgreSqlTesUserPassword
               value: {{ .Values.database.postgreSqlTesUserPassword }}
+            - name: PostgreSql__PostgreSqlTesSslMode
+              value: {{ .Values.database.postgreSqlTesSslMode }}
             - name: ASPNETCORE_URLS
               value: http://0.0.0.0:{{ .Values.service.tesPort }}/
             - name: DefaultStorageAccountName

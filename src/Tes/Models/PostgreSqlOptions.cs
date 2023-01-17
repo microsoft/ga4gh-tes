@@ -13,6 +13,6 @@
         public string PostgreSqlTesUserLogin { get; set; }
         public string PostgreSqlTesUserPassword { get; set; }
         public string PostgreSqlServerNameSuffix { get; set; } = ".postgres.database.azure.com";
-        public string PostgreSqlSslMode { get; set; } = "VerifyFull";
+        public string PostgreSqlTesSslMode { get; set; } = "VerifyFull";
     }
 }
