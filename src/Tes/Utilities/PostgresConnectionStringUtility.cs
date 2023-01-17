@@ -14,6 +14,7 @@ namespace Tes.Utilities
             ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlTesDatabasePort, nameof(options.Value.PostgreSqlTesDatabasePort));
             ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlTesUserLogin, nameof(options.Value.PostgreSqlTesUserLogin));
             ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlTesUserPassword, nameof(options.Value.PostgreSqlTesUserPassword));
+            ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlTesSslMode, nameof(options.Value.PostgreSqlTesSslMode));
 
             if (options.Value.PostgreSqlServerName.Contains(options.Value.PostgreSqlServerNameSuffix, StringComparison.OrdinalIgnoreCase))
             {
@@ -26,7 +27,7 @@ namespace Tes.Utilities
             connectionStringBuilder.Append($"Port={options.Value.PostgreSqlTesDatabasePort};");
             connectionStringBuilder.Append($"User Id={options.Value.PostgreSqlTesUserLogin};");
             connectionStringBuilder.Append($"Password={options.Value.PostgreSqlTesUserPassword};");
-            connectionStringBuilder.Append($"SSL Mode={options.Value.PostgreSqlSslMode};");
+            connectionStringBuilder.Append($"SSL Mode={options.Value.PostgreSqlTesSslMode};");
             return connectionStringBuilder.ToString();
         }
     }

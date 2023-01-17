@@ -407,6 +407,7 @@ namespace TesDeployer
             values.Database["postgreSqlTesDatabasePort"] = settings["PostgreSqlTesDatabasePort"];
             values.Database["postgreSqlTesUserLogin"] = settings["PostgreSqlTesUserLogin"];
             values.Database["postgreSqlTesUserPassword"] = settings["PostgreSqlTesUserPassword"];
+            values.Database["postgreSqlTesSslMode"] = settings["PostgreSqlTesSslMode"];
         }
 
         private static Dictionary<string, string> ValuesToSettings(HelmValues values)
@@ -448,6 +449,7 @@ namespace TesDeployer
                 ["PostgreSqlTesDatabasePort"] = values.Database["postgreSqlTesDatabasePort"],
                 ["PostgreSqlTesUserLogin"] = values.Database["postgreSqlTesUserLogin"],
                 ["PostgreSqlTesUserPassword"] = values.Database["postgreSqlTesUserPassword"],
+                ["PostgreSqlTesSslMode"] = values.Database["postgreSqlTesSslMode"],
             };
 
         /// <summary>
