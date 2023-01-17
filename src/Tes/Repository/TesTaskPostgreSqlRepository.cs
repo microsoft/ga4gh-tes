@@ -20,7 +20,7 @@ namespace Tes.Repository
         private readonly Func<TesDbContext> createDbContext;
 
         /// <summary>
-        /// Default constructor
+        /// Default constructor that also will create the schema if it does not exist
         /// </summary>
         /// <param name="connectionString">The PostgreSql connection string</param>
         public TesTaskPostgreSqlRepository(string connectionString)
