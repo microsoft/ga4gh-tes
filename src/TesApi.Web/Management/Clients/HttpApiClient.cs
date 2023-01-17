@@ -94,7 +94,7 @@ namespace TesApi.Web.Management.Clients
                 return await HttpGetRequestWithCachingAndRetryPolicyAsync(requestUrl, setAuthorizationHeader);
             }
 
-            return await HttpGetRequestWithRetryPolicyAsync(requestUrl);
+            return await HttpGetRequestWithRetryPolicyAsync(requestUrl, setAuthorizationHeader);
         }
         /// <summary>
         /// Sends a Http Get request to the URL and deserializes the body response to the specified type 

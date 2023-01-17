@@ -21,7 +21,6 @@ namespace TesApi.Web
         private readonly IConfiguration configuration;
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly ILogger<ConfigurationUtils> logger;
-        //TODO: refactor this to use the interface, which will require to rework the logic below to use not azure specific types. 
         private readonly IBatchQuotaProvider quotaProvider;
         private readonly IBatchSkuInformationProvider skuInformationProvider;
         private readonly BatchAccountResourceInformation batchAccountResourceInformation;
