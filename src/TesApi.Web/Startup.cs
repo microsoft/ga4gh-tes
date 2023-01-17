@@ -56,7 +56,6 @@ namespace TesApi.Web
         public void ConfigureServices(IServiceCollection services)
             => services
                 .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.BatchAccount))
-                .Configure<CosmosDbOptions>(Configuration.GetSection(CosmosDbOptions.CosmosDbAccount))
                 .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.RetryPolicy))
                 .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.Terra))
                 .AddSingleton<IAppCache, CachingService>()
@@ -158,25 +157,11 @@ namespace TesApi.Web
             return ActivatorUtilities.CreateInstance<ArmBatchQuotaProvider>(services);
         }
 
-        private IRepository<TesTask> CreateCosmosDbRepositoryFromConfiguration(IServiceProvider services)
+        private IRepository<TesTask> CreatePostgresSqlRepositoryFromConfiguration(IServiceProvider services)
         {
-            var options = services.GetRequiredService<IOptions<CosmosDbOptions>>();
-
-            if (!string.IsNullOrWhiteSpace(options.Value.CosmosDbKey))
-            {
-                return WrapService(ActivatorUtilities.CreateInstance<CosmosDbRepository<TesTask>>(services,
-                    options.Value.CosmosDbEndpoint, options.Value.CosmosDbKey, CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId));
-            }
-
-            var azureProxy = services.GetRequiredService<IAzureProxy>();
-
-            (var cosmosDbEndpoint, var cosmosDbKey) = azureProxy.GetCosmosDbEndpointAndKeyAsync(options.Value.AccountName).Result;
-
-            return WrapService(ActivatorUtilities.CreateInstance<CosmosDbRepository<TesTask>>(services,
-                cosmosDbEndpoint, cosmosDbKey, CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId));
-
-            IRepository<TesTask> WrapService(IRepository<TesTask> service)
-                => ActivatorUtilities.CreateInstance<CachingWithRetriesRepository<TesTask>>(services, service);
+            var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
+            string postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
+            return new TesTaskPostgreSqlRepository(postgresConnectionString);
         }
 
         private BatchAccountResourceInformation CreateBatchAccountResourceInformation(IServiceProvider services)
