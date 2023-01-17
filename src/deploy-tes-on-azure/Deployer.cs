@@ -851,7 +851,6 @@ namespace TesDeployer
 
                 UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
-                UpdateSetting(settings, defaults, "TesHostname", $"{configuration.ResourceGroupName}.{configuration.RegionName}.cloudapp.azure.com", ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "TesHostname", kubernetesManager.TesHostname, ignoreDefaults: true);
             }
 
