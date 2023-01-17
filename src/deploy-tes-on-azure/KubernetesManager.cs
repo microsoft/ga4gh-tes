@@ -54,6 +54,9 @@ namespace TesDeployer
         private string valuesTemplatePath { get; set; }
         private string helmScriptsRootDirectory { get; set; }
         public string TempHelmValuesYamlPath { get; set; }
+        public string TesCname { get; set; }
+        public string TesHostname { get; set; }
+        public string AzureDnsLabelName { get; set; }
 
         public KubernetesManager(Configuration config, AzureCredentials credentials, CancellationTokenSource cts)
         {
@@ -62,6 +65,16 @@ namespace TesDeployer
             azureCredentials = credentials;
 
             CreateAndInitializeWorkingDirectoriesAsync().Wait();
+        }
+
+        public void SetTesIngressNetworkingConfiguration(string prefix)
+        {
+            const int maxCnLength = 64;
+            var suffix = $".{configuration.RegionName}.cloudapp.azure.com";
+            var prefixMaxLength = maxCnLength - suffix.Length;
+            TesCname = GetTesCname(prefix, prefixMaxLength);
+            TesHostname = $"{TesCname}{suffix}";
+            AzureDnsLabelName = TesCname;
         }
 
         public async Task<IKubernetes> GetKubernetesClientAsync()
@@ -96,7 +109,7 @@ namespace TesDeployer
             return client;
         }
 
-        public async Task<IKubernetes> EnableIngress(IResourceGroup _/*resourceGroup*/, string tesUsername, string tesPassword, IKubernetes client = default) //TODO: use or remove resourceGroup
+        public async Task<IKubernetes> EnableIngress(string tesUsername, string tesPassword, IKubernetes client = default)
         {
             var certManagerRegistry = "quay.io";
             var certImageController = $"{certManagerRegistry}/jetstack/cert-manager-controller";
@@ -174,7 +187,7 @@ namespace TesDeployer
 
             await ExecHelmProcessAsync($"repo update");
 
-            var dnsAnnotation = $"--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-dns-label-name\"={configuration.ResourceGroupName}";
+            var dnsAnnotation = $"--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-dns-label-name\"={AzureDnsLabelName}";
             var healthProbeAnnotation = "--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-load-balancer-health-probe-request-path\"=/healthz";
             await ExecHelmProcessAsync($"install ingress-nginx ingress-nginx/ingress-nginx --namespace {configuration.AksCoANamespace} --kubeconfig {kubeConfigPath} --version {NginxIngressVersion} {healthProbeAnnotation} {dnsAnnotation}");
             await ExecHelmProcessAsync("install cert-manager jetstack/cert-manager " +
@@ -436,6 +449,23 @@ namespace TesDeployer
                 ["PostgreSqlTesUserLogin"] = values.Database["postgreSqlTesUserLogin"],
                 ["PostgreSqlTesUserPassword"] = values.Database["postgreSqlTesUserPassword"],
             };
+
+        /// <summary>
+        /// Return a cname derived from the resource group name
+        /// </summary>
+        /// <param name="maxLength">Max length of the cname</param>
+        /// <returns></returns>
+        private string GetTesCname(string prefix, int maxLength = 40)
+        {
+            var tempCname = SdkContext.RandomResourceName($"{prefix.Replace(".", "")}-", maxLength);
+
+            if (tempCname.Length > maxLength)
+            {
+                tempCname = tempCname.Substring(0, maxLength);
+            }
+
+            return tempCname.TrimEnd('-').ToLowerInvariant();
+        }
 
         private async Task<string> ExecHelmProcessAsync(string command, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
         {

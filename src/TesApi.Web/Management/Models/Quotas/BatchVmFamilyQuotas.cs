@@ -4,7 +4,7 @@
 namespace TesApi.Web.Management.Models.Quotas
 {
     /// <summary>
-    /// Record representing the batch account quotas for a vm family.
+    /// Record representing the batch account quotas for a vm family. 
     /// </summary>
     /// <param name="TotalCoreQuota">Total core quota</param>
     /// <param name="VmFamilyQuota">Vm Family quota</param>

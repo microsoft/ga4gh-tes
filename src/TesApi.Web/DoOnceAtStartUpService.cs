@@ -45,7 +45,7 @@ namespace TesApi.Web
                 }
                 catch (Exception e)
                 {
-                    logger.LogError("Failed to execute start up tasks", e);
+                    logger.LogError(e, "Failed to execute start up tasks");
                     throw;
                 }
             }

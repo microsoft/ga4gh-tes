@@ -153,8 +153,7 @@ namespace TesDeployer
                 var keyVaultUri = string.Empty;
                 IIdentity managedIdentity = null;
                 IPrivateDnsZone postgreSqlDnsZone = null;
-                string tesEndpoint = null;
-
+                
                 try
                 {
                     if (configuration.Update)
@@ -253,7 +252,6 @@ namespace TesDeployer
                         await kubernetesManager.UpgradeAKSDeploymentAsync(
                             settings,
                             storageAccount);
-                        tesEndpoint = settings["TesHostname"];
 
                         if (aksValues.TryGetValue("EnableIngress", out var enableIngress))
                         {
@@ -335,6 +333,9 @@ namespace TesDeployer
                         {
                             resourceGroup = await azureSubscriptionClient.ResourceGroups.GetByNameAsync(configuration.ResourceGroupName);
                         }
+
+                        // Derive TES ingress URL from resource group name
+                        kubernetesManager.SetTesIngressNetworkingConfiguration(configuration.ResourceGroupName);
 
                         managedIdentity = await CreateUserManagedIdentityAsync(resourceGroup);
 
@@ -435,7 +436,6 @@ namespace TesDeployer
 
                         var clientId = managedIdentity.ClientId;
                         var settings = ConfigureSettings(clientId);
-                        tesEndpoint = settings["TesHostname"];
 
                         await kubernetesManager.UpdateHelmValuesAsync(storageAccount, keyVaultUri, resourceGroup.Name, settings, managedIdentity);
 
@@ -452,7 +452,7 @@ namespace TesDeployer
 
                             if (configuration.EnableIngress.GetValueOrDefault())
                             {
-                                _ = await kubernetesManager.EnableIngress(resourceGroup, configuration.TesUsername, configuration.TesPassword, kubernetesClient);
+                                _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
                             }
 
                             _ = await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
@@ -478,7 +478,7 @@ namespace TesDeployer
                 if (configuration.EnableIngress.GetValueOrDefault())
                 {
                     ConsoleEx.WriteLine($"TES ingress is enabled.");
-                    ConsoleEx.WriteLine($"TES is secured with basic auth at {tesEndpoint}");
+                    ConsoleEx.WriteLine($"TES is secured with basic auth at {kubernetesManager.TesHostname}");
                     ConsoleEx.WriteLine($"TES username: '{configuration.TesUsername}' password: '{configuration.TesPassword}'");
 
                     if (isBatchQuotaAvailable)
@@ -489,7 +489,7 @@ namespace TesDeployer
                         }
                         else
                         {
-                            var isTestWorkflowSuccessful = await RunTestTask(tesEndpoint, batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+                            var isTestWorkflowSuccessful = await RunTestTask(kubernetesManager.TesHostname, batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
 
                             if (!isTestWorkflowSuccessful)
                             {
@@ -851,7 +851,7 @@ namespace TesDeployer
 
                 UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
-                UpdateSetting(settings, defaults, "TesHostname", $"{configuration.ResourceGroupName}.{configuration.RegionName}.cloudapp.azure.com", ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "TesHostname", kubernetesManager.TesHostname, ignoreDefaults: true);
             }
 
             //if (installedVersion is null || installedVersion < new Version(3, 3))
@@ -1093,7 +1093,7 @@ namespace TesDeployer
         {
             var blobClient = await GetBlobClientAsync(storageAccount);
 
-            var defaultContainers = new List<string> { "workflows", InputsContainerName, "outputs", ConfigurationContainerName };
+            var defaultContainers = new List<string> { "executions", "workflows", InputsContainerName, "outputs", ConfigurationContainerName };
             await Task.WhenAll(defaultContainers.Select(c => blobClient.GetBlobContainerClient(c).CreateIfNotExistsAsync(cancellationToken: cts.Token)));
         }
 

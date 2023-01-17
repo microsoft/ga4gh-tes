@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
@@ -18,8 +19,25 @@ namespace TesApi.Tests;
 [TestClass]
 public class BatchQuotaVerifierTests
 {
+    private Mock<IBatchQuotaProvider> quotaProvider;
+    private Mock<IAzureProxy> azureProxy;
+    private Mock<IBatchSkuInformationProvider> skuInfoProvider;
+    private BatchAccountResourceInformation batchAccountResourceInformation;
+
     private const string Region = "eastus";
     private const string VmFamily = "StandardDSeries";
+
+    [TestInitialize]
+    public void BeforeEach()
+    {
+        azureProxy = new Mock<IAzureProxy>();
+        azureProxy.Setup(p => p.GetArmRegion()).Returns(Region);
+        quotaProvider = new Mock<IBatchQuotaProvider>();
+        skuInfoProvider = new Mock<IBatchSkuInformationProvider>();
+        batchAccountResourceInformation = new BatchAccountResourceInformation("batchaccount", "mrg", "subid", "eastus");
+
+        new BatchQuotaVerifier(batchAccountResourceInformation, quotaProvider.Object, skuInfoProvider.Object, azureProxy.Object, new NullLogger<BatchQuotaVerifier>());
+    }
 
     [TestMethod]
     [ExpectedException(typeof(InvalidOperationException))]
@@ -35,12 +53,13 @@ public class BatchQuotaVerifierTests
         var vmInfo = new VirtualMachineInformation();
 
         BatchVmFamilyQuotas batchVmFamilyQuotas = null;
-        services.BatchQuotaProvider.Setup(p => p.GetBatchAccountQuotaForRequirementAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>()))
+        services.BatchQuotaProvider.Setup(p => p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>()))
             .ReturnsAsync(batchVmFamilyQuotas);
 
         await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo);
 
         logger.Verify(l => l.LogError(It.IsAny<string>(), It.IsAny<Exception>()), Times.Once);
+
     }
 
     [DataRow(10, 5, 10)] //not enough total quota
@@ -72,7 +91,7 @@ public class BatchQuotaVerifierTests
 
         var batchAccountQuotas = new BatchVmFamilyQuotas(totalCoreQuota, vmFamilyQuota, poolQuota, activeJobAndJobScheduleQuota, true, VmFamily);
 
-        services.BatchQuotaProvider.Setup(p => p.GetBatchAccountQuotaForRequirementAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>()))
+        services.BatchQuotaProvider.Setup(p => p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>()))
             .ReturnsAsync(batchAccountQuotas);
 
         services.BatchSkuInformationProvider.Setup(p => p.GetVmSizesAndPricesAsync(It.IsAny<string>())).ReturnsAsync(CreateVmSkuList(10));
@@ -81,6 +100,7 @@ public class BatchQuotaVerifierTests
         services.BatchSkuInformationProvider.Setup(p => p.GetVmSizesAndPricesAsync(Region)).ReturnsAsync(CreateBatchSupportedVmSkuList(10));
 
         await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo);
+
     }
 
     private static List<VirtualMachineInformation> CreateBatchSupportedVmSkuList(int maxNumberOfCores)
@@ -152,3 +172,5 @@ public class BatchQuotaVerifierTests
         };
     }
 }
+
+
