@@ -1,31 +1,26 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build-env
+FROM mcr.microsoft.com/dotnet/sdk:7.0-jammy-amd64 AS build-env
 WORKDIR /app
-# 1.1 Copy solution & nuget config file (if exists)
-COPY ./* ./
-# 1.2 Copy csproj and create folders for projects
-COPY ./*/*/*.csproj ./src/
-WORKDIR /app/src
-# 1.3 Create folders for projects
-RUN for file in $(ls *.csproj); do mkdir -p ${file%.*} && mv $file ${file%.*}/; done
-WORKDIR /app
-# Restore packages in separate layer
-RUN dotnet restore
 
-# Copy the rest of the files and publish
-COPY . ./
-RUN dotnet build -c Release
-RUN dotnet publish TesApi.Web -c Release -o /app/out
+# Instal Tes Compliance
+RUN apt update
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt install -y software-properties-common
 
-# Build runtime image
-FROM mcr.microsoft.com/dotnet/aspnet:7.0
+RUN add-apt-repository ppa:deadsnakes/ppa
+RUN apt-get update
+RUN apt-get -y install python3.8 python3.8-distutils python3-pip
+
+RUN git clone https://github.com/elixir-cloud-aai/tes-compliance-suite.git 
+
+WORKDIR /app/tes-compliance-suite
+RUN python3.8 setup.py install
+
 WORKDIR /app
-COPY --from=build-env /app/out .
-RUN apt update && apt full-upgrade -y && apt autoremove -y
-RUN apt install -y postgresql-client
-RUN adduser --home /home/tes -u 1000 tes
-RUN apt install -y libcap2-bin
-RUN setcap CAP_NET_BIND_SERVICE=+eip /usr/share/dotnet/dotnet
-ENTRYPOINT ["dotnet", "tesapi.dll"]
+RUN mkdir results
+
+COPY entrypoint.sh /app/tes-compliance-suite/entrypoint.sh
+
+ENTRYPOINT ["/bin/bash", "/app/tes-compliance-suite/entrypoint.sh"]

@@ -9,6 +9,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		src\CommonAssemblyInfo.cs = src\CommonAssemblyInfo.cs
 		src\Dockerfile-Tes = src\Dockerfile-Tes
 		Dockerfile-Tes-Integration-Test = Dockerfile-Tes-Integration-Test
+		entrypoint.sh = entrypoint.sh
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TesApi.Web", "src\TesApi.Web\TesApi.Web.csproj", "{80BB1AF3-4789-4CF6-ABF3-EB2195838730}"
