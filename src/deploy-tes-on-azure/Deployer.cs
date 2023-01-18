@@ -10,6 +10,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -502,9 +503,21 @@ namespace TesDeployer
 
                 if (configuration.EnableIngress.GetValueOrDefault())
                 {
-                    ConsoleEx.WriteLine($"TES ingress is enabled.");
+                    ConsoleEx.WriteLine($"TES ingress is enabled");
                     ConsoleEx.WriteLine($"TES is secured with basic auth at {kubernetesManager.TesHostname}");
-                    ConsoleEx.WriteLine($"TES username: '{configuration.TesUsername}' password: '{configuration.TesPassword}'");
+
+                    if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
+                    {
+                        // Write credentials to JSON file in working directory
+                        var credentialsJson = System.Text.Json.JsonSerializer.Serialize(
+                            new { kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword });
+
+                        var credentialsPath = Path.Combine(Directory.GetCurrentDirectory(), "TesCredentials.json");
+                        await File.WriteAllTextAsync(credentialsPath, credentialsJson);
+                        ConsoleEx.WriteLine($"TES credentials file written to: {credentialsPath}");
+                    }
+
+
 
                     if (isBatchQuotaAvailable)
                     {

@@ -74,6 +74,7 @@ namespace TesDeployer
         public bool UsePostgreSqlSingleServer { get; set; } = false;
         public string KeyVaultName { get; set; }
         public bool? EnableIngress { get; set; } = null;
+        public bool? OutputTesCredentialsJson { get; set; } = true;
         public string LetsEncryptEmail { get; set; } = null;
         public string TesUsername { get; set; } = "tes";
         public string TesPassword { get; set; }
