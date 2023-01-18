@@ -75,7 +75,7 @@ namespace TesApi.Web
         /// <param name="logger"></param>
         /// <exception cref="ArgumentException"></exception>
         public BatchPool(string poolId, IBatchScheduler batchScheduler, IConfiguration configuration, IAzureProxy azureProxy, ILogger<BatchPool> logger)
-            : this((CloudPool)default,
+            : this(default,
                 new() { PoolId = poolId },
                 batchScheduler,
                 configuration,
@@ -187,6 +187,7 @@ namespace TesApi.Web
                                 case PoolResizeErrorCodes.AccountLowPriorityCoreQuotaReached:
                                 case PoolResizeErrorCodes.CommunicationEnabledPoolReachedMaxVMCount:
                                 case PoolResizeErrorCodes.AccountSpotCoreQuotaReached:
+                                case PoolResizeErrorCodes.AllocationTimedOut:
                                     break;
 
                                 // Errors to force autoscale to be reset
@@ -231,16 +232,16 @@ namespace TesApi.Web
 
               The type of ~Tasks is what batch calls a "doubleVec", which needs to be first turned into a "doubleVecList" before it can be turned into a scaler.
               This is accomplished by calling doubleVec's GetSample method, which returns some number of the most recent available samples of the related metric.
-              Then, function is used to extract a scaler from the list of scalers (measurements). NOTE: there does not seem to be a "last" function.
+              Then, a function is used to extract a scaler from the list of scalers (measurements). NOTE: there does not seem to be a "last" function.
 
               Whenever autoscaling is first turned on, including when the pool is first created, there are no sampled metrics available. Thus, we need to prevent the
-              expected errors that would result from trying to extract the samples. Later on, if recent samples aren't available, we prefer that the furmula fails
+              expected errors that would result from trying to extract the samples. Later on, if recent samples aren't available, we prefer that the formula fails
               (1- so we can potentially capture that, and 2- so that we don't suddenly try to remove all nodes from the pool when there's still demand) so we use a
               timed scheme to substitue an "initial value" (aka initialTarget).
 
               We set NodeDeallocationOption to taskcompletion to prevent wasting time/money by stopping a running task, only to requeue it onto another node, or worse,
-              fail it, just because batch's last sample was taken longer ago than a job's assignment was made to a node, because the formula evaluations are not coordinated
-              with the metric sampling based on my observations.
+              fail it, just because batch's last sample was taken longer ago than a task's assignment was made to a node, because the formula evaluations are not coordinated
+              with the metric sampling based on my observations. This does mean that some resizes will time out, so we shouldn't always consider timeout to be a fatal error.
             */
             => string.Format(@"
     $NodeDeallocationOption=taskcompletion;
@@ -354,7 +355,9 @@ namespace TesApi.Web
                 var (lowPriorityNodes, dedicatedNodes) = await _azureProxy.GetCurrentComputeNodesAsync(Pool.PoolId, cancellationToken);
                 if ((lowPriorityNodes is null || lowPriorityNodes == 0) && (dedicatedNodes is null || dedicatedNodes == 0) && !await GetJobsAsync().AnyAsync(cancellationToken))
                 {
+                    // TODO: deal with missing pool and/or job
                     await _azureProxy.DeleteBatchPoolAsync(Pool.PoolId, cancellationToken);
+                    await _azureProxy.DeleteBatchJobAsync(Pool, cancellationToken);
                     _ = _batchPools.RemovePoolFromList(this);
                 }
             }

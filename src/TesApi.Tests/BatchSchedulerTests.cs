@@ -366,10 +366,10 @@ namespace TesApi.Tests
             await batchScheduler.ProcessTesTaskAsync(tesTask);
 
             var createBatchPoolAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateBatchPoolAsync));
-            var createBatchJobAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateBatchJobAsync));
+            var addBatchTaskAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.AddBatchTaskAsync));
 
-            var cloudTask = createBatchJobAsyncInvocation?.Arguments[1] as CloudTask;
-            var poolInformation = createBatchJobAsyncInvocation?.Arguments[2] as PoolInformation;
+            var cloudTask = addBatchTaskAsyncInvocation?.Arguments[1] as CloudTask;
+            var poolInformation = addBatchTaskAsyncInvocation?.Arguments[2] as PoolInformation;
             var pool = createBatchPoolAsyncInvocation?.Arguments[0] as Pool;
 
             Assert.IsNull(poolInformation.AutoPoolSpecification);
@@ -647,7 +647,7 @@ namespace TesApi.Tests
 
             Assert.AreEqual(TesState.CANCELEDEnum, tesTask.State);
             Assert.IsFalse(tesTask.IsCancelRequested);
-            azureProxy.Verify(i => i.DeleteBatchJobAsync(tesTask.Id, It.IsAny<System.Threading.CancellationToken>()));
+            azureProxy.Verify(i => i.DeleteBatchTaskAsync(tesTask.Id, It.IsAny<PoolInformation>(), It.IsAny<System.Threading.CancellationToken>()));
         }
 
         [TestMethod]
@@ -1111,11 +1111,12 @@ namespace TesApi.Tests
             await batchScheduler.ProcessTesTaskAsync(tesTask);
 
             var createBatchPoolAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateBatchPoolAsync));
-            var createBatchJobAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateBatchJobAsync));
+            var createAutoPoolBatchJobAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateAutoPoolModeBatchJobAsync));
+            var addBatchTaskAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.AddBatchTaskAsync));
 
-            var jobId = createBatchJobAsyncInvocation?.Arguments[0] as string;
-            var cloudTask = createBatchJobAsyncInvocation?.Arguments[1] as CloudTask;
-            var poolInformation = createBatchJobAsyncInvocation?.Arguments[2] as PoolInformation;
+            var jobId = (addBatchTaskAsyncInvocation?.Arguments[0] ?? createAutoPoolBatchJobAsyncInvocation?.Arguments[0]) as string;
+            var cloudTask = (addBatchTaskAsyncInvocation?.Arguments[1] ?? createAutoPoolBatchJobAsyncInvocation?.Arguments[1]) as CloudTask;
+            var poolInformation = (addBatchTaskAsyncInvocation?.Arguments[2] ?? createAutoPoolBatchJobAsyncInvocation?.Arguments[2]) as PoolInformation;
             var batchPoolsModel = createBatchPoolAsyncInvocation?.Arguments[0] as Pool;
 
             return (jobId, cloudTask, poolInformation, batchPoolsModel);
@@ -1206,7 +1207,7 @@ namespace TesApi.Tests
                 azureProxy.Setup(a => a.GetNextBatchJobIdAsync(It.IsAny<string>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.NextBatchJobId));
 
-                azureProxy.Setup(a => a.GetBatchJobAndTaskStateAsync(It.IsAny<string>()))
+                azureProxy.Setup(a => a.GetBatchJobAndTaskStateAsync(It.IsAny<TesTask>(), It.IsAny<bool>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.BatchJobAndTaskState));
 
                 azureProxy.Setup(a => a.GetNextBatchJobIdAsync(It.IsAny<string>()))

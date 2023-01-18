@@ -272,10 +272,9 @@ namespace TesDeployer
                         var installedVersion = !string.IsNullOrEmpty(versionString) && Version.TryParse(versionString, out var version) ? version : null;
                         var settings = ConfigureSettings(managedIdentity.ClientId, aksValues, installedVersion);
 
-                        if (installedVersion is null || installedVersion < new Version(4, 0))
-                        {
-                            await PatchContainersAddJobPreparationScriptV400Async(storageAccount);
-                        }
+                        //if (installedVersion is null || installedVersion < new Version(4, 0))
+                        //{
+                        //}
 
                         await kubernetesManager.UpgradeAKSDeploymentAsync(
                             settings,
@@ -401,7 +400,6 @@ namespace TesDeployer
                             storageAccount ??= await CreateStorageAccountAsync();
                             await CreateDefaultStorageContainersAsync(storageAccount);
                             await WritePersonalizedFilesToStorageAccountAsync(storageAccount, managedIdentity.Name);
-                            await PatchContainersAddJobPreparationScriptV400Async(storageAccount);
                             await AssignVmAsContributorToStorageAccountAsync(managedIdentity, storageAccount);
                             await AssignVmAsDataReaderToStorageAccountAsync(managedIdentity, storageAccount);
                             await AssignManagedIdOperatorToResourceAsync(managedIdentity, resourceGroup);
@@ -847,11 +845,6 @@ namespace TesDeployer
 
             return settings;
         }
-
-        private Task PatchContainersAddJobPreparationScriptV400Async(IStorageAccount storageAccount)
-            => Execute(
-                $"Adding job scripts...",
-                () => UploadTextToStorageAccountAsync(storageAccount, InputsContainerName, "coa-tes/job-prep.sh", Utility.GetFileContent("scripts", "job-prep.sh")));
 
         private Dictionary<string, string> ConfigureSettings(string managedIdentityClientId, Dictionary<string, string> settings = null, Version installedVersion = null)
         {

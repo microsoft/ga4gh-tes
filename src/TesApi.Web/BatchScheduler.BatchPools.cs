@@ -11,6 +11,7 @@ using System.Text;
 using Tes.Models;
 using Tes.Extensions;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
+using Microsoft.Azure.Batch;
 
 namespace TesApi.Web
 {
@@ -128,7 +129,18 @@ namespace TesApi.Web
                     modelPool.Metadata ??= new List<BatchModels.MetadataItem>();
                     modelPool.Metadata.Add(new(PoolHostName, this.hostname));
                     modelPool.Metadata.Add(new(PoolIsDedicated, (!isPreemptable).ToString()));
-                    pool = _batchPoolFactory.CreateNew(await azureProxy.CreateBatchPoolAsync(modelPool, isPreemptable));
+                    var poolInfo = await azureProxy.CreateBatchPoolAsync(modelPool, isPreemptable);
+
+                    try
+                    {
+                        await azureProxy.CreateBatchJobAsync(poolInfo);
+                    }
+                    catch (Exception ex)
+                    {
+                        HandleTimeout(poolId, ex);
+                    }
+
+                    pool = _batchPoolFactory.CreateNew(poolInfo);
                 }
                 catch (OperationCanceledException)
                 {
@@ -150,11 +162,18 @@ namespace TesApi.Web
             static bool Available(IBatchPool pool)
                 => pool.IsAvailable;
 
-            void HandleTimeout(string poolId)
+            void HandleTimeout(string poolId, Exception ex = default)
             {
                 // When the batch management API creating the pool times out, it may or may not have created the pool. Add an inactive record to delete it if it did get created and try again later. That record will be removed later whether or not the pool was created.
                 _ = AddPool(_batchPoolFactory.CreateNew(poolId));
-                throw new AzureBatchQuotaMaxedOutException($"Pool creation timed out");
+                throw ex switch
+                {
+                    null => new AzureBatchQuotaMaxedOutException("Pool creation timed out"),
+                    OperationCanceledException => ex,
+                    var x when x is RequestFailedException rfe && rfe.Status == 0 && rfe.InnerException is WebException webException && webException.Status == WebExceptionStatus.Timeout => new AzureBatchQuotaMaxedOutException("Pool creation timed out", ex),
+                    var x when IsInnermostExceptionSocketException125(x) => new AzureBatchQuotaMaxedOutException("Pool creation timed out", ex),
+                    _ => new Exception(ex.Message, ex),
+                };
             }
 
             static bool IsInnermostExceptionSocketException125(Exception ex)
@@ -177,7 +196,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async ValueTask<IEnumerable<Task>> GetShutdownCandidatePools(CancellationToken cancellationToken)
             => (await GetEmptyPools(cancellationToken))
-                .Select(t => azureProxy.DeleteBatchPoolAsync(t.Pool.PoolId));
+                .Select(async t => await DeletePoolAsync(t.Pool));
 
         /// <inheritdoc/>
         public IEnumerable<IBatchPool> GetPools()
@@ -206,7 +225,7 @@ namespace TesApi.Web
                     {
                         await Task.WhenAll(pools.Select(async p =>
                         {
-                            await azureProxy.DeleteBatchPoolAsync(p.Pool.PoolId);
+                            await DeletePoolAsync(p.Pool);
                             _ = RemovePoolFromList(p);
                         }).ToArray());
                     }
@@ -216,6 +235,13 @@ namespace TesApi.Web
             {
                 neededPools.Clear();
             }
+        }
+
+        private async ValueTask DeletePoolAsync(PoolInformation pool, CancellationToken cancellationToken = default)
+        {
+            // TODO: deal with missing pool and/or job
+            await azureProxy.DeleteBatchPoolAsync(pool.PoolId, cancellationToken);
+            await azureProxy.DeleteBatchJobAsync(pool, cancellationToken);
         }
 
         private bool AddPool(IBatchPool pool)

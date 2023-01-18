@@ -45,18 +45,6 @@ namespace TesApi.Web
         /// </summary>
         public JobState? JobState { get; set; }
         /// <summary>
-        /// Gets the creation time of the Azure Batch job.
-        /// </summary>
-        public DateTime? JobStartTime { get; set; } // TODO: consider removing
-        /// <summary>
-        /// Gets the completion time of Azure Batch job.
-        /// </summary>
-        public DateTime? JobEndTime { get; set; } // TODO: consider removing
-        /// <summary>
-        /// Gets the error encountered by the Batch service in scheduling the Azure Batch job.
-        /// </summary>
-        public JobSchedulingError JobSchedulingError { get; set; } // TODO: consider removing
-        /// <summary>
         /// Gets the current state of the compute node.
         /// </summary>
         public ComputeNodeState? NodeState { get; set; }
@@ -120,6 +108,6 @@ namespace TesApi.Web
         /// <summary>
         /// Gets the task's pool Id.
         /// </summary>
-        public string PoolId { get; set; }
+        public PoolInformation Pool { get; set; }
     }
 }

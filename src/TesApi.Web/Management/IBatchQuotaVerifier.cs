@@ -16,10 +16,10 @@ namespace TesApi.Web.Management
         /// Checks if the current quota allows fullfilment of the requested VM SKU.
         /// </summary>
         /// <param name="virtualMachineInformation"></param>
-        /// <param name="needPoolQuotaCheck">A <see cref="Func{Boolean}"/> to enable checking pool quota.</param>
+        /// <param name="needPoolOrJobQuotaCheck">A <see cref="Func{Boolean}"/> to enable checking pool and job quota.</param>
         /// <returns></returns>
         /// <exception cref="AzureBatchQuotaMaxedOutException">Thrown when a max quota condition was identified</exception>
-        Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, Func<bool> needPoolQuotaCheck);
+        Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, Func<bool> needPoolOrJobQuotaCheck);
 
         /// <summary>
         /// Gets the instance of the batch quota provider.
