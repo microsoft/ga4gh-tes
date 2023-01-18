@@ -52,7 +52,7 @@
   <ItemGroup>
     <EmbeddedResource Include="scripts\containers-to-mount" />
     <EmbeddedResource Include="scripts\allowed-vm-sizes" />
-    <EmbeddedResource Include="scripts\env-00-coa-version.txt" />
+    <EmbeddedResource Include="scripts\env-00-tes-version.txt" />
     <EmbeddedResource Include="scripts\env-01-account-names.txt" />
     <EmbeddedResource Include="scripts\env-02-internal-images.txt" />
     <EmbeddedResource Include="scripts\env-04-settings.txt" />

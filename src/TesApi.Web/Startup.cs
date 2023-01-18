@@ -93,9 +93,9 @@ namespace TesApi.Web
 
                 .AddSwaggerGen(c =>
                 {
-                    c.SwaggerDoc("0.3.3", new OpenApiInfo
+                    c.SwaggerDoc("0.4.0", new OpenApiInfo
                     {
-                        Version = "0.3.3",
+                        Version = "0.4.0",
                         Title = "Task Execution Service",
                         Description = "Task Execution Service (ASP.NET Core 7.0)",
                         Contact = new OpenApiContact()
