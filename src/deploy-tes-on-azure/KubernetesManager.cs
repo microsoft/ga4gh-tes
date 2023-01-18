@@ -408,6 +408,8 @@ namespace TesDeployer
             values.Database["postgreSqlTesUserLogin"] = settings["PostgreSqlTesUserLogin"];
             values.Database["postgreSqlTesUserPassword"] = settings["PostgreSqlTesUserPassword"];
             values.Database["postgreSqlTesSslMode"] = settings["PostgreSqlTesSslMode"];
+            values.Database["postgreSqlAdministratorLogin"] = settings["PostgreSqlAdministratorLogin"];
+            values.Database["postgreSqlAdministratorPassword"] = settings["PostgreSqlAdministratorPassword"];
         }
 
         private static Dictionary<string, string> ValuesToSettings(HelmValues values)
@@ -433,11 +435,7 @@ namespace TesDeployer
                 ["MarthaKeyVaultName"] = values.Config["marthaKeyVaultName"],
                 ["MarthaSecretName"] = values.Config["marthaSecretName"],
                 ["CrossSubscriptionAKSDeployment"] = values.Config["crossSubscriptionAKSDeployment"],
-                //["PostgreSqlServerName"] = values.Config["postgreSqlServerName"],
-                //["PostgreSqlDatabaseName"] = values.Config["postgreSqlDatabaseName"],
-                //["PostgreSqlUserLogin"] = values.Config["postgreSqlUserLogin"],
-                //["PostgreSqlUserPassword"] = values.Config["postgreSqlUserPassword"],
-                //["UsePostgreSqlSingleServer"] = values.Config["usePostgreSqlSingleServer"],
+                ["UsePostgreSqlSingleServer"] = values.Config["usePostgreSqlSingleServer"],
                 ["ManagedIdentityClientId"] = values.Identity["clientId"],
                 ["TesImageName"] = values.Images["tes"],
                 ["TesHostname"] = values.Service["tesHostname"],
@@ -450,6 +448,8 @@ namespace TesDeployer
                 ["PostgreSqlTesUserLogin"] = values.Database["postgreSqlTesUserLogin"],
                 ["PostgreSqlTesUserPassword"] = values.Database["postgreSqlTesUserPassword"],
                 ["PostgreSqlTesSslMode"] = values.Database["postgreSqlTesSslMode"],
+                ["PostgreSqlAdministratorLogin"] = values.Database["postgreSqlAdministratorLogin"],
+                ["PostgreSqlAdministratorPassword"] = values.Database["postgreSqlAdministratorPassword"],
             };
 
         /// <summary>

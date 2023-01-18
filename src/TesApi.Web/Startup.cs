@@ -56,6 +56,7 @@ namespace TesApi.Web
         public void ConfigureServices(IServiceCollection services)
             => services
                 .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.BatchAccount))
+                .Configure<PostgreSqlOptions>(Configuration.GetSection(PostgreSqlOptions.PostgreSqlAccount))
                 .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.RetryPolicy))
                 .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.Terra))
                 .AddSingleton<IAppCache, CachingService>()
