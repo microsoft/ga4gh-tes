@@ -18,9 +18,8 @@ RUN git clone https://github.com/elixir-cloud-aai/tes-compliance-suite.git
 WORKDIR /app/tes-compliance-suite
 RUN python3.8 setup.py install
 
-WORKDIR /app
 RUN mkdir results
 
 COPY entrypoint.sh /app/tes-compliance-suite/entrypoint.sh
 
-ENTRYPOINT ["/bin/bash", "/app/tes-compliance-suite/entrypoint.sh"]
+ENTRYPOINT ["/bin/bash", "entrypoint.sh"]
