@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
 using TesApi.Web.Management;
+using TesApi.Web.Management.Models.Quotas;
 
 namespace TesApi.Web
 {
@@ -20,8 +21,7 @@ namespace TesApi.Web
         private readonly IConfiguration configuration;
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly ILogger<ConfigurationUtils> logger;
-        //TODO: refactor this to use the interface, which will require to rework the logic below to use not azure specific types. 
-        private readonly ArmBatchQuotaProvider quotaProvider;
+        private readonly IBatchQuotaProvider quotaProvider;
         private readonly IBatchSkuInformationProvider skuInformationProvider;
         private readonly BatchAccountResourceInformation batchAccountResourceInformation;
 
@@ -30,14 +30,14 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="configuration"><see cref="IConfiguration"/></param>
         /// <param name="storageAccessProvider"><see cref="IStorageAccessProvider"/></param>
-        /// <param name="quotaProvider"><see cref="ArmBatchQuotaProvider"/>></param>
+        /// <param name="quotaProvider"><see cref="IBatchQuotaProvider"/>></param>
         /// <param name="skuInformationProvider"><see cref="IBatchSkuInformationProvider"/>></param>
         /// <param name="batchAccountResourceInformation"><see cref="BatchAccountResourceInformation"/></param>
         /// <param name="logger"><see cref="ILogger"/></param>
         public ConfigurationUtils(
             IConfiguration configuration,
             IStorageAccessProvider storageAccessProvider,
-            ArmBatchQuotaProvider quotaProvider,
+            IBatchQuotaProvider quotaProvider,
             IBatchSkuInformationProvider skuInformationProvider,
             BatchAccountResourceInformation batchAccountResourceInformation,
             ILogger<ConfigurationUtils> logger)
@@ -74,7 +74,7 @@ namespace TesApi.Web
             var allowedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/allowed-vm-sizes";
 
             var supportedVmSizes = (await skuInformationProvider.GetVmSizesAndPricesAsync(batchAccountResourceInformation.Region)).ToList();
-            var batchAccountQuotas = await quotaProvider.GetBatchAccountQuotasAsync();
+            var batchAccountQuotas = await quotaProvider.GetVmCoreQuotaAsync(lowPriority: false);
             var supportedVmSizesFileContent = VirtualMachineInfoToFixedWidthColumns(supportedVmSizes.OrderBy(v => v.VmFamily).ThenBy(v => v.VmSize), batchAccountQuotas);
 
             try
@@ -149,7 +149,7 @@ namespace TesApi.Web
         /// <param name="vmInfos">List of <see cref="VirtualMachineInformation"/></param>
         /// <param name="batchAccountQuotas">Batch quotas <see cref="AzureBatchAccountQuotas"/></param>
         /// <returns></returns>
-        private static string VirtualMachineInfoToFixedWidthColumns(IEnumerable<VirtualMachineInformation> vmInfos, AzureBatchAccountQuotas batchAccountQuotas)
+        private static string VirtualMachineInfoToFixedWidthColumns(IEnumerable<VirtualMachineInformation> vmInfos, BatchVmCoreQuota batchAccountQuotas)
         {
             var vmSizes = vmInfos.Where(v => !v.LowPriority).Select(v => v.VmSize);
 
@@ -164,12 +164,12 @@ namespace TesApi.Web
                     MemoryInGiB = v.VmInfoWithDedicatedPrice.MemoryInGB?.ToString(),
                     NumberOfCores = v.VmInfoWithDedicatedPrice.NumberOfCores.ToString(),
                     ResourceDiskSizeInGiB = v.VmInfoWithDedicatedPrice.ResourceDiskSizeInGB.ToString(),
-                    DedicatedQuota = batchAccountQuotas.DedicatedCoreQuotaPerVMFamilyEnforced
-                        ? batchAccountQuotas.DedicatedCoreQuotaPerVMFamily.FirstOrDefault(q => q.Name.Equals(v.VmInfoWithDedicatedPrice.VmFamily, StringComparison.OrdinalIgnoreCase))?.CoreQuota.ToString() ?? "N/A"
-                        : batchAccountQuotas.DedicatedCoreQuota.ToString()
+                    DedicatedQuota = batchAccountQuotas.IsDedicatedAndPerVmFamilyCoreQuotaEnforced
+                        ? batchAccountQuotas.DedicatedCoreQuotas.FirstOrDefault(q => q.VmFamilyName.Equals(v.VmInfoWithDedicatedPrice.VmFamily, StringComparison.OrdinalIgnoreCase))?.CoreQuota.ToString() ?? "N/A"
+                        : batchAccountQuotas.NumberOfCores.ToString()
                 });
 
-            vmInfosAsStrings = vmInfosAsStrings.Prepend(new { VmSize = string.Empty, VmFamily = string.Empty, PricePerHourDedicated = "dedicated", PricePerHourLowPri = "low pri", MemoryInGiB = "(GiB)", NumberOfCores = string.Empty, ResourceDiskSizeInGiB = "(GiB)", DedicatedQuota = $"quota {(batchAccountQuotas.DedicatedCoreQuotaPerVMFamilyEnforced ? "(per fam.)" : "(total)")}" });
+            vmInfosAsStrings = vmInfosAsStrings.Prepend(new { VmSize = string.Empty, VmFamily = string.Empty, PricePerHourDedicated = "dedicated", PricePerHourLowPri = "low pri", MemoryInGiB = "(GiB)", NumberOfCores = string.Empty, ResourceDiskSizeInGiB = "(GiB)", DedicatedQuota = $"quota {(batchAccountQuotas.IsDedicatedAndPerVmFamilyCoreQuotaEnforced ? "(per fam.)" : "(total)")}" });
             vmInfosAsStrings = vmInfosAsStrings.Prepend(new { VmSize = "VM Size", VmFamily = "Family", PricePerHourDedicated = "$/hour", PricePerHourLowPri = "$/hour", MemoryInGiB = "Memory", NumberOfCores = "CPUs", ResourceDiskSizeInGiB = "Disk", DedicatedQuota = "Dedicated CPU" });
 
             var sizeColWidth = vmInfosAsStrings.Max(v => v.VmSize.Length);

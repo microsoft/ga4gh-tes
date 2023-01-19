@@ -484,7 +484,7 @@ namespace TesApi.Web
         {
             var jobFilter = new ODATADetailLevel
             {
-                FilterClause = $"startswith(id,'{tesTaskId}{BatchJobAttemptSeparator}') and state ne 'deleting'",
+                FilterClause = $"startswith(id,'{tesTaskId}{BatchJobAttemptSeparator}')",
                 SelectClause = "id"
             };
 

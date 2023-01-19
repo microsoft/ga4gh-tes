@@ -68,18 +68,18 @@ namespace Tes.Models
         /// Cromwell task description without shard and attempt numbers
         /// </summary>
         [IgnoreDataMember]
-        public string CromwellTaskInstanceName => CromwellTaskInstanceNameRegex.Match(this.Description).Groups[1].Value;
+        public string CromwellTaskInstanceName => this.Description == null ? null : CromwellTaskInstanceNameRegex.Match(this.Description).Groups[1].Value;
 
         /// <summary>
         /// Cromwell shard number
         /// </summary>
         [IgnoreDataMember]
-        public int? CromwellShard => int.TryParse(CromwellShardRegex.Match(this.Description).Groups[1].Value, out var result) ? result : null;
+        public int? CromwellShard => this.Description == null ? null : (int.TryParse(CromwellShardRegex.Match(this.Description).Groups[1].Value, out var result) ? result : null);
 
         /// <summary>
         /// Cromwell attempt number
         /// </summary>
         [IgnoreDataMember]
-        public int? CromwellAttempt => int.TryParse(CromwellAttemptRegex.Match(this.Description).Groups[1].Value, out var result) ? result : null;
+        public int? CromwellAttempt => this.Description == null ? null : (int.TryParse(CromwellAttemptRegex.Match(this.Description).Groups[1].Value, out var result) ? result : null);
     }
 }

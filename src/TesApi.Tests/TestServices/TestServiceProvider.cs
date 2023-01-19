@@ -18,6 +18,7 @@ using Tes.Models;
 using Tes.Repository;
 using TesApi.Web;
 using TesApi.Web.Management;
+using TesApi.Web.Management.Clients;
 
 namespace TesApi.Tests.TestServices
 {
@@ -65,7 +66,7 @@ namespace TesApi.Tests.TestServices
                 .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
                 .AddSingleton(s => GetArmBatchQuotaProvider(s, armBatchQuotaProvider)) //added so config utils gets the arm implementation, to be removed once config utils is refactored.
-                //.AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
+                                                                                       //.AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .IfThenElse(additionalActions is null, s => s, s => { additionalActions(s); return s; })
             .BuildServiceProvider();

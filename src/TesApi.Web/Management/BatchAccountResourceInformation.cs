@@ -19,7 +19,7 @@ namespace TesApi.Web.Management
         private const int ResourceNameSegment = 8;
 
         /// <summary>
-        /// Creates a new instance of BatchAccountResourceInformation from a batch resource id.
+        /// Creates a new instance of BatchAccountResourceInformation from a batch resource id. 
         /// </summary>
         /// <param name="resourceId"></param>
         /// <param name="region"></param>
@@ -29,6 +29,7 @@ namespace TesApi.Web.Management
         {
             ArgumentException.ThrowIfNullOrEmpty(resourceId);
             ArgumentException.ThrowIfNullOrEmpty(region);
+
 
             if (!resourceId.StartsWith('/'))
             {
@@ -42,7 +43,8 @@ namespace TesApi.Web.Management
                 throw new ArgumentException($"The resource id provided is invalid. Resource id:{resourceId}", nameof(resourceId));
             }
 
-            return new(segments[ResourceNameSegment], segments[ResourceGroupNameSegment], segments[SubscriptionIdSegment], region);
+            return new BatchAccountResourceInformation(segments[ResourceNameSegment],
+                segments[ResourceGroupNameSegment], segments[SubscriptionIdSegment], region);
         }
     }
 }

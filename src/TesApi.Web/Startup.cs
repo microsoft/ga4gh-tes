@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using Azure.Identity;
 using LazyCache;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -19,6 +20,7 @@ using Tes.Models;
 using Tes.Repository;
 using TesApi.Filters;
 using TesApi.Web.Management;
+using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 
 namespace TesApi.Web
@@ -58,9 +60,10 @@ namespace TesApi.Web
             => services
                 .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.BatchAccount))
                 .Configure<CosmosDbOptions>(Configuration.GetSection(CosmosDbOptions.CosmosDbAccount))
+                .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.RetryPolicy))
+                .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.Terra))
 
-                .AddSingleton<IAppCache, CachingService>()
-
+	        .AddSingleton<IAppCache, CachingService>()
                 .AddSingleton<AzureProxy, AzureProxy>()
                 .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
 
@@ -78,21 +81,22 @@ namespace TesApi.Web
                 .AddSingleton<IStorageAccessProvider, StorageAccessProvider>()
 
                 .AddLogging()
-                .AddSingleton<IBatchQuotaProvider, ArmBatchQuotaProvider>()
+                .AddSingleton<CacheAndRetryHandler, CacheAndRetryHandler>()
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
                 .AddSingleton<PriceApiClient, PriceApiClient>()
                 .AddSingleton<IBatchSkuInformationProvider>(sp => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(sp))
                 .AddSingleton(CreateBatchAccountResourceInformation)
+                .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
                 .AddSingleton<AzureManagementClientsFactory, AzureManagementClientsFactory>()
                 .AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
-                .AddSingleton<ConfigurationUtils, ConfigurationUtils>() //this should not be call if running in terra.
+                .AddSingleton<ConfigurationUtils, ConfigurationUtils>()
 
                 .AddSwaggerGen(c =>
                 {
-                    c.SwaggerDoc("0.3.3", new OpenApiInfo
+                    c.SwaggerDoc("0.4.0", new OpenApiInfo
                     {
-                        Version = "0.3.3",
+                        Version = "0.4.0",
                         Title = "Task Execution Service",
                         Description = "Task Execution Service (ASP.NET Core 7.0)",
                         Contact = new OpenApiContact()
@@ -140,7 +144,27 @@ namespace TesApi.Web
 
                         return s;
                     },
-                    s => s.AddApplicationInsightsTelemetry());
+                s => s.AddApplicationInsightsTelemetry());
+
+        private IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
+        {
+            var terraOptions = services.GetService<IOptions<TerraOptions>>();
+
+            if (!string.IsNullOrEmpty(terraOptions?.Value.LandingZoneApiHost))
+            {
+                var cacheAndRetryHandler = services.GetRequiredService<CacheAndRetryHandler>();
+                var serviceLogger = services.GetService<ILogger<TerraLandingZoneApiClient>>();
+                var credentials = new DefaultAzureCredential();
+
+                var terraApiClient = new TerraLandingZoneApiClient(terraOptions.Value.LandingZoneApiHost,
+                    credentials,
+                    cacheAndRetryHandler,
+                    serviceLogger);
+                return new TerraQuotaProvider(terraApiClient, terraOptions);
+            }
+
+            return ActivatorUtilities.CreateInstance<ArmBatchQuotaProvider>(services);
+        }
 
         private IRepository<TesTask> CreateCosmosDbRepositoryFromConfiguration(IServiceProvider services)
         {
@@ -198,7 +222,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="app">An Microsoft.AspNetCore.Builder.IApplicationBuilder for the app to configure.</param>
         public void Configure(IApplicationBuilder app)
-            => app.UseRouting()
+        => app.UseRouting()
                 .UseEndpoints(endpoints =>
                 {
                     endpoints.MapControllers();

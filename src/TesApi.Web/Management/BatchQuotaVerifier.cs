@@ -16,7 +16,7 @@ namespace TesApi.Web.Management;
 /// </summary>
 public class BatchQuotaVerifier : IBatchQuotaVerifier
 {
-    private const string AzureSupportUrl = $"https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
+    private const string AzureSupportUrl = "https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
     private readonly IAzureProxy azureProxy;
     private readonly ILogger logger;
     private readonly IBatchQuotaProvider batchQuotaProvider;
@@ -38,6 +38,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
         IAzureProxy azureProxy,
         ILogger<BatchQuotaVerifier> logger)
     {
+        ArgumentNullException.ThrowIfNull(azureProxy);
         ArgumentNullException.ThrowIfNull(batchQuotaProvider);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(batchSkuInformationProvider);
@@ -50,6 +51,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
 
         ArgumentNullException.ThrowIfNull(azureProxy);
 
+        this.azureProxy = azureProxy;
         this.logger = logger;
         this.batchAccountInformation = batchAccountInformation;
         this.batchSkuInformationProvider = batchSkuInformationProvider;
@@ -67,7 +69,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
 
         try
         {
-            batchVmFamilyBatchQuotas = await batchQuotaProvider.GetBatchAccountQuotaForRequirementAsync(
+            batchVmFamilyBatchQuotas = await batchQuotaProvider.GetQuotaForRequirementAsync(
                 virtualMachineInformation.VmFamily,
                 virtualMachineInformation.LowPriority,
                 virtualMachineInformation.NumberOfCores);
@@ -80,7 +82,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
         }
         catch (Exception e)
         {
-            logger.LogError("Failed to retrieve quota information for the management provider", e);
+            logger.LogError(e, "Failed to retrieve quota information for the management provider");
             throw;
         }
 
@@ -160,6 +162,9 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
         var dedicatedCoresInUseInRequestedVmFamily = activeNodeCountByVmSizeInRequestedFamily
             .Sum(x => virtualMachineInfoList.FirstOrDefault(vm => vm.VmSize.Equals(x.VirtualMachineSize, StringComparison.OrdinalIgnoreCase))?.NumberOfCores * x.DedicatedNodeCount) ?? 0;
 
-        return new(activeJobsCount, activePoolsCount, totalCoresInUse, dedicatedCoresInUseInRequestedVmFamily);
+
+        return new BatchAccountUtilization(activeJobsCount, activePoolsCount, totalCoresInUse, dedicatedCoresInUseInRequestedVmFamily);
+
     }
+
 }

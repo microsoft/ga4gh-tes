@@ -13,7 +13,7 @@ namespace TesApi.Web.Management
     public interface IBatchQuotaVerifier
     {
         /// <summary>
-        /// Checks if the current quota allows fullfilment of the requested VM SKU.
+        /// Checks if the current quota allows fulfillment of the requested VM SKU.
         /// </summary>
         /// <param name="virtualMachineInformation"></param>
         /// <param name="needPoolOrJobQuotaCheck">A <see cref="Func{Boolean}"/> to enable checking pool and job quota.</param>

@@ -7,18 +7,18 @@ using TesApi.Web.Management.Models.Quotas;
 namespace TesApi.Web.Management
 {
     /// <summary>
-    /// Provides quota information of Batch VM resources.
+    /// Provides quota information of Batch VM resources. 
     /// </summary>
     public interface IBatchQuotaProvider
     {
         /// <summary>
-        /// Returns the quota information for the VM requirements.
+        /// Returns the quota information for the VM requirements. 
         /// </summary>
         /// <param name="vmFamily"></param>
         /// <param name="lowPriority"></param>
         /// <param name="coresRequirement"></param>
         /// <returns></returns>
-        Task<BatchVmFamilyQuotas> GetBatchAccountQuotaForRequirementAsync(
+        Task<BatchVmFamilyQuotas> GetQuotaForRequirementAsync(
             string vmFamily,
             bool lowPriority,
             int? coresRequirement);
@@ -29,7 +29,7 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <param name="lowPriority"></param>
         /// <returns></returns>
-        Task<BatchVmCoreQuota> GetVmCoresPerFamilyAsync(bool lowPriority);
+        Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority);
 
         /// <summary>
         /// Returns the batch account pool quota.
