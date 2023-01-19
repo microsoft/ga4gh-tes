@@ -752,7 +752,7 @@ namespace TesApi.Web
             var executor = task.Executors.First();
 
             var volumeMountsOption = $"-v $AZ_BATCH_TASK_WORKING_DIR{batchExecutionPathPrefix}:{batchExecutionPathPrefix}";
-            
+
             var executorImageIsPublic = (await azureProxy.GetContainerRegistryInfoAsync(executor.Image)) is null;
             var dockerInDockerImageIsPublic = (await azureProxy.GetContainerRegistryInfoAsync(dockerInDockerImageName)) is null;
             var blobXferImageIsPublic = (await azureProxy.GetContainerRegistryInfoAsync(blobxferImageName)) is null;
@@ -1277,7 +1277,7 @@ namespace TesApi.Web
 
             var coreQuota = await quotaVerifier
                 .GetBatchQuotaProvider()
-                .GetVmCoresPerFamilyAsync(preemptible);
+                .GetVmCoreQuotaAsync(preemptible);
 
             var selectedVm = eligibleVms
                 .Where(allowedVmSizesFilter)

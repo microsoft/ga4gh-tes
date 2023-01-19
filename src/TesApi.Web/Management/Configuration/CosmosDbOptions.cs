@@ -21,7 +21,7 @@ namespace TesApi.Web.Management.Configuration
         /// </summary>
         public string CosmosDbEndpoint { get; set; }
         /// <summary>
-        /// Cosmos db account name.
+        /// Cosmos db account name. 
         /// </summary>
         public string AccountName { get; set; }
     }
