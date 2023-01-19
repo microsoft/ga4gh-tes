@@ -23,6 +23,8 @@ namespace TesApi.Web.Management.Clients
         private readonly SHA256 sha256 = SHA256.Create();
         private readonly ILogger<HttpApiClient> logger;
         private readonly string tokenScope;
+        private readonly object lockObject = new object();
+        private AccessToken accessToken;
 
         /// <summary>
         /// Inner http client.
@@ -120,11 +122,15 @@ namespace TesApi.Web.Management.Clients
         protected async Task<string> HttpGetRequestWithCachingAndRetryPolicyAsync(Uri requestUrl,
             bool setAuthorizationHeader = false)
         {
-            var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader);
 
-            var cacheKey = ToCacheKey(httpRequest);
+            var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader);
 
-            return await cacheAndRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, () => ExecuteRequestAndReadResponseBodyAsync(httpRequest));
+            return await cacheAndRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, async () =>
+            {
+                var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader);
+
+                return await ExecuteRequestAndReadResponseBodyAsync(httpRequest);
+            });
         }
 
         /// <summary>
@@ -136,9 +142,15 @@ namespace TesApi.Web.Management.Clients
         protected async Task<string> HttpGetRequestWithRetryPolicyAsync(Uri requestUrl,
             bool setAuthorizationHeader = false)
         {
-            var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader);
 
-            return await cacheAndRetryHandler.ExecuteWithRetryAsync(() => ExecuteRequestAndReadResponseBodyAsync(httpRequest));
+            return await cacheAndRetryHandler.ExecuteWithRetryAsync(async () =>
+                {
+                    //request must be recreated in every retry.
+                    var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader);
+
+                    return await ExecuteRequestAndReadResponseBodyAsync(httpRequest);
+                }
+            );
         }
 
         private async Task<HttpRequestMessage> CreateGetHttpRequest(Uri requestUrl, bool setAuthorizationHeader)
@@ -169,16 +181,13 @@ namespace TesApi.Web.Management.Clients
                 throw new ArgumentException("Can't set the authentication token as the token scope is missing", nameof(tokenScope));
             }
 
-            logger.LogInformation("Getting token for scope:{}", tokenScope);
+            logger.LogTrace("Getting token for scope:{}", tokenScope);
+
             try
             {
-                var accessToken = await tokenCredential.GetTokenAsync(new TokenRequestContext(new[]
-                    {
-                        tokenScope
-                    }),
-                    CancellationToken.None);
-                requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.Token);
+                var token = await GetOrRefreshAccessToken();
 
+                requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             }
             catch (Exception e)
             {
@@ -187,17 +196,56 @@ namespace TesApi.Web.Management.Clients
             }
         }
 
-        /// <summary>
-        /// Creates a unique cache key that from the request data.
-        /// </summary>
-        /// <param name="httpRequest">request</param>
-        /// <returns></returns>
-        public string ToCacheKey(HttpRequestMessage httpRequest)
+        private async Task<string> GetOrRefreshAccessToken()
         {
-            // ToString() returns the URI, headers and method from the request. 
-            var cacheKey = httpRequest.ToString();
+            // here we are synchronizing access to the access token only, there is a still
+            // a small chance the call to GetTokenAsync won't be synchronized, and it will get call more than once, concurrently
+            // however the impact should be marginal - the cached token will be updated more than once. 
+            lock (lockObject)
+            {
+                if (DateTimeOffset.UtcNow < accessToken.ExpiresOn)
+                {
+                    logger.LogTrace(
+                        $"Using existing token. Token has not expired. Token expiration date: {accessToken.ExpiresOn}");
+                    return accessToken.Token;
+                }
+            }
 
-            var hash = sha256.ComputeHash(Encoding.ASCII.GetBytes(cacheKey));
+            var newAccessToken = await tokenCredential.GetTokenAsync(new TokenRequestContext(new[] { tokenScope }),
+                    CancellationToken.None);
+
+            lock (lockObject)
+            {
+                logger.LogTrace($"Returning a new token with an expiration date of: {newAccessToken.ExpiresOn}");
+                accessToken = newAccessToken;
+                return accessToken.Token;
+            }
+
+        }
+
+        /// <summary>
+        /// Creates a string hash value from the URL that can be used as cached key.
+        /// </summary>
+        /// <param name="requestUrl">Request url</param>
+        /// <param name="perUser">if true, caching data will be per user</param>
+        /// <returns></returns>
+        public async Task<string> ToCacheKeyAsync(Uri requestUrl, bool perUser)
+        {
+            var cacheKey = requestUrl.ToString();
+
+            if (perUser)
+            {
+                //append the token to create a string that is unique to the user and the URL
+                var token = await GetOrRefreshAccessToken();
+                cacheKey += token;
+            }
+
+            return ToHash(cacheKey);
+        }
+
+        private string ToHash(string input)
+        {
+            var hash = sha256.ComputeHash(Encoding.ASCII.GetBytes(input));
 
             return hash.Aggregate("", (current, t) => current + t.ToString("X2"));
         }
