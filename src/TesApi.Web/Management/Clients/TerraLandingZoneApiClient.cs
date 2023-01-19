@@ -11,7 +11,7 @@ namespace TesApi.Web.Management.Clients
     /// </summary>
     public class TerraLandingZoneApiClient : HttpApiClient
     {
-        private const string LandingZonesApiSegments = @"/api/landingzones/v1/azure";
+        private const string LandingZonesApiSegments = @"/api/landingzones/v1/azure/";
         private const string TokenScope = @"https://management.azure.com/.default";
 
         private readonly string baseApiUrl;
@@ -72,16 +72,27 @@ namespace TesApi.Web.Management.Clients
 
         }
 
-        private Uri GetQuotaApiUrl(Guid landingZoneId, string resourceId)
+        /// <summary>
+        /// Returns a parsed URL to get quota of a resource using the Terra landing zone API. 
+        /// </summary>
+        /// <param name="landingZoneId">Landing zone id</param>
+        /// <param name="resourceId">Fully qualified Azure resource id</param>
+        /// <returns></returns>
+        public Uri GetQuotaApiUrl(Guid landingZoneId, string resourceId)
         {
             var uriBuilder = GetLandingZoneUriBuilder(landingZoneId, "/resource-quota");
-            uriBuilder.Query = $@"azureResourceId={resourceId}";
+            uriBuilder.Query = $@"azureResourceId={Uri.EscapeDataString(resourceId)}";
             return uriBuilder.Uri;
         }
 
-        private Uri GetLandingZoneResourcesApiUrl(Guid landingZoneId)
+        /// <summary>
+        /// Returns a parsed URL to get resources in a landing zone using the Terra landing zone API. 
+        /// </summary>
+        /// <param name="landingZoneId">Landing zone id</param>
+        /// <returns></returns>
+        public Uri GetLandingZoneResourcesApiUrl(Guid landingZoneId)
         {
-            var uriBuilder = GetLandingZoneUriBuilder(landingZoneId, "/resource");
+            var uriBuilder = GetLandingZoneUriBuilder(landingZoneId, "/resources");
             return uriBuilder.Uri;
         }
 

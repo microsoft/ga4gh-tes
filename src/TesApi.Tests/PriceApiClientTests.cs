@@ -1,8 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
 using System.Linq;
-using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using LazyCache;
@@ -47,7 +47,7 @@ namespace TesApi.Tests
         public async Task GetPricingInformationPageAsync_ReturnsSinglePageAndCaches()
         {
             var page = await pricingApiClient.GetPricingInformationPageAsync(0, "westus2", cacheResults: true);
-            var cacheKey = pricingApiClient.ToCacheKey(new HttpRequestMessage(HttpMethod.Get, page.RequestLink));
+            var cacheKey = await pricingApiClient.ToCacheKeyAsync(new Uri(page.RequestLink), false);
             var cachedPage = JsonSerializer.Deserialize<RetailPricingData>(appCache.Get<string>(cacheKey));
             Assert.IsNotNull(page);
             Assert.IsTrue(page.Items.Length == 100);
