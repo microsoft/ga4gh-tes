@@ -398,7 +398,7 @@ namespace TesApi.Web
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask);
 
                 (poolName, var displayName) = this.enableBatchAutopool ? default : await GetPoolName(tesTask, virtualMachineInfo);
-                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, () => this.enableBatchAutopool || !IsPoolAvailable(poolName));
+                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, this.enableBatchAutopool || !IsPoolAvailable(poolName));
 
                 var tesTaskLog = tesTask.AddTesTaskLog();
                 tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
@@ -960,8 +960,7 @@ namespace TesApi.Web
             var batchExecutionDirectorySasUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchExecutionDirectoryPath}", getContainerSas: true);
 
             //var batchRunScriptPath = "task-run.sh";
-            var batchRunScriptContent = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh"))
-                .Replace("\r\n", "\n") // For some odd reason, File.ReadAllText is replacing \n with \r\n
+            var batchRunScriptContent = string.Join(" && ", File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh")))
                 .Replace(@"{BatchScriptPath}", batchScriptPath)
                 .Replace(@"{TaskExecutor}", executor.Image);
 

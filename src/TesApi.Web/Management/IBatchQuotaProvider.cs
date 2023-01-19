@@ -30,11 +30,5 @@ namespace TesApi.Web.Management
         /// <param name="lowPriority"></param>
         /// <returns></returns>
         Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority);
-
-        /// <summary>
-        /// Returns the batch account pool quota.
-        /// </summary>
-        /// <returns></returns>
-        Task<int> GetBatchAccountPoolQuotaAsync();
     }
 }

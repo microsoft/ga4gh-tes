@@ -118,7 +118,14 @@ namespace TesApi.Web
             var pool = batchPools.TryGetValue(key, out var set) ? set.LastOrDefault(Available) : default;
             if (pool is null)
             {
-                await quotaVerifier.CheckBatchPoolAvailabilityQuotaAsync();
+                var activePoolsCount = azureProxy.GetBatchActivePoolCount();
+                var poolQuota = (await quotaVerifier.GetBatchQuotaProvider().GetVmCoreQuotaAsync(isPreemptable)).AccountQuota?.PoolQuota;
+
+                if (poolQuota is null || activePoolsCount + 1 > poolQuota)
+                {
+                    throw new AzureBatchQuotaMaxedOutException($"No remaining pool quota available. There are {activePoolsCount} pools in use out of {poolQuota}.");
+                }
+
                 var uniquifier = new byte[8]; // This always becomes 13 chars when converted to base32 after removing the three '='s at the end. We won't ever decode this, so we don't need the '='s
                 RandomNumberGenerator.Fill(uniquifier);
                 var poolId = $"{key}-{BatchUtils.ConvertToBase32(uniquifier).TrimEnd('=')}"; // embedded '-' is required by GetKeyFromPoolId()

@@ -200,17 +200,15 @@ namespace TesApi.Tests
                     .ReturnsAsync(new BatchVmCoreQuota(batchQuotas.LowPriorityCoreQuota,
                         true,
                         batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced,
-                        batchQuotas.DedicatedCoreQuotaPerVMFamily?.Select(v => new BatchVmCoresPerFamily(v.Name, v.CoreQuota)).ToList()));
+                        batchQuotas.DedicatedCoreQuotaPerVMFamily?.Select(v => new BatchVmCoresPerFamily(v.Name, v.CoreQuota)).ToList(),
+                        new(batchQuotas.ActiveJobAndJobScheduleQuota, batchQuotas.PoolQuota, batchQuotas.DedicatedCoreQuota, batchQuotas.LowPriorityCoreQuota)));
                 quotaProvider.Setup(p =>
                         p.GetVmCoreQuotaAsync(It.Is<bool>(l => l == false)))
                     .ReturnsAsync(new BatchVmCoreQuota(batchQuotas.DedicatedCoreQuota,
                         false,
                         batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced,
-                        batchQuotas.DedicatedCoreQuotaPerVMFamily?.Select(v => new BatchVmCoresPerFamily(v.Name, v.CoreQuota)).ToList()));
-
-                quotaProvider.Setup(p =>
-                        p.GetBatchAccountPoolQuotaAsync())
-                    .ReturnsAsync(azureProxyReturnValues.BatchQuotas.PoolQuota);
+                        batchQuotas.DedicatedCoreQuotaPerVMFamily?.Select(v => new BatchVmCoresPerFamily(v.Name, v.CoreQuota)).ToList(),
+                        new(batchQuotas.ActiveJobAndJobScheduleQuota, batchQuotas.PoolQuota, batchQuotas.DedicatedCoreQuota, batchQuotas.LowPriorityCoreQuota)));
             });
 
         private static Action<Mock<IAzureProxy>> PrepareMockAzureProxy(AzureProxyReturnValues azureProxyReturnValues)

@@ -48,10 +48,6 @@ namespace TesApi.Web.Management
         }
 
         /// <inheritdoc />
-        public async Task<int> GetBatchAccountPoolQuotaAsync()
-            => (await GetBatchAccountQuotaFromTerraAsync()).QuotaValues.PoolQuota;
-
-        /// <inheritdoc />
         public async Task<BatchVmFamilyQuotas> GetQuotaForRequirementAsync(string vmFamily, bool lowPriority, int? coresRequirement)
         {
             ArgumentException.ThrowIfNullOrEmpty(vmFamily);
