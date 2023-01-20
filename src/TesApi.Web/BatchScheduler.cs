@@ -960,13 +960,13 @@ namespace TesApi.Web
             var batchExecutionDirectorySasUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchExecutionDirectoryPath}", getContainerSas: true);
 
             //var batchRunScriptPath = "task-run.sh";
-            var batchRunScriptContent = string.Join(" && ", File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh")))
+            var batchRunScriptContent = string.Join(") && (", File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh")))
                 .Replace(@"{BatchScriptPath}", batchScriptPath)
                 .Replace(@"{TaskExecutor}", executor.Image);
 
             //var batchRunScriptSasUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchRunScriptPath}");
 
-            var cloudTask = new CloudTask(taskId, $"/bin/bash -c \"{batchRunScriptContent}\"")
+            var cloudTask = new CloudTask(taskId, $"/bin/bash -c \"({batchRunScriptContent})\"")
             {
                 UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
                 ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(batchScriptSasUrl, batchScriptPath), ResourceFile.FromUrl(downloadFilesScriptUrl, downloadFilesScriptPath), ResourceFile.FromUrl(uploadFilesScriptSasUrl, uploadFilesScriptPath) },
