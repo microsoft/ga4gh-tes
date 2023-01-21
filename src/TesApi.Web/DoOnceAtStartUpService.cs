@@ -15,18 +15,23 @@ namespace TesApi.Web
     public class DoOnceAtStartUpService : IHostedService
     {
         private readonly ILogger logger;
-        private readonly IServiceProvider serviceProvider;
+        private readonly ConfigurationUtils configUtils;
+        private readonly IBatchScheduler batchScheduler;
+
         /// <summary>
         /// Hosted service that executes one-time set-up tasks at start up.
         /// </summary>
-        /// <param name="serviceProvider"></param>
+        /// <param name="configUtils"></param>
+        /// <param name="batchScheduler"></param>
         /// <param name="logger"></param>
-        public DoOnceAtStartUpService(IServiceProvider serviceProvider, ILogger<DoOnceAtStartUpService> logger)
+        public DoOnceAtStartUpService(ConfigurationUtils configUtils, IBatchScheduler batchScheduler, ILogger<DoOnceAtStartUpService> logger)
         {
-            ArgumentNullException.ThrowIfNull(serviceProvider);
+            ArgumentNullException.ThrowIfNull(configUtils);
+            ArgumentNullException.ThrowIfNull(batchScheduler);
             ArgumentNullException.ThrowIfNull(logger);
 
-            this.serviceProvider = serviceProvider;
+            this.configUtils = configUtils;
+            this.batchScheduler = batchScheduler;
             this.logger = logger;
         }
 
@@ -53,12 +58,7 @@ namespace TesApi.Web
 
         private async Task ExecuteConfigurationUtilsSetupAsync()
         {
-            if (serviceProvider.GetService(typeof(ConfigurationUtils)) is not ConfigurationUtils configUtils)
-            {
-                throw new InvalidOperationException(
-                    "Configuration utils instance can't be resolved from the app context");
-            }
-
+            await batchScheduler.LoadExistingPoolsAsync();
             await configUtils.ProcessAllowedVmSizesConfigurationFileAsync();
         }
 

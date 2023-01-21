@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-//using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,12 +41,9 @@ namespace TesApi.Web
     /// <summary>
     /// Wrapper for Azure APIs
     /// </summary>
-    public class AzureProxy : IAzureProxy
+    public partial class AzureProxy : IAzureProxy
     {
         private const char BatchJobAttemptSeparator = '-';
-        //private const string DefaultAzureBillingRegionName = "US West";
-
-        //private static readonly HttpClient httpClient = new();
         private static readonly AsyncRetryPolicy batchRaceConditionJobNotFoundRetryPolicy = Policy
             .Handle<BatchException>(ex => ex.RequestInformation.BatchError.Code == BatchErrorCodeStrings.JobNotFound)
             .WaitAndRetryAsync(10, retryAttempt => TimeSpan.FromSeconds(1));
@@ -56,8 +52,6 @@ namespace TesApi.Web
         private readonly BatchClient batchClient;
         private readonly string subscriptionId;
         private readonly string location;
-        //private readonly string billingRegionName;
-        //private readonly string azureOfferDurableId;
         private readonly string batchResourceGroupName;
         private readonly string batchAccountName;
 
@@ -94,7 +88,7 @@ namespace TesApi.Web
             }
             else
             {
-                this.batchAccountName = batchAccountOptions.Value.AccountName;
+                batchAccountName = batchAccountOptions.Value.AccountName;
                 var (SubscriptionId, ResourceGroupName, Location, BatchAccountEndpoint) = FindBatchAccountAsync(batchAccountName).Result;
                 batchResourceGroupName = ResourceGroupName;
                 subscriptionId = SubscriptionId;
@@ -263,7 +257,7 @@ namespace TesApi.Web
             logger.LogInformation("TES: Creating Batch job {BatchJob}", poolInformation.PoolId);
             var job = batchClient.JobOperations.CreateJob(poolInformation.PoolId, poolInformation);
             job.OnAllTasksComplete = OnAllTasksComplete.NoAction;
-            job.OnTaskFailure = Microsoft.Azure.Batch.Common.OnTaskFailure.NoAction;
+            job.OnTaskFailure = OnTaskFailure.NoAction;
 
             await job.CommitAsync(cancellationToken: cancellationToken);
             logger.LogInformation("TES: Batch job {BatchJob} committed successfully", poolInformation.PoolId);
@@ -349,6 +343,7 @@ namespace TesApi.Web
                 {
                     if (string.IsNullOrWhiteSpace(tesTask.PoolId))
                     {
+                        logger.LogDebug("No Pool Found for TesTask {TesTask}", tesTask.Id);
                         return new AzureBatchJobAndTaskState { JobState = null };
                     }
 
@@ -361,20 +356,21 @@ namespace TesApi.Web
                         logger.LogError(ex, $"Failed to get job for TesTask {tesTask.Id}");
                         return new AzureBatchJobAndTaskState { JobState = null };
                     }
+                    logger.LogDebug("Found Job for TesTask {TesTask}", tesTask.Id);
 
                     var taskInfos = await batchClient.JobOperations.ListTasks(tesTask.PoolId, jobOrTaskFilter).ToAsyncEnumerable()
                         .Select(t => new { Task = t, AttemptNumber = int.Parse(t.Id.Split(BatchJobAttemptSeparator)[1]) })
                         .ToListAsync();
 
-                    if (!taskInfos.Any(t => t.Task.State != TaskState.Completed))
+                    if (!taskInfos.Any())
                     {
                         logger.LogError($"Failed to get task for TesTask {tesTask.Id}");
                     }
                     else
                     {
-
                         if (taskInfos.Count(t => t.Task.State != TaskState.Completed) > 1)
                         {
+                            logger.LogDebug("More than one not-completed task found for TesTask {TesTask}", tesTask.Id);
                             return new AzureBatchJobAndTaskState { MoreThanOneActiveJobFound = true };
                         }
 
@@ -810,10 +806,12 @@ namespace TesApi.Web
             }
         }
 
+        [GeneratedRegex("/*/resourceGroups/([^/]*)/*")]
+        private static partial Regex GetResourceGroupRegex();
+
         private static async Task<(string SubscriptionId, string ResourceGroupName, string Location, string BatchAccountEndpoint)> FindBatchAccountAsync(string batchAccountName)
         {
-            var resourceGroupRegex = new Regex("/*/resourceGroups/([^/]*)/*");
-
+            var resourceGroupRegex = GetResourceGroupRegex();
             var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync());
             var azureClient = await GetAzureManagementClientAsync();
 

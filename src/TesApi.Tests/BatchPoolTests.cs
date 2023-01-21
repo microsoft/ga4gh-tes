@@ -7,14 +7,13 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
-using Microsoft.Azure.Batch.Common;
 using Microsoft.Azure.Management.Batch.Models;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
-using TesApi.Web;
-using TesApi.Web.Management.Models.Quotas;
-using TesApi.Web.Management;
 using Tes.Models;
+using TesApi.Web;
+using TesApi.Web.Management;
+using TesApi.Web.Management.Models.Quotas;
 
 namespace TesApi.Tests
 {

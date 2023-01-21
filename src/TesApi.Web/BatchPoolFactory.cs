@@ -36,7 +36,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public IBatchPool CreateNew(string poolId)
-            => (IBatchPool)_batchPoolAltCreator(_serviceProvider, new object[] { poolId});
+            => (IBatchPool)_batchPoolAltCreator(_serviceProvider, new object[] { poolId });
 
         private static ObjectFactory BatchPoolAltCreatorFactory()
             => ActivatorUtilities.CreateFactory(typeof(BatchPool), new Type[] { typeof(string) });
@@ -50,7 +50,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public IBatchPool Retrieve(CloudPool pool)
-            => (IBatchPool)_batchPoolRequester(_serviceProvider, new object[] { pool});
+            => (IBatchPool)_batchPoolRequester(_serviceProvider, new object[] { pool });
 
         private static ObjectFactory BatchPoolRequesterFactory()
             => ActivatorUtilities.CreateFactory(typeof(BatchPool), new Type[] { typeof(CloudPool) });

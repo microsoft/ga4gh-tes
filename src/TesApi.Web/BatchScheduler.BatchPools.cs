@@ -1,17 +1,16 @@
-﻿using Azure;
-using static Azure.Core.HttpHeader;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
-using System.Threading.Tasks;
-using System.Threading;
-using System;
 using System.Text;
-using Tes.Models;
-using Tes.Extensions;
-using BatchModels = Microsoft.Azure.Management.Batch.Models;
+using System.Threading;
+using System.Threading.Tasks;
+using Azure;
 using Microsoft.Azure.Batch;
+using Tes.Extensions;
+using Tes.Models;
+using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
 namespace TesApi.Web
 {

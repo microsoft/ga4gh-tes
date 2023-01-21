@@ -10,7 +10,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -156,7 +155,7 @@ namespace TesDeployer
                 var keyVaultUri = string.Empty;
                 IIdentity managedIdentity = null;
                 IPrivateDnsZone postgreSqlDnsZone = null;
-                
+
                 try
                 {
                     if (configuration.Update)

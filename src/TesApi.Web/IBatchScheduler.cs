@@ -20,6 +20,13 @@ namespace TesApi.Web
         bool NeedPoolFlush { get; }
 
         /// <summary>
+        /// Loads existing pools from Azure Batch Account tagged with this instance's "Name"
+        /// </summary>
+        /// <returns></returns>
+        /// <remarks>This should be called only once after the <see cref="BatchScheduler"/> is created before any other methods are called.</remarks>
+        Task LoadExistingPoolsAsync();
+
+        /// <summary>
         /// Iteratively schedule a <see cref="TesTask"/> on a batch system until completion or failure
         /// </summary>
         /// <param name="tesTask"><see cref="TesTask"/> to schedule on the batch system</param>

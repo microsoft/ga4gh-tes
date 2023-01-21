@@ -3,15 +3,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
-using Microsoft.Azure.Management.AppService.Fluent.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -94,7 +90,7 @@ namespace TesApi.Web
             this._logger = logger;
             _batchPools = batchScheduler as BatchScheduler ?? throw new ArgumentException("batchScheduler must be of type BatchScheduler", nameof(batchScheduler));
 
-            Creation = cloudPool?.CreationTime;
+            Creation = cloudPool?.CreationTime ?? DateTime.UtcNow;
             IsAvailable = cloudPool is not null;
 
             if (IsAvailable)
@@ -495,7 +491,7 @@ namespace TesApi.Web
 
             void RemoveMissingPools(Exception ex)
             {
-                switch(ex)
+                switch (ex)
                 {
                     case AggregateException aggregateException:
                         foreach (var e in aggregateException.InnerExceptions)

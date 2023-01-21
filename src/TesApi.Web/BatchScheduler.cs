@@ -130,8 +130,6 @@ namespace TesApi.Web
                 _batchPoolFactory = poolFactory;
                 hostname = GetStringValue(configuration, "Name");
                 logger.LogInformation($"hostname: {hostname}");
-
-                LoadExistingPools().Wait();
             }
 
             this.batchNodeInfo = new BatchNodeInfo
@@ -277,11 +275,15 @@ namespace TesApi.Web
         public IAsyncEnumerable<CloudPool> GetCloudPools()
             => azureProxy.GetActivePoolsAsync(this.hostname);
 
-        private async Task LoadExistingPools()
+        /// <inheritdoc/>
+        public async Task LoadExistingPoolsAsync()
         {
-            await foreach (var cloudPool in GetCloudPools())
+            if (!enableBatchAutopool)
             {
-                batchPools.Add(_batchPoolFactory.Retrieve(cloudPool));
+                await foreach (var cloudPool in GetCloudPools())
+                {
+                    batchPools.Add(_batchPoolFactory.Retrieve(cloudPool));
+                }
             }
         }
 
@@ -318,7 +320,7 @@ namespace TesApi.Web
         private static string GetCromwellExecutionDirectoryPath(TesTask task)
             => GetParentPath(task.Inputs?.FirstOrDefault(IsCromwellCommandScript)?.Path.TrimStart('/'));
 
-        private string GetBatchExecutionDirectoryPath(TesTask task)
+        private static string GetBatchExecutionDirectoryPath(TesTask task)
         {
             var cromwellDir = GetCromwellExecutionDirectoryPath(task);
             if (cromwellDir is not null)

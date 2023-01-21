@@ -63,8 +63,8 @@ namespace TesApi.Web
                 .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.RetryPolicy))
                 .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.Terra))
 
-	        .AddSingleton<IAppCache, CachingService>()
-                .AddSingleton<AzureProxy, AzureProxy>()
+                .AddSingleton<IAppCache, CachingService>()
+                .AddSingleton<AzureProxy>()
                 .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
 
                 .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
@@ -81,16 +81,16 @@ namespace TesApi.Web
                 .AddSingleton<IStorageAccessProvider, StorageAccessProvider>()
 
                 .AddLogging()
-                .AddSingleton<CacheAndRetryHandler, CacheAndRetryHandler>()
+                .AddSingleton<CacheAndRetryHandler>()
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
-                .AddSingleton<PriceApiClient, PriceApiClient>()
+                .AddSingleton<PriceApiClient>()
                 .AddSingleton<IBatchSkuInformationProvider>(sp => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(sp))
                 .AddSingleton(CreateBatchAccountResourceInformation)
                 .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
-                .AddSingleton<AzureManagementClientsFactory, AzureManagementClientsFactory>()
-                .AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
-                .AddSingleton<ConfigurationUtils, ConfigurationUtils>()
+                .AddSingleton<AzureManagementClientsFactory>()
+                .AddSingleton<ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
+                .AddSingleton<ConfigurationUtils>()
 
                 .AddSwaggerGen(c =>
                 {
