@@ -336,14 +336,13 @@ namespace TesApi.Web
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError(ex, $"Failed to get task for TesTask {tesTask.Id}");
+                        logger.LogError(ex, @"Failed to get task for TesTask {TesTask}", tesTask.Id);
                     }
                 }
                 else
                 {
                     if (string.IsNullOrWhiteSpace(tesTask.PoolId))
                     {
-                        logger.LogDebug("No Pool Found for TesTask {TesTask}", tesTask.Id);
                         return new AzureBatchJobAndTaskState { JobState = null };
                     }
 
@@ -353,10 +352,9 @@ namespace TesApi.Web
                     }
                     catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException e && e.Body.Code == "JobNotFound")
                     {
-                        logger.LogError(ex, $"Failed to get job for TesTask {tesTask.Id}");
+                        logger.LogError(ex, @"Failed to get job for TesTask {TesTask}", tesTask.Id);
                         return new AzureBatchJobAndTaskState { JobState = null };
                     }
-                    logger.LogDebug("Found Job for TesTask {TesTask}", tesTask.Id);
 
                     var taskInfos = await batchClient.JobOperations.ListTasks(tesTask.PoolId, jobOrTaskFilter).ToAsyncEnumerable()
                         .Select(t => new { Task = t, AttemptNumber = int.Parse(t.Id.Split(BatchJobAttemptSeparator)[1]) })
@@ -364,13 +362,12 @@ namespace TesApi.Web
 
                     if (!taskInfos.Any())
                     {
-                        logger.LogError($"Failed to get task for TesTask {tesTask.Id}");
+                        logger.LogError(@"Failed to get task for TesTask {TesTask}", tesTask.Id);
                     }
                     else
                     {
                         if (taskInfos.Count(t => t.Task.State != TaskState.Completed) > 1)
                         {
-                            logger.LogDebug("More than one not-completed task found for TesTask {TesTask}", tesTask.Id);
                             return new AzureBatchJobAndTaskState { MoreThanOneActiveJobFound = true };
                         }
 
@@ -382,6 +379,10 @@ namespace TesApi.Web
                 }
 
                 poolId = job.ExecutionInformation?.PoolId;
+
+                Func<ComputeNode, bool> computeNodePredicate = usingAutoPools
+                    ? n => (n.RecentTasks?.Select(t => t.JobId) ?? Enumerable.Empty<string>()).Contains(job.Id)
+                    : n => (n.RecentTasks?.Select(t => t.TaskId) ?? Enumerable.Empty<string>()).Contains(batchTask?.Id);
 
                 if (job.State == JobState.Active && poolId is not null)
                 {
@@ -397,7 +398,7 @@ namespace TesApi.Web
                     {
                         nodeAllocationFailed = pool.ResizeErrors?.Count > 0;
 
-                        var node = await pool.ListComputeNodes().ToAsyncEnumerable().FirstOrDefaultAsync(n => (n.RecentTasks?.Select(t => t.JobId) ?? Enumerable.Empty<string>()).Contains(job.Id));
+                        var node = await pool.ListComputeNodes().ToAsyncEnumerable().FirstOrDefaultAsync(computeNodePredicate);
 
                         if (node is not null)
                         {
@@ -445,7 +446,7 @@ namespace TesApi.Web
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"GetBatchJobAndTaskStateAsync failed for TesTask {tesTask.Id}");
+                logger.LogError(ex, @"GetBatchJobAndTaskStateAsync failed for TesTask {TesTask}", tesTask.Id);
                 throw;
             }
 
