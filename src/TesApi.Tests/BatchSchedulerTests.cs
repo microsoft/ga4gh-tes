@@ -1266,8 +1266,8 @@ namespace TesApi.Tests
                     .Callback<string, CancellationToken>((poolId, cancellationToken) => azureProxyReturnValues.AzureProxyDeleteBatchPoolImpl(poolId, cancellationToken))
                     .Returns(Task.CompletedTask);
 
-                azureProxy.Setup(a => a.ListJobsAsync(It.IsAny<DetailLevel>()))
-                    .Returns(azureProxyReturnValues.AzureProxyListJobs);
+                azureProxy.Setup(a => a.ListTasksAsync(It.IsAny<string>(), It.IsAny<DetailLevel>()))
+                    .Returns(azureProxyReturnValues.AzureProxyListTasks);
             };
 
         private static Func<IEnumerable<(string Key, string Value)>> GetMockConfig(bool autopool)
@@ -1342,7 +1342,7 @@ namespace TesApi.Tests
             internal Func<(int? lowPriorityNodes, int? dedicatedNodes)> AzureProxyGetCurrentComputeNodes { get; set; }
             internal Action<string, System.Threading.CancellationToken> AzureProxyDeleteBatchPoolIfExists { get; set; }
             internal Action<string, CancellationToken> AzureProxyDeleteBatchPool { get; set; }
-            internal Func<ODATADetailLevel, IAsyncEnumerable<CloudJob>> AzureProxyListJobs { get; set; } = detail => AsyncEnumerable.Empty<CloudJob>();
+            internal Func<string, ODATADetailLevel, IAsyncEnumerable<CloudTask>> AzureProxyListTasks { get; set; } = (jobId, detail) => AsyncEnumerable.Empty<CloudTask>();
             public Dictionary<string, StorageAccountInfo> StorageAccountInfos { get; set; }
             public ContainerRegistryInfo ContainerRegistryInfo { get; set; }
             public List<VirtualMachineInformation> VmSizesAndPrices { get; set; }

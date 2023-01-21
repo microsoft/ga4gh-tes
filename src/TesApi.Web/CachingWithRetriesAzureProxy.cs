@@ -218,7 +218,7 @@ namespace TesApi.Web
         public IAsyncEnumerable<ComputeNode> ListComputeNodesAsync(string poolId, DetailLevel detailLevel) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.ListComputeNodesAsync(poolId, detailLevel), retryPolicy);
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<CloudJob> ListJobsAsync(DetailLevel detailLevel) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.ListJobsAsync(detailLevel), retryPolicy);
+        public IAsyncEnumerable<CloudTask> ListTasksAsync(string jobId, DetailLevel detailLevel) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.ListTasksAsync(jobId, detailLevel), retryPolicy);
 
         /// <inheritdoc/>
         public Task DisableBatchPoolAutoScaleAsync(string poolId, CancellationToken cancellationToken) => azureProxy.DisableBatchPoolAutoScaleAsync(poolId, cancellationToken);

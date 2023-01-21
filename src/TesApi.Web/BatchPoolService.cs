@@ -5,6 +5,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ namespace TesApi.Web
     public class BatchPoolService : BackgroundService
     {
         private readonly IBatchScheduler _batchScheduler;
+        private readonly IAzureProxy _azureProxy;
         private readonly ILogger _logger;
         private readonly bool _isDisabled;
 
@@ -32,13 +34,15 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="configuration"></param>
         /// <param name="batchScheduler"></param>
+        /// <param name="azureProxy"></param>
         /// <param name="logger"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public BatchPoolService(IConfiguration configuration, IBatchScheduler batchScheduler, ILogger<BatchPoolService> logger)
+        public BatchPoolService(IConfiguration configuration, IBatchScheduler batchScheduler, IAzureProxy azureProxy, ILogger<BatchPoolService> logger)
         {
             _batchScheduler = batchScheduler ?? throw new ArgumentNullException(nameof(batchScheduler));
+            _azureProxy = azureProxy ?? throw new ArgumentNullException(nameof(azureProxy));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _isDisabled = configuration.GetValue("UseLegacyBatchImplementationWithAutopools", false);
+            _isDisabled = configuration.GetValue("DisableBatchScheduling", false) || configuration.GetValue("UseLegacyBatchImplementationWithAutopools", false);
         }
 
         /// <inheritdoc />
@@ -55,14 +59,15 @@ namespace TesApi.Web
         /// <inheritdoc />
         public override Task StopAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Scheduler stopping...");
+            _logger.LogInformation("Batch Pools stopping...");
             return base.StopAsync(cancellationToken);
         }
 
         /// <inheritdoc />
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("Scheduler started.");
+            _logger.LogInformation("Batch Pools started.");
+            _batchScheduler.LoadExistingPoolsAsync().Wait(stoppingToken); // Delay starting Scheduler until this completes to finish initializing BatchScheduler.
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -82,7 +87,7 @@ namespace TesApi.Web
                 }
             }
 
-            _logger.LogInformation("Scheduler gracefully stopped.");
+            _logger.LogInformation("Batch Pools gracefully stopped.");
         }
 
         /// <summary>
@@ -104,7 +109,15 @@ namespace TesApi.Web
                 }
                 else
                 {
+                    var poolId = new Microsoft.Azure.Batch.PoolInformation() { PoolId = pool.Id };
                     await pool.DeleteAsync(cancellationToken: cancellationToken);
+
+                    try
+                    {
+                        await _azureProxy.DeleteBatchJobAsync(poolId, cancellationToken);
+                    }
+                    finally // ignore all errors
+                    { }
                 }
             }
 

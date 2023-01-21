@@ -254,9 +254,10 @@ namespace TesApi.Web
         /// <summary>
         /// Lists jobs in the batch account
         /// </summary>
+        /// <param name="jobId">The job id (which is the pool id)</param>
         /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for filtering the list and for controlling which properties are retrieved from the service.</param>
         /// <returns></returns>
-        IAsyncEnumerable<CloudJob> ListJobsAsync(DetailLevel detailLevel = null);
+        IAsyncEnumerable<CloudTask> ListTasksAsync(string jobId, DetailLevel detailLevel = null);
 
         /// <summary>
         /// Deletes the specified ComputeNodes

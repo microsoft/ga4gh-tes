@@ -117,13 +117,13 @@ namespace TesApi.Web
                     c.OperationFilter<GeneratePathParamsValidationFilter>();
                 })
 
-                .AddHostedService<Scheduler>()
+                .AddHostedService<DoOnceAtStartUpService>()
                 .AddHostedService<BatchPoolService>()
+                .AddHostedService<Scheduler>()
                 .AddHostedService<DeleteCompletedBatchJobsHostedService>()
                 .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
                 .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
                 //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
-                .AddHostedService<DoOnceAtStartUpService>()
 
 
                 //Configure AppInsights Azure Service when in PRODUCTION environment
@@ -238,7 +238,7 @@ namespace TesApi.Web
                 })
                 .UseSwaggerUI(c =>
                 {
-                    c.SwaggerEndpoint("/swagger/0.3.3/openapi.json", "Task Execution Service");
+                    c.SwaggerEndpoint("/swagger/0.4.0/openapi.json", "Task Execution Service");
                 })
 
                 .IfThenElse(hostingEnvironment.IsDevelopment(),

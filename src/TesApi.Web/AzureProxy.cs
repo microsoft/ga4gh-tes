@@ -388,11 +388,19 @@ namespace TesApi.Web
                 {
                     var poolFilter = new ODATADetailLevel
                     {
-                        FilterClause = $"id eq '{poolId}'",
                         SelectClause = "*"
                     };
 
-                    var pool = await batchClient.PoolOperations.ListPools(poolFilter).ToAsyncEnumerable().FirstOrDefaultAsync();
+                    CloudPool pool;
+
+                    try
+                    {
+                        pool = await batchClient.PoolOperations.GetPoolAsync(poolId, poolFilter);
+                    }
+                    catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException e && e.Response?.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        pool = default;
+                    }
 
                     if (pool is not null)
                     {
@@ -849,8 +857,8 @@ namespace TesApi.Web
             => batchClient.PoolOperations.ListComputeNodes(poolId, detailLevel: detailLevel).ToAsyncEnumerable();
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<CloudJob> ListJobsAsync(DetailLevel detailLevel = null)
-            => batchClient.JobOperations.ListJobs(detailLevel: detailLevel).ToAsyncEnumerable();
+        public IAsyncEnumerable<CloudTask> ListTasksAsync(string jobId, DetailLevel detailLevel = null)
+            => batchClient.JobOperations.ListTasks(jobId, detailLevel: detailLevel).ToAsyncEnumerable();
 
         /// <inheritdoc/>
         public async Task DisableBatchPoolAutoScaleAsync(string poolId, CancellationToken cancellationToken)

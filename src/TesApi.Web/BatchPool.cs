@@ -109,8 +109,8 @@ namespace TesApi.Web
         private Queue<TaskFailureInformation> StartTaskFailures { get; } = new();
         private Queue<ResizeError> ResizeErrors { get; } = new();
 
-        internal IAsyncEnumerable<CloudJob> GetJobsAsync()
-            => _azureProxy.ListJobsAsync(new ODATADetailLevel { SelectClause = "id,stateTransitionTime", FilterClause = $"state eq 'active' and executionInfo/poolId eq '{Pool.PoolId}'" });
+        internal IAsyncEnumerable<CloudTask> GetTasksAsync()
+            => _azureProxy.ListTasksAsync(Pool.PoolId, new ODATADetailLevel { SelectClause = "id,stateTransitionTime", FilterClause = "state ne 'completed'" });
 
         private async ValueTask RemoveNodesAsync(IList<ComputeNode> nodesToRemove, CancellationToken cancellationToken)
         {
@@ -349,7 +349,7 @@ namespace TesApi.Web
             if (!IsAvailable)
             {
                 var (lowPriorityNodes, dedicatedNodes) = await _azureProxy.GetCurrentComputeNodesAsync(Pool.PoolId, cancellationToken);
-                if ((lowPriorityNodes is null || lowPriorityNodes == 0) && (dedicatedNodes is null || dedicatedNodes == 0) && !await GetJobsAsync().AnyAsync(cancellationToken))
+                if ((lowPriorityNodes is null || lowPriorityNodes == 0) && (dedicatedNodes is null || dedicatedNodes == 0) && !await GetTasksAsync().AnyAsync(cancellationToken))
                 {
                     // TODO: deal with missing pool and/or job
                     await _azureProxy.DeleteBatchPoolAsync(Pool.PoolId, cancellationToken);
@@ -398,7 +398,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async ValueTask<bool> CanBeDeleted(CancellationToken cancellationToken = default)
         {
-            if (await GetJobsAsync().AnyAsync(cancellationToken))
+            if (await GetTasksAsync().AnyAsync(cancellationToken))
             {
                 return false;
             }
@@ -521,7 +521,7 @@ namespace TesApi.Web
     /// </content>
     public sealed partial class BatchPool
     {
-        internal int TestPendingReservationsCount => GetJobsAsync().CountAsync().AsTask().Result;
+        internal int TestPendingReservationsCount => GetTasksAsync().CountAsync().AsTask().Result;
 
         internal int? TestTargetDedicated => _azureProxy.GetComputeNodeAllocationStateAsync(Pool.PoolId).Result.TargetDedicated;
         internal int? TestTargetLowPriority => _azureProxy.GetComputeNodeAllocationStateAsync(Pool.PoolId).Result.TargetLowPriority;

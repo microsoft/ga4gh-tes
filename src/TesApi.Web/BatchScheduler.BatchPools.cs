@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Azure;
 using Microsoft.Azure.Batch;
+using Microsoft.Extensions.Logging;
 using Tes.Extensions;
 using Tes.Models;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
@@ -202,7 +203,10 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async ValueTask<IEnumerable<Task>> GetShutdownCandidatePools(CancellationToken cancellationToken)
             => (await GetEmptyPools(cancellationToken))
-                .Select(async t => await DeletePoolAsync(t.Pool));
+                .Select(DeletePoolAsyncWrapper);
+
+        private Task DeletePoolAsyncWrapper(IBatchPool pool)
+            => DeletePoolAsync(pool.Pool, CancellationToken.None);
 
         /// <inheritdoc/>
         public IEnumerable<IBatchPool> GetPools()
@@ -227,13 +231,10 @@ namespace TesApi.Web
                         .Take(neededPools.Count)
                         .ToList();
 
-                    if (pools.Any())
+                    foreach (var pool in pools)
                     {
-                        await Task.WhenAll(pools.Select(async p =>
-                        {
-                            await DeletePoolAsync(p.Pool);
-                            _ = RemovePoolFromList(p);
-                        }).ToArray());
+                        await DeletePoolAsync(pool.Pool, cancellationToken);
+                        _ = RemovePoolFromList(pool);
                     }
                 }
             }
@@ -243,8 +244,9 @@ namespace TesApi.Web
             }
         }
 
-        private async ValueTask DeletePoolAsync(PoolInformation pool, CancellationToken cancellationToken = default)
+        private async Task DeletePoolAsync(PoolInformation pool, CancellationToken cancellationToken)
         {
+            logger.LogDebug(@"Deleting pool and job {PoolId}", pool.PoolId);
             // TODO: deal with missing pool and/or job
             await azureProxy.DeleteBatchPoolAsync(pool.PoolId, cancellationToken);
             await azureProxy.DeleteBatchJobAsync(pool, cancellationToken);
