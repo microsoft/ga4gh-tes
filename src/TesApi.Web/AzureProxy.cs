@@ -144,11 +144,7 @@ namespace TesApi.Web
             return null;
         }
 
-        /// <summary>
-        /// Gets a new Azure Batch job id to schedule another task
-        /// </summary>
-        /// <param name="tesTaskId">The unique TES task ID</param>
-        /// <returns>The next logical, new Azure Batch job ID</returns>
+        /// <inheritdoc/>
         public async Task<string> GetNextBatchJobIdAsync(string tesTaskId)
         {
             var jobFilter = new ODATADetailLevel
