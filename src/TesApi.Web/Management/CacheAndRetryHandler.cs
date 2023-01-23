@@ -21,6 +21,11 @@ namespace TesApi.Web.Management
         private readonly AsyncRetryPolicy<HttpResponseMessage> asyncHttpRetryPolicy;
 
         /// <summary>
+        /// App cache instance. 
+        /// </summary>
+        public virtual IAppCache AppCache => appCache;
+
+        /// <summary>
         /// Contains an App Cache instances and retry policies. 
         /// </summary>
         /// <param name="appCache"><see cref="IAppCache"/>></param>
@@ -47,6 +52,7 @@ namespace TesApi.Web.Management
         /// Protected parameterless constructor
         /// </summary>
         protected CacheAndRetryHandler() { }
+
 
 
         /// <summary>
@@ -100,6 +106,21 @@ namespace TesApi.Web.Management
         }
 
         /// <summary>
+        ///  Executes a delegate with the specified async retry policy and persisting the result in a cache. 
+        /// </summary>
+        /// <param name="cacheKey"></param>
+        /// <param name="action"></param>
+        /// <param name="cachesExpires"></param>
+        /// <typeparam name="TResult"></typeparam>
+        /// <returns></returns>
+        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<Task<TResult>> action, DateTimeOffset cachesExpires)
+        {
+            ValidateArgs(cacheKey, action);
+
+            return await ExecuteWithCacheAsync(cacheKey, () => ExecuteWithRetryAsync(action), cachesExpires);
+        }
+
+        /// <summary>
         /// Executes a delegate with the specified async retry policy and persisting the result in a cache, if the response is successful. 
         /// </summary>
         /// <param name="cacheKey"></param>
@@ -136,6 +157,11 @@ namespace TesApi.Web.Management
         private async Task<TResult> ExecuteWithCacheAsync<TResult>(string cacheKey, Func<Task<TResult>> action)
         {
             return await appCache.GetOrAddAsync(cacheKey, action);
+        }
+
+        private async Task<TResult> ExecuteWithCacheAsync<TResult>(string cacheKey, Func<Task<TResult>> action, DateTimeOffset cacheExpires)
+        {
+            return await appCache.GetOrAddAsync(cacheKey, action, cacheExpires);
         }
     }
 }

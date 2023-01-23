@@ -80,6 +80,7 @@ namespace TesApi.Web
                 .AddSingleton<IStorageAccessProvider, StorageAccessProvider>()
 
                 .AddLogging()
+                .AddSingleton<ContainerRegistryProvider, ContainerRegistryProvider>()
                 .AddSingleton<CacheAndRetryHandler, CacheAndRetryHandler>()
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()

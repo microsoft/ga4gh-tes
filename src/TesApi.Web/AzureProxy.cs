@@ -478,50 +478,6 @@ namespace TesApi.Web
             }
         }
 
-        /// <summary>
-        /// Gets the list of container registries that the TES server has access to
-        /// </summary>
-        /// <returns>List of container registries</returns>
-        private async Task<IEnumerable<ContainerRegistryInfo>> GetAccessibleContainerRegistriesAsync()
-        {
-            var azureClient = await GetAzureManagementClientAsync();
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
-            var infos = new List<ContainerRegistryInfo>();
-            logger.LogInformation(@"GetAccessibleContainerRegistriesAsync() called.");
-
-            foreach (var subId in subscriptionIds)
-            {
-                try
-                {
-                    var registries = (await azureClient.WithSubscription(subId).ContainerRegistries.ListAsync()).ToList();
-                    logger.LogInformation(@$"Searching {subId} for container registries.");
-
-                    foreach (var r in registries)
-                    {
-                        logger.LogInformation(@$"Found {r.Name}. AdminUserEnabled: {r.AdminUserEnabled}");
-
-                        try
-                        {
-                            var server = await r.GetCredentialsAsync();
-                            var info = new ContainerRegistryInfo { RegistryServer = r.LoginServerUrl, Username = server.Username, Password = server.AccessKeys[AccessKeyType.Primary] };
-                            infos.Add(info);
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.LogWarning($"TES service doesn't have permission to get credentials for registry {r.LoginServerUrl}.  Please verify that 'Admin user' is enabled in the 'Access Keys' area in the Azure Portal for this container registry.  Exception: {ex}");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning($"TES service doesn't have permission to list container registries in subscription {subId}.  Exception: {ex}");
-                }
-            }
-
-            logger.LogInformation(@"GetAccessibleContainerRegistriesAsync() returning {Count} registries.", infos.Count);
-            return infos;
-        }
-
         private static async Task<IEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync()
         {
             var azureClient = await GetAzureManagementClientAsync();
@@ -680,11 +636,6 @@ namespace TesApi.Web
 
             throw new Exception($"Batch account '{batchAccountName}' does not exist or the TES app service does not have Contributor role on the account.");
         }
-
-        /// <inheritdoc/>
-        public async Task<ContainerRegistryInfo> GetContainerRegistryInfoAsync(string imageName)
-            => (await GetAccessibleContainerRegistriesAsync())
-                .FirstOrDefault(reg => reg.RegistryServer.Equals(imageName.Split('/').FirstOrDefault(), StringComparison.OrdinalIgnoreCase));
 
         /// <inheritdoc/>
         public async Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName)

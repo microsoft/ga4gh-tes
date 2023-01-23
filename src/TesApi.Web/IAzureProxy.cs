@@ -42,7 +42,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="imageName">Image name</param>
         /// <returns><see cref="ContainerRegistryInfo"/></returns>
-        Task<ContainerRegistryInfo> GetContainerRegistryInfoAsync(string imageName);
+      //  Task<ContainerRegistryInfo> GetContainerRegistryInfoAsync(string imageName);
 
         /// <summary>
         /// Gets the <see cref="StorageAccountInfo"/> for the given storage account name

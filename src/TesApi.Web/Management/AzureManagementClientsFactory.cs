@@ -49,6 +49,11 @@ namespace TesApi.Web.Management
             this.batchAccountInformation = batchAccountInformation;
         }
 
+        /// <summary>
+        /// Protected constructor.
+        /// </summary>
+        protected AzureManagementClientsFactory() { }
+
         private static Task<string> GetAzureAccessTokenAsync(string resource = "https://management.azure.com/")
             => new AzureServiceTokenProvider().GetAccessTokenAsync(resource);
 
@@ -60,6 +65,15 @@ namespace TesApi.Web.Management
         public async Task<BatchManagementClient> CreateBatchAccountManagementClient()
         {
             return new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync())) { SubscriptionId = batchAccountInformation.SubscriptionId };
+        }
+
+        /// <summary>
+        /// Creates a new instance of Azure Management Client with the default credentials and subscription.
+        /// </summary>
+        /// <returns></returns>
+        public async Task<FluentAzure.IAuthenticated> CreateAzureManagementClientAsync()
+        {
+            return await AzureManagementClientsFactory.GetAzureManagementClientAsync();
         }
 
         /// <summary>
@@ -83,7 +97,6 @@ namespace TesApi.Web.Management
                 var batchAccount = (await batchClient.BatchAccount.ListAsync())
                     .FirstOrDefault(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase));
 
-
                 if (batchAccount is not null)
                 {
                     return BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id, batchAccount.Location);
@@ -93,7 +106,7 @@ namespace TesApi.Web.Management
             return null;
         }
 
-        private static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync()
+        public static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync()
         {
             var accessToken = await GetAzureAccessTokenAsync();
             var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, AzureEnvironment.AzureGlobalCloud);
