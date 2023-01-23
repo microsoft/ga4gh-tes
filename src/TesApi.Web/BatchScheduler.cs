@@ -77,8 +77,10 @@ namespace TesApi.Web
         private readonly string defaultStorageAccountName;
         private readonly string globalStartTaskPath;
         private readonly string globalManagedIdentity;
+        private readonly ContainerRegistryProvider containerRegistryProvider;
         private readonly string hostname;
         private readonly IBatchPoolFactory _batchPoolFactory;
+
         private HashSet<string> onlyLogBatchTaskStateOnce = new();
 
         /// <summary>
@@ -90,8 +92,9 @@ namespace TesApi.Web
         /// <param name="storageAccessProvider">Storage access provider <see cref="IStorageAccessProvider"/></param>
         /// <param name="quotaVerifier">Quota verifier <see cref="IBatchQuotaVerifier"/>></param>
         /// <param name="skuInformationProvider">Sku informatoin provider <see cref="IBatchSkuInformationProvider"/></param>
+        /// <param name="containerRegistryProvider"></param>
         /// <param name="poolFactory"></param>
-        public BatchScheduler(ILogger<BatchScheduler> logger, IConfiguration configuration, IAzureProxy azureProxy, IStorageAccessProvider storageAccessProvider, IBatchQuotaVerifier quotaVerifier, IBatchSkuInformationProvider skuInformationProvider, IBatchPoolFactory poolFactory)
+        public BatchScheduler(ILogger<BatchScheduler> logger, IConfiguration configuration, IAzureProxy azureProxy, IStorageAccessProvider storageAccessProvider, IBatchQuotaVerifier quotaVerifier, IBatchSkuInformationProvider skuInformationProvider, ContainerRegistryProvider containerRegistryProvider, IBatchPoolFactory poolFactory)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(configuration);
@@ -99,6 +102,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(quotaVerifier);
             ArgumentNullException.ThrowIfNull(skuInformationProvider);
+            ArgumentNullException.ThrowIfNull(containerRegistryProvider);
             ArgumentNullException.ThrowIfNull(poolFactory);
 
             this.logger = logger;
@@ -106,6 +110,7 @@ namespace TesApi.Web
             this.storageAccessProvider = storageAccessProvider;
             this.quotaVerifier = quotaVerifier;
             this.skuInformationProvider = skuInformationProvider;
+            this.containerRegistryProvider = containerRegistryProvider;
 
             static bool GetBoolValue(IConfiguration configuration, string key, bool defaultValue) => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : bool.Parse(configuration[key]);
             static string GetStringValue(IConfiguration configuration, string key, string defaultValue = "") => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : configuration[key];
@@ -406,7 +411,7 @@ namespace TesApi.Web
                 tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
 
                 // TODO?: Support for multiple executors. Cromwell has single executor per task.
-                var containerConfiguration = await GetContainerConfigurationIfNeeded(tesTask.Executors.First().Image);
+                var containerConfiguration = await GetContainerConfigurationIfNeededAsync(tesTask.Executors.First().Image);
                 var identities = new List<string>();
 
                 if (!string.IsNullOrWhiteSpace(globalManagedIdentity))
@@ -884,9 +889,9 @@ namespace TesApi.Web
 
             var volumeMountsOption = $"-v $AZ_BATCH_TASK_WORKING_DIR{batchExecutionPathPrefix}:{batchExecutionPathPrefix}";
 
-            var executorImageIsPublic = (await azureProxy.GetContainerRegistryInfoAsync(executor.Image)) is null;
-            var dockerInDockerImageIsPublic = (await azureProxy.GetContainerRegistryInfoAsync(dockerInDockerImageName)) is null;
-            var blobXferImageIsPublic = (await azureProxy.GetContainerRegistryInfoAsync(blobxferImageName)) is null;
+            var executorImageIsPublic = (await containerRegistryProvider.GetContainerRegistryInfoAsync(executor.Image)) is null;
+            var dockerInDockerImageIsPublic = (await containerRegistryProvider.GetContainerRegistryInfoAsync(dockerInDockerImageName)) is null;
+            var blobXferImageIsPublic = (await containerRegistryProvider.GetContainerRegistryInfoAsync(blobxferImageName)) is null;
 
             var sb = new StringBuilder();
 
@@ -1108,10 +1113,10 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="executorImage">The image name for the current <see cref="TesTask"/></param>
         /// <returns></returns>
-        private async ValueTask<ContainerConfiguration> GetContainerConfigurationIfNeeded(string executorImage)
+        private async ValueTask<ContainerConfiguration> GetContainerConfigurationIfNeededAsync(string executorImage)
         {
             BatchModels.ContainerConfiguration result = default;
-            var containerRegistryInfo = await azureProxy.GetContainerRegistryInfoAsync(executorImage);
+            var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage);
 
             if (containerRegistryInfo is not null)
             {
@@ -1129,7 +1134,7 @@ namespace TesApi.Web
                     }
                 };
 
-                var containerRegistryInfoForDockerInDocker = await azureProxy.GetContainerRegistryInfoAsync(dockerInDockerImageName);
+                var containerRegistryInfoForDockerInDocker = await containerRegistryProvider.GetContainerRegistryInfoAsync(dockerInDockerImageName);
 
                 if (containerRegistryInfoForDockerInDocker is not null && containerRegistryInfoForDockerInDocker.RegistryServer != containerRegistryInfo.RegistryServer)
                 {
@@ -1139,7 +1144,7 @@ namespace TesApi.Web
                         password: containerRegistryInfoForDockerInDocker.Password));
                 }
 
-                var containerRegistryInfoForBlobXfer = await azureProxy.GetContainerRegistryInfoAsync(blobxferImageName);
+                var containerRegistryInfoForBlobXfer = await containerRegistryProvider.GetContainerRegistryInfoAsync(blobxferImageName);
 
                 if (containerRegistryInfoForBlobXfer is not null && containerRegistryInfoForBlobXfer.RegistryServer != containerRegistryInfo.RegistryServer && containerRegistryInfoForBlobXfer.RegistryServer != containerRegistryInfoForDockerInDocker.RegistryServer)
                 {

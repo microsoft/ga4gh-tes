@@ -81,11 +81,12 @@ namespace TesApi.Web
                 .AddSingleton<IStorageAccessProvider, StorageAccessProvider>()
 
                 .AddLogging()
+                .AddSingleton<ContainerRegistryProvider>()
                 .AddSingleton<CacheAndRetryHandler>()
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
                 .AddSingleton<PriceApiClient>()
-                .AddSingleton<IBatchSkuInformationProvider>(sp => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(sp))
+                .AddSingleton<IBatchSkuInformationProvider, PriceApiBatchSkuInformationProvider>()
                 .AddSingleton(CreateBatchAccountResourceInformation)
                 .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
                 .AddSingleton<AzureManagementClientsFactory>()

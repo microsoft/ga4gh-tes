@@ -106,24 +106,6 @@ namespace TesApi.Web
         public Task<AzureBatchJobAndTaskState> GetBatchJobAndTaskStateAsync(Tes.Models.TesTask tesTask, bool usingAutoPools) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetBatchJobAndTaskStateAsync(tesTask, usingAutoPools));
 
         /// <inheritdoc/>
-        public async Task<ContainerRegistryInfo> GetContainerRegistryInfoAsync(string imageName)
-        {
-            var containerRegistryInfo = cache.Get<ContainerRegistryInfo>(imageName);
-
-            if (containerRegistryInfo is null)
-            {
-                containerRegistryInfo = await asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetContainerRegistryInfoAsync(imageName));
-
-                if (containerRegistryInfo is not null)
-                {
-                    cache.Add(imageName, containerRegistryInfo, DateTimeOffset.Now.AddHours(1));
-                }
-            }
-
-            return containerRegistryInfo;
-        }
-
-        /// <inheritdoc/>
         public Task<string> GetNextBatchJobIdAsync(string tesTaskId) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetNextBatchJobIdAsync(tesTaskId));
 
         /// <inheritdoc/>

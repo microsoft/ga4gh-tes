@@ -22,7 +22,7 @@ namespace TesApi.Web
         private async Task<(string PoolName, string DisplayName)> GetPoolName(TesTask tesTask, VirtualMachineInformation virtualMachineInformation)
         {
             var identityResourceId = tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true ? tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) : default;
-            var containerInfo = await azureProxy.GetContainerRegistryInfoAsync(tesTask.Executors.FirstOrDefault()?.Image);
+            var containerInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(tesTask.Executors.FirstOrDefault()?.Image);
             var registryServer = containerInfo is null ? default : containerInfo.RegistryServer;
 
             var vmName = string.IsNullOrWhiteSpace(hostname) ? "<none>" : hostname;

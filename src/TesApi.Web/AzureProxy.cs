@@ -840,11 +840,6 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<ContainerRegistryInfo> GetContainerRegistryInfoAsync(string imageName)
-            => (await GetAccessibleContainerRegistriesAsync())
-                .FirstOrDefault(reg => reg.RegistryServer.Equals(imageName.Split('/').FirstOrDefault(), StringComparison.OrdinalIgnoreCase));
-
-        /// <inheritdoc/>
         public async Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName)
             => (await GetAccessibleStorageAccountsAsync())
                 .FirstOrDefault(storageAccount => storageAccount.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase));

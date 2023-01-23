@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-
 using System;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -71,62 +70,6 @@ namespace TesApi.Tests
             serviceProvider.AzureProxy.Verify(mock => mock.GetStorageAccountInfoAsync("defaultstorageaccount"), Times.Exactly(2));
             Assert.IsNull(info1);
             Assert.AreEqual(storageAccountInfo, info2);
-        }
-
-        [TestMethod]
-        public async Task GetContainerRegistryInfoAsync_UsesCache()
-        {
-            var containerRegistryInfo = new ContainerRegistryInfo { RegistryServer = "registryServer1", Username = "default", Password = "placeholder" };
-
-            using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
-            {
-                PrepareAzureProxy(a);
-                a.Setup(a => a.GetContainerRegistryInfoAsync(It.IsAny<string>())).Returns(Task.FromResult(containerRegistryInfo));
-            });
-            var cachingAzureProxy = serviceProvider.GetT();
-
-            var info1 = await cachingAzureProxy.GetContainerRegistryInfoAsync("registryServer1/imageName1:tag1");
-            var info2 = await cachingAzureProxy.GetContainerRegistryInfoAsync("registryServer1/imageName1:tag1");
-
-            serviceProvider.AzureProxy.Verify(mock => mock.GetContainerRegistryInfoAsync("registryServer1/imageName1:tag1"), Times.Once());
-            Assert.AreEqual(containerRegistryInfo, info1);
-            Assert.AreEqual(info1, info2);
-        }
-
-        [TestMethod]
-        public async Task GetContainerRegistryInfoAsync_NullInfo_DoesNotSetCache()
-        {
-            using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
-            {
-                PrepareAzureProxy(a);
-                a.Setup(a => a.GetContainerRegistryInfoAsync(It.IsAny<string>())).Returns(Task.FromResult((ContainerRegistryInfo)null));
-            });
-            var cachingAzureProxy = serviceProvider.GetT();
-            var info1 = await cachingAzureProxy.GetContainerRegistryInfoAsync("registryServer1/imageName1:tag1");
-
-            var containerRegistryInfo = new ContainerRegistryInfo { RegistryServer = "registryServer1", Username = "default", Password = "placeholder" };
-            serviceProvider.AzureProxy.Setup(a => a.GetContainerRegistryInfoAsync(It.IsAny<string>())).Returns(Task.FromResult(containerRegistryInfo));
-            var info2 = await cachingAzureProxy.GetContainerRegistryInfoAsync("registryServer1/imageName1:tag1");
-
-            serviceProvider.AzureProxy.Verify(mock => mock.GetContainerRegistryInfoAsync("registryServer1/imageName1:tag1"), Times.Exactly(2));
-            Assert.IsNull(info1);
-            Assert.AreEqual(containerRegistryInfo, info2);
-        }
-
-        [TestMethod]
-        public async Task GetContainerRegistryInfoAsync_ThrowsException_DoesNotSetCache()
-        {
-            SystemClock.SleepAsync = (_, __) => Task.FromResult(true);
-            SystemClock.Sleep = (_, __) => { };
-            using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
-            {
-                PrepareAzureProxy(a);
-                a.Setup(a => a.GetContainerRegistryInfoAsync("throw/exception:tag1")).Throws<Exception>();
-            });
-            var cachingAzureProxy = serviceProvider.GetT();
-
-            await Assert.ThrowsExceptionAsync<Exception>(async () => await cachingAzureProxy.GetContainerRegistryInfoAsync("throw/exception:tag1"));
-            serviceProvider.AzureProxy.Verify(mock => mock.GetContainerRegistryInfoAsync("throw/exception:tag1"), Times.Exactly(4));
         }
 
         [TestMethod]

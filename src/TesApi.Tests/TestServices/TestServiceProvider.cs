@@ -39,8 +39,10 @@ namespace TesApi.Tests.TestServices
             Action<Mock<IBatchSkuInformationProvider>> batchSkuInformationProvider = default,
             Action<Mock<IBatchQuotaProvider>> batchQuotaProvider = default,
             (Func<IServiceProvider, System.Linq.Expressions.Expression<Func<ArmBatchQuotaProvider>>> expression, Action<Mock<ArmBatchQuotaProvider>> action) armBatchQuotaProvider = default, //added so config utils gets the arm implementation, to be removed once config utils is refactored.
+            Action<Mock<ContainerRegistryProvider>> containerRegistryProviderSetup = default,
             Action<IServiceCollection> additionalActions = default)
             => provider = new ServiceCollection()
+                .AddSingleton(_ => GetContainerRegisterProvider(containerRegistryProviderSetup).Object)
                 .AddSingleton(_ => GetConfiguration(configuration))
                 .AddSingleton(s => wrapAzureProxy ? ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(s, GetAzureProxy(azureProxy).Object) : GetAzureProxy(azureProxy).Object)
                 .AddSingleton(_ => GetTesTaskRepository(tesTaskRepository).Object)
@@ -71,6 +73,7 @@ namespace TesApi.Tests.TestServices
                 .IfThenElse(additionalActions is null, s => s, s => { additionalActions(s); return s; })
             .BuildServiceProvider();
 
+
         internal IConfiguration Configuration { get; private set; }
         internal Mock<IAzureProxy> AzureProxy { get; private set; }
         internal Mock<IBatchSkuInformationProvider> BatchSkuInformationProvider { get; private set; }
@@ -78,6 +81,7 @@ namespace TesApi.Tests.TestServices
         internal Mock<ArmBatchQuotaProvider> ArmBatchQuotaProvider { get; private set; } //added so config utils gets the arm implementation, to be removed once config utils is refactored.
         internal Mock<IRepository<TesTask>> TesTaskRepository { get; private set; }
         internal Mock<IStorageAccessProvider> StorageAccessProvider { get; private set; }
+        internal Mock<ContainerRegistryProvider> ContainerRegistryProvider { get; private set; }
 
         internal T GetT()
             => GetT(Array.Empty<Type>(), Array.Empty<object>());
@@ -131,6 +135,13 @@ namespace TesApi.Tests.TestServices
             var proxy = new Mock<IAzureProxy>();
             action?.Invoke(proxy);
             return AzureProxy = proxy;
+        }
+
+        private Mock<ContainerRegistryProvider> GetContainerRegisterProvider(Action<Mock<ContainerRegistryProvider>> action)
+        {
+            var proxy = new Mock<ContainerRegistryProvider>();
+            action?.Invoke(proxy);
+            return ContainerRegistryProvider = proxy;
         }
 
         private Mock<IBatchSkuInformationProvider> GetBatchSkuInformationProvider(Action<Mock<IBatchSkuInformationProvider>> action)
