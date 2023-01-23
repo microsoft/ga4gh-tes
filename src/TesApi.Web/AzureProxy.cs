@@ -350,7 +350,7 @@ namespace TesApi.Web
                     {
                         job = await batchClient.JobOperations.GetJobAsync(tesTask.PoolId);
                     }
-                    catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException e && e.Body.Code == "JobNotFound")
+                    catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException e && e.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
                     {
                         logger.LogError(ex, @"Failed to get job for TesTask {TesTask}", tesTask.Id);
                         return new AzureBatchJobAndTaskState { JobState = null };
@@ -372,7 +372,6 @@ namespace TesApi.Web
                         }
 
                         var lastTaskInfo = taskInfos.OrderBy(t => t.AttemptNumber).Last();
-
                         batchTask = lastTaskInfo.Task;
                         attemptNumber = lastTaskInfo.AttemptNumber;
                     }
@@ -457,8 +456,6 @@ namespace TesApi.Web
                 logger.LogError(ex, @"GetBatchJobAndTaskStateAsync failed for TesTask {TesTask}", tesTask.Id);
                 throw;
             }
-
-
         }
 
         /// <inheritdoc/>
