@@ -446,9 +446,9 @@ namespace TesDeployer
                 ["PostgreSqlServerNameSuffix"] = values.TesDatabase["postgreSqlServerNameSuffix"],
                 ["PostgreSqlServerPort"] = values.TesDatabase["postgreSqlServerPort"],
                 ["PostgreSqlServerSslMode"] = values.TesDatabase["postgreSqlServerSslMode"],
-                ["PostgreSqlTesDatabaseName"] = values.TesDatabase["postgreSqlTesDatabaseName"],
-                ["PostgreSqlTesDatabaseUserLogin"] = values.TesDatabase["postgreSqlTesDatabaseUserLogin"],
-                ["PostgreSqlTesDatabaseUserPassword"] = values.TesDatabase["postgreSqlTesDatabaseUserPassword"],
+                ["PostgreSqlTesDatabaseName"] = values.TesDatabase["postgreSqlDatabaseName"],
+                ["PostgreSqlTesDatabaseUserLogin"] = values.TesDatabase["postgreSqlDatabaseUserLogin"],
+                ["PostgreSqlTesDatabaseUserPassword"] = values.TesDatabase["postgreSqlDatabaseUserPassword"],
             };
 
         /// <summary>
