@@ -410,8 +410,6 @@ namespace TesDeployer
             values.TesDatabase["postgreSqlDatabaseName"] = settings["PostgreSqlTesDatabaseName"];
             values.TesDatabase["postgreSqlDatabaseUserLogin"] = settings["PostgreSqlTesDatabaseUserLogin"];
             values.TesDatabase["postgreSqlDatabaseUserPassword"] = settings["PostgreSqlTesDatabaseUserPassword"];
-            values.TesDatabase["postgreSqlAdministratorLogin"] = settings["PostgreSqlAdministratorLogin"];
-            values.TesDatabase["postgreSqlAdministratorPassword"] = settings["PostgreSqlAdministratorPassword"];
         }
 
         private static Dictionary<string, string> ValuesToSettings(HelmValues values)
