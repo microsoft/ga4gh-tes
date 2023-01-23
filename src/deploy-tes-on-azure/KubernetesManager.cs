@@ -446,6 +446,7 @@ namespace TesDeployer
                 ["PostgreSqlServerNameSuffix"] = values.TesDatabase["postgreSqlServerNameSuffix"],
                 ["PostgreSqlServerPort"] = values.TesDatabase["postgreSqlServerPort"],
                 ["PostgreSqlServerSslMode"] = values.TesDatabase["postgreSqlServerSslMode"],
+                // Note: Notice "Tes" is added to the property name since it's coming from the TesDatabase section
                 ["PostgreSqlTesDatabaseName"] = values.TesDatabase["postgreSqlDatabaseName"],
                 ["PostgreSqlTesDatabaseUserLogin"] = values.TesDatabase["postgreSqlDatabaseUserLogin"],
                 ["PostgreSqlTesDatabaseUserPassword"] = values.TesDatabase["postgreSqlDatabaseUserPassword"],
