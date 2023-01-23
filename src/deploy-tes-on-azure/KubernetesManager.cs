@@ -451,8 +451,6 @@ namespace TesDeployer
                 ["PostgreSqlTesDatabaseName"] = values.TesDatabase["postgreSqlTesDatabaseName"],
                 ["PostgreSqlTesDatabaseUserLogin"] = values.TesDatabase["postgreSqlTesDatabaseUserLogin"],
                 ["PostgreSqlTesDatabaseUserPassword"] = values.TesDatabase["postgreSqlTesDatabaseUserPassword"],
-                ["PostgreSqlAdministratorLogin"] = values.TesDatabase["postgreSqlAdministratorLogin"],
-                ["PostgreSqlAdministratorPassword"] = values.TesDatabase["postgreSqlAdministratorPassword"],
             };
 
         /// <summary>

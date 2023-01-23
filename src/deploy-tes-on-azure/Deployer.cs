@@ -849,8 +849,6 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "PostgreSqlTesDatabaseUserLogin", GetFormattedPostgresqlUser(), ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "PostgreSqlTesDatabaseUserPassword", configuration.PostgreSqlTesUserPassword, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "UsePostgreSqlSingleServer", configuration.UsePostgreSqlSingleServer.ToString(), ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "PostgreSqlAdministratorLogin", configuration.PostgreSqlAdministratorLogin, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "PostgreSqlAdministratorPassword", configuration.PostgreSqlAdministratorPassword, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
                 UpdateSetting(settings, defaults, "TesHostname", kubernetesManager.TesHostname, ignoreDefaults: true);
