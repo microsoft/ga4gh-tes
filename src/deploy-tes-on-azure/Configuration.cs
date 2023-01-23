@@ -70,7 +70,7 @@ namespace TesDeployer
         public bool DebugLogging { get; set; } = false;
         public bool? ProvisionPostgreSqlOnAzure { get; set; } = true;
         public string PostgreSqlServerName { get; set; }
-        public string PostgreSqlServerNameSuffix { get; set; }
+        public string PostgreSqlServerNameSuffix { get; set; } = ".postgres.database.azure.com";
         public int PostgreSqlServerPort { get; set; } = 5432;
         public string PostgreSqlServerSslMode { get; set; } = "VerifyFull";
         public bool UsePostgreSqlSingleServer { get; set; } = false;
