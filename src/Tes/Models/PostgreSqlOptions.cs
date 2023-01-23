@@ -5,14 +5,24 @@
     /// </summary>
     public class PostgreSqlOptions
     {
-        public const string PostgreSqlAccount = "PostgreSql";
+        private const string ConfigurationSectionNameSuffix = "PostgreSql";
 
+        /// <summary>
+        /// Gets a configuration section name based on the service name.  Used since there are multiple Postgres databases in CoA
+        /// </summary>
+        /// <param name="serviceName">The name of the service, i.e. "Tes" or "Cromwell"</param>
+        /// <returns>The configuration section name (usually in appsettings)</returns>
+        public static string GetConfigurationSectionName(string serviceName)
+        {
+            return $"{serviceName}{ConfigurationSectionNameSuffix}";
+        }
+        
         public string PostgreSqlServerName { get; set; }
         public string PostgreSqlServerNameSuffix { get; set; } = ".postgres.database.azure.com";
-        public string PostgreSqlTesDatabaseName { get; set; } = "tes_db";
-        public string PostgreSqlTesDatabasePort { get; set; } = "5432";
-        public string PostgreSqlTesUserLogin { get; set; }
-        public string PostgreSqlTesUserPassword { get; set; }
-        public string PostgreSqlTesSslMode { get; set; } = "VerifyFull";
+        public string PostgreSqlServerPort { get; set; } = "5432";
+        public string PostgreSqlServerSslMode { get; set; } = "VerifyFull";
+        public string PostgreSqlDatabaseName { get; set; } = "tes_db";
+        public string PostgreSqlDatabaseUserLogin { get; set; }
+        public string PostgreSqlDatabaseUserPassword { get; set; }
     }
 }

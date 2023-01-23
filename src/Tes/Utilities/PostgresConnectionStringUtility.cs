@@ -10,11 +10,13 @@ namespace Tes.Utilities
         public string GetPostgresConnectionString(IOptions<PostgreSqlOptions> options)
         {
             ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlServerName, nameof(options.Value.PostgreSqlServerName));
-            ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlTesDatabaseName, nameof(options.Value.PostgreSqlTesDatabaseName));
-            ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlTesDatabasePort, nameof(options.Value.PostgreSqlTesDatabasePort));
-            ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlTesUserLogin, nameof(options.Value.PostgreSqlTesUserLogin));
-            ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlTesUserPassword, nameof(options.Value.PostgreSqlTesUserPassword));
-            ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlTesSslMode, nameof(options.Value.PostgreSqlTesSslMode));
+            ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlServerNameSuffix, nameof(options.Value.PostgreSqlServerNameSuffix));
+            ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlServerPort, nameof(options.Value.PostgreSqlServerPort));
+            ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlServerSslMode, nameof(options.Value.PostgreSqlServerSslMode));
+            ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlDatabaseName, nameof(options.Value.PostgreSqlDatabaseName));
+            ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlDatabaseUserLogin, nameof(options.Value.PostgreSqlDatabaseUserLogin));
+            ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlDatabaseUserPassword, nameof(options.Value.PostgreSqlDatabaseUserPassword));
+            
 
             if (options.Value.PostgreSqlServerName.Contains(options.Value.PostgreSqlServerNameSuffix, StringComparison.OrdinalIgnoreCase))
             {
@@ -23,11 +25,11 @@ namespace Tes.Utilities
 
             var connectionStringBuilder = new StringBuilder();
             connectionStringBuilder.Append($"Server={options.Value.PostgreSqlServerName}{options.Value.PostgreSqlServerNameSuffix};");
-            connectionStringBuilder.Append($"Database={options.Value.PostgreSqlTesDatabaseName};");
-            connectionStringBuilder.Append($"Port={options.Value.PostgreSqlTesDatabasePort};");
-            connectionStringBuilder.Append($"User Id={options.Value.PostgreSqlTesUserLogin};");
-            connectionStringBuilder.Append($"Password={options.Value.PostgreSqlTesUserPassword};");
-            connectionStringBuilder.Append($"SSL Mode={options.Value.PostgreSqlTesSslMode};");
+            connectionStringBuilder.Append($"Database={options.Value.PostgreSqlDatabaseName};");
+            connectionStringBuilder.Append($"Port={options.Value.PostgreSqlServerPort};");
+            connectionStringBuilder.Append($"User Id={options.Value.PostgreSqlDatabaseUserLogin};");
+            connectionStringBuilder.Append($"Password={options.Value.PostgreSqlDatabaseUserPassword};");
+            connectionStringBuilder.Append($"SSL Mode={options.Value.PostgreSqlServerSslMode};");
             return connectionStringBuilder.ToString();
         }
     }

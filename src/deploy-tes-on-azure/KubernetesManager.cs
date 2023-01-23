@@ -402,14 +402,16 @@ namespace TesDeployer
             values.Service["enableIngress"] = settings["EnableIngress"];
             values.Config["letsEncryptEmail"] = settings["LetsEncryptEmail"];
             values.Persistence["storageAccount"] = settings["DefaultStorageAccountName"];
-            values.Database["postgreSqlServerName"] = settings["PostgreSqlServerName"];
-            values.Database["postgreSqlTesDatabaseName"] = settings["PostgreSqlTesDatabaseName"];
-            values.Database["postgreSqlTesDatabasePort"] = settings["PostgreSqlTesDatabasePort"];
-            values.Database["postgreSqlTesUserLogin"] = settings["PostgreSqlTesUserLogin"];
-            values.Database["postgreSqlTesUserPassword"] = settings["PostgreSqlTesUserPassword"];
-            values.Database["postgreSqlTesSslMode"] = settings["PostgreSqlTesSslMode"];
-            values.Database["postgreSqlAdministratorLogin"] = settings["PostgreSqlAdministratorLogin"];
-            values.Database["postgreSqlAdministratorPassword"] = settings["PostgreSqlAdministratorPassword"];
+            values.TesDatabase["postgreSqlServerName"] = settings["PostgreSqlServerName"];
+            values.TesDatabase["postgreSqlServerNameSuffix"] = settings["PostgreSqlServerNameSuffix"];
+            values.TesDatabase["postgreSqlServerPort"] = settings["PostgreSqlServerPort"];
+            values.TesDatabase["postgreSqlServerSslMode"] = settings["PostgreSqlServerSslMode"];
+            // Note: Notice "Tes" is omitted from the property name since it's now in the TesDatabase section
+            values.TesDatabase["postgreSqlDatabaseName"] = settings["PostgreSqlTesDatabaseName"];
+            values.TesDatabase["postgreSqlDatabaseUserLogin"] = settings["PostgreSqlTesDatabaseUserLogin"];
+            values.TesDatabase["postgreSqlDatabaseUserPassword"] = settings["PostgreSqlTesDatabaseUserPassword"];
+            values.TesDatabase["postgreSqlAdministratorLogin"] = settings["PostgreSqlAdministratorLogin"];
+            values.TesDatabase["postgreSqlAdministratorPassword"] = settings["PostgreSqlAdministratorPassword"];
         }
 
         private static Dictionary<string, string> ValuesToSettings(HelmValues values)
@@ -442,14 +444,15 @@ namespace TesDeployer
                 ["EnableIngress"] = values.Service["enableIngress"],
                 ["LetsEncryptEmail"] = values.Config["letsEncryptEmail"],
                 ["DefaultStorageAccountName"] = values.Persistence["storageAccount"],
-                ["PostgreSqlServerName"] = values.Database["postgreSqlServerName"],
-                ["PostgreSqlTesDatabaseName"] = values.Database["postgreSqlTesDatabaseName"],
-                ["PostgreSqlTesDatabasePort"] = values.Database["postgreSqlTesDatabasePort"],
-                ["PostgreSqlTesUserLogin"] = values.Database["postgreSqlTesUserLogin"],
-                ["PostgreSqlTesUserPassword"] = values.Database["postgreSqlTesUserPassword"],
-                ["PostgreSqlTesSslMode"] = values.Database["postgreSqlTesSslMode"],
-                ["PostgreSqlAdministratorLogin"] = values.Database["postgreSqlAdministratorLogin"],
-                ["PostgreSqlAdministratorPassword"] = values.Database["postgreSqlAdministratorPassword"],
+                ["PostgreSqlServerName"] = values.TesDatabase["postgreSqlServerName"],
+                ["PostgreSqlServerNameSuffix"] = values.TesDatabase["postgreSqlServerNameSuffix"],
+                ["PostgreSqlServerPort"] = values.TesDatabase["postgreSqlServerPort"],
+                ["PostgreSqlServerSslMode"] = values.TesDatabase["postgreSqlServerSslMode"],
+                ["PostgreSqlTesDatabaseName"] = values.TesDatabase["postgreSqlTesDatabaseName"],
+                ["PostgreSqlTesDatabaseUserLogin"] = values.TesDatabase["postgreSqlTesDatabaseUserLogin"],
+                ["PostgreSqlTesDatabaseUserPassword"] = values.TesDatabase["postgreSqlTesDatabaseUserPassword"],
+                ["PostgreSqlAdministratorLogin"] = values.TesDatabase["postgreSqlAdministratorLogin"],
+                ["PostgreSqlAdministratorPassword"] = values.TesDatabase["postgreSqlAdministratorPassword"],
             };
 
         /// <summary>
@@ -559,7 +562,7 @@ namespace TesDeployer
         {
             public Dictionary<string, string> Service { get; set; }
             public Dictionary<string, string> Config { get; set; }
-            public Dictionary<string, string> Database { get; set; }
+            public Dictionary<string, string> TesDatabase { get; set; }
             public Dictionary<string, string> Images { get; set; }
             public List<string> DefaultContainers { get; set; }
             public List<Dictionary<string, string>> InternalContainersMIAuth { get; set; }

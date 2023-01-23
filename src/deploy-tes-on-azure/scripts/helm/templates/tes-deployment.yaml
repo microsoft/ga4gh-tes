@@ -27,18 +27,20 @@ spec:
         supplementalGroups: [1000]
       containers:
         - env:
-            - name: PostgreSql__PostgreSqlServerName
-              value: {{ .Values.database.postgreSqlServerName }}
-            - name: PostgreSql__PostgreSqlTesDatabaseName
-              value: {{ .Values.database.postgreSqlTesDatabaseName }}
-            - name: PostgreSql__PostgreSqlTesDatabasePort
-              value: {{ .Values.database.postgreSqlTesDatabasePort | quote }}
-            - name: PostgreSql__PostgreSqlTesUserLogin
-              value: {{ .Values.database.postgreSqlTesUserLogin }}
-            - name: PostgreSql__PostgreSqlTesUserPassword
-              value: {{ .Values.database.postgreSqlTesUserPassword }}
-            - name: PostgreSql__PostgreSqlTesSslMode
-              value: {{ .Values.database.postgreSqlTesSslMode }}
+            - name: TesPostgreSql__PostgreSqlServerName
+              value: {{ .Values.tesdatabase.postgreSqlServerName }}
+            - name: TesPostgreSql__PostgreSqlServerNameSuffix
+              value: {{ .Values.tesdatabase.postgreSqlServerNameSuffix }}
+            - name: TesPostgreSql__PostgreSqlServerSslMode
+              value: {{ .Values.tesdatabase.postgreSqlServerSslMode }}
+            - name: TesPostgreSql__PostgreSqlServerPort
+              value: {{ .Values.tesdatabase.postgreSqlServerPort | quote }}
+            - name: TesPostgreSql__PostgreSqlDatabaseName
+              value: {{ .Values.tesdatabase.postgreSqlDatabaseName }}
+            - name: TesPostgreSql__PostgreSqlDatabaseUserLogin
+              value: {{ .Values.tesdatabase.postgreSqlDatabaseUserLogin }}
+            - name: TesPostgreSql__PostgreSqlDatabaseUserPassword
+              value: {{ .Values.tesdatabase.postgreSqlDatabaseUserPassword }}
             - name: ASPNETCORE_URLS
               value: http://0.0.0.0:{{ .Values.service.tesPort }}/
             - name: DefaultStorageAccountName

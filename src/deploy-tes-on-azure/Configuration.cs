@@ -10,9 +10,9 @@ namespace TesDeployer
 {
     public class Configuration : UserAccessibleConfiguration
     {
-        public string PostgreSqlTesDatabaseName { get; set; } = "tes_db";
         public string PostgreSqlAdministratorLogin { get; set; } = "tes_admin";
         public string PostgreSqlAdministratorPassword { get; set; }
+        public string PostgreSqlTesDatabaseName { get; set; } = "tes_db";
         public string PostgreSqlTesUserLogin { get; set; } = "tes";
         public string PostgreSqlTesUserPassword { get; set; }
         public string PostgreSqlSkuName { get; set; } = "Standard_B2s";
@@ -21,7 +21,6 @@ namespace TesDeployer
         public string PostgreSqlVersion { get; set; } = "11";
         public string DefaultPostgreSqlSubnetName { get; set; } = "sqlsubnet";
         public int PostgreSqlStorageSize { get; set; } = 128;  // GiB
-        public int PostgreSqlTesDatabasePort { get; set; } = 5432;
     }
 
     public abstract class UserAccessibleConfiguration
@@ -71,6 +70,9 @@ namespace TesDeployer
         public bool DebugLogging { get; set; } = false;
         public bool? ProvisionPostgreSqlOnAzure { get; set; } = true;
         public string PostgreSqlServerName { get; set; }
+        public string PostgreSqlServerNameSuffix { get; set; }
+        public int PostgreSqlServerPort { get; set; } = 5432;
+        public string PostgreSqlServerSslMode { get; set; } = "VerifyFull";
         public bool UsePostgreSqlSingleServer { get; set; } = false;
         public string KeyVaultName { get; set; }
         public bool? EnableIngress { get; set; } = null;

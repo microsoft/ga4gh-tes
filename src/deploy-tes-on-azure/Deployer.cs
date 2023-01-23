@@ -841,17 +841,16 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "AksCoANamespace", configuration.AksCoANamespace, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ProvisionPostgreSqlOnAzure", configuration.ProvisionPostgreSqlOnAzure, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "CrossSubscriptionAKSDeployment", configuration.CrossSubscriptionAKSDeployment);
-                var provisionPostgreSqlOnAzure = bool.TryParse(settings["ProvisionPostgreSqlOnAzure"], out var _provisionPostgreSqlOnAzure) ? _provisionPostgreSqlOnAzure : false;
-                UpdateSetting(settings, defaults, "PostgreSqlServerName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlServerName : string.Empty, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "PostgreSqlTesDatabasePort", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesDatabasePort.ToString() : string.Empty, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "PostgreSqlTesDatabaseName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesDatabaseName : string.Empty, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "PostgreSqlTesUserLogin", GetFormattedPostgresqlUser(), ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "PostgreSqlTesUserPassword", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserPassword : string.Empty, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "UsePostgreSqlSingleServer", provisionPostgreSqlOnAzure ? configuration.UsePostgreSqlSingleServer.ToString() : string.Empty, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "PostgreSqlAdministratorLogin", provisionPostgreSqlOnAzure ? configuration.PostgreSqlAdministratorLogin : string.Empty, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "PostgreSqlAdministratorPassword", provisionPostgreSqlOnAzure ? configuration.PostgreSqlAdministratorPassword : string.Empty, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "PostgreSqlTesSslMode", provisionPostgreSqlOnAzure ? PostgresqlSslMode : string.Empty, ignoreDefaults: true);
-
+                UpdateSetting(settings, defaults, "PostgreSqlServerName", configuration.PostgreSqlServerName, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlServerNameSuffix", configuration.PostgreSqlServerNameSuffix, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlServerPort", configuration.PostgreSqlServerPort.ToString(), ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlServerSslMode", configuration.PostgreSqlServerSslMode, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlTesDatabaseName", configuration.PostgreSqlTesDatabaseName, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlTesDatabaseUserLogin", GetFormattedPostgresqlUser(), ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlTesDatabaseUserPassword", configuration.PostgreSqlTesUserPassword, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "UsePostgreSqlSingleServer", configuration.UsePostgreSqlSingleServer.ToString(), ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlAdministratorLogin", configuration.PostgreSqlAdministratorLogin, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlAdministratorPassword", configuration.PostgreSqlAdministratorPassword, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
                 UpdateSetting(settings, defaults, "TesHostname", kubernetesManager.TesHostname, ignoreDefaults: true);
@@ -1295,7 +1294,7 @@ namespace TesDeployer
                     }
 
                     var commands = new List<string[]> {
-                        new string[] { "bash", "-lic", $"echo {configuration.PostgreSqlServerName}.postgres.database.azure.com:{configuration.PostgreSqlTesDatabasePort}:{configuration.PostgreSqlTesDatabaseName}:{adminUser}:{configuration.PostgreSqlAdministratorPassword} >> ~/.pgpass" },
+                        new string[] { "bash", "-lic", $"echo {configuration.PostgreSqlServerName}{configuration.PostgreSqlServerNameSuffix}:{configuration.PostgreSqlServerPort}:{configuration.PostgreSqlTesDatabaseName}:{adminUser}:{configuration.PostgreSqlAdministratorPassword} >> ~/.pgpass" },
                         new string[] { "bash", "-lic", "chmod 0600 ~/.pgpass" },
                         new string[] { "/usr/bin/psql", "-h", serverPath, "-U", adminUser, "-d", configuration.PostgreSqlTesDatabaseName, "-c", tesScript }
                     };
