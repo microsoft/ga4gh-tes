@@ -38,13 +38,6 @@ namespace TesApi.Web
         Task CreateBatchJobAsync(string jobId, CloudTask cloudTask, PoolInformation poolInformation);
 
         /// <summary>
-        /// Gets the <see cref="ContainerRegistryInfo"/> for the given image name
-        /// </summary>
-        /// <param name="imageName">Image name</param>
-        /// <returns><see cref="ContainerRegistryInfo"/></returns>
-      //  Task<ContainerRegistryInfo> GetContainerRegistryInfoAsync(string imageName);
-
-        /// <summary>
         /// Gets the <see cref="StorageAccountInfo"/> for the given storage account name
         /// </summary>
         /// <param name="storageAccountName">Storage account name</param>
@@ -89,12 +82,6 @@ namespace TesApi.Web
         /// </summary>
         /// <returns>Count of active batch jobs</returns>
         int GetBatchActiveJobCount();
-
-        ///// <summary>
-        ///// Get/sets cached value for the price and resource summary of all available VMs in a region for the <see cref="BatchModels.BatchAccount"/>.
-        ///// </summary>
-        ///// <returns><see cref="VirtualMachineInformation"/> for available VMs in a region.</returns>
-        //Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync();
 
         /// <summary>
         /// Gets the primary key of the given storage account.
