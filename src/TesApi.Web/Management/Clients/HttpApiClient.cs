@@ -23,7 +23,6 @@ namespace TesApi.Web.Management.Clients
         private readonly SHA256 sha256 = SHA256.Create();
         private readonly ILogger logger;
         private readonly string tokenScope;
-        private readonly object lockObject = new object();
         private readonly SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
         private AccessToken accessToken;
 
@@ -68,10 +67,11 @@ namespace TesApi.Web.Management.Clients
         protected HttpApiClient() { }
 
         /// <summary>
-        /// Sends request with a retry policy.
+        /// Sends request with a retry policy
         /// </summary>
-        /// <param name="httpRequest"></param>
-        /// <param name="setAuthorizationHeader"></param>
+        /// <param name="httpRequestFactory">Factory that creates new http requests, in the event of retry the factory is called again
+        /// and must be idempotent</param>
+        /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
         /// <returns></returns>
         protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(Func<HttpRequestMessage> httpRequestFactory, bool setAuthorizationHeader = false)
         {
@@ -177,6 +177,11 @@ namespace TesApi.Web.Management.Clients
 
         }
 
+        /// <summary>
+        /// Creates a query string with from an array of arguments.
+        /// </summary>
+        /// <param name="arguments"></param>
+        /// <returns></returns>
         protected string AppendQueryStringParams(params string[] arguments)
         {
             if (arguments is null || arguments.Length == 0)

@@ -17,4 +17,8 @@ public class TerraOptions
     /// Landing zone api host. 
     /// </summary>
     public string LandingZoneApiHost { get; set; }
+    /// <summary>
+    /// Wsm api host. 
+    /// </summary>
+    public string WsmApiHost { get; set; }
 }
