@@ -21,9 +21,10 @@ namespace TesApi.Web.Management.Clients
         private readonly TokenCredential tokenCredential;
         private readonly CacheAndRetryHandler cacheAndRetryHandler;
         private readonly SHA256 sha256 = SHA256.Create();
-        private readonly ILogger<HttpApiClient> logger;
+        private readonly ILogger logger;
         private readonly string tokenScope;
         private readonly object lockObject = new object();
+        private readonly SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
         private AccessToken accessToken;
 
         /// <summary>
@@ -36,7 +37,7 @@ namespace TesApi.Web.Management.Clients
         /// </summary>
         /// <param name="cacheAndRetryHandler"></param>
         /// <param name="logger"></param>
-        protected HttpApiClient(CacheAndRetryHandler cacheAndRetryHandler, ILogger<HttpApiClient> logger)
+        protected HttpApiClient(CacheAndRetryHandler cacheAndRetryHandler, ILogger logger)
         {
             ArgumentNullException.ThrowIfNull(cacheAndRetryHandler);
             ArgumentNullException.ThrowIfNull(logger);
@@ -52,7 +53,7 @@ namespace TesApi.Web.Management.Clients
         /// <param name="cacheAndRetryHandler"></param>
         /// <param name="tokenScope"></param>
         /// <param name="logger"></param>
-        protected HttpApiClient(TokenCredential tokenCredential, string tokenScope, CacheAndRetryHandler cacheAndRetryHandler, ILogger<HttpApiClient> logger) : this(cacheAndRetryHandler, logger)
+        protected HttpApiClient(TokenCredential tokenCredential, string tokenScope, CacheAndRetryHandler cacheAndRetryHandler, ILogger logger) : this(cacheAndRetryHandler, logger)
         {
             ArgumentNullException.ThrowIfNull(tokenCredential);
             ArgumentException.ThrowIfNullOrEmpty(tokenScope);
@@ -72,14 +73,18 @@ namespace TesApi.Web.Management.Clients
         /// <param name="httpRequest"></param>
         /// <param name="setAuthorizationHeader"></param>
         /// <returns></returns>
-        protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(HttpRequestMessage httpRequest, bool setAuthorizationHeader = false)
+        protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(Func<HttpRequestMessage> httpRequestFactory, bool setAuthorizationHeader = false)
         {
-            if (setAuthorizationHeader)
+            return await cacheAndRetryHandler.ExecuteWithRetryAsync(async () =>
             {
-                await AddAuthorizationHeaderToRequestAsync(httpRequest);
-            }
+                var request = httpRequestFactory();
+                if (setAuthorizationHeader)
+                {
+                    await AddAuthorizationHeaderToRequestAsync(request);
+                }
 
-            return await cacheAndRetryHandler.ExecuteWithRetryAsync(() => HttpClient.SendAsync(httpRequest));
+                return await HttpClient.SendAsync(request);
+            });
         }
 
         /// <summary>
@@ -153,6 +158,47 @@ namespace TesApi.Web.Management.Clients
             );
         }
 
+        /// <summary>
+        /// Returns an query string key-value, with the value escaped. If the value is null or empty returns an empty string
+        /// </summary>
+        /// <param name="name">parameter name</param>
+        /// <param name="value">parameter value</param>
+        /// <returns></returns>
+        protected string ParseQueryStringParameter(string name, string value)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(name);
+
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
+            }
+
+            return $"{name}={Uri.EscapeDataString(value)}";
+
+        }
+
+        protected string AppendQueryStringParams(params string[] arguments)
+        {
+            if (arguments is null || arguments.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            var queryString = "";
+            var prefix = "";
+
+            foreach (var argument in arguments)
+            {
+                if (!string.IsNullOrEmpty(argument))
+                {
+                    queryString += prefix + argument;
+                    prefix = "&";
+                }
+            }
+
+            return queryString;
+        }
+
         private async Task<HttpRequestMessage> CreateGetHttpRequest(Uri requestUrl, bool setAuthorizationHeader)
         {
             var httpRequest = new HttpRequestMessage(HttpMethod.Get, requestUrl);
@@ -185,7 +231,7 @@ namespace TesApi.Web.Management.Clients
 
             try
             {
-                var token = await GetOrRefreshAccessToken();
+                var token = await GetOrRefreshAccessTokenAsync();
 
                 requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             }
@@ -196,29 +242,29 @@ namespace TesApi.Web.Management.Clients
             }
         }
 
-        private async Task<string> GetOrRefreshAccessToken()
+        private async Task<string> GetOrRefreshAccessTokenAsync()
         {
-            // here we are synchronizing access to the access token only, there is a still
-            // a small chance the call to GetTokenAsync won't be synchronized, and it will get call more than once, concurrently
-            // however the impact should be marginal - the cached token will be updated more than once. 
-            lock (lockObject)
+            try
             {
+                await semaphore.WaitAsync();
+
                 if (DateTimeOffset.UtcNow < accessToken.ExpiresOn)
                 {
                     logger.LogTrace(
                         $"Using existing token. Token has not expired. Token expiration date: {accessToken.ExpiresOn}");
                     return accessToken.Token;
                 }
-            }
 
-            var newAccessToken = await tokenCredential.GetTokenAsync(new TokenRequestContext(new[] { tokenScope }),
-                    CancellationToken.None);
+                var newAccessToken = await tokenCredential.GetTokenAsync(new TokenRequestContext(new[] { tokenScope }),
+                  CancellationToken.None);
 
-            lock (lockObject)
-            {
                 logger.LogTrace($"Returning a new token with an expiration date of: {newAccessToken.ExpiresOn}");
                 accessToken = newAccessToken;
                 return accessToken.Token;
+            }
+            finally
+            {
+                semaphore.Release();
             }
 
         }
@@ -236,7 +282,7 @@ namespace TesApi.Web.Management.Clients
             if (perUser)
             {
                 //append the token to create a string that is unique to the user and the URL
-                var token = await GetOrRefreshAccessToken();
+                var token = await GetOrRefreshAccessTokenAsync();
                 cacheKey += token;
             }
 

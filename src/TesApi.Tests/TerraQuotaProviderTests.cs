@@ -28,7 +28,7 @@ namespace TesApi.Tests
             quotaApiResponse = terraApiStubData.GetResourceQuotaApiResponse();
 
             var optionsMock = new Mock<IOptions<TerraOptions>>();
-            optionsMock.Setup(o => o.Value).Returns(new TerraOptions() { LandingZoneApiHost = terraApiStubData.ApiHost, LandingZoneId = terraApiStubData.LandingZoneId.ToString() });
+            optionsMock.Setup(o => o.Value).Returns(new TerraOptions() { LandingZoneApiHost = terraApiStubData.LandingZoneApiHost, LandingZoneId = terraApiStubData.LandingZoneId.ToString() });
 
             terraLandingZoneApiClientMock
                 .Setup(t => t.GetLandingZoneResourcesAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.LandingZoneId)), It.Is<bool>(c => c == true)))

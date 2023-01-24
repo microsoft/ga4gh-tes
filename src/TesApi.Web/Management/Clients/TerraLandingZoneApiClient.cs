@@ -9,10 +9,9 @@ namespace TesApi.Web.Management.Clients
     /// <summary>
     /// Terra Landing Zone api client. 
     /// </summary>
-    public class TerraLandingZoneApiClient : HttpApiClient
+    public class TerraLandingZoneApiClient : TerraApiClient
     {
         private const string LandingZonesApiSegments = @"/api/landingzones/v1/azure/";
-        private const string TokenScope = @"https://management.azure.com/.default";
 
         private readonly string baseApiUrl;
 
@@ -23,7 +22,7 @@ namespace TesApi.Web.Management.Clients
         /// <param name="tokenCredential"></param>
         /// <param name="cacheAndRetryHandler"></param>
         /// <param name="logger"></param>
-        public TerraLandingZoneApiClient(string apiHost, TokenCredential tokenCredential, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraLandingZoneApiClient> logger) : base(tokenCredential, TokenScope, cacheAndRetryHandler, logger)
+        public TerraLandingZoneApiClient(string apiHost, TokenCredential tokenCredential, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraLandingZoneApiClient> logger) : base(tokenCredential, cacheAndRetryHandler, logger)
         {
             ArgumentException.ThrowIfNullOrEmpty(apiHost);
             ArgumentNullException.ThrowIfNull(tokenCredential);
