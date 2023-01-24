@@ -27,7 +27,7 @@ namespace TesDeployer
     /// <summary>
     /// Class to hold all the kubernetes specific deployer logic.
     /// </summary>
-    internal class KubernetesManager
+    public class KubernetesManager
     {
         private static readonly AsyncRetryPolicy WorkloadReadyRetryPolicy = Policy
             .Handle<Exception>()
@@ -219,10 +219,16 @@ namespace TesDeployer
             return client;
         }
 
+        public async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath)
+        {
+            var templateText = await File.ReadAllTextAsync(valuesTemplatePath);
+            var values = KubernetesYaml.Deserialize<HelmValues>(templateText);
+            return values;
+        }
 
         public async Task UpdateHelmValuesAsync(IStorageAccount storageAccount, string keyVaultUrl, string resourceGroupName, Dictionary<string, string> settings, IIdentity managedId)
         {
-            var values = KubernetesYaml.Deserialize<HelmValues>(await File.ReadAllTextAsync(valuesTemplatePath));
+            var values = await GetHelmValuesAsync(valuesTemplatePath);
             UpdateValuesFromSettings(values, settings);
             values.Config["resourceGroup"] = resourceGroupName;
             values.Identity["name"] = managedId.Name;
@@ -555,7 +561,7 @@ namespace TesDeployer
             return result.Outcome == OutcomeType.Successful;
         }
 
-        private class HelmValues
+        public class HelmValues
         {
             public Dictionary<string, string> Service { get; set; }
             public Dictionary<string, string> Config { get; set; }

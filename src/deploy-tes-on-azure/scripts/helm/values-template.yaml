@@ -28,7 +28,7 @@ config:
   batchManagedIdentity:
   letsEncryptEmail: RUNTIME_PARAMETER
 
-tesdatabase:
+tesDatabase:
   postgreSqlServerName: RUNTIME_PARAMETER
   postgreSqlServerNameSuffix: RUNTIME_PARAMETER
   postgreSqlServerPort: RUNTIME_PARAMETER
@@ -36,7 +36,6 @@ tesdatabase:
   postgreSqlDatabaseName: RUNTIME_PARAMETER
   postgreSqlDatabaseUserLogin: RUNTIME_PARAMETER
   postgreSqlDatabaseUserPassword: RUNTIME_PARAMETER
-
 
 images:
   tes: RUNTIME_PARAMETER
