@@ -19,7 +19,6 @@ namespace TesApi.Web
     public class BatchPoolService : BackgroundService
     {
         private readonly IBatchScheduler _batchScheduler;
-        private readonly IAzureProxy _azureProxy;
         private readonly ILogger _logger;
         private readonly bool _isDisabled;
 
@@ -33,13 +32,11 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="configuration"></param>
         /// <param name="batchScheduler"></param>
-        /// <param name="azureProxy"></param>
         /// <param name="logger"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public BatchPoolService(IConfiguration configuration, IBatchScheduler batchScheduler, IAzureProxy azureProxy, ILogger<BatchPoolService> logger)
+        public BatchPoolService(IConfiguration configuration, IBatchScheduler batchScheduler, ILogger<BatchPoolService> logger)
         {
             _batchScheduler = batchScheduler ?? throw new ArgumentNullException(nameof(batchScheduler));
-            _azureProxy = azureProxy ?? throw new ArgumentNullException(nameof(azureProxy));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _isDisabled = configuration.GetValue("DisableBatchScheduling", false) || configuration.GetValue("UseLegacyBatchImplementationWithAutopools", false);
         }
@@ -72,7 +69,6 @@ namespace TesApi.Web
             {
                 try
                 {
-                    await RemoveUnknownPools(stoppingToken);
                     await ServiceBatchPools(stoppingToken);
                     await Task.Delay(RunInterval, stoppingToken);
                 }
@@ -87,43 +83,6 @@ namespace TesApi.Web
             }
 
             _logger.LogInformation("Batch Pools gracefully stopped.");
-        }
-
-        /// <summary>
-        /// Cleans up pools that are unknown/deleted.
-        /// </summary>
-        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        private async ValueTask RemoveUnknownPools(CancellationToken cancellationToken)
-        {
-            var extraPools = _batchScheduler.GetPools().ToList();
-
-            await foreach (var pool in _batchScheduler.GetCloudPools().WithCancellation(cancellationToken))
-            {
-                var batchPool = extraPools.Find(p => p.Pool.PoolId.Equals(pool.Id, StringComparison.OrdinalIgnoreCase));
-
-                if (batchPool is not null)
-                {
-                    extraPools.Remove(batchPool);
-                }
-                else
-                {
-                    var poolId = new Microsoft.Azure.Batch.PoolInformation() { PoolId = pool.Id };
-                    await pool.DeleteAsync(cancellationToken: cancellationToken);
-
-                    try
-                    {
-                        await _azureProxy.DeleteBatchJobAsync(poolId, cancellationToken);
-                    }
-                    finally // ignore all errors
-                    { }
-                }
-            }
-
-            foreach (var pool in extraPools)
-            {
-                _ = _batchScheduler.RemovePoolFromList(pool);
-            }
         }
 
         /// <summary>

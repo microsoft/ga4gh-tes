@@ -69,6 +69,7 @@ namespace TesApi.Web
 
                 .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
                 .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
+                .AddTransient<BatchPool>()
 
                 .AddControllers()
                 .AddNewtonsoftJson(opts =>

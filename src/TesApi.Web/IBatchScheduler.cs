@@ -34,10 +34,25 @@ namespace TesApi.Web
         ValueTask<bool> ProcessTesTaskAsync(TesTask tesTask);
 
         /// <summary>
+        /// Adds <see cref="IBatchPool"/> to the managed batch pools.
+        /// </summary>
+        /// <param name="pool">The pool to add to the pools accessible by this scheduler.</param>
+        /// <returns>True if pool was added, false otherwise (including if it was already present).</returns>
+        bool AddPool(IBatchPool pool);
+
+        /// <summary>
         /// Enumerates all the managed batch pools.
         /// </summary>
         /// <returns></returns>
         IEnumerable<IBatchPool> GetPools();
+
+        /// <summary>
+        /// Deletes pool and job.
+        /// </summary>
+        /// <param name="pool"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken);
 
         /// <summary>
         /// Provides a list of pools that can safely be disposed of.

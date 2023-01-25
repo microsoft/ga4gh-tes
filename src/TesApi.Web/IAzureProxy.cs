@@ -32,6 +32,14 @@ namespace TesApi.Web
         Task<string> GetNextBatchJobIdAsync(string tesTaskId);
 
         /// <summary>
+        /// Gets a new Azure Batch task id to schedule another task
+        /// </summary>
+        /// <param name="tesTaskId">The unique TES task ID</param>
+        /// <param name="batchJobId">The azure job ID</param>
+        /// <returns>The next logical, new Azure Batch task ID</returns>
+        Task<string> GetNextBatchTaskIdAsync(string tesTaskId, string batchJobId);
+
+        /// <summary>
         /// Creates a new Azure Batch job for Autopools
         /// </summary>
         /// <param name="jobId"></param>
@@ -73,7 +81,7 @@ namespace TesApi.Web
         /// <summary>
         /// Creates an Azure Batch pool who's lifecycle must be manually managed
         /// </summary>
-        /// <param name="poolInfo">Contains information about a pool. <see cref="BatchModels.ProxyResource.Name"/> becomes the <see cref="CloudPool.Id"/></param>
+        /// <param name="poolInfo">Contains information about the pool. <see cref="BatchModels.ProxyResource.Name"/> becomes the <see cref="CloudPool.Id"/></param>
         /// <param name="isPreemptable">True if nodes in this pool will all be preemptable. False if nodes will all be dedicated.</param>
         Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable);
 
@@ -221,6 +229,15 @@ namespace TesApi.Web
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         /// <returns><see cref="CloudPool"/></returns>
         Task<CloudPool> GetBatchPoolAsync(string poolId, DetailLevel detailLevel = default, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Retrieves the specified batch job.
+        /// </summary>
+        /// <param name="jobId">The <see cref="CloudJob"/> of the job to retrieve.</param>
+        /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for controlling which properties are retrieved from the service.</param>
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        Task<CloudJob> GetBatchJobAsync(string jobId, DetailLevel detailLevel = default, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Commits all pending changes to this Microsoft.Azure.Batch.CloudPool to the Azure Batch service.

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Configuration;
@@ -27,76 +28,20 @@ namespace TesApi.Web
         private readonly IAzureProxy _azureProxy;
 
         /// <summary>
-        /// Constructor of <see cref="BatchPool"/> for new pools
+        /// Constructor of <see cref="BatchPool"/>.
         /// </summary>
-        /// <param name="poolInformation"></param>
         /// <param name="batchScheduler"></param>
         /// <param name="configuration"></param>
         /// <param name="azureProxy"></param>
         /// <param name="logger"></param>
         /// <exception cref="ArgumentException"></exception>
-        public BatchPool(PoolInformation poolInformation, IBatchScheduler batchScheduler, IConfiguration configuration, IAzureProxy azureProxy, ILogger<BatchPool> logger)
-            : this(azureProxy.GetBatchPoolAsync(poolInformation.PoolId, new ODATADetailLevel { SelectClause = CloudPoolSelectClause }).Result,
-                poolInformation,
-                batchScheduler,
-                configuration,
-                azureProxy,
-                logger)
-        { }
-
-        /// <summary>
-        /// Constructor of <see cref="BatchPool"/> for retrieved pools
-        /// </summary>
-        /// <param name="pool"></param>
-        /// <param name="batchScheduler"></param>
-        /// <param name="configuration"></param>
-        /// <param name="azureProxy"></param>
-        /// <param name="logger"></param>
-        public BatchPool(CloudPool pool, IBatchScheduler batchScheduler, IConfiguration configuration, IAzureProxy azureProxy, ILogger<BatchPool> logger)
-            : this(pool,
-                new() { PoolId = pool.Id },
-                batchScheduler,
-                configuration,
-                azureProxy,
-                logger)
-        { }
-
-        /// <summary>
-        /// Alternate constructor of <see cref="BatchPool"/> for broken pools
-        /// </summary>
-        /// <param name="poolId"></param>
-        /// <param name="batchScheduler"></param>
-        /// <param name="configuration"></param>
-        /// <param name="azureProxy"></param>
-        /// <param name="logger"></param>
-        /// <exception cref="ArgumentException"></exception>
-        public BatchPool(string poolId, IBatchScheduler batchScheduler, IConfiguration configuration, IAzureProxy azureProxy, ILogger<BatchPool> logger)
-            : this(default,
-                new() { PoolId = poolId },
-                batchScheduler,
-                configuration,
-                azureProxy,
-                logger)
-        { }
-
-        // Common constructor
-        private BatchPool(CloudPool cloudPool, PoolInformation poolInfo, IBatchScheduler batchScheduler, IConfiguration configuration, IAzureProxy azureProxy, ILogger<BatchPool> logger)
+        public BatchPool(IBatchScheduler batchScheduler, IConfiguration configuration, IAzureProxy azureProxy, ILogger<BatchPool> logger)
         {
-            Pool = poolInfo ?? throw new ArgumentNullException(nameof(poolInfo));
-
             _forcePoolRotationAge = TimeSpan.FromDays(GetConfigurationValue(configuration, "BatchPoolRotationForcedDays", 30));
 
             this._azureProxy = azureProxy;
             this._logger = logger;
             _batchPools = batchScheduler as BatchScheduler ?? throw new ArgumentException("batchScheduler must be of type BatchScheduler", nameof(batchScheduler));
-
-            Creation = cloudPool?.CreationTime ?? DateTime.UtcNow;
-            IsAvailable = cloudPool is not null;
-
-            if (IsAvailable)
-            {
-                IsDedicated = bool.Parse(cloudPool.Metadata.First(m => BatchScheduler.PoolIsDedicated.Equals(m.Name, StringComparison.Ordinal)).Value);
-            }
 
             // IConfiguration.GetValue<double>(string key, double defaultValue) throws an exception if the value is defined as blank
             static double GetConfigurationValue(IConfiguration configuration, string key, double defaultValue)
@@ -351,9 +296,7 @@ namespace TesApi.Web
                 var (lowPriorityNodes, dedicatedNodes) = await _azureProxy.GetCurrentComputeNodesAsync(Pool.PoolId, cancellationToken);
                 if ((lowPriorityNodes is null || lowPriorityNodes == 0) && (dedicatedNodes is null || dedicatedNodes == 0) && !await GetTasksAsync().AnyAsync(cancellationToken))
                 {
-                    // TODO: deal with missing pool and/or job
-                    await _azureProxy.DeleteBatchPoolAsync(Pool.PoolId, cancellationToken);
-                    await _azureProxy.DeleteBatchJobAsync(Pool, cancellationToken);
+                    await _batchPools.DeletePoolAsync(this, cancellationToken);
                     _ = _batchPools.RemovePoolFromList(this);
                 }
             }
@@ -393,7 +336,7 @@ namespace TesApi.Web
         public bool IsAvailable { get; private set; } = true;
 
         /// <inheritdoc/>
-        public PoolInformation Pool { get; }
+        public PoolInformation Pool { get; private set; }
 
         /// <inheritdoc/>
         public async ValueTask<bool> CanBeDeleted(CancellationToken cancellationToken = default)
@@ -514,6 +457,93 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async ValueTask<DateTime> GetAllocationStateTransitionTime(CancellationToken cancellationToken = default) // TODO: put this at front of list by returning earliest possible time, or put at end of list by returning UtcNow?
             => (await _azureProxy.GetBatchPoolAsync(Pool.PoolId, new ODATADetailLevel { SelectClause = "allocationStateTransitionTime" }, cancellationToken)).AllocationStateTransitionTime ?? DateTime.UtcNow;
+
+        /// <inheritdoc/>
+        public async ValueTask CreatePoolAndJobAsync(Microsoft.Azure.Management.Batch.Models.Pool poolModel, bool isPreemptible, CancellationToken cancellationToken)
+        {
+            try
+            {
+                CloudPool pool = default;
+                var poolInfo = await _azureProxy.CreateBatchPoolAsync(poolModel, isPreemptible);
+                await Task.WhenAll(
+                    Task.Run(async () => pool = await _azureProxy.GetBatchPoolAsync(poolInfo.PoolId, new ODATADetailLevel { SelectClause = CloudPoolSelectClause }, cancellationToken)),
+                    _azureProxy.CreateBatchJobAsync(poolInfo, cancellationToken));
+                Configure(pool);
+                _ = _batchPools.AddPool(this);
+            }
+            catch (AggregateException ex)
+            {
+                if (ex.InnerExceptions.Count < 2)
+                {
+                    throw new AggregateException(ex.InnerExceptions.Select(HandleException).ToArray());
+                }
+
+                throw HandleException(ex.InnerException);
+
+                Exception HandleException(Exception e)
+                {
+                    switch (e)
+                    {
+                        case OperationCanceledException:
+                        case RequestFailedException rfe when rfe.Status == 0 && rfe.InnerException is System.Net.WebException we && we.Status == System.Net.WebExceptionStatus.Timeout:
+                        case Exception when IsInnermostExceptionSocketException125(e):
+                            return ProcessException();
+                        default:
+                            return ProcessException(e);
+                    }
+                }
+            }
+
+            static bool IsInnermostExceptionSocketException125(Exception ex)
+            {
+                // errno: ECANCELED 125 Operation canceled
+                for (var e = ex; e is System.Net.Sockets.SocketException /*se && se.ErrorCode == 125*/; e = e.InnerException)
+                {
+                    if (e.InnerException is null) { return false; }
+                }
+                return true;
+            }
+
+            Exception ProcessException(Exception ex = default)
+            {
+                // When the batch management API creating the pool times out, it may or may not have created the pool. Add an inactive record to delete it if it did get created and try again later. That record will be removed later whether or not the pool was created.
+                Pool ??= new() { PoolId = poolModel.Name };
+                _ = _batchPools.AddPool(this);
+                return ex switch
+                {
+                    null => new AzureBatchQuotaMaxedOutException("Pool creation timed out"),
+                    OperationCanceledException => ex,
+                    var x when x is RequestFailedException rfe && rfe.Status == 0 && rfe.InnerException is System.Net.WebException webException && webException.Status == System.Net.WebExceptionStatus.Timeout => new AzureBatchQuotaMaxedOutException("Pool creation timed out", ex),
+                    var x when IsInnermostExceptionSocketException125(x) => new AzureBatchQuotaMaxedOutException("Pool creation timed out", ex),
+                    _ => new Exception(ex.Message, ex),
+                };
+            }
+        }
+
+        /// <inheritdoc/>
+        public async ValueTask AssignPoolAsync(CloudPool pool, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(pool);
+
+            if (pool.Id is null || pool.CreationTime is null || pool.Metadata is null || !pool.Metadata.Any(m => BatchScheduler.PoolHostName.Equals(m.Name, StringComparison.Ordinal)) || !pool.Metadata.Any(m => BatchScheduler.PoolIsDedicated.Equals(m.Name, StringComparison.Ordinal)))
+            {
+                throw new ArgumentException("CloudPool is either not configured correctly or was not retrieved with all required metadata.", nameof(pool));
+            }
+
+            // Pool is "broken" if job is missing/not active. Reject this pool.
+            _ = await _azureProxy.GetBatchJobAsync(pool.Id, new ODATADetailLevel { SelectClause = "id", FilterClause = "state eq 'active'" }, cancellationToken);
+
+            Configure(pool);
+        }
+
+        private void Configure(CloudPool pool)
+        {
+            Pool = new() { PoolId = pool.Id };
+
+            Creation = pool.CreationTime ?? DateTime.UtcNow;
+            IsAvailable = true;
+            IsDedicated = bool.Parse(pool.Metadata.First(m => BatchScheduler.PoolIsDedicated.Equals(m.Name, StringComparison.Ordinal)).Value);
+        }
     }
 
     /// <content>

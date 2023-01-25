@@ -223,7 +223,7 @@ namespace TesApi.Web
             tesTaskStateTransitions = new List<TesTaskStateTransition>()
             {
                 new TesTaskStateTransition(tesTaskCancellationRequested, batchTaskState: null, CancelTaskAsync),
-                new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.JobNotFound, (tesTask, _) => AddBatchJobAsync(tesTask)),
+                new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.JobNotFound, (tesTask, _) => AddBatchTaskAsync(tesTask)),
                 new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.MissingBatchTask, DeleteBatchJobAndRequeueTaskAsync),
                 new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.Initializing, (tesTask, _) => tesTask.State = TesState.INITIALIZINGEnum),
                 new TesTaskStateTransition(tesTaskIsQueuedOrInitializing, BatchTaskState.NodeAllocationFailed, DeleteBatchJobAndRequeueTaskAsync),
@@ -287,7 +287,16 @@ namespace TesApi.Web
             {
                 await foreach (var cloudPool in GetCloudPools())
                 {
-                    batchPools.Add(_batchPoolFactory.Retrieve(cloudPool));
+                    try
+                    {
+                        var batchPool = _batchPoolFactory.CreateNew();
+                        await batchPool.AssignPoolAsync(cloudPool, CancellationToken.None);
+                        batchPools.Add(batchPool);
+                    }
+                    catch (Exception exc)
+                    {
+                        logger.LogError(exc, "When retrieving previously created batch pools and jobs, there were one or more failures when trying to use batch pool {PoolId} or its associated job.", cloudPool.Id);
+                    }
                 }
             }
         }
@@ -394,14 +403,13 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="tesTask">The <see cref="TesTask"/> to schedule on Azure Batch</param>
         /// <returns>A task to await</returns>
-        private async Task AddBatchJobAsync(TesTask tesTask)
+        private async Task AddBatchTaskAsync(TesTask tesTask)
         {
             PoolInformation poolInformation = null;
             string poolName = null;
 
             try
             {
-                var jobId = await azureProxy.GetNextBatchJobIdAsync(tesTask.Id);
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask);
 
                 (poolName, var displayName) = this.enableBatchAutopool ? default : await GetPoolName(tesTask, virtualMachineInfo);
@@ -424,8 +432,10 @@ namespace TesApi.Web
                     identities.Add(tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity));
                 }
 
+                string jobId = default;
                 if (this.enableBatchAutopool)
                 {
+                    jobId = await azureProxy.GetNextBatchJobIdAsync(tesTask.Id);
                     poolInformation = await CreateAutoPoolModePoolInformation(
                         poolSpecification: await GetPoolSpecification(
                         vmSize: virtualMachineInfo.VmSize,
@@ -453,6 +463,7 @@ namespace TesApi.Web
                                 nodeInfo: batchNodeInfo,
                                 containerConfiguration: containerConfiguration)))
                         ).Pool;
+                    jobId = await azureProxy.GetNextBatchTaskIdAsync(tesTask.Id, poolInformation.PoolId);
                 }
 
                 tesTask.PoolId = poolInformation.PoolId;

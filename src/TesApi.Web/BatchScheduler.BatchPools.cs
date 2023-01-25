@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
 using Microsoft.Azure.Batch;
+using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Tes.Extensions;
 using Tes.Models;
@@ -116,6 +116,7 @@ namespace TesApi.Web
             // TODO: Make sure key doesn't contain any unsupported chars
 
             var pool = batchPools.TryGetValue(key, out var set) ? set.LastOrDefault(Available) : default;
+
             if (pool is null)
             {
                 var activePoolsCount = azureProxy.GetBatchActivePoolCount();
@@ -129,69 +130,19 @@ namespace TesApi.Web
                 var uniquifier = new byte[8]; // This always becomes 13 chars when converted to base32 after removing the three '='s at the end. We won't ever decode this, so we don't need the '='s
                 RandomNumberGenerator.Fill(uniquifier);
                 var poolId = $"{key}-{BatchUtils.ConvertToBase32(uniquifier).TrimEnd('=')}"; // embedded '-' is required by GetKeyFromPoolId()
-
-                try
-                {
-                    var modelPool = await modelPoolFactory(poolId);
-                    modelPool.Metadata ??= new List<BatchModels.MetadataItem>();
-                    modelPool.Metadata.Add(new(PoolHostName, this.hostname));
-                    modelPool.Metadata.Add(new(PoolIsDedicated, (!isPreemptable).ToString()));
-                    var poolInfo = await azureProxy.CreateBatchPoolAsync(modelPool, isPreemptable);
-
-                    try
-                    {
-                        await azureProxy.CreateBatchJobAsync(poolInfo);
-                    }
-                    catch (Exception ex)
-                    {
-                        HandleTimeout(poolId, ex);
-                    }
-
-                    pool = _batchPoolFactory.CreateNew(poolInfo);
-                }
-                catch (OperationCanceledException)
-                {
-                    HandleTimeout(poolId);
-                }
-                catch (RequestFailedException ex) when (ex.Status == 0 && ex.InnerException is WebException webException && webException.Status == WebExceptionStatus.Timeout)
-                {
-                    HandleTimeout(poolId);
-                }
-                catch (Exception ex) when (IsInnermostExceptionSocketException125(ex))
-                {
-                    HandleTimeout(poolId);
-                }
-
-                _ = AddPool(pool);
+                var modelPool = await modelPoolFactory(poolId);
+                modelPool.Metadata ??= new List<BatchModels.MetadataItem>();
+                modelPool.Metadata.Add(new(PoolHostName, this.hostname));
+                modelPool.Metadata.Add(new(PoolIsDedicated, (!isPreemptable).ToString()));
+                var batchPool = _batchPoolFactory.CreateNew();
+                await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, CancellationToken.None);
+                pool = batchPool;
             }
+
             return pool;
 
             static bool Available(IBatchPool pool)
                 => pool.IsAvailable;
-
-            void HandleTimeout(string poolId, Exception ex = default)
-            {
-                // When the batch management API creating the pool times out, it may or may not have created the pool. Add an inactive record to delete it if it did get created and try again later. That record will be removed later whether or not the pool was created.
-                _ = AddPool(_batchPoolFactory.CreateNew(poolId));
-                throw ex switch
-                {
-                    null => new AzureBatchQuotaMaxedOutException("Pool creation timed out"),
-                    OperationCanceledException => ex,
-                    var x when x is RequestFailedException rfe && rfe.Status == 0 && rfe.InnerException is WebException webException && webException.Status == WebExceptionStatus.Timeout => new AzureBatchQuotaMaxedOutException("Pool creation timed out", ex),
-                    var x when IsInnermostExceptionSocketException125(x) => new AzureBatchQuotaMaxedOutException("Pool creation timed out", ex),
-                    _ => new Exception(ex.Message, ex),
-                };
-            }
-
-            static bool IsInnermostExceptionSocketException125(Exception ex)
-            {
-                // errno: ECANCELED 125 Operation canceled
-                for (var e = ex; e is System.Net.Sockets.SocketException /*se && se.ErrorCode == 125*/; e = e.InnerException)
-                {
-                    if (e.InnerException is null) { return false; }
-                }
-                return true;
-            }
         }
 
         private async ValueTask<List<IBatchPool>> GetEmptyPools(CancellationToken cancellationToken)
@@ -206,7 +157,7 @@ namespace TesApi.Web
                 .Select(DeletePoolAsyncWrapper);
 
         private Task DeletePoolAsyncWrapper(IBatchPool pool)
-            => DeletePoolAsync(pool.Pool, CancellationToken.None);
+            => DeletePoolAsync(pool, CancellationToken.None);
 
         /// <inheritdoc/>
         public IEnumerable<IBatchPool> GetPools()
@@ -233,7 +184,7 @@ namespace TesApi.Web
 
                     foreach (var pool in pools)
                     {
-                        await DeletePoolAsync(pool.Pool, cancellationToken);
+                        await DeletePoolAsync(pool, cancellationToken);
                         _ = RemovePoolFromList(pool);
                     }
                 }
@@ -244,15 +195,35 @@ namespace TesApi.Web
             }
         }
 
-        private async Task DeletePoolAsync(PoolInformation pool, CancellationToken cancellationToken)
+        /// <inheritdoc/>
+        public async Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken)
         {
-            logger.LogDebug(@"Deleting pool and job {PoolId}", pool.PoolId);
-            // TODO: deal with missing pool and/or job
-            await azureProxy.DeleteBatchPoolAsync(pool.PoolId, cancellationToken);
-            await azureProxy.DeleteBatchJobAsync(pool, cancellationToken);
+            logger.LogDebug(@"Deleting pool and job {PoolId}", pool.Pool.PoolId);
+            try
+            {
+                await Task.WhenAll(
+                    AllowIfNotFound(azureProxy.DeleteBatchPoolAsync(pool.Pool.PoolId, cancellationToken)),
+                    AllowIfNotFound(azureProxy.DeleteBatchJobAsync(pool.Pool, cancellationToken)));
+            }
+            catch { }
+
+            static async Task AllowIfNotFound(Task task)
+            {
+                try
+                {
+                    await task;
+                }
+                catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException e && e.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                { }
+                catch
+                {
+                    throw;
+                }
+            }
         }
 
-        private bool AddPool(IBatchPool pool)
+        /// <inheritdoc/>
+        public bool AddPool(IBatchPool pool)
             => batchPools.Add(pool);
 
         private static string GetKeyFromPoolId(string poolId)

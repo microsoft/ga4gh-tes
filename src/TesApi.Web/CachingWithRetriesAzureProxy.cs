@@ -71,6 +71,9 @@ namespace TesApi.Web
         public Task<CloudPool> GetBatchPoolAsync(string poolId, DetailLevel detailLevel, CancellationToken cancellationToken) => asyncRetryPolicy.ExecuteAsync(ct => azureProxy.GetBatchPoolAsync(poolId, detailLevel, ct), cancellationToken);
 
         /// <inheritdoc/>
+        public Task<CloudJob> GetBatchJobAsync(string jobId, DetailLevel detailLevel, CancellationToken cancellationToken) => asyncRetryPolicy.ExecuteAsync(ct => azureProxy.GetBatchJobAsync(jobId, detailLevel, ct), cancellationToken);
+
+        /// <inheritdoc/>
         public Task CommitBatchPoolChangesAsync(CloudPool pool, CancellationToken cancellationToken) => asyncRetryPolicy.ExecuteAsync(ct => azureProxy.CommitBatchPoolChangesAsync(pool, ct), cancellationToken);
 
         /// <inheritdoc/>
@@ -107,6 +110,9 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task<string> GetNextBatchJobIdAsync(string tesTaskId) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetNextBatchJobIdAsync(tesTaskId));
+
+        /// <inheritdoc/>
+        public Task<string> GetNextBatchTaskIdAsync(string tesTaskId, string batchJobId) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetNextBatchTaskIdAsync(tesTaskId, batchJobId));
 
         /// <inheritdoc/>
         public Task<IEnumerable<string>> GetPoolIdsReferencedByJobsAsync(CancellationToken cancellationToken) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetPoolIdsReferencedByJobsAsync(cancellationToken));

@@ -50,6 +50,21 @@ namespace TesApi.Web
         PoolInformation Pool { get; }
 
         /// <summary>
+        /// Creates an Azure Batch pool and associated job in the Batch Account.
+        /// </summary>
+        /// <param name="pool"></param>
+        /// <param name="isPreemptible"></param>
+        /// <param name="cancellationToken"></param>
+        ValueTask CreatePoolAndJobAsync(Microsoft.Azure.Management.Batch.Models.Pool pool, bool isPreemptible, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Connects to the provided pool and associated job in the Batch Account.
+        /// </summary>
+        /// <param name="pool">The <see cref="CloudPool"/> to connect to.</param>
+        /// <param name="cancellationToken"></param>
+        ValueTask AssignPoolAsync(CloudPool pool, CancellationToken cancellationToken);
+
+        /// <summary>
         /// Indicates that the pool is not scheduled to run tasks nor running tasks.
         /// </summary>
         /// <param name="cancellationToken"></param>

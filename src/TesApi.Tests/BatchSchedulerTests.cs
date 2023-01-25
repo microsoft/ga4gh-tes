@@ -250,7 +250,7 @@ namespace TesApi.Tests
                 GetContainerRegistryInfoProvider(AzureProxyReturnValues.Defaults));
             var batchScheduler = serviceProvider.GetT();
 
-            var size = await batchScheduler.GetVmSizeAsync(task);
+            var size = await ((BatchScheduler)batchScheduler).GetVmSizeAsync(task);
             Assert.AreEqual(vmSize, size.VmSize);
         }
 
@@ -382,7 +382,7 @@ namespace TesApi.Tests
             Assert.IsNotNull(poolInformation.PoolId);
             Assert.AreEqual("hostname-dicated1-W4ULCECZZWRHTX2HMNJHRZBQDXDPCRND-", poolInformation.PoolId[0..^13]);
             Assert.AreEqual("VmSizeDedicated1", pool.VmSize);
-            Assert.IsTrue(batchScheduler.TryGetPool(poolInformation.PoolId, out _));
+            Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(poolInformation.PoolId, out _));
             Assert.AreEqual(1, pool.DeploymentConfiguration.VirtualMachineConfiguration.ContainerConfiguration.ContainerRegistries.Count);
         }
 
@@ -1171,7 +1171,7 @@ namespace TesApi.Tests
                         new(batchQuotas.ActiveJobAndJobScheduleQuota, batchQuotas.PoolQuota, batchQuotas.DedicatedCoreQuota, batchQuotas.LowPriorityCoreQuota)));
             });
 
-        private static TestServices.TestServiceProvider<BatchScheduler> GetServiceProvider(IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchQuotaProvider>> quotaProvider, Action<Mock<IBatchSkuInformationProvider>> skuInfoProvider, Action<Mock<ContainerRegistryProvider>> containerRegistryProviderSetup)
+        private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProvider(IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchQuotaProvider>> quotaProvider, Action<Mock<IBatchSkuInformationProvider>> skuInfoProvider, Action<Mock<ContainerRegistryProvider>> containerRegistryProviderSetup)
             => new(wrapAzureProxy: true, configuration: configuration, azureProxy: azureProxy, batchQuotaProvider: quotaProvider, batchSkuInformationProvider: skuInfoProvider, accountResourceInformation: GetNewBatchResourceInfo(), batchPoolRepositoryArgs: ("endpoint", "key", "databaseId", "containerId", "partitionKeyValue"), containerRegistryProviderSetup: containerRegistryProviderSetup);
 
         private static async Task<TesState> GetNewTesTaskStateAsync(TesTask tesTask, AzureProxyReturnValues azureProxyReturnValues)
@@ -1225,7 +1225,7 @@ namespace TesApi.Tests
                 azureProxy.Setup(a => a.GetBatchJobAndTaskStateAsync(It.IsAny<TesTask>(), It.IsAny<bool>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.BatchJobAndTaskState));
 
-                azureProxy.Setup(a => a.GetNextBatchJobIdAsync(It.IsAny<string>()))
+                azureProxy.Setup(a => a.GetNextBatchTaskIdAsync(It.IsAny<string>(), It.IsAny<string>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.NextBatchJobId));
 
                 azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount"))

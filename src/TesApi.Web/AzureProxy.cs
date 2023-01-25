@@ -176,6 +176,22 @@ namespace TesApi.Web
             return $"{tesTaskId}{BatchJobAttemptSeparator}{lastAttemptNumber + 1}";
         }
 
+        /// <inheritdoc/>
+        public async Task<string> GetNextBatchTaskIdAsync(string tesTaskId, string batchJobId)
+        {
+            var taskFilter = new ODATADetailLevel
+            {
+                FilterClause = $"startswith(id,'{tesTaskId}{BatchJobAttemptSeparator}')",
+                SelectClause = "id"
+            };
+
+            var lastAttemptNumber = (await batchClient.JobOperations.ListTasks(batchJobId, taskFilter).ToListAsync())
+                .Select(j => int.Parse(j.Id.Split(BatchJobAttemptSeparator)[1]))
+                .OrderBy(a => a)
+                .LastOrDefault();
+
+            return $"{tesTaskId}{BatchJobAttemptSeparator}{lastAttemptNumber + 1}";
+        }
 
         /// <inheritdoc/>
         public IEnumerable<AzureBatchNodeCount> GetBatchActiveNodeCountByVmSize()
@@ -611,6 +627,10 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public Task<CloudPool> GetBatchPoolAsync(string poolId, DetailLevel detailLevel = default, CancellationToken cancellationToken = default)
             => batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: detailLevel, cancellationToken: cancellationToken);
+
+        /// <inheritdoc/>
+        public Task<CloudJob> GetBatchJobAsync(string jobId, DetailLevel detailLevel, CancellationToken cancellationToken)
+            => batchClient.JobOperations.GetJobAsync(jobId, detailLevel, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
         public Task CommitBatchPoolChangesAsync(CloudPool pool, CancellationToken cancellationToken = default)
