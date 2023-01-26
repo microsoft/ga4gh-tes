@@ -5,12 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using LazyCache;
-using Microsoft.Azure.Batch;
-using Polly;
-using Polly.Retry;
-using TesApi.Web.Storage;
-using static TesApi.Web.IAzureProxy;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
 namespace TesApi.Web

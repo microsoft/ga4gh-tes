@@ -3,7 +3,6 @@
 
 using System;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 
 namespace TesApi.Web.Storage;
 
@@ -22,7 +21,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     protected const string BatchPathPrefix = "/executions/";
 
     /// <summary>
-    /// Logger instance.
+    /// Logger instance. 
     /// </summary>
     protected readonly ILogger logger;
     /// <summary>
@@ -35,10 +34,11 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// </summary>
     /// <param name="logger">Logger <see cref="ILogger"/></param>
     /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
-    public StorageAccessProvider(ILogger logger, IAzureProxy azureProxy)
+    public StorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IAzureProxy azureProxy)
     {
         this.logger = logger;
         this.azureProxy = azureProxy;
+
     }
 
     /// <inheritdoc />
@@ -71,11 +71,11 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
 
     /// <inheritdoc />
     public async Task UploadBlobAsync(string blobRelativePath, string content)
-        => await this.azureProxy.UploadBlobAsync(new(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), content);
+        => await this.azureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), content);
 
     /// <inheritdoc />
     public async Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath)
-        => await this.azureProxy.UploadBlobFromFileAsync(new(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), sourceLocalFilePath);
+        => await this.azureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), sourceLocalFilePath);
 
     /// <inheritdoc />
     public abstract Task<bool> IsPublicHttpUrlAsync(string uriString);
@@ -84,7 +84,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     public abstract Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false);
 
     /// <summary>
-    /// Tries to parse the input into a Http Url.
+    /// Tries to parse the input into a Http Url. 
     /// </summary>
     /// <param name="input">string to parse</param>
     /// <param name="uri">resulting Url if successful</param>

@@ -3,12 +3,6 @@
 
 using System;
 using System.Threading.Tasks;
-using System.Web;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using TesApi.Web.Management.Clients;
-using TesApi.Web.Management.Configuration;
-using TesApi.Web.Management.Models.Terra;
 
 namespace TesApi.Web.Storage
 {
@@ -38,6 +32,7 @@ namespace TesApi.Web.Storage
             ArgumentNullException.ThrowIfNull(terraOptions);
 
             this.terraOptions = terraOptions.Value;
+
         }
 
         /// <inheritdoc />
