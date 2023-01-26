@@ -22,6 +22,7 @@ using TesApi.Filters;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
+using TesApi.Web.Storage;
 
 namespace TesApi.Web
 {
@@ -77,7 +78,7 @@ namespace TesApi.Web
                 }).Services
 
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
-                .AddSingleton<IStorageAccessProvider, StorageAccessProvider>()
+                .AddSingleton<IStorageAccessProvider, DefaultStorageAccessProvider>()
 
                 .AddLogging()
                 .AddSingleton<ContainerRegistryProvider, ContainerRegistryProvider>()

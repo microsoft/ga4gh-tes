@@ -18,6 +18,7 @@ using Tes.Extensions;
 using Tes.Models;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
+using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 using TesException = Tes.Models.TesException;
 using TesFileType = Tes.Models.TesFileType;

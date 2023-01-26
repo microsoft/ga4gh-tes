@@ -4,7 +4,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace TesApi.Web
+namespace TesApi.Web.Storage
 {
     /// <summary>
     /// Provides methods for abstracting storage access by using local path references in form of /storageaccount/container/blobpath
