@@ -879,14 +879,14 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async Task EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, IAzureProxy.BatchPoolAutoScaleFormulaFactory formulaFactory, CancellationToken cancellationToken)
         {
-            var state = await GetComputeNodeAllocationStateAsync(poolId, cancellationToken);
+            var (allocationState, _, targetLowPriority, targetDedicated) = await GetComputeNodeAllocationStateAsync(poolId, cancellationToken);
 
-            if (state.AllocationState != AllocationState.Steady)
+            if (allocationState != AllocationState.Steady)
             {
                 throw new InvalidOperationException();
             }
 
-            await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formulaFactory(preemptable, preemptable ? state.TargetLowPriority.Value : state.TargetDedicated.Value), interval, cancellationToken: cancellationToken);
+            await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formulaFactory(preemptable, preemptable ? targetLowPriority.Value : targetDedicated.Value), interval, cancellationToken: cancellationToken);
         }
     }
 }

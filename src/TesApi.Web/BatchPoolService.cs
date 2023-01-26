@@ -78,7 +78,7 @@ namespace TesApi.Web
                 }
                 catch (Exception exc)
                 {
-                    _logger.LogError(exc, exc.Message);
+                    _logger.LogError(exc, @"{ExceptionMessage}", exc.Message);
                 }
             }
 
@@ -113,7 +113,7 @@ namespace TesApi.Web
                 }
             }
 
-            _logger.LogDebug($"ServiceBatchPools for {pools.Count} pools completed in {DateTime.UtcNow.Subtract(startTime).TotalSeconds} seconds.");
+            _logger.LogDebug(@"ServiceBatchPools for {PoolsCount} pools completed in {TotalSeconds} seconds.", pools.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
         }
     }
 }

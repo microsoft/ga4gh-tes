@@ -617,28 +617,34 @@ namespace TesApi.Web
             {
                 if (this.enableBatchAutopool)
                 {
-                    ProcessStartTaskFailure((await azureProxy.ListComputeNodesAsync(azureBatchJobAndTaskState.Pool.PoolId, new ODATADetailLevel { FilterClause = "state eq 'starttaskfailed'", SelectClause = "id,startTaskInfo" }).FirstOrDefaultAsync())?.StartTaskInformation?.FailureInformation);
+                    _ = ProcessStartTaskFailure((await azureProxy.ListComputeNodesAsync(azureBatchJobAndTaskState.Pool.PoolId, new ODATADetailLevel { FilterClause = "state eq 'starttaskfailed'", SelectClause = "id,startTaskInfo" }).FirstOrDefaultAsync())?.StartTaskInformation?.FailureInformation);
                 }
                 else
                 {
                     if (TryGetPool(azureBatchJobAndTaskState.Pool.PoolId, out var pool))
                     {
-                        azureBatchJobAndTaskState.NodeAllocationFailed = pool.PopNextResizeError() is not null;
-                        ProcessStartTaskFailure(pool.PopNextStartTaskFailure());
+                        if (!ProcessStartTaskFailure(pool.PopNextStartTaskFailure()))
+                        {
+                            azureBatchJobAndTaskState.NodeAllocationFailed = pool.PopNextResizeError() is not null;
+                        }
                     }
                 }
 
-                void ProcessStartTaskFailure(TaskFailureInformation failureInformation)
+                bool ProcessStartTaskFailure(TaskFailureInformation failureInformation)
                 {
                     if (failureInformation is not null)
                     {
                         azureBatchJobAndTaskState.NodeState = ComputeNodeState.StartTaskFailed;
                         azureBatchJobAndTaskState.NodeErrorCode = failureInformation.Code;
                         azureBatchJobAndTaskState.NodeErrorDetails = failureInformation.Details?.Select(d => d.Value);
+                        return true;
                     }
+
+                    return false;
                 }
             }
 
+            logger.LogInformation(@"TES Task: {TesTask} JobState {JobState}", tesTask.Id, azureBatchJobAndTaskState.JobState?.ToString());
             switch (azureBatchJobAndTaskState.JobState)
             {
                 case null:
@@ -686,7 +692,7 @@ namespace TesApi.Web
 
                         if (azureBatchJobAndTaskState.NodeErrorCode is not null)
                         {
-                            if (azureBatchJobAndTaskState.NodeErrorCode == "DiskFull")
+                            if (azureBatchJobAndTaskState.NodeErrorCode == TaskFailureInformationCodes.DiskFull)
                             {
                                 return new CombinedBatchTaskInfo
                                 {
@@ -716,6 +722,7 @@ namespace TesApi.Web
                     throw new Exception($"Found batch job {tesTask.Id} in unexpected state: {azureBatchJobAndTaskState.JobState}");
             }
 
+            logger.LogInformation(@"TES Task: {TesTask} TaskState {TaskState}", tesTask.Id, azureBatchJobAndTaskState.TaskState?.ToString());
             switch (azureBatchJobAndTaskState.TaskState)
             {
                 case null:
@@ -1273,7 +1280,7 @@ namespace TesApi.Web
             if (autoscaled)
             {
                 poolSpecification.AutoScaleEnabled = true;
-                poolSpecification.AutoScaleEvaluationInterval = TimeSpan.FromMinutes(5);
+                poolSpecification.AutoScaleEvaluationInterval = BatchPool.AutoScaleEvaluationInterval;
                 poolSpecification.AutoScaleFormula = BatchPool.AutoPoolFormula(preemptable, 1);
             }
             else
@@ -1426,6 +1433,8 @@ namespace TesApi.Web
             bool allowedVmSizesFilter(VirtualMachineInformation vm) => allowedVmSizes is null || !allowedVmSizes.Any() || allowedVmSizes.Contains(vm.VmSize, StringComparer.OrdinalIgnoreCase) || allowedVmSizes.Contains(vm.VmFamily, StringComparer.OrdinalIgnoreCase);
 
             var tesResources = tesTask.Resources;
+
+            logger.LogInformation(@"TesTask {TesTask} has recorded previous vmsize {VmSize} attempt resulting in {FailureReason}.", tesTask.Id, tesTask.Logs?.LastOrDefault()?.VirtualMachineInfo?.VmSize ?? "<No previous vmsize>", tesTask.Logs?.LastOrDefault()?.FailureReason ?? "<no previous failure reason>");
 
             var previouslyFailedVmSizes = tesTask.Logs?
                 .Where(log => log.FailureReason == BatchTaskState.NodeAllocationFailed.ToString() && log.VirtualMachineInfo?.VmSize is not null)

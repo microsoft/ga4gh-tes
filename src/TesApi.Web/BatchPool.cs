@@ -24,6 +24,11 @@ namespace TesApi.Web
         /// </summary>
         public const string CloudPoolSelectClause = "id,creationTime,metadata";
 
+        /// <summary>
+        /// Autoscale evalutation interval
+        /// </summary>
+        public static TimeSpan AutoScaleEvaluationInterval { get; } = TimeSpan.FromMinutes(5);
+
         private readonly ILogger _logger;
         private readonly IAzureProxy _azureProxy;
 
@@ -167,9 +172,9 @@ namespace TesApi.Web
                   Reference: https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling
 
               In my not at all humble opinion, some of the builtin variable names in batch's autoscale formulas are very badly named:
-                  running tasks are named RunningTasks, which is fine
-                  queued tasks are named ActiveTasks, which matches the "state", but isn't the best name around
-                  the sum of running & queued tasks (what should be named TotalTasks) is named PendingTasks, an absolutely awful name
+                  Running tasks are named RunningTasks, which is fine
+                  Queued tasks are named ActiveTasks, which matches the "state", but isn't the best name around
+                  The sum of running & queued tasks (what should be named TotalTasks) is named PendingTasks, an absolutely awful name
 
               The type of ~Tasks is what batch calls a "doubleVec", which needs to be first turned into a "doubleVecList" before it can be turned into a scaler.
               This is accomplished by calling doubleVec's GetSample method, which returns some number of the most recent available samples of the related metric.
@@ -182,31 +187,34 @@ namespace TesApi.Web
 
               We set NodeDeallocationOption to taskcompletion to prevent wasting time/money by stopping a running task, only to requeue it onto another node, or worse,
               fail it, just because batch's last sample was taken longer ago than a task's assignment was made to a node, because the formula evaluations are not coordinated
-              with the metric sampling based on my observations. This does mean that some resizes will time out, so we shouldn't always consider timeout to be a fatal error.
+              with the metric sampling based on my observations. This does mean that some resizes will time out, so we mustn't simply consider timeout to be a fatal error.
             */
             => string.Format(@"
-    $NodeDeallocationOption=taskcompletion;
-    lifespan         = time() - time(""{1}"");
-    span             = TimeInterval_Second * 90;
-    startup          = TimeInterval_Minute * 2;
-    ratio            = 10;
-    {0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
-    ", preemptable ? "$TargetLowPriorityNodes" : "$TargetDedicated", DateTime.UtcNow.ToString("r"), initialTarget);
+$NodeDeallocationOption=taskcompletion;
+lifespan         = time() - time(""{1}"");
+span             = TimeInterval_Second * 90;
+startup          = TimeInterval_Minute * 2;
+ratio            = 10;
+${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
+",
+                /* {0} */ preemptable ? "TargetLowPriorityNodes" : "TargetDedicated",
+                /* {1} */ DateTime.UtcNow.ToString("r"),
+                /* {2} */ initialTarget);
 
 
         private async ValueTask ServicePoolManagePoolScalingAsync(CancellationToken cancellationToken)
         {
-            // This method implememts a state machine to disable/enable autoscaling as needed to clear certain conditions that have been observed
+            // This method implememts a state machine to disable/enable autoscaling as needed to clear certain conditions that can be observed
 
-            var currentAllocationState = await _azureProxy.GetComputeNodeAllocationStateAsync(Pool.PoolId, cancellationToken);
-            EnsureScalingModeSet(currentAllocationState.AutoScaleEnabled);
+            var (allocationState, autoScaleEnabled, _, _) = await _azureProxy.GetComputeNodeAllocationStateAsync(Pool.PoolId, cancellationToken);
+            EnsureScalingModeSet(autoScaleEnabled);
 
-            if (currentAllocationState.AllocationState == AllocationState.Steady)
+            if (allocationState == AllocationState.Steady)
             {
                 switch (_scalingMode)
                 {
                     case ScalingMode.AutoScaleEnabled:
-                        if (_resizeStoppedReceived || await GetNodes(false).AnyAsync(cancellationToken))
+                        if (_resizeStoppedReceived || await GetNodesToRemove(false).AnyAsync(cancellationToken))
                         {
                             await _azureProxy.DisableBatchPoolAutoScaleAsync(Pool.PoolId, cancellationToken);
                             _scalingMode = ScalingMode.SettingManualScale;
@@ -218,46 +226,49 @@ namespace TesApi.Web
                             var nodesToRemove = Enumerable.Empty<ComputeNode>();
 
                             // It's documented that a max of 100 nodes can be removed at a time. Excess eligible nodes will be removed in a future call to this method.
-                            await foreach (var node in GetNodes(true).Take(100).WithCancellation(cancellationToken))
+                            await foreach (var node in GetNodesToRemove(true).Take(100).WithCancellation(cancellationToken))
                             {
                                 switch (node.State)
                                 {
                                     case ComputeNodeState.Unusable:
                                         _logger.LogDebug("Found unusable node {NodeId}", node.Id);
-                                        goto default;
+                                        break;
 
                                     case ComputeNodeState.StartTaskFailed:
                                         _logger.LogDebug("Found starttaskfailed node {NodeId}", node.Id);
                                         StartTaskFailures.Enqueue(node.StartTaskInformation.FailureInformation);
-                                        goto default;
+                                        break;
 
                                     case ComputeNodeState.Preempted:
                                         _logger.LogDebug("Found preempted node {NodeId}", node.Id);
-                                        goto default;
-
-                                    default:
-                                        nodesToRemove = nodesToRemove.Append(node);
-                                        _resizeErrorsRetrieved = false;
                                         break;
+
+                                    default: // Should never reach here. Skip.
+                                        continue;
                                 }
+
+                                nodesToRemove = nodesToRemove.Append(node);
+                                _resizeErrorsRetrieved = false;
                             }
+
+                            nodesToRemove = nodesToRemove.ToList();
 
                             if (!nodesToRemove.Any())
                             {
-                                goto case ScalingMode.RemovingFailedNodes;
+                                _scalingMode = ScalingMode.RemovingFailedNodes;
                             }
-
-                            await RemoveNodesAsync(nodesToRemove.ToList(), cancellationToken);
+                            else
+                            {
+                                await RemoveNodesAsync((IList<ComputeNode>)nodesToRemove, cancellationToken);
+                            }
                         }
-                        _scalingMode = ScalingMode.RemovingFailedNodes;
                         break;
 
                     case ScalingMode.RemovingFailedNodes:
                         ResizeErrors.Clear();
                         _resizeErrorsRetrieved = true;
-                        var timeout = TimeSpan.FromMinutes(5);
-                        await _azureProxy.EnableBatchPoolAutoScaleAsync(Pool.PoolId, !IsDedicated, timeout, AutoPoolFormula, cancellationToken);
-                        _autoScaleWaitTime = DateTime.UtcNow + timeout;
+                        await _azureProxy.EnableBatchPoolAutoScaleAsync(Pool.PoolId, !IsDedicated, AutoScaleEvaluationInterval, AutoPoolFormula, cancellationToken);
+                        _autoScaleWaitTime = DateTime.UtcNow + AutoScaleEvaluationInterval;
                         _scalingMode = _resizeStoppedReceived ? ScalingMode.WaitingForAutoScale : ScalingMode.SettingAutoScale;
                         break;
 
@@ -275,7 +286,7 @@ namespace TesApi.Web
                 }
             }
 
-            IAsyncEnumerable<ComputeNode> GetNodes(bool withState)
+            IAsyncEnumerable<ComputeNode> GetNodesToRemove(bool withState)
                 => _azureProxy.ListComputeNodesAsync(Pool.PoolId, new ODATADetailLevel(filterClause: @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'", selectClause: withState ? @"id,state,startTaskInfo" : @"id"));
         }
 

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.
+﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 namespace TesApi.Web
@@ -13,10 +13,12 @@ namespace TesApi.Web
         /// required Job Preparation task to complete on the node.
         /// </summary>
         Initializing,
+
         /// <summary>
         /// The task is running on a compute node.
         /// </summary>
         Running,
+
         /// <summary>
         /// The task is no longer eligible to run, usually because the task has
         /// finished successfully, or the task has finished unsuccessfully and
