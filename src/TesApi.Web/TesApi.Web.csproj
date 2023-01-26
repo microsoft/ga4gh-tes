@@ -55,8 +55,4 @@
   <ItemGroup>
     <ProjectReference Include="..\Tes\Tes.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Management\Clients\" />
-    <Folder Include="Management\Models\Terra\" />
-  </ItemGroup>
 </Project>

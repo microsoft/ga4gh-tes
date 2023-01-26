@@ -25,7 +25,7 @@ namespace TesApi.Tests
             terraApiStubData = new TerraApiStubData();
             tokenCredential = new Mock<TokenCredential>();
             cacheAndRetryHandler = new Mock<CacheAndRetryHandler>();
-            terraLandingZoneApiClient = new TerraLandingZoneApiClient(terraApiStubData.ApiHost, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
+            terraLandingZoneApiClient = new TerraLandingZoneApiClient(terraApiStubData.LandingZoneApiHost, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
         }
 
         [TestMethod]
@@ -79,7 +79,7 @@ namespace TesApi.Tests
         {
             var url = terraLandingZoneApiClient.GetLandingZoneResourcesApiUrl(terraApiStubData.LandingZoneId);
 
-            var expectedUrl = $"{terraApiStubData.ApiHost}/api/landingzones/v1/azure/{terraApiStubData.LandingZoneId}/resources";
+            var expectedUrl = $"{terraApiStubData.LandingZoneApiHost}/api/landingzones/v1/azure/{terraApiStubData.LandingZoneId}/resources";
 
             Assert.AreEqual(expectedUrl, url.ToString());
 
@@ -90,7 +90,7 @@ namespace TesApi.Tests
         {
             var url = terraLandingZoneApiClient.GetQuotaApiUrl(terraApiStubData.LandingZoneId, terraApiStubData.BatchAccountId);
 
-            var expectedUrl = $"{terraApiStubData.ApiHost}/api/landingzones/v1/azure/{terraApiStubData.LandingZoneId}/resource-quota?azureResourceId={Uri.EscapeDataString(terraApiStubData.BatchAccountId)}";
+            var expectedUrl = $"{terraApiStubData.LandingZoneApiHost}/api/landingzones/v1/azure/{terraApiStubData.LandingZoneId}/resource-quota?azureResourceId={Uri.EscapeDataString(terraApiStubData.BatchAccountId)}";
 
             Assert.AreEqual(expectedUrl, url.ToString());
 

@@ -6,10 +6,14 @@ namespace TesApi.Tests;
 
 public class TerraApiStubData
 {
-    public string ApiHost => "https://landingzone.host";
+    public string LandingZoneApiHost => "https://landingzone.host";
+    public string WsmApiHost => "https://wsm.host";
+
     public string ResourceGroup => "mrg-terra-dev-previ-20191228";
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
+    public Guid WorkspaceId { get; } = Guid.NewGuid();
+    public Guid ContainerResourceId { get; } = Guid.NewGuid();
 
     public string BatchAccountId =>
         $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Batch/batchAccounts/lzee170c71b6cf678cfca744";
@@ -21,6 +25,19 @@ public class TerraApiStubData
     public QuotaApiResponse GetResourceQuotaApiResponse()
     {
         return JsonSerializer.Deserialize<QuotaApiResponse>(GetResourceQuotaApiResponseInJson());
+    }
+
+    public WsmSasTokenApiResponse GetWsmSasTokenApiResponse()
+    {
+        return JsonSerializer.Deserialize<WsmSasTokenApiResponse>(GetWsmSasTokenApiResponseInJson());
+    }
+
+    public string GetWsmSasTokenApiResponseInJson()
+    {
+        return @"{
+  ""token"": ""SASTOKENSTUB="",
+  ""url"": ""https://bloburl.org/container?sas=SASTOKENSUTB=""
+    }";
     }
 
     public string GetResourceApiResponseInJson()
