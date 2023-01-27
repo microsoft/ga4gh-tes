@@ -141,6 +141,11 @@ namespace TesApi.Web
                                     _resizeStoppedReceived |= true;
                                     break;
 
+                                // Errors to both force resetting autoscale and fail tasks
+                                case PoolResizeErrorCodes.AllocationFailed:
+                                    _resizeStoppedReceived |= true;
+                                    goto default;
+
                                 // Errors to fail tasks should be directed here
                                 default:
                                     ResizeErrors.Enqueue(error);

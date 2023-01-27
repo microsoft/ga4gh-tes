@@ -74,6 +74,7 @@ namespace TesApi.Web
         /// Removes and returns the next available resize error.
         /// </summary>
         /// <returns>The first <see cref="ResizeError"/> in the list, or null if the list is empty.</returns>
+        /// <remarks><see cref="ResizeError.Values"/> appears to contain two entries with <see cref="NameValuePair.Name"/> containing respectively "code" &amp; "message"</remarks>
         ResizeError PopNextResizeError();
 
         /// <summary>
