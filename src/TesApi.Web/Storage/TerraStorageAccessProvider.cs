@@ -43,7 +43,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override Task<bool> IsPublicHttpUrl(string uriString)
+        public override Task<bool> IsPublicHttpUrlAsync(string uriString)
         {
             //TODO: check if this assumption is correct
             //For Terra, if it is a Http/Https Url then it is public.

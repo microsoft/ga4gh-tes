@@ -925,7 +925,7 @@ namespace TesApi.Web
                 inputFileUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync(inputFile.Path);
                 await this.storageAccessProvider.UploadBlobFromFileAsync(inputFile.Path, localPath);
             }
-            else if (await this.storageAccessProvider.IsPublicHttpUrl(inputFile.Url))
+            else if (await this.storageAccessProvider.IsPublicHttpUrlAsync(inputFile.Url))
             {
                 inputFileUrl = inputFile.Url;
             }

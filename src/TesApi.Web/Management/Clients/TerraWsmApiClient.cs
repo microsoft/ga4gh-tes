@@ -34,13 +34,18 @@ namespace TesApi.Web.Management.Clients
         }
 
         /// <summary>
+        /// Protected parameter-less constructor
+        /// </summary>
+        protected TerraWsmApiClient() { }
+
+        /// <summary>
         /// Returns the SAS token of a container or blob for WSM managed storage account.
         /// </summary>
         /// <param name="workspaceId">Terra workspace id</param>
         /// <param name="resourceId">Terra resource id</param>
         /// <param name="sasTokenApiParameters">Sas token parameters</param>
         /// <returns></returns>
-        public async Task<WsmSasTokenApiResponse> GetSasTokenAsync(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
+        public virtual async Task<WsmSasTokenApiResponse> GetSasTokenAsync(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
         {
             var uri = GetContainerSasTokenApiUri(workspaceId, resourceId, sasTokenApiParameters);
 
@@ -68,7 +73,7 @@ namespace TesApi.Web.Management.Clients
         /// <param name="resourceId">WSM resource Id of the container</param>
         /// <param name="sasTokenApiParameters"><see cref="SasTokenApiParameters"/></param>
         /// <returns></returns>
-        public Uri GetContainerSasTokenApiUri(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
+        public virtual Uri GetContainerSasTokenApiUri(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
         {
             var segments = $"/resources/controlled/azure/storageContainer/{resourceId}/getSasToken";
 

@@ -55,7 +55,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<bool> IsPublicHttpUrl(string uriString)
+        public override async Task<bool> IsPublicHttpUrlAsync(string uriString)
         {
             var isHttpUrl = TryParseHttpUrlFromInput(uriString, out var uri);
 

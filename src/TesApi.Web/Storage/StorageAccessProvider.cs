@@ -67,7 +67,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
         => await this.azureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), sourceLocalFilePath);
 
     /// <inheritdoc />
-    public abstract Task<bool> IsPublicHttpUrl(string uriString);
+    public abstract Task<bool> IsPublicHttpUrlAsync(string uriString);
 
     /// <inheritdoc />
     public abstract Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false);

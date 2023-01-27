@@ -47,7 +47,7 @@ namespace TesApi.Web.Storage
         /// </summary>
         /// <param name="uriString">URI string</param>
         /// <returns>True if the URL can be used as is, without adding SAS token to it</returns>
-        public Task<bool> IsPublicHttpUrl(string uriString);
+        public Task<bool> IsPublicHttpUrlAsync(string uriString);
 
         /// <summary>
         /// Returns an Azure Storage Blob or Container URL with SAS token given a path that uses one of the following formats: 
