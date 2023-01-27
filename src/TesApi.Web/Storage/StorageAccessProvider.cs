@@ -34,7 +34,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// </summary>
     /// <param name="logger">Logger <see cref="ILogger"/></param>
     /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
-    public StorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IAzureProxy azureProxy)
+    public StorageAccessProvider(ILogger logger, IAzureProxy azureProxy)
     {
         this.logger = logger;
         this.azureProxy = azureProxy;
