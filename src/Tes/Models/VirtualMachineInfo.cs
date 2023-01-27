@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections.Generic;
+
 namespace Tes.Models
 {
     /// <summary>
@@ -55,5 +57,17 @@ namespace Tes.Models
         /// </summary>
         [TesTaskLogMetadataKey("vm_max_data_disk_count")]
         public int? MaxDataDiskCount { get; set; }
+
+        /// <summary>
+        /// HyperV Generations of VM this sku supports.
+        /// </summary>
+        [TesTaskLogMetadataKey("vm_hyper_v_generations")]
+        public List<string> HyperVGenerations { get; set; }
+
+        /// <summary>
+        /// List of regions this VM can be provisioned by Batch. 
+        /// </summary>
+        [TesTaskLogMetadataKey("vm_regions_available")]
+        public List<string> RegionsAvailable { get; set; }
     }
 }
