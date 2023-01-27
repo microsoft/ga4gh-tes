@@ -148,6 +148,7 @@ namespace TesApi.Web
                             }
                         }
 
+                        _logger.LogInformation(@"Pool: {Pool} queued {ResizeErrors} errors", Pool.PoolId, ResizeErrors.Count);
                         _resizeErrorsRetrieved = true;
                     }
                 }

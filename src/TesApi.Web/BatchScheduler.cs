@@ -644,10 +644,9 @@ namespace TesApi.Web
                         azureBatchJobAndTaskState.NodeState = ComputeNodeState.StartTaskFailed;
                         azureBatchJobAndTaskState.NodeErrorCode = failureInformation.Code;
                         azureBatchJobAndTaskState.NodeErrorDetails = failureInformation.Details?.Select(d => d.Value);
-                        return true;
                     }
 
-                    return false;
+                    return failureInformation is not null;
                 }
             }
 
