@@ -630,7 +630,7 @@ namespace TesApi.Web
                 {
                     if (TryGetPool(azureBatchJobAndTaskState.Pool.PoolId, out var pool))
                     {
-                        if (!ProcessStartTaskFailure(pool.PopNextStartTaskFailure()))
+                        if (!string.IsNullOrWhiteSpace(azureBatchJobAndTaskState.NodeErrorCode) || !ProcessStartTaskFailure(pool.PopNextStartTaskFailure()))
                         {
                             azureBatchJobAndTaskState.NodeAllocationFailed = pool.PopNextResizeError() is not null;
                         }

@@ -419,7 +419,7 @@ namespace TesApi.Web
 
                     if (pool is not null)
                     {
-                        nodeAllocationFailed = pool.ResizeErrors?.Count > 0;
+                        nodeAllocationFailed = usingAutoPools && pool.ResizeErrors?.Count > 0; // When not using autopools, NodeAllocationFailed will be determined in BatchScheduler.GetBatchTaskStateAsync()
 
                         var node = await pool.ListComputeNodes().ToAsyncEnumerable().FirstOrDefaultAsync(computeNodePredicate);
 
