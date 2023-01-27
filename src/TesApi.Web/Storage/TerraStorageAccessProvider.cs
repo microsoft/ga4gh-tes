@@ -31,7 +31,7 @@ namespace TesApi.Web.Storage
         /// <param name="terraOptions"><see cref="TerraOptions"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         /// <param name="terraWsmApiClient"><see cref="terraWsmApiClient"/></param>
-        public TerraStorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger,
+        public TerraStorageAccessProvider(ILogger<TerraStorageAccessProvider> logger,
             IOptions<TerraOptions> terraOptions, IAzureProxy azureProxy, TerraWsmApiClient terraWsmApiClient) : base(
             logger, azureProxy)
         {

@@ -4,6 +4,8 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 
 namespace TesApi.Web.Management.Clients
@@ -21,14 +23,14 @@ namespace TesApi.Web.Management.Clients
         /// Constructor of TerraWsmApiClient
         /// </summary>
         /// <param name="tokenCredential"></param>
-        /// <param name="apiHost">Api Host</param>
+        /// <param name="terraOptions"></param>
         /// <param name="cacheAndRetryHandler"></param>
         /// <param name="logger"></param>
-        public TerraWsmApiClient(TokenCredential tokenCredential, string apiHost, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraWsmApiClient> logger) : base(tokenCredential, cacheAndRetryHandler, logger)
+        public TerraWsmApiClient(TokenCredential tokenCredential, IOptions<TerraOptions> terraOptions, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraWsmApiClient> logger) : base(tokenCredential, cacheAndRetryHandler, logger)
         {
-            ArgumentException.ThrowIfNullOrEmpty(apiHost);
+            ArgumentException.ThrowIfNullOrEmpty(terraOptions.Value.WsmApiHost, nameof(terraOptions.Value.WsmApiHost));
 
-            this.baseApiUrl = apiHost.TrimEnd('/') + WsmApiSegments;
+            this.baseApiUrl = terraOptions.Value.WsmApiHost.TrimEnd('/') + WsmApiSegments;
         }
 
         /// <summary>

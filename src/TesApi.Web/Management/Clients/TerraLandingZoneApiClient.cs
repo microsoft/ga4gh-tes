@@ -2,6 +2,8 @@
 using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 
 namespace TesApi.Web.Management.Clients
@@ -18,17 +20,17 @@ namespace TesApi.Web.Management.Clients
         /// <summary>
         /// Constructor of TerraLandingZoneApiClient
         /// </summary>
-        /// <param name="apiHost"></param>
+        /// <param name="terraOptions"></param>
         /// <param name="tokenCredential"></param>
         /// <param name="cacheAndRetryHandler"></param>
         /// <param name="logger"></param>
-        public TerraLandingZoneApiClient(string apiHost, TokenCredential tokenCredential, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraLandingZoneApiClient> logger) : base(tokenCredential, cacheAndRetryHandler, logger)
+        public TerraLandingZoneApiClient(IOptions<TerraOptions> terraOptions, TokenCredential tokenCredential, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraLandingZoneApiClient> logger) : base(tokenCredential, cacheAndRetryHandler, logger)
         {
-            ArgumentException.ThrowIfNullOrEmpty(apiHost);
+            ArgumentException.ThrowIfNullOrEmpty(terraOptions.Value.LandingZoneApiHost, nameof(terraOptions.Value.LandingZoneApiHost));
             ArgumentNullException.ThrowIfNull(tokenCredential);
             ArgumentNullException.ThrowIfNull(cacheAndRetryHandler);
 
-            this.baseApiUrl = apiHost.TrimEnd('/') + LandingZonesApiSegments;
+            this.baseApiUrl = terraOptions.Value.LandingZoneApiHost.TrimEnd('/') + LandingZonesApiSegments;
         }
 
         /// <summary>
