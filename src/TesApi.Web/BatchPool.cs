@@ -377,7 +377,17 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
 
         /// <inheritdoc/>
         public ResizeError PopNextResizeError()
-            => ResizeErrors.TryDequeue(out var resizeError) ? resizeError : default;
+            //=> ResizeErrors.TryDequeue(out var resizeError) ? resizeError : default;
+        {
+            if (ResizeErrors.TryDequeue(out var resizeError))
+            {
+                _logger.LogInformation(@"Pool: {Pool} dequeued resize error. There are {ResizeErrors} errors remaining.", Pool.PoolId, ResizeErrors.Count);
+                return resizeError;
+            }
+
+            _logger.LogInformation(@"Pool: {Pool} has no resize errors remaining.", Pool.PoolId);
+            return null;
+        }
 
         /// <inheritdoc/>
         public TaskFailureInformation PopNextStartTaskFailure()
