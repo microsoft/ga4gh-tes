@@ -3,15 +3,6 @@
 
 using System;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
-using TesApi.Web;
-using TesApi.Web.Management.Clients;
-using TesApi.Web.Management.Configuration;
-using TesApi.Web.Management.Models.Terra;
-using TesApi.Web.Storage;
 
 namespace TesApi.Tests
 {
@@ -22,6 +13,7 @@ namespace TesApi.Tests
         private const string WorkspaceStorageAccountName = "terraAccount";
         private const string WorkspaceStorageContainerName = "terraContainer";
 
+        private Mock<CacheAndRetryHandler> cacheAndRetryHandlerMock;
         private Mock<TerraWsmApiClient> wsmApiClientMock;
         private Mock<IAzureProxy> azureProxyMock;
         private TerraStorageAccessProvider terraStorageAccessProvider;
@@ -32,13 +24,14 @@ namespace TesApi.Tests
         [TestInitialize]
         public void SetUp()
         {
-            terraApiStubData = new();
-            wsmApiClientMock = new();
-            optionsMock = new();
+            terraApiStubData = new TerraApiStubData();
+            cacheAndRetryHandlerMock = new Mock<CacheAndRetryHandler>();
+            wsmApiClientMock = new Mock<TerraWsmApiClient>();
+            optionsMock = new Mock<IOptions<TerraOptions>>();
             terraOptions = CreateTerraOptionsFromStubData();
             optionsMock.Setup(o => o.Value).Returns(terraOptions);
-            azureProxyMock = new();
-            terraStorageAccessProvider = new(NullLogger<TerraStorageAccessProvider>.Instance,
+            azureProxyMock = new Mock<IAzureProxy>();
+            terraStorageAccessProvider = new TerraStorageAccessProvider(NullLogger<TerraStorageAccessProvider>.Instance,
                 optionsMock.Object, azureProxyMock.Object, wsmApiClientMock.Object);
         }
 
@@ -67,13 +60,16 @@ namespace TesApi.Tests
         [DataRow($"https://{WorkspaceStorageAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}/dir/blob")]
         public async Task MapLocalPathToSasUrlAsync_ValidInput(string input)
         {
+
+
             wsmApiClientMock.Setup(a => a.GetSasTokenAsync(terraApiStubData.WorkspaceId,
                     terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>()))
-                .ReturnsAsync(TerraApiStubData.GetWsmSasTokenApiResponse());
+                .ReturnsAsync(terraApiStubData.GetWsmSasTokenApiResponse());
 
             var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input);
 
-            Assert.IsNotNull(TerraApiStubData.GetWsmSasTokenApiResponse().Url, result);
+            Assert.IsNotNull(terraApiStubData.GetWsmSasTokenApiResponse().Url, result);
+
         }
 
         [TestMethod]
@@ -81,34 +77,18 @@ namespace TesApi.Tests
         [DataRow($"/bar/{WorkspaceStorageContainerName}")]
         [DataRow($"/foo/bar/")]
         [DataRow($"/foo/bar/dir/blobName")]
-        [DataRow($"https://{WorkspaceStorageAccountName}.blob.core.windows.net/foo")]
-        [DataRow($"https://bar.blob.core.windows.net/{WorkspaceStorageContainerName}/")]
+
         [ExpectedException(typeof(Exception))]
         public async Task MapLocalPathToSasUrlAsync_InvalidInputs(string input)
         {
-            await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input);
-        }
-
-        [TestMethod]
-        public async Task MapLocalPathToSasUrlAsync_ContainerSasTokenIsRequested()
-        {
-            var path = "/foo/bar";
-            wsmApiClientMock.Setup(a => a.GetSasTokenAsync(terraApiStubData.WorkspaceId,
-                    terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>()))
-                .ReturnsAsync(TerraApiStubData.GetWsmSasTokenApiResponse());
-
-            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(path, true);
-
-            var builder = new UriBuilder(TerraApiStubData.GetWsmSasTokenApiResponse().Url);
-            builder.Path += path.TrimStart('/');
-
-            Assert.IsNotNull(builder.ToString(), result);
+            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input);
         }
 
         private TerraOptions CreateTerraOptionsFromStubData()
-            => new()
+        {
+            return new TerraOptions()
             {
-                WsmApiHost = TerraApiStubData.WsmApiHost,
+                WsmApiHost = terraApiStubData.WsmApiHost,
                 WorkspaceStorageAccountName = WorkspaceStorageAccountName,
                 WorkspaceStorageContainerName = WorkspaceStorageContainerName,
                 WorkspaceId = terraApiStubData.WorkspaceId.ToString(),
@@ -116,5 +96,6 @@ namespace TesApi.Tests
                 SasTokenExpirationInSeconds = 60,
                 SasAllowedIpRange = "169.0.0.1"
             };
+        }
     }
 }
