@@ -650,6 +650,7 @@ namespace TesApi.Web
                 }
             }
 
+            logger.LogInformation(@"TES Task: {TesTask} NodeState {NodeState} NodeAllocationFailed {NodeAllocationFailed}", tesTask.Id, azureBatchJobAndTaskState.NodeState?.ToString() ?? "<null>", azureBatchJobAndTaskState.NodeAllocationFailed);
             logger.LogInformation(@"TES Task: {TesTask} JobState {JobState}", tesTask.Id, azureBatchJobAndTaskState.JobState?.ToString());
             switch (azureBatchJobAndTaskState.JobState)
             {
