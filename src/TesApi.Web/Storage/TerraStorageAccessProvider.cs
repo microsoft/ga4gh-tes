@@ -81,7 +81,7 @@ namespace TesApi.Web.Storage
 
             logger.LogInformation($"Successfully obtained the Sas Url from Terra. Requested blobName:{blobName}. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
 
-            return tokenInfo.Url.ToString();
+            return tokenInfo.Url;
         }
 
         private string ToBlobNameWithSegments(string path)

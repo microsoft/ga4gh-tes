@@ -1,4 +1,7 @@
-﻿namespace TesApi.Web.Storage;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+namespace TesApi.Web.Storage;
 
 /// <summary>
 /// External storage container information
