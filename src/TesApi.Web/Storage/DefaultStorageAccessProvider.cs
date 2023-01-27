@@ -19,8 +19,7 @@ namespace TesApi.Web.Storage
     /// </summary>
     public class DefaultStorageAccessProvider : StorageAccessProvider
     {
-        private const string CromwellPathPrefix = "/cromwell-executions/";
-        private const string BatchPathPrefix = "/executions/";
+
         private static readonly TimeSpan SasTokenDuration = TimeSpan.FromDays(3); //TODO: refactor this to drive it from configuration. 
         private readonly string defaultStorageAccountName;
         private readonly List<ExternalStorageContainerInfo> externalStorageContainers;
@@ -92,7 +91,7 @@ namespace TesApi.Web.Storage
             // This would allow the user to omit the account name for files stored in the default storage account
 
             // /cromwell-executions/... URLs become /defaultStorageAccountName/cromwell-executions/... to unify how URLs starting with /acct/container/... pattern are handled.
-            if (path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase) || path.StartsWith(BatchPathPrefix, StringComparison.OrdinalIgnoreCase))
+            if (IsItKnownFilePath(path))
             {
                 path = $"/{defaultStorageAccountName}{path}";
             }

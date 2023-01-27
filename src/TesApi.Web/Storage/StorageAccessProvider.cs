@@ -10,6 +10,15 @@ namespace TesApi.Web.Storage;
 public abstract class StorageAccessProvider : IStorageAccessProvider
 {
     /// <summary>
+    /// Cromwell path prefix
+    /// </summary>
+    protected const string CromwellPathPrefix = "/cromwell-executions/";
+    /// <summary>
+    /// Executions path prefix
+    /// </summary>
+    protected const string BatchPathPrefix = "/executions/";
+
+    /// <summary>
     /// Logger instance. 
     /// </summary>
     protected readonly ILogger logger;
@@ -81,5 +90,17 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     protected static bool TryParseHttpUrlFromInput(string input, out Uri uri)
     {
         return Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// True if the path is the cromwell or executions folder
+    /// </summary>
+    /// <param name="path"></param>
+    /// <returns></returns>
+    protected bool IsItKnownFilePath(string path)
+    {
+        return path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase)
+               || path.StartsWith(BatchPathPrefix, StringComparison.OrdinalIgnoreCase);
+
     }
 }

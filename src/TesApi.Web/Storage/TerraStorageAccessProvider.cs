@@ -58,9 +58,14 @@ namespace TesApi.Web.Storage
 
             var normalizedPath = path.TrimStart('/');
 
+            if (IsItKnownFilePath(normalizedPath))
+            {
+                return await GetMappedSasUrlFromWsmAsync(normalizedPath);
+            }
+
             CheckIfPathMatchesExpectedTerraLocation(normalizedPath);
 
-            return await GetMappedSasUrlFromWsmAsync(ToBlobNameWithSegments(normalizedPath));
+            return await GetMappedSasUrlFromWsmAsync(RemoveStorageAndContainerSegments(normalizedPath));
 
         }
 
@@ -84,7 +89,7 @@ namespace TesApi.Web.Storage
             return tokenInfo.Url;
         }
 
-        private string ToBlobNameWithSegments(string path)
+        private string RemoveStorageAndContainerSegments(string path)
         {
             var segments = path.Split('/');
 
