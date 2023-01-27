@@ -162,10 +162,8 @@ namespace TesApi.Web
                     }
                     catch (Exception exc)
                     {
-                        var errorCount = ++tesTask.ErrorCount;
-                        if (/*++tesTask.ErrorCount*/errorCount > 3) // TODO: Should we increment this for exceptions here (current behaviour) or the attempted executions on the batch?
+                        if (++tesTask.ErrorCount > 3) // TODO: Should we increment this for exceptions here (current behaviour) or the attempted executions on the batch?
                         {
-                            logger.LogInformation(@"TES Task: {TesTask} ErrorCount: {ErrorCount} in OrchestrateTesTasksOnBatch", tesTask.Id, errorCount);
                             tesTask.State = TesState.SYSTEMERROREnum;
                             tesTask.EndTime = DateTimeOffset.UtcNow;
                             tesTask.SetFailureReason("UnknownError", exc.Message, exc.StackTrace);

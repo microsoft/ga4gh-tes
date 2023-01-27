@@ -209,16 +209,9 @@ namespace TesApi.Web
             Task DeleteBatchJobAndSetTaskSystemErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo) => DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.SYSTEMERROREnum, batchInfo);
 
             Task DeleteBatchJobAndRequeueTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo)
-                //=> ++tesTask.ErrorCount > 3
-                //    ? DeleteBatchJobAndSetTaskExecutorErrorAsync(tesTask, batchInfo)
-                //    : DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.QUEUEDEnum, batchInfo);
-            {
-                var errorCount = ++tesTask.ErrorCount;
-                logger.LogInformation(@"TES Task: {TesTask} ErrorCount: {ErrorCount} in DeleteBatchJobAndRequeueTaskAsync", tesTask.Id, errorCount);
-                return errorCount > 3
+                => ++tesTask.ErrorCount > 3
                     ? DeleteBatchJobAndSetTaskExecutorErrorAsync(tesTask, batchInfo)
                     : DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.QUEUEDEnum, batchInfo);
-            }
 
             async Task CancelTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo)
             {
@@ -650,8 +643,6 @@ namespace TesApi.Web
                 }
             }
 
-            logger.LogInformation(@"TES Task: {TesTask} NodeState {NodeState} NodeAllocationFailed {NodeAllocationFailed}", tesTask.Id, azureBatchJobAndTaskState.NodeState?.ToString() ?? "<null>", azureBatchJobAndTaskState.NodeAllocationFailed);
-            logger.LogInformation(@"TES Task: {TesTask} JobState {JobState}", tesTask.Id, azureBatchJobAndTaskState.JobState?.ToString());
             switch (azureBatchJobAndTaskState.JobState)
             {
                 case null:
@@ -729,7 +720,6 @@ namespace TesApi.Web
                     throw new Exception($"Found batch job {tesTask.Id} in unexpected state: {azureBatchJobAndTaskState.JobState}");
             }
 
-            logger.LogInformation(@"TES Task: {TesTask} TaskState {TaskState}", tesTask.Id, azureBatchJobAndTaskState.TaskState?.ToString());
             switch (azureBatchJobAndTaskState.TaskState)
             {
                 case null:
@@ -1440,8 +1430,6 @@ namespace TesApi.Web
             bool allowedVmSizesFilter(VirtualMachineInformation vm) => allowedVmSizes is null || !allowedVmSizes.Any() || allowedVmSizes.Contains(vm.VmSize, StringComparer.OrdinalIgnoreCase) || allowedVmSizes.Contains(vm.VmFamily, StringComparer.OrdinalIgnoreCase);
 
             var tesResources = tesTask.Resources;
-
-            logger.LogInformation(@"TesTask {TesTask} has recorded previous vmsize {VmSize} attempt resulting in {FailureReason}.", tesTask.Id, tesTask.Logs?.LastOrDefault()?.VirtualMachineInfo?.VmSize ?? "<No previous vmsize>", tesTask.Logs?.LastOrDefault()?.FailureReason ?? "<no previous failure reason>");
 
             var previouslyFailedVmSizes = tesTask.Logs?
                 .Where(log => log.FailureReason == BatchTaskState.NodeAllocationFailed.ToString() && log.VirtualMachineInfo?.VmSize is not null)
