@@ -209,9 +209,16 @@ namespace TesApi.Web
             Task DeleteBatchJobAndSetTaskSystemErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo) => DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.SYSTEMERROREnum, batchInfo);
 
             Task DeleteBatchJobAndRequeueTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo)
-                => ++tesTask.ErrorCount > 3
-                ? DeleteBatchJobAndSetTaskExecutorErrorAsync(tesTask, batchInfo)
-                : DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.QUEUEDEnum, batchInfo);
+                //=> ++tesTask.ErrorCount > 3
+                //    ? DeleteBatchJobAndSetTaskExecutorErrorAsync(tesTask, batchInfo)
+                //    : DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.QUEUEDEnum, batchInfo);
+            {
+                var errorCount = ++tesTask.ErrorCount;
+                logger.LogInformation(@"TES Task: {TesTask} ErrorCount: {ErrorCount} in DeleteBatchJobAndRequeueTaskAsync", tesTask.Id, errorCount);
+                return errorCount > 3
+                    ? DeleteBatchJobAndSetTaskExecutorErrorAsync(tesTask, batchInfo)
+                    : DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.QUEUEDEnum, batchInfo);
+            }
 
             async Task CancelTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo)
             {
