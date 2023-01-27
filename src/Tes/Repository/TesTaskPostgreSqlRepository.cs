@@ -9,7 +9,9 @@ namespace Tes.Repository
     using System.Linq.Expressions;
     using System.Threading.Tasks;
     using Microsoft.EntityFrameworkCore;
+    using Microsoft.Extensions.Options;
     using Tes.Models;
+    using Tes.Utilities;
 
     /// <summary>
     /// A TesTask specific repository for storing the TesTask as JSON within an Entity Framework Postgres table
@@ -25,6 +27,18 @@ namespace Tes.Repository
         /// <param name="connectionString">The PostgreSql connection string</param>
         public TesTaskPostgreSqlRepository(string connectionString)
         {
+            createDbContext = () => { return new TesDbContext(connectionString); };
+            using var dbContext = createDbContext();
+            dbContext.Database.EnsureCreatedAsync().Wait();
+        }
+
+        /// <summary>
+        /// Default constructor that also will create the schema if it does not exist
+        /// </summary>
+        /// <param name="connectionString">The PostgreSql connection string</param>
+        public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options)
+        {
+            var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
             createDbContext = () => { return new TesDbContext(connectionString); };
             using var dbContext = createDbContext();
             dbContext.Database.EnsureCreatedAsync().Wait();

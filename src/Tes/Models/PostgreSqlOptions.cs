@@ -12,7 +12,7 @@
         /// </summary>
         /// <param name="serviceName">The name of the service, i.e. "Tes" or "Cromwell"</param>
         /// <returns>The configuration section name (usually in appsettings)</returns>
-        public static string GetConfigurationSectionName(string serviceName)
+        public static string GetConfigurationSectionName(string serviceName = "Tes")
         {
             return $"{serviceName}{ConfigurationSectionNameSuffix}";
         }
