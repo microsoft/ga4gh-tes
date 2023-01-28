@@ -97,7 +97,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// </summary>
     /// <param name="path"></param>
     /// <returns></returns>
-    protected bool IsItKnownFilePath(string path)
+    protected bool IsItKnownExecutionFilePath(string path)
     {
         return path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase)
                || path.StartsWith(BatchPathPrefix, StringComparison.OrdinalIgnoreCase);

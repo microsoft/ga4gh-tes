@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Linq;
 using System.Threading.Tasks;
+using System.Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TesApi.Web.Management.Clients;
@@ -19,9 +19,8 @@ namespace TesApi.Web.Storage
     {
         private readonly TerraOptions terraOptions;
         private readonly TerraWsmApiClient terraWsmApiClient;
-        private const int FirstSegment = 0;
-        private const int SecondSegment = 1;
-        private const string SasTokenPermissions = "racw";
+        private const string SasBlobPermissions = "racw";
+        private const string SasContainerPermissions = "racwl";
 
         /// <summary>
         /// Provides methods for blob storage access by using local path references in form of /storageaccount/container/blobpath
@@ -39,16 +38,32 @@ namespace TesApi.Web.Storage
             ArgumentNullException.ThrowIfNull(terraOptions);
 
             this.terraOptions = terraOptions.Value;
-
         }
 
         /// <inheritdoc />
         public override Task<bool> IsPublicHttpUrlAsync(string uriString)
         {
-            //TODO: check if this assumption is correct
-            //For Terra, if it is a Http/Https Url then it is public.
-            return Task.FromResult(TryParseHttpUrlFromInput(uriString, out _));
+            var isHttpUrl = TryParseHttpUrlFromInput(uriString, out var uri);
 
+            if (!isHttpUrl)
+            {
+                return Task.FromResult(false);
+            }
+
+            if (HttpUtility.ParseQueryString(uri.Query).Get("sig") is not null)
+            {
+                return Task.FromResult(true);
+            }
+
+            if (StorageAccountUrlSegments.TryCreate(uriString, out var parts))
+            {
+                if (IsTerraWorkspaceContainer(parts.ContainerName) && IsTerraWorkspaceStorageAccount(parts.AccountName))
+                {
+                    return Task.FromResult(false);
+                }
+            }
+
+            return Task.FromResult(true);
         }
 
         /// <inheritdoc />
@@ -58,67 +73,89 @@ namespace TesApi.Web.Storage
 
             var normalizedPath = path.TrimStart('/');
 
-            if (IsItKnownFilePath(normalizedPath))
+            if (getContainerSas)
+            {
+                return await GetMappedSasContainerUrlFromWsmAsync(normalizedPath);
+            }
+
+            if (IsItKnownExecutionFilePath(normalizedPath))
             {
                 return await GetMappedSasUrlFromWsmAsync(normalizedPath);
             }
 
-            CheckIfPathMatchesExpectedTerraLocation(normalizedPath);
+            if (!StorageAccountUrlSegments.TryCreate(normalizedPath, out var segments))
+            {
+                throw new Exception(
+                    "Invalid path provided. The path must be a valid blob storage url or a path with the following format: /accountName/container");
+            }
 
-            return await GetMappedSasUrlFromWsmAsync(RemoveStorageAndContainerSegments(normalizedPath));
+            CheckIfAccountAndContainerAreWorkspaceStorage(segments.AccountName, segments.ContainerName);
 
+            return await GetMappedSasUrlFromWsmAsync(segments.BlobName);
+        }
+
+        private async Task<string> GetMappedSasContainerUrlFromWsmAsync(string pathToAppend)
+        {
+            //an empty blob name gets a container Sas token
+            var tokenInfo = await GetSasTokenFromWsmAsync(CreateTokenParamsFromOptions(blobName: string.Empty, SasContainerPermissions));
+
+            var urlBuilder = new UriBuilder(tokenInfo.Url);
+
+            urlBuilder.Path += pathToAppend;
+
+            return urlBuilder.ToString();
         }
 
         private async Task<string> GetMappedSasUrlFromWsmAsync(string blobName)
         {
-            var tokenParams = new SasTokenApiParameters(
-                terraOptions.SasAllowedIpRange,
-                terraOptions.SasTokenExpirationInSeconds,
-                SasTokenPermissions, blobName);
+            var tokenParams = CreateTokenParamsFromOptions(blobName, SasBlobPermissions);
 
-            logger.LogInformation($"Getting Sas Url from Terra. Requested blobName:{blobName}. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
-
-            var tokenInfo = await terraWsmApiClient.GetSasTokenAsync(
-                 Guid.Parse(terraOptions.WorkspaceId),
-                 Guid.Parse(terraOptions.WorkspaceStorageContainerResourceId),
-                 tokenParams);
-
+            var tokenInfo = await GetSasTokenFromWsmAsync(tokenParams);
 
             logger.LogInformation($"Successfully obtained the Sas Url from Terra. Requested blobName:{blobName}. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
 
             return tokenInfo.Url;
         }
 
-        private string RemoveStorageAndContainerSegments(string path)
+        private SasTokenApiParameters CreateTokenParamsFromOptions(string blobName, string sasPermissions)
         {
-            var segments = path.Split('/');
-
-            //removes the storage and container segments form the path, but keeps the additional segments
-            return string.Join("/", segments.Skip(2).ToArray());
+            return new SasTokenApiParameters(
+                terraOptions.SasAllowedIpRange,
+                terraOptions.SasTokenExpirationInSeconds,
+                sasPermissions, blobName);
         }
 
-        private void CheckIfPathMatchesExpectedTerraLocation(string path)
+        private async Task<WsmSasTokenApiResponse> GetSasTokenFromWsmAsync(SasTokenApiParameters tokenParams)
         {
-            var segments = path.Split('/');
+            logger.LogInformation(
+                $"Getting Sas Url from Terra. Requested blobName:{tokenParams.SasBlobName}. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
 
-            var errorMsg =
-                $"The path must contain the expected Terra storage location:{terraOptions.WorkspaceStorageAccountName}/{terraOptions.WorkspaceStorageContainerName}. " +
-                $"Path provided:{path}.";
+            return await terraWsmApiClient.GetSasTokenAsync(
+                Guid.Parse(terraOptions.WorkspaceId),
+                Guid.Parse(terraOptions.WorkspaceStorageContainerResourceId),
+                tokenParams);
+        }
 
-            if (segments.Length < 2)
+        private void CheckIfAccountAndContainerAreWorkspaceStorage(string accountName, string containerName)
+        {
+            if (!IsTerraWorkspaceStorageAccount(accountName))
             {
-                throw new Exception("Invalid path provided. " + errorMsg);
+                throw new Exception($"The account name does not match. Expected:{accountName} and Provided{terraOptions.WorkspaceStorageAccountName}");
             }
 
-            if (!segments[FirstSegment].Equals(terraOptions.WorkspaceStorageAccountName, StringComparison.OrdinalIgnoreCase))
+            if (!IsTerraWorkspaceContainer(containerName))
             {
-                throw new Exception("The account name does not match. " + errorMsg);
+                throw new Exception($"The container name does not match. Expected:{containerName} and Provided{terraOptions.WorkspaceStorageContainerName}");
             }
+        }
 
-            if (!segments[SecondSegment].Equals(terraOptions.WorkspaceStorageContainerName, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new Exception("The container name does not match. " + errorMsg);
-            }
+        private bool IsTerraWorkspaceContainer(string value)
+        {
+            return terraOptions.WorkspaceStorageContainerName.Equals(value, StringComparison.OrdinalIgnoreCase);
+        }
+        private bool IsTerraWorkspaceStorageAccount(string value)
+        {
+            return terraOptions.WorkspaceStorageAccountName.Equals(value, StringComparison.OrdinalIgnoreCase);
         }
     }
 }
