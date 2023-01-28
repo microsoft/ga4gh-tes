@@ -109,31 +109,5 @@ namespace TesApi.Web.Management
 
             return azureClient;
         }
-
-        //private async Task<(string SubscriptionId, string ResourceGroupName, string Location, string BatchAccountEndpoint)> FindBatchAccountAsync(string batchAccountName)
-        //{
-        //    var resourceGroupRegex = new Regex("/*/resourceGroups/([^/]*)/*");
-
-        //    var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync());
-        //    var azureClient = await GetAzureManagementClientAsync();
-
-        //    var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
-
-
-        //    foreach (var subId in subscriptionIds)
-        //    {
-        //        var batchAccount = (await new BatchManagementClient(tokenCredentials) { SubscriptionId = subId }.BatchAccount.ListAsync())
-        //            .FirstOrDefault(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase));
-
-        //        if (batchAccount is not null)
-        //        {
-        //            var resourceGroupName = resourceGroupRegex.Match(batchAccount.Id).Groups[1].Value;
-
-        //            return (subId, resourceGroupName, batchAccount.Location, batchAccount.AccountEndpoint);
-        //        }
-        //    }
-
-        //    throw new Exception($"Batch account '{batchAccountName}' does not exist or the TES app service does not have Contributor role on the account.");
-        //}
     }
 }
