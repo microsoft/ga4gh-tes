@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System;
-using Microsoft.Azure.Batch;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace TesApi.Web

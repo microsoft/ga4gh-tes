@@ -12,12 +12,19 @@ public class TerraOptions
     /// Terra configuration section
     /// </summary>
     public const string Terra = "Terra";
+
     /// <summary>
     /// Landing zone id containing the Tes back-end resources
     /// </summary>
     public string LandingZoneId { get; set; }
+
     /// <summary>
     /// Landing zone api host. 
     /// </summary>
     public string LandingZoneApiHost { get; set; }
+
+    /// <summary>
+    /// Wsm api host.
+    /// </summary>
+    public string WsmApiHost { get; set; }
 }

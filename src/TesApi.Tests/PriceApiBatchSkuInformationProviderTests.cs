@@ -31,9 +31,8 @@ namespace TesApi.Tests
             mockRetryOptions.Setup(m => m.Value).Returns(new RetryPolicyOptions());
 
             cacheAndRetryHandler = new CacheAndRetryHandler(appCache, mockRetryOptions.Object);
-            pricingApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<HttpApiClient>());
+            pricingApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
             provider = new PriceApiBatchSkuInformationProvider(pricingApiClient, new NullLogger<PriceApiBatchSkuInformationProvider>());
-
         }
 
         [TestMethod]
@@ -56,6 +55,5 @@ namespace TesApi.Tests
             Assert.IsTrue(results.Any(r => r.LowPriority && r.PricePerHour is not null && r.PricePerHour > 0));
             Assert.IsTrue(results.Any(r => !r.LowPriority && r.PricePerHour is not null && r.PricePerHour > 0));
         }
-
     }
 }
