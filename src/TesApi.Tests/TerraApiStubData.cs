@@ -31,12 +31,10 @@ public class TerraApiStubData
         => JsonSerializer.Deserialize<WsmSasTokenApiResponse>(GetWsmSasTokenApiResponseInJson());
 
     public static string GetWsmSasTokenApiResponseInJson()
-    {
-        return @"{
+        => @"{
   ""token"": ""SASTOKENSTUB="",
   ""url"": ""https://bloburl.org/container?sas=SASTOKENSUTB=""
     }";
-    }
 
     public string GetResourceApiResponseInJson()
         => $@"{{
