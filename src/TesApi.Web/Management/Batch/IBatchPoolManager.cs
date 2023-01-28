@@ -3,7 +3,6 @@
 
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Azure.Batch;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
 namespace TesApi.Web.Management.Batch
@@ -28,5 +27,6 @@ namespace TesApi.Web.Management.Batch
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         Task DeleteBatchPoolAsync(string poolName, CancellationToken cancellationToken = default);
+
     }
 }

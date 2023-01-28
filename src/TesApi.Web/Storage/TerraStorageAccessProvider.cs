@@ -32,7 +32,6 @@ namespace TesApi.Web.Storage
             ArgumentNullException.ThrowIfNull(terraOptions);
 
             this.terraOptions = terraOptions.Value;
-
         }
 
         /// <inheritdoc />
@@ -68,14 +67,15 @@ namespace TesApi.Web.Storage
 
             var normalizedPath = path.TrimStart('/');
 
-            if (IsItKnownFilePath(normalizedPath))
+            if (getContainerSas)
+            {
+                return await GetMappedSasContainerUrlFromWsmAsync(normalizedPath);
+            }
+
+            if (IsItKnownExecutionFilePath(normalizedPath))
             {
                 return await GetMappedSasUrlFromWsmAsync(normalizedPath);
             }
-
-            CheckIfPathMatchesExpectedTerraLocation(normalizedPath);
-
-            return await GetMappedSasUrlFromWsmAsync(RemoveStorageAndContainerSegments(normalizedPath));
 
             if (!StorageAccountUrlSegments.TryCreate(normalizedPath, out var segments))
             {
@@ -111,7 +111,15 @@ namespace TesApi.Web.Storage
             return tokenInfo.Url;
         }
 
-        private string RemoveStorageAndContainerSegments(string path)
+        private SasTokenApiParameters CreateTokenParamsFromOptions(string blobName, string sasPermissions)
+        {
+            return new SasTokenApiParameters(
+                terraOptions.SasAllowedIpRange,
+                terraOptions.SasTokenExpirationInSeconds,
+                sasPermissions, blobName);
+        }
+
+        private async Task<WsmSasTokenApiResponse> GetSasTokenFromWsmAsync(SasTokenApiParameters tokenParams)
         {
             logger.LogInformation(
                 $"Getting Sas Url from Terra. Requested blobName:{tokenParams.SasBlobName}. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
@@ -133,6 +141,15 @@ namespace TesApi.Web.Storage
             {
                 throw new Exception($"The container name does not match. Expected:{containerName} and Provided{terraOptions.WorkspaceStorageContainerName}");
             }
+        }
+
+        private bool IsTerraWorkspaceContainer(string value)
+        {
+            return terraOptions.WorkspaceStorageContainerName.Equals(value, StringComparison.OrdinalIgnoreCase);
+        }
+        private bool IsTerraWorkspaceStorageAccount(string value)
+        {
+            return terraOptions.WorkspaceStorageAccountName.Equals(value, StringComparison.OrdinalIgnoreCase);
         }
 
         private bool IsTerraWorkspaceContainer(string value)

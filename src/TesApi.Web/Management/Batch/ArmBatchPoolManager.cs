@@ -4,10 +4,6 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Azure.Batch;
-using Microsoft.Azure.Management.Batch;
-using Microsoft.Azure.Management.Batch.Models;
-using Microsoft.Extensions.Logging;
 
 namespace TesApi.Web.Management.Batch
 {
@@ -16,7 +12,8 @@ namespace TesApi.Web.Management.Batch
     /// </summary>
     public class ArmBatchPoolManager : IBatchPoolManager
     {
-        private readonly ILogger logger;
+
+        private readonly ILogger<ArmBatchPoolManager> logger;
         private readonly AzureManagementClientsFactory azureClientsFactory;
 
         /// <summary>
