@@ -31,7 +31,7 @@ namespace TesApi.Tests
         [TestMethod]
         public void GetContainerSasTokenApiUri_NoSasParameters_ReturnsExpectedUriWithoutQueryString()
         {
-            var uri = terraWsmApiClient.GetContainerSasTokenApiUri(terraApiStubData.WorkspaceId,
+            var uri = terraWsmApiClient.GetContainerSasTokenApiUrl(terraApiStubData.WorkspaceId,
                 terraApiStubData.ContainerResourceId, null);
 
             var expectedUri =
@@ -45,7 +45,7 @@ namespace TesApi.Tests
         {
             var sasParams = new SasTokenApiParameters("ipRange", 10, "rwdl", "blobName");
 
-            var uri = terraWsmApiClient.GetContainerSasTokenApiUri(terraApiStubData.WorkspaceId,
+            var uri = terraWsmApiClient.GetContainerSasTokenApiUrl(terraApiStubData.WorkspaceId,
                 terraApiStubData.ContainerResourceId, sasParams);
 
             var expectedUri =
@@ -66,7 +66,7 @@ namespace TesApi.Tests
         {
             var sasParams = new SasTokenApiParameters("ipRange", 10, null, null);
 
-            var uri = terraWsmApiClient.GetContainerSasTokenApiUri(terraApiStubData.WorkspaceId,
+            var uri = terraWsmApiClient.GetContainerSasTokenApiUrl(terraApiStubData.WorkspaceId,
                 terraApiStubData.ContainerResourceId, sasParams);
 
             var expectedUri =
