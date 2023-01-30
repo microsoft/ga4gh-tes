@@ -8,25 +8,6 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Azure.Batch;
-using Microsoft.Azure.Batch.Auth;
-using Microsoft.Azure.Batch.Common;
-using Microsoft.Azure.Management.ApplicationInsights.Management;
-using Microsoft.Azure.Management.Batch;
-using Microsoft.Azure.Management.ContainerRegistry.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Azure.Services.AppAuthentication;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Microsoft.Rest;
-using Microsoft.WindowsAzure.Storage.Blob;
-using Newtonsoft.Json;
-using Polly;
-using Polly.Retry;
-using Tes.Models;
-using TesApi.Web.Management.Configuration;
-using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 using CloudTask = Microsoft.Azure.Batch.CloudTask;
 using ComputeNodeState = Microsoft.Azure.Batch.Common.ComputeNodeState;
@@ -55,6 +36,8 @@ namespace TesApi.Web
         private readonly string location;
         private readonly string batchResourceGroupName;
         private readonly string batchAccountName;
+        //TODO: This dependency should be injected at a higher level (e.g. scheduler), but that requires significant refactoring that should be done separately.
+        private readonly IBatchPoolManager batchPoolManager;
 
 
         /// <summary>
@@ -63,11 +46,14 @@ namespace TesApi.Web
         /// <param name="batchAccountOptions">The Azure Batch Account options</param>
         /// <param name="logger">The logger</param>
         /// <exception cref="InvalidOperationException"></exception>
-        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, ILogger<AzureProxy> logger)
+        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, IBatchPoolManager batchPoolManager, ILogger<AzureProxy> logger)
         {
 
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
             ArgumentNullException.ThrowIfNull(logger);
+            ArgumentNullException.ThrowIfNull(batchPoolManager);
+
+            batchPoolManager = this.batchPoolManager;
 
             if (string.IsNullOrWhiteSpace(batchAccountOptions.Value.AccountName))
             {
@@ -817,20 +803,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable)
         {
-            try
-            {
-                var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync());
-                var batchManagementClient = new BatchManagementClient(tokenCredentials) { SubscriptionId = subscriptionId };
-                logger.LogInformation($"Creating manual batch pool named {poolInfo.Name} with vmSize {poolInfo.VmSize} and low priority {isPreemptable}");
-                var pool = await batchManagementClient.Pool.CreateAsync(batchResourceGroupName, batchAccountName, poolInfo.Name, poolInfo);
-                logger.LogInformation($"Successfully created manual batch pool named {poolInfo.Name} with vmSize {poolInfo.VmSize} and low priority {isPreemptable}");
-                return new() { PoolId = pool.Name };
-            }
-            catch (Exception exc)
-            {
-                logger.LogError(exc, $"Error trying to create manual batch pool named {poolInfo.Name} with vmSize {poolInfo.VmSize} and low priority {isPreemptable}");
-                throw;
-            }
+            return await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable);
         }
 
         [GeneratedRegex("/*/resourceGroups/([^/]*)/*")]

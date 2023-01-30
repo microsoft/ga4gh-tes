@@ -144,6 +144,23 @@ namespace TesApi.Web
             return ActivatorUtilities.CreateInstance<ArmBatchQuotaProvider>(services);
         }
 
+        private IBatchPoolManager CreateBatchPoolManagerFromConfiguration(IServiceProvider services)
+        {
+            var terraOptions = services.GetService<IOptions<TerraOptions>>();
+
+            if (!string.IsNullOrEmpty(terraOptions?.Value.WsmApiHost))
+            {
+                return new TerraBatchPoolManager(
+                    ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services),
+                    services.GetRequiredService<IMapper>(),
+                    terraOptions,
+                    services.GetService<IOptions<BatchAccountOptions>>(),
+                    services.GetService<ILogger<TerraBatchPoolManager>>());
+            }
+
+            return ActivatorUtilities.CreateInstance<ArmBatchPoolManager>(services);
+        }
+
         private IRepository<TesTask> CreateCosmosDbRepositoryFromConfiguration(IServiceProvider services)
         {
             var options = services.GetRequiredService<IOptions<CosmosDbOptions>>();

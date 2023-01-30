@@ -13,16 +13,18 @@ using TesApi.Web.Management.Models.Terra;
 
 namespace TesApi.Web.Management.Batch
 {
+    /// <summary>
+    /// 
+    /// </summary>
     public class TerraBatchPoolManager : IBatchPoolManager
     {
         private const string CloningInstructionsCloneNothing = "COPY_NOTHING";
-        private const string AccessScopePrivateAccess = "PRIVATE_ACCESS";
+        private const string AccessScopeSharedAccess = "SHARED_ACCESS";
         private const string ApplicationManaged = "APPLICATION";
 
         private readonly TerraWsmApiClient terraWsmApiClient;
-        private readonly AzureManagementClientsFactory azureClientsFactory;
         private readonly IMapper mapper;
-        private readonly Logger<TerraBatchPoolManager> logger;
+        private readonly ILogger<TerraBatchPoolManager> logger;
         private readonly TerraOptions terraOptions;
         private readonly BatchAccountOptions batchAccountOptions;
 
@@ -30,20 +32,19 @@ namespace TesApi.Web.Management.Batch
         /// Provides batch pool created and delete operations via the Terra api. 
         /// </summary>
         /// <param name="terraWsmApiClient"></param>
-        /// <param name="azureClientsFactory"></param>
         /// <param name="mapper"></param>
+        /// <param name="batchAccountOptions"></param>
         /// <param name="logger"></param>
-        public TerraBatchPoolManager(TerraWsmApiClient terraWsmApiClient, AzureManagementClientsFactory azureClientsFactory, IMapper mapper, IOptions<TerraOptions> terraOptions, IOptions<BatchAccountOptions> batchAccountOptions, Logger<TerraBatchPoolManager> logger)
+        /// <param name="terraOptions"></param>
+        public TerraBatchPoolManager(TerraWsmApiClient terraWsmApiClient, IMapper mapper, IOptions<TerraOptions> terraOptions, IOptions<BatchAccountOptions> batchAccountOptions, ILogger<TerraBatchPoolManager> logger)
         {
             ArgumentNullException.ThrowIfNull(terraWsmApiClient);
-            ArgumentNullException.ThrowIfNull(azureClientsFactory);
             ArgumentNullException.ThrowIfNull(mapper);
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
 
             this.terraWsmApiClient = terraWsmApiClient;
-            this.azureClientsFactory = azureClientsFactory;
             this.mapper = mapper;
             this.logger = logger;
             this.batchAccountOptions = batchAccountOptions.Value;
@@ -53,11 +54,25 @@ namespace TesApi.Web.Management.Batch
         }
 
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="poolInfo"></param>
+        /// <param name="isPreemptable"></param>
+        /// <returns></returns>
         public async Task<PoolInformation> CreateBatchPoolAsync(Pool poolInfo, bool isPreemptable)
         {
             var apiRequest = new ApiCreateBatchPoolRequest()
             {
-                Common = new ApiCommon() { },
+                Common = new ApiCommon
+                {
+                    Name = poolInfo.Id,
+                    Description = poolInfo.DisplayName,
+                    CloningInstructions = CloningInstructionsCloneNothing,
+                    AccessScope = AccessScopeSharedAccess,
+                    ManagedBy = ApplicationManaged,
+                    ResourceId = Guid.NewGuid()
+                },
                 AzureBatchPool = mapper.Map<ApiAzureBatchPool>(poolInfo),
             };
 
