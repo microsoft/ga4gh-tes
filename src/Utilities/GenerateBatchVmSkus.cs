@@ -11,7 +11,6 @@ using Tes.Models;
 using Azure.ResourceManager.Compute;
 using Azure;
 using Azure.ResourceManager.Compute.Models;
-using Microsoft.Azure.Management.Compute.Fluent;
 
 namespace TesUtils
 {
