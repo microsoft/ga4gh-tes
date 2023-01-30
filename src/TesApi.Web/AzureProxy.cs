@@ -338,7 +338,7 @@ namespace TesApi.Web
 
                     if (jobInfos.Count(j => j.Job.State == JobState.Active) > 1)
                     {
-                        return new AzureBatchJobAndTaskState { MoreThanOneActiveJobFound = true };
+                        return new AzureBatchJobAndTaskState { MoreThanOneActiveJobOrTaskFound = true };
                     }
 
                     var lastJobInfo = jobInfos.OrderBy(j => j.AttemptNumber).Last();
@@ -384,7 +384,7 @@ namespace TesApi.Web
                     {
                         if (taskInfos.Count(t => t.Task.State != TaskState.Completed) > 1)
                         {
-                            return new AzureBatchJobAndTaskState { MoreThanOneActiveJobFound = true };
+                            return new AzureBatchJobAndTaskState { MoreThanOneActiveJobOrTaskFound = true };
                         }
 
                         var lastTaskInfo = taskInfos.OrderBy(t => t.AttemptNumber).Last();
@@ -448,7 +448,7 @@ namespace TesApi.Web
 
                 return new AzureBatchJobAndTaskState
                 {
-                    MoreThanOneActiveJobFound = false,
+                    MoreThanOneActiveJobOrTaskFound = false,
                     ActiveJobWithMissingAutoPool = activeJobWithMissingAutoPool,
                     AttemptNumber = attemptNumber,
                     NodeAllocationFailed = nodeAllocationFailed,
@@ -510,7 +510,7 @@ namespace TesApi.Web
 
             if (batchTasksToDelete.Count > 1)
             {
-                logger.LogWarning("Found more than one active tase for TES task {TesTask}", tesTaskId);
+                logger.LogWarning("Found more than one active task for TES task {TesTask}", tesTaskId);
             }
 
             foreach (var task in batchTasksToDelete)

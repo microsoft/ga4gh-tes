@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
@@ -16,6 +17,9 @@ namespace TesApi.Web
 {
     public partial class BatchScheduler
     {
+        [GeneratedRegex("^[a-zA-Z0-9_-]+$")]
+        private static partial Regex PoolNameRegex();
+
         internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId);
 
         private async Task<(string PoolName, string DisplayName)> GetPoolName(TesTask tesTask, VirtualMachineInformation virtualMachineInformation)
@@ -73,9 +77,7 @@ namespace TesApi.Web
                 static char Limit(char ch)
                     => ch switch
                     {
-                        var x when x >= '0' || x <= '9' => x,
-                        var x when x >= 'A' || x <= 'Z' => x,
-                        var x when x >= 'a' || x <= 'z' => x,
+                        var x when char.IsAsciiLetterOrDigit(x) => x,
                         '_' => ch,
                         '-' => ch,
                         _ => '_',
@@ -92,7 +94,7 @@ namespace TesApi.Web
 
         internal bool TryGetPool(string poolId, out IBatchPool batchPool)
         {
-            batchPool = batchPools.FirstOrDefault(p => p.Pool.PoolId.Equals(poolId, StringComparison.Ordinal));
+            batchPool = batchPools.FirstOrDefault(p => p.Pool.PoolId.Equals(poolId, StringComparison.OrdinalIgnoreCase));
             return batchPool is not null;
         }
 
@@ -112,7 +114,11 @@ namespace TesApi.Web
             {
                 throw new ArgumentException("Key must be between 1-50 chars in length", nameof(key));
             }
-            // TODO: Make sure key doesn't contain any unsupported chars
+
+            if (!PoolNameRegex().IsMatch(key))
+            {
+                throw new ArgumentException("Key contains unsupported characters", nameof(key));
+            }
 
             var pool = batchPools.TryGetValue(key, out var set) ? set.LastOrDefault(Available) : default;
 

@@ -25,7 +25,7 @@ namespace TesApi.Web
         /// <returns>An <see cref="IAsyncEnumerable{T}"/></returns>
         /// <exception cref="ArgumentNullException"></exception>
         public static IAsyncEnumerable<T> ToAsyncEnumerable<T>(this IPagedEnumerable<T> source)
-            => new AsyncEnumerable<T>(source ?? throw new ArgumentNullException(nameof(source)));
+            => new AsyncEnumerable<T>(source);
 
         /// <summary>
         /// Creates an <see cref="IAsyncEnumerable{T}"/> from an <see cref="IPagedCollection{T}"/>
@@ -35,7 +35,7 @@ namespace TesApi.Web
         /// <returns>An <see cref="IAsyncEnumerable{T}"/></returns>
         /// <exception cref="ArgumentNullException"></exception>
         public static IAsyncEnumerable<T> ToAsyncEnumerable<T>(this IPagedCollection<T> source)
-            => new AsyncEnumerable<T>(source ?? throw new ArgumentNullException(nameof(source)));
+            => new AsyncEnumerable<T>(source);
 
         /// <summary>
         /// Adapts calls returning <see cref="IAsyncEnumerable{T}"/> to <see cref="AsyncRetryPolicy"/>.
@@ -47,24 +47,29 @@ namespace TesApi.Web
         /// <returns></returns>
         public static IAsyncEnumerable<T> ExecuteAsync<T>(this AsyncRetryPolicy asyncRetryPolicy, Func<IAsyncEnumerable<T>> func, RetryPolicy retryPolicy)
         {
-            _ = func ?? throw new ArgumentNullException(nameof(func));
-            return new PollyAsyncEnumerable<T>((retryPolicy ?? throw new ArgumentNullException(nameof(retryPolicy))).Execute(() => func()), asyncRetryPolicy ?? throw new ArgumentNullException(nameof(asyncRetryPolicy)));
+            ArgumentNullException.ThrowIfNull(asyncRetryPolicy);
+            ArgumentNullException.ThrowIfNull(func);
+            ArgumentNullException.ThrowIfNull(retryPolicy);
+
+            return new PollyAsyncEnumerable<T>((retryPolicy).Execute(() => func()), asyncRetryPolicy);
         }
 
         #region Implementation classes
-        private struct AsyncEnumerable<T> : IAsyncEnumerable<T>
+        private readonly struct AsyncEnumerable<T> : IAsyncEnumerable<T>
         {
             private readonly Func<CancellationToken, IAsyncEnumerator<T>> _getEnumerator;
 
             public AsyncEnumerable(IPagedEnumerable<T> source)
             {
-                _ = source ?? throw new ArgumentNullException(nameof(source));
+                ArgumentNullException.ThrowIfNull(source);
+
                 _getEnumerator = c => new PagedEnumerableEnumerator<T>(source, c);
             }
 
             public AsyncEnumerable(IPagedCollection<T> source)
             {
-                _ = source ?? throw new ArgumentNullException(nameof(source));
+                ArgumentNullException.ThrowIfNull(source);
+
                 _getEnumerator = c => new PagedCollectionEnumerator<T>(source, c);
             }
 
@@ -79,8 +84,11 @@ namespace TesApi.Web
 
             public PollyAsyncEnumerable(IAsyncEnumerable<T> source, AsyncRetryPolicy retryPolicy)
             {
-                _source = source ?? throw new ArgumentNullException(nameof(source));
-                _retryPolicy = retryPolicy ?? throw new ArgumentNullException(nameof(retryPolicy));
+                ArgumentNullException.ThrowIfNull(source);
+                ArgumentNullException.ThrowIfNull(retryPolicy);
+
+                _source = source;
+                _retryPolicy = retryPolicy;
             }
 
             IAsyncEnumerator<T> IAsyncEnumerable<T>.GetAsyncEnumerator(CancellationToken cancellationToken)
@@ -95,8 +103,11 @@ namespace TesApi.Web
 
             public PollyAsyncEnumerator(IAsyncEnumerator<T> source, AsyncRetryPolicy retryPolicy, CancellationToken cancellationToken)
             {
-                _source = source ?? throw new ArgumentNullException(nameof(source));
-                _retryPolicy = retryPolicy ?? throw new ArgumentNullException(nameof(retryPolicy));
+                ArgumentNullException.ThrowIfNull(source);
+                ArgumentNullException.ThrowIfNull(retryPolicy);
+
+                _source = source;
+                _retryPolicy = retryPolicy;
                 _cancellationToken = cancellationToken;
             }
 
@@ -118,7 +129,9 @@ namespace TesApi.Web
 
             public PagedCollectionEnumerator(IPagedCollection<T> source, CancellationToken cancellationToken)
             {
-                _source = source ?? throw new ArgumentNullException(nameof(source));
+                ArgumentNullException.ThrowIfNull(source);
+
+                _source = source;
                 _cancellationToken = cancellationToken;
                 _enumerator = source.GetEnumerator();
             }
@@ -158,27 +171,29 @@ namespace TesApi.Web
 
         private sealed class PagedEnumerableEnumerator<T> : IAsyncEnumerator<T>
         {
-            private readonly IPagedEnumerator<T> _source;
+            private readonly IPagedEnumerator<T> _enumerator;
             private readonly CancellationToken _cancellationToken;
 
             public PagedEnumerableEnumerator(IPagedEnumerable<T> source, CancellationToken cancellationToken)
             {
-                _source = (source ?? throw new ArgumentNullException(nameof(source))).GetPagedEnumerator();
+                ArgumentNullException.ThrowIfNull(source);
+
+                _enumerator = source.GetPagedEnumerator();
                 _cancellationToken = cancellationToken;
             }
 
-            public T Current => _source.Current;
+            public T Current => _enumerator.Current;
 
             public ValueTask DisposeAsync()
             {
-                _source.Dispose();
+                _enumerator.Dispose();
                 return ValueTask.CompletedTask;
             }
 
             public async ValueTask<bool> MoveNextAsync()
             {
                 _cancellationToken.ThrowIfCancellationRequested();
-                return await _source.MoveNextAsync(_cancellationToken);
+                return await _enumerator.MoveNextAsync(_cancellationToken);
             }
         }
         #endregion

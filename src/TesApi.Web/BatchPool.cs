@@ -29,6 +29,8 @@ namespace TesApi.Web
         /// </summary>
         public static TimeSpan AutoScaleEvaluationInterval { get; } = TimeSpan.FromMinutes(5);
 
+        private const int MaxComputeNodesToRemoveAtOnce = 100; // https://learn.microsoft.com/en-us/rest/api/batchservice/pool/remove-nodes?tabs=HTTP#request-body nodeList description
+
         private readonly ILogger _logger;
         private readonly IAzureProxy _azureProxy;
 
@@ -91,7 +93,7 @@ namespace TesApi.Web
         private readonly TimeSpan _forcePoolRotationAge;
         private readonly BatchScheduler _batchPools;
         private bool _resizeErrorsRetrieved;
-        private bool _resizeStoppedReceived;
+        private bool _resetAutoScalingRequired;
 
         private DateTime? Creation { get; set; }
         private bool IsDedicated { get; set; }
@@ -138,12 +140,12 @@ namespace TesApi.Web
 
                                 // Errors to force autoscale to be reset
                                 case PoolResizeErrorCodes.ResizeStopped:
-                                    _resizeStoppedReceived |= true;
+                                    _resetAutoScalingRequired |= true;
                                     break;
 
                                 // Errors to both force resetting autoscale and fail tasks
                                 case PoolResizeErrorCodes.AllocationFailed:
-                                    _resizeStoppedReceived |= true;
+                                    _resetAutoScalingRequired |= true;
                                     goto default;
 
                                 // Errors to fail tasks should be directed here
@@ -158,7 +160,7 @@ namespace TesApi.Web
                 }
                 else
                 {
-                    _resizeStoppedReceived = false;
+                    _resetAutoScalingRequired = false;
                     _resizeErrorsRetrieved = false;
                 }
             }
@@ -219,8 +221,9 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
                 switch (_scalingMode)
                 {
                     case ScalingMode.AutoScaleEnabled:
-                        if (_resizeStoppedReceived || await GetNodesToRemove(false).AnyAsync(cancellationToken))
+                        if (_resetAutoScalingRequired || await GetNodesToRemove(false).AnyAsync(cancellationToken))
                         {
+                            _logger.LogInformation(@"Switching pool {PoolId} to manual scale to clear resize errors and/or compute nodes in invalid states.", Pool.PoolId);
                             await _azureProxy.DisableBatchPoolAutoScaleAsync(Pool.PoolId, cancellationToken);
                             _scalingMode = ScalingMode.SettingManualScale;
                         }
@@ -231,7 +234,7 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
                             var nodesToRemove = Enumerable.Empty<ComputeNode>();
 
                             // It's documented that a max of 100 nodes can be removed at a time. Excess eligible nodes will be removed in a future call to this method.
-                            await foreach (var node in GetNodesToRemove(true).Take(100).WithCancellation(cancellationToken))
+                            await foreach (var node in GetNodesToRemove(true).Take(MaxComputeNodesToRemoveAtOnce).WithCancellation(cancellationToken))
                             {
                                 switch (node.State)
                                 {
@@ -258,13 +261,13 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
 
                             nodesToRemove = nodesToRemove.ToList();
 
-                            if (!nodesToRemove.Any())
+                            if (nodesToRemove.Any())
                             {
-                                _scalingMode = ScalingMode.RemovingFailedNodes;
+                                await RemoveNodesAsync((IList<ComputeNode>)nodesToRemove, cancellationToken);
                             }
                             else
                             {
-                                await RemoveNodesAsync((IList<ComputeNode>)nodesToRemove, cancellationToken);
+                                _scalingMode = ScalingMode.RemovingFailedNodes;
                             }
                         }
                         break;
@@ -272,13 +275,14 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
                     case ScalingMode.RemovingFailedNodes:
                         ResizeErrors.Clear();
                         _resizeErrorsRetrieved = true;
+                        _logger.LogInformation(@"Switching pool {PoolId} back to autoscale.", Pool.PoolId);
                         await _azureProxy.EnableBatchPoolAutoScaleAsync(Pool.PoolId, !IsDedicated, AutoScaleEvaluationInterval, AutoPoolFormula, cancellationToken);
                         _autoScaleWaitTime = DateTime.UtcNow + AutoScaleEvaluationInterval;
-                        _scalingMode = _resizeStoppedReceived ? ScalingMode.WaitingForAutoScale : ScalingMode.SettingAutoScale;
+                        _scalingMode = _resetAutoScalingRequired ? ScalingMode.WaitingForAutoScale : ScalingMode.SettingAutoScale;
                         break;
 
                     case ScalingMode.WaitingForAutoScale:
-                        _resizeStoppedReceived = false;
+                        _resetAutoScalingRequired = false;
                         if (DateTime.UtcNow > _autoScaleWaitTime)
                         {
                             _scalingMode = ScalingMode.SettingAutoScale;
@@ -312,8 +316,8 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
                 var (lowPriorityNodes, dedicatedNodes) = await _azureProxy.GetCurrentComputeNodesAsync(Pool.PoolId, cancellationToken);
                 if ((lowPriorityNodes is null || lowPriorityNodes == 0) && (dedicatedNodes is null || dedicatedNodes == 0) && !await GetTasksAsync().AnyAsync(cancellationToken))
                 {
-                    await _batchPools.DeletePoolAsync(this, cancellationToken);
                     _ = _batchPools.RemovePoolFromList(this);
+                    await _batchPools.DeletePoolAsync(this, cancellationToken);
                 }
             }
         }
@@ -324,29 +328,7 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
     /// </content>
     public sealed partial class BatchPool : IBatchPool
     {
-        private sealed class LockObj : IDisposable
-        {
-            private static readonly SemaphoreSlim lockObj = new(1, 1);
-
-            public static async ValueTask<LockObj> Lock()
-            {
-                await lockObj.WaitAsync();
-                return new LockObj();
-            }
-
-            public static async ValueTask<LockObj> Lock(TimeSpan timeout)
-            {
-                if (await lockObj.WaitAsync(timeout))
-                {
-                    return new LockObj();
-                }
-
-                throw new TimeoutException();
-            }
-
-            public void Dispose()
-                => lockObj.Release();
-        }
+        private static readonly SemaphoreSlim lockObj = new(1, 1);
 
         /// <inheritdoc/>
         public bool IsAvailable { get; private set; } = true;
@@ -399,8 +381,16 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
                 _ => throw new ArgumentOutOfRangeException(nameof(serviceKind)),
             };
 
-            using var @lock = await LockObj.Lock();
-            await func(cancellationToken);
+            await lockObj.WaitAsync(cancellationToken); // Don't release if we never acquire. Thus, don't put this inside the try/finally where the finally calls Release().
+
+            try // Don't add any code that can throw between this line and the call above to acquire lockObj.
+            {
+                await func(cancellationToken);
+            }
+            finally
+            {
+                _ = lockObj.Release();
+            }
         }
 
         /// <inheritdoc/>
@@ -471,7 +461,7 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
         }
 
         /// <inheritdoc/>
-        public async ValueTask<DateTime> GetAllocationStateTransitionTime(CancellationToken cancellationToken = default) // TODO: put this at front of list by returning earliest possible time, or put at end of list by returning UtcNow?
+        public async ValueTask<DateTime> GetAllocationStateTransitionTime(CancellationToken cancellationToken = default)
             => (await _azureProxy.GetBatchPoolAsync(Pool.PoolId, new ODATADetailLevel { SelectClause = "allocationStateTransitionTime" }, cancellationToken)).AllocationStateTransitionTime ?? DateTime.UtcNow;
 
         /// <inheritdoc/>
@@ -481,9 +471,11 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
             {
                 CloudPool pool = default;
                 var poolInfo = await _azureProxy.CreateBatchPoolAsync(poolModel, isPreemptible);
+
                 await Task.WhenAll(
                     Task.Run(async () => pool = await _azureProxy.GetBatchPoolAsync(poolInfo.PoolId, new ODATADetailLevel { SelectClause = CloudPoolSelectClause }, cancellationToken)),
                     _azureProxy.CreateBatchJobAsync(poolInfo, cancellationToken));
+
                 Configure(pool);
                 _ = _batchPools.AddPool(this);
             }
@@ -491,29 +483,32 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
             {
                 if (ex.InnerExceptions.Count < 2)
                 {
-                    throw new AggregateException(ex.InnerExceptions.Select(HandleException).ToArray());
+                    throw new AggregateException(ex.InnerExceptions.Select(HandleException));
                 }
 
                 throw HandleException(ex.InnerException);
+            }
+            catch (Exception ex)
+            {
+                throw HandleException(ex);
+            }
 
-                Exception HandleException(Exception e)
+            Exception HandleException(Exception e)
+            {
+                switch (e)
                 {
-                    switch (e)
-                    {
-                        case OperationCanceledException:
-                        case RequestFailedException rfe when rfe.Status == 0 && rfe.InnerException is System.Net.WebException we && we.Status == System.Net.WebExceptionStatus.Timeout:
-                        case Exception when IsInnermostExceptionSocketException125(e):
-                            return ProcessException();
-                        default:
-                            return ProcessException(e);
-                    }
+                    case OperationCanceledException:
+                    case RequestFailedException rfe when rfe.Status == 0 && rfe.InnerException is System.Net.WebException we && we.Status == System.Net.WebExceptionStatus.Timeout:
+                    case Exception when IsInnermostExceptionSocketException(e):
+                        return ProcessException();
+                    default:
+                        return ProcessException(e);
                 }
             }
 
-            static bool IsInnermostExceptionSocketException125(Exception ex)
+            static bool IsInnermostExceptionSocketException(Exception ex)
             {
-                // errno: ECANCELED 125 Operation canceled
-                for (var e = ex; e is System.Net.Sockets.SocketException /*se && se.ErrorCode == 125*/; e = e.InnerException)
+                for (var e = ex; e is System.Net.Sockets.SocketException; e = e.InnerException)
                 {
                     if (e.InnerException is null) { return false; }
                 }
@@ -530,7 +525,7 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
                     null => new AzureBatchQuotaMaxedOutException("Pool creation timed out"),
                     OperationCanceledException => ex,
                     var x when x is RequestFailedException rfe && rfe.Status == 0 && rfe.InnerException is System.Net.WebException webException && webException.Status == System.Net.WebExceptionStatus.Timeout => new AzureBatchQuotaMaxedOutException("Pool creation timed out", ex),
-                    var x when IsInnermostExceptionSocketException125(x) => new AzureBatchQuotaMaxedOutException("Pool creation timed out", ex),
+                    var x when IsInnermostExceptionSocketException(x) => new AzureBatchQuotaMaxedOutException("Pool creation timed out", ex),
                     _ => new Exception(ex.Message, ex),
                 };
             }
@@ -546,7 +541,7 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
                 throw new ArgumentException("CloudPool is either not configured correctly or was not retrieved with all required metadata.", nameof(pool));
             }
 
-            // Pool is "broken" if job is missing/not active. Reject this pool.
+            // Pool is "broken" if job is missing/not active. Reject this pool via the side effect of the exception that is thrown.
             _ = await _azureProxy.GetBatchJobAsync(pool.Id, new ODATADetailLevel { SelectClause = "id", FilterClause = "state eq 'active'" }, cancellationToken);
 
             Configure(pool);

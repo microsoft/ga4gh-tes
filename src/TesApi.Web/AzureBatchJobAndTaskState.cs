@@ -14,9 +14,9 @@ namespace TesApi.Web
     public struct AzureBatchJobAndTaskState
     {
         /// <summary>
-        /// More than one active Azure Batch job was found in the active state for this task. No other members are set.
+        /// More than one active Azure Batch job and/or task was found in the active state for this task. No other members are set.
         /// </summary>
-        public bool MoreThanOneActiveJobFound { get; set; }
+        public bool MoreThanOneActiveJobOrTaskFound { get; set; }
         /// <summary>
         /// Job is active but has not had a pool assigned within a configured time limit.
         /// </summary>

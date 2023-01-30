@@ -49,9 +49,9 @@ namespace TesApi.Web
         ErrorRetrievingJobs,
 
         /// <summary>
-        /// More than one active job is associated with a given task.  This may indicate an implementation defect due to an unforeseen edge case
+        /// More than one active batch job/task is associated with a given tes task.  This may indicate an implementation defect due to an unforeseen edge case
         /// </summary>
-        MoreThanOneActiveJobFound,
+        MoreThanOneActiveJobOrTaskFound,
 
         /// <summary>
         /// Azure Batch was unable to allocate a machine for the job.  This could be due to either a temporary or permanent unavailability of the given VM SKU

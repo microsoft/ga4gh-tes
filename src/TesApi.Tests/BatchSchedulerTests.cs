@@ -1337,7 +1337,7 @@ namespace TesApi.Tests
             public static AzureBatchJobAndTaskState TaskFailed => new() { JobState = JobState.Completed, TaskState = TaskState.Completed, TaskExitCode = -1 };
             public static AzureBatchJobAndTaskState JobNotFound => new() { JobState = null };
             public static AzureBatchJobAndTaskState TaskNotFound => new() { JobState = JobState.Active, TaskState = null };
-            public static AzureBatchJobAndTaskState MoreThanOneJobFound => new() { MoreThanOneActiveJobFound = true };
+            public static AzureBatchJobAndTaskState MoreThanOneJobFound => new() { MoreThanOneActiveJobOrTaskFound = true };
             public static AzureBatchJobAndTaskState NodeAllocationFailed => new() { JobState = JobState.Active, NodeAllocationFailed = true };
             public static AzureBatchJobAndTaskState NodePreempted => new() { JobState = JobState.Active, NodeState = ComputeNodeState.Preempted };
             public static AzureBatchJobAndTaskState NodeDiskFull => new() { JobState = JobState.Active, NodeErrorCode = "DiskFull" };

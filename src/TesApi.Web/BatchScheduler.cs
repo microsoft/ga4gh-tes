@@ -80,6 +80,7 @@ namespace TesApi.Web
         private readonly ContainerRegistryProvider containerRegistryProvider;
         private readonly string hostname;
         private readonly IBatchPoolFactory _batchPoolFactory;
+        private readonly string taskRunScriptContent;
 
         private HashSet<string> onlyLogBatchTaskStateOnce = new();
 
@@ -135,6 +136,7 @@ namespace TesApi.Web
                 _batchPoolFactory = poolFactory;
                 hostname = GetStringValue(configuration, "Name");
                 logger.LogInformation($"hostname: {hostname}");
+                taskRunScriptContent = string.Join(") && (", File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh")));
             }
 
             this.batchNodeInfo = new BatchNodeInfo
@@ -228,7 +230,7 @@ namespace TesApi.Web
                 new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.Initializing, (tesTask, _) => tesTask.State = TesState.INITIALIZINGEnum),
                 new TesTaskStateTransition(tesTaskIsQueuedOrInitializing, BatchTaskState.NodeAllocationFailed, DeleteBatchJobAndRequeueTaskAsync),
                 new TesTaskStateTransition(tesTaskIsQueuedOrInitializing, BatchTaskState.Running, (tesTask, _) => tesTask.State = TesState.RUNNINGEnum),
-                new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, BatchTaskState.MoreThanOneActiveJobFound, DeleteBatchJobAndSetTaskSystemErrorAsync),
+                new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, BatchTaskState.MoreThanOneActiveJobOrTaskFound, DeleteBatchJobAndSetTaskSystemErrorAsync),
                 new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, BatchTaskState.CompletedSuccessfully, SetTaskCompleted),
                 new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, BatchTaskState.CompletedWithErrors, SetTaskExecutorError),
                 new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, BatchTaskState.ActiveJobWithMissingAutoPool, DeleteBatchJobAndRequeueTaskAsync),
@@ -521,19 +523,19 @@ namespace TesApi.Web
             catch (BatchException exception) when (exception.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batcnErrorException && IsJobQuotaException(batcnErrorException.Body.Code))
             {
                 tesTask.SetWarning(batcnErrorException.Body.Message.Value, Array.Empty<string>());
-                logger.LogDebug($"Not enough quota available for task Id {tesTask.Id}. Reason: {batcnErrorException.Body.Message.Value}. Task will remain in queue.");
+                logger.LogInformation($"Not enough quota available for task Id {tesTask.Id}. Reason: {batcnErrorException.Body.Message.Value}. Task will remain in queue.");
             }
-            catch (BatchException exception) when (exception.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batcnErrorException && IsPoolQuotaException(batcnErrorException.Body.Code))
+            catch (BatchException exception) when (exception.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && IsPoolQuotaException(batchErrorException.Body.Code))
             {
                 neededPools.Add(poolName);
-                tesTask.SetWarning(batcnErrorException.Body.Message.Value, Array.Empty<string>());
-                logger.LogDebug($"Not enough quota available for task Id {tesTask.Id}. Reason: {batcnErrorException.Body.Message.Value}. Task will remain in queue.");
+                tesTask.SetWarning(batchErrorException.Body.Message.Value, Array.Empty<string>());
+                logger.LogInformation($"Not enough quota available for task Id {tesTask.Id}. Reason: {batchErrorException.Body.Message.Value}. Task will remain in queue.");
             }
             catch (Microsoft.Rest.Azure.CloudException exception) when (IsPoolQuotaException(exception.Body.Code))
             {
                 neededPools.Add(poolName);
                 tesTask.SetWarning(exception.Body.Message, Array.Empty<string>());
-                logger.LogDebug($"Not enough quota available for task Id {tesTask.Id}. Reason: {exception.Body.Message}. Task will remain in queue.");
+                logger.LogInformation($"Not enough quota available for task Id {tesTask.Id}. Reason: {exception.Body.Message}. Task will remain in queue.");
             }
             catch (Exception exception)
             {
@@ -602,17 +604,17 @@ namespace TesApi.Web
                 };
             }
 
-            if (azureBatchJobAndTaskState.MoreThanOneActiveJobFound)
+            if (azureBatchJobAndTaskState.MoreThanOneActiveJobOrTaskFound)
             {
                 return new CombinedBatchTaskInfo
                 {
-                    BatchTaskState = BatchTaskState.MoreThanOneActiveJobFound,
-                    FailureReason = BatchTaskState.MoreThanOneActiveJobFound.ToString(),
+                    BatchTaskState = BatchTaskState.MoreThanOneActiveJobOrTaskFound,
+                    FailureReason = BatchTaskState.MoreThanOneActiveJobOrTaskFound.ToString(),
                     Pool = azureBatchJobAndTaskState.Pool
                 };
             }
 
-            // Because a ComputeTask is not assigned to the compute node while the StartTask is running, IAzureProxy.GetBatchJobAndTaskStateAsync() does not see start task failures. Attempt to deal with that here.
+            // Because a ComputeTask is not assigned to the compute node while the StartTask is running, IAzureProxy.GetBatchJobAndTaskStateAsync() does not see start task failures. Deal with that here.
             if (azureBatchJobAndTaskState.NodeState is null && azureBatchJobAndTaskState.JobState == JobState.Active && azureBatchJobAndTaskState.TaskState == TaskState.Active && !string.IsNullOrWhiteSpace(azureBatchJobAndTaskState.Pool?.PoolId))
             {
                 if (this.enableBatchAutopool)
@@ -621,6 +623,12 @@ namespace TesApi.Web
                 }
                 else
                 {
+                    /*
+                     * Priority order for assigning errors to TesTasks in shared-pool mode:
+                     * 1. Node error found in GetBatchJobAndTaskStateAsync()
+                     * 2. StartTask failure
+                     * 3. NodeAllocation failure
+                     */
                     if (TryGetPool(azureBatchJobAndTaskState.Pool.PoolId, out var pool))
                     {
                         if (!string.IsNullOrWhiteSpace(azureBatchJobAndTaskState.NodeErrorCode) || !ProcessStartTaskFailure(pool.PopNextStartTaskFailure()))
@@ -981,14 +989,11 @@ namespace TesApi.Web
             var batchScriptSasUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchScriptPath}");
             var batchExecutionDirectorySasUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchExecutionDirectoryPath}", getContainerSas: true);
 
-            //var batchRunScriptPath = "task-run.sh";
-            var batchRunScriptContent = string.Join(") && (", File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh")))
-                .Replace(@"{BatchScriptPath}", batchScriptPath)
-                .Replace(@"{TaskExecutor}", executor.Image);
+            var batchRunCommand = enableBatchAutopool
+                ? $"/bin/bash {batchScriptPath}"
+                : $"/bin/bash -c \"({taskRunScriptContent.Replace(@"{BatchScriptPath}", batchScriptPath).Replace(@"{TaskExecutor}", executor.Image)})\"";
 
-            //var batchRunScriptSasUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchRunScriptPath}");
-
-            var cloudTask = new CloudTask(taskId, $"/bin/bash -c \"({batchRunScriptContent})\"")
+            var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
                 UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
                 ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(batchScriptSasUrl, batchScriptPath), ResourceFile.FromUrl(downloadFilesScriptUrl, downloadFilesScriptPath), ResourceFile.FromUrl(uploadFilesScriptSasUrl, uploadFilesScriptPath) },
