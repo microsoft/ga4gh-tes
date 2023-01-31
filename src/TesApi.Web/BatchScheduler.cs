@@ -400,13 +400,12 @@ namespace TesApi.Web
                     identities.Add(tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity));
                 }
 
-                
-                var useGen2 = virtualMachineInfo.HyperVGenerations.Contains("V2");
+                var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2");
                 poolInformation = await CreateAutoPoolModePoolInformation(
                     GetPoolSpecification(
                         vmSize: virtualMachineInfo.VmSize,
                         preemptable: virtualMachineInfo.LowPriority,
-                        nodeInfo: useGen2 ? gen2BatchNodeInfo : gen1BatchNodeInfo,
+                        nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                         startTaskSasUrl: startTaskSasUrl,
                         startTaskPath: startTaskScriptFilename,
                         containerConfiguration: containerConfiguration),
