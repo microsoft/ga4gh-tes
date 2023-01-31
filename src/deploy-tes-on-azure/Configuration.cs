@@ -28,7 +28,7 @@ namespace TesDeployer
         {
             var blob = new byte[6];
             RandomNumberGenerator.Fill(blob);
-            return Utility.ConvertToBase32(blob).TrimEnd('=');
+            return CommonUtilities.Base32.ConvertToBase32(blob).TrimEnd('=');
         }
     }
 

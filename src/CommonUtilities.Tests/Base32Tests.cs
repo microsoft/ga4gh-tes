@@ -2,13 +2,11 @@
 // Licensed under the MIT License.
 
 using System.Text;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using TesApi.Web;
 
-namespace TesApi.Tests
+namespace CommonUtilities.Tests
 {
     [TestClass]
-    public class BatchUtilsTests
+    public class Base32Tests
     {
         [DataTestMethod] // https://datatracker.ietf.org/doc/html/rfc4648#section-10
         [DataRow("", "")]
@@ -19,6 +17,6 @@ namespace TesApi.Tests
         [DataRow("fooba", "MZXW6YTB")]
         [DataRow("foobar", "MZXW6YTBOI======")]
         public void ValidateConvertToBase32(string data, string expected)
-            => Assert.AreEqual(expected, BatchUtils.ConvertToBase32(Encoding.UTF8.GetBytes(data)));
+            => Assert.AreEqual(expected, Base32.ConvertToBase32(Encoding.UTF8.GetBytes(data)));
     }
 }
