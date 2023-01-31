@@ -244,23 +244,6 @@ namespace TesApi.Tests
             public override Microsoft.Azure.Batch.Protocol.IComputeNodeOperations ComputeNode => computeNode;
         }
 
-        private class ComputeNodeGroup : KeyedGroup<ComputeNode, GroupableSet<ComputeNode>>
-        {
-            public ComputeNodeGroup() : base(c => c.Id, StringComparer.Ordinal) { }
-
-            protected override Func<IEnumerable<ComputeNode>, GroupableSet<ComputeNode>> CreateSetFunc
-                => e => new(e, new ComputeNodeEqualityComparer());
-
-            private class ComputeNodeEqualityComparer : IEqualityComparer<ComputeNode>
-            {
-                bool IEqualityComparer<ComputeNode>.Equals(ComputeNode x, ComputeNode y)
-                    => x.Id.Equals(y.Id);
-
-                int IEqualityComparer<ComputeNode>.GetHashCode(ComputeNode obj)
-                    => obj.Id.GetHashCode();
-            }
-        }
-
         // Below this line we use reflection and internal details of the Azure libraries in order to generate Mocks of CloudPool and ComputeNode. A newer version of the library is supposed to enable this scenario, so hopefully we can soon drop this code.
         internal static CloudPool GeneratePool(string id, int currentDedicatedNodes = default, int currentLowPriorityNodes = default, int targetDedicatedNodes = default, int targetLowPriorityNodes = default, Microsoft.Azure.Batch.Common.AllocationState allocationState = Microsoft.Azure.Batch.Common.AllocationState.Steady, IList<Microsoft.Azure.Batch.MetadataItem> metadata = default, DateTime creationTime = default)
         {

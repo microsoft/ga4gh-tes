@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -11,6 +12,7 @@ using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Tes.Extensions;
 using Tes.Models;
+using static TesApi.Web.BatchScheduler.BatchPools;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
 namespace TesApi.Web
@@ -94,7 +96,7 @@ namespace TesApi.Web
 
         internal bool TryGetPool(string poolId, out IBatchPool batchPool)
         {
-            batchPool = batchPools.FirstOrDefault(p => p.Pool.PoolId.Equals(poolId, StringComparison.OrdinalIgnoreCase));
+            batchPool = batchPools.GetPoolOrDefault(poolId);
             return batchPool is not null;
         }
 
@@ -151,7 +153,7 @@ namespace TesApi.Web
         }
 
         private async ValueTask<List<IBatchPool>> GetEmptyPools(CancellationToken cancellationToken)
-            => await batchPools
+            => await batchPools.GetAllPools()
                 .ToAsyncEnumerable()
                 .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
                 .ToListAsync(cancellationToken);
@@ -166,7 +168,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public IEnumerable<IBatchPool> GetPools()
-            => batchPools;
+            => batchPools.GetAllPools();
 
         /// <inheritdoc/>
         public bool RemovePoolFromList(IBatchPool pool)
@@ -245,20 +247,77 @@ namespace TesApi.Web
 
         #region Used for unit/module testing
         internal IEnumerable<string> GetPoolGroupKeys()
-            => batchPools.Keys;
+            => batchPools.GetPoolKeys();
         #endregion
 
-        private class BatchPools : KeyedGroup<IBatchPool, GroupableSet<IBatchPool>>
+        internal sealed class BatchPools : KeyedCollection<string, PoolSet>
         {
             public BatchPools()
-                : base(p => p is null ? default : GetKeyFromPoolId(p.Pool.PoolId), StringComparer.Ordinal)
+                : base(StringComparer.OrdinalIgnoreCase)
             { }
 
-            protected override Func<IEnumerable<IBatchPool>, GroupableSet<IBatchPool>> CreateSetFunc
-                => e => new(e, new BatchPoolEqualityComparer());
+            protected override string GetKeyForItem(PoolSet item)
+                => item.Key;
+
+            private static string GetKeyForItem(IBatchPool pool)
+                => pool is null ? default : GetKeyFromPoolId(pool.Pool.PoolId);
+
+            public IEnumerable<IBatchPool> GetAllPools()
+                => this.SelectMany(s => s);
 
             public IBatchPool GetPoolOrDefault(string poolId)
-                => TryGetValue(GetKeyFromPoolId(poolId), out var batchPools) ? batchPools.FirstOrDefault(p => p.Pool.PoolId.Equals(poolId, StringComparison.Ordinal)) : default;
+                => TryGetValue(GetKeyFromPoolId(poolId), out var poolSet) ? poolSet.FirstOrDefault(p => p.Pool.PoolId.Equals(poolId, StringComparison.OrdinalIgnoreCase)) : default;
+
+            public bool Add(IBatchPool pool)
+            {
+                return TryGetValue(GetKeyForItem(pool), out var poolSet)
+                    ? poolSet.Add(pool)
+                    : AddSet();
+
+                bool AddSet()
+                {
+                    Add(new PoolSet(pool));
+                    return true;
+                }
+            }
+
+            public bool Remove(IBatchPool pool)
+            {
+                if (TryGetValue(GetKeyForItem(pool), out var poolSet))
+                {
+                    if (poolSet.Remove(pool))
+                    {
+                        if (0 == poolSet.Count)
+                        {
+                            if (!Remove(poolSet))
+                            {
+                                throw new InvalidOperationException();
+                            }
+                        }
+
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            internal IEnumerable<string> GetPoolKeys()
+                => this.Select(GetKeyForItem);
+
+            internal sealed class PoolSet : HashSet<IBatchPool>
+            {
+                public string Key { get; }
+                public PoolSet(IBatchPool pool)
+                    : base(new BatchPoolEqualityComparer())
+                {
+                    Key = GetKeyForItem(pool);
+                    if (!Add(pool))
+                    {
+                        throw new InvalidOperationException();
+                    }
+                }
+            }
         }
     }
 }
