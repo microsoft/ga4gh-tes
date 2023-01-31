@@ -9,6 +9,7 @@ using LazyCache;
 using Microsoft.Azure.Batch;
 using Polly;
 using Polly.Retry;
+using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
 namespace TesApi.Web

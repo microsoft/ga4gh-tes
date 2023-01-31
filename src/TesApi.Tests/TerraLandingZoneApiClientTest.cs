@@ -4,10 +4,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Clients;
+using TesApi.Web.Management.Configuration;
 
 namespace TesApi.Tests
 {
@@ -25,7 +27,10 @@ namespace TesApi.Tests
             terraApiStubData = new TerraApiStubData();
             tokenCredential = new Mock<TokenCredential>();
             cacheAndRetryHandler = new Mock<CacheAndRetryHandler>();
-            terraLandingZoneApiClient = new TerraLandingZoneApiClient(terraApiStubData.LandingZoneApiHost, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
+            var terraOptions = new Mock<IOptions<TerraOptions>>();
+            terraOptions.Setup(o => o.Value)
+                .Returns(new TerraOptions() { LandingZoneApiHost = terraApiStubData.LandingZoneApiHost });
+            terraLandingZoneApiClient = new TerraLandingZoneApiClient(terraOptions.Object, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
         }
 
         [TestMethod]

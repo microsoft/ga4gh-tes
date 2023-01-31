@@ -36,7 +36,7 @@ public class TerraApiStubData
     {
         return @"{
   ""token"": ""SASTOKENSTUB="",
-  ""url"": ""https://bloburl.org/container?sas=SASTOKENSUTB=""
+  ""url"": ""https://bloburl.foo/container?sas=SASTOKENSTUB=""
     }";
     }
 
