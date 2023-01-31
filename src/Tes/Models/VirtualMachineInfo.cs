@@ -43,8 +43,8 @@ namespace Tes.Models
         /// <summary>
         /// Number of cores for this VM
         /// </summary>
-        [TesTaskLogMetadataKey("vm_number_of_cores")]
-        public int? NumberOfCores { get; set; }
+        [TesTaskLogMetadataKey("vm_vcpus_available")]
+        public int? VCpusAvailable { get; set; }
 
         /// <summary>
         /// The resources disk size, in GB

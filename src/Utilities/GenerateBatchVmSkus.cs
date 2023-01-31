@@ -141,7 +141,7 @@ namespace TesUtils
                     {
                         MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
                         MemoryInGB = ConvertMiBToGiB(sizeInfo.MemoryInMB ?? 0),
-                        NumberOfCores = vCpusAvailable,
+                        VCpusAvailable = vCpusAvailable,
                         ResourceDiskSizeInGB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB ?? 0),
                         VmSize = sizeInfo.Name,
                         VmFamily = sku?.Family,

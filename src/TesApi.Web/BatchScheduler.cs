@@ -1282,7 +1282,7 @@ namespace TesApi.Web
                 eligibleVms = virtualMachineInfoList
                     .Where(vm =>
                         vm.LowPriority == preemptible
-                        && vm.NumberOfCores >= requiredNumberOfCores
+                        && vm.VCpusAvailable >= requiredNumberOfCores
                         && vm.MemoryInGB >= requiredMemoryInGB
                         && vm.ResourceDiskSizeInGB >= requiredDiskSizeInGB)
                     .ToList();
@@ -1348,7 +1348,7 @@ namespace TesApi.Web
         {
             if (coreQuota.IsLowPriority || !coreQuota.IsDedicatedAndPerVmFamilyCoreQuotaEnforced)
             {
-                return coreQuota.NumberOfCores >= vm.NumberOfCores;
+                return coreQuota.NumberOfCores >= vm.VCpusAvailable;
             }
 
             var result = coreQuota.DedicatedCoreQuotas?.FirstOrDefault(q => q.VmFamilyName.Equals(vm.VmFamily, StringComparison.OrdinalIgnoreCase));
@@ -1358,7 +1358,7 @@ namespace TesApi.Web
                 return false;
             }
 
-            return result?.CoreQuota >= vm.NumberOfCores;
+            return result?.CoreQuota >= vm.VCpusAvailable;
         }
 
         private async Task<(Tes.Models.BatchNodeMetrics BatchNodeMetrics, DateTimeOffset? TaskStartTime, DateTimeOffset? TaskEndTime, int? CromwellRcCode)> GetBatchNodeMetricsAndCromwellResultCodeAsync(TesTask tesTask)

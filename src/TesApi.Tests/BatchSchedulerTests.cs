@@ -45,8 +45,8 @@ namespace TesApi.Tests
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
             azureProxyReturnValues.VmSizesAndPrices = new() {
-                new() { VmSize = "VmSize1", LowPriority = true, NumberOfCores = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 1 },
-                new() { VmSize = "VmSize2", LowPriority = true, NumberOfCores = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 2 }};
+                new() { VmSize = "VmSize1", LowPriority = true, VCpusAvailable = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 1 },
+                new() { VmSize = "VmSize2", LowPriority = true, VCpusAvailable = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 2 }};
 
             var state = await GetNewTesTaskStateAsync(new TesResources { Preemptible = true, BackendParameters = new() { { "vm_size", "VmSize1" } } }, azureProxyReturnValues);
             Assert.AreEqual(TesState.INITIALIZINGEnum, state);
@@ -120,8 +120,8 @@ namespace TesApi.Tests
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
             azureProxyReturnValues.VmSizesAndPrices = new() {
-                new() { VmSize = "VmSize1", LowPriority = true, NumberOfCores = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 1 },
-                new() { VmSize = "VmSize2", LowPriority = true, NumberOfCores = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 2 }};
+                new() { VmSize = "VmSize1", LowPriority = true, VCpusAvailable = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 1 },
+                new() { VmSize = "VmSize2", LowPriority = true, VCpusAvailable = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 2 }};
 
             Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 1, RamGb = 1, DiskGb = 10, Preemptible = false }, azureProxyReturnValues));
             Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 4, RamGb = 1, DiskGb = 10, Preemptible = true }, azureProxyReturnValues));
@@ -173,8 +173,8 @@ namespace TesApi.Tests
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
             azureProxyReturnValues.VmSizesAndPrices = new() {
-                new() { VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = false, NumberOfCores = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 1 },
-                new() { VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = true, NumberOfCores = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 2 }};
+                new() { VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = false, VCpusAvailable = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 1 },
+                new() { VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = true, VCpusAvailable = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 2 }};
 
             azureProxyReturnValues.BatchQuotas = new() { ActiveJobAndJobScheduleQuota = 1, PoolQuota = 1, DedicatedCoreQuota = 9, LowPriorityCoreQuota = 17 };
 
@@ -423,11 +423,11 @@ namespace TesApi.Tests
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
             azureProxyReturnValues.VmSizesAndPrices = new() {
-                new() { VmSize = "VmSize1", LowPriority = false, NumberOfCores = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 1 },
-                new() { VmSize = "VmSize2", LowPriority = false, NumberOfCores = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 2 },
-                new() { VmSize = "VmSize3", LowPriority = false, NumberOfCores = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 3 },
-                new() { VmSize = "VmSize4", LowPriority = false, NumberOfCores = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 4 },
-                new() { VmSize = "VmSize5", LowPriority = false, NumberOfCores = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 5 }
+                new() { VmSize = "VmSize1", LowPriority = false, VCpusAvailable = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 1 },
+                new() { VmSize = "VmSize2", LowPriority = false, VCpusAvailable = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 2 },
+                new() { VmSize = "VmSize3", LowPriority = false, VCpusAvailable = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 3 },
+                new() { VmSize = "VmSize4", LowPriority = false, VCpusAvailable = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 4 },
+                new() { VmSize = "VmSize5", LowPriority = false, VCpusAvailable = 2, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 5 }
             };
 
             await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
@@ -1146,10 +1146,10 @@ namespace TesApi.Tests
                 },
                 ContainerRegistryInfo = new() { RegistryServer = "registryServer1", Username = "default", Password = "placeholder" },
                 VmSizesAndPrices = new() {
-                    new() { VmSize = "VmSizeLowPri1", VmFamily = "VmFamily1", LowPriority = true, NumberOfCores = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 1 },
-                    new() { VmSize = "VmSizeLowPri2", VmFamily = "VmFamily2", LowPriority = true, NumberOfCores = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 2 },
-                    new() { VmSize = "VmSizeDedicated1", VmFamily = "VmFamily1", LowPriority = false, NumberOfCores = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 11 },
-                    new() { VmSize = "VmSizeDedicated2", VmFamily = "VmFamily2", LowPriority = false, NumberOfCores = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 22 }
+                    new() { VmSize = "VmSizeLowPri1", VmFamily = "VmFamily1", LowPriority = true, VCpusAvailable = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 1 },
+                    new() { VmSize = "VmSizeLowPri2", VmFamily = "VmFamily2", LowPriority = true, VCpusAvailable = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 2 },
+                    new() { VmSize = "VmSizeDedicated1", VmFamily = "VmFamily1", LowPriority = false, VCpusAvailable = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 11 },
+                    new() { VmSize = "VmSizeDedicated2", VmFamily = "VmFamily2", LowPriority = false, VCpusAvailable = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 22 }
                 },
                 BatchQuotas = new() { ActiveJobAndJobScheduleQuota = 1, PoolQuota = 1, DedicatedCoreQuota = 5, LowPriorityCoreQuota = 10, DedicatedCoreQuotaPerVMFamily = new List<VirtualMachineFamilyCoreQuota>() },
                 ActiveNodeCountByVmSize = new List<AzureBatchNodeCount>(),
@@ -1167,7 +1167,7 @@ namespace TesApi.Tests
             private static AzureProxyReturnValues DefaultsPerVMFamilyEnforcedImpl()
             {
                 var proxy = Defaults;
-                proxy.VmSizesAndPrices.Add(new() { VmSize = "VmSize3", VmFamily = "VmFamily3", LowPriority = false, NumberOfCores = 4, MemoryInGB = 12, ResourceDiskSizeInGB = 80, PricePerHour = 33 });
+                proxy.VmSizesAndPrices.Add(new() { VmSize = "VmSize3", VmFamily = "VmFamily3", LowPriority = false, VCpusAvailable = 4, MemoryInGB = 12, ResourceDiskSizeInGB = 80, PricePerHour = 33 });
                 proxy.BatchQuotas = new()
                 {
                     DedicatedCoreQuotaPerVMFamilyEnforced = true,

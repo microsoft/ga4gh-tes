@@ -112,7 +112,7 @@ namespace TesApi.Web.Management
                 LowPriority = isLowPriority,
                 MaxDataDiskCount = vmReference.MaxDataDiskCount,
                 MemoryInGB = vmReference.MemoryInGB,
-                NumberOfCores = vmReference.NumberOfCores,
+                VCpusAvailable = vmReference.VCpusAvailable,
                 PricePerHour = pricePerHour,
                 ResourceDiskSizeInGB = vmReference.ResourceDiskSizeInGB,
                 VmFamily = vmReference.VmFamily,
