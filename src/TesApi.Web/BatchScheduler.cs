@@ -61,7 +61,8 @@ namespace TesApi.Web
         private readonly bool usePreemptibleVmsOnly;
         private readonly string batchNodesSubnetId;
         private readonly bool disableBatchNodesPublicIpAddress;
-        private readonly BatchNodeInfo batchNodeInfo;
+        private readonly BatchNodeInfo gen2BatchNodeInfo;
+        private readonly BatchNodeInfo gen1BatchNodeInfo;
         private readonly string marthaUrl;
         private readonly string marthaKeyVaultName;
         private readonly string marthaSecretName;
@@ -116,12 +117,21 @@ namespace TesApi.Web
             this.globalStartTaskPath = StandardizeStartTaskPath(GetStringValue(configuration, "GlobalStartTaskPath", string.Empty), this.defaultStorageAccountName);
             this.globalManagedIdentity = GetStringValue(configuration, "GlobalManagedIdentity", string.Empty);
 
-            this.batchNodeInfo = new BatchNodeInfo
+            this.gen2BatchNodeInfo = new BatchNodeInfo
             {
                 BatchImageOffer = GetStringValue(configuration, "BatchImageOffer"),
                 BatchImagePublisher = GetStringValue(configuration, "BatchImagePublisher"),
                 BatchImageSku = GetStringValue(configuration, "BatchImageSku"),
                 BatchImageVersion = GetStringValue(configuration, "BatchImageVersion"),
+                BatchNodeAgentSkuId = GetStringValue(configuration, "BatchNodeAgentSkuId")
+            };
+
+            this.gen1BatchNodeInfo = new BatchNodeInfo
+            {
+                BatchImageOffer = GetStringValue(configuration, "Gen1BatchImageOffer"),
+                BatchImagePublisher = GetStringValue(configuration, "Gen1BatchImagePublisher"),
+                BatchImageSku = GetStringValue(configuration, "Gen1BatchImageSku"),
+                BatchImageVersion = GetStringValue(configuration, "Gen1BatchImageVersion"),
                 BatchNodeAgentSkuId = GetStringValue(configuration, "BatchNodeAgentSkuId")
             };
 
@@ -390,11 +400,13 @@ namespace TesApi.Web
                     identities.Add(tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity));
                 }
 
+                
+                var useGen2 = virtualMachineInfo.HyperVGenerations.Contains("V2");
                 poolInformation = await CreateAutoPoolModePoolInformation(
                     GetPoolSpecification(
                         vmSize: virtualMachineInfo.VmSize,
                         preemptable: virtualMachineInfo.LowPriority,
-                        nodeInfo: batchNodeInfo,
+                        nodeInfo: useGen2 ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                         startTaskSasUrl: startTaskSasUrl,
                         startTaskPath: startTaskScriptFilename,
                         containerConfiguration: containerConfiguration),

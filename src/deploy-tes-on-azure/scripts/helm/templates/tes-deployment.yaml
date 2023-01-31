@@ -59,6 +59,14 @@ spec:
               value: {{ .Values.config.batchImageSku | quote }}
             - name: BatchImageVersion
               value: {{ .Values.config.batchImageVersion }}
+            - name: Gen1BatchImageOffer
+              value: {{ .Values.config.gen1BatchImageOffer }}
+            - name: Gen1BatchImagePublisher
+              value: {{ .Values.config.gen1BatchImagePublisher }}
+            - name: Gen1BatchImageSku
+              value: {{ .Values.config.gen1BatchImageSku | quote }}
+            - name: Gen1BatchImageVersion
+              value: {{ .Values.config.gen1BatchImageVersion }}
             - name: BatchNodeAgentSkuId
               value: {{ .Values.config.batchNodeAgentSkuId }}
             - name: MarthaUrl

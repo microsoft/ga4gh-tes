@@ -393,6 +393,10 @@ namespace TesDeployer
             values.Config["batchImagePublisher"] = settings["BatchImagePublisher"];
             values.Config["batchImageSku"] = settings["BatchImageSku"];
             values.Config["batchImageVersion"] = settings["BatchImageVersion"];
+            values.Config["gen1BatchImageOffer"] = settings["Gen1BatchImageOffer"];
+            values.Config["gen1BatchImagePublisher"] = settings["Gen1BatchImagePublisher"];
+            values.Config["gen1BatchImageSku"] = settings["Gen1BatchImageSku"];
+            values.Config["gen1BatchImageVersion"] = settings["Gen1BatchImageVersion"];
             values.Config["batchNodeAgentSkuId"] = settings["BatchNodeAgentSkuId"];
             values.Config["marthaUrl"] = settings["MarthaUrl"];
             values.Config["marthaKeyVaultName"] = settings["MarthaKeyVaultName"];
@@ -429,6 +433,10 @@ namespace TesDeployer
                 ["BatchImagePublisher"] = values.Config["batchImagePublisher"],
                 ["BatchImageSku"] = values.Config["batchImageSku"],
                 ["BatchImageVersion"] = values.Config["batchImageVersion"],
+                ["Gen1BatchImageOffer"] = values.Config["gen1BatchImageOffer"],
+                ["Gen1BatchImagePublisher"] = values.Config["gen1BatchImagePublisher"],
+                ["Gen1BatchImageSku"] = values.Config["gen1BatchImageSku"],
+                ["Gen1BatchImageVersion"] = values.Config["gen1BatchImageVersion"],
                 ["BatchNodeAgentSkuId"] = values.Config["batchNodeAgentSkuId"],
                 ["MarthaUrl"] = values.Config["marthaUrl"],
                 ["MarthaKeyVaultName"] = values.Config["marthaKeyVaultName"],
