@@ -44,10 +44,11 @@ namespace TesApi.Web
                 .Configure<CosmosDbOptions>(Configuration.GetSection(CosmosDbOptions.CosmosDbAccount))
                 .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.RetryPolicy))
                 .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.Terra))
-
+                .Configure<ContainerRegistryOptions>(Configuration.GetSection(ContainerRegistryOptions.ContainerRegistrySection))
                 .AddSingleton<IAppCache, CachingService>()
-                .AddSingleton<AzureProxy>()
-                .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
+                .AddSingleton(CreateBatchPoolManagerFromConfiguration)
+
+                .AddSingleton<AzureProxy, AzureProxy>()
 
                 .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
                 .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
@@ -61,9 +62,11 @@ namespace TesApi.Web
                 }).Services
 
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
-                .AddSingleton<IStorageAccessProvider, DefaultStorageAccessProvider>()
+                .AddSingleton(CreateStorageAccessProviderFromConfiguration)
+                .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
 
                 .AddLogging()
+                .AddAutoMapper(typeof(Pool), typeof(ApiCreateBatchPoolRequest))
                 .AddSingleton<ContainerRegistryProvider>()
                 .AddSingleton<CacheAndRetryHandler>()
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
@@ -72,9 +75,9 @@ namespace TesApi.Web
                 .AddSingleton<IBatchSkuInformationProvider, PriceApiBatchSkuInformationProvider>()
                 .AddSingleton(CreateBatchAccountResourceInformation)
                 .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
-                .AddSingleton<AzureManagementClientsFactory>()
-                .AddSingleton<ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
-                .AddSingleton<ConfigurationUtils>()
+                .AddSingleton<AzureManagementClientsFactory, AzureManagementClientsFactory>()
+                //.AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
+                .AddSingleton<ConfigurationUtils, ConfigurationUtils>()
                 .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
 
                 .AddSwaggerGen(c =>

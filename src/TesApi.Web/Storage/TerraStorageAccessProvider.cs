@@ -65,7 +65,7 @@ namespace TesApi.Web.Storage
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
 
-            var normalizedPath = path.TrimStart('/');
+            var normalizedPath = $"/{path.TrimStart('/')}";
 
             if (getContainerSas)
             {
@@ -102,13 +102,17 @@ namespace TesApi.Web.Storage
 
         private async Task<string> GetMappedSasUrlFromWsmAsync(string blobName)
         {
-            var tokenParams = CreateTokenParamsFromOptions(blobName, SasBlobPermissions);
+            var tokenParams = CreateTokenParamsFromOptions(blobName.TrimStart('/'), SasBlobPermissions);
 
             var tokenInfo = await GetSasTokenFromWsmAsync(tokenParams);
 
             logger.LogInformation($"Successfully obtained the Sas Url from Terra. Requested blobName:{blobName}. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
 
-            return tokenInfo.Url;
+            var uriBuilder = new UriBuilder(tokenInfo.Url);
+
+            uriBuilder.Path += blobName;
+
+            return uriBuilder.ToString();
         }
 
         private SasTokenApiParameters CreateTokenParamsFromOptions(string blobName, string sasPermissions)
