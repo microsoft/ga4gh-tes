@@ -106,7 +106,7 @@ namespace TesApi.Web.Storage
 
             var tokenInfo = await GetSasTokenFromWsmAsync(tokenParams);
 
-            logger.LogInformation($"Successfully obtained the Sas Url from Terra. Requested blobName:{blobName}. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
+            logger.LogInformation($"Successfully obtained the Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
 
             var uriBuilder = new UriBuilder(tokenInfo.Url);
 
@@ -126,7 +126,7 @@ namespace TesApi.Web.Storage
         private async Task<WsmSasTokenApiResponse> GetSasTokenFromWsmAsync(SasTokenApiParameters tokenParams)
         {
             logger.LogInformation(
-                $"Getting Sas Url from Terra. Requested blobName:{tokenParams.SasBlobName}. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
+                $"Getting Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
 
             return await terraWsmApiClient.GetSasTokenAsync(
                 Guid.Parse(terraOptions.WorkspaceId),
@@ -138,12 +138,12 @@ namespace TesApi.Web.Storage
         {
             if (!IsTerraWorkspaceStorageAccount(accountName))
             {
-                throw new Exception($"The account name does not match. Expected:{accountName} and Provided{terraOptions.WorkspaceStorageAccountName}");
+                throw new Exception($"The account name does not match the configuration for Terra.");
             }
 
             if (!IsTerraWorkspaceContainer(containerName))
             {
-                throw new Exception($"The container name does not match. Expected:{containerName} and Provided{terraOptions.WorkspaceStorageContainerName}");
+                throw new Exception($"The container name does not match the configuration for Terra");
             }
         }
 
