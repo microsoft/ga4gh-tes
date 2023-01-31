@@ -16,8 +16,8 @@ namespace TesUtils
 {
     internal class Configuration
     {
-        public string SubscriptionId { get; set; }
-        public string OutputFilePath { get; set; }
+        public string? SubscriptionId { get; set; }
+        public string? OutputFilePath { get; set; }
 
         public static Configuration BuildConfiguration(string[] args)
         {
@@ -129,11 +129,14 @@ namespace TesUtils
                 {
                     var generationList = new List<string>();
                     var generation = sku?.Capabilities.Where(x => x.Name.Equals("HyperVGenerations")).FirstOrDefault()?.Value;
+
                     if (generation is not null)
                     {
                         generationList = generation.Split(",").ToList();
                     }
+
                     int.TryParse(sku?.Capabilities.Where(x => x.Name.Equals("vCPUsAvailable")).FirstOrDefault()?.Value, out var vCpusAvailable);
+
                     return new VirtualMachineInformation()
                     {
                         MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
@@ -146,6 +149,7 @@ namespace TesUtils
                         RegionsAvailable = new List<string>(regionsForVm[s])
                     };
                 }
+
                 return null;
             }).ToList();
 
