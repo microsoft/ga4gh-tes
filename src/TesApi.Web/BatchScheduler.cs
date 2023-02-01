@@ -143,11 +143,11 @@ namespace TesApi.Web
 
             this.gen2BatchNodeInfo = new BatchNodeInfo
             {
-                BatchImageOffer = GetStringValue(configuration, "BatchImageOffer"),
-                BatchImagePublisher = GetStringValue(configuration, "BatchImagePublisher"),
-                BatchImageSku = GetStringValue(configuration, "BatchImageSku"),
-                BatchImageVersion = GetStringValue(configuration, "BatchImageVersion"),
-                BatchNodeAgentSkuId = GetStringValue(configuration, "BatchNodeAgentSkuId")
+                BatchImageOffer = GetStringValue(configuration, "Gen2BatchImageOffer"),
+                BatchImagePublisher = GetStringValue(configuration, "Gen2BatchImagePublisher"),
+                BatchImageSku = GetStringValue(configuration, "Gen2BatchImageSku"),
+                BatchImageVersion = GetStringValue(configuration, "Gen2BatchImageVersion"),
+                BatchNodeAgentSkuId = GetStringValue(configuration, "Gen2BatchNodeAgentSkuId")
             };
 
             this.gen1BatchNodeInfo = new BatchNodeInfo
