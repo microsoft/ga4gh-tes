@@ -111,10 +111,10 @@ public class BatchQuotaVerifierTests
             {
                 LowPriority = false,
                 MaxDataDiskCount = 1,
-                MemoryInGB = 2.0d,
+                MemoryInGiB = 2.0d,
                 VCpusAvailable = maxNumberOfCores / 2,
                 PricePerHour = 1.0m,
-                ResourceDiskSizeInGB = 1d,
+                ResourceDiskSizeInGiB = 1d,
                 VmFamily = VmFamily,
                 VmSize = "D4"
             },
@@ -122,10 +122,10 @@ public class BatchQuotaVerifierTests
             {
                 LowPriority = false,
                 MaxDataDiskCount = 1,
-                MemoryInGB = 4.0d,
+                MemoryInGiB = 4.0d,
                 VCpusAvailable = maxNumberOfCores / 2,
                 PricePerHour = 1.0m,
-                ResourceDiskSizeInGB = 1d,
+                ResourceDiskSizeInGiB = 1d,
                 VmFamily = VmFamily,
                 VmSize = "D8"
             },
@@ -133,10 +133,10 @@ public class BatchQuotaVerifierTests
             {
                 LowPriority = false,
                 MaxDataDiskCount = 1,
-                MemoryInGB = 2.0d,
+                MemoryInGiB = 2.0d,
                 VCpusAvailable = maxNumberOfCores / 2,
                 PricePerHour = 1.0m,
-                ResourceDiskSizeInGB = 1d,
+                ResourceDiskSizeInGiB = 1d,
                 VmFamily = VmFamily,
                 VmSize = "D2"
             }
@@ -151,10 +151,10 @@ public class BatchQuotaVerifierTests
             {
                 LowPriority = false,
                 MaxDataDiskCount = 1,
-                MemoryInGB = 2.0d,
+                MemoryInGiB = 2.0d,
                 VCpusAvailable = maxNumberOfCores / 2,
                 PricePerHour = 1.0m,
-                ResourceDiskSizeInGB = 1d,
+                ResourceDiskSizeInGiB = 1d,
                 VmFamily = VmFamily,
                 VmSize = "D4"
             },
@@ -162,10 +162,10 @@ public class BatchQuotaVerifierTests
             {
                 LowPriority = false,
                 MaxDataDiskCount = 1,
-                MemoryInGB = 2.0d,
+                MemoryInGiB = 2.0d,
                 VCpusAvailable = maxNumberOfCores / 2,
                 PricePerHour = 1.0m,
-                ResourceDiskSizeInGB = 1d,
+                ResourceDiskSizeInGiB = 1d,
                 VmFamily = VmFamily,
                 VmSize = "D2"
             }

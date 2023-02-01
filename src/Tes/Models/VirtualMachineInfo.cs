@@ -37,8 +37,8 @@ namespace Tes.Models
         /// <summary>
         /// VM memory size, in GB
         /// </summary>
-        [TesTaskLogMetadataKey("vm_memory_in_gb")]
-        public double? MemoryInGB { get; set; }
+        [TesTaskLogMetadataKey("vm_memory_in_gib")]
+        public double? MemoryInGiB { get; set; }
 
         /// <summary>
         /// Number of cores for this VM
@@ -49,8 +49,8 @@ namespace Tes.Models
         /// <summary>
         /// The resources disk size, in GB
         /// </summary>
-        [TesTaskLogMetadataKey("vm_resource_disk_size_in_gb")]
-        public double? ResourceDiskSizeInGB { get; set; }
+        [TesTaskLogMetadataKey("vm_resource_disk_size_in_gib")]
+        public double? ResourceDiskSizeInGiB { get; set; }
 
         /// <summary>
         /// The max number of data disks for this VM

@@ -1282,8 +1282,8 @@ namespace TesApi.Web
                     .Where(vm =>
                         vm.LowPriority == preemptible
                         && vm.VCpusAvailable >= requiredNumberOfCores
-                        && vm.MemoryInGB >= requiredMemoryInGB
-                        && vm.ResourceDiskSizeInGB >= requiredDiskSizeInGB)
+                        && vm.MemoryInGiB >= requiredMemoryInGB
+                        && vm.ResourceDiskSizeInGiB >= requiredDiskSizeInGB)
                     .ToList();
 
                 noVmFoundMessage = $"No VM (out of {virtualMachineInfoList.Count}) available with the required resources (cores: {requiredNumberOfCores}, memory: {requiredMemoryInGB} GB, disk: {requiredDiskSizeInGB} GB, preemptible: {preemptible}) for task id {tesTask.Id}.";

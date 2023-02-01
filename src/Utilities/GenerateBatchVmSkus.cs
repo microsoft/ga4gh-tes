@@ -46,7 +46,7 @@ namespace TesUtils
     {
         static async Task Main(string[] args)
         {
-            Configuration configuration = null;
+            Configuration? configuration = null;
 
             try
             {
@@ -81,6 +81,7 @@ namespace TesUtils
 
                     List<VirtualMachineSize>? sizes = null;
                     List<ComputeResourceSku>? skus = null;
+
                     foreach (var vm in vms)
                     {
                         if (regionsForVm.ContainsKey(vm))
@@ -98,7 +99,7 @@ namespace TesUtils
                             {
                                 sizes = await subscription.GetVirtualMachineSizesAsync(region).ToListAsync();
                             }
-                            sizeForVm[vm] = sizes.FirstOrDefault(vmsize => vmsize.Name.Equals(vm));
+                            sizeForVm[vm] = sizes.SingleOrDefault(vmsize => vmsize.Name.Equals(vm, StringComparison.OrdinalIgnoreCase));
                         }
 
                         if (!skuForVm.ContainsKey(vm))
@@ -107,7 +108,7 @@ namespace TesUtils
                             {
                                 skus = await subscription.GetComputeResourceSkusAsync(region).ToListAsync();
                             }
-                            skuForVm[vm] = skus.FirstOrDefault(sku => sku.Name == vm);
+                            skuForVm[vm] = skus.SingleOrDefault(sku => sku.Name.Equals(vm, StringComparison.OrdinalIgnoreCase));
                         }
                     }
                     Console.WriteLine($"{region} supportedSkuCount:{vms.Count}");
@@ -125,32 +126,38 @@ namespace TesUtils
             {
                 var sizeInfo = sizeForVm[s];
                 var sku = skuForVm[s];
-                if (sizeInfo is not null)
+
+                if (sizeInfo is null)
                 {
-                    var generationList = new List<string>();
-                    var generation = sku?.Capabilities.Where(x => x.Name.Equals("HyperVGenerations")).FirstOrDefault()?.Value;
-
-                    if (generation is not null)
-                    {
-                        generationList = generation.Split(",").ToList();
-                    }
-
-                    int.TryParse(sku?.Capabilities.Where(x => x.Name.Equals("vCPUsAvailable")).FirstOrDefault()?.Value, out var vCpusAvailable);
-
-                    return new VirtualMachineInformation()
-                    {
-                        MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
-                        MemoryInGB = ConvertMiBToGiB(sizeInfo.MemoryInMB ?? 0),
-                        VCpusAvailable = vCpusAvailable,
-                        ResourceDiskSizeInGB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB ?? 0),
-                        VmSize = sizeInfo.Name,
-                        VmFamily = sku?.Family,
-                        HyperVGenerations = generationList,
-                        RegionsAvailable = new List<string>(regionsForVm[s])
-                    };
+                    throw new Exception($"Size info is null for VM {s}");
                 }
 
-                return null;
+                if (sku is null)
+                {
+                    throw new Exception($"Sku info is null for VM {s}");
+                }
+
+                var generationList = new List<string>();
+                var generation = sku?.Capabilities.Where(x => x.Name.Equals("HyperVGenerations")).SingleOrDefault()?.Value;
+
+                if (generation is not null)
+                {
+                    generationList = generation.Split(",").ToList();
+                }
+
+                int.TryParse(sku?.Capabilities.Where(x => x.Name.Equals("vCPUsAvailable")).SingleOrDefault()?.Value, out var vCpusAvailable);
+
+                return new VirtualMachineInformation()
+                {
+                    MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
+                    MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB ?? 0),
+                    VCpusAvailable = vCpusAvailable,
+                    ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB ?? 0),
+                    VmSize = sizeInfo.Name,
+                    VmFamily = sku?.Family,
+                    HyperVGenerations = generationList,
+                    RegionsAvailable = new List<string>(regionsForVm[s])
+                };
             }).ToList();
 
             var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.General);
