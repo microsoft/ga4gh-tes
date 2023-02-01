@@ -7,6 +7,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Polly.Utilities;
 using TesApi.Web;
+using TesApi.Web.Storage;
 
 namespace TesApi.Tests
 {

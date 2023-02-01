@@ -26,6 +26,7 @@ using Polly;
 using Polly.Retry;
 using Tes.Models;
 using TesApi.Web.Management.Configuration;
+using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 using CloudTask = Microsoft.Azure.Batch.CloudTask;
 using ComputeNodeState = Microsoft.Azure.Batch.Common.ComputeNodeState;

@@ -33,7 +33,7 @@ public class TerraApiStubData
     public static string GetWsmSasTokenApiResponseInJson()
         => @"{
   ""token"": ""SASTOKENSTUB="",
-  ""url"": ""https://bloburl.org/container?sas=SASTOKENSUTB=""
+  ""url"": ""https://bloburl.foo/container?sas=SASTOKENSTUB=""
     }";
 
     public string GetResourceApiResponseInJson()

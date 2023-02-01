@@ -101,7 +101,11 @@ namespace TesApi.Web.Management
             return null;
         }
 
-        private static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync()
+        /// <summary>
+        /// Creates a new instance of Azure Management client
+        /// </summary>
+        /// <returns></returns>
+        public static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync()
         {
             var accessToken = await GetAzureAccessTokenAsync();
             var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, AzureEnvironment.AzureGlobalCloud);

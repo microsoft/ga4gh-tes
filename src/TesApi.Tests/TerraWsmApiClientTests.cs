@@ -8,10 +8,12 @@ using System.Threading.Tasks;
 using System.Web;
 using Azure.Core;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Clients;
+using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 
 namespace TesApi.Tests
@@ -27,10 +29,13 @@ namespace TesApi.Tests
         [TestInitialize]
         public void SetUp()
         {
-            terraApiStubData = new TerraApiStubData();
-            tokenCredential = new Mock<TokenCredential>();
-            cacheAndRetryHandler = new Mock<CacheAndRetryHandler>();
-            terraWsmApiClient = new TerraWsmApiClient(tokenCredential.Object, TerraApiStubData.WsmApiHost,
+            terraApiStubData = new();
+            tokenCredential = new();
+            cacheAndRetryHandler = new();
+            var terraOptions = new Mock<IOptions<TerraOptions>>();
+            terraOptions.Setup(o => o.Value)
+                .Returns(new TerraOptions() { WsmApiHost = TerraApiStubData.WsmApiHost });
+            terraWsmApiClient = new(tokenCredential.Object, terraOptions.Object,
                 cacheAndRetryHandler.Object, NullLogger<TerraWsmApiClient>.Instance);
         }
 

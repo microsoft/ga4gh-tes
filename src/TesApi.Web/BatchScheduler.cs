@@ -19,6 +19,7 @@ using Tes.Extensions;
 using Tes.Models;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
+using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 using TesException = Tes.Models.TesException;
 using TesFileType = Tes.Models.TesFileType;
@@ -1083,7 +1084,7 @@ namespace TesApi.Web
                 inputFileUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync(inputFile.Path);
                 await this.storageAccessProvider.UploadBlobFromFileAsync(inputFile.Path, localPath);
             }
-            else if (await this.storageAccessProvider.IsPublicHttpUrl(inputFile.Url))
+            else if (await this.storageAccessProvider.IsPublicHttpUrlAsync(inputFile.Url))
             {
                 inputFileUrl = inputFile.Url;
             }

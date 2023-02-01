@@ -7,6 +7,8 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 
 namespace TesApi.Web.Management.Clients
@@ -24,15 +26,20 @@ namespace TesApi.Web.Management.Clients
         /// Constructor of TerraWsmApiClient
         /// </summary>
         /// <param name="tokenCredential"></param>
-        /// <param name="apiHost">Api Host</param>
+        /// <param name="terraOptions"></param>
         /// <param name="cacheAndRetryHandler"></param>
         /// <param name="logger"></param>
-        public TerraWsmApiClient(TokenCredential tokenCredential, string apiHost, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraWsmApiClient> logger) : base(tokenCredential, cacheAndRetryHandler, logger)
+        public TerraWsmApiClient(TokenCredential tokenCredential, IOptions<TerraOptions> terraOptions, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraWsmApiClient> logger) : base(tokenCredential, cacheAndRetryHandler, logger)
         {
-            ArgumentException.ThrowIfNullOrEmpty(apiHost);
+            ArgumentException.ThrowIfNullOrEmpty(terraOptions.Value.WsmApiHost, nameof(terraOptions.Value.WsmApiHost));
 
-            this.baseApiUrl = apiHost.TrimEnd('/') + WsmApiSegments;
+            this.baseApiUrl = terraOptions.Value.WsmApiHost.TrimEnd('/') + WsmApiSegments;
         }
+
+        /// <summary>
+        /// Protected parameter-less constructor
+        /// </summary>
+        protected TerraWsmApiClient() { }
 
         /// <summary>
         /// Returns the SAS token of a container or blob for WSM managed storage account.
@@ -41,7 +48,7 @@ namespace TesApi.Web.Management.Clients
         /// <param name="resourceId">Terra resource id</param>
         /// <param name="sasTokenApiParameters">Sas token parameters</param>
         /// <returns></returns>
-        public async Task<WsmSasTokenApiResponse> GetSasTokenAsync(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
+        public virtual async Task<WsmSasTokenApiResponse> GetSasTokenAsync(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
         {
             var uri = GetContainerSasTokenApiUri(workspaceId, resourceId, sasTokenApiParameters);
 
@@ -67,7 +74,7 @@ namespace TesApi.Web.Management.Clients
         /// <param name="resourceId">WSM resource Id of the container</param>
         /// <param name="sasTokenApiParameters"><see cref="SasTokenApiParameters"/></param>
         /// <returns></returns>
-        public Uri GetContainerSasTokenApiUri(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
+        public virtual Uri GetContainerSasTokenApiUri(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
         {
             var segments = $"/resources/controlled/azure/storageContainer/{resourceId}/getSasToken";
 
