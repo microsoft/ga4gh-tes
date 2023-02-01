@@ -823,15 +823,15 @@ namespace TesApi.Web
             var cromwellExecutionDirectoryPath = GetCromwellExecutionDirectoryPath(task);
             var batchExecutionPathPrefix = cromwellExecutionDirectoryPath is null ? ExecutionsPathPrefix : CromwellPathPrefix;
 
-            var queryStringsToRemoveFromLocalFilePaths = task.Inputs
+            var queryStringsToRemoveFromLocalFilePaths = task.Inputs?
                 .Select(i => i.Path)
                 .Concat(task.Outputs.Select(o => o.Path))
                 .Where(p => p is not null)
                 .Select(p => queryStringRegex.Match(p).Groups[1].Value)
                 .Where(qs => !string.IsNullOrEmpty(qs))
-                .ToList();
+                .ToList() ?? new List<string>();
 
-            var inputFiles = task.Inputs.Distinct();
+            var inputFiles = task.Inputs?.Distinct().ToList() ?? new List<TesInput>();
 
             var drsInputFiles = inputFiles
                 .Where(f => f?.Url?.StartsWith("drs://", StringComparison.OrdinalIgnoreCase) == true)
