@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -29,13 +32,13 @@ namespace TesApi.Tests
         [TestInitialize]
         public void SetUp()
         {
-            terraApiStubData = new TerraApiStubData();
-            wsmApiClientMock = new Mock<TerraWsmApiClient>();
-            optionsMock = new Mock<IOptions<TerraOptions>>();
+            terraApiStubData = new();
+            wsmApiClientMock = new();
+            optionsMock = new();
             terraOptions = CreateTerraOptionsFromStubData();
             optionsMock.Setup(o => o.Value).Returns(terraOptions);
-            azureProxyMock = new Mock<IAzureProxy>();
-            terraStorageAccessProvider = new TerraStorageAccessProvider(NullLogger<TerraStorageAccessProvider>.Instance,
+            azureProxyMock = new();
+            terraStorageAccessProvider = new(NullLogger<TerraStorageAccessProvider>.Instance,
                 optionsMock.Object, azureProxyMock.Object, wsmApiClientMock.Object);
         }
 
@@ -66,11 +69,11 @@ namespace TesApi.Tests
         {
             wsmApiClientMock.Setup(a => a.GetSasTokenAsync(terraApiStubData.WorkspaceId,
                     terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>()))
-                .ReturnsAsync(terraApiStubData.GetWsmSasTokenApiResponse());
+                .ReturnsAsync(TerraApiStubData.GetWsmSasTokenApiResponse());
 
             var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input);
 
-            Assert.IsNotNull(terraApiStubData.GetWsmSasTokenApiResponse().Url, result);
+            Assert.IsNotNull(TerraApiStubData.GetWsmSasTokenApiResponse().Url, result);
         }
 
         [TestMethod]
@@ -92,21 +95,20 @@ namespace TesApi.Tests
             var path = "/foo/bar";
             wsmApiClientMock.Setup(a => a.GetSasTokenAsync(terraApiStubData.WorkspaceId,
                     terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>()))
-                .ReturnsAsync(terraApiStubData.GetWsmSasTokenApiResponse());
+                .ReturnsAsync(TerraApiStubData.GetWsmSasTokenApiResponse());
 
             var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(path, true);
 
-            var builder = new UriBuilder(terraApiStubData.GetWsmSasTokenApiResponse().Url);
+            var builder = new UriBuilder(TerraApiStubData.GetWsmSasTokenApiResponse().Url);
             builder.Path += path.TrimStart('/');
 
             Assert.IsNotNull(builder.ToString(), result);
         }
 
         private TerraOptions CreateTerraOptionsFromStubData()
-        {
-            return new TerraOptions()
+            => new()
             {
-                WsmApiHost = terraApiStubData.WsmApiHost,
+                WsmApiHost = TerraApiStubData.WsmApiHost,
                 WorkspaceStorageAccountName = WorkspaceStorageAccountName,
                 WorkspaceStorageContainerName = WorkspaceStorageContainerName,
                 WorkspaceId = terraApiStubData.WorkspaceId.ToString(),
@@ -114,6 +116,5 @@ namespace TesApi.Tests
                 SasTokenExpirationInSeconds = 60,
                 SasAllowedIpRange = "169.0.0.1"
             };
-        }
     }
 }

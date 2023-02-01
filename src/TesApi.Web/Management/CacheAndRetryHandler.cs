@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+
 using System;
 using System.Net;
 using System.Net.Http;
@@ -23,7 +24,7 @@ namespace TesApi.Web.Management
         private readonly AsyncRetryPolicy<HttpResponseMessage> asyncHttpRetryPolicy;
 
         /// <summary>
-        /// App cache instance. 
+        /// App cache instance.
         /// </summary>
         public virtual IAppCache AppCache => appCache;
 
@@ -108,7 +109,7 @@ namespace TesApi.Web.Management
         }
 
         /// <summary>
-        ///  Executes a delegate with the specified async retry policy and persisting the result in a cache. 
+        ///  Executes a delegate with the specified async retry policy and persisting the result in a cache.
         /// </summary>
         /// <param name="cacheKey"></param>
         /// <param name="action"></param>
@@ -146,7 +147,7 @@ namespace TesApi.Web.Management
             return response;
         }
 
-        private void ValidateArgs(string cacheKey, Func<Task> action)
+        private static void ValidateArgs(string cacheKey, Func<Task> action)
         {
             ArgumentNullException.ThrowIfNull(action);
 
@@ -157,13 +158,9 @@ namespace TesApi.Web.Management
         }
 
         private async Task<TResult> ExecuteWithCacheAsync<TResult>(string cacheKey, Func<Task<TResult>> action)
-        {
-            return await appCache.GetOrAddAsync(cacheKey, action);
-        }
+            => await appCache.GetOrAddAsync(cacheKey, action);
 
         private async Task<TResult> ExecuteWithCacheAsync<TResult>(string cacheKey, Func<Task<TResult>> action, DateTimeOffset cacheExpires)
-        {
-            return await appCache.GetOrAddAsync(cacheKey, action, cacheExpires);
-        }
+            => await appCache.GetOrAddAsync(cacheKey, action, cacheExpires);
     }
 }

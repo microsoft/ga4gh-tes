@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,13 +27,13 @@ namespace TesApi.Tests
         [TestInitialize]
         public void SetUp()
         {
-            terraApiStubData = new TerraApiStubData();
-            tokenCredential = new Mock<TokenCredential>();
-            cacheAndRetryHandler = new Mock<CacheAndRetryHandler>();
+            terraApiStubData = new();
+            tokenCredential = new();
+            cacheAndRetryHandler = new();
             var terraOptions = new Mock<IOptions<TerraOptions>>();
             terraOptions.Setup(o => o.Value)
-                .Returns(new TerraOptions() { LandingZoneApiHost = terraApiStubData.LandingZoneApiHost });
-            terraLandingZoneApiClient = new TerraLandingZoneApiClient(terraOptions.Object, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
+                .Returns(new TerraOptions() { LandingZoneApiHost = TerraApiStubData.LandingZoneApiHost });
+            terraLandingZoneApiClient = new(terraOptions.Object, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
         }
 
         [TestMethod]
@@ -84,7 +87,7 @@ namespace TesApi.Tests
         {
             var url = terraLandingZoneApiClient.GetLandingZoneResourcesApiUrl(terraApiStubData.LandingZoneId);
 
-            var expectedUrl = $"{terraApiStubData.LandingZoneApiHost}/api/landingzones/v1/azure/{terraApiStubData.LandingZoneId}/resources";
+            var expectedUrl = $"{TerraApiStubData.LandingZoneApiHost}/api/landingzones/v1/azure/{terraApiStubData.LandingZoneId}/resources";
 
             Assert.AreEqual(expectedUrl, url.ToString());
 
@@ -95,7 +98,7 @@ namespace TesApi.Tests
         {
             var url = terraLandingZoneApiClient.GetQuotaApiUrl(terraApiStubData.LandingZoneId, terraApiStubData.BatchAccountId);
 
-            var expectedUrl = $"{terraApiStubData.LandingZoneApiHost}/api/landingzones/v1/azure/{terraApiStubData.LandingZoneId}/resource-quota?azureResourceId={Uri.EscapeDataString(terraApiStubData.BatchAccountId)}";
+            var expectedUrl = $"{TerraApiStubData.LandingZoneApiHost}/api/landingzones/v1/azure/{terraApiStubData.LandingZoneId}/resource-quota?azureResourceId={Uri.EscapeDataString(terraApiStubData.BatchAccountId)}";
 
             Assert.AreEqual(expectedUrl, url.ToString());
 

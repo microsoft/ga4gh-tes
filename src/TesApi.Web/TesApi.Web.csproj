@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="Scripts\start-task.sh" />
+    <None Remove="scripts\task-run.sh" />
   </ItemGroup>
 
   <ItemGroup>
@@ -48,11 +48,12 @@
     </AssemblyAttribute>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Scripts\start-task.sh">
+    <Content Include="scripts\task-run.sh">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\CommonUtilities\CommonUtilities.csproj" />
     <ProjectReference Include="..\Tes\Tes.csproj" />
   </ItemGroup>
 </Project>

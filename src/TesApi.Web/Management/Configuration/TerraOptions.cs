@@ -1,4 +1,7 @@
-﻿namespace TesApi.Web.Management.Configuration;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+namespace TesApi.Web.Management.Configuration;
 
 /// <summary>
 /// Terra integration options
@@ -9,19 +12,20 @@ public class TerraOptions
     /// Terra configuration section
     /// </summary>
     public const string Terra = "Terra";
-
     private const int DefaultSasTokenExpirationInSeconds = 60 * 24 * 3; // 3 days
 
     /// <summary>
     /// Landing zone id containing the Tes back-end resources
     /// </summary>
     public string LandingZoneId { get; set; }
+
     /// <summary>
     /// Landing zone api host. 
     /// </summary>
     public string LandingZoneApiHost { get; set; }
+
     /// <summary>
-    /// Wsm api host. 
+    /// Wsm api host.
     /// </summary>
     public string WsmApiHost { get; set; }
 

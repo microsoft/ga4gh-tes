@@ -36,11 +36,11 @@ namespace TesApi.Web.Management
             ArgumentNullException.ThrowIfNull(terraLandingZoneClient);
             if (string.IsNullOrEmpty(terraOptions.Value.LandingZoneId))
             {
-                throw new ArgumentException("The landing zone id is missing. Please check the app configuration.");
+                throw new ArgumentException("The landing zone id is missing. Please check the app configuration.", nameof(terraOptions));
             }
             if (string.IsNullOrEmpty(terraOptions.Value.LandingZoneApiHost))
             {
-                throw new ArgumentException("The landing zone id is missing. Please check the app configuration.");
+                throw new ArgumentException("The landing zone id is missing. Please check the app configuration.", nameof(terraOptions));
             }
 
             this.terraLandingZoneClient = terraLandingZoneClient;
@@ -74,11 +74,11 @@ namespace TesApi.Web.Management
                     .ToList();
             }
 
-            return new BatchVmCoreQuota(numberOfCores,
+            return new(numberOfCores,
                 lowPriority,
                 isDedicatedAndPerVmFamilyCoreQuotaEnforced,
                 dedicatedCoresPerFamilies,
-                new AccountQuota(batchQuota.QuotaValues.ActiveJobAndJobScheduleQuota,
+                new(batchQuota.QuotaValues.ActiveJobAndJobScheduleQuota,
                     batchQuota.QuotaValues.PoolQuota,
                     batchQuota.QuotaValues.DedicatedCoreQuota,
                     batchQuota.QuotaValues.LowPriorityCoreQuota));
@@ -114,7 +114,7 @@ namespace TesApi.Web.Management
             return batchResource.ResourceId;
         }
 
-        private BatchVmFamilyQuotas ToVmFamilyBatchAccountQuotas(QuotaApiResponse batchAccountQuotas, string vmFamily, bool lowPriority, int? coresRequirement)
+        private static BatchVmFamilyQuotas ToVmFamilyBatchAccountQuotas(QuotaApiResponse batchAccountQuotas, string vmFamily, bool lowPriority, int? coresRequirement)
         {
 
             var isDedicated = !lowPriority;
@@ -128,9 +128,7 @@ namespace TesApi.Web.Management
                       .Value
                 : coresRequirement ?? 0;
 
-            return new BatchVmFamilyQuotas(totalCoreQuota, vmFamilyCoreQuota, batchAccountQuotas.QuotaValues.PoolQuota,
-                batchAccountQuotas.QuotaValues.ActiveJobAndJobScheduleQuota, batchAccountQuotas.QuotaValues.DedicatedCoreQuotaPerVmFamilyEnforced, vmFamily);
+            return new(totalCoreQuota, vmFamilyCoreQuota, batchAccountQuotas.QuotaValues.PoolQuota, batchAccountQuotas.QuotaValues.ActiveJobAndJobScheduleQuota, batchAccountQuotas.QuotaValues.DedicatedCoreQuotaPerVmFamilyEnforced, vmFamily);
         }
-
     }
 }

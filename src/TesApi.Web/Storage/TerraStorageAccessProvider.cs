@@ -118,12 +118,10 @@ namespace TesApi.Web.Storage
         }
 
         private SasTokenApiParameters CreateTokenParamsFromOptions(string blobName, string sasPermissions)
-        {
-            return new SasTokenApiParameters(
+            => new(
                 terraOptions.SasAllowedIpRange,
                 terraOptions.SasTokenExpirationInSeconds,
                 sasPermissions, blobName);
-        }
 
         private async Task<WsmSasTokenApiResponse> GetSasTokenFromWsmAsync(SasTokenApiParameters tokenParams)
         {
@@ -150,12 +148,9 @@ namespace TesApi.Web.Storage
         }
 
         private bool IsTerraWorkspaceContainer(string value)
-        {
-            return terraOptions.WorkspaceStorageContainerName.Equals(value, StringComparison.OrdinalIgnoreCase);
-        }
+            => terraOptions.WorkspaceStorageContainerName.Equals(value, StringComparison.OrdinalIgnoreCase);
+
         private bool IsTerraWorkspaceStorageAccount(string value)
-        {
-            return terraOptions.WorkspaceStorageAccountName.Equals(value, StringComparison.OrdinalIgnoreCase);
-        }
+            => terraOptions.WorkspaceStorageAccountName.Equals(value, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -22,13 +25,13 @@ namespace TesApi.Tests
         [TestInitialize]
         public void SetUp()
         {
-            terraApiStubData = new TerraApiStubData();
-            terraLandingZoneApiClientMock = new Mock<TerraLandingZoneApiClient>();
+            terraApiStubData = new();
+            terraLandingZoneApiClientMock = new();
             resourcesApiResponse = terraApiStubData.GetResourceApiResponse();
             quotaApiResponse = terraApiStubData.GetResourceQuotaApiResponse();
 
             var optionsMock = new Mock<IOptions<TerraOptions>>();
-            optionsMock.Setup(o => o.Value).Returns(new TerraOptions() { LandingZoneApiHost = terraApiStubData.LandingZoneApiHost, LandingZoneId = terraApiStubData.LandingZoneId.ToString() });
+            optionsMock.Setup(o => o.Value).Returns(new TerraOptions() { LandingZoneApiHost = TerraApiStubData.LandingZoneApiHost, LandingZoneId = terraApiStubData.LandingZoneId.ToString() });
 
             terraLandingZoneApiClientMock
                 .Setup(t => t.GetLandingZoneResourcesAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.LandingZoneId)), It.Is<bool>(c => c == true)))
@@ -36,7 +39,7 @@ namespace TesApi.Tests
             terraLandingZoneApiClientMock
                 .Setup(t => t.GetResourceQuotaAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.LandingZoneId)), It.Is<string>(b => string.Equals(b, terraApiStubData.BatchAccountId, StringComparison.OrdinalIgnoreCase)), It.Is<bool>(c => c == true)))
                 .ReturnsAsync(quotaApiResponse);
-            terraQuotaProvider = new TerraQuotaProvider(terraLandingZoneApiClientMock.Object, optionsMock.Object);
+            terraQuotaProvider = new(terraLandingZoneApiClientMock.Object, optionsMock.Object);
         }
 
         [TestMethod]

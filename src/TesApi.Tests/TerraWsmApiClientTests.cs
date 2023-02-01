@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -26,13 +29,13 @@ namespace TesApi.Tests
         [TestInitialize]
         public void SetUp()
         {
-            terraApiStubData = new TerraApiStubData();
-            tokenCredential = new Mock<TokenCredential>();
-            cacheAndRetryHandler = new Mock<CacheAndRetryHandler>();
+            terraApiStubData = new();
+            tokenCredential = new();
+            cacheAndRetryHandler = new();
             var terraOptions = new Mock<IOptions<TerraOptions>>();
             terraOptions.Setup(o => o.Value)
-                .Returns(new TerraOptions() { WsmApiHost = terraApiStubData.WsmApiHost });
-            terraWsmApiClient = new TerraWsmApiClient(tokenCredential.Object, terraOptions.Object,
+                .Returns(new TerraOptions() { WsmApiHost = TerraApiStubData.WsmApiHost });
+            terraWsmApiClient = new(tokenCredential.Object, terraOptions.Object,
                 cacheAndRetryHandler.Object, NullLogger<TerraWsmApiClient>.Instance);
         }
 
@@ -43,7 +46,7 @@ namespace TesApi.Tests
                 terraApiStubData.ContainerResourceId, null);
 
             var expectedUri =
-                $"{terraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/storageContainer/{terraApiStubData.ContainerResourceId}/getSasToken";
+                $"{TerraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/storageContainer/{terraApiStubData.ContainerResourceId}/getSasToken";
             Assert.AreEqual(expectedUri, uri.ToString());
             Assert.AreEqual(string.Empty, uri.Query);
         }
@@ -57,7 +60,7 @@ namespace TesApi.Tests
                 terraApiStubData.ContainerResourceId, sasParams);
 
             var expectedUri =
-                $"{terraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/storageContainer/{terraApiStubData.ContainerResourceId}/getSasToken"
+                $"{TerraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/storageContainer/{terraApiStubData.ContainerResourceId}/getSasToken"
                 + $"?sasIpRange={sasParams.SasIpRange}&sasExpirationDuration={sasParams.SasExpirationInSeconds}&sasPermissions={sasParams.SasPermission}&sasBlobName={sasParams.SasBlobName}";
 
             var parsedQs = HttpUtility.ParseQueryString(uri.Query);
@@ -78,7 +81,7 @@ namespace TesApi.Tests
                 terraApiStubData.ContainerResourceId, sasParams);
 
             var expectedUri =
-                $"{terraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/storageContainer/{terraApiStubData.ContainerResourceId}/getSasToken"
+                $"{TerraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/storageContainer/{terraApiStubData.ContainerResourceId}/getSasToken"
                 + $"?sasIpRange={sasParams.SasIpRange}&sasExpirationDuration={sasParams.SasExpirationInSeconds}";
 
             var parsedQs = HttpUtility.ParseQueryString(uri.Query);
@@ -93,7 +96,7 @@ namespace TesApi.Tests
         {
             var response = new HttpResponseMessage(HttpStatusCode.OK);
 
-            response.Content = new StringContent(terraApiStubData.GetWsmSasTokenApiResponseInJson());
+            response.Content = new StringContent(TerraApiStubData.GetWsmSasTokenApiResponseInJson());
 
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<Task<HttpResponseMessage>>>()))
                 .ReturnsAsync(response);

@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -17,13 +20,13 @@ namespace TesApi.Web.Management.Clients
     /// </summary>
     public abstract class HttpApiClient
     {
-        private static readonly HttpClient HttpClient = new HttpClient();
+        private static readonly HttpClient HttpClient = new();
         private readonly TokenCredential tokenCredential;
         private readonly CacheAndRetryHandler cacheAndRetryHandler;
         private readonly SHA256 sha256 = SHA256.Create();
         private readonly ILogger logger;
         private readonly string tokenScope;
-        private readonly SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim semaphore = new(1, 1);
         private AccessToken accessToken;
 
         /// <summary>
@@ -145,18 +148,14 @@ namespace TesApi.Web.Management.Clients
         /// <param name="setAuthorizationHeader"></param>
         /// <returns></returns>
         protected async Task<string> HttpGetRequestWithRetryPolicyAsync(Uri requestUrl,
-            bool setAuthorizationHeader = false)
-        {
+                bool setAuthorizationHeader = false)
+            => await cacheAndRetryHandler.ExecuteWithRetryAsync(async () =>
+            {
+                //request must be recreated in every retry.
+                var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader);
 
-            return await cacheAndRetryHandler.ExecuteWithRetryAsync(async () =>
-                {
-                    //request must be recreated in every retry.
-                    var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader);
-
-                    return await ExecuteRequestAndReadResponseBodyAsync(httpRequest);
-                }
-            );
-        }
+                return await ExecuteRequestAndReadResponseBodyAsync(httpRequest);
+            });
 
         /// <summary>
         /// Returns an query string key-value, with the value escaped. If the value is null or empty returns an empty string
@@ -216,7 +215,7 @@ namespace TesApi.Web.Management.Clients
             return httpRequest;
         }
 
-        private async Task<string> ExecuteRequestAndReadResponseBodyAsync(HttpRequestMessage request)
+        private static async Task<string> ExecuteRequestAndReadResponseBodyAsync(HttpRequestMessage request)
         {
             var response = await HttpClient.SendAsync(request);
 
@@ -271,7 +270,6 @@ namespace TesApi.Web.Management.Clients
             {
                 semaphore.Release();
             }
-
         }
 
         /// <summary>

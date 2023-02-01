@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Extensions.Logging;
@@ -70,11 +73,10 @@ namespace TesApi.Web.Management.Clients
             var url = GetLandingZoneResourcesApiUrl(landingZoneId);
 
             return await HttpGetRequestAsync<LandingZoneResourcesApiResponse>(url, setAuthorizationHeader: true, cacheResults);
-
         }
 
         /// <summary>
-        /// Returns a parsed URL to get quota of a resource using the Terra landing zone API. 
+        /// Returns a parsed URL to get quota of a resource using the Terra landing zone API.
         /// </summary>
         /// <param name="landingZoneId">Landing zone id</param>
         /// <param name="resourceId">Fully qualified Azure resource id</param>
@@ -87,7 +89,7 @@ namespace TesApi.Web.Management.Clients
         }
 
         /// <summary>
-        /// Returns a parsed URL to get resources in a landing zone using the Terra landing zone API. 
+        /// Returns a parsed URL to get resources in a landing zone using the Terra landing zone API.
         /// </summary>
         /// <param name="landingZoneId">Landing zone id</param>
         /// <returns></returns>
@@ -104,6 +106,5 @@ namespace TesApi.Web.Management.Clients
             var uriBuilder = new UriBuilder(apiRequestUrl);
             return uriBuilder;
         }
-
     }
 }

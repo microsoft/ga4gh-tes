@@ -1,4 +1,7 @@
-﻿using Azure.Core;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using Azure.Core;
 using Microsoft.Extensions.Logging;
 
 namespace TesApi.Web.Management.Clients
@@ -9,7 +12,6 @@ namespace TesApi.Web.Management.Clients
     public abstract class TerraApiClient : HttpApiClient
     {
         private const string TokenScope = @"https://management.azure.com/.default";
-
 
         /// <summary>
         /// Protected parameter-less constructor

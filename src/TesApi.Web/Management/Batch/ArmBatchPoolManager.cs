@@ -12,16 +12,15 @@ using Microsoft.Extensions.Logging;
 namespace TesApi.Web.Management.Batch
 {
     /// <summary>
-    /// 
+    /// Provides management plane operations for Azure Batch Pools using ARM
     /// </summary>
     public class ArmBatchPoolManager : IBatchPoolManager
     {
-
-        private readonly ILogger<ArmBatchPoolManager> logger;
+        private readonly ILogger logger;
         private readonly AzureManagementClientsFactory azureClientsFactory;
 
         /// <summary>
-        /// 
+        /// Constructor of ArmBatchPoolManager
         /// </summary>
         /// <param name="azureClientsFactory"></param>
         /// <param name="logger"></param>

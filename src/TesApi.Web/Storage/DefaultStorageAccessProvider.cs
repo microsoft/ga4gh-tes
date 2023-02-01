@@ -20,7 +20,7 @@ namespace TesApi.Web.Storage
     public class DefaultStorageAccessProvider : StorageAccessProvider
     {
 
-        private static readonly TimeSpan SasTokenDuration = TimeSpan.FromDays(3); //TODO: refactor this to drive it from configuration. 
+        private static readonly TimeSpan SasTokenDuration = TimeSpan.FromDays(3); //TODO: refactor this to drive it from configuration.
         private readonly string defaultStorageAccountName;
         private readonly List<ExternalStorageContainerInfo> externalStorageContainers;
 
@@ -32,7 +32,7 @@ namespace TesApi.Web.Storage
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         public DefaultStorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IConfiguration configuration, IAzureProxy azureProxy) : base(logger, azureProxy)
         {
-            //TODO: refactor to use the options pattern. 
+            //TODO: refactor to use the options pattern.
             defaultStorageAccountName = configuration["DefaultStorageAccountName"];    // This account contains the cromwell-executions container
             logger.LogInformation($"DefaultStorageAccountName: {defaultStorageAccountName}");
 

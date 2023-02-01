@@ -1,4 +1,7 @@
-﻿namespace TesApi.Web.Management.Configuration;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+namespace TesApi.Web.Management.Configuration;
 
 /// <summary>
 /// Configuration options for container registries
@@ -10,7 +13,7 @@ public class ContainerRegistryOptions
     /// </summary>
     public const string ContainerRegistrySection = "ContainerRegistry";
     /// <summary>
-    /// Enables/disables auto-discovery features 
+    /// Enables/disables auto-discovery features
     /// </summary>
     public bool AutoDiscoveryEnabled { get; set; } = true;
     /// <summary>

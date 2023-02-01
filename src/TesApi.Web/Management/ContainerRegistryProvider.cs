@@ -14,19 +14,19 @@ using TesApi.Web.Management.Configuration;
 namespace TesApi.Web.Management
 {
     /// <summary>
-    /// Provides container registry information 
+    /// Provides container registry information
     /// </summary>
     public class ContainerRegistryProvider : AzureProvider
     {
         private readonly ContainerRegistryOptions options;
 
         /// <summary>
-        /// If true the auto-discovery is enabled. 
+        /// If true the auto-discovery is enabled.
         /// </summary>
         public bool IsAutoDiscoveryEnabled => options.AutoDiscoveryEnabled;
 
         /// <summary>
-        /// Provides resource information about the container registries the TES service has access. 
+        /// Provides resource information about the container registries the TES service has access.
         /// </summary>
         /// <param name="containerRegistryOptions"></param>
         /// <param name="cacheAndRetryHandler"></param>
@@ -47,7 +47,7 @@ namespace TesApi.Web.Management
         protected ContainerRegistryProvider() { }
 
         /// <summary>
-        /// Looks for the container registry information from the image name.  
+        /// Looks for the container registry information from the image name.
         /// </summary>
         /// <param name="imageName">Container image name</param>
         /// <returns>Container registry information, or null if auto-discovery is disabled or the repository was not found</returns>

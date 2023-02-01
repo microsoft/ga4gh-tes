@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -58,13 +61,11 @@ namespace TesApi.Web.Management.Clients
         }
 
         private string ToQueryString(SasTokenApiParameters sasTokenApiParameters)
-        {
-            return AppendQueryStringParams(
+            => AppendQueryStringParams(
                 ParseQueryStringParameter("sasIpRange", sasTokenApiParameters.SasIpRange),
                 ParseQueryStringParameter("sasExpirationDuration", sasTokenApiParameters.SasExpirationInSeconds.ToString()),
                 ParseQueryStringParameter("sasPermissions", sasTokenApiParameters.SasPermission),
                 ParseQueryStringParameter("sasBlobName", sasTokenApiParameters.SasBlobName));
-        }
 
         /// <summary>
         /// Gets the Api Url to get a container sas token

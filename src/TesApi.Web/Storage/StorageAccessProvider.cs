@@ -1,11 +1,14 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace TesApi.Web.Storage;
 
 /// <summary>
-/// 
+/// Provides base class for abstracting storage access by using local path references in form of /storageaccount/container/blobpath
 /// </summary>
 public abstract class StorageAccessProvider : IStorageAccessProvider
 {
@@ -19,7 +22,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     protected const string BatchPathPrefix = "/executions/";
 
     /// <summary>
-    /// Logger instance. 
+    /// Logger instance.
     /// </summary>
     protected readonly ILogger logger;
     /// <summary>
@@ -36,7 +39,6 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     {
         this.logger = logger;
         this.azureProxy = azureProxy;
-
     }
 
     /// <inheritdoc />
@@ -69,11 +71,11 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
 
     /// <inheritdoc />
     public async Task UploadBlobAsync(string blobRelativePath, string content)
-        => await this.azureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), content);
+        => await this.azureProxy.UploadBlobAsync(new(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), content);
 
     /// <inheritdoc />
     public async Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath)
-        => await this.azureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), sourceLocalFilePath);
+        => await this.azureProxy.UploadBlobFromFileAsync(new(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), sourceLocalFilePath);
 
     /// <inheritdoc />
     public abstract Task<bool> IsPublicHttpUrlAsync(string uriString);
@@ -82,15 +84,13 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     public abstract Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false);
 
     /// <summary>
-    /// Tries to parse the input into a Http Url. 
+    /// Tries to parse the input into a Http Url.
     /// </summary>
     /// <param name="input">string to parse</param>
     /// <param name="uri">resulting Url if successful</param>
     /// <returns>true if the input is a Url, false otherwise</returns>
     protected static bool TryParseHttpUrlFromInput(string input, out Uri uri)
-    {
-        return Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
-    }
+        => Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// True if the path is the cromwell or executions folder
@@ -98,9 +98,6 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <param name="path"></param>
     /// <returns></returns>
     protected bool IsItKnownExecutionFilePath(string path)
-    {
-        return path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase)
-               || path.StartsWith(BatchPathPrefix, StringComparison.OrdinalIgnoreCase);
-
-    }
+        => path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith(BatchPathPrefix, StringComparison.OrdinalIgnoreCase);
 }
