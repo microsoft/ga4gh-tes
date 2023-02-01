@@ -821,7 +821,8 @@ namespace TesApi.Web
         private async Task<CloudTask> ConvertTesTaskToBatchTaskAsync(string taskId, TesTask task, bool poolHasContainerConfig)
         {
             var cromwellExecutionDirectoryPath = GetCromwellExecutionDirectoryPath(task);
-            var batchExecutionPathPrefix = cromwellExecutionDirectoryPath is null ? ExecutionsPathPrefix : CromwellPathPrefix;
+            bool isCromwell = cromwellExecutionDirectoryPath is not null;
+            var batchExecutionPathPrefix = isCromwell ? CromwellPathPrefix : ExecutionsPathPrefix;
 
             var queryStringsToRemoveFromLocalFilePaths = task.Inputs
                 .Select(i => i.Path)
@@ -852,7 +853,7 @@ namespace TesApi.Web
             var additionalInputFiles = new List<TesInput>();
             // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
             // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
-            if (cromwellExecutionDirectoryPath is not null)
+            if (isCromwell)
             {
                 var executionDirectoryUri = new Uri(await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{cromwellExecutionDirectoryPath}", getContainerSas: true));
                 var blobsInExecutionDirectory = (await azureProxy.ListBlobsAsync(executionDirectoryUri)).Where(b => !b.EndsWith($"/{CromwellScriptFileName}")).Where(b => !b.Contains($"/{BatchExecutionDirectoryName}/"));
@@ -889,9 +890,11 @@ namespace TesApi.Web
 
             var filesToUpload = await Task.WhenAll(
                 task.Outputs.Select(async f =>
-                    new TesOutput { Path = f.Path, Url = await this.storageAccessProvider.MapLocalPathToSasUrlAsync(
-                        f.Path.StartsWith(ExecutionsPathPrefix) ? $"{ExecutionsPathPrefix}/{task.Id}{f.Path.Substring(ExecutionsPathPrefix.Length)}" : f.Path,
-                        getContainerSas: true), Name = f.Name, Type = f.Type }));
+                    new TesOutput { 
+                        Path = f.Path, 
+                        Url = isCromwell ? await this.storageAccessProvider.MapLocalPathToSasUrlAsync(f.Path, getContainerSas: true) : f.Url,
+                        Name = f.Name, 
+                        Type = f.Type }));
 
             // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
             // Ignore any other missing files and directories. WDL tasks can have optional output files.
