@@ -67,7 +67,12 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false)
+        public override async Task<string> MapLocalPathToSasUrlAsync(
+        string path, bool
+        getContainerSas = false,
+        [System.Runtime.CompilerServices.CallerMemberName] string memberName = "",
+        [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = 0)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
 

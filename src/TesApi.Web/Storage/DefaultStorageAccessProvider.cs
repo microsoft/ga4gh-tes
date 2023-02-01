@@ -85,7 +85,12 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false)
+        public override async Task<string> MapLocalPathToSasUrlAsync(
+            string path, bool 
+            getContainerSas = false, 
+            [System.Runtime.CompilerServices.CallerMemberName] string memberName = "",
+            [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "",
+            [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = 0)
         {
             // TODO: Optional: If path is /container/... where container matches the name of the container in the default storage account, prepend the account name to the path.
             // This would allow the user to omit the account name for files stored in the default storage account
@@ -98,7 +103,7 @@ namespace TesApi.Web.Storage
             //TODO: refactor this to throw an exception instead of logging and error and returning null.
             if (!StorageAccountUrlSegments.TryCreate(path, out var pathSegments))
             {
-                logger.LogError($"Could not parse path '{path}'.");
+                logger.LogError($"Could not parse path '{path}'. {memberName} {sourceFilePath} {sourceLineNumber}");
                 return null;
             }
 

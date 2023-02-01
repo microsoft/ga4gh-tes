@@ -60,6 +60,11 @@ namespace TesApi.Web.Storage
         /// <param name="path">The file path to convert. Two-part path is treated as container path. Paths with three or more parts are treated as blobs.</param>
         /// <param name="getContainerSas">Get the container SAS even if path is longer than two parts</param>
         /// <returns>An Azure Block Blob or Container URL with SAS token</returns>
-        public Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false);
+        public Task<string> MapLocalPathToSasUrlAsync(
+        string path, bool
+        getContainerSas = false,
+        [System.Runtime.CompilerServices.CallerMemberName] string memberName = "",
+        [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = 0);
     }
 }

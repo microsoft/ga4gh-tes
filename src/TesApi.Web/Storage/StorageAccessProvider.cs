@@ -81,7 +81,13 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     public abstract Task<bool> IsPublicHttpUrlAsync(string uriString);
 
     /// <inheritdoc />
-    public abstract Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false);
+    public abstract Task<string> MapLocalPathToSasUrlAsync(
+        string path, bool
+        getContainerSas = false,
+        [System.Runtime.CompilerServices.CallerMemberName] string memberName = "",
+        [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = 0);
+    
 
     /// <summary>
     /// Tries to parse the input into a Http Url.
@@ -90,7 +96,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <param name="uri">resulting Url if successful</param>
     /// <returns>true if the input is a Url, false otherwise</returns>
     protected static bool TryParseHttpUrlFromInput(string input, out Uri uri)
-        => Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
+    => Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// True if the path is the cromwell or executions folder
