@@ -825,7 +825,7 @@ namespace TesApi.Web
 
             var queryStringsToRemoveFromLocalFilePaths = task.Inputs?
                 .Select(i => i.Path)
-                .Concat(task.Outputs.Select(o => o.Path))
+                .Concat(task.Outputs?.Select(o => o.Path) ?? new List<string>())
                 .Where(p => p is not null)
                 .Select(p => queryStringRegex.Match(p).Groups[1].Value)
                 .Where(qs => !string.IsNullOrEmpty(qs))
@@ -837,11 +837,14 @@ namespace TesApi.Web
                 .Where(f => f?.Url?.StartsWith("drs://", StringComparison.OrdinalIgnoreCase) == true)
                 .ToList();
 
-            foreach (var output in task.Outputs)
+            if (task.Outputs != null)
             {
-                if (!output.Path.StartsWith($"{CromwellPathPrefix}/", StringComparison.OrdinalIgnoreCase) && !output.Path.StartsWith($"{ExecutionsPathPrefix}/", StringComparison.OrdinalIgnoreCase))
+                foreach (var output in task.Outputs)
                 {
-                    throw new TesException("InvalidOutputPath", $"Unsupported output path '{output.Path}' for task Id {task.Id}. Must start with {CromwellPathPrefix} or {ExecutionsPathPrefix}");
+                    if (!output.Path.StartsWith($"{CromwellPathPrefix}/", StringComparison.OrdinalIgnoreCase) && !output.Path.StartsWith($"{ExecutionsPathPrefix}/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new TesException("InvalidOutputPath", $"Unsupported output path '{output.Path}' for task Id {task.Id}. Must start with {CromwellPathPrefix} or {ExecutionsPathPrefix}");
+                    }
                 }
             }
 
@@ -888,7 +891,7 @@ namespace TesApi.Web
             await this.storageAccessProvider.UploadBlobAsync($"/{downloadFilesScriptPath}", downloadFilesScriptContent);
 
             var filesToUpload = await Task.WhenAll(
-                task.Outputs.Select(async f =>
+                task.Outputs?.Select(async f =>
                     new TesOutput { Path = f.Path, Url = await this.storageAccessProvider.MapLocalPathToSasUrlAsync(f.Path, getContainerSas: true), Name = f.Name, Type = f.Type }));
 
             // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
