@@ -892,7 +892,9 @@ namespace TesApi.Web
                 task.Outputs.Select(async f =>
                     new TesOutput { 
                         Path = f.Path, 
-                        Url = isCromwell ? await this.storageAccessProvider.MapLocalPathToSasUrlAsync(f.Path, getContainerSas: true) : f.Url,
+                        Url = isCromwell ? 
+                            await this.storageAccessProvider.MapLocalPathToSasUrlAsync(f.Path, getContainerSas: true) : 
+                            await this.storageAccessProvider.MapLocalPathToSasUrlAsync(f.Url, getContainerSas: true),
                         Name = f.Name, 
                         Type = f.Type }));
 
