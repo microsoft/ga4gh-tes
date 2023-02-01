@@ -15,14 +15,14 @@ namespace TesApi.Web.Management.Clients
     /// </summary>
     public class PriceApiClient : HttpApiClient
     {
-        private static readonly Uri ApiEndpoint = new Uri("https://prices.azure.com/api/retail/prices");
+        private static readonly Uri ApiEndpoint = new("https://prices.azure.com/api/retail/prices");
 
         /// <summary>
         /// Constructor of the Price API Client.
         /// </summary>
         /// <param name="cacheAndRetryHandler"><see cref="CacheAndRetryHandler"/></param>
         /// <param name="logger"><see cref="ILogger{TCategoryName}"/></param>
-        public PriceApiClient(CacheAndRetryHandler cacheAndRetryHandler, ILogger<HttpApiClient> logger) : base(cacheAndRetryHandler, logger)
+        public PriceApiClient(CacheAndRetryHandler cacheAndRetryHandler, ILogger<PriceApiClient> logger) : base(cacheAndRetryHandler, logger)
         {
         }
 
@@ -35,6 +35,7 @@ namespace TesApi.Web.Management.Clients
         public async IAsyncEnumerable<PricingItem> GetAllPricingInformationAsync(string region, bool cacheResults = false)
         {
             var skip = 0;
+
             while (true)
             {
                 var page = await GetPricingInformationPageAsync(skip, region, cacheResults);
@@ -43,7 +44,6 @@ namespace TesApi.Web.Management.Clients
                 {
                     yield break;
                 }
-
 
                 foreach (var pricingItem in page.Items)
                 {
@@ -62,10 +62,8 @@ namespace TesApi.Web.Management.Clients
         /// <param name="cacheResults">If true results will be cached. Default is false.</param>
         /// <returns></returns>
         public IAsyncEnumerable<PricingItem> GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(string region, bool cacheResults = false)
-        {
-            return GetAllPricingInformationAsync(region, cacheResults)
+            => GetAllPricingInformationAsync(region, cacheResults)
                 .WhereAwait(p => ValueTask.FromResult(!p.productName.Contains(" Windows") && !p.meterName.Contains(" Spot")));
-        }
 
         /// <summary>
         /// Returns a page of pricing information starting at the requested position for a given region.
@@ -100,26 +98,18 @@ namespace TesApi.Web.Management.Clients
             var skipKeyValue = ParseQueryStringKeyIntValue("$skip", skip);
 
             return $"{filter}&{skipKeyValue}";
-
         }
 
         private static string ParseFilterCondition(string conditionOperator, params string[] condition)
-        {
-            return $"$filter={String.Join($" {conditionOperator} ", condition)}";
-        }
+            => $"$filter={String.Join($" {conditionOperator} ", condition)}";
 
         private static string ParseQueryStringKeyIntValue(string key, int value)
-        {
-            return $"{key}={value}";
-        }
+            => $"{key}={value}";
 
         private static string ParseEq(string name, string value)
-        {
-            return $"{name} eq '{value}'";
-        }
+            => $"{name} eq '{value}'";
+
         private static string ParseEq(string name, bool value)
-        {
-            return $"{name} eq {value.ToString().ToLowerInvariant()}";
-        }
+            => $"{name} eq {value.ToString().ToLowerInvariant()}";
     }
 }

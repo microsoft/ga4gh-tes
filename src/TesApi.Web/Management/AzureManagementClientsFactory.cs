@@ -3,7 +3,6 @@
 
 using System;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
@@ -63,18 +62,14 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <returns></returns>
         public async Task<BatchManagementClient> CreateBatchAccountManagementClient()
-        {
-            return new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync())) { SubscriptionId = batchAccountInformation.SubscriptionId };
-        }
+            => new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync())) { SubscriptionId = batchAccountInformation.SubscriptionId };
 
         /// <summary>
         /// Creates a new instance of Azure Management Client with the default credentials and subscription.
         /// </summary>
         /// <returns></returns>
         public async Task<FluentAzure.IAuthenticated> CreateAzureManagementClientAsync()
-        {
-            return await AzureManagementClientsFactory.GetAzureManagementClientAsync();
-        }
+            => await AzureManagementClientsFactory.GetAzureManagementClientAsync();
 
         /// <summary>
         /// Attempts to get the batch resource information using the ARM api.
@@ -106,6 +101,10 @@ namespace TesApi.Web.Management
             return null;
         }
 
+        /// <summary>
+        /// Creates a new instance of Azure Management client
+        /// </summary>
+        /// <returns></returns>
         public static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync()
         {
             var accessToken = await GetAzureAccessTokenAsync();
@@ -114,32 +113,5 @@ namespace TesApi.Web.Management
 
             return azureClient;
         }
-
-        private async Task<(string SubscriptionId, string ResourceGroupName, string Location, string BatchAccountEndpoint)> FindBatchAccountAsync(string batchAccountName)
-        {
-            var resourceGroupRegex = new Regex("/*/resourceGroups/([^/]*)/*");
-
-            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync());
-            var azureClient = await GetAzureManagementClientAsync();
-
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
-
-
-            foreach (var subId in subscriptionIds)
-            {
-                var batchAccount = (await new BatchManagementClient(tokenCredentials) { SubscriptionId = subId }.BatchAccount.ListAsync())
-                    .FirstOrDefault(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase));
-
-                if (batchAccount is not null)
-                {
-                    var resourceGroupName = resourceGroupRegex.Match(batchAccount.Id).Groups[1].Value;
-
-                    return (subId, resourceGroupName, batchAccount.Location, batchAccount.AccountEndpoint);
-                }
-            }
-
-            throw new Exception($"Batch account '{batchAccountName}' does not exist or the TES app service does not have Contributor role on the account.");
-        }
-
     }
 }

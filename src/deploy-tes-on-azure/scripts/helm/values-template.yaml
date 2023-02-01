@@ -17,6 +17,7 @@ config:
   disableBatchScheduling: RUNTIME_PARAMETER
   dockerInDockerImageName: RUNTIME_PARAMETER
   usePreemptibleVmsOnly: RUNTIME_PARAMETER
+  useLegacyBatchImplementationWithAutopools: "False"
   batchImageOffer: RUNTIME_PARAMETER
   batchImagePublisher: RUNTIME_PARAMETER
   batchImageSku: RUNTIME_PARAMETER
@@ -26,6 +27,8 @@ config:
   gen1BatchImageSku: RUNTIME_PARAMETER
   gen1BatchImageVersion: RUNTIME_PARAMETER
   batchNodeAgentSkuId: RUNTIME_PARAMETER
+  batchPoolRotationForcedDays: "7"
+  name: RUNTIME_PARAMETER
   marthaUrl: RUNTIME_PARAMETER
   marthaKeyVaultName: RUNTIME_PARAMETER
   marthaSecretName: RUNTIME_PARAMETER

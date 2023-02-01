@@ -31,7 +31,7 @@ namespace TesApi.Tests
             var options = new Mock<IOptions<RetryPolicyOptions>>();
             options.Setup(o => o.Value).Returns(new RetryPolicyOptions());
             cacheAndRetryHandler = new CacheAndRetryHandler(appCache, options.Object);
-            pricingApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<HttpApiClient>());
+            pricingApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
         }
 
         [TestMethod]
@@ -53,7 +53,6 @@ namespace TesApi.Tests
             Assert.IsTrue(page.Items.Length == 100);
             Assert.IsNotNull(cachedPage);
             Assert.IsTrue(cachedPage.Items.Length == 100);
-
         }
 
         [TestMethod]
@@ -73,7 +72,6 @@ namespace TesApi.Tests
             Assert.IsTrue(pages.Count > 0);
             Assert.IsFalse(pages.Any(r => r.productName.Contains(" Windows")));
             Assert.IsFalse(pages.Any(r => r.productName.Contains(" Spot")));
-
         }
     }
 }

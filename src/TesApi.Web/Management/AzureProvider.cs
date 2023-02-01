@@ -1,10 +1,13 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using Microsoft.Extensions.Logging;
 
 namespace TesApi.Web.Management
 {
     /// <summary>
-    /// Base class of providers that require access to Azure management API with retry an caching capabilities 
+    /// Base class of providers that require access to Azure management API with retry an caching capabilities
     /// </summary>
     public abstract class AzureProvider
     {
@@ -30,7 +33,7 @@ namespace TesApi.Web.Management
         }
 
         /// <summary>
-        /// Protected parameter-less constructor 
+        /// Protected parameter-less constructor
         /// </summary>
         protected AzureProvider() { }
     }

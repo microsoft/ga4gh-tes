@@ -59,13 +59,8 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
         this.azureProxy = azureProxy;
     }
 
-    /// <summary>
-    /// Verifies if the batch account can fulfill the compute requirements
-    /// </summary>
-    /// <param name="virtualMachineInformation"></param>
-    /// <exception cref="AzureBatchLowQuotaException"></exception>
-    /// <exception cref="AzureBatchQuotaMaxedOutException"></exception>
-    public async Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation)
+    /// <inheritdoc cref="IBatchQuotaProvider"/>
+    public async Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck)
     {
         var workflowCoresRequirement = virtualMachineInformation.VCpusAvailable ?? 0;
         var isDedicated = !virtualMachineInformation.LowPriority;
@@ -79,7 +74,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
                 virtualMachineInformation.LowPriority,
                 virtualMachineInformation.VCpusAvailable);
 
-            if (batchVmFamilyBatchQuotas == null)
+            if (batchVmFamilyBatchQuotas is null)
             {
                 throw new InvalidOperationException(
                     "Could not obtain quota information from the management service. The return value is null");
@@ -107,12 +102,12 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
             throw new AzureBatchLowQuotaException($"Azure Batch Account does not have enough dedicated {vmFamily} cores quota to run a workflow with cpu core requirement of {workflowCoresRequirement}. Please submit an Azure Support request to increase your quota: {AzureSupportUrl}");
         }
 
-        if (batchUtilization.ActiveJobsCount + 1 > batchVmFamilyBatchQuotas.ActiveJobAndJobScheduleQuota)
+        if (needPoolOrJobQuotaCheck && batchUtilization.ActiveJobsCount + 1 > batchVmFamilyBatchQuotas.ActiveJobAndJobScheduleQuota)
         {
             throw new AzureBatchQuotaMaxedOutException($"No remaining active jobs quota available. There are {batchUtilization.ActivePoolsCount} active jobs out of {batchVmFamilyBatchQuotas.ActiveJobAndJobScheduleQuota}.");
         }
 
-        if (batchUtilization.ActivePoolsCount + 1 > batchVmFamilyBatchQuotas.PoolQuota)
+        if (needPoolOrJobQuotaCheck && batchUtilization.ActivePoolsCount + 1 > batchVmFamilyBatchQuotas.PoolQuota)
         {
             throw new AzureBatchQuotaMaxedOutException($"No remaining pool quota available. There are {batchUtilization.ActivePoolsCount} pools in use out of {batchVmFamilyBatchQuotas.PoolQuota}.");
         }

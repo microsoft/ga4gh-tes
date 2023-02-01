@@ -19,6 +19,7 @@ using Tes.Repository;
 using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Clients;
+using TesApi.Web.Storage;
 
 namespace TesApi.Tests.TestServices
 {
@@ -47,26 +48,28 @@ namespace TesApi.Tests.TestServices
                 .AddSingleton(s => wrapAzureProxy ? ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(s, GetAzureProxy(azureProxy).Object) : GetAzureProxy(azureProxy).Object)
                 .AddSingleton(_ => GetTesTaskRepository(tesTaskRepository).Object)
                 //.AddSingleton(_ => new CosmosCredentials(batchPoolRepositoryArgs.endpoint ?? "endpoint", batchPoolRepositoryArgs.key ?? "key"))
-                .AddSingleton(s => mockStorageAccessProvider ? GetStorageAccessProvider(storageAccessProvider).Object : ActivatorUtilities.CreateInstance<StorageAccessProvider>(s))
+                .AddSingleton(s => mockStorageAccessProvider ? GetStorageAccessProvider(storageAccessProvider).Object : ActivatorUtilities.CreateInstance<DefaultStorageAccessProvider>(s))
                 .AddSingleton<IAppCache>(_ => new CachingService(new MemoryCacheProvider(new MemoryCache(new MemoryCacheOptions()))))
                 .IfThenElse(accountResourceInformation is null, s => s, s => s.AddSingleton(accountResourceInformation))
                 .AddTransient<ILogger<T>>(_ => NullLogger<T>.Instance)
-                .IfThenElse(mockStorageAccessProvider, s => s, s => s.AddTransient<ILogger<StorageAccessProvider>>(_ => NullLogger<StorageAccessProvider>.Instance))
+                .IfThenElse(mockStorageAccessProvider, s => s, s => s.AddTransient<ILogger<DefaultStorageAccessProvider>>(_ => NullLogger<DefaultStorageAccessProvider>.Instance))
                 .IfThenElse(batchSkuInformationProvider is null,
                     s => s.AddSingleton<IBatchSkuInformationProvider>(sp => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(sp))
                         .AddSingleton(sp => new PriceApiBatchSkuInformationProvider(sp.GetRequiredService<PriceApiClient>(), sp.GetRequiredService<ILogger<PriceApiBatchSkuInformationProvider>>())),
                     s => s.AddSingleton(_ => GetBatchSkuInformationProvider(batchSkuInformationProvider).Object))
                 .AddSingleton(_ => GetBatchQuotaProvider(batchQuotaProvider).Object)
                 .AddTransient<ILogger<BatchScheduler>>(_ => NullLogger<BatchScheduler>.Instance)
+                .AddTransient<ILogger<BatchPool>>(_ => NullLogger<BatchPool>.Instance)
                 .AddTransient<ILogger<ArmBatchQuotaProvider>>(_ => NullLogger<ArmBatchQuotaProvider>.Instance)
                 .AddTransient<ILogger<BatchQuotaVerifier>>(_ => NullLogger<BatchQuotaVerifier>.Instance)
                 .AddTransient<ILogger<ConfigurationUtils>>(_ => NullLogger<ConfigurationUtils>.Instance)
                 .AddTransient<ILogger<PriceApiBatchSkuInformationProvider>>(_ => NullLogger<PriceApiBatchSkuInformationProvider>.Instance)
                 .AddSingleton<TestRepositoryStorage>()
                 .AddSingleton<PriceApiClient>()
+                .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
+                .AddTransient<BatchPool>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
                 .AddSingleton(s => GetArmBatchQuotaProvider(s, armBatchQuotaProvider)) //added so config utils gets the arm implementation, to be removed once config utils is refactored.
-                                                                                       //.AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .IfThenElse(additionalActions is null, s => s, s => { additionalActions(s); return s; })
             .BuildServiceProvider();

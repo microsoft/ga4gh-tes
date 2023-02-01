@@ -401,6 +401,7 @@ namespace TesDeployer
             values.Config["marthaUrl"] = settings["MarthaUrl"];
             values.Config["marthaKeyVaultName"] = settings["MarthaKeyVaultName"];
             values.Config["marthaSecretName"] = settings["MarthaSecretName"];
+            values.Config["name"] = settings["Name"];
             values.Config["crossSubscriptionAKSDeployment"] = settings["CrossSubscriptionAKSDeployment"];
             //values.Config["postgreSqlServerName"] = settings["PostgreSqlServerName"];
             //values.Config["postgreSqlDatabaseName"] = settings["PostgreSqlDatabaseName"];
@@ -441,6 +442,7 @@ namespace TesDeployer
                 ["MarthaUrl"] = values.Config["marthaUrl"],
                 ["MarthaKeyVaultName"] = values.Config["marthaKeyVaultName"],
                 ["MarthaSecretName"] = values.Config["marthaSecretName"],
+                ["Name"] = values.Config["name"],
                 ["CrossSubscriptionAKSDeployment"] = values.Config["crossSubscriptionAKSDeployment"],
                 //["PostgreSqlServerName"] = values.Config["postgreSqlServerName"],
                 //["PostgreSqlDatabaseName"] = values.Config["postgreSqlDatabaseName"],
