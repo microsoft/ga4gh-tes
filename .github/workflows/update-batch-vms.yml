@@ -3,6 +3,7 @@ name: "UpdateBatchVmList"
 on:
   schedule:
     - cron: '21 19 * * 0'
+  workflow_dispatch:
 
 jobs:
   update-batch-vms:
