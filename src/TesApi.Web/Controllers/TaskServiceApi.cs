@@ -139,7 +139,7 @@ namespace TesApi.Controllers
             // For CWL workflows, if disk size is not specified in TES object (always), try to retrieve it from the corresponding workflow stored by Cromwell in /cromwell-tmp directory
             // Also allow for TES-style "memory" and "cpu" hints in CWL.
             if (tesTask.Name is not null
-                && tesTask?.Inputs.Any(i => i.Path.Contains(".cwl/")) == true
+                && tesTask.Inputs?.Any(i => i.Path.Contains(".cwl/")) == true
                 && tesTask.WorkflowId is not null
                 && azureProxy.TryReadCwlFile(tesTask.WorkflowId, out var cwlContent)
                 && CwlDocument.TryCreate(cwlContent, out var cwlDocument))
