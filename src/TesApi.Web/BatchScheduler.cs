@@ -889,7 +889,9 @@ namespace TesApi.Web
 
             var filesToUpload = await Task.WhenAll(
                 task.Outputs.Select(async f =>
-                    new TesOutput { Path = f.Path, Url = await this.storageAccessProvider.MapLocalPathToSasUrlAsync(f.Path, getContainerSas: true), Name = f.Name, Type = f.Type }));
+                    new TesOutput { Path = f.Path, Url = await this.storageAccessProvider.MapLocalPathToSasUrlAsync(
+                        f.Path.StartsWith(ExecutionsPathPrefix) ? $"{ExecutionsPathPrefix}/{task.Id}{f.Path.Substring(ExecutionsPathPrefix.Length)}" : f.Path,
+                        getContainerSas: true), Name = f.Name, Type = f.Type }));
 
             // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
             // Ignore any other missing files and directories. WDL tasks can have optional output files.
