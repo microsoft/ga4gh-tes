@@ -900,6 +900,7 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
                 UpdateSetting(settings, defaults, "TesHostname", kubernetesManager.TesHostname, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "IntegrationTestMode", configuration.IntegrationTestMode);
             }
 
             BackFillSettings(settings, defaults);
@@ -1961,6 +1962,7 @@ namespace TesDeployer
             ThrowIfProvidedForUpdate(configuration.CrossSubscriptionAKSDeployment, nameof(configuration.CrossSubscriptionAKSDeployment));
             ThrowIfProvidedForUpdate(configuration.ProvisionPostgreSqlOnAzure, nameof(configuration.ProvisionPostgreSqlOnAzure));
             ThrowIfProvidedForUpdate(configuration.ApplicationInsightsAccountName, nameof(configuration.ApplicationInsightsAccountName));
+            ThrowIfProvidedForUpdate(configuration.IntegrationTestMode, nameof(configuration.IntegrationTestMode));
             ThrowIfProvidedForUpdate(configuration.PrivateNetworking, nameof(configuration.PrivateNetworking));
             ThrowIfProvidedForUpdate(configuration.EnableIngress, nameof(configuration.EnableIngress));
             ThrowIfProvidedForUpdate(configuration.VnetName, nameof(configuration.VnetName));

@@ -27,7 +27,7 @@ namespace TesApi.Web
         private readonly ILogger<Scheduler> logger;
         private readonly bool isDisabled;
         private readonly bool usingBatchAutopools;
-        private IEnumerable<Task> shutdownCandidates = Enumerable.Empty<Task>();
+        private readonly bool testMode;
         private readonly TimeSpan runInterval = TimeSpan.FromSeconds(5);
 
         /// <summary>
@@ -44,6 +44,7 @@ namespace TesApi.Web
             this.logger = logger;
             isDisabled = configuration.GetValue("DisableBatchScheduling", false);
             usingBatchAutopools = configuration.GetValue("UseLegacyBatchImplementationWithAutopools", false);
+            testMode = configuration.GetValue("IntegrationTestMode", false);
         }
 
         /// <summary>
@@ -78,16 +79,9 @@ namespace TesApi.Web
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                shutdownCandidates = Enumerable.Empty<Task>();
-
                 try
                 {
                     await OrchestrateTesTasksOnBatch(stoppingToken);
-
-                    if (!usingBatchAutopools)
-                    {
-                        shutdownCandidates = await batchScheduler.GetShutdownCandidatePools(stoppingToken);
-                    }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -108,20 +102,17 @@ namespace TesApi.Web
                 }
             }
 
-            try
+            if (testMode && !usingBatchAutopools)
             {
-                // Quickly delete pools without jobs on a best-effort basis since TES is shutting down. This was first
-                // implemented for integration tests sharing a batch account that is not created anew for testing.
-                //
-                // We don't generate the pool list here because of possible delays in communicating with the Batch API
-                // coupled with the fact that very little change of state is likely to have occured since the end of
-                // the last call to OrchestrateTesTasksOnBatch().
-                // The trade-off is that some newly job-emptied pools may not be included in this pool clean-out.
-                await Task.WhenAll(shutdownCandidates);
-            }
-            catch (AggregateException exc)
-            {
-                logger.LogError(exc, exc.Message);
+                try
+                {
+                    await Task.WhenAll(batchScheduler.GetPools()
+                        .Select(p => batchScheduler.DeletePoolAsync(p, CancellationToken.None)));
+                }
+                catch (AggregateException e)
+                {
+                    logger.LogError(e, @"Errors removing pools/jobs in integration test mode: {ErrorMessage}", e.Message);
+                }
             }
 
             logger.LogInformation("Scheduler gracefully stopped.");

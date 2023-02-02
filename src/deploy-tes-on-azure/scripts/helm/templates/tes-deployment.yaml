@@ -53,6 +53,8 @@ spec:
               value: {{ .Values.config.dockerInDockerImageName }}
             - name: UseLegacyBatchImplementationWithAutopools
               value: {{ .Values.config.useLegacyBatchImplementationWithAutopools | quote }}
+            - name: IntegrationTestMode
+              value: {{ .Values.config.integrationTestMode | quote }}
             - name: BatchImageOffer
               value: {{ .Values.config.batchImageOffer }}
             - name: BatchImagePublisher
