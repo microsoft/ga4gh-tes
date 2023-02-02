@@ -824,21 +824,21 @@ namespace TesApi.Web
             bool isCromwell = cromwellExecutionDirectoryPath is not null;
             var batchExecutionPathPrefix = isCromwell ? CromwellPathPrefix : ExecutionsPathPrefix;
 
-            var queryStringsToRemoveFromLocalFilePaths = task.Inputs
+            var queryStringsToRemoveFromLocalFilePaths = task.Inputs?
                 .Select(i => i.Path)
-                .Concat(task.Outputs.Select(o => o.Path))
+                .Concat(task.Outputs?.Select(o => o.Path) ?? new List<string>())
                 .Where(p => p is not null)
                 .Select(p => queryStringRegex.Match(p).Groups[1].Value)
                 .Where(qs => !string.IsNullOrEmpty(qs))
-                .ToList();
+                .ToList() ?? new List<string>();
 
-            var inputFiles = task.Inputs.Distinct();
+            var inputFiles = task.Inputs?.Distinct().ToList() ?? new List<TesInput>();
 
             var drsInputFiles = inputFiles
                 .Where(f => f?.Url?.StartsWith("drs://", StringComparison.OrdinalIgnoreCase) == true)
                 .ToList();
 
-            foreach (var output in task.Outputs)
+            foreach (var output in task.Outputs ?? Enumerable.Empty<TesOutput>())
             {
                 if (!output.Path.StartsWith($"{CromwellPathPrefix}/", StringComparison.OrdinalIgnoreCase) && !output.Path.StartsWith($"{ExecutionsPathPrefix}/", StringComparison.OrdinalIgnoreCase))
                 {
@@ -887,14 +887,14 @@ namespace TesApi.Web
             var downloadFilesScriptPath = $"{batchExecutionDirectoryPath}/{DownloadFilesScriptFileName}";
             var downloadFilesScriptUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{downloadFilesScriptPath}");
             await this.storageAccessProvider.UploadBlobAsync($"/{downloadFilesScriptPath}", downloadFilesScriptContent);
+            var filesToUpload = new TesOutput[0];
 
-            var filesToUpload = await Task.WhenAll(
-                task.Outputs.Select(async f =>
-                    new TesOutput { 
-                        Path = f.Path, 
-                        Url = await this.storageAccessProvider.MapLocalPathToSasUrlAsync(f.Url, getContainerSas: true),
-                        Name = f.Name, 
-                        Type = f.Type }));
+            if (task.Outputs?.Count > 0)
+            {
+                filesToUpload = await Task.WhenAll(
+                    task.Outputs?.Select(async f =>
+                        new TesOutput { Path = f.Path, Url = await this.storageAccessProvider.MapLocalPathToSasUrlAsync(f.Url, getContainerSas: true), Name = f.Name, Type = f.Type }));
+            }
 
             // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
             // Ignore any other missing files and directories. WDL tasks can have optional output files.
