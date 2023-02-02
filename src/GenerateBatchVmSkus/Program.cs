@@ -43,7 +43,7 @@ namespace TesUtils
         }
     }
 
-    internal class GenerateBatchVmSkus
+    internal class Program
     {
         static async Task Main(string[] args)
         {
@@ -166,7 +166,7 @@ namespace TesUtils
 
             var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.General);
             jsonOptions.WriteIndented = true;
-            var data = JsonSerializer.Serialize(batchVmInfo, options: jsonOptions); ;
+            var data = JsonSerializer.Serialize(batchVmInfo, options: jsonOptions);
             await File.WriteAllTextAsync(configuration.OutputFilePath, data);
             return 0;
         }

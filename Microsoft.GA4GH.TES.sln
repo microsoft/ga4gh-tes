@@ -23,11 +23,11 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "deploy-tes-on-azure", "src\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "deploy-tes-on-azure.Tests", "src\deploy-tes-on-azure.Tests\deploy-tes-on-azure.Tests.csproj", "{19A5D64F-5252-4FE7-B7CD-49BDC9185A1B}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Utilities", "src\Utilities\Utilities.csproj", "{98977FDA-80E7-45CD-A471-E615FC595F3A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CommonUtilities", "src\CommonUtilities\CommonUtilities.csproj", "{D863F869-4C87-4C4C-AF6A-A699E7301C83}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CommonUtilities", "src\CommonUtilities\CommonUtilities.csproj", "{D863F869-4C87-4C4C-AF6A-A699E7301C83}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CommonUtilities.Tests", "src\CommonUtilities.Tests\CommonUtilities.Tests.csproj", "{B4E82DE4-16F7-40D5-9619-702A7EECBE92}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CommonUtilities.Tests", "src\CommonUtilities.Tests\CommonUtilities.Tests.csproj", "{B4E82DE4-16F7-40D5-9619-702A7EECBE92}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GenerateBatchVmSkus", "src\GenerateBatchVmSkus\GenerateBatchVmSkus.csproj", "{23C29BA5-3A52-4356-9220-FC84FE32E43E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -55,10 +55,6 @@ Global
 		{19A5D64F-5252-4FE7-B7CD-49BDC9185A1B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{19A5D64F-5252-4FE7-B7CD-49BDC9185A1B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{19A5D64F-5252-4FE7-B7CD-49BDC9185A1B}.Release|Any CPU.Build.0 = Release|Any CPU
-		{98977FDA-80E7-45CD-A471-E615FC595F3A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{98977FDA-80E7-45CD-A471-E615FC595F3A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{98977FDA-80E7-45CD-A471-E615FC595F3A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{98977FDA-80E7-45CD-A471-E615FC595F3A}.Release|Any CPU.Build.0 = Release|Any CPU
 		{D863F869-4C87-4C4C-AF6A-A699E7301C83}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{D863F869-4C87-4C4C-AF6A-A699E7301C83}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D863F869-4C87-4C4C-AF6A-A699E7301C83}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -67,6 +63,10 @@ Global
 		{B4E82DE4-16F7-40D5-9619-702A7EECBE92}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B4E82DE4-16F7-40D5-9619-702A7EECBE92}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B4E82DE4-16F7-40D5-9619-702A7EECBE92}.Release|Any CPU.Build.0 = Release|Any CPU
+		{23C29BA5-3A52-4356-9220-FC84FE32E43E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{23C29BA5-3A52-4356-9220-FC84FE32E43E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{23C29BA5-3A52-4356-9220-FC84FE32E43E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{23C29BA5-3A52-4356-9220-FC84FE32E43E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

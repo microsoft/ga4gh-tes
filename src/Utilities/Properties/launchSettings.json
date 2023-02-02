@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "Utilities": {
-      "commandName": "Project",
-      "commandLineArgs": "--SubscriptionId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee \r\n--OutputFilePath BatchSupportedVmSizeInformation.json"
-    }
-  }
-}
