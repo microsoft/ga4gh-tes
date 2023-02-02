@@ -211,7 +211,7 @@ namespace TesApi.Web
         {
             var activePoolsFilter = new ODATADetailLevel
             {
-                FilterClause = $"state eq 'active' or state eq 'deleting'",
+                FilterClause = "state eq 'active' or state eq 'deleting'",
                 SelectClause = "id"
             };
 
@@ -223,7 +223,7 @@ namespace TesApi.Web
         {
             var activeJobsFilter = new ODATADetailLevel
             {
-                FilterClause = $"state eq 'active' or state eq 'disabling' or state eq 'terminating' or state eq 'deleting'",
+                FilterClause = "state eq 'active' or state eq 'disabling' or state eq 'terminating' or state eq 'deleting'",
                 SelectClause = "id"
             };
 
@@ -567,7 +567,7 @@ namespace TesApi.Web
         {
             var activePoolsFilter = new ODATADetailLevel
             {
-                FilterClause = $"state eq 'active'",
+                FilterClause = "state eq 'active'",
                 SelectClause = BatchPool.CloudPoolSelectClause
             };
 

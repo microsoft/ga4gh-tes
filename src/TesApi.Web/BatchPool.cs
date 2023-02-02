@@ -542,9 +542,14 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
             }
 
             // Pool is "broken" if job is missing/not active. Reject this pool via the side effect of the exception that is thrown.
-            _ = await _azureProxy.GetBatchJobAsync(pool.Id, new ODATADetailLevel { SelectClause = "id", FilterClause = "state eq 'active'" }, cancellationToken);
+            if (1 != (await _azureProxy.GetBatchJobAsync(pool.Id, new ODATADetailLevel { SelectClause = "id,state"/*, FilterClause = "state eq 'active'"*/ }, cancellationToken).ToAsyncEnumerable().Where(j => j.State == JobState.Active).ToListAsync(cancellationToken)).Count)
+            {
+                // TODO: investigate why FilterClause throws "Type Microsoft.Azure.Batch.Protocol.BatchRequests.JobGetBatchRequest does not support a filter clause. (Parameter 'detailLevel')"
+                throw new InvalidOperationException($"Active Job not found for Pool {pool.Id}");
+            }
 
             Configure(pool);
+            _ = _batchPools.AddPool(this);
         }
 
         private void Configure(CloudPool pool)
