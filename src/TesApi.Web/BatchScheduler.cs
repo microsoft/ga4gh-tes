@@ -71,7 +71,8 @@ namespace TesApi.Web
         private readonly string batchNodesSubnetId;
         private readonly bool disableBatchNodesPublicIpAddress;
         private readonly bool enableBatchAutopool;
-        private readonly BatchNodeInfo batchNodeInfo;
+        private readonly BatchNodeInfo gen2BatchNodeInfo;
+        private readonly BatchNodeInfo gen1BatchNodeInfo;
         private readonly string marthaUrl;
         private readonly string marthaKeyVaultName;
         private readonly string marthaSecretName;
@@ -140,12 +141,21 @@ namespace TesApi.Web
                 taskRunScriptContent = string.Join(") && (", File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh")));
             }
 
-            this.batchNodeInfo = new BatchNodeInfo
+            this.gen2BatchNodeInfo = new BatchNodeInfo
             {
-                BatchImageOffer = GetStringValue(configuration, "BatchImageOffer"),
-                BatchImagePublisher = GetStringValue(configuration, "BatchImagePublisher"),
-                BatchImageSku = GetStringValue(configuration, "BatchImageSku"),
-                BatchImageVersion = GetStringValue(configuration, "BatchImageVersion"),
+                BatchImageOffer = GetStringValue(configuration, "Gen2BatchImageOffer"),
+                BatchImagePublisher = GetStringValue(configuration, "Gen2BatchImagePublisher"),
+                BatchImageSku = GetStringValue(configuration, "Gen2BatchImageSku"),
+                BatchImageVersion = GetStringValue(configuration, "Gen2BatchImageVersion"),
+                BatchNodeAgentSkuId = GetStringValue(configuration, "Gen2BatchNodeAgentSkuId")
+            };
+
+            this.gen1BatchNodeInfo = new BatchNodeInfo
+            {
+                BatchImageOffer = GetStringValue(configuration, "Gen1BatchImageOffer"),
+                BatchImagePublisher = GetStringValue(configuration, "Gen1BatchImagePublisher"),
+                BatchImageSku = GetStringValue(configuration, "Gen1BatchImageSku"),
+                BatchImageVersion = GetStringValue(configuration, "Gen1BatchImageVersion"),
                 BatchNodeAgentSkuId = GetStringValue(configuration, "BatchNodeAgentSkuId")
             };
 
@@ -435,6 +445,7 @@ namespace TesApi.Web
                     identities.Add(tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity));
                 }
 
+                var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2");
                 string jobId = default;
                 if (this.enableBatchAutopool)
                 {
@@ -444,7 +455,7 @@ namespace TesApi.Web
                         vmSize: virtualMachineInfo.VmSize,
                         autoscaled: false,
                         preemptable: virtualMachineInfo.LowPriority,
-                        nodeInfo: batchNodeInfo,
+                        nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                         containerConfiguration: containerConfiguration),
                     tesTaskId: tesTask.Id,
                     jobId: jobId,
@@ -463,7 +474,7 @@ namespace TesApi.Web
                                 vmSize: virtualMachineInfo.VmSize,
                                 autoscaled: true,
                                 preemptable: virtualMachineInfo.LowPriority,
-                                nodeInfo: batchNodeInfo,
+                                nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                                 containerConfiguration: containerConfiguration)))
                         ).Pool;
                     jobId = await azureProxy.GetNextBatchTaskIdAsync(tesTask.Id, poolInformation.PoolId);
@@ -1475,9 +1486,9 @@ namespace TesApi.Web
                 eligibleVms = virtualMachineInfoList
                     .Where(vm =>
                         vm.LowPriority == preemptible
-                        && vm.NumberOfCores >= requiredNumberOfCores
-                        && vm.MemoryInGB >= requiredMemoryInGB
-                        && vm.ResourceDiskSizeInGB >= requiredDiskSizeInGB)
+                        && vm.VCpusAvailable >= requiredNumberOfCores
+                        && vm.MemoryInGiB >= requiredMemoryInGB
+                        && vm.ResourceDiskSizeInGiB >= requiredDiskSizeInGB)
                     .ToList();
 
                 noVmFoundMessage = $"No VM (out of {virtualMachineInfoList.Count}) available with the required resources (cores: {requiredNumberOfCores}, memory: {requiredMemoryInGB} GB, disk: {requiredDiskSizeInGB} GB, preemptible: {preemptible}) for task id {tesTask.Id}.";
@@ -1541,7 +1552,7 @@ namespace TesApi.Web
         {
             if (coreQuota.IsLowPriority || !coreQuota.IsDedicatedAndPerVmFamilyCoreQuotaEnforced)
             {
-                return coreQuota.NumberOfCores >= vm.NumberOfCores;
+                return coreQuota.NumberOfCores >= vm.VCpusAvailable;
             }
 
             var result = coreQuota.DedicatedCoreQuotas?.FirstOrDefault(q => q.VmFamilyName.Equals(vm.VmFamily, StringComparison.OrdinalIgnoreCase));
@@ -1551,7 +1562,7 @@ namespace TesApi.Web
                 return false;
             }
 
-            return result?.CoreQuota >= vm.NumberOfCores;
+            return result?.CoreQuota >= vm.VCpusAvailable;
         }
 
         private async Task<(Tes.Models.BatchNodeMetrics BatchNodeMetrics, DateTimeOffset? TaskStartTime, DateTimeOffset? TaskEndTime, int? CromwellRcCode)> GetBatchNodeMetricsAndCromwellResultCodeAsync(TesTask tesTask)
