@@ -154,9 +154,9 @@ namespace TesUtils
                 return new VirtualMachineInformation()
                 {
                     MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
-                    MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB ?? 0),
+                    MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB.Value),
                     VCpusAvailable = vCpusAvailable,
-                    ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB ?? 0),
+                    ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB.Value),
                     VmSize = sizeInfo.Name,
                     VmFamily = sku?.Family,
                     HyperVGenerations = generationList,
