@@ -62,7 +62,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
     /// <inheritdoc cref="IBatchQuotaProvider"/>
     public async Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck)
     {
-        var workflowCoresRequirement = virtualMachineInformation.NumberOfCores ?? 0;
+        var workflowCoresRequirement = virtualMachineInformation.VCpusAvailable ?? 0;
         var isDedicated = !virtualMachineInformation.LowPriority;
         var vmFamily = virtualMachineInformation.VmFamily;
         BatchVmFamilyQuotas batchVmFamilyBatchQuotas;
@@ -72,7 +72,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
             batchVmFamilyBatchQuotas = await batchQuotaProvider.GetQuotaForRequirementAsync(
                 virtualMachineInformation.VmFamily,
                 virtualMachineInformation.LowPriority,
-                virtualMachineInformation.NumberOfCores);
+                virtualMachineInformation.VCpusAvailable);
 
             if (batchVmFamilyBatchQuotas is null)
             {
@@ -140,14 +140,14 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
             .Sum(x =>
                 virtualMachineInfoList
                     .FirstOrDefault(vm => vm.VmSize.Equals(x.VirtualMachineSize, StringComparison.OrdinalIgnoreCase))?
-                    .NumberOfCores * (isDedicated ? x.DedicatedNodeCount : x.LowPriorityNodeCount)) ?? 0;
+                    .VCpusAvailable * (isDedicated ? x.DedicatedNodeCount : x.LowPriorityNodeCount)) ?? 0;
 
         var vmSizesInRequestedFamily = virtualMachineInfoList.Where(vm => String.Equals(vm.VmFamily, vmInfo.VmFamily, StringComparison.OrdinalIgnoreCase)).Select(vm => vm.VmSize).ToList();
 
         var activeNodeCountByVmSizeInRequestedFamily = activeNodeCountByVmSize.Where(x => vmSizesInRequestedFamily.Contains(x.VirtualMachineSize, StringComparer.OrdinalIgnoreCase));
 
         var dedicatedCoresInUseInRequestedVmFamily = activeNodeCountByVmSizeInRequestedFamily
-            .Sum(x => virtualMachineInfoList.FirstOrDefault(vm => vm.VmSize.Equals(x.VirtualMachineSize, StringComparison.OrdinalIgnoreCase))?.NumberOfCores * x.DedicatedNodeCount) ?? 0;
+            .Sum(x => virtualMachineInfoList.FirstOrDefault(vm => vm.VmSize.Equals(x.VirtualMachineSize, StringComparison.OrdinalIgnoreCase))?.VCpusAvailable * x.DedicatedNodeCount) ?? 0;
 
 
         return new BatchAccountUtilization(activeJobsCount, activePoolsCount, totalCoresInUse, dedicatedCoresInUseInRequestedVmFamily);

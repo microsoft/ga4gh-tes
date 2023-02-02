@@ -115,28 +115,28 @@ namespace TesApi.Tests
             {
                 new VirtualMachineInformation
                 {
-                    VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = false, NumberOfCores = 2, MemoryInGB = 3,
-                    ResourceDiskSizeInGB = 20, PricePerHour = 11
+                    VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 3,
+                    ResourceDiskSizeInGiB = 20, PricePerHour = 11
                 },
                 new VirtualMachineInformation
                 {
-                    VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = true, NumberOfCores = 2, MemoryInGB = 3,
-                    ResourceDiskSizeInGB = 20, PricePerHour = 22
+                    VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = true, VCpusAvailable = 2, MemoryInGiB = 3,
+                    ResourceDiskSizeInGiB = 20, PricePerHour = 22
                 },
                 new VirtualMachineInformation
                 {
-                    VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = false, NumberOfCores = 4, MemoryInGB = 6,
-                    ResourceDiskSizeInGB = 40, PricePerHour = 33
+                    VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = false, VCpusAvailable = 4, MemoryInGiB = 6,
+                    ResourceDiskSizeInGiB = 40, PricePerHour = 33
                 },
                 new VirtualMachineInformation
                 {
-                    VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = true, NumberOfCores = 4, MemoryInGB = 6,
-                    ResourceDiskSizeInGB = 40, PricePerHour = 44
+                    VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = true, VCpusAvailable = 4, MemoryInGiB = 6,
+                    ResourceDiskSizeInGiB = 40, PricePerHour = 44
                 },
                 new VirtualMachineInformation
                 {
-                    VmSize = "VmSize3", VmFamily = "VmFamily3", LowPriority = false, NumberOfCores = 8, MemoryInGB = 12,
-                    ResourceDiskSizeInGB = 80, PricePerHour = 55
+                    VmSize = "VmSize3", VmFamily = "VmFamily3", LowPriority = false, VCpusAvailable = 8, MemoryInGiB = 12,
+                    ResourceDiskSizeInGiB = 80, PricePerHour = 55
                 }
             };
         }
