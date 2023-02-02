@@ -11,6 +11,7 @@ using Tes.Models;
 using Azure.ResourceManager.Compute;
 using Azure;
 using Azure.ResourceManager.Compute.Models;
+using Azure.ResourceManager.Resources.Models;
 
 namespace TesUtils
 {
@@ -73,11 +74,14 @@ namespace TesUtils
             var sizeForVm = new Dictionary<string, VirtualMachineSize>();
             var skuForVm = new Dictionary<string, ComputeResourceSku>();
 
-            foreach (var region in typeof(AzureLocation).GetTypeInfo().DeclaredProperties.Where(p => p.PropertyType == typeof(AzureLocation)).Select(p => p.Name).ToList())
+            var regions = await subscription.GetLocationsAsync().Where(x => x.Metadata.RegionType == RegionType.Physical).ToListAsync();
+
+            foreach (var region in regions)
             {
                 try
                 {
-                    var vms = await subscription.GetBatchSupportedVirtualMachineSkusAsync(new AzureLocation(region)).Select(s => s.Name).ToListAsync();
+                    var location = new AzureLocation(region.Name);
+                    var vms = await subscription.GetBatchSupportedVirtualMachineSkusAsync(location).Select(s => s.Name).ToListAsync();
 
                     List<VirtualMachineSize>? sizes = null;
                     List<ComputeResourceSku>? skus = null;
@@ -86,18 +90,18 @@ namespace TesUtils
                     {
                         if (regionsForVm.ContainsKey(vm))
                         {
-                            regionsForVm[vm].Add(region);
+                            regionsForVm[vm].Add(region.Name);
                         }
                         else
                         {
-                            regionsForVm[vm] = new HashSet<string>() { region };
+                            regionsForVm[vm] = new HashSet<string>() { region.Name };
                         }
 
                         if (!sizeForVm.ContainsKey(vm))
                         {
                             if (sizes is null)
                             {
-                                sizes = await subscription.GetVirtualMachineSizesAsync(region).ToListAsync();
+                                sizes = await subscription.GetVirtualMachineSizesAsync(location).ToListAsync();
                             }
                             sizeForVm[vm] = sizes.SingleOrDefault(vmsize => vmsize.Name.Equals(vm, StringComparison.OrdinalIgnoreCase));
                         }
@@ -106,16 +110,16 @@ namespace TesUtils
                         {
                             if (skus is null)
                             {
-                                skus = await subscription.GetComputeResourceSkusAsync(region).ToListAsync();
+                                skus = await subscription.GetComputeResourceSkusAsync($"location eq '{region.Name}'").ToListAsync();
                             }
                             skuForVm[vm] = skus.SingleOrDefault(sku => sku.Name.Equals(vm, StringComparison.OrdinalIgnoreCase));
                         }
                     }
-                    Console.WriteLine($"{region} supportedSkuCount:{vms.Count}");
+                    Console.WriteLine($"{region.Name} supportedSkuCount:{vms.Count}");
                 }
                 catch (RequestFailedException e)
                 {
-                    Console.WriteLine($"No skus supported in {region}. {e.ErrorCode}");
+                    Console.WriteLine($"No skus supported in {region.Name}. {e.ErrorCode}");
                 }
             }
             
@@ -158,7 +162,7 @@ namespace TesUtils
                     HyperVGenerations = generationList,
                     RegionsAvailable = new List<string>(regionsForVm[s])
                 };
-            }).ToList();
+            }).OrderBy(x => x.VmSize).ToList();
 
             var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.General);
             jsonOptions.WriteIndented = true;
