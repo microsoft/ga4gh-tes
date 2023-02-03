@@ -91,7 +91,7 @@ namespace TesApi.Web.Storage
             // This would allow the user to omit the account name for files stored in the default storage account
 
             // /cromwell-executions/... URLs become /defaultStorageAccountName/cromwell-executions/... to unify how URLs starting with /acct/container/... pattern are handled.
-            if (IsItKnownExecutionFilePath(path))
+            if (IsKnownExecutionFilePath(path))
             {
                 path = $"/{defaultStorageAccountName}{path}";
             }

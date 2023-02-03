@@ -83,7 +83,7 @@ namespace TesApi.Web.Storage
                 return await GetMappedSasContainerUrlFromWsmAsync(normalizedPath);
             }
 
-            if (IsItKnownExecutionFilePath(normalizedPath))
+            if (IsKnownExecutionFilePath(normalizedPath))
             {
                 return await GetMappedSasUrlFromWsmAsync(normalizedPath);
             }
