@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace TesApi.Web.Management.Models.Terra
 {
+#pragma warning disable CS1591
     public class ApiCreateBatchPoolResponse
     {
         [JsonPropertyName("resourceId")]
@@ -126,4 +127,5 @@ namespace TesApi.Web.Management.Models.Terra
         [JsonPropertyName("sourceResourceId")]
         public Guid SourceResourceId { get; set; }
     }
+#pragma warning restore CS1591
 }

@@ -44,6 +44,7 @@ namespace TesApi.Web
         /// Constructor of AzureProxy
         /// </summary>
         /// <param name="batchAccountOptions">The Azure Batch Account options</param>
+        /// <param name="batchPoolManager"><inheritdoc cref="IBatchPoolManager"/></param>
         /// <param name="logger">The logger</param>
         /// <exception cref="InvalidOperationException"></exception>
         public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, IBatchPoolManager batchPoolManager, ILogger<AzureProxy> logger)
@@ -53,7 +54,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(batchPoolManager);
 
-            batchPoolManager = this.batchPoolManager;
+            this.batchPoolManager = batchPoolManager;
 
             if (string.IsNullOrWhiteSpace(batchAccountOptions.Value.AccountName))
             {
