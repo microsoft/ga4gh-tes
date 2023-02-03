@@ -1,10 +1,13 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Azure.Batch;
+using Microsoft.Azure.Batch.Common;
+using Tes.Models;
+using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
 namespace TesApi.Web
@@ -78,7 +81,7 @@ namespace TesApi.Web
         /// <summary>
         /// Creates an Azure Batch pool who's lifecycle must be manually managed
         /// </summary>
-        /// <param name="poolInfo">Contains information about the pool. <see cref="BatchModels.ProxyResource.Name"/> becomes the <see cref="CloudPool.Id"/></param>
+        /// <param name="poolInfo">Contains information about the pool. <see cref="BatchModels.ProxyResource.Name"/> becomes the <see cref="Microsoft.Azure.Batch.Protocol.Models.CloudPool.Id"/></param>
         /// <param name="isPreemptable">True if nodes in this pool will all be preemptable. False if nodes will all be dedicated.</param>
         Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable);
 
@@ -196,7 +199,7 @@ namespace TesApi.Web
         /// Gets the list of active pools matching the hostname in the metadata
         /// </summary>
         /// <param name="hostName"></param>
-        /// <returns>List of <see cref="CloudPool"/> managed by the host.</returns>
+        /// <returns>List of <see cref="Microsoft.Azure.Batch.Protocol.Models.CloudPool"/> managed by the host.</returns>
         IAsyncEnumerable<CloudPool> GetActivePoolsAsync(string hostName);
 
         /// <summary>
@@ -230,7 +233,7 @@ namespace TesApi.Web
         /// <summary>
         /// Retrieves the specified batch job.
         /// </summary>
-        /// <param name="jobId">The <see cref="CloudJob"/> of the job to retrieve.</param>
+        /// <param name="jobId">The <see cref="Microsoft.Azure.Batch.Protocol.Models.CloudJob"/> of the job to retrieve.</param>
         /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for controlling which properties are retrieved from the service.</param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>

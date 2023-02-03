@@ -3,6 +3,12 @@
 
 using System;
 using System.Threading.Tasks;
+using System.Web;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using TesApi.Web.Management.Clients;
+using TesApi.Web.Management.Configuration;
+using TesApi.Web.Management.Models.Terra;
 
 namespace TesApi.Web.Storage
 {
@@ -111,7 +117,7 @@ namespace TesApi.Web.Storage
 
             var tokenInfo = await GetSasTokenFromWsmAsync(tokenParams);
 
-            logger.LogInformation($"Successfully obtained the Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
+            Logger.LogInformation($"Successfully obtained the Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
 
             var uriBuilder = new UriBuilder(tokenInfo.Url);
 
@@ -130,7 +136,7 @@ namespace TesApi.Web.Storage
 
         private async Task<WsmSasTokenApiResponse> GetSasTokenFromWsmAsync(SasTokenApiParameters tokenParams)
         {
-            logger.LogInformation(
+            Logger.LogInformation(
                 $"Getting Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
 
             return await terraWsmApiClient.GetSasTokenAsync(
@@ -160,11 +166,5 @@ namespace TesApi.Web.Storage
         {
             return terraOptions.WorkspaceStorageAccountName.Equals(value, StringComparison.OrdinalIgnoreCase);
         }
-
-        private bool IsTerraWorkspaceContainer(string value)
-            => terraOptions.WorkspaceStorageContainerName.Equals(value, StringComparison.OrdinalIgnoreCase);
-
-        private bool IsTerraWorkspaceStorageAccount(string value)
-            => terraOptions.WorkspaceStorageAccountName.Equals(value, StringComparison.OrdinalIgnoreCase);
     }
 }

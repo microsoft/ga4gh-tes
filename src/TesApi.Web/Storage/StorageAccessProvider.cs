@@ -3,6 +3,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace TesApi.Web.Storage;
 
@@ -23,11 +24,11 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <summary>
     /// Logger instance. 
     /// </summary>
-    protected readonly ILogger logger;
+    protected readonly ILogger Logger;
     /// <summary>
     /// Azure proxy instance.
     /// </summary>
-    protected readonly IAzureProxy azureProxy;
+    protected readonly IAzureProxy AzureProxy;
 
     /// <summary>
     /// Provides base methods for blob storage access and local input mapping.
@@ -36,8 +37,8 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
     public StorageAccessProvider(ILogger logger, IAzureProxy azureProxy)
     {
-        this.logger = logger;
-        this.azureProxy = azureProxy;
+        this.Logger = logger;
+        this.AzureProxy = azureProxy;
 
     }
 
@@ -46,7 +47,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     {
         try
         {
-            return await this.azureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath)));
+            return await this.AzureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath)));
         }
         catch
         {
@@ -59,7 +60,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     {
         try
         {
-            var content = await this.azureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath)));
+            var content = await this.AzureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath)));
             action?.Invoke(content);
             return true;
         }
@@ -71,11 +72,11 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
 
     /// <inheritdoc />
     public async Task UploadBlobAsync(string blobRelativePath, string content)
-        => await this.azureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), content);
+        => await this.AzureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), content);
 
     /// <inheritdoc />
     public async Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath)
-        => await this.azureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), sourceLocalFilePath);
+        => await this.AzureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), sourceLocalFilePath);
 
     /// <inheritdoc />
     public abstract Task<bool> IsPublicHttpUrlAsync(string uriString);

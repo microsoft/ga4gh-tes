@@ -3,7 +3,18 @@
 
 using System;
 using System.Net;
+using System.Net.Http;
 using System.Threading.Tasks;
+using System.Web;
+using Azure.Core;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
+using TesApi.Web.Management;
+using TesApi.Web.Management.Clients;
+using TesApi.Web.Management.Configuration;
+using TesApi.Web.Management.Models.Terra;
 
 namespace TesApi.Tests
 {
@@ -85,7 +96,7 @@ namespace TesApi.Tests
         {
             var response = new HttpResponseMessage(HttpStatusCode.OK);
 
-            response.Content = new StringContent(TerraApiStubData.GetWsmSasTokenApiResponseInJson());
+            response.Content = new StringContent(terraApiStubData.GetWsmSasTokenApiResponseInJson());
 
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<Task<HttpResponseMessage>>>()))
                 .ReturnsAsync(response);

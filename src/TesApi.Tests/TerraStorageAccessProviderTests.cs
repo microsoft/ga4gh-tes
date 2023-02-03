@@ -3,6 +3,15 @@
 
 using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
+using TesApi.Web;
+using TesApi.Web.Management.Clients;
+using TesApi.Web.Management.Configuration;
+using TesApi.Web.Management.Models.Terra;
+using TesApi.Web.Storage;
 
 namespace TesApi.Tests
 {
@@ -10,8 +19,8 @@ namespace TesApi.Tests
     [TestCategory("unit")]
     public class TerraStorageAccessProviderTests
     {
-        private const string WorkspaceStorageAccountName = "terraAccount";
-        private const string WorkspaceStorageContainerName = "terraContainer";
+        private const string WorkspaceStorageAccountName = TerraApiStubData.WorkspaceAccountName;
+        private const string WorkspaceStorageContainerName = TerraApiStubData.WorkspaceContainerName;
 
         private Mock<TerraWsmApiClient> wsmApiClientMock;
         private Mock<IAzureProxy> azureProxyMock;
@@ -26,7 +35,7 @@ namespace TesApi.Tests
             terraApiStubData = new TerraApiStubData();
             wsmApiClientMock = new Mock<TerraWsmApiClient>();
             optionsMock = new Mock<IOptions<TerraOptions>>();
-            terraOptions = CreateTerraOptionsFromStubData();
+            terraOptions = terraApiStubData.GetTerraOptions();
             optionsMock.Setup(o => o.Value).Returns(terraOptions);
             azureProxyMock = new Mock<IAzureProxy>();
             terraStorageAccessProvider = new TerraStorageAccessProvider(NullLogger<TerraStorageAccessProvider>.Instance,
@@ -94,20 +103,6 @@ namespace TesApi.Tests
             builder.Path += path.TrimStart('/');
 
             Assert.IsNotNull(builder.ToString(), result);
-        }
-
-        private TerraOptions CreateTerraOptionsFromStubData()
-        {
-            return new TerraOptions()
-            {
-                WsmApiHost = terraApiStubData.WsmApiHost,
-                WorkspaceStorageAccountName = WorkspaceStorageAccountName,
-                WorkspaceStorageContainerName = WorkspaceStorageContainerName,
-                WorkspaceId = terraApiStubData.WorkspaceId.ToString(),
-                WorkspaceStorageContainerResourceId = terraApiStubData.ContainerResourceId.ToString(),
-                SasTokenExpirationInSeconds = 60,
-                SasAllowedIpRange = "169.0.0.1"
-            };
         }
     }
 }

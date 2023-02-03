@@ -1,22 +1,22 @@
-﻿// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
-using System;
+﻿using System;
+using System.Text.Json;
+using TesApi.Web.Management.Configuration;
+using TesApi.Web.Management.Models.Terra;
 
 namespace TesApi.Tests;
 
 public class TerraApiStubData
 {
-    public static string LandingZoneApiHost => "https://landingzone.host";
-    public static string WsmApiHost => "https://wsm.host";
+    public const string LandingZoneApiHost = "https://landingzone.host";
+    public const string WsmApiHost = "https://wsm.host";
+    public const string ResourceGroup = "mrg-terra-dev-previ-20191228";
+    public const string WorkspaceAccountName = "fooaccount";
+    public const string WorkspaceContainerName = "foocontainer";
 
-    public static string ResourceGroup => "mrg-terra-dev-previ-20191228";
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
     public Guid WorkspaceId { get; } = Guid.NewGuid();
     public Guid ContainerResourceId { get; } = Guid.NewGuid();
-    public string WorkspaceAccountName => "fooaccount";
-    public string WorkspaceContainerName => "foocontainer";
     public string BatchAccountName => "lzee170c71b6cf678cfca744";
     public string Region => "westus3";
     public string BatchAccountId =>
@@ -24,13 +24,18 @@ public class TerraApiStubData
 
     public string PoolId => "poolId";
     public LandingZoneResourcesApiResponse GetResourceApiResponse()
-        => JsonSerializer.Deserialize<LandingZoneResourcesApiResponse>(GetResourceApiResponseInJson());
-
+    {
+        return JsonSerializer.Deserialize<LandingZoneResourcesApiResponse>(GetResourceApiResponseInJson());
+    }
     public QuotaApiResponse GetResourceQuotaApiResponse()
-        => JsonSerializer.Deserialize<QuotaApiResponse>(GetResourceQuotaApiResponseInJson());
+    {
+        return JsonSerializer.Deserialize<QuotaApiResponse>(GetResourceQuotaApiResponseInJson());
+    }
 
-    public static WsmSasTokenApiResponse GetWsmSasTokenApiResponse()
-        => JsonSerializer.Deserialize<WsmSasTokenApiResponse>(GetWsmSasTokenApiResponseInJson());
+    public WsmSasTokenApiResponse GetWsmSasTokenApiResponse()
+    {
+        return JsonSerializer.Deserialize<WsmSasTokenApiResponse>(GetWsmSasTokenApiResponseInJson());
+    }
 
     public TerraOptions GetTerraOptions()
     {
@@ -64,9 +69,11 @@ public class TerraApiStubData
   ""token"": ""SASTOKENSTUB="",
   ""url"": ""https://bloburl.foo/container?sas=SASTOKENSTUB=""
     }";
+    }
 
-        public string GetResourceApiResponseInJson()
-            => $@"{{
+    public string GetResourceApiResponseInJson()
+    {
+        return $@"{{
   ""id"": ""{LandingZoneId}"",
   ""resources"": [
     {{
@@ -160,9 +167,11 @@ public class TerraApiStubData
     }}
   ]
 }}";
+    }
 
-        public string GetResourceQuotaApiResponseInJson()
-            => $@"{{
+    public string GetResourceQuotaApiResponseInJson()
+    {
+        return $@"{{
   ""landingZoneId"": ""{LandingZoneId}"",
   ""azureResourceId"": ""{BatchAccountId}"",
   ""resourceType"": ""Microsoft.Batch/batchAccounts"",

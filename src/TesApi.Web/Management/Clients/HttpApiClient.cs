@@ -3,10 +3,15 @@
 
 using System;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Core;
+using Microsoft.Extensions.Logging;
 
 namespace TesApi.Web.Management.Clients
 {
@@ -50,7 +55,8 @@ namespace TesApi.Web.Management.Clients
         /// <param name="cacheAndRetryHandler"></param>
         /// <param name="tokenScope"></param>
         /// <param name="logger"></param>
-        protected HttpApiClient(TokenCredential tokenCredential, string tokenScope, CacheAndRetryHandler cacheAndRetryHandler, ILogger logger) : this(cacheAndRetryHandler, logger)
+        protected HttpApiClient(TokenCredential tokenCredential, string tokenScope,
+            CacheAndRetryHandler cacheAndRetryHandler, ILogger logger) : this(cacheAndRetryHandler, logger)
         {
             ArgumentNullException.ThrowIfNull(tokenCredential);
             ArgumentException.ThrowIfNullOrEmpty(tokenScope);
@@ -71,7 +77,8 @@ namespace TesApi.Web.Management.Clients
         /// and must be idempotent</param>
         /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
         /// <returns></returns>
-        protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(Func<HttpRequestMessage> httpRequestFactory, bool setAuthorizationHeader = false)
+        protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(
+            Func<HttpRequestMessage> httpRequestFactory, bool setAuthorizationHeader = false)
         {
             return await cacheAndRetryHandler.ExecuteWithRetryAsync(async () =>
             {
@@ -101,6 +108,7 @@ namespace TesApi.Web.Management.Clients
 
             return await HttpGetRequestWithRetryPolicyAsync(requestUrl, setAuthorizationHeader);
         }
+
         /// <summary>
         /// Sends a Http Get request to the URL and deserializes the body response to the specified type 
         /// </summary>
@@ -109,7 +117,8 @@ namespace TesApi.Web.Management.Clients
         /// <param name="cacheResults"></param>
         /// <typeparam name="TResponse"></typeparam>
         /// <returns></returns>
-        protected async Task<TResponse> HttpGetRequestAsync<TResponse>(Uri requestUrl, bool setAuthorizationHeader, bool cacheResults)
+        protected async Task<TResponse> HttpGetRequestAsync<TResponse>(Uri requestUrl, bool setAuthorizationHeader,
+            bool cacheResults)
         {
             var content = await HttpGetRequestAsync(requestUrl, setAuthorizationHeader, cacheResults);
 
@@ -145,166 +154,169 @@ namespace TesApi.Web.Management.Clients
             bool setAuthorizationHeader = false)
         {
             return await cacheAndRetryHandler.ExecuteWithRetryAsync(async () =>
-                {
-                    //request must be recreated in every retry.
-                    var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader);
-
-                    return await ExecuteRequestAndReadResponseBodyAsync(httpRequest);
-                });
-
-            /// <summary>
-            /// Returns an query string key-value, with the value escaped. If the value is null or empty returns an empty string
-            /// </summary>
-            /// <param name="name">parameter name</param>
-            /// <param name="value">parameter value</param>
-            /// <returns></returns>
-            protected string ParseQueryStringParameter(string name, string value)
             {
-                ArgumentException.ThrowIfNullOrEmpty(name);
+                //request must be recreated in every retry.
+                var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader);
 
-                if (string.IsNullOrEmpty(value))
-                {
-                    return string.Empty;
-                }
+                return await ExecuteRequestAndReadResponseBodyAsync(httpRequest);
+            });
+        }
 
-                return $"{name}={Uri.EscapeDataString(value)}";
+        /// <summary>
+        /// Returns an query string key-value, with the value escaped. If the value is null or empty returns an empty string
+        /// </summary>
+        /// <param name="name">parameter name</param>
+        /// <param name="value">parameter value</param>
+        /// <returns></returns>
+        protected string ParseQueryStringParameter(string name, string value)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(name);
 
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
             }
 
-            /// <summary>
-            /// Creates a query string with from an array of arguments.
-            /// </summary>
-            /// <param name="arguments"></param>
-            /// <returns></returns>
-            protected string AppendQueryStringParams(params string[] arguments)
+            return $"{name}={Uri.EscapeDataString(value)}";
+        }
+
+        /// <summary>
+        /// Creates a query string with from an array of arguments.
+        /// </summary>
+        /// <param name="arguments"></param>
+        /// <returns></returns>
+        protected string AppendQueryStringParams(params string[] arguments)
+        {
+            if (arguments is null || arguments.Length == 0)
             {
-                if (arguments is null || arguments.Length == 0)
-                {
-                    return string.Empty;
-                }
-
-                var queryString = "";
-                var prefix = "";
-
-                foreach (var argument in arguments)
-                {
-                    if (!string.IsNullOrEmpty(argument))
-                    {
-                        queryString += prefix + argument;
-                        prefix = "&";
-                    }
-                }
-
-                return queryString;
+                return string.Empty;
             }
 
-            private async Task<HttpRequestMessage> CreateGetHttpRequest(Uri requestUrl, bool setAuthorizationHeader)
+            var queryString = "";
+            var prefix = "";
+
+            foreach (var argument in arguments)
             {
-                var httpRequest = new HttpRequestMessage(HttpMethod.Get, requestUrl);
-
-                if (setAuthorizationHeader)
+                if (!string.IsNullOrEmpty(argument))
                 {
-                    await AddAuthorizationHeaderToRequestAsync(httpRequest);
-                }
-
-                return httpRequest;
-            }
-
-            private static async Task<string> ExecuteRequestAndReadResponseBodyAsync(HttpRequestMessage request)
-            {
-                var response = await HttpClient.SendAsync(request);
-
-                response.EnsureSuccessStatusCode();
-
-                return await response.Content.ReadAsStringAsync();
-            }
-
-            private async Task AddAuthorizationHeaderToRequestAsync(HttpRequestMessage requestMessage)
-            {
-                if (string.IsNullOrEmpty(tokenScope))
-                {
-                    throw new ArgumentException("Can't set the authentication token as the token scope is missing", nameof(tokenScope));
-                }
-
-                logger.LogTrace("Getting token for scope:{}", tokenScope);
-
-                try
-                {
-                    var token = await GetOrRefreshAccessTokenAsync();
-
-                    requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(@"Failed to set authentication header with the access token for scope:{tokenScope}", e);
-                    throw;
+                    queryString += prefix + argument;
+                    prefix = "&";
                 }
             }
 
-            private async Task<string> GetOrRefreshAccessTokenAsync()
+            return queryString;
+        }
+
+        private async Task<HttpRequestMessage> CreateGetHttpRequest(Uri requestUrl, bool setAuthorizationHeader)
+        {
+            var httpRequest = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+
+            if (setAuthorizationHeader)
             {
-                try
-                {
-                    await semaphore.WaitAsync();
-
-                    if (DateTimeOffset.UtcNow < accessToken.ExpiresOn)
-                    {
-                        logger.LogTrace(
-                            $"Using existing token. Token has not expired. Token expiration date: {accessToken.ExpiresOn}");
-                        return accessToken.Token;
-                    }
-
-                    var newAccessToken = await tokenCredential.GetTokenAsync(new TokenRequestContext(new[] { tokenScope }),
-                      CancellationToken.None);
-
-                    logger.LogTrace($"Returning a new token with an expiration date of: {newAccessToken.ExpiresOn}");
-                    accessToken = newAccessToken;
-                    return accessToken.Token;
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
+                await AddAuthorizationHeaderToRequestAsync(httpRequest);
             }
 
-            /// <summary>
-            /// Creates a string hash value from the URL that can be used as cached key.
-            /// </summary>
-            /// <param name="requestUrl">Request url</param>
-            /// <param name="perUser">if true, caching data will be per user</param>
-            /// <returns></returns>
-            public async Task<string> ToCacheKeyAsync(Uri requestUrl, bool perUser)
+            return httpRequest;
+        }
+
+        private static async Task<string> ExecuteRequestAndReadResponseBodyAsync(HttpRequestMessage request)
+        {
+            var response = await HttpClient.SendAsync(request);
+
+            response.EnsureSuccessStatusCode();
+
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        private async Task AddAuthorizationHeaderToRequestAsync(HttpRequestMessage requestMessage)
+        {
+            if (string.IsNullOrEmpty(tokenScope))
             {
-                var cacheKey = requestUrl.ToString();
-
-                if (perUser)
-                {
-                    //append the token to create a string that is unique to the user and the URL
-                    var token = await GetOrRefreshAccessTokenAsync();
-                    cacheKey += token;
-                }
-
-                return ToHash(cacheKey);
+                throw new ArgumentException("Can't set the authentication token as the token scope is missing",
+                    nameof(tokenScope));
             }
 
-            private string ToHash(string input)
-            {
-                var hash = sha256.ComputeHash(Encoding.ASCII.GetBytes(input));
+            logger.LogTrace("Getting token for scope:{}", tokenScope);
 
-                return hash.Aggregate("", (current, t) => current + t.ToString("X2"));
+            try
+            {
+                var token = await GetOrRefreshAccessTokenAsync();
+
+                requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             }
-
-            /// <summary>
-            /// Returns the response content, the response is successful 
-            /// </summary>
-            /// <param name="response">Response</param>
-            /// <typeparam name="T">Response's content deserialization type</typeparam>
-            /// <returns></returns>
-            protected static async Task<T> GetApiResponseContentAsync<T>(HttpResponseMessage response)
+            catch (Exception e)
             {
-                response.EnsureSuccessStatusCode();
-
-                return JsonSerializer.Deserialize<T>(await response.Content.ReadAsStringAsync());
+                logger.LogError(@"Failed to set authentication header with the access token for scope:{tokenScope}",
+                    e);
+                throw;
             }
         }
+
+        private async Task<string> GetOrRefreshAccessTokenAsync()
+        {
+            try
+            {
+                await semaphore.WaitAsync();
+
+                if (DateTimeOffset.UtcNow < accessToken.ExpiresOn)
+                {
+                    logger.LogTrace(
+                        $"Using existing token. Token has not expired. Token expiration date: {accessToken.ExpiresOn}");
+                    return accessToken.Token;
+                }
+
+                var newAccessToken = await tokenCredential.GetTokenAsync(
+                    new TokenRequestContext(new[] { tokenScope }),
+                    CancellationToken.None);
+
+                logger.LogTrace($"Returning a new token with an expiration date of: {newAccessToken.ExpiresOn}");
+                accessToken = newAccessToken;
+                return accessToken.Token;
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }
+
+        /// <summary>
+        /// Creates a string hash value from the URL that can be used as cached key.
+        /// </summary>
+        /// <param name="requestUrl">Request url</param>
+        /// <param name="perUser">if true, caching data will be per user</param>
+        /// <returns></returns>
+        public async Task<string> ToCacheKeyAsync(Uri requestUrl, bool perUser)
+        {
+            var cacheKey = requestUrl.ToString();
+
+            if (perUser)
+            {
+                //append the token to create a string that is unique to the user and the URL
+                var token = await GetOrRefreshAccessTokenAsync();
+                cacheKey += token;
+            }
+
+            return ToHash(cacheKey);
+        }
+
+        private string ToHash(string input)
+        {
+            var hash = sha256.ComputeHash(Encoding.ASCII.GetBytes(input));
+
+            return hash.Aggregate("", (current, t) => current + t.ToString("X2"));
+        }
+
+        /// <summary>
+        /// Returns the response content, the response is successful 
+        /// </summary>
+        /// <param name="response">Response</param>
+        /// <typeparam name="T">Response's content deserialization type</typeparam>
+        /// <returns></returns>
+        protected static async Task<T> GetApiResponseContentAsync<T>(HttpResponseMessage response)
+        {
+            response.EnsureSuccessStatusCode();
+
+            return JsonSerializer.Deserialize<T>(await response.Content.ReadAsStringAsync());
+        }
     }
+}

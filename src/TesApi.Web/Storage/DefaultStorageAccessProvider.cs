@@ -5,6 +5,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Web;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.WindowsAzure.Storage;
+using Microsoft.WindowsAzure.Storage.Auth;
+using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace TesApi.Web.Storage
 {
@@ -92,7 +98,7 @@ namespace TesApi.Web.Storage
             //TODO: refactor this to throw an exception instead of logging and error and returning null.
             if (!StorageAccountUrlSegments.TryCreate(path, out var pathSegments))
             {
-                logger.LogError($"Could not parse path '{path}'.");
+                Logger.LogError($"Could not parse path '{path}'.");
                 return null;
             }
 
@@ -106,13 +112,13 @@ namespace TesApi.Web.Storage
 
                 if (!await TryGetStorageAccountInfoAsync(pathSegments.AccountName, info => storageAccountInfo = info))
                 {
-                    logger.LogError($"Could not find storage account '{pathSegments.AccountName}' corresponding to path '{path}'. Either the account does not exist or the TES app service does not have permission to it.");
+                    Logger.LogError($"Could not find storage account '{pathSegments.AccountName}' corresponding to path '{path}'. Either the account does not exist or the TES app service does not have permission to it.");
                     return null;
                 }
 
                 try
                 {
-                    var accountKey = await azureProxy.GetStorageAccountKeyAsync(storageAccountInfo);
+                    var accountKey = await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo);
                     var resultPathSegments = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName);
 
                     if (pathSegments.IsContainer || getContainerSas)
@@ -136,7 +142,7 @@ namespace TesApi.Web.Storage
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, $"Could not get the key of storage account '{pathSegments.AccountName}'. Make sure that the TES app service has Contributor access to it.");
+                    Logger.LogError(ex, $"Could not get the key of storage account '{pathSegments.AccountName}'. Make sure that the TES app service has Contributor access to it.");
                     return null;
                 }
             }
@@ -146,7 +152,7 @@ namespace TesApi.Web.Storage
         {
             try
             {
-                var storageAccountInfo = await azureProxy.GetStorageAccountInfoAsync(accountName);
+                var storageAccountInfo = await AzureProxy.GetStorageAccountInfoAsync(accountName);
 
                 if (storageAccountInfo is not null)
                 {
@@ -155,12 +161,12 @@ namespace TesApi.Web.Storage
                 }
                 else
                 {
-                    logger.LogError($"Could not find storage account '{accountName}'. Either the account does not exist or the TES app service does not have permission to it.");
+                    Logger.LogError($"Could not find storage account '{accountName}'. Either the account does not exist or the TES app service does not have permission to it.");
                 }
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"Exception while getting storage account '{accountName}'");
+                Logger.LogError(ex, $"Exception while getting storage account '{accountName}'");
             }
 
             return false;
