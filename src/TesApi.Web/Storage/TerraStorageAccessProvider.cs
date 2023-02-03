@@ -65,7 +65,12 @@ namespace TesApi.Web.Storage
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
 
-            var normalizedPath = $"/{path.TrimStart('/')}";
+            var normalizedPath = path;
+
+            if (!TryParseHttpUrlFromInput(path, out _))
+            {   // if it is a local path, add the leading slash if missing.
+                normalizedPath = $"/{path.TrimStart('/')}";
+            }
 
             if (getContainerSas)
             {

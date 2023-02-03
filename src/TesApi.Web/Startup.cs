@@ -66,7 +66,7 @@ namespace TesApi.Web
                 .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
 
                 .AddLogging()
-                .AddAutoMapper(typeof(Pool), typeof(ApiCreateBatchPoolRequest))
+                .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
                 .AddSingleton<ContainerRegistryProvider>()
                 .AddSingleton<CacheAndRetryHandler>()
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()

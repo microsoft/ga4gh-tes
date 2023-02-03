@@ -9,8 +9,10 @@ namespace TesApi.Web.Management.Models.Terra
     /// </summary>
     public class ApiCreateBatchPoolRequest
     {
+#pragma warning disable CS1591
         [JsonPropertyName("common")]
         public ApiCommon Common { get; set; }
+
 
         [JsonPropertyName("azureBatchPool")]
         public ApiAzureBatchPool AzureBatchPool { get; set; }
@@ -181,22 +183,22 @@ namespace TesApi.Web.Management.Models.Terra
         public ApiFixedScale FixedScale { get; set; }
 
         [JsonPropertyName("autoScale")]
-        public AutoScale AutoScale { get; set; }
+        public ApiAutoScale AutoScale { get; set; }
     }
 
-    public class AutoScale
+    public class ApiAutoScale
     {
         [JsonPropertyName("formula")]
         public string Formula { get; set; }
 
         [JsonPropertyName("evaluationInterval")]
-        public long EvaluationInterval { get; set; }
+        public TimeSpan? EvaluationInterval { get; set; }
     }
 
     public class ApiFixedScale
     {
         [JsonPropertyName("resizeTimeout")]
-        public long ResizeTimeout { get; set; }
+        public TimeSpan? ResizeTimeout { get; set; }
 
         [JsonPropertyName("targetDedicatedNodes")]
         public long TargetDedicatedNodes { get; set; }
@@ -241,13 +243,13 @@ namespace TesApi.Web.Management.Models.Terra
         public string ImageName { get; set; }
 
         [JsonPropertyName("registry")]
-        public ApiRegistry Registry { get; set; }
+        public ApiContainerRegistry Registry { get; set; }
 
         [JsonPropertyName("workingDirectory")]
         public ApiDynamicVNetAssignmentScope WorkingDirectory { get; set; }
     }
 
-    public class ApiRegistry
+    public class ApiContainerRegistry
     {
         [JsonPropertyName("userName")]
         public string UserName { get; set; }
@@ -307,10 +309,10 @@ namespace TesApi.Web.Management.Models.Terra
         public string UserName { get; set; }
 
         [JsonPropertyName("autoUser")]
-        public ApiAutoUser AutoUser { get; set; }
+        public ApiAutoUserSpecification AutoUser { get; set; }
     }
 
-    public class ApiAutoUser
+    public class ApiAutoUserSpecification
     {
         [JsonPropertyName("scope")]
         public ApiDynamicVNetAssignmentScope Scope { get; set; }
@@ -372,4 +374,5 @@ namespace TesApi.Web.Management.Models.Terra
         [JsonPropertyName("value")]
         public string Value { get; set; }
     }
+#pragma warning restore CS1591
 }
