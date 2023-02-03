@@ -274,30 +274,12 @@ namespace TesApi.Web
         Task DeleteBatchComputeNodesAsync(string poolId, IEnumerable<ComputeNode> computeNodes, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Gets the allocation state and numbers of targeted compute nodes
+        /// Gets the allocation state and numbers of targeted and current compute nodes
         /// </summary>
         /// <param name="poolId">The id of the pool.</param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        Task<(AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? TargetDedicated)> GetComputeNodeAllocationStateAsync(string poolId, CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Resizes the specified pool
-        /// </summary>
-        /// <param name="poolId">The id of the pool.</param>
-        /// <param name="targetLowPriorityComputeNodes"></param>
-        /// <param name="targetDedicatedComputeNodes"></param>
-        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        Task SetComputeNodeTargetsAsync(string poolId, int? targetLowPriorityComputeNodes, int? targetDedicatedComputeNodes, CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Gets the numbers of compute nodes currently in the pool
-        /// </summary>
-        /// <param name="poolId">The id of the pool.</param>
-        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        Task<(int? lowPriorityNodes, int? dedicatedNodes)> GetCurrentComputeNodesAsync(string poolId, CancellationToken cancellationToken = default);
+        Task<(AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Checks if a local file exists

@@ -113,7 +113,7 @@ namespace TesApi.Web
 
         private async ValueTask ServicePoolGetResizeErrorsAsync(CancellationToken cancellationToken)
         {
-            var currentAllocationState = await _azureProxy.GetComputeNodeAllocationStateAsync(Pool.PoolId, cancellationToken);
+            var currentAllocationState = await _azureProxy.GetFullAllocationStateAsync(Pool.PoolId, cancellationToken);
             EnsureScalingModeSet(currentAllocationState.AutoScaleEnabled);
 
             if (_scalingMode == ScalingMode.AutoScaleEnabled)
@@ -213,7 +213,7 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
         {
             // This method implememts a state machine to disable/enable autoscaling as needed to clear certain conditions that can be observed
 
-            var (allocationState, autoScaleEnabled, _, _) = await _azureProxy.GetComputeNodeAllocationStateAsync(Pool.PoolId, cancellationToken);
+            var (allocationState, autoScaleEnabled, _, _, _, _) = await _azureProxy.GetFullAllocationStateAsync(Pool.PoolId, cancellationToken);
             EnsureScalingModeSet(autoScaleEnabled);
 
             if (allocationState == AllocationState.Steady)
@@ -313,8 +313,8 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
         {
             if (!IsAvailable)
             {
-                var (lowPriorityNodes, dedicatedNodes) = await _azureProxy.GetCurrentComputeNodesAsync(Pool.PoolId, cancellationToken);
-                if ((lowPriorityNodes is null || lowPriorityNodes == 0) && (dedicatedNodes is null || dedicatedNodes == 0) && !await GetTasksAsync().AnyAsync(cancellationToken))
+                var (_, _, _, lowPriorityNodes, _, dedicatedNodes) = await _azureProxy.GetFullAllocationStateAsync(Pool.PoolId, cancellationToken);
+                if (lowPriorityNodes < 1 && dedicatedNodes < 1 && !await GetTasksAsync().AnyAsync(cancellationToken))
                 {
                     _ = _batchPools.RemovePoolFromList(this);
                     await _batchPools.DeletePoolAsync(this, cancellationToken);
@@ -569,8 +569,8 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
     {
         internal int TestPendingReservationsCount => GetTasksAsync().CountAsync().AsTask().Result;
 
-        internal int? TestTargetDedicated => _azureProxy.GetComputeNodeAllocationStateAsync(Pool.PoolId).Result.TargetDedicated;
-        internal int? TestTargetLowPriority => _azureProxy.GetComputeNodeAllocationStateAsync(Pool.PoolId).Result.TargetLowPriority;
+        internal int? TestTargetDedicated => _azureProxy.GetFullAllocationStateAsync(Pool.PoolId).Result.TargetDedicated;
+        internal int? TestTargetLowPriority => _azureProxy.GetFullAllocationStateAsync(Pool.PoolId).Result.TargetLowPriority;
 
         internal TimeSpan TestRotatePoolTime
             => _forcePoolRotationAge;
