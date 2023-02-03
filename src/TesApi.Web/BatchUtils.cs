@@ -3,24 +3,49 @@
 
 using System;
 using System.IO;
+using Newtonsoft.Json;
 
 namespace TesApi.Web
 {
     /// <summary>
     /// Util class for Azure Batch related helper functions.
     /// </summary>
-    public class BatchUtils
+    public static class BatchUtils
     {
         /// <summary>
-        /// Readonly variable for the command line string so we're only reading from the file once.
+        /// Deserializes the JSON structure contained by the specified System.IO.TextReader
+        /// into an instance of the specified type.
         /// </summary>
-        public static readonly string StartTaskScript = GetStartTaskScript();
+        /// <typeparam name="T"></typeparam>
+        /// <param name="textReader"></param>
+        /// <param name="defaultValue"></param>
+        /// <returns></returns>
+        public static T ReadJson<T>(TextReader textReader, Func<T> defaultValue)
+        {
+            return textReader is null
+                ? defaultValue()
+                : ReadJsonFile();
+
+            T ReadJsonFile()
+            {
+                using var reader = new JsonTextReader(textReader);
+                return JsonSerializer.CreateDefault().Deserialize<T>(reader) ?? defaultValue();
+            }
+        }
 
         /// <summary>
-        /// Converts the install-docker.sh shell script to a string.
+        /// Serializes the specified <typeparamref name="T"/> and writes the JSON structure
+        /// into the returned <see cref="String"/>.
         /// </summary>
-        /// <returns>The string version of the shell script.</returns>
-        private static string GetStartTaskScript()
-            => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Scripts/start-task.sh"));
+        /// <typeparam name="T"></typeparam>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public static string WriteJson<T>(T value)
+        {
+            using var result = new StringWriter();
+            using var writer = new JsonTextWriter(result);
+            JsonSerializer.CreateDefault(new() { Error = (o, e) => throw e.ErrorContext.Error }).Serialize(writer, value);
+            return result.ToString();
+        }
     }
 }

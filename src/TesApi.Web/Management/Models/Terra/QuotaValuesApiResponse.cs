@@ -1,4 +1,7 @@
-﻿using System.Collections.Generic;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace TesApi.Web.Management.Models.Terra;
@@ -43,5 +46,4 @@ public class QuotaValuesApiResponse
     /// </summary>
     [JsonPropertyName("lowPriorityCoreQuota")]
     public int LowPriorityCoreQuota { get; set; }
-
 }

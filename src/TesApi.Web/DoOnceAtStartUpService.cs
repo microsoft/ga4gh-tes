@@ -12,36 +12,34 @@ namespace TesApi.Web
     /// <summary>
     /// Hosted service that executes one-time set up tasks at start up.
     /// </summary>
-    public class DoOnceAtStartUpService : IHostedService
+    public class DoOnceAtStartUpService : BackgroundService
     {
         private readonly ILogger logger;
-        private readonly IServiceProvider serviceProvider;
+        private readonly ConfigurationUtils configUtils;
+
         /// <summary>
         /// Hosted service that executes one-time set-up tasks at start up.
         /// </summary>
-        /// <param name="serviceProvider"></param>
+        /// <param name="configUtils"></param>
         /// <param name="logger"></param>
-        public DoOnceAtStartUpService(IServiceProvider serviceProvider, ILogger<DoOnceAtStartUpService> logger)
+        public DoOnceAtStartUpService(ConfigurationUtils configUtils, ILogger<DoOnceAtStartUpService> logger)
         {
-            ArgumentNullException.ThrowIfNull(serviceProvider);
+            ArgumentNullException.ThrowIfNull(configUtils);
             ArgumentNullException.ThrowIfNull(logger);
 
-            this.serviceProvider = serviceProvider;
+            this.configUtils = configUtils;
             this.logger = logger;
         }
 
-        /// <summary>
-        /// Executes start up tasks
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        public async Task StartAsync(CancellationToken cancellationToken)
+        /// <inheritdoc/>
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             using (logger.BeginScope("Executing Start Up tasks"))
             {
                 try
                 {
                     logger.LogInformation("Executing Configuration Utils Setup");
-                    await ExecuteConfigurationUtilsSetupAsync();
+                    await configUtils.ProcessAllowedVmSizesConfigurationFileAsync();
                 }
                 catch (Exception e)
                 {
@@ -49,28 +47,6 @@ namespace TesApi.Web
                     throw;
                 }
             }
-        }
-
-        private async Task ExecuteConfigurationUtilsSetupAsync()
-        {
-            if (serviceProvider.GetService(typeof(ConfigurationUtils)) is not ConfigurationUtils configUtils)
-            {
-                throw new InvalidOperationException(
-                    "Configuration utils instance can't be resolved from the app context");
-            }
-
-            await configUtils.ProcessAllowedVmSizesConfigurationFileAsync();
-        }
-
-        /// <summary>
-        /// Stops service.
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public Task StopAsync(CancellationToken cancellationToken)
-        {
-            logger.LogInformation("Service stopped");
-            return Task.CompletedTask;
         }
     }
 }

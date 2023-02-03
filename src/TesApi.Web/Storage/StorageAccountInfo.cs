@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-namespace TesApi.Web
+namespace TesApi.Web.Storage
 {
     /// <summary>
     /// A representation associating an Azure Storage account with an Azure SubscriptionId

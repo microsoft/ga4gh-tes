@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -24,9 +27,9 @@ public class CacheAndRetryHandlerTest
     {
         var mockOptions = new Mock<IOptions<RetryPolicyOptions>>();
         appCache = new CachingService();
-        mockInstanceToRetry = new Mock<object>();
+        mockInstanceToRetry = new();
         mockOptions.SetupGet(x => x.Value).Returns(new RetryPolicyOptions() { ExponentialBackOffExponent = 1, MaxRetryCount = MaxRetryCount });
-        cacheAndRetryHandler = new CacheAndRetryHandler(appCache, mockOptions.Object);
+        cacheAndRetryHandler = new(appCache, mockOptions.Object);
     }
 
     [TestMethod]
@@ -144,9 +147,7 @@ public class CacheAndRetryHandlerTest
     }
 
     private Task<HttpResponseMessage> CreateResponseAsync(HttpStatusCode statusCode)
-    {
-        return Task.FromResult(new HttpResponseMessage(statusCode));
-    }
+        => Task.FromResult<HttpResponseMessage>(new(statusCode));
 
     public interface ITestHttpResponseMessageFactory
     {

@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Text.Json;
 using TesApi.Web.Management.Models.Terra;
 
@@ -6,26 +9,35 @@ namespace TesApi.Tests;
 
 public class TerraApiStubData
 {
-    public string ApiHost => "https://landingzone.host";
-    public string ResourceGroup => "mrg-terra-dev-previ-20191228";
+    public static string LandingZoneApiHost => "https://landingzone.host";
+    public static string WsmApiHost => "https://wsm.host";
+
+    public static string ResourceGroup => "mrg-terra-dev-previ-20191228";
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
+    public Guid WorkspaceId { get; } = Guid.NewGuid();
+    public Guid ContainerResourceId { get; } = Guid.NewGuid();
 
     public string BatchAccountId =>
         $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Batch/batchAccounts/lzee170c71b6cf678cfca744";
 
     public LandingZoneResourcesApiResponse GetResourceApiResponse()
-    {
-        return JsonSerializer.Deserialize<LandingZoneResourcesApiResponse>(GetResourceApiResponseInJson());
-    }
+        => JsonSerializer.Deserialize<LandingZoneResourcesApiResponse>(GetResourceApiResponseInJson());
+
     public QuotaApiResponse GetResourceQuotaApiResponse()
-    {
-        return JsonSerializer.Deserialize<QuotaApiResponse>(GetResourceQuotaApiResponseInJson());
-    }
+        => JsonSerializer.Deserialize<QuotaApiResponse>(GetResourceQuotaApiResponseInJson());
+
+    public static WsmSasTokenApiResponse GetWsmSasTokenApiResponse()
+        => JsonSerializer.Deserialize<WsmSasTokenApiResponse>(GetWsmSasTokenApiResponseInJson());
+
+    public static string GetWsmSasTokenApiResponseInJson()
+        => @"{
+  ""token"": ""SASTOKENSTUB="",
+  ""url"": ""https://bloburl.foo/container?sas=SASTOKENSTUB=""
+    }";
 
     public string GetResourceApiResponseInJson()
-    {
-        return $@"{{
+        => $@"{{
   ""id"": ""{LandingZoneId}"",
   ""resources"": [
     {{
@@ -119,11 +131,9 @@ public class TerraApiStubData
     }}
   ]
 }}";
-    }
 
     public string GetResourceQuotaApiResponseInJson()
-    {
-        return $@"{{
+        => $@"{{
   ""landingZoneId"": ""{LandingZoneId}"",
   ""azureResourceId"": ""{BatchAccountId}"",
   ""resourceType"": ""Microsoft.Batch/batchAccounts"",
@@ -196,5 +206,4 @@ public class TerraApiStubData
     ""lowPriorityCoreQuota"": 100
   }}
 }}";
-    }
 }

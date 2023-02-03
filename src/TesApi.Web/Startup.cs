@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using Azure.Core;
 using Azure.Identity;
 using LazyCache;
 using Microsoft.AspNetCore.Builder;
@@ -23,6 +24,7 @@ using TesApi.Filters;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
+using TesApi.Web.Storage;
 
 namespace TesApi.Web
 {
@@ -63,6 +65,9 @@ namespace TesApi.Web
                 .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
                 .AddSingleton<AzureProxy, AzureProxy>()
                 .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
+                .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
+                .AddTransient<BatchPool>()
+
                 .AddControllers()
                 .AddNewtonsoftJson(opts =>
                 {
@@ -71,25 +76,27 @@ namespace TesApi.Web
                 }).Services
 
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
-                .AddSingleton<IStorageAccessProvider, StorageAccessProvider>()
+                .AddSingleton<IStorageAccessProvider, DefaultStorageAccessProvider>()
 
                 .AddLogging()
-                .AddSingleton<CacheAndRetryHandler, CacheAndRetryHandler>()
+                .AddSingleton<ContainerRegistryProvider>()
+                .AddSingleton<CacheAndRetryHandler>()
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
-                .AddSingleton<PriceApiClient, PriceApiClient>()
-                .AddSingleton<IBatchSkuInformationProvider>(sp => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(sp))
+                .AddSingleton<PriceApiClient>()
+                .AddSingleton<IBatchSkuInformationProvider, PriceApiBatchSkuInformationProvider>()
                 .AddSingleton(CreateBatchAccountResourceInformation)
                 .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
-                .AddSingleton<AzureManagementClientsFactory, AzureManagementClientsFactory>()
-                .AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
-                .AddSingleton<ConfigurationUtils, ConfigurationUtils>()
+                .AddSingleton<AzureManagementClientsFactory>()
+                .AddSingleton<ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
+                .AddSingleton<ConfigurationUtils>()
+                .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
 
                 .AddSwaggerGen(c =>
                 {
-                    c.SwaggerDoc("0.3.3", new OpenApiInfo
+                    c.SwaggerDoc("0.4.0", new OpenApiInfo
                     {
-                        Version = "0.3.3",
+                        Version = "0.4.0",
                         Title = "Task Execution Service",
                         Description = "Task Execution Service (ASP.NET Core 7.0)",
                         Contact = new OpenApiContact()
@@ -110,12 +117,13 @@ namespace TesApi.Web
                     c.OperationFilter<GeneratePathParamsValidationFilter>();
                 })
 
+                .AddHostedService<DoOnceAtStartUpService>()
+                .AddHostedService<BatchPoolService>()
                 .AddHostedService<Scheduler>()
                 .AddHostedService<DeleteCompletedBatchJobsHostedService>()
                 .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
                 .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
                 //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
-                .AddHostedService<DoOnceAtStartUpService>()
 
 
                 //Configure AppInsights Azure Service when in PRODUCTION environment
@@ -144,14 +152,7 @@ namespace TesApi.Web
 
             if (!string.IsNullOrEmpty(terraOptions?.Value.LandingZoneApiHost))
             {
-                var cacheAndRetryHandler = services.GetRequiredService<CacheAndRetryHandler>();
-                var serviceLogger = services.GetService<ILogger<TerraLandingZoneApiClient>>();
-                var credentials = new DefaultAzureCredential();
-
-                var terraApiClient = new TerraLandingZoneApiClient(terraOptions.Value.LandingZoneApiHost,
-                    credentials,
-                    cacheAndRetryHandler,
-                    serviceLogger);
+                var terraApiClient = ActivatorUtilities.CreateInstance<TerraLandingZoneApiClient>(services);
                 return new TerraQuotaProvider(terraApiClient, terraOptions);
             }
 
@@ -163,6 +164,34 @@ namespace TesApi.Web
             var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
             string postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
             return new TesTaskPostgreSqlRepository(postgresConnectionString);
+        }
+
+        private IStorageAccessProvider CreateStorageAccessProviderFromConfiguration(IServiceProvider services)
+        {
+            var options = services.GetRequiredService<IOptions<TerraOptions>>();
+
+            //if workspace id is set, then we are assuming we are running in terra
+            if (!string.IsNullOrEmpty(options.Value.WorkspaceId))
+            {
+                ValidateRequiredOptionsForTerraStorageProvider(options.Value);
+
+                return new TerraStorageAccessProvider(
+                    services.GetRequiredService<ILogger<TerraStorageAccessProvider>>(),
+                    options,
+                    services.GetRequiredService<IAzureProxy>(),
+                    ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services));
+            }
+
+            return ActivatorUtilities.CreateInstance<DefaultStorageAccessProvider>(services);
+        }
+
+        private void ValidateRequiredOptionsForTerraStorageProvider(TerraOptions terraOptions)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceId, nameof(terraOptions.WorkspaceId));
+            ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageAccountName, nameof(terraOptions.WorkspaceStorageAccountName));
+            ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerName, nameof(terraOptions.WorkspaceStorageContainerName));
+            ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerResourceId, nameof(terraOptions.WorkspaceStorageContainerResourceId));
+            ArgumentException.ThrowIfNullOrEmpty(terraOptions.LandingZoneApiHost, nameof(terraOptions.WsmApiHost));
         }
 
         private BatchAccountResourceInformation CreateBatchAccountResourceInformation(IServiceProvider services)
@@ -216,7 +245,7 @@ namespace TesApi.Web
                 })
                 .UseSwaggerUI(c =>
                 {
-                    c.SwaggerEndpoint("/swagger/0.3.3/openapi.json", "Task Execution Service");
+                    c.SwaggerEndpoint("/swagger/0.4.0/openapi.json", "Task Execution Service");
                 })
 
                 .IfThenElse(hostingEnvironment.IsDevelopment(),
@@ -231,14 +260,7 @@ namespace TesApi.Web
                         var r = s.UseHsts();
                         logger.LogInformation("Configuring for Production environment");
                         return r;
-                    })
-
-                .IfThenElse(false, s => s, s =>
-                {
-                    var configurationUtils = ActivatorUtilities.GetServiceOrCreateInstance<ConfigurationUtils>(s.ApplicationServices);
-                    configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync().Wait();
-                    return s;
-                });
+                    });
     }
 
     internal static class BooleanMethodSelectorExtensions

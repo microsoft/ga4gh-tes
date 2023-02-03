@@ -1,8 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
 using System.Linq;
-using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using LazyCache;
@@ -31,7 +31,7 @@ namespace TesApi.Tests
             var options = new Mock<IOptions<RetryPolicyOptions>>();
             options.Setup(o => o.Value).Returns(new RetryPolicyOptions());
             cacheAndRetryHandler = new CacheAndRetryHandler(appCache, options.Object);
-            pricingApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<HttpApiClient>());
+            pricingApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
         }
 
         [TestMethod]
@@ -47,13 +47,12 @@ namespace TesApi.Tests
         public async Task GetPricingInformationPageAsync_ReturnsSinglePageAndCaches()
         {
             var page = await pricingApiClient.GetPricingInformationPageAsync(0, "westus2", cacheResults: true);
-            var cacheKey = pricingApiClient.ToCacheKey(new HttpRequestMessage(HttpMethod.Get, page.RequestLink));
+            var cacheKey = await pricingApiClient.ToCacheKeyAsync(new Uri(page.RequestLink), false);
             var cachedPage = JsonSerializer.Deserialize<RetailPricingData>(appCache.Get<string>(cacheKey));
             Assert.IsNotNull(page);
             Assert.IsTrue(page.Items.Length == 100);
             Assert.IsNotNull(cachedPage);
             Assert.IsTrue(cachedPage.Items.Length == 100);
-
         }
 
         [TestMethod]
@@ -73,7 +72,6 @@ namespace TesApi.Tests
             Assert.IsTrue(pages.Count > 0);
             Assert.IsFalse(pages.Any(r => r.productName.Contains(" Windows")));
             Assert.IsFalse(pages.Any(r => r.productName.Contains(" Spot")));
-
         }
     }
 }

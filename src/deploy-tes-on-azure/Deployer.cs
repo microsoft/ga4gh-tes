@@ -153,7 +153,7 @@ namespace TesDeployer
                 var keyVaultUri = string.Empty;
                 IIdentity managedIdentity = null;
                 IPrivateDnsZone postgreSqlDnsZone = null;
-                
+
                 try
                 {
                     if (configuration.Update)
@@ -161,7 +161,7 @@ namespace TesDeployer
                         resourceGroup = await azureSubscriptionClient.ResourceGroups.GetByNameAsync(configuration.ResourceGroupName);
                         configuration.RegionName = resourceGroup.RegionName;
 
-                        var targetVersion = Utility.DelimitedTextToDictionary(Utility.GetFileContent("scripts", "env-00-coa-version.txt")).GetValueOrDefault("TesOnAzureVersion");
+                        var targetVersion = Utility.DelimitedTextToDictionary(Utility.GetFileContent("scripts", "env-00-tes-version.txt")).GetValueOrDefault("TesOnAzureVersion");
 
                         ConsoleEx.WriteLine($"Upgrading TES on Azure instance in resource group '{resourceGroup.Name}' to version {targetVersion}...");
 
@@ -211,6 +211,16 @@ namespace TesDeployer
                             throw new ValidationException($"Could not retrieve account names from stored configuration in {storageAccount.Name}.", displayExample: false);
                         }
 
+                        if (aksValues.TryGetValue("EnableIngress", out var enableIngress))
+                        {
+                            configuration.EnableIngress = bool.TryParse(enableIngress, out var parsed) ? parsed : null;
+                        }
+
+                        if (!configuration.SkipTestWorkflow && configuration.EnableIngress.GetValueOrDefault() && string.IsNullOrEmpty(configuration.TesPassword))
+                        {
+                            throw new ValidationException($"{nameof(configuration.TesPassword)} is required for update.", false);
+                        }
+
                         if (!aksValues.TryGetValue("BatchAccountName", out var batchAccountName))
                         {
                             throw new ValidationException($"Could not retrieve the Batch account name from stored configuration in {storageAccount.Name}.", displayExample: false);
@@ -249,14 +259,13 @@ namespace TesDeployer
                         var installedVersion = !string.IsNullOrEmpty(versionString) && Version.TryParse(versionString, out var version) ? version : null;
                         var settings = ConfigureSettings(managedIdentity.ClientId, aksValues, installedVersion);
 
+                        //if (installedVersion is null || installedVersion < new Version(4, 0))
+                        //{
+                        //}
+
                         await kubernetesManager.UpgradeAKSDeploymentAsync(
                             settings,
                             storageAccount);
-
-                        if (aksValues.TryGetValue("EnableIngress", out var enableIngress))
-                        {
-                            configuration.EnableIngress = bool.TryParse(enableIngress, out var parsed) ? parsed : null;
-                        }
                     }
 
                     if (!configuration.Update)
@@ -476,9 +485,21 @@ namespace TesDeployer
 
                 if (configuration.EnableIngress.GetValueOrDefault())
                 {
-                    ConsoleEx.WriteLine($"TES ingress is enabled.");
+                    ConsoleEx.WriteLine($"TES ingress is enabled");
                     ConsoleEx.WriteLine($"TES is secured with basic auth at {kubernetesManager.TesHostname}");
-                    ConsoleEx.WriteLine($"TES username: '{configuration.TesUsername}' password: '{configuration.TesPassword}'");
+
+                    if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
+                    {
+                        // Write credentials to JSON file in working directory
+                        var credentialsJson = System.Text.Json.JsonSerializer.Serialize(
+                            new { kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword });
+
+                        var credentialsPath = Path.Combine(Directory.GetCurrentDirectory(), "TesCredentials.json");
+                        await File.WriteAllTextAsync(credentialsPath, credentialsJson);
+                        ConsoleEx.WriteLine($"TES credentials file written to: {credentialsPath}");
+                    }
+
+
 
                     if (isBatchQuotaAvailable)
                     {
@@ -814,7 +835,7 @@ namespace TesDeployer
         private Dictionary<string, string> ConfigureSettings(string managedIdentityClientId, Dictionary<string, string> settings = null, Version installedVersion = null)
         {
             settings ??= new();
-            var defaults = GetDefaultValues(new[] { "env-00-coa-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt" });
+            var defaults = GetDefaultValues(new[] { "env-00-tes-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt" });
 
             // We always overwrite the CoA version
             UpdateSetting(settings, defaults, "TesOnAzureVersion", default(string), ignoreDefaults: false);
@@ -832,6 +853,7 @@ namespace TesDeployer
 
             if (installedVersion is null)
             {
+                UpdateSetting(settings, defaults, "Name", configuration.Name, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "DefaultStorageAccountName", configuration.StorageAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "BatchAccountName", configuration.BatchAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ApplicationInsightsAccountName", configuration.ApplicationInsightsAccountName, ignoreDefaults: true);
@@ -853,9 +875,6 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
                 UpdateSetting(settings, defaults, "TesHostname", kubernetesManager.TesHostname, ignoreDefaults: true);
             }
-
-            //if (installedVersion is null || installedVersion < new Version(3, 3))
-            //{ }
 
             BackFillSettings(settings, defaults);
             return settings;

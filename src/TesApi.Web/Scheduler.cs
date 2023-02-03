@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,6 +26,8 @@ namespace TesApi.Web
         private readonly IBatchScheduler batchScheduler;
         private readonly ILogger<Scheduler> logger;
         private readonly bool isDisabled;
+        private readonly bool usingBatchAutopools;
+        private IEnumerable<Task> shutdownCandidates = Enumerable.Empty<Task>();
         private readonly TimeSpan runInterval = TimeSpan.FromSeconds(5);
 
         /// <summary>
@@ -40,6 +43,7 @@ namespace TesApi.Web
             this.batchScheduler = batchScheduler;
             this.logger = logger;
             isDisabled = configuration.GetValue("DisableBatchScheduling", false);
+            usingBatchAutopools = configuration.GetValue("UseLegacyBatchImplementationWithAutopools", false);
         }
 
         /// <summary>
@@ -74,10 +78,16 @@ namespace TesApi.Web
 
             while (!stoppingToken.IsCancellationRequested)
             {
+                shutdownCandidates = Enumerable.Empty<Task>();
+
                 try
                 {
                     await OrchestrateTesTasksOnBatch(stoppingToken);
-                    await Task.Delay(runInterval, stoppingToken);
+
+                    if (!usingBatchAutopools)
+                    {
+                        shutdownCandidates = await batchScheduler.GetShutdownCandidatePools(stoppingToken);
+                    }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -87,6 +97,31 @@ namespace TesApi.Web
                 {
                     logger.LogError(exc, exc.Message);
                 }
+
+                try
+                {
+                    await Task.Delay(runInterval, stoppingToken);
+                }
+                catch (TaskCanceledException)
+                {
+                    break;
+                }
+            }
+
+            try
+            {
+                // Quickly delete pools without jobs on a best-effort basis since TES is shutting down. This was first
+                // implemented for integration tests sharing a batch account that is not created anew for testing.
+                //
+                // We don't generate the pool list here because of possible delays in communicating with the Batch API
+                // coupled with the fact that very little change of state is likely to have occured since the end of
+                // the last call to OrchestrateTesTasksOnBatch().
+                // The trade-off is that some newly job-emptied pools may not be included in this pool clean-out.
+                await Task.WhenAll(shutdownCandidates);
+            }
+            catch (AggregateException exc)
+            {
+                logger.LogError(exc, exc.Message);
             }
 
             logger.LogInformation("Scheduler gracefully stopped.");
@@ -96,8 +131,10 @@ namespace TesApi.Web
         /// Retrieves all actionable TES tasks from the database, performs an action in the batch system, and updates the resultant state
         /// </summary>
         /// <returns></returns>
-        private async ValueTask OrchestrateTesTasksOnBatch(CancellationToken _1)
+        private async ValueTask OrchestrateTesTasksOnBatch(CancellationToken stoppingToken)
         {
+            var pools = new HashSet<string>();
+
             var tesTasks = (await repository.GetItemsAsync(
                     predicate: t => t.State == TesState.QUEUEDEnum
                         || t.State == TesState.INITIALIZINGEnum
@@ -197,6 +234,16 @@ namespace TesApi.Web
                 {
                     logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw {exc.GetType().FullName}: '{exc.Message}'. Stack trace: {exc.StackTrace}");
                 }
+
+                if (!string.IsNullOrWhiteSpace(tesTask.PoolId) && (TesState.QUEUEDEnum == tesTask.State || TesState.RUNNINGEnum == tesTask.State))
+                {
+                    pools.Add(tesTask.PoolId);
+                }
+            }
+
+            if (batchScheduler.NeedPoolFlush)
+            {
+                await batchScheduler.FlushPoolsAsync(pools, stoppingToken);
             }
 
             logger.LogDebug($"OrchestrateTesTasksOnBatch for {tesTasks.Count} tasks completed in {DateTime.UtcNow.Subtract(startTime).TotalSeconds} seconds.");

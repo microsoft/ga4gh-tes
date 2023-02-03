@@ -56,7 +56,7 @@ public class BatchQuotaVerifierTests
         services.BatchQuotaProvider.Setup(p => p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>()))
             .ReturnsAsync(batchVmFamilyQuotas);
 
-        await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo);
+        await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo, true);
 
         logger.Verify(l => l.LogError(It.IsAny<string>(), It.IsAny<Exception>()), Times.Once);
 
@@ -86,7 +86,7 @@ public class BatchQuotaVerifierTests
         var batchQuotaVerifier = services.GetT();
         var vmInfo = new VirtualMachineInformation
         {
-            NumberOfCores = requestedNumberOfCores
+            VCpusAvailable = requestedNumberOfCores
         };
 
         var batchAccountQuotas = new BatchVmFamilyQuotas(totalCoreQuota, vmFamilyQuota, poolQuota, activeJobAndJobScheduleQuota, true, VmFamily);
@@ -99,8 +99,7 @@ public class BatchQuotaVerifierTests
         services.AzureProxy.Setup(p => p.GetBatchActivePoolCount()).Returns(activePoolCount);
         services.BatchSkuInformationProvider.Setup(p => p.GetVmSizesAndPricesAsync(Region)).ReturnsAsync(CreateBatchSupportedVmSkuList(10));
 
-        await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo);
-
+        await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo, true);
     }
 
     private static List<VirtualMachineInformation> CreateBatchSupportedVmSkuList(int maxNumberOfCores)
@@ -111,10 +110,10 @@ public class BatchQuotaVerifierTests
             {
                 LowPriority = false,
                 MaxDataDiskCount = 1,
-                MemoryInGB = 2.0d,
-                NumberOfCores = maxNumberOfCores / 2,
+                MemoryInGiB = 2.0d,
+                VCpusAvailable = maxNumberOfCores / 2,
                 PricePerHour = 1.0m,
-                ResourceDiskSizeInGB = 1d,
+                ResourceDiskSizeInGiB = 1d,
                 VmFamily = VmFamily,
                 VmSize = "D4"
             },
@@ -122,10 +121,10 @@ public class BatchQuotaVerifierTests
             {
                 LowPriority = false,
                 MaxDataDiskCount = 1,
-                MemoryInGB = 4.0d,
-                NumberOfCores = maxNumberOfCores / 2,
+                MemoryInGiB = 4.0d,
+                VCpusAvailable = maxNumberOfCores / 2,
                 PricePerHour = 1.0m,
-                ResourceDiskSizeInGB = 1d,
+                ResourceDiskSizeInGiB = 1d,
                 VmFamily = VmFamily,
                 VmSize = "D8"
             },
@@ -133,10 +132,10 @@ public class BatchQuotaVerifierTests
             {
                 LowPriority = false,
                 MaxDataDiskCount = 1,
-                MemoryInGB = 2.0d,
-                NumberOfCores = maxNumberOfCores / 2,
+                MemoryInGiB = 2.0d,
+                VCpusAvailable = maxNumberOfCores / 2,
                 PricePerHour = 1.0m,
-                ResourceDiskSizeInGB = 1d,
+                ResourceDiskSizeInGiB = 1d,
                 VmFamily = VmFamily,
                 VmSize = "D2"
             }
@@ -151,10 +150,10 @@ public class BatchQuotaVerifierTests
             {
                 LowPriority = false,
                 MaxDataDiskCount = 1,
-                MemoryInGB = 2.0d,
-                NumberOfCores = maxNumberOfCores / 2,
+                MemoryInGiB = 2.0d,
+                VCpusAvailable = maxNumberOfCores / 2,
                 PricePerHour = 1.0m,
-                ResourceDiskSizeInGB = 1d,
+                ResourceDiskSizeInGiB = 1d,
                 VmFamily = VmFamily,
                 VmSize = "D4"
             },
@@ -162,10 +161,10 @@ public class BatchQuotaVerifierTests
             {
                 LowPriority = false,
                 MaxDataDiskCount = 1,
-                MemoryInGB = 2.0d,
-                NumberOfCores = maxNumberOfCores / 2,
+                MemoryInGiB = 2.0d,
+                VCpusAvailable = maxNumberOfCores / 2,
                 PricePerHour = 1.0m,
-                ResourceDiskSizeInGB = 1d,
+                ResourceDiskSizeInGiB = 1d,
                 VmFamily = VmFamily,
                 VmSize = "D2"
             }
