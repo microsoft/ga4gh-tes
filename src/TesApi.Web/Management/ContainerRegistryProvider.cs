@@ -19,6 +19,7 @@ namespace TesApi.Web.Management
     public class ContainerRegistryProvider : AzureProvider
     {
         private readonly ContainerRegistryOptions options;
+        private readonly string[] knownContainerRegistries = new string[] { "mcr.microsoft.com" };
 
         /// <summary>
         /// If true the auto-discovery is enabled.
@@ -53,7 +54,7 @@ namespace TesApi.Web.Management
         /// <returns>Container registry information, or null if auto-discovery is disabled or the repository was not found</returns>
         public virtual async Task<ContainerRegistryInfo> GetContainerRegistryInfoAsync(string imageName)
         {
-            if (!options.AutoDiscoveryEnabled)
+            if (!options.AutoDiscoveryEnabled || IsKnownOrDefaultContainerRegistry(imageName))
             {
                 return null;
             }
@@ -67,6 +68,19 @@ namespace TesApi.Web.Management
 
             return await LookUpAndAddToCacheContainerRegistryInfoAsync(imageName);
 
+        }
+
+        private bool IsKnownOrDefaultContainerRegistry(string imageName)
+        {
+            var parts = imageName.Split('/');
+
+            if (parts.Length > 1)
+            {
+                return knownContainerRegistries.Any(r => r.Equals(parts[0], StringComparison.OrdinalIgnoreCase));
+            }
+
+            //one part means, it is using the default registry
+            return parts.Length == 1;
         }
 
         private async Task<ContainerRegistryInfo> LookUpAndAddToCacheContainerRegistryInfoAsync(string imageName)
