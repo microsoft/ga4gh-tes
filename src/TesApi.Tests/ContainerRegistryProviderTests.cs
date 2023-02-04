@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using LazyCache;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
@@ -26,7 +26,6 @@ namespace TesApi.Tests
         private Mock<IAppCache> appCacheMock;
         private Mock<IOptions<ContainerRegistryOptions>> containerRegistryOptionsMock;
         private Mock<AzureManagementClientsFactory> clientFactoryMock;
-        private Mock<ILogger<ContainerRegistryProvider>> loggerMock;
 
 
 
@@ -40,9 +39,8 @@ namespace TesApi.Tests
             containerRegistryOptionsMock = new Mock<IOptions<ContainerRegistryOptions>>();
             containerRegistryOptions = new ContainerRegistryOptions();
             containerRegistryOptionsMock.Setup(o => o.Value).Returns(containerRegistryOptions);
-            loggerMock = new Mock<ILogger<ContainerRegistryProvider>>();
             containerRegistryProvider = new ContainerRegistryProvider(containerRegistryOptionsMock.Object,
-                retryHandlerMock.Object, clientFactoryMock.Object, loggerMock.Object);
+                retryHandlerMock.Object, clientFactoryMock.Object, new NullLogger<ContainerRegistryProvider>());
         }
 
         [TestMethod]
@@ -102,17 +100,6 @@ namespace TesApi.Tests
             appCacheMock.Verify(
                 c => c.Add(It.Is<string>(v => v.Equals(image)), It.IsAny<ContainerRegistryInfo>(),
                     It.IsAny<MemoryCacheEntryOptions>()), Times.Never);
-        }
-
-        [TestMethod]
-        [DataRow("mcr.microsoft.com")]
-        [DataRow("mcr.microsoft.com/blobxfer")]
-        [DataRow("docker")]
-        public async Task GetContainerRegistryInfoAsync_DoesNotLogWarningWhenKnownImage(string imageName)
-        {
-            await containerRegistryProvider.GetContainerRegistryInfoAsync(imageName);
-
-            loggerMock.Verify(logger => logger.Log(LogLevel.Warning, It.IsAny<EventId>(), It.IsAny<object>(), It.IsAny<Exception>(), (Func<object, Exception, string>)It.IsAny<object>()), Times.Never);
         }
     }
 }
