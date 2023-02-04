@@ -65,7 +65,24 @@ namespace TesApi.Web
         public override Task StopAsync(CancellationToken cancellationToken)
         {
             logger.LogInformation("Scheduler stopping...");
-            return base.StopAsync(cancellationToken);
+            return Task.WhenAll(
+                base.StopAsync(cancellationToken),
+                Task.Run(async () =>
+                {
+                    if (testMode && !usingBatchAutopools)
+                    {
+                        try
+                        {
+                            await Task.WhenAll(batchScheduler.GetPools()
+                                .Select(p => batchScheduler.DeletePoolAsync(p, cancellationToken)));
+                        }
+                        catch (AggregateException e) when (!e.InnerExceptions.All(ex => ex is OperationCanceledException))
+                        {
+                            logger.LogError(e, @"Errors removing pools/jobs in integration test mode: {ErrorMessage}", e.Message);
+                        }
+                    }
+                },
+                cancellationToken));
         }
 
         /// <summary>
@@ -99,19 +116,6 @@ namespace TesApi.Web
                 catch (TaskCanceledException)
                 {
                     break;
-                }
-            }
-
-            if (testMode && !usingBatchAutopools)
-            {
-                try
-                {
-                    await Task.WhenAll(batchScheduler.GetPools()
-                        .Select(p => batchScheduler.DeletePoolAsync(p, CancellationToken.None)));
-                }
-                catch (AggregateException e)
-                {
-                    logger.LogError(e, @"Errors removing pools/jobs in integration test mode: {ErrorMessage}", e.Message);
                 }
             }
 
