@@ -4,6 +4,28 @@
 using System;
 using System.IO;
 using System.Reflection;
+using AutoMapper;
+using Azure.Core;
+using Azure.Identity;
+using LazyCache;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.OpenApi.Models;
+using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Serialization;
+using Tes.Models;
+using Tes.Repository;
+using TesApi.Filters;
+using TesApi.Web.Management;
+using TesApi.Web.Management.Batch;
+using TesApi.Web.Management.Clients;
+using TesApi.Web.Management.Configuration;
+using TesApi.Web.Storage;
 
 namespace TesApi.Web
 {
@@ -43,14 +65,10 @@ namespace TesApi.Web
             services
                 .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.SectionName))
                 .Configure<CosmosDbOptions>(Configuration.GetSection(CosmosDbOptions.CosmosDbAccount))
-                .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.RetryPolicy))
-                .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.Terra))
-                .Configure<ContainerRegistryOptions>(Configuration.GetSection(ContainerRegistryOptions.ContainerRegistrySection))
+                .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.SectionName))
+                .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.SectionName))
+                .Configure<ContainerRegistryOptions>(Configuration.GetSection(ContainerRegistryOptions.SectionName))
                 .AddSingleton<IAppCache, CachingService>()
-                .AddSingleton(CreateBatchPoolManagerFromConfiguration)
-
-                .AddSingleton<AzureProxy, AzureProxy>()
-
                 .AddSingleton<AzureProxy>()
                 .AddSingleton<IAzureProxy>(sp =>
                     ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp,
@@ -58,6 +76,7 @@ namespace TesApi.Web
                 .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
                 .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                 .AddTransient<BatchPool>()
+                .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
                 .AddControllers()
                 .AddNewtonsoftJson(opts =>
