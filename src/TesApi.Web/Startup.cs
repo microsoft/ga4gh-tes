@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using AutoMapper;
 using Azure.Core;
 using Azure.Identity;
 using LazyCache;
@@ -21,6 +22,7 @@ using Tes.Models;
 using Tes.Repository;
 using TesApi.Filters;
 using TesApi.Web.Management;
+using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
@@ -64,10 +66,11 @@ namespace TesApi.Web
                 .Configure<CosmosDbOptions>(Configuration.GetSection(CosmosDbOptions.CosmosDbAccount))
                 .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.RetryPolicy))
                 .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.Terra))
-
+                .Configure<ContainerRegistryOptions>(Configuration.GetSection(ContainerRegistryOptions.ContainerRegistrySection))
                 .AddSingleton<IAppCache, CachingService>()
-                .AddSingleton<AzureProxy>()
-                .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
+                .AddSingleton(CreateBatchPoolManagerFromConfiguration)
+
+                .AddSingleton<AzureProxy, AzureProxy>()
 
                 .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
                 .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
@@ -81,9 +84,11 @@ namespace TesApi.Web
                 }).Services
 
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
-                .AddSingleton<IStorageAccessProvider, DefaultStorageAccessProvider>()
+                .AddSingleton(CreateStorageAccessProviderFromConfiguration)
+                .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
 
                 .AddLogging()
+                .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
                 .AddSingleton<ContainerRegistryProvider>()
                 .AddSingleton<CacheAndRetryHandler>()
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
@@ -92,9 +97,9 @@ namespace TesApi.Web
                 .AddSingleton<IBatchSkuInformationProvider, PriceApiBatchSkuInformationProvider>()
                 .AddSingleton(CreateBatchAccountResourceInformation)
                 .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
-                .AddSingleton<AzureManagementClientsFactory>()
-                .AddSingleton<ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
-                .AddSingleton<ConfigurationUtils>()
+                .AddSingleton<AzureManagementClientsFactory, AzureManagementClientsFactory>()
+                //.AddSingleton<ArmBatchQuotaProvider, ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
+                .AddSingleton<ConfigurationUtils, ConfigurationUtils>()
                 .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
 
                 .AddSwaggerGen(c =>
@@ -162,6 +167,23 @@ namespace TesApi.Web
             }
 
             return ActivatorUtilities.CreateInstance<ArmBatchQuotaProvider>(services);
+        }
+
+        private IBatchPoolManager CreateBatchPoolManagerFromConfiguration(IServiceProvider services)
+        {
+            var terraOptions = services.GetService<IOptions<TerraOptions>>();
+
+            if (!string.IsNullOrEmpty(terraOptions?.Value.WsmApiHost))
+            {
+                return new TerraBatchPoolManager(
+                    ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services),
+                    services.GetRequiredService<IMapper>(),
+                    terraOptions,
+                    services.GetService<IOptions<BatchAccountOptions>>(),
+                    services.GetService<ILogger<TerraBatchPoolManager>>());
+            }
+
+            return ActivatorUtilities.CreateInstance<ArmBatchPoolManager>(services);
         }
 
         private IRepository<TesTask> CreateCosmosDbRepositoryFromConfiguration(IServiceProvider services)

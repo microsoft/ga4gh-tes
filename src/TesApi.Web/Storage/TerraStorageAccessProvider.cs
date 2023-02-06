@@ -71,14 +71,19 @@ namespace TesApi.Web.Storage
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
 
-            var normalizedPath = path.TrimStart('/');
+            var normalizedPath = path;
+
+            if (!TryParseHttpUrlFromInput(path, out _))
+            {   // if it is a local path, add the leading slash if missing.
+                normalizedPath = $"/{path.TrimStart('/')}";
+            }
 
             if (getContainerSas)
             {
                 return await GetMappedSasContainerUrlFromWsmAsync(normalizedPath);
             }
 
-            if (IsItKnownExecutionFilePath(normalizedPath))
+            if (IsKnownExecutionFilePath(normalizedPath))
             {
                 return await GetMappedSasUrlFromWsmAsync(normalizedPath);
             }
@@ -108,25 +113,31 @@ namespace TesApi.Web.Storage
 
         private async Task<string> GetMappedSasUrlFromWsmAsync(string blobName)
         {
-            var tokenParams = CreateTokenParamsFromOptions(blobName, SasBlobPermissions);
+            var tokenParams = CreateTokenParamsFromOptions(blobName.TrimStart('/'), SasBlobPermissions);
 
             var tokenInfo = await GetSasTokenFromWsmAsync(tokenParams);
 
-            logger.LogInformation($"Successfully obtained the Sas Url from Terra. Requested blobName:{blobName}. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
+            Logger.LogInformation($"Successfully obtained the Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
 
-            return tokenInfo.Url;
+            var uriBuilder = new UriBuilder(tokenInfo.Url);
+
+            uriBuilder.Path += blobName;
+
+            return uriBuilder.ToString();
         }
 
         private SasTokenApiParameters CreateTokenParamsFromOptions(string blobName, string sasPermissions)
-            => new(
+        {
+            return new SasTokenApiParameters(
                 terraOptions.SasAllowedIpRange,
                 terraOptions.SasTokenExpirationInSeconds,
                 sasPermissions, blobName);
+        }
 
         private async Task<WsmSasTokenApiResponse> GetSasTokenFromWsmAsync(SasTokenApiParameters tokenParams)
         {
-            logger.LogInformation(
-                $"Getting Sas Url from Terra. Requested blobName:{tokenParams.SasBlobName}. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
+            Logger.LogInformation(
+                $"Getting Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
 
             return await terraWsmApiClient.GetSasTokenAsync(
                 Guid.Parse(terraOptions.WorkspaceId),
@@ -138,19 +149,22 @@ namespace TesApi.Web.Storage
         {
             if (!IsTerraWorkspaceStorageAccount(accountName))
             {
-                throw new Exception($"The account name does not match. Expected:{accountName} and Provided{terraOptions.WorkspaceStorageAccountName}");
+                throw new Exception($"The account name does not match the configuration for Terra.");
             }
 
             if (!IsTerraWorkspaceContainer(containerName))
             {
-                throw new Exception($"The container name does not match. Expected:{containerName} and Provided{terraOptions.WorkspaceStorageContainerName}");
+                throw new Exception($"The container name does not match the configuration for Terra");
             }
         }
 
         private bool IsTerraWorkspaceContainer(string value)
-            => terraOptions.WorkspaceStorageContainerName.Equals(value, StringComparison.OrdinalIgnoreCase);
-
+        {
+            return terraOptions.WorkspaceStorageContainerName.Equals(value, StringComparison.OrdinalIgnoreCase);
+        }
         private bool IsTerraWorkspaceStorageAccount(string value)
-            => terraOptions.WorkspaceStorageAccountName.Equals(value, StringComparison.OrdinalIgnoreCase);
+        {
+            return terraOptions.WorkspaceStorageAccountName.Equals(value, StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

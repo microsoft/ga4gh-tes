@@ -16,7 +16,8 @@ namespace TesApi.Web.Management.Batch
     /// </summary>
     public class ArmBatchPoolManager : IBatchPoolManager
     {
-        private readonly ILogger logger;
+
+        private readonly ILogger<ArmBatchPoolManager> logger;
         private readonly AzureManagementClientsFactory azureClientsFactory;
 
         /// <summary>

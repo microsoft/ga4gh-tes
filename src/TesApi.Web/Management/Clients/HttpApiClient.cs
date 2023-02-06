@@ -55,7 +55,8 @@ namespace TesApi.Web.Management.Clients
         /// <param name="cacheAndRetryHandler"></param>
         /// <param name="tokenScope"></param>
         /// <param name="logger"></param>
-        protected HttpApiClient(TokenCredential tokenCredential, string tokenScope, CacheAndRetryHandler cacheAndRetryHandler, ILogger logger) : this(cacheAndRetryHandler, logger)
+        protected HttpApiClient(TokenCredential tokenCredential, string tokenScope,
+            CacheAndRetryHandler cacheAndRetryHandler, ILogger logger) : this(cacheAndRetryHandler, logger)
         {
             ArgumentNullException.ThrowIfNull(tokenCredential);
             ArgumentException.ThrowIfNullOrEmpty(tokenScope);
@@ -76,7 +77,8 @@ namespace TesApi.Web.Management.Clients
         /// and must be idempotent</param>
         /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
         /// <returns></returns>
-        protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(Func<HttpRequestMessage> httpRequestFactory, bool setAuthorizationHeader = false)
+        protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(
+            Func<HttpRequestMessage> httpRequestFactory, bool setAuthorizationHeader = false)
         {
             return await cacheAndRetryHandler.ExecuteWithRetryAsync(async () =>
             {
@@ -106,6 +108,7 @@ namespace TesApi.Web.Management.Clients
 
             return await HttpGetRequestWithRetryPolicyAsync(requestUrl, setAuthorizationHeader);
         }
+
         /// <summary>
         /// Sends a Http Get request to the URL and deserializes the body response to the specified type 
         /// </summary>
@@ -114,7 +117,8 @@ namespace TesApi.Web.Management.Clients
         /// <param name="cacheResults"></param>
         /// <typeparam name="TResponse"></typeparam>
         /// <returns></returns>
-        protected async Task<TResponse> HttpGetRequestAsync<TResponse>(Uri requestUrl, bool setAuthorizationHeader, bool cacheResults)
+        protected async Task<TResponse> HttpGetRequestAsync<TResponse>(Uri requestUrl, bool setAuthorizationHeader,
+            bool cacheResults)
         {
             var content = await HttpGetRequestAsync(requestUrl, setAuthorizationHeader, cacheResults);
 
@@ -130,7 +134,6 @@ namespace TesApi.Web.Management.Clients
         protected async Task<string> HttpGetRequestWithCachingAndRetryPolicyAsync(Uri requestUrl,
             bool setAuthorizationHeader = false)
         {
-
             var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader);
 
             return await cacheAndRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, async () =>
@@ -148,14 +151,16 @@ namespace TesApi.Web.Management.Clients
         /// <param name="setAuthorizationHeader"></param>
         /// <returns></returns>
         protected async Task<string> HttpGetRequestWithRetryPolicyAsync(Uri requestUrl,
-                bool setAuthorizationHeader = false)
-            => await cacheAndRetryHandler.ExecuteWithRetryAsync(async () =>
+            bool setAuthorizationHeader = false)
+        {
+            return await cacheAndRetryHandler.ExecuteWithRetryAsync(async () =>
             {
                 //request must be recreated in every retry.
                 var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader);
 
                 return await ExecuteRequestAndReadResponseBodyAsync(httpRequest);
             });
+        }
 
         /// <summary>
         /// Returns an query string key-value, with the value escaped. If the value is null or empty returns an empty string
@@ -173,7 +178,6 @@ namespace TesApi.Web.Management.Clients
             }
 
             return $"{name}={Uri.EscapeDataString(value)}";
-
         }
 
         /// <summary>
@@ -228,7 +232,8 @@ namespace TesApi.Web.Management.Clients
         {
             if (string.IsNullOrEmpty(tokenScope))
             {
-                throw new ArgumentException("Can't set the authentication token as the token scope is missing", nameof(tokenScope));
+                throw new ArgumentException("Can't set the authentication token as the token scope is missing",
+                    nameof(tokenScope));
             }
 
             logger.LogTrace("Getting token for scope:{}", tokenScope);
@@ -241,7 +246,8 @@ namespace TesApi.Web.Management.Clients
             }
             catch (Exception e)
             {
-                logger.LogError(@"Failed to set authentication header with the access token for scope:{tokenScope}", e);
+                logger.LogError(@"Failed to set authentication header with the access token for scope:{tokenScope}",
+                    e);
                 throw;
             }
         }
@@ -259,8 +265,9 @@ namespace TesApi.Web.Management.Clients
                     return accessToken.Token;
                 }
 
-                var newAccessToken = await tokenCredential.GetTokenAsync(new TokenRequestContext(new[] { tokenScope }),
-                  CancellationToken.None);
+                var newAccessToken = await tokenCredential.GetTokenAsync(
+                    new TokenRequestContext(new[] { tokenScope }),
+                    CancellationToken.None);
 
                 logger.LogTrace($"Returning a new token with an expiration date of: {newAccessToken.ExpiresOn}");
                 accessToken = newAccessToken;
@@ -297,6 +304,19 @@ namespace TesApi.Web.Management.Clients
             var hash = sha256.ComputeHash(Encoding.ASCII.GetBytes(input));
 
             return hash.Aggregate("", (current, t) => current + t.ToString("X2"));
+        }
+
+        /// <summary>
+        /// Returns the response content, the response is successful 
+        /// </summary>
+        /// <param name="response">Response</param>
+        /// <typeparam name="T">Response's content deserialization type</typeparam>
+        /// <returns></returns>
+        protected static async Task<T> GetApiResponseContentAsync<T>(HttpResponseMessage response)
+        {
+            response.EnsureSuccessStatusCode();
+
+            return JsonSerializer.Deserialize<T>(await response.Content.ReadAsStringAsync());
         }
     }
 }
