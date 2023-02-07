@@ -138,11 +138,11 @@ namespace TesDeployer
                     networkManagementClient = new Microsoft.Azure.Management.Network.NetworkManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
                     postgreSqlFlexManagementClient = new FlexibleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, LongRunningOperationRetryTimeout = 1200 };
                     postgreSqlSingleManagementClient = new SingleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, LongRunningOperationRetryTimeout = 1200 };
-                    kubernetesManager = new(configuration, azureCredentials, cts);
+                    
                 });
 
                 await ValidateSubscriptionAndResourceGroupAsync(configuration);
-
+                kubernetesManager = new(configuration, azureCredentials, cts);
                 IResourceGroup resourceGroup = null;
                 ManagedCluster aksCluster = null;
                 BatchAccount batchAccount = null;
@@ -431,16 +431,13 @@ namespace TesDeployer
                                 await AssignVmAsContributorToAppInsightsAsync(managedIdentity, appInsights);
                             }),
                             Task.Run(async () => {
-                                if (configuration.ProvisionPostgreSqlOnAzure == true)
+                                if (configuration.UsePostgreSqlSingleServer)
                                 {
-                                    if (configuration.UsePostgreSqlSingleServer)
-                                    {
-                                        postgreSqlSingleServer ??= await CreateSinglePostgreSqlServerAndDatabaseAsync(postgreSqlSingleManagementClient, vnetAndSubnet.Value.vmSubnet, postgreSqlDnsZone);
-                                    }
-                                    else
-                                    {
-                                        postgreSqlFlexServer ??= await CreatePostgreSqlServerAndDatabaseAsync(postgreSqlFlexManagementClient, vnetAndSubnet.Value.postgreSqlSubnet, postgreSqlDnsZone);
-                                    }
+                                    postgreSqlSingleServer ??= await CreateSinglePostgreSqlServerAndDatabaseAsync(postgreSqlSingleManagementClient, vnetAndSubnet.Value.vmSubnet, postgreSqlDnsZone);
+                                }
+                                else
+                                {
+                                    postgreSqlFlexServer ??= await CreatePostgreSqlServerAndDatabaseAsync(postgreSqlFlexManagementClient, vnetAndSubnet.Value.postgreSqlSubnet, postgreSqlDnsZone);
                                 }
                             })
                         });
@@ -465,7 +462,7 @@ namespace TesDeployer
                             // Deploy an ubuntu pod to run PSQL commands, then delete it
                             const string deploymentName = "ubuntu";
                             const string deploymentNamespace = "default";
-                            var ubuntuDeployment = kubernetesManager.GetUbuntuDeployment();
+                            var ubuntuDeployment = kubernetesManager.GetUbuntuDeploymentTemplate();
                             await kubernetesClient.AppsV1.CreateNamespacedDeploymentAsync(ubuntuDeployment, deploymentNamespace);
                             await ExecuteQueriesOnAzurePostgreSQLDbFromK8(deploymentName, deploymentNamespace);
                             await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace);
