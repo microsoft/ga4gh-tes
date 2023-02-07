@@ -11,7 +11,7 @@ public class TerraOptions
     /// <summary>
     /// Terra configuration section
     /// </summary>
-    public const string Terra = "Terra";
+    public const string SectionName = "Terra";
     private const int DefaultSasTokenExpirationInSeconds = 60 * 24 * 3; // 3 days
 
     /// <summary>

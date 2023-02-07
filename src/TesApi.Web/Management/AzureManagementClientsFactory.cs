@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
@@ -70,36 +69,6 @@ namespace TesApi.Web.Management
         /// <returns></returns>
         public async Task<FluentAzure.IAuthenticated> CreateAzureManagementClientAsync()
             => await AzureManagementClientsFactory.GetAzureManagementClientAsync();
-
-        /// <summary>
-        /// Attempts to get the batch resource information using the ARM api.
-        /// Returns null if the resource was not found or the account does not have access.
-        /// </summary>
-        /// <param name="batchAccountName">batch account name</param>
-        /// <returns></returns>
-        public static async Task<BatchAccountResourceInformation> TryGetResourceInformationFromAccountNameAsync(string batchAccountName)
-        {
-            //TODO: look if a newer version of the management SDK provides a simpler way to look for this information .
-            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync());
-            var azureClient = await GetAzureManagementClientAsync();
-
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
-
-            foreach (var subId in subscriptionIds)
-            {
-                using var batchClient = new BatchManagementClient(tokenCredentials) { SubscriptionId = subId };
-
-                var batchAccount = (await batchClient.BatchAccount.ListAsync())
-                    .FirstOrDefault(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase));
-
-                if (batchAccount is not null)
-                {
-                    return BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id, batchAccount.Location);
-                }
-            }
-
-            return null;
-        }
 
         /// <summary>
         /// Creates a new instance of Azure Management client

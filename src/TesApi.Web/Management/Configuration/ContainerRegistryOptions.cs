@@ -11,7 +11,7 @@ public class ContainerRegistryOptions
     /// <summary>
     /// Configuration section.
     /// </summary>
-    public const string ContainerRegistrySection = "ContainerRegistry";
+    public const string SectionName = "ContainerRegistry";
     /// <summary>
     /// Enables/disables auto-discovery features
     /// </summary>
