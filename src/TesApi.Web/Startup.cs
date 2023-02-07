@@ -70,9 +70,6 @@ namespace TesApi.Web
                 .Configure<ContainerRegistryOptions>(Configuration.GetSection(ContainerRegistryOptions.SectionName))
                 .AddSingleton<IAppCache, CachingService>()
                 .AddSingleton<AzureProxy>()
-                .AddSingleton<IAzureProxy>(sp =>
-                    ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp,
-                        (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
                 .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
                 .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                 .AddTransient<BatchPool>()
