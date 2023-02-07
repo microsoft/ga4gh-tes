@@ -32,7 +32,7 @@ namespace TesApi.Tests
             cacheAndRetryHandler = new();
             var terraOptions = new Mock<IOptions<TerraOptions>>();
             terraOptions.Setup(o => o.Value)
-                .Returns(new TerraOptions() { LandingZoneApiHost = TerraApiStubData.LandingZoneApiHost });
+                .Returns(terraApiStubData.GetTerraOptions());
             terraLandingZoneApiClient = new(terraOptions.Object, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
         }
 

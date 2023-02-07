@@ -22,13 +22,13 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     protected const string BatchPathPrefix = "/executions/";
 
     /// <summary>
-    /// Logger instance.
+    /// Logger instance. 
     /// </summary>
-    protected readonly ILogger logger;
+    protected readonly ILogger Logger;
     /// <summary>
     /// Azure proxy instance.
     /// </summary>
-    protected readonly IAzureProxy azureProxy;
+    protected readonly IAzureProxy AzureProxy;
 
     /// <summary>
     /// Provides base methods for blob storage access and local input mapping.
@@ -37,8 +37,8 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
     public StorageAccessProvider(ILogger logger, IAzureProxy azureProxy)
     {
-        this.logger = logger;
-        this.azureProxy = azureProxy;
+        this.Logger = logger;
+        this.AzureProxy = azureProxy;
     }
 
     /// <inheritdoc />
@@ -46,7 +46,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     {
         try
         {
-            return await this.azureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath)));
+            return await this.AzureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath)));
         }
         catch
         {
@@ -59,7 +59,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     {
         try
         {
-            var content = await this.azureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath)));
+            var content = await this.AzureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath)));
             action?.Invoke(content);
             return true;
         }
@@ -71,11 +71,11 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
 
     /// <inheritdoc />
     public async Task UploadBlobAsync(string blobRelativePath, string content)
-        => await this.azureProxy.UploadBlobAsync(new(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), content);
+        => await this.AzureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), content);
 
     /// <inheritdoc />
     public async Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath)
-        => await this.azureProxy.UploadBlobFromFileAsync(new(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), sourceLocalFilePath);
+        => await this.AzureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), sourceLocalFilePath);
 
     /// <inheritdoc />
     public abstract Task<bool> IsPublicHttpUrlAsync(string uriString);
@@ -84,20 +84,24 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     public abstract Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false);
 
     /// <summary>
-    /// Tries to parse the input into a Http Url.
+    /// Tries to parse the input into a Http Url. 
     /// </summary>
     /// <param name="input">string to parse</param>
     /// <param name="uri">resulting Url if successful</param>
     /// <returns>true if the input is a Url, false otherwise</returns>
     protected static bool TryParseHttpUrlFromInput(string input, out Uri uri)
-        => Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
+    {
+        return Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>
     /// True if the path is the cromwell or executions folder
     /// </summary>
     /// <param name="path"></param>
     /// <returns></returns>
-    protected bool IsItKnownExecutionFilePath(string path)
-        => path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith(BatchPathPrefix, StringComparison.OrdinalIgnoreCase);
+    protected bool IsKnownExecutionFilePath(string path)
+    {
+        return path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase)
+               || path.StartsWith(BatchPathPrefix, StringComparison.OrdinalIgnoreCase);
+    }
 }

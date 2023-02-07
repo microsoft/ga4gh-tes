@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using AutoMapper;
 using Azure.Core;
 using Azure.Identity;
 using LazyCache;
@@ -22,6 +23,7 @@ using Tes.Repository;
 using Tes.Utilities;
 using TesApi.Filters;
 using TesApi.Web.Management;
+using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
@@ -56,17 +58,19 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="services">The Microsoft.Extensions.DependencyInjection.IServiceCollection to add the services to.</param>
         public void ConfigureServices(IServiceCollection services)
-            => services
-                .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.BatchAccount))
-                .Configure<PostgreSqlOptions>(Configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
-                .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.RetryPolicy))
-                .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.Terra))
+        {
+            services
+                .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.SectionName))
+                .Configure<CosmosDbOptions>(Configuration.GetSection(CosmosDbOptions.CosmosDbAccount))
+                .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.SectionName))
+                .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.SectionName))
+                .Configure<ContainerRegistryOptions>(Configuration.GetSection(ContainerRegistryOptions.SectionName))
                 .AddSingleton<IAppCache, CachingService>()
-                .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
-                .AddSingleton<AzureProxy, AzureProxy>()
-                .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
+                .AddSingleton<AzureProxy>()
+                .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
                 .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                 .AddTransient<BatchPool>()
+                .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
                 .AddControllers()
                 .AddNewtonsoftJson(opts =>
@@ -76,9 +80,11 @@ namespace TesApi.Web
                 }).Services
 
                 .AddSingleton<IBatchScheduler, BatchScheduler>()
-                .AddSingleton<IStorageAccessProvider, DefaultStorageAccessProvider>()
+                .AddSingleton(CreateStorageAccessProviderFromConfiguration)
+                .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
 
                 .AddLogging()
+                .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
                 .AddSingleton<ContainerRegistryProvider>()
                 .AddSingleton<CacheAndRetryHandler>()
                 .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
@@ -88,7 +94,6 @@ namespace TesApi.Web
                 .AddSingleton(CreateBatchAccountResourceInformation)
                 .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
                 .AddSingleton<AzureManagementClientsFactory>()
-                .AddSingleton<ArmBatchQuotaProvider>() //added so config utils gets the arm implementation, to be removed once config utils is refactored.
                 .AddSingleton<ConfigurationUtils>()
                 .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
 
@@ -122,29 +127,33 @@ namespace TesApi.Web
                 .AddHostedService<Scheduler>()
                 .AddHostedService<DeleteCompletedBatchJobsHostedService>()
                 .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
-                .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
-                //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
+                .AddHostedService<DeleteOrphanedAutoPoolsHostedService>();
+            //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
 
 
-                //Configure AppInsights Azure Service when in PRODUCTION environment
-                .IfThenElse(hostingEnvironment.IsProduction(),
-                    s =>
-                    {
-                        var applicationInsightsAccountName = Configuration["ApplicationInsightsAccountName"];
-                        var instrumentationKey = AzureProxy.GetAppInsightsInstrumentationKeyAsync(applicationInsightsAccountName).Result;
+            AddAppInsightsWithDefaultOrLookingUpTheConnectionString(services);
+        }
 
-                        if (instrumentationKey is not null)
-                        {
-                            var connectionString = $"InstrumentationKey={instrumentationKey}";
-                            return s.AddApplicationInsightsTelemetry(options =>
-                            {
-                                options.ConnectionString = connectionString;
-                            });
-                        }
+        private void AddAppInsightsWithDefaultOrLookingUpTheConnectionString(IServiceCollection services)
+        {
+            var accountName = Configuration["ApplicationInsightsAccountName"];
 
-                        return s;
-                    },
-                s => s.AddApplicationInsightsTelemetry());
+            if (string.IsNullOrEmpty(accountName))
+            {
+                //use default settings that will use the app insights configuration
+                services.AddApplicationInsightsTelemetry();
+                return;
+            }
+
+            services.AddApplicationInsightsTelemetry(s =>
+            {
+                var instrumentationKey = ArmResourceInformationFinder
+                    .GetAppInsightsInstrumentationKeyAsync(accountName)
+                    .Result;
+
+                s.ConnectionString = $"InstrumentationKey={instrumentationKey}";
+            });
+        }
 
         private IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
         {
@@ -157,6 +166,23 @@ namespace TesApi.Web
             }
 
             return ActivatorUtilities.CreateInstance<ArmBatchQuotaProvider>(services);
+        }
+
+        private IBatchPoolManager CreateBatchPoolManagerFromConfiguration(IServiceProvider services)
+        {
+            var terraOptions = services.GetService<IOptions<TerraOptions>>();
+
+            if (!string.IsNullOrEmpty(terraOptions?.Value.WsmApiHost))
+            {
+                return new TerraBatchPoolManager(
+                    ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services),
+                    services.GetRequiredService<IMapper>(),
+                    terraOptions,
+                    services.GetService<IOptions<BatchAccountOptions>>(),
+                    services.GetService<ILogger<TerraBatchPoolManager>>());
+            }
+
+            return ActivatorUtilities.CreateInstance<ArmBatchPoolManager>(services);
         }
 
         private IRepository<TesTask> CreatePostgresSqlRepositoryFromConfiguration(IServiceProvider services)
@@ -208,7 +234,7 @@ namespace TesApi.Web
             if (string.IsNullOrWhiteSpace(options.Value.AppKey))
             {
                 //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
-                var task = AzureManagementClientsFactory.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName);
+                var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName);
                 task.Wait();
 
                 if (task.Result == null)
