@@ -61,13 +61,13 @@ namespace TesApi.Web
         {
             services
                 .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.SectionName))
-                .Configure<CosmosDbOptions>(Configuration.GetSection(CosmosDbOptions.CosmosDbAccount))
+                .Configure<PostgreSqlOptions>(Configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
                 .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.SectionName))
                 .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.SectionName))
                 .Configure<ContainerRegistryOptions>(Configuration.GetSection(ContainerRegistryOptions.SectionName))
                 .AddSingleton<IAppCache, CachingService>()
                 .AddSingleton<AzureProxy>()
-                .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
+                .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
                 .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                 .AddTransient<BatchPool>()
                 .AddSingleton(CreateBatchPoolManagerFromConfiguration)
