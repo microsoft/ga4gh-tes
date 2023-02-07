@@ -18,6 +18,7 @@ using Microsoft.Azure.Management.ContainerService.Fluent;
 using Microsoft.Azure.Management.Msi.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
+using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Azure.Management.Storage.Fluent;
 using Polly;
 using Polly.Retry;
@@ -77,25 +78,50 @@ namespace TesDeployer
             AzureDnsLabelName = TesCname;
         }
 
-        public async Task<IKubernetes> GetKubernetesClientAsync()
+        public async Task<IKubernetes> GetKubernetesClientAsync(IResource resourceGroupObject)
         {
+            var resourceGroup = resourceGroupObject.Name;
             var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
 
             // Write kubeconfig in the working directory, because KubernetesClientConfiguration needs to read from a file, TODO figure out how to pass this directly. 
-            var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(configuration.ResourceGroupName, configuration.AksClusterName);
+            var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(resourceGroup, configuration.AksClusterName);
             var kubeConfigFile = new FileInfo(kubeConfigPath);
             await File.WriteAllTextAsync(kubeConfigFile.FullName, Encoding.Default.GetString(creds.Kubeconfigs.First().Value));
             kubeConfigFile.Refresh();
-
             var k8sConfiguration = KubernetesClientConfiguration.LoadKubeConfig(kubeConfigFile, false);
             var k8sClientConfiguration = KubernetesClientConfiguration.BuildConfigFromConfigObject(k8sConfiguration);
             return new Kubernetes(k8sClientConfiguration);
         }
 
-        public async Task<IKubernetes> DeployCoADependenciesAsync(IResourceGroup _/*resourceGroup*/, IKubernetes client = default) //TODO: use or remove resourceGroup
+        public V1Deployment GetUbuntuDeployment()
         {
-            client ??= await GetKubernetesClientAsync();
+            return new V1Deployment
+            {
+                ApiVersion = "apps/v1",
+                Kind = "deployment",
+                Metadata = new V1ObjectMeta { Name = "ubuntu" },
+                Spec = new V1DeploymentSpec
+                {
+                    Replicas = 1,
+                    Template = new V1PodTemplateSpec
+                    {
+                        Spec = new V1PodSpec
+                        {
+                            Containers = new List<V1Container>{
+                                new V1Container {
+                                    Name = "ubuntu",
+                                    Image = "mcr.microsoft.com/mirror/docker/library/ubuntu:22.04",
+                                    Command = new List<string> { "/bin/bash", "-c", "--" },
+                                    Args = new List<string> { "while true; do sleep 30; done;" } }
+                            }
+                        }
+                    }
+                }
+            };
+        }
 
+        public async Task DeployCoADependenciesAsync()
+        {
             var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
 
             if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("aad-pod-identity", StringComparison.OrdinalIgnoreCase))
@@ -105,18 +131,14 @@ namespace TesDeployer
 
             await ExecHelmProcessAsync($"repo update");
             await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig {kubeConfigPath}");
-
-            return client;
         }
 
-        public async Task<IKubernetes> EnableIngress(string tesUsername, string tesPassword, IKubernetes client = default)
+        public async Task<IKubernetes> EnableIngress(string tesUsername, string tesPassword, IKubernetes client)
         {
             var certManagerRegistry = "quay.io";
             var certImageController = $"{certManagerRegistry}/jetstack/cert-manager-controller";
             var certImageWebhook = $"{certManagerRegistry}/jetstack/cert-manager-webhook";
             var certImageCainjector = $"{certManagerRegistry}/jetstack/cert-manager-cainjector";
-
-            client ??= await GetKubernetesClientAsync();
 
             await client.CoreV1.CreateNamespaceAsync(new V1Namespace()
             {
@@ -206,17 +228,13 @@ namespace TesDeployer
             return client;
         }
 
-        public async Task<IKubernetes> DeployHelmChartToClusterAsync(IKubernetes client = default)
+        public async Task DeployHelmChartToClusterAsync(IKubernetes kubernetesClient)
         {
-            client ??= await GetKubernetesClientAsync();
-
             // https://helm.sh/docs/helm/helm_upgrade/
             // The chart argument can be either: a chart reference('example/mariadb'), a path to a chart directory, a packaged chart, or a fully qualified URL
             await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig {kubeConfigPath} --namespace {configuration.AksCoANamespace} --create-namespace",
                 workingDirectory: workingDirectoryTemp);
-            await WaitForWorkloadAsync(client, "tes", configuration.AksCoANamespace, cts.Token);
-
-            return client;
+            await WaitForWorkloadAsync(kubernetesClient, "tes", configuration.AksCoANamespace, cts.Token);
         }
 
         public async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath)
@@ -346,10 +364,10 @@ namespace TesDeployer
             }
         }
 
-        public async Task UpgradeAKSDeploymentAsync(Dictionary<string, string> settings, IStorageAccount storageAccount)
+        public async Task UpgradeAKSDeploymentAsync(Dictionary<string, string> settings, IStorageAccount storageAccount, IKubernetes kubernetesClient)
         {
             await UpgradeValuesYamlAsync(storageAccount, settings);
-            _ = await DeployHelmChartToClusterAsync();
+            await DeployHelmChartToClusterAsync(kubernetesClient);
         }
 
         public void DeleteTempFiles()
@@ -552,14 +570,14 @@ namespace TesDeployer
             return output;
         }
 
-        private static async Task<bool> WaitForWorkloadAsync(IKubernetes client, string deploymentName, string deploymentNamespace, CancellationToken cancellationToken)
+        private static async Task<bool> WaitForWorkloadAsync(IKubernetes client, string deploymentName, string aksNamespace, CancellationToken cancellationToken)
         {
-            var deployments = await client.AppsV1.ListNamespacedDeploymentAsync(deploymentNamespace, cancellationToken: cancellationToken);
+            var deployments = await client.AppsV1.ListNamespacedDeploymentAsync(aksNamespace, cancellationToken: cancellationToken);
             var deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
 
             var result = await WorkloadReadyRetryPolicy.ExecuteAndCaptureAsync(async () =>
             {
-                deployments = await client.AppsV1.ListNamespacedDeploymentAsync(deploymentNamespace, cancellationToken: cancellationToken);
+                deployments = await client.AppsV1.ListNamespacedDeploymentAsync(aksNamespace, cancellationToken: cancellationToken);
                 deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
 
                 if ((deployment?.Status?.ReadyReplicas ?? 0) < 1)

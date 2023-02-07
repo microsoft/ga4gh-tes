@@ -110,6 +110,7 @@ namespace TesDeployer
         private bool SkipBillingReaderRoleAssignment { get; set; }
         private bool isResourceGroupCreated { get; set; }
         private KubernetesManager kubernetesManager { get; set; }
+        private IKubernetes kubernetesClient { get; set; }
 
         public Deployer(Configuration configuration)
             => this.configuration = configuration;
@@ -265,7 +266,8 @@ namespace TesDeployer
 
                         await kubernetesManager.UpgradeAKSDeploymentAsync(
                             settings,
-                            storageAccount);
+                            storageAccount,
+                            kubernetesClient);
                     }
 
                     if (!configuration.Update)
@@ -457,19 +459,23 @@ namespace TesDeployer
                         }
                         else
                         {
-                            var kubernetesClient = await kubernetesManager.DeployCoADependenciesAsync(resourceGroup);
+                            kubernetesClient = await kubernetesManager.GetKubernetesClientAsync(resourceGroup);
+                            await kubernetesManager.DeployCoADependenciesAsync();
+
+                            // Deploy an ubuntu pod to run PSQL commands, then delete it
+                            const string deploymentName = "ubuntu";
+                            const string deploymentNamespace = "default";
+                            var ubuntuDeployment = kubernetesManager.GetUbuntuDeployment();
+                            await kubernetesClient.AppsV1.CreateNamespacedDeploymentAsync(ubuntuDeployment, deploymentNamespace);
+                            await ExecuteQueriesOnAzurePostgreSQLDbFromK8(deploymentName, deploymentNamespace);
+                            await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace);
 
                             if (configuration.EnableIngress.GetValueOrDefault())
                             {
                                 _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
                             }
 
-                            _ = await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
-
-                            if (configuration.ProvisionPostgreSqlOnAzure == true)
-                            {
-                                await ExecuteQueriesOnAzurePostgreSQLDbFromK8(kubernetesClient);
-                            }
+                            await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
                         }
                     }
                 }
@@ -1296,7 +1302,7 @@ namespace TesDeployer
             }
         }
 
-        private Task ExecuteQueriesOnAzurePostgreSQLDbFromK8(IKubernetes kubernetesClient)
+        private Task ExecuteQueriesOnAzurePostgreSQLDbFromK8(string podName, string aksNamespace)
             => Execute(
                 $"Executing scripts on postgresql...",
                 async () =>
@@ -1316,7 +1322,7 @@ namespace TesDeployer
                         new string[] { "/usr/bin/psql", "-h", serverPath, "-U", adminUser, "-d", configuration.PostgreSqlTesDatabaseName, "-c", tesScript }
                     };
 
-                    await kubernetesManager.ExecuteCommandsOnPodAsync(kubernetesClient, "tes", commands, configuration.AksCoANamespace);
+                    await kubernetesManager.ExecuteCommandsOnPodAsync(kubernetesClient, podName, commands, aksNamespace);
                 });
 
         private async Task AssignVmAsBillingReaderToSubscriptionAsync(IIdentity managedIdentity)
