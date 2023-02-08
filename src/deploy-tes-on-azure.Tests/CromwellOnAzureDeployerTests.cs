@@ -31,7 +31,5 @@ namespace TesDeployer.Tests
             var error = exception.ToCloudErrorType();
             Assert.IsTrue(error == CloudErrorType.NotSet);
         }
-
-        static void Main() { }
     }
 }

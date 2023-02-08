@@ -6,6 +6,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PreserveCompilationContext>true</PreserveCompilationContext>
     <AssemblyName>tesapi</AssemblyName>
+    <StartupObject>TesApi.Web.Program</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>

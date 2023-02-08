@@ -603,7 +603,5 @@ namespace TesApi.Tests
 
             return tesTask;
         }
-
-        static void Main() { }
     }
 }
