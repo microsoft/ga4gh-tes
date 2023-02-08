@@ -161,11 +161,6 @@ namespace TesApi.Web
             });
         }
 
-        //private ILogger GetLoggerFromServiceProvider(IServiceProvider serviceProvider)
-        //{
-        //    return serviceProvider.GetRequiredService<ILogger<Startup>>();
-        //}
-
         private IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
         {
             var terraOptions = services.GetService<IOptions<TerraOptions>>();
