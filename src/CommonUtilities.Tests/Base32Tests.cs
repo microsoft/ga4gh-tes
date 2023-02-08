@@ -18,7 +18,5 @@ namespace CommonUtilities.Tests
         [DataRow("foobar", "MZXW6YTBOI======")]
         public void ValidateConvertToBase32(string data, string expected)
             => Assert.AreEqual(expected, Base32.ConvertToBase32(Encoding.UTF8.GetBytes(data)));
-
-        static void Main() { }
     }
 }
