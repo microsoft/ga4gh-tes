@@ -297,7 +297,7 @@ namespace TesApi.Web
         public async Task DeleteBatchJobAsync(PoolInformation poolInformation, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrEmpty(poolInformation?.PoolId, nameof(poolInformation));
-            logger.LogInformation("Deleting job {BatchJob}", poolInformation.PoolId);
+            //logger.LogInformation("Deleting job {BatchJob}", poolInformation.PoolId);
             await batchClient.JobOperations.DeleteJobAsync(poolInformation.PoolId, cancellationToken: cancellationToken);
         }
 
