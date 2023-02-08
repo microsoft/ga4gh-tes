@@ -161,15 +161,14 @@ namespace TesApi.Web
             });
         }
 
-        private ILogger GetLoggerFromServiceProvider(IServiceProvider serviceProvider)
-        {
-            return ActivatorUtilities.CreateInstance<ILogger>(serviceProvider);
-        }
+        //private ILogger GetLoggerFromServiceProvider(IServiceProvider serviceProvider)
+        //{
+        //    return serviceProvider.GetRequiredService<ILogger<Startup>>();
+        //}
 
         private IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
         {
             var terraOptions = services.GetService<IOptions<TerraOptions>>();
-            var logger = GetLoggerFromServiceProvider(services);
 
             logger.LogInformation("Attempting to create a Batch Quota Provider");
 
@@ -192,7 +191,6 @@ namespace TesApi.Web
         private IBatchPoolManager CreateBatchPoolManagerFromConfiguration(IServiceProvider services)
         {
             var terraOptions = services.GetService<IOptions<TerraOptions>>();
-            var logger = GetLoggerFromServiceProvider(services);
 
             logger.LogInformation("Attempting to create a Batch Pool Manager");
 
@@ -239,7 +237,6 @@ namespace TesApi.Web
         private IStorageAccessProvider CreateStorageAccessProviderFromConfiguration(IServiceProvider services)
         {
             var options = services.GetRequiredService<IOptions<TerraOptions>>();
-            var logger = GetLoggerFromServiceProvider(services);
 
             logger.LogInformation("Attempting to create a Storage Access Provider");
 
