@@ -68,6 +68,9 @@ namespace TesApi.Web
                 .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.SectionName))
                 .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.SectionName))
                 .Configure<ContainerRegistryOptions>(Configuration.GetSection(ContainerRegistryOptions.SectionName))
+
+                .AddLogging()
+
                 .AddSingleton<IAppCache, CachingService>()
                 .AddSingleton<AzureProxy>()
                 .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
@@ -86,7 +89,7 @@ namespace TesApi.Web
                 .AddSingleton(CreateStorageAccessProviderFromConfiguration)
                 .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
 
-                .AddLogging()
+
                 .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
                 .AddSingleton<ContainerRegistryProvider>()
                 .AddSingleton<CacheAndRetryHandler>()
@@ -162,11 +165,18 @@ namespace TesApi.Web
         {
             var terraOptions = services.GetService<IOptions<TerraOptions>>();
 
+            logger.LogInformation("Attempting to create a Batch Quota Provider");
+
             if (!string.IsNullOrEmpty(terraOptions?.Value.LandingZoneApiHost))
             {
                 var terraApiClient = ActivatorUtilities.CreateInstance<TerraLandingZoneApiClient>(services);
+
+                logger.LogInformation("Terra Landing Zone API Host is set. Using the Terra Quota Provider.");
+
                 return new TerraQuotaProvider(terraApiClient, terraOptions);
             }
+
+            logger.LogInformation("Using default ARM Quota Provider.");
 
             return ActivatorUtilities.CreateInstance<ArmBatchQuotaProvider>(services);
         }
@@ -175,8 +185,12 @@ namespace TesApi.Web
         {
             var terraOptions = services.GetService<IOptions<TerraOptions>>();
 
+            logger.LogInformation("Attempting to create a Batch Pool Manager");
+
             if (!string.IsNullOrEmpty(terraOptions?.Value.WsmApiHost))
             {
+                logger.LogInformation("Terra WSM API Host is set. Using Terra Batch Pool Manager");
+
                 return new TerraBatchPoolManager(
                     ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services),
                     services.GetRequiredService<IMapper>(),
@@ -184,6 +198,8 @@ namespace TesApi.Web
                     services.GetService<IOptions<BatchAccountOptions>>(),
                     services.GetService<ILogger<TerraBatchPoolManager>>());
             }
+
+            logger.LogInformation("Using default Batch Pool Manager.");
 
             return ActivatorUtilities.CreateInstance<ArmBatchPoolManager>(services);
         }
@@ -213,9 +229,13 @@ namespace TesApi.Web
         {
             var options = services.GetRequiredService<IOptions<TerraOptions>>();
 
+            logger.LogInformation("Attempting to create a Storage Access Provider");
+
             //if workspace id is set, then we are assuming we are running in terra
             if (!string.IsNullOrEmpty(options.Value.WorkspaceId))
             {
+                logger.LogInformation("Terra Workspace Id is set. Using Terra Storage Provider");
+
                 ValidateRequiredOptionsForTerraStorageProvider(options.Value);
 
                 return new TerraStorageAccessProvider(
@@ -224,6 +244,8 @@ namespace TesApi.Web
                     services.GetRequiredService<IAzureProxy>(),
                     ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services));
             }
+
+            logger.LogInformation("Using Default Storage Provider");
 
             return ActivatorUtilities.CreateInstance<DefaultStorageAccessProvider>(services);
         }
