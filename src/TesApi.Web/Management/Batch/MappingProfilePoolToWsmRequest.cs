@@ -37,10 +37,11 @@ namespace TesApi.Web.Management.Batch
             CreateMap<PublicIPAddressConfiguration, ApiPublicIpAddressConfiguration>();
             //TODO: This mapping to be updated once the WSM API changes to support the correct values 
             CreateMap<UserAssignedIdentities, ApiUserAssignedIdentity>()
-                .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.PrincipalId))
-                .ForMember(dest => dest.ResourceGroupName, opt => opt.Ignore());
+                .ForMember(dest => dest.ClientId, opt => opt.MapFrom(src => src.ClientId))
+                .ForMember(dest => dest.ResourceGroupName, opt => opt.Ignore())
+                .ForMember(dest => dest.Name, opt => opt.Ignore());
             CreateMap<Pool, ApiAzureBatchPool>()
-               .ForMember(dest => dest.UserAssignedIdentities, opt => opt.Ignore());
+               .ForMember(dest => dest.UserAssignedIdentities, opt => opt.MapFrom(src => src.Identity.UserAssignedIdentities.Values));
         }
     }
 }

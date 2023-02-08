@@ -328,6 +328,9 @@ namespace TesApi.Web.Management.Models.Terra
 
         [JsonPropertyName("resourceGroupName")]
         public string ResourceGroupName { get; set; }
+
+        [JsonPropertyName("clientId")]
+        public string ClientId { get; set; }
     }
 
     public class ApiCommon
