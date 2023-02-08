@@ -3,41 +3,80 @@
 
 using System;
 using System.Text.Json;
+using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 
 namespace TesApi.Tests;
 
 public class TerraApiStubData
 {
-    public static string LandingZoneApiHost => "https://landingzone.host";
-    public static string WsmApiHost => "https://wsm.host";
+    public const string LandingZoneApiHost = "https://landingzone.host";
+    public const string WsmApiHost = "https://wsm.host";
+    public const string ResourceGroup = "mrg-terra-dev-previ-20191228";
+    public const string WorkspaceAccountName = "fooaccount";
+    public const string WorkspaceContainerName = "foocontainer";
 
-    public static string ResourceGroup => "mrg-terra-dev-previ-20191228";
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
     public Guid WorkspaceId { get; } = Guid.NewGuid();
     public Guid ContainerResourceId { get; } = Guid.NewGuid();
-
+    public string BatchAccountName => "lzee170c71b6cf678cfca744";
+    public string Region => "westus3";
     public string BatchAccountId =>
-        $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Batch/batchAccounts/lzee170c71b6cf678cfca744";
+        $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Batch/batchAccounts/{BatchAccountName}";
 
+    public string PoolId => "poolId";
     public LandingZoneResourcesApiResponse GetResourceApiResponse()
-        => JsonSerializer.Deserialize<LandingZoneResourcesApiResponse>(GetResourceApiResponseInJson());
-
+    {
+        return JsonSerializer.Deserialize<LandingZoneResourcesApiResponse>(GetResourceApiResponseInJson());
+    }
     public QuotaApiResponse GetResourceQuotaApiResponse()
-        => JsonSerializer.Deserialize<QuotaApiResponse>(GetResourceQuotaApiResponseInJson());
+    {
+        return JsonSerializer.Deserialize<QuotaApiResponse>(GetResourceQuotaApiResponseInJson());
+    }
 
-    public static WsmSasTokenApiResponse GetWsmSasTokenApiResponse()
-        => JsonSerializer.Deserialize<WsmSasTokenApiResponse>(GetWsmSasTokenApiResponseInJson());
+    public WsmSasTokenApiResponse GetWsmSasTokenApiResponse()
+    {
+        return JsonSerializer.Deserialize<WsmSasTokenApiResponse>(GetWsmSasTokenApiResponseInJson());
+    }
 
-    public static string GetWsmSasTokenApiResponseInJson()
-        => @"{
+    public TerraOptions GetTerraOptions()
+    {
+        return new TerraOptions()
+        {
+            WorkspaceId = WorkspaceId.ToString(),
+            LandingZoneApiHost = LandingZoneApiHost,
+            WsmApiHost = WsmApiHost,
+            WorkspaceStorageAccountName = WorkspaceAccountName,
+            WorkspaceStorageContainerName = WorkspaceContainerName,
+            WorkspaceStorageContainerResourceId = ContainerResourceId.ToString()
+        };
+    }
+
+    public BatchAccountOptions GetBatchAccountOptions()
+    {
+        return new BatchAccountOptions()
+        {
+            AccountName = BatchAccountName,
+            SubscriptionId = SubscriptionId.ToString(),
+            ResourceGroup = ResourceGroup,
+            Region = Region,
+            AppKey = "APPKEY",
+            BaseUrl = "http://batchurl"
+        };
+    }
+
+    public string GetWsmSasTokenApiResponseInJson()
+    {
+        return @"{
   ""token"": ""SASTOKENSTUB="",
   ""url"": ""https://bloburl.foo/container?sas=SASTOKENSTUB=""
     }";
+    }
 
     public string GetResourceApiResponseInJson()
-        => $@"{{
+    {
+        return $@"{{
   ""id"": ""{LandingZoneId}"",
   ""resources"": [
     {{
@@ -47,7 +86,7 @@ public class TerraApiStubData
           ""resourceType"": ""DeployedSubnet"",
           ""resourceName"": ""POSTGRESQL_SUBNET"",
           ""resourceParentId"": ""/subscriptions/{SubscriptionId}/resourceGroups/ResourceGroup/providers/Microsoft.Network/virtualNetworks/lz7f4d78e9882101e6834b0ff98c9e128c79414b85b16bdd3c2bf64b3004a2ab"",
-          ""region"": ""westus3""
+          ""region"": ""{Region}""
         }}
       ]
     }},
@@ -55,44 +94,44 @@ public class TerraApiStubData
       ""purpose"": ""SHARED_RESOURCE"",
       ""deployedResources"": [
         {{
-          ""resourceId"": ""/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Batch/batchAccounts/lzee170c71b6cf678cfca744"",
+          ""resourceId"": ""/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Batch/batchAccounts/{BatchAccountName}"",
           ""resourceType"": ""Microsoft.Batch/batchAccounts"",
-          ""region"": ""westus3""
+          ""region"": ""{Region}""
         }},
         {{
           ""resourceId"": ""/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ContainerService/managedClusters/lz73fc42a6df6b9c9173d1642"",
           ""resourceType"": ""Microsoft.ContainerService/managedClusters"",
-          ""region"": ""westus3""
+          ""region"": ""{Region}""
         }},
         {{
           ""resourceId"": ""/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.DBforPostgreSQL/servers/lz7634015e1ec0acec24fef4a84c9dcf86f62af29ede09e1a2d3e2c3a415d3a"",
           ""resourceType"": ""Microsoft.DBforPostgreSQL/servers"",
-          ""region"": ""westus3""
+          ""region"": ""{Region}""
         }},
         {{
           ""resourceId"": ""/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Insights/components/lz931ac245d357d3741ea6c1643489023a33b1d3c97eb0827d9b7f6a928dff4d52"",
           ""resourceType"": ""Microsoft.Insights/components"",
-          ""region"": ""westus3""
+          ""region"": ""{Region}""
         }},
         {{
           ""resourceId"": ""/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Insights/dataCollectionRules/lz8ccc2ee36f14b77a0f2a6a971992e757b63095613df7a9fd22607e2d3074ab"",
           ""resourceType"": ""Microsoft.Insights/dataCollectionRules"",
-          ""region"": ""westus3""
+          ""region"": ""{Region}""
         }},
         {{
           ""resourceId"": ""/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/lz8f97a76a9c49a3cfa40ab860e40d4d1fe57520fb4ebd0edb4e204d9c5b0d9"",
           ""resourceType"": ""Microsoft.OperationalInsights/workspaces"",
-          ""region"": ""westus3""
+          ""region"": ""{Region}""
         }},
         {{
           ""resourceId"": ""/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Relay/namespaces/lzcf39cbb5964910f3da058ef02595b6862f560718e0e8c16d"",
           ""resourceType"": ""Microsoft.Relay/namespaces"",
-          ""region"": ""westus3""
+          ""region"": ""{Region}""
         }},
         {{
           ""resourceId"": ""/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Storage/storageAccounts/lz05d7f0bc9f7d3634aca839"",
           ""resourceType"": ""Microsoft.Storage/storageAccounts"",
-          ""region"": ""westus3""
+          ""region"": ""{Region}""
         }}
       ]
     }},
@@ -103,7 +142,7 @@ public class TerraApiStubData
           ""resourceType"": ""DeployedSubnet"",
           ""resourceName"": ""AKS_SUBNET"",
           ""resourceParentId"": ""/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Network/virtualNetworks/lz7f4d78e9882101e6834b0ff98c9e128c79414b85b16bdd3c2bf64b3004a2ab"",
-          ""region"": ""westus3""
+          ""region"": ""{Region}""
         }}
       ]
     }},
@@ -114,7 +153,7 @@ public class TerraApiStubData
           ""resourceType"": ""DeployedSubnet"",
           ""resourceName"": ""COMPUTE_SUBNET"",
           ""resourceParentId"": ""/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Network/virtualNetworks/lz7f4d78e9882101e6834b0ff98c9e128c79414b85b16bdd3c2bf64b3004a2ab"",
-          ""region"": ""westus3""
+          ""region"": ""{Region}""
         }}
       ]
     }},
@@ -125,15 +164,17 @@ public class TerraApiStubData
           ""resourceType"": ""DeployedSubnet"",
           ""resourceName"": ""BATCH_SUBNET"",
           ""resourceParentId"": ""/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Network/virtualNetworks/lz7f4d78e9882101e6834b0ff98c9e128c79414b85b16bdd3c2bf64b3004a2ab"",
-          ""region"": ""westus3""
+          ""region"": ""{Region}""
         }}
       ]
     }}
   ]
 }}";
+    }
 
     public string GetResourceQuotaApiResponseInJson()
-        => $@"{{
+    {
+        return $@"{{
   ""landingZoneId"": ""{LandingZoneId}"",
   ""azureResourceId"": ""{BatchAccountId}"",
   ""resourceType"": ""Microsoft.Batch/batchAccounts"",
@@ -206,4 +247,39 @@ public class TerraApiStubData
     ""lowPriorityCoreQuota"": 100
   }}
 }}";
+    }
+
+    public ApiCreateBatchPoolRequest GetApiCreateBatchPoolRequest()
+    {
+        return new ApiCreateBatchPoolRequest()
+        {
+            Common = new ApiCommon(),
+            AzureBatchPool = new ApiAzureBatchPool()
+            {
+                UserAssignedIdentities = new ApiUserAssignedIdentity[]
+                {
+                    new ApiUserAssignedIdentity()
+                    {
+                        Name = "identityName",
+                        ResourceGroupName = ResourceGroup
+                    }
+                }
+            }
+        };
+    }
+
+    public ApiCreateBatchPoolResponse GetApiCreateBatchPoolResponse()
+    {
+        return new ApiCreateBatchPoolResponse()
+        {
+            AzureBatchPool = new ApiAzureBatchPoolResource()
+            {
+                Attributes = new ApiAzureBatchPoolAttributes()
+                {
+                    Id = PoolId
+                }
+            },
+            ResourceId = new Guid()
+        };
+    }
 }

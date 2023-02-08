@@ -50,14 +50,45 @@ namespace TesApi.Web.Management.Clients
         /// <returns></returns>
         public virtual async Task<WsmSasTokenApiResponse> GetSasTokenAsync(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
         {
-            var uri = GetContainerSasTokenApiUri(workspaceId, resourceId, sasTokenApiParameters);
+            var url = GetContainerSasTokenApiUrl(workspaceId, resourceId, sasTokenApiParameters);
 
-            var response = await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, uri),
+            var response = await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, url),
                 setAuthorizationHeader: true);
 
-            response.EnsureSuccessStatusCode();
+            return await GetApiResponseContentAsync<WsmSasTokenApiResponse>(response);
+        }
 
-            return JsonSerializer.Deserialize<WsmSasTokenApiResponse>(await response.Content.ReadAsStringAsync());
+        /// <summary>
+        ///  Creates a Wsm managed batch pool
+        /// </summary>
+        /// <param name="workspaceId">Wsm Workspace id</param>
+        /// <param name="apiCreateBatchPool">Create batch pool request</param>
+        /// <returns></returns>
+        public virtual async Task<ApiCreateBatchPoolResponse> CreateBatchPool(Guid workspaceId, ApiCreateBatchPoolRequest apiCreateBatchPool)
+        {
+            ArgumentNullException.ThrowIfNull(apiCreateBatchPool);
+
+            var uri = GetCreateBatchPoolUrl(workspaceId);
+
+            var response =
+                await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, uri) { Content = GetBatchPoolRequestContent(apiCreateBatchPool) },
+                    setAuthorizationHeader: true);
+
+            return await GetApiResponseContentAsync<ApiCreateBatchPoolResponse>(response);
+        }
+
+        private string GetCreateBatchPoolUrl(Guid workspaceId)
+        {
+            var segments = $"/resources/controlled/azure/batchpool";
+
+            var builder = GetWsmUriBuilder(workspaceId, segments);
+
+            return builder.ToString();
+        }
+
+        private HttpContent GetBatchPoolRequestContent(ApiCreateBatchPoolRequest apiCreateBatchPool)
+        {
+            return new StringContent(JsonSerializer.Serialize(apiCreateBatchPool));
         }
 
         private string ToQueryString(SasTokenApiParameters sasTokenApiParameters)
@@ -74,7 +105,7 @@ namespace TesApi.Web.Management.Clients
         /// <param name="resourceId">WSM resource Id of the container</param>
         /// <param name="sasTokenApiParameters"><see cref="SasTokenApiParameters"/></param>
         /// <returns></returns>
-        public virtual Uri GetContainerSasTokenApiUri(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
+        public virtual Uri GetContainerSasTokenApiUrl(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
         {
             var segments = $"/resources/controlled/azure/storageContainer/{resourceId}/getSasToken";
 

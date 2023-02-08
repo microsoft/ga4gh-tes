@@ -1,17 +1,18 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+
+using System.Reflection;
+using System.Text.Json;
+using Azure;
 using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Batch;
-using Microsoft.Extensions.Configuration;
-using System.Reflection;
-using System.Text.Json;
-using Tes.Models;
 using Azure.ResourceManager.Compute;
-using Azure;
 using Azure.ResourceManager.Compute.Models;
 using Azure.ResourceManager.Resources.Models;
+using Microsoft.Extensions.Configuration;
+using Tes.Models;
 
 namespace TesUtils
 {
@@ -66,6 +67,9 @@ namespace TesUtils
 
         static async Task<int> RunAsync(Configuration configuration)
         {
+            ArgumentException.ThrowIfNullOrEmpty(configuration.OutputFilePath);
+            ArgumentException.ThrowIfNullOrEmpty(configuration.SubscriptionId);
+
             var client = new ArmClient(new DefaultAzureCredential());
             static double ConvertMiBToGiB(int value) => Math.Round(value / 1024.0, 2);
             var subscription = client.GetSubscriptionResource(new ResourceIdentifier($"/subscriptions/{configuration.SubscriptionId}"));
@@ -100,23 +104,13 @@ namespace TesUtils
                         if (!sizeForVm.ContainsKey(vm))
                         {
                             sizes ??= await subscription.GetVirtualMachineSizesAsync(location).ToListAsync();
-                            var size = sizes.SingleOrDefault(vmsize => vmsize.Name.Equals(vm, StringComparison.OrdinalIgnoreCase));
-
-                            if (size is not null)
-                            {
-                                sizeForVm[vm] = size;
-                            }
+                            sizeForVm[vm] = sizes.Single(vmsize => vmsize.Name.Equals(vm, StringComparison.OrdinalIgnoreCase));
                         }
 
                         if (!skuForVm.ContainsKey(vm))
                         {
                             skus ??= await subscription.GetComputeResourceSkusAsync($"location eq '{region.Name}'").ToListAsync();
-                            var sku = skus.SingleOrDefault(sku => sku.Name.Equals(vm, StringComparison.OrdinalIgnoreCase));
-
-                            if (sku is not null)
-                            {
-                                skuForVm[vm] = sku;
-                            }
+                            skuForVm[vm] = skus.Single(sku => sku.Name.Equals(vm, StringComparison.OrdinalIgnoreCase));
                         }
                     }
 
@@ -136,7 +130,7 @@ namespace TesUtils
                 var sizeInfo = sizeForVm[s];
                 var sku = skuForVm[s];
 
-                if (sizeInfo is null)
+                if (sizeInfo is null || sizeInfo.MemoryInMB is null || sizeInfo.ResourceDiskSizeInMB is null)
                 {
                     throw new Exception($"Size info is null for VM {s}");
                 }

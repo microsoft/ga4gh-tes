@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -17,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Tes.Extensions;
 using Tes.Models;
+using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
 using TesApi.Web.Storage;
@@ -848,13 +848,13 @@ namespace TesApi.Web
                 .Where(f => f?.Url?.StartsWith("drs://", StringComparison.OrdinalIgnoreCase) == true)
                 .ToList();
 
-            foreach (var output in task.Outputs ?? Enumerable.Empty<TesOutput>())
-            {
-                if (!output.Path.StartsWith($"{CromwellPathPrefix}/", StringComparison.OrdinalIgnoreCase) && !output.Path.StartsWith($"{ExecutionsPathPrefix}/", StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new TesException("InvalidOutputPath", $"Unsupported output path '{output.Path}' for task Id {task.Id}. Must start with {CromwellPathPrefix} or {ExecutionsPathPrefix}");
-                }
-            }
+            //foreach (var output in task.Outputs)
+            //{
+            //    if (!output.Path.StartsWith($"{CromwellPathPrefix}/", StringComparison.OrdinalIgnoreCase) && !output.Path.StartsWith($"{ExecutionsPathPrefix}/", StringComparison.OrdinalIgnoreCase))
+            //    {
+            //        throw new TesException("InvalidOutputPath", $"Unsupported output path '{output.Path}' for task Id {task.Id}. Must start with {CromwellPathPrefix} or {ExecutionsPathPrefix}");
+            //    }
+            //}
 
             var batchExecutionDirectoryPath = GetBatchExecutionDirectoryPath(task);
             var metricsPath = $"/{batchExecutionDirectoryPath}/metrics.txt";
@@ -934,70 +934,71 @@ namespace TesApi.Web
 
             var sb = new StringBuilder();
 
-            sb.AppendLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath}; }} && \\");  // Function that appends key=value pair to metrics.txt file
-            sb.AppendLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
-            sb.AppendLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/{batchExecutionDirectoryPath} && \\");
+            sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath}; }} && \\");  // Function that appends key=value pair to metrics.txt file
+            sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
+            sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/{batchExecutionDirectoryPath} && \\");
 
             if (dockerInDockerImageIsPublic)
             {
-                sb.AppendLine($"(grep -q alpine /etc/os-release && apk add bash || :) && \\");  // Install bash if running on alpine (will be the case if running inside "docker" image)
+                sb.AppendLinuxLine($"(grep -q alpine /etc/os-release && apk add bash || :) && \\");  // Install bash if running on alpine (will be the case if running inside "docker" image)
             }
 
             var vmSize = task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
 
             if (drsInputFiles.Count > 0 && task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true)
             {
-                sb.AppendLine($"write_ts CromwellDrsLocalizerPullStart && \\");
-                sb.AppendLine($"docker pull --quiet {cromwellDrsLocalizerImageName} && \\");
-                sb.AppendLine($"write_ts CromwellDrsLocalizerPullEnd && \\");
+                sb.AppendLinuxLine($"write_ts CromwellDrsLocalizerPullStart && \\");
+                sb.AppendLinuxLine($"docker pull --quiet {cromwellDrsLocalizerImageName} && \\");
+                sb.AppendLinuxLine($"write_ts CromwellDrsLocalizerPullEnd && \\");
             }
 
             if (blobXferImageIsPublic)
             {
-                sb.AppendLine($"write_ts BlobXferPullStart && \\");
-                sb.AppendLine($"docker pull --quiet {blobxferImageName} && \\");
-                sb.AppendLine($"write_ts BlobXferPullEnd && \\");
+                sb.AppendLinuxLine($"write_ts BlobXferPullStart && \\");
+                sb.AppendLinuxLine($"docker pull --quiet {blobxferImageName} && \\");
+                sb.AppendLinuxLine($"write_ts BlobXferPullEnd && \\");
             }
 
             if (executorImageIsPublic)
             {
                 // Private executor images are pulled via pool ContainerConfiguration
-                sb.AppendLine($"write_ts ExecutorPullStart && docker pull --quiet {executor.Image} && write_ts ExecutorPullEnd && \\");
+                sb.AppendLinuxLine($"write_ts ExecutorPullStart && docker pull --quiet {executor.Image} && write_ts ExecutorPullEnd && \\");
             }
 
             // The remainder of the script downloads the inputs, runs the main executor container, and uploads the outputs, including the metrics.txt file
             // After task completion, metrics file is downloaded and used to populate the BatchNodeMetrics object
-            sb.AppendLine($"write_kv ExecutorImageSizeInBytes $(docker inspect {executor.Image} | grep \\\"Size\\\" | grep -Po '(?i)\\\"Size\\\":\\K([^,]*)') && \\");
+            sb.AppendLinuxLine($"write_kv ExecutorImageSizeInBytes $(docker inspect {executor.Image} | grep \\\"Size\\\" | grep -Po '(?i)\\\"Size\\\":\\K([^,]*)') && \\");
 
             if (drsInputFiles.Count > 0)
             {
                 // resolve DRS input files with Cromwell DRS Localizer Docker image
-                sb.AppendLine($"write_ts DrsLocalizationStart && \\");
+                sb.AppendLinuxLine($"write_ts DrsLocalizationStart && \\");
 
                 foreach (var drsInputFile in drsInputFiles)
                 {
                     var drsUrl = drsInputFile.Url;
                     var localizedFilePath = drsInputFile.Path;
                     var drsLocalizationCommand = $"docker run --rm {volumeMountsOption} -e MARTHA_URL=\"{marthaUrl}\" {cromwellDrsLocalizerImageName} {drsUrl} {localizedFilePath} --access-token-strategy azure{(!string.IsNullOrWhiteSpace(marthaKeyVaultName) ? " --vault-name " + marthaKeyVaultName : string.Empty)}{(!string.IsNullOrWhiteSpace(marthaSecretName) ? " --secret-name " + marthaSecretName : string.Empty)} && \\";
-                    sb.AppendLine(drsLocalizationCommand);
+                    sb.AppendLinuxLine(drsLocalizationCommand);
                 }
 
-                sb.AppendLine($"write_ts DrsLocalizationEnd && \\");
+                sb.AppendLinuxLine($"write_ts DrsLocalizationEnd && \\");
             }
 
-            sb.AppendLine($"write_ts DownloadStart && \\");
-            sb.AppendLine($"docker run --rm {volumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} /{downloadFilesScriptPath} && \\");
-            sb.AppendLine($"write_ts DownloadEnd && \\");
-            sb.AppendLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR{batchExecutionPathPrefix} && \\");
-            sb.AppendLine($"write_ts ExecutorStart && \\");
-            sb.AppendLine($"docker run --rm {volumeMountsOption} --entrypoint= --workdir / {executor.Image} {executor.Command[0]} -c \"{string.Join(" && ", executor.Command.Skip(1))}\" && \\");
-            sb.AppendLine($"write_ts ExecutorEnd && \\");
-            sb.AppendLine($"write_ts UploadStart && \\");
-            sb.AppendLine($"docker run --rm {volumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} /{uploadFilesScriptPath} && \\");
-            sb.AppendLine($"write_ts UploadEnd && \\");
-            sb.AppendLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath} && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath}' && \\");
-            sb.AppendLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
-            sb.AppendLine($"docker run --rm {volumeMountsOption} {blobxferImageName} upload --storage-url \"{metricsUrl}\" --local-path \"{metricsPath}\" --rename --no-recursive");
+            sb.AppendLinuxLine($"write_ts DownloadStart && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} /{downloadFilesScriptPath} && \\");
+            sb.AppendLinuxLine($"write_ts DownloadEnd && \\");
+            sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR{batchExecutionPathPrefix} && \\");
+            sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR{batchExecutionPathPrefix} && \\");
+            sb.AppendLinuxLine($"write_ts ExecutorStart && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= --workdir / {executor.Image} {executor.Command[0]}  \"{string.Join(" && ", executor.Command.Skip(1))}\" && \\");
+            sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
+            sb.AppendLinuxLine($"write_ts UploadStart && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} /{uploadFilesScriptPath} && \\");
+            sb.AppendLinuxLine($"write_ts UploadEnd && \\");
+            sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath} && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath}' && \\");
+            sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {blobxferImageName} upload --storage-url \"{metricsUrl}\" --local-path \"{metricsPath}\" --rename --no-recursive");
 
             var batchScriptPath = $"{batchExecutionDirectoryPath}/{BatchScriptFileName}";
             await this.storageAccessProvider.UploadBlobAsync($"/{batchScriptPath}", sb.ToString());

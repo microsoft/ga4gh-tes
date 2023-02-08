@@ -9,7 +9,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
-using Microsoft.Extensions.Logging;
 using Tes.Extensions;
 using Tes.Models;
 using static TesApi.Web.BatchScheduler.BatchPools;

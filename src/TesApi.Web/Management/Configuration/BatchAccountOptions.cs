@@ -11,7 +11,7 @@ namespace TesApi.Web.Management.Configuration
         /// <summary>
         /// Configuration section.
         /// </summary>
-        public const string BatchAccount = "BatchAccount";
+        public const string SectionName = "BatchAccount";
         /// <summary>
         /// Default Azure offer durable id. 
         /// </summary>
