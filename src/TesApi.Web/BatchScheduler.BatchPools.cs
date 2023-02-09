@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
+using Microsoft.Extensions.Logging;
 using Tes.Extensions;
 using Tes.Models;
 using static TesApi.Web.BatchScheduler.BatchPools;
@@ -202,16 +203,13 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken)
+        public Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken)
         {
-            //logger.LogDebug(@"Deleting pool and job {PoolId}", pool.Pool.PoolId);
-            try
-            {
-                await Task.WhenAll(
-                    AllowIfNotFound(azureProxy.DeleteBatchPoolAsync(pool.Pool.PoolId, cancellationToken)),
-                    AllowIfNotFound(azureProxy.DeleteBatchJobAsync(pool.Pool, cancellationToken)));
-            }
-            catch { }
+            logger.LogDebug(@"Deleting pool and job {PoolId}", pool.Pool.PoolId);
+
+            return Task.WhenAll(
+                AllowIfNotFound(azureProxy.DeleteBatchPoolAsync(pool.Pool.PoolId, cancellationToken)),
+                AllowIfNotFound(azureProxy.DeleteBatchJobAsync(pool.Pool, cancellationToken)));
 
             static async Task AllowIfNotFound(Task task)
             {

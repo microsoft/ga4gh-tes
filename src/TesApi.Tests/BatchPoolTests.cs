@@ -39,9 +39,7 @@ namespace TesApi.Tests
         {
             var azureProxy = AzureProxyReturnValues.Get();
             azureProxy.AzureProxyGetComputeNodeAllocationState = id => (Microsoft.Azure.Batch.Common.AllocationState.Steady, true, 0, 0, 1, 1);
-            azureProxy.AzureProxyGetCurrentComputeNodes = () => (0, 1);
             azureProxy.AzureProxyListTasks = (jobId, detailLevel) => AsyncEnumerable.Empty<CloudTask>().Append(GenerateTask(jobId, "job1"));
-            azureProxy.AzureProxySetComputeNodeTargets = (id, loPri, dedic) => { };
             azureProxy.AzureProxyListComputeNodesAsync = (i, d) => AsyncEnumerable.Empty<ComputeNode>();
             var services = GetServiceProvider(azureProxy);
             var pool = await AddPool(services.GetT(), false);
@@ -69,7 +67,7 @@ namespace TesApi.Tests
         {
             IBatchPool pool = default;
             var azureProxy = AzureProxyReturnValues.Get();
-            azureProxy.AzureProxyGetCurrentComputeNodes = () => (0, 1);
+            azureProxy.AzureProxyGetComputeNodeAllocationState = id => (Microsoft.Azure.Batch.Common.AllocationState.Steady, true, 0, 0, 1, 1);
             azureProxy.AzureProxyDeleteBatchPool = (poolId, cancellationToken) => Assert.Fail();
             var services = GetServiceProvider(azureProxy);
             pool = await AddPool(services.GetT(), false);
@@ -129,11 +127,8 @@ namespace TesApi.Tests
             internal int ActivePoolCount { get; set; } = 0;
 
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<ComputeNode>> AzureProxyListComputeNodesAsync { get; set; } = (poolId, detailLevel) => AsyncEnumerable.Empty<ComputeNode>();
-            internal Action<string> AzureProxyGetComputeNodeTargets { get; set; } = poolId => { };
             internal Action<string, IEnumerable<ComputeNode>, CancellationToken> AzureProxyDeleteBatchComputeNodes { get; set; } = (poolId, computeNodes, cancellationToken) => { };
             internal Func<string, (Microsoft.Azure.Batch.Common.AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)> AzureProxyGetComputeNodeAllocationState { get; set; } = id => (Microsoft.Azure.Batch.Common.AllocationState.Steady, true, 0, 0, 0, 0);
-            internal Action<string, int?, int?> AzureProxySetComputeNodeTargets { get; set; } = (poolId, targetLowPriorityComputeNodes, targetDedicatedComputeNodes) => { };
-            internal Func<(int? lowPriorityNodes, int? dedicatedNodes)> AzureProxyGetCurrentComputeNodes { get; set; } = () => (0, 0);
             internal Action<string, CancellationToken> AzureProxyDeleteBatchPool { get; set; } = (poolId, cancellationToken) => { };
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<CloudTask>> AzureProxyListTasks { get; set; } = (jobId, detailLevel) => AsyncEnumerable.Empty<CloudTask>();
             internal List<VirtualMachineInformation> VmSizesAndPrices { get; set; } = new();

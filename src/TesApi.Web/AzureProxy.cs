@@ -69,7 +69,6 @@ namespace TesApi.Web
         /// <exception cref="InvalidOperationException"></exception>
         public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, IBatchPoolManager batchPoolManager, ILogger<AzureProxy> logger)
         {
-
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(batchPoolManager);
@@ -304,7 +303,7 @@ namespace TesApi.Web
         public async Task DeleteBatchJobAsync(PoolInformation poolInformation, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrEmpty(poolInformation?.PoolId, nameof(poolInformation));
-            //logger.LogInformation("Deleting job {BatchJob}", poolInformation.PoolId);
+            logger.LogInformation("Deleting job {BatchJob}", poolInformation.PoolId);
             await batchClient.JobOperations.DeleteJobAsync(poolInformation.PoolId, cancellationToken: cancellationToken);
         }
 
@@ -594,7 +593,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken = default)
-            => batchClient.PoolOperations.DeletePoolAsync(poolId, cancellationToken: cancellationToken);
+            => batchPoolManager.DeleteBatchPoolAsync(poolId, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
         public async Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken = default)
@@ -768,9 +767,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable)
-        {
-            return await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable);
-        }
+            => await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable);
 
         [GeneratedRegex("/*/resourceGroups/([^/]*)/*")]
         private static partial Regex GetResourceGroupRegex();
