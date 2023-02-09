@@ -493,19 +493,6 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
                 throw HandleException(ex);
             }
 
-            Exception HandleException(Exception e)
-            {
-                switch (e)
-                {
-                    case OperationCanceledException:
-                    case RequestFailedException rfe when rfe.Status == 0 && rfe.InnerException is System.Net.WebException we && we.Status == System.Net.WebExceptionStatus.Timeout:
-                    case Exception when IsInnermostExceptionSocketException(e):
-                        return ProcessException();
-                    default:
-                        return ProcessException(e);
-                }
-            }
-
             static bool IsInnermostExceptionSocketException(Exception ex)
             {
                 for (var e = ex; e is System.Net.Sockets.SocketException; e = e.InnerException)
@@ -515,18 +502,17 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
                 return true;
             }
 
-            Exception ProcessException(Exception ex = default)
+            Exception HandleException(Exception ex)
             {
                 // When the batch management API creating the pool times out, it may or may not have created the pool. Add an inactive record to delete it if it did get created and try again later. That record will be removed later whether or not the pool was created.
                 Pool ??= new() { PoolId = poolModel.Name };
                 _ = _batchPools.AddPool(this);
                 return ex switch
                 {
-                    null => new AzureBatchQuotaMaxedOutException("Pool creation timed out"),
                     OperationCanceledException => ex,
-                    var x when x is RequestFailedException rfe && rfe.Status == 0 && rfe.InnerException is System.Net.WebException webException && webException.Status == System.Net.WebExceptionStatus.Timeout => new AzureBatchQuotaMaxedOutException("Pool creation timed out", ex),
-                    var x when IsInnermostExceptionSocketException(x) => new AzureBatchQuotaMaxedOutException("Pool creation timed out", ex),
-                    _ => new Exception(ex.Message, ex),
+                    var x when x is RequestFailedException rfe && rfe.Status == 0 && rfe.InnerException is System.Net.WebException webException && webException.Status == System.Net.WebExceptionStatus.Timeout => new AzureBatchPoolCreationException("Pool creation timed out", ex),
+                    var x when IsInnermostExceptionSocketException(x) => new AzureBatchPoolCreationException("Pool creation timed out", ex),
+                    _ => new AzureBatchPoolCreationException(ex?.Message, ex),
                 };
             }
         }
