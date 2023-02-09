@@ -87,7 +87,6 @@ namespace TesDeployer
         public string LetsEncryptEmail { get; set; } = null;
         public string TesUsername { get; set; } = "tes";
         public string TesPassword { get; set; }
-        public bool IntegrationTestMode { get; set; } = true;
 
         public static Configuration BuildConfiguration(string[] args)
         {

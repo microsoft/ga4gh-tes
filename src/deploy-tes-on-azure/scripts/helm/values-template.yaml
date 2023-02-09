@@ -18,7 +18,6 @@ config:
   dockerInDockerImageName: RUNTIME_PARAMETER
   usePreemptibleVmsOnly: RUNTIME_PARAMETER
   useLegacyBatchImplementationWithAutopools: "False"
-  integrationTestMode: RUNTIME_PARAMETER
   gen2BatchImageOffer: RUNTIME_PARAMETER
   gen2BatchImagePublisher: RUNTIME_PARAMETER
   gen2BatchImageSku: RUNTIME_PARAMETER

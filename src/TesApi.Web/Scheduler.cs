@@ -27,7 +27,6 @@ namespace TesApi.Web
         private readonly ILogger<Scheduler> logger;
         private readonly bool isDisabled;
         private readonly bool usingBatchAutopools;
-        private readonly bool testMode;
         private readonly TimeSpan runInterval = TimeSpan.FromSeconds(5);
 
         /// <summary>
@@ -44,7 +43,6 @@ namespace TesApi.Web
             this.logger = logger;
             isDisabled = configuration.GetValue("DisableBatchScheduling", false);
             usingBatchAutopools = configuration.GetValue("UseLegacyBatchImplementationWithAutopools", false);
-            testMode = configuration.GetValue("IntegrationTestMode", false);
         }
 
         /// <summary>
@@ -65,24 +63,7 @@ namespace TesApi.Web
         public override Task StopAsync(CancellationToken cancellationToken)
         {
             logger.LogInformation("Scheduler stopping...");
-            return Task.WhenAll(
-                base.StopAsync(cancellationToken),
-                Task.Run(async () =>
-                {
-                    if (testMode && !usingBatchAutopools)
-                    {
-                        try
-                        {
-                            await Task.WhenAll(batchScheduler.GetPools()
-                                .Select(p => batchScheduler.DeletePoolAsync(p, cancellationToken)));
-                        }
-                        catch (AggregateException e) when (!e.InnerExceptions.All(ex => ex is OperationCanceledException))
-                        {
-                            logger.LogError(e, @"Errors removing pools/jobs in integration test mode: {ErrorMessage}", e.Message);
-                        }
-                    }
-                },
-                cancellationToken));
+            return base.StopAsync(cancellationToken);
         }
 
         /// <summary>

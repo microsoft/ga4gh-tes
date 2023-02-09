@@ -387,7 +387,6 @@ namespace TesDeployer
             values.Config["disableBatchNodesPublicIpAddress"] = settings["DisableBatchNodesPublicIpAddress"];
             values.Config["disableBatchScheduling"] = settings["DisableBatchScheduling"];
             values.Config["usePreemptibleVmsOnly"] = settings["UsePreemptibleVmsOnly"];
-            values.Config["integrationTestMode"] = settings["IntegrationTestMode"];
             values.Config["blobxferImageName"] = settings["BlobxferImageName"];
             values.Config["dockerInDockerImageName"] = settings["DockerInDockerImageName"];
             values.Config["gen2BatchImageOffer"] = settings["Gen2BatchImageOffer"];
@@ -429,7 +428,6 @@ namespace TesDeployer
                 ["DisableBatchNodesPublicIpAddress"] = values.Config["disableBatchNodesPublicIpAddress"],
                 ["DisableBatchScheduling"] = values.Config["disableBatchScheduling"],
                 ["UsePreemptibleVmsOnly"] = values.Config["usePreemptibleVmsOnly"],
-                ["IntegrationTestMode"] = values.Config["integrationTestMode"],
                 ["BlobxferImageName"] = values.Config["blobxferImageName"],
                 ["DockerInDockerImageName"] = values.Config["dockerInDockerImageName"],
                 ["Gen2BatchImageOffer"] = values.Config["gen2BatchImageOffer"],

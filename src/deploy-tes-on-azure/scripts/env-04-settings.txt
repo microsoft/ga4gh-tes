@@ -1,6 +1,5 @@
 ﻿UsePreemptibleVmsOnly=false
 DisableBatchScheduling=false
-IntegrationTestMode=false
 AzureOfferDurableId=MS-AZR-0003p
 Gen2BatchImageOffer=ubuntu-hpc
 Gen2BatchImagePublisher=microsoft-dsvm
