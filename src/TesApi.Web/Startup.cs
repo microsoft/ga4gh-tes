@@ -160,7 +160,6 @@ namespace TesApi.Web
                 s.ConnectionString = $"InstrumentationKey={instrumentationKey}";
             });
         }
-
         private IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
         {
             var terraOptions = services.GetService<IOptions<TerraOptions>>();

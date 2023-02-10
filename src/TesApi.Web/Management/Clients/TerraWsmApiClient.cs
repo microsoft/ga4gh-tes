@@ -3,7 +3,9 @@
 
 using System;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Extensions.Logging;
@@ -68,13 +70,32 @@ namespace TesApi.Web.Management.Clients
         {
             ArgumentNullException.ThrowIfNull(apiCreateBatchPool);
 
-            var uri = GetCreateBatchPoolUrl(workspaceId);
+            HttpResponseMessage response = null;
+            try
+            {
+                var uri = GetCreateBatchPoolUrl(workspaceId);
 
-            var response =
-                await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, uri) { Content = GetBatchPoolRequestContent(apiCreateBatchPool) },
-                    setAuthorizationHeader: true);
+                Logger.LogInformation($"Creating a batch pool using WSM for workspace:{workspaceId}");
 
-            return await GetApiResponseContentAsync<ApiCreateBatchPoolResponse>(response);
+                response =
+                    await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, uri) { Content = GetBatchPoolRequestContent(apiCreateBatchPool) },
+                        setAuthorizationHeader: true);
+
+                Logger.LogInformation($"Successfully created a batch pool using WSM for workspace:{workspaceId}");
+
+                return await GetApiResponseContentAsync<ApiCreateBatchPoolResponse>(response);
+            }
+            catch (Exception ex)
+            {
+                var responseContent = "";
+                if (response is not null)
+                {
+                    responseContent = await response.Content.ReadAsStringAsync();
+                }
+
+                Logger.LogError($"Failed to create a batch pool using wsm. Response content:{responseContent}", ex);
+                throw;
+            }
         }
 
         private string GetCreateBatchPoolUrl(Guid workspaceId)
@@ -88,7 +109,8 @@ namespace TesApi.Web.Management.Clients
 
         private HttpContent GetBatchPoolRequestContent(ApiCreateBatchPoolRequest apiCreateBatchPool)
         {
-            return new StringContent(JsonSerializer.Serialize(apiCreateBatchPool));
+            return new StringContent(JsonSerializer.Serialize(apiCreateBatchPool,
+                new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }), Encoding.UTF8, "application/json");
         }
 
         private string ToQueryString(SasTokenApiParameters sasTokenApiParameters)

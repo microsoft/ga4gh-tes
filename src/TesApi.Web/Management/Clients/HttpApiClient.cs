@@ -24,7 +24,10 @@ namespace TesApi.Web.Management.Clients
         private readonly TokenCredential tokenCredential;
         private readonly CacheAndRetryHandler cacheAndRetryHandler;
         private readonly SHA256 sha256 = SHA256.Create();
-        private readonly ILogger logger;
+        /// <summary>
+        /// Logger instance
+        /// </summary>
+        protected readonly ILogger Logger;
         private readonly string tokenScope;
         private readonly SemaphoreSlim semaphore = new(1, 1);
         private AccessToken accessToken;
@@ -45,7 +48,7 @@ namespace TesApi.Web.Management.Clients
             ArgumentNullException.ThrowIfNull(logger);
 
             this.cacheAndRetryHandler = cacheAndRetryHandler;
-            this.logger = logger;
+            this.Logger = logger;
         }
 
         /// <summary>
@@ -236,7 +239,7 @@ namespace TesApi.Web.Management.Clients
                     nameof(tokenScope));
             }
 
-            logger.LogTrace("Getting token for scope:{}", tokenScope);
+            Logger.LogTrace("Getting token for scope:{}", tokenScope);
 
             try
             {
@@ -246,7 +249,7 @@ namespace TesApi.Web.Management.Clients
             }
             catch (Exception e)
             {
-                logger.LogError(@"Failed to set authentication header with the access token for scope:{tokenScope}",
+                Logger.LogError(@"Failed to set authentication header with the access token for scope:{tokenScope}",
                     e);
                 throw;
             }
@@ -260,7 +263,7 @@ namespace TesApi.Web.Management.Clients
 
                 if (DateTimeOffset.UtcNow < accessToken.ExpiresOn)
                 {
-                    logger.LogTrace(
+                    Logger.LogTrace(
                         $"Using existing token. Token has not expired. Token expiration date: {accessToken.ExpiresOn}");
                     return accessToken.Token;
                 }
@@ -269,7 +272,7 @@ namespace TesApi.Web.Management.Clients
                     new TokenRequestContext(new[] { tokenScope }),
                     CancellationToken.None);
 
-                logger.LogTrace($"Returning a new token with an expiration date of: {newAccessToken.ExpiresOn}");
+                Logger.LogTrace($"Returning a new token with an expiration date of: {newAccessToken.ExpiresOn}");
                 accessToken = newAccessToken;
                 return accessToken.Token;
             }
