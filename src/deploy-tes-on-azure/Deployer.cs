@@ -17,6 +17,7 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using Azure.Storage;
 using Azure.Storage.Blobs;
+using CommonUtilities;
 using IdentityModel.Client;
 using k8s;
 using Microsoft.Azure.Management.Batch;
@@ -285,8 +286,8 @@ namespace TesDeployer
                             configuration.PostgreSqlServerName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
                         }
 
-                        configuration.PostgreSqlAdministratorPassword = Utility.GeneratePassword();
-                        configuration.PostgreSqlTesUserPassword = Utility.GeneratePassword();
+                        configuration.PostgreSqlAdministratorPassword = PasswordGenerator.GeneratePassword();
+                        configuration.PostgreSqlTesUserPassword = PasswordGenerator.GeneratePassword();
 
                         if (string.IsNullOrWhiteSpace(configuration.BatchAccountName))
                         {
@@ -310,7 +311,7 @@ namespace TesDeployer
 
                         if (string.IsNullOrWhiteSpace(configuration.TesPassword))
                         {
-                            configuration.TesPassword = Utility.GeneratePassword();
+                            configuration.TesPassword = PasswordGenerator.GeneratePassword();
                         }
 
                         if (string.IsNullOrWhiteSpace(configuration.AksClusterName))

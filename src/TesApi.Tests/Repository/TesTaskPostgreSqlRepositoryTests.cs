@@ -2,39 +2,88 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using CommonUtilities;
+using Microsoft.Azure.Management.PostgreSQL;
+using Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
+using Microsoft.Azure.Management.ResourceManager.Fluent;
+using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
+using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
+using Microsoft.Extensions.Options;
+using Microsoft.Rest;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
+using Tes.Models;
 using Tes.Utilities;
+using FlexibleServer = Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 
 namespace Tes.Repository.Tests
 {
     /// <summary>
+    /// These tests will automatically create an "Azure Database for PostgreSQL - Flexible Server",
+    /// and then delete it when done.
+    /// 
     /// To run these tests,
-    /// 1.  Create a new Azure Database for PostgreSQL flexible server
-    /// 2.  Create a new database called "tes_db"
-    /// 3.  Add your client IP address to the Network -> Firewall allowed IP addresses section
-    /// 4.  Set the server name to "myazureserver" etc, set the "user" to the admin username and password
-    /// 5.  Remove the "[Ignore]" attribute from this class
-    /// 6.  Run the tests
+    /// 1.  From a command prompt, log in with "az login" then start Visual Studio
+    /// 2.  Set "subscriptionId" to your subscriptionId
+    /// 3.  Remove the "[Ignore]" attribute from this class
     /// </summary>
-
     [Ignore]
     [TestClass]
     public class TesTaskPostgreSqlRepositoryTests
     {
-        private readonly TesTaskPostgreSqlRepository repository;
+        private static TesTaskPostgreSqlRepository repository;
+        private static readonly string subscriptionId = "";
+        private static readonly string regionName = "southcentralus";
+        private static readonly string resourceGroupName = $"tes-test-{Guid.NewGuid().ToString().Substring(0, 8)}";
+        private static readonly string postgreSqlServerName = $"tes{Guid.NewGuid().ToString().Substring(0, 8)}";
+        private static readonly string postgreSqlDatabaseName = "tes_db";
+        private static readonly string adminLogin = $"tes{Guid.NewGuid().ToString().Substring(0, 8)}";
+        private static readonly string adminPw = PasswordGenerator.GeneratePassword();
+        
 
-        public TesTaskPostgreSqlRepositoryTests()
+        [ClassInitialize]
+        public async static Task ClassInitializeAsync(TestContext context)
         {
-            var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(null);
+            Console.WriteLine("Creating Azure Resource Group and PostgreSql Server...");
+            await PostgreSqlTestUtility.CreateTestDbAsync(
+                subscriptionId, regionName, resourceGroupName, postgreSqlServerName, postgreSqlDatabaseName, adminLogin, adminPw);
+
+            var options = new PostgreSqlOptions
+            {
+                PostgreSqlServerName = postgreSqlServerName,
+                PostgreSqlDatabaseName = postgreSqlDatabaseName,
+                PostgreSqlDatabaseUserLogin = adminLogin,
+                PostgreSqlDatabaseUserPassword = adminPw
+            };
+
+            var optionsMock = new Mock<IOptions<PostgreSqlOptions>>();
+            optionsMock.Setup(x => x.Value).Returns(options);
+            var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(optionsMock.Object);
             repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(connectionString));
+            Console.WriteLine("Creation complete.");
+        }
+
+        [ClassCleanup]
+        public static async Task ClassCleanupAsync()
+        {
+            Console.WriteLine("Deleting Azure Resource Group...");
+            await PostgreSqlTestUtility.DeleteResourceGroupAsync(subscriptionId, resourceGroupName);
+            Console.WriteLine("Done");
         }
 
         [TestMethod]
         public async Task TryGetItemAsyncTest()
         {
             var id = Guid.NewGuid().ToString();
-            var createdItem = await CreateItemAsyncTest(id);
+            var createdItem = await repository.CreateItemAsync(new Models.TesTask
+            {
+                Id = id,
+                Description = Guid.NewGuid().ToString(),
+                CreationTime = DateTime.UtcNow,
+                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+            });
             Assert.IsNotNull(createdItem);
 
             Models.TesTask updatedAndRetrievedItem = null;
@@ -100,7 +149,6 @@ namespace Tes.Repository.Tests
             Console.WriteLine($"Total running tasks: {runningTasks.Count()}");
             Console.WriteLine($"Total other tasks: {allOtherTasks.Count()}");
 
-
             Assert.IsTrue(runningTasks.Count() > 0);
             Assert.IsTrue(allOtherTasks.Count() > 0);
             Assert.IsTrue(runningTasks.Count() != allOtherTasks.Count());
@@ -110,16 +158,12 @@ namespace Tes.Repository.Tests
         }
 
         [TestMethod]
-        public async Task<Models.TesTask> CreateItemAsyncTest(string id = null)
+        public async Task CreateItemAsyncTest()
         {
             var itemId = Guid.NewGuid().ToString();
 
-            if (!string.IsNullOrWhiteSpace(id))
+            var task = await repository.CreateItemAsync(new Models.TesTask
             {
-                itemId = id;
-            }
-
-            var task = await repository.CreateItemAsync(new Models.TesTask { 
                 Id = itemId,
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
@@ -127,7 +171,6 @@ namespace Tes.Repository.Tests
             });
 
             Assert.IsNotNull(task);
-            return task;
         }
 
         [TestMethod]
@@ -135,10 +178,20 @@ namespace Tes.Repository.Tests
         {
             string description = $"created at {DateTime.UtcNow}";
             var id = Guid.NewGuid().ToString();
-            var createdItem = await CreateItemAsyncTest(id);
+
+            var createdItem = await repository.CreateItemAsync(new Models.TesTask
+            {
+                Id = id,
+                Description = Guid.NewGuid().ToString(),
+                CreationTime = DateTime.UtcNow,
+                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+            });
+
+            Assert.IsTrue(createdItem.State != Models.TesState.COMPLETEEnum);
 
             createdItem.Description = description;
             createdItem.State = Models.TesState.COMPLETEEnum;
+
             await repository.UpdateItemAsync(createdItem);
 
             Models.TesTask updatedAndRetrievedItem = null;
@@ -154,7 +207,14 @@ namespace Tes.Repository.Tests
         public async Task DeleteItemAsyncTest()
         {
             var id = Guid.NewGuid().ToString();
-            var createdItem = await CreateItemAsyncTest(id);
+
+            var createdItem = await repository.CreateItemAsync(new Models.TesTask
+            {
+                Id = id,
+                Description = Guid.NewGuid().ToString(),
+                CreationTime = DateTime.UtcNow,
+                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+            });
             Assert.IsNotNull(createdItem);
             await repository.DeleteItemAsync(id);
 
@@ -164,5 +224,87 @@ namespace Tes.Repository.Tests
             Assert.IsNull(updatedAndRetrievedItem);
             Assert.IsFalse(isFound);
         }
+    }
+
+
+    public static class PostgreSqlTestUtility
+    {
+        public static async Task CreateTestDbAsync(
+            string subscriptionId,
+            string regionName,
+            string resourceGroupName,
+            string postgreSqlServerName,
+            string postgreSqlDatabaseName,
+            string adminLogin,
+            string adminPw)
+        {
+            const string postgreSqlVersion = "14";
+
+            var tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider("https://management.azure.com/"));
+            var azureCredentials = new AzureCredentials(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
+            var postgresManagementClient = new FlexibleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = subscriptionId, LongRunningOperationRetryTimeout = 1200 };
+            var azureClient = GetAzureClient(azureCredentials);
+            var azureSubscriptionClient = azureClient.WithSubscription(subscriptionId);
+
+            var rgs = (await azureSubscriptionClient.ResourceGroups.ListAsync()).ToList();
+            
+            if (rgs.Any(r => r.Name.Equals(resourceGroupName, StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
+            await azureSubscriptionClient
+                .ResourceGroups
+                .Define(resourceGroupName)
+                .WithRegion(regionName)
+                .CreateAsync();
+
+            await postgresManagementClient.Servers.CreateAsync(
+                resourceGroupName,
+                postgreSqlServerName,
+                        new(
+                           location: regionName,
+                           version: postgreSqlVersion,
+                           sku: new("Standard_B2s", "Burstable"),
+                           storage: new(128),
+                           administratorLogin: adminLogin,
+                           administratorLoginPassword: adminPw,
+                           //network: new(publicNetworkAccess: "Enabled"),
+                           highAvailability: new("Disabled")
+                        ));
+
+            await postgresManagementClient.Databases.CreateAsync(resourceGroupName, postgreSqlServerName, postgreSqlDatabaseName, new());
+            
+            var startIp = "0.0.0.0";
+            var endIp = "255.255.255.255";
+
+            // Many networks have non-deterministic client IP addresses
+            //using var client = new HttpClient();
+            //var ip = (await client.GetStringAsync("https://checkip.amazonaws.com")).Trim();
+            //startIp = ip;
+            //endIp = ip;
+            
+            await postgresManagementClient.FirewallRules.CreateOrUpdateAsync(
+                resourceGroupName,
+                postgreSqlServerName,
+                "AllowTestMachine",
+                new FlexibleServer.Models.FirewallRule { StartIpAddress = startIp, EndIpAddress = endIp });
+        }
+
+        public static async Task DeleteResourceGroupAsync(string subscriptionId, string resourceGroupName)
+        {
+            var tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider("https://management.azure.com/"));
+            var azureCredentials = new AzureCredentials(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
+            var azureClient = GetAzureClient(azureCredentials);
+            var azureSubscriptionClient = azureClient.WithSubscription(subscriptionId);
+            await azureSubscriptionClient.ResourceGroups.DeleteByNameAsync(resourceGroupName, CancellationToken.None);
+        }
+
+        private static Microsoft.Azure.Management.Fluent.Azure.IAuthenticated GetAzureClient(AzureCredentials azureCredentials)
+            => Microsoft.Azure.Management.Fluent.Azure
+                .Configure()
+                .WithLogLevel(HttpLoggingDelegatingHandler.Level.Basic)
+                .Authenticate(azureCredentials);
+
     }
 }
