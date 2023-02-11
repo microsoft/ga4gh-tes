@@ -1,4 +1,7 @@
-﻿using AutoMapper;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using AutoMapper;
 using Microsoft.Azure.Management.Batch.Models;
 using TesApi.Web.Management.Models.Terra;
 

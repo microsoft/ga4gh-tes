@@ -69,7 +69,6 @@ namespace TesApi.Web
         /// <exception cref="InvalidOperationException"></exception>
         public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, IBatchPoolManager batchPoolManager, ILogger<AzureProxy> logger)
         {
-
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(batchPoolManager);
@@ -198,7 +197,7 @@ namespace TesApi.Web
         {
             var activePoolsFilter = new ODATADetailLevel
             {
-                FilterClause = $"state eq 'active' or state eq 'deleting'",
+                FilterClause = "state eq 'active' or state eq 'deleting'",
                 SelectClause = "id"
             };
 
@@ -210,7 +209,7 @@ namespace TesApi.Web
         {
             var activeJobsFilter = new ODATADetailLevel
             {
-                FilterClause = $"state eq 'active' or state eq 'disabling' or state eq 'terminating' or state eq 'deleting'",
+                FilterClause = "state eq 'active' or state eq 'disabling' or state eq 'terminating' or state eq 'deleting'",
                 SelectClause = "id"
             };
 
@@ -554,7 +553,7 @@ namespace TesApi.Web
         {
             var activePoolsFilter = new ODATADetailLevel
             {
-                FilterClause = $"state eq 'active'",
+                FilterClause = "state eq 'active'",
                 SelectClause = BatchPool.CloudPoolSelectClause
             };
 
@@ -574,7 +573,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken = default)
-            => batchClient.PoolOperations.DeletePoolAsync(poolId, cancellationToken: cancellationToken);
+            => batchPoolManager.DeleteBatchPoolAsync(poolId, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
         public async Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken = default)
@@ -625,65 +624,10 @@ namespace TesApi.Web
             => pool.CommitChangesAsync(cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
-        public async Task<(int? lowPriorityNodes, int? dedicatedNodes)> GetCurrentComputeNodesAsync(string poolId, CancellationToken cancellationToken = default)
+        public async Task<(AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken = default)
         {
-            var pool = await batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: new ODATADetailLevel(selectClause: "currentLowPriorityNodes,currentDedicatedNodes"), cancellationToken: cancellationToken);
-            return (pool.CurrentLowPriorityComputeNodes, pool.CurrentDedicatedComputeNodes);
-        }
-
-        /// <inheritdoc/>
-        public async Task<(AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? TargetDedicated)> GetComputeNodeAllocationStateAsync(string poolId, CancellationToken cancellationToken = default)
-        {
-            var pool = await batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: new ODATADetailLevel(selectClause: "allocationState,enableAutoScale,targetLowPriorityNodes,targetDedicatedNodes"), cancellationToken: cancellationToken);
-            return (pool.AllocationState, pool.AutoScaleEnabled, pool.TargetLowPriorityComputeNodes, pool.TargetDedicatedComputeNodes);
-        }
-
-        /// <inheritdoc/>
-        public async Task SetComputeNodeTargetsAsync(string poolId, int? targetLowPriorityComputeNodes, int? targetDedicatedComputeNodes, CancellationToken cancellationToken = default)
-            => await batchClient.PoolOperations.ResizePoolAsync(poolId, targetDedicatedComputeNodes: targetDedicatedComputeNodes, targetLowPriorityComputeNodes: targetLowPriorityComputeNodes, cancellationToken: cancellationToken);
-
-        /// <summary>
-        /// Gets the list of container registries that the TES server has access to
-        /// </summary>
-        /// <returns>List of container registries</returns>
-        private async Task<IEnumerable<ContainerRegistryInfo>> GetAccessibleContainerRegistriesAsync()
-        {
-            var azureClient = await GetAzureManagementClientAsync();
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
-            var infos = new List<ContainerRegistryInfo>();
-            logger.LogInformation(@"GetAccessibleContainerRegistriesAsync() called.");
-
-            foreach (var subId in subscriptionIds)
-            {
-                try
-                {
-                    var registries = (await azureClient.WithSubscription(subId).ContainerRegistries.ListAsync()).ToList();
-                    logger.LogInformation(@$"Searching {subId} for container registries.");
-
-                    foreach (var r in registries)
-                    {
-                        logger.LogInformation(@$"Found {r.Name}. AdminUserEnabled: {r.AdminUserEnabled}");
-
-                        try
-                        {
-                            var server = await r.GetCredentialsAsync();
-                            var info = new ContainerRegistryInfo { RegistryServer = r.LoginServerUrl, Username = server.Username, Password = server.AccessKeys[AccessKeyType.Primary] };
-                            infos.Add(info);
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.LogWarning($"TES service doesn't have permission to get credentials for registry {r.LoginServerUrl}.  Please verify that 'Admin user' is enabled in the 'Access Keys' area in the Azure Portal for this container registry.  Exception: {ex}");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning($"TES service doesn't have permission to list container registries in subscription {subId}.  Exception: {ex}");
-                }
-            }
-
-            logger.LogInformation(@"GetAccessibleContainerRegistriesAsync() returning {Count} registries.", infos.Count);
-            return infos;
+            var pool = await batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: new ODATADetailLevel(selectClause: "allocationState,enableAutoScale,targetLowPriorityNodes,currentLowPriorityNodes,targetDedicatedNodes,currentDedicatedNodes"), cancellationToken: cancellationToken);
+            return (pool.AllocationState, pool.AutoScaleEnabled, pool.TargetLowPriorityComputeNodes, pool.CurrentLowPriorityComputeNodes, pool.TargetDedicatedComputeNodes, pool.CurrentDedicatedComputeNodes);
         }
 
         private static async Task<IEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync()
@@ -803,9 +747,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable)
-        {
-            return await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable);
-        }
+            => await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable);
 
         [GeneratedRegex("/*/resourceGroups/([^/]*)/*")]
         private static partial Regex GetResourceGroupRegex();
@@ -854,14 +796,14 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async Task EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, IAzureProxy.BatchPoolAutoScaleFormulaFactory formulaFactory, CancellationToken cancellationToken)
         {
-            var (allocationState, _, targetLowPriority, targetDedicated) = await GetComputeNodeAllocationStateAsync(poolId, cancellationToken);
+            var (allocationState, _, _, currentLowPriority, _, currentDedicated) = await GetFullAllocationStateAsync(poolId, cancellationToken);
 
             if (allocationState != AllocationState.Steady)
             {
                 throw new InvalidOperationException();
             }
 
-            await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formulaFactory(preemptable, preemptable ? targetLowPriority.Value : targetDedicated.Value), interval, cancellationToken: cancellationToken);
+            await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formulaFactory(preemptable, preemptable ? currentLowPriority ?? 0 : currentDedicated ?? 0), interval, cancellationToken: cancellationToken);
         }
     }
 }
