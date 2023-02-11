@@ -234,8 +234,6 @@ namespace TesApi.Web
 
             logger.LogInformation("Attempting to create a Storage Access Provider");
 
-            logger.LogInformation("Attempting to create a Storage Access Provider");
-
             //if workspace id is set, then we are assuming we are running in terra
             if (!string.IsNullOrEmpty(options.Value.WorkspaceId))
             {
