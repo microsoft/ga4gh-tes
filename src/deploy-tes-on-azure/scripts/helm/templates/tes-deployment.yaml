@@ -25,6 +25,7 @@ spec:
         runAsGroup: 1000
         fsGroup: 1000
         supplementalGroups: [1000]
+      terminationGracePeriodSeconds: 90
       containers:
         - env:
             - name: ASPNETCORE_URLS

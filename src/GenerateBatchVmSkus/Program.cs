@@ -1,17 +1,18 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+
+using System.Reflection;
+using System.Text.Json;
+using Azure;
 using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Batch;
-using Microsoft.Extensions.Configuration;
-using System.Reflection;
-using System.Text.Json;
-using Tes.Models;
 using Azure.ResourceManager.Compute;
-using Azure;
 using Azure.ResourceManager.Compute.Models;
 using Azure.ResourceManager.Resources.Models;
+using Microsoft.Extensions.Configuration;
+using Tes.Models;
 
 namespace TesUtils
 {
@@ -91,33 +92,28 @@ namespace TesUtils
 
                     foreach (var vm in vms)
                     {
-                        if (regionsForVm.ContainsKey(vm))
+                        if (regionsForVm.TryGetValue(vm, out var value))
                         {
-                            regionsForVm[vm].Add(region.Name);
+                            value.Add(region.Name);
                         }
                         else
                         {
-                            regionsForVm[vm] = new HashSet<string>() { region.Name };
+                            regionsForVm[vm] = new() { region.Name };
                         }
 
                         if (!sizeForVm.ContainsKey(vm))
                         {
-                            if (sizes is null)
-                            {
-                                sizes = await subscription.GetVirtualMachineSizesAsync(location).ToListAsync();
-                            }
+                            sizes ??= await subscription.GetVirtualMachineSizesAsync(location).ToListAsync();
                             sizeForVm[vm] = sizes.Single(vmsize => vmsize.Name.Equals(vm, StringComparison.OrdinalIgnoreCase));
                         }
 
                         if (!skuForVm.ContainsKey(vm))
                         {
-                            if (skus is null)
-                            {
-                                skus = await subscription.GetComputeResourceSkusAsync($"location eq '{region.Name}'").ToListAsync();
-                            }
+                            skus ??= await subscription.GetComputeResourceSkusAsync($"location eq '{region.Name}'").ToListAsync();
                             skuForVm[vm] = skus.Single(sku => sku.Name.Equals(vm, StringComparison.OrdinalIgnoreCase));
                         }
                     }
+
                     Console.WriteLine($"{region.Name} supportedSkuCount:{vms.Count}");
                 }
                 catch (RequestFailedException e)
@@ -125,7 +121,7 @@ namespace TesUtils
                     Console.WriteLine($"No skus supported in {region.Name}. {e.ErrorCode}");
                 }
             }
-            
+
             var batchSupportedVmSet = regionsForVm.Keys.ToList();
             Console.WriteLine($"Superset supportedSkuCount:{batchSupportedVmSet.Count}");
 
@@ -152,14 +148,14 @@ namespace TesUtils
                     generationList = generation.Split(",").ToList();
                 }
 
-                int.TryParse(sku?.Capabilities.Where(x => x.Name.Equals("vCPUsAvailable")).SingleOrDefault()?.Value, out var vCpusAvailable);
+                _ = int.TryParse(sku?.Capabilities.Where(x => x.Name.Equals("vCPUsAvailable")).SingleOrDefault()?.Value, out var vCpusAvailable);
 
                 return new VirtualMachineInformation()
                 {
                     MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
-                    MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB.Value),
+                    MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB!.Value),
                     VCpusAvailable = vCpusAvailable,
-                    ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB.Value),
+                    ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB!.Value),
                     VmSize = sizeInfo.Name,
                     VmFamily = sku?.Family,
                     HyperVGenerations = generationList,
@@ -167,10 +163,12 @@ namespace TesUtils
                 };
             }).OrderBy(x => x.VmSize).ToList();
 
-            var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.General);
-            jsonOptions.WriteIndented = true;
+            var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.General)
+            {
+                WriteIndented = true
+            };
             var data = JsonSerializer.Serialize(batchVmInfo, options: jsonOptions);
-            await File.WriteAllTextAsync(configuration.OutputFilePath, data);
+            await File.WriteAllTextAsync(configuration.OutputFilePath!, data);
             return 0;
         }
     }

@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Text.Json;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;

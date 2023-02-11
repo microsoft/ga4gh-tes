@@ -175,16 +175,13 @@ namespace TesApi.Web
             => azureProxy.DeleteBatchPoolIfExistsAsync(poolId, cancellationToken);
 
         /// <inheritdoc/>
-        public Task<(int? lowPriorityNodes, int? dedicatedNodes)> GetCurrentComputeNodesAsync(string poolId, CancellationToken cancellationToken) => asyncRetryPolicy.ExecuteAsync(ct => azureProxy.GetCurrentComputeNodesAsync(poolId, ct), cancellationToken);
-
-        /// <inheritdoc/>
-        public async Task<(Microsoft.Azure.Batch.Common.AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? TargetDedicated)> GetComputeNodeAllocationStateAsync(string poolId, CancellationToken cancellationToken)
+        public async Task<(Microsoft.Azure.Batch.Common.AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken)
         {
-            var allocationState = cache.Get<(Microsoft.Azure.Batch.Common.AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? TargetDedicated)>(poolId);
+            var allocationState = cache.Get<(Microsoft.Azure.Batch.Common.AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)>(poolId);
 
             if (default == allocationState)
             {
-                allocationState = await asyncRetryPolicy.ExecuteAsync(ct => azureProxy.GetComputeNodeAllocationStateAsync(poolId, ct), cancellationToken);
+                allocationState = await asyncRetryPolicy.ExecuteAsync(ct => azureProxy.GetFullAllocationStateAsync(poolId, ct), cancellationToken);
 
                 if (default != allocationState)
                 {
@@ -193,13 +190,6 @@ namespace TesApi.Web
             }
 
             return allocationState;
-        }
-
-        /// <inheritdoc/>
-        public Task SetComputeNodeTargetsAsync(string poolId, int? targetLowPriorityComputeNodes, int? targetDedicatedComputeNodes, CancellationToken cancellationToken)
-        {
-            cache.Remove(poolId);
-            return asyncRetryPolicy.ExecuteAsync(ct => azureProxy.SetComputeNodeTargetsAsync(poolId, targetLowPriorityComputeNodes, targetDedicatedComputeNodes, ct), cancellationToken);
         }
 
         /// <inheritdoc/>
