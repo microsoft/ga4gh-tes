@@ -65,7 +65,7 @@ namespace Tes.Models
         public IEnumerable<string> HyperVGenerations { get; set; }
 
         /// <summary>
-        /// List of regions this VM can be provisioned by Batch. 
+        /// List of regions this VM can be provisioned by Batch.
         /// </summary>
         [TesTaskLogMetadataKey("vm_regions_available")]
         public IEnumerable<string> RegionsAvailable { get; set; }

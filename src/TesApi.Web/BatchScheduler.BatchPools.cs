@@ -203,29 +203,19 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken)
+        public Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken)
         {
             logger.LogDebug(@"Deleting pool and job {PoolId}", pool.Pool.PoolId);
-            try
-            {
-                await Task.WhenAll(
-                    AllowIfNotFound(azureProxy.DeleteBatchPoolAsync(pool.Pool.PoolId, cancellationToken)),
-                    AllowIfNotFound(azureProxy.DeleteBatchJobAsync(pool.Pool, cancellationToken)));
-            }
-            catch { }
+
+            return Task.WhenAll(
+                AllowIfNotFound(azureProxy.DeleteBatchPoolAsync(pool.Pool.PoolId, cancellationToken)),
+                AllowIfNotFound(azureProxy.DeleteBatchJobAsync(pool.Pool, cancellationToken)));
 
             static async Task AllowIfNotFound(Task task)
             {
-                try
-                {
-                    await task;
-                }
-                catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException e && e.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                { }
-                catch
-                {
-                    throw;
-                }
+                try { await task; }
+                catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException e && e.Response.StatusCode == System.Net.HttpStatusCode.NotFound) { }
+                catch { throw; }
             }
         }
 

@@ -152,7 +152,7 @@ namespace Tes.Models
             string value = null;
             var hasValue = this.Metadata is not null && this.Metadata.TryGetValue(key, out value);
 
-            if (type == typeof(IEnumerable<string>)) 
+            if (type == typeof(IEnumerable<string>))
             {
                 result = hasValue ? JsonConvert.DeserializeObject(value, type) : default;
             }
