@@ -93,7 +93,7 @@ namespace TesApi.Web.Management.Clients
                     responseContent = await response.Content.ReadAsStringAsync();
                 }
 
-                Logger.LogError($"Failed to create a batch pool using wsm. Response content:{responseContent}", ex);
+                Logger.LogError(ex, $"Failed to create a batch pool using wsm. Response content:{responseContent}";
                 throw;
             }
         }
