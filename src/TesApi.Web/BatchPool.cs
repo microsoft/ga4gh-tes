@@ -481,25 +481,17 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
             }
             catch (AggregateException ex)
             {
-                if (ex.InnerExceptions.Count < 2)
+                var exception = ex.Flatten();
+                if (exception.InnerExceptions.Count < 2)
                 {
-                    throw new AggregateException(ex.InnerExceptions.Select(HandleException));
+                    throw new AggregateException(exception.Message, exception.InnerExceptions?.Select(HandleException) ?? Enumerable.Empty<Exception>());
                 }
 
-                throw HandleException(ex.InnerException);
+                throw HandleException(exception.InnerException);
             }
             catch (Exception ex)
             {
                 throw HandleException(ex);
-            }
-
-            static bool IsInnermostExceptionSocketException(Exception ex)
-            {
-                for (var e = ex; e is System.Net.Sockets.SocketException; e = e.InnerException)
-                {
-                    if (e.InnerException is null) { return false; }
-                }
-                return true;
             }
 
             Exception HandleException(Exception ex)
@@ -509,11 +501,21 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
                 _ = _batchPools.AddPool(this);
                 return ex switch
                 {
-                    OperationCanceledException => ex,
+                    OperationCanceledException => ex.InnerException is null ? ex : new AzureBatchPoolCreationException("Pool creation was cancelled out", ex),
                     var x when x is RequestFailedException rfe && rfe.Status == 0 && rfe.InnerException is System.Net.WebException webException && webException.Status == System.Net.WebExceptionStatus.Timeout => new AzureBatchPoolCreationException("Pool creation timed out", ex),
-                    var x when IsInnermostExceptionSocketException(x) => new AzureBatchPoolCreationException("Pool creation timed out", ex),
-                    _ => new AzureBatchPoolCreationException(ex?.Message, ex),
+                    var x when IsInnermostExceptionSocketException(x) => new AzureBatchPoolCreationException("Pool creation likely timed out", ex),
+                    _ => ex,
                 };
+
+                static bool IsInnermostExceptionSocketException(Exception ex)
+                {
+                    for (var e = ex; e is not System.Net.Sockets.SocketException; e = e.InnerException)
+                    {
+                        if (e.InnerException is null) { return false; }
+                    }
+
+                    return true;
+                }
             }
         }
 
