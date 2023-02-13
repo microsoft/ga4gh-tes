@@ -23,7 +23,8 @@ namespace TesApi.Web.Management.Batch
     {
         private const string CloningInstructionsCloneNothing = "COPY_NOTHING";
         private const string AccessScopeSharedAccess = "SHARED_ACCESS";
-        private const string ApplicationManaged = "APPLICATION";
+        private const string UserManaged = "USER";
+        private readonly string tesBatchPoolName = Guid.NewGuid().ToString();
 
         private readonly TerraWsmApiClient terraWsmApiClient;
         private readonly IMapper mapper;
@@ -69,15 +70,17 @@ namespace TesApi.Web.Management.Batch
             {
                 Common = new ApiCommon
                 {
-                    Name = poolInfo.Id,
+                    Name = tesBatchPoolName,
                     Description = poolInfo.DisplayName,
                     CloningInstructions = CloningInstructionsCloneNothing,
                     AccessScope = AccessScopeSharedAccess,
-                    ManagedBy = ApplicationManaged,
+                    ManagedBy = UserManaged,
                     ResourceId = Guid.NewGuid()
                 },
                 AzureBatchPool = mapper.Map<ApiAzureBatchPool>(poolInfo),
             };
+
+            apiRequest.AzureBatchPool.Id = poolInfo.Name;
 
             var response = await terraWsmApiClient.CreateBatchPool(Guid.Parse(terraOptions.WorkspaceId), apiRequest);
 

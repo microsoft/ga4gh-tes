@@ -1107,7 +1107,7 @@ namespace TesApi.Web
             {
                 inputFileUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync(inputFile.Path);
 
-                var content = inputFile.Content ?? await this.storageAccessProvider.DownloadBlobAsync(inputFile.Path);
+                var content = inputFile.Content ?? await this.storageAccessProvider.DownloadBlobAsync(inputFile.Url);
                 content = IsCromwellCommandScript(inputFile) ? RemoveQueryStringsFromLocalFilePaths(content, queryStringsToRemoveFromLocalFilePaths) : content;
 
                 await this.storageAccessProvider.UploadBlobAsync(inputFile.Path, content);

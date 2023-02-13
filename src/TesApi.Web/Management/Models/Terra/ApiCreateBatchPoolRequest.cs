@@ -123,8 +123,8 @@ namespace TesApi.Web.Management.Models.Terra
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum ApiDynamicVNetAssignmentScope
     {
-        [EnumMember(Value = "none")] None,
-        [EnumMember(Value = "job")] Job
+        [EnumMember(Value = "none")] none,
+        [EnumMember(Value = "job")] job
     }
 
 
@@ -174,10 +174,21 @@ namespace TesApi.Web.Management.Models.Terra
     public class ApiPublicIpAddressConfiguration
     {
         [JsonPropertyName("provision")]
-        public ApiDynamicVNetAssignmentScope Provision { get; set; }
+        public ApiIpProvisionType Provision { get; set; }
 
         [JsonPropertyName("ipAddressIds")]
         public string[] IpAddressIds { get; set; }
+    }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum ApiIpProvisionType
+    {
+        [EnumMember(Value = "BatchManaged")]
+        BatchManaged,
+        [EnumMember(Value = "UserManaged")]
+        UserManaged,
+        [EnumMember(Value = "NoPublicIPAddresses")]
+        NoPublicIPAddresses,
     }
 
     public class ApiScaleSettings
@@ -195,7 +206,7 @@ namespace TesApi.Web.Management.Models.Terra
         public string Formula { get; set; }
 
         [JsonPropertyName("evaluationInterval")]
-        public TimeSpan? EvaluationInterval { get; set; }
+        public long? EvaluationInterval { get; set; }
     }
 
     public class ApiFixedScale
