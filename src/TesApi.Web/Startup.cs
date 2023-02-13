@@ -157,10 +157,11 @@ namespace TesApi.Web
                 s.ConnectionString = $"InstrumentationKey={instrumentationKey}";
             });
         }
-
         private IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
         {
             var terraOptions = services.GetService<IOptions<TerraOptions>>();
+
+            logger.LogInformation("Attempting to create a Batch Quota Provider");
 
             logger.LogInformation("Attempting to create a Batch Quota Provider");
 
@@ -181,6 +182,8 @@ namespace TesApi.Web
         private IBatchPoolManager CreateBatchPoolManagerFromConfiguration(IServiceProvider services)
         {
             var terraOptions = services.GetService<IOptions<TerraOptions>>();
+
+            logger.LogInformation("Attempting to create a Batch Pool Manager");
 
             logger.LogInformation("Attempting to create a Batch Pool Manager");
 

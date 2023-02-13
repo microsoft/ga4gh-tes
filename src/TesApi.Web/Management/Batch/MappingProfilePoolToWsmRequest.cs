@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
 using AutoMapper;
 using Microsoft.Azure.Management.Batch.Models;
 using TesApi.Web.Management.Models.Terra;
@@ -21,7 +22,8 @@ namespace TesApi.Web.Management.Batch
             CreateMap<VirtualMachineConfiguration, ApiVirtualMachineConfiguration>();
             CreateMap<CloudServiceConfiguration, ApiCloudServiceConfiguration>();
             CreateMap<ScaleSettings, ApiScaleSettings>();
-            CreateMap<AutoScaleSettings, ApiAutoScale>();
+            CreateMap<AutoScaleSettings, ApiAutoScale>()
+                .ForMember(dest => dest.EvaluationInterval, opt => opt.MapFrom(src => Convert.ToInt64(src.EvaluationInterval.Value.TotalSeconds)));
             CreateMap<StartTask, ApiStartTask>();
             CreateMap<ResourceFile, ApiResourceFile>();
             CreateMap<ComputeNodeIdentityReference, ApiIdentityReference>();

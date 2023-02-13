@@ -113,7 +113,9 @@ namespace TesApi.Web.Storage
 
         private async Task<string> GetMappedSasUrlFromWsmAsync(string blobName)
         {
-            var tokenParams = CreateTokenParamsFromOptions(blobName.TrimStart('/'), SasBlobPermissions);
+            var normalizedBlobName = blobName.TrimStart('/');
+
+            var tokenParams = CreateTokenParamsFromOptions(normalizedBlobName, SasBlobPermissions);
 
             var tokenInfo = await GetSasTokenFromWsmAsync(tokenParams);
 
@@ -121,7 +123,10 @@ namespace TesApi.Web.Storage
 
             var uriBuilder = new UriBuilder(tokenInfo.Url);
 
-            uriBuilder.Path += blobName;
+            if (normalizedBlobName != string.Empty)
+            {
+                uriBuilder.Path += $"/{normalizedBlobName.TrimStart('/')}";
+            }
 
             return uriBuilder.ToString();
         }
