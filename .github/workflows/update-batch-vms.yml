@@ -38,7 +38,7 @@ jobs:
 
     - name: Checkout branch, commit and push
       if: env.SUBMIT_PR != null
-      run: git checkout -b jsaun/update-batch-vms && git add src/TesApi.Web/BatchSupportedVmSizeInformation.json && git commit --author="Github Actions <>" -m "Update src/TesApi.Web/BatchSupportedVmSizeInformation.json" && git push -u origin jsaun/update-batch-vms
+      run: git checkout -b jsaun/update-batch-vms && git add src/TesApi.Web/BatchSupportedVmSizeInformation.json && git commit --author="Jonathon Saunders <jonathon.saunders@microsoft.com>" -m "Update src/TesApi.Web/BatchSupportedVmSizeInformation.json" && git push -u origin jsaun/update-batch-vms
 
     - name: create pull request
       if: env.SUBMIT_PR != null
