@@ -445,10 +445,10 @@ namespace TesApi.Web
                 }
 
                 var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2");
-                string jobId = default;
+                string jobOrTaskId = default;
                 if (this.enableBatchAutopool)
                 {
-                    jobId = await azureProxy.GetNextBatchJobIdAsync(tesTask.Id);
+                    jobOrTaskId = await azureProxy.GetNextBatchJobIdAsync(tesTask.Id);
                     poolInformation = await CreateAutoPoolModePoolInformation(
                         poolSpecification: await GetPoolSpecification(
                         vmSize: virtualMachineInfo.VmSize,
@@ -457,7 +457,7 @@ namespace TesApi.Web
                         nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                         containerConfiguration: containerConfiguration),
                     tesTaskId: tesTask.Id,
-                    jobId: jobId,
+                    jobId: jobOrTaskId,
                     identityResourceIds: identities);
                 }
                 else
@@ -476,16 +476,16 @@ namespace TesApi.Web
                                 nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                                 containerConfiguration: containerConfiguration)))
                         ).Pool;
-                    jobId = await azureProxy.GetNextBatchTaskIdAsync(tesTask.Id, poolInformation.PoolId);
+                    jobOrTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
                 }
 
                 tesTask.PoolId = poolInformation.PoolId;
-                var cloudTask = await ConvertTesTaskToBatchTaskAsync(enableBatchAutopool ? tesTask.Id : jobId, tesTask, containerConfiguration is not null);
-                logger.LogInformation($"Creating batch job for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
+                var cloudTask = await ConvertTesTaskToBatchTaskAsync(enableBatchAutopool ? tesTask.Id : jobOrTaskId, tesTask, containerConfiguration is not null);
+                logger.LogInformation($"Creating batch task for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
 
                 if (this.enableBatchAutopool)
                 {
-                    await azureProxy.CreateAutoPoolModeBatchJobAsync(jobId, cloudTask, poolInformation);
+                    await azureProxy.CreateAutoPoolModeBatchJobAsync(jobOrTaskId, cloudTask, poolInformation);
                 }
                 else
                 {
