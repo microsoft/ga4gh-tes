@@ -47,6 +47,8 @@ jobs:
         git push --force -u origin update-batch-vms
         
     - run: if (( $(gh pr list -H update-batch-vms | wc -l) > 0 )); then echo "SUBMIT_PR=True" >> $GITHUB_ENV; fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: create pull request
       if: env.UPDATE_PR != null && env.SUBMIT_PR != null
