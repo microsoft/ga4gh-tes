@@ -890,7 +890,7 @@ namespace TesApi.Web
                         ? $"blobxfer download --storage-url \"$url\" --local-path \"$path\" --chunk-size-bytes 104857600 --rename --include '{StorageAccountUrlSegments.Create(f.Url).BlobName}'"
                         : "mkdir -p $(dirname \"$path\") && wget -O \"$path\" \"$url\"";
 
-                    return $" && {setVariables} && {downloadSingleFile} && {exitIfDownloadedFileIsNotFound} && {incrementTotalBytesTransferred}";
+                    return $"&& echo $(date +%T) && {setVariables} && {downloadSingleFile} && {exitIfDownloadedFileIsNotFound} && {incrementTotalBytesTransferred}";
                 }))
                 + $" && echo FileDownloadSizeInBytes=$total_bytes >> {metricsPath}";
 

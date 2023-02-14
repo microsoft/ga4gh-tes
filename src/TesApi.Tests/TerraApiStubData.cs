@@ -15,6 +15,8 @@ public class TerraApiStubData
     public const string ResourceGroup = "mrg-terra-dev-previ-20191228";
     public const string WorkspaceAccountName = "fooaccount";
     public const string WorkspaceContainerName = "foocontainer";
+    public const string SasToken = "SASTOKENSTUB=";
+    public const string WsmGetSasResponseStorageUrl = "https://bloburl.foo/container";
 
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
@@ -68,10 +70,10 @@ public class TerraApiStubData
 
     public string GetWsmSasTokenApiResponseInJson()
     {
-        return @"{
-  ""token"": ""SASTOKENSTUB="",
-  ""url"": ""https://bloburl.foo/container?sas=SASTOKENSTUB=""
-    }";
+        return $@"{{
+  ""token"": ""{SasToken}"",
+  ""url"": ""{WsmGetSasResponseStorageUrl}?sv={SasToken}""
+    }}";
     }
 
     public string GetResourceApiResponseInJson()
