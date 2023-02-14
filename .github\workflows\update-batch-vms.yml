@@ -1,0 +1,47 @@
+name: "UpdateBatchVmList"
+
+on:
+  schedule:
+    - cron: '21 19 * * 0'
+  workflow_dispatch:
+
+jobs:
+  update-batch-vms:
+    name: Update Batch VMs db
+    runs-on: ubuntu-latest
+    environment: test
+
+    steps:
+    - name: Azure login
+      uses: azure/login@v1
+      with:
+        creds: '${{ secrets.AZURE_CREDENTIALS }}'
+
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Setup dotnet
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '7.0.x'
+
+    - name: Install dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build
+
+    - name: Run GenerateBatchVmSkus
+      run: ./src/GenerateBatchVmSkus/bin/Debug/net7.0/GenerateBatchVmSkus --subscriptionId ${{ secrets.AZURE_SUBSCRIPTION_ID }} --outputFilePath src/TesApi.Web/BatchSupportedVmSizeInformation.json
+
+    - run: if (( $(git diff src/TesApi.Web/BatchSupportedVmSizeInformation.json | wc -l) > 0 )); then echo "SUBMIT_PR=True" >> $GITHUB_ENV; fi
+
+    - name: Checkout branch, commit and push
+      if: env.SUBMIT_PR != null
+      run: git checkout -b jsaun/update-batch-vms && git add src/TesApi.Web/BatchSupportedVmSizeInformation.json && git commit -m "Update src/TesApi.Web/BatchSupportedVmSizeInformation.json" && git push -u origin jsaun/update-batch-vms
+
+    - name: create pull request
+      if: env.SUBMIT_PR != null
+      run: gh pr create -B develop -H jsaun/update-batch-vms --title 'Merge jsaun/update-batch-vms into develop' --body 'Created by Github action'
+      env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
