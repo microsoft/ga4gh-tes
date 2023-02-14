@@ -19,7 +19,7 @@ namespace TesApi.Web.Storage
     {
         private readonly TerraOptions terraOptions;
         private readonly TerraWsmApiClient terraWsmApiClient;
-        private const string SasBlobPermissions = "racwl";
+        private const string SasBlobPermissions = "racw";
         private const string SasContainerPermissions = "racwl";
 
         /// <summary>
@@ -80,18 +80,7 @@ namespace TesApi.Web.Storage
 
             if (getContainerSas)
             {
-                if (IsKnownExecutionFilePath(normalizedPath))
-                {
-                    return await GetMappedSasContainerUrlFromWsmAsync(normalizedPath);
-                }
-
-                if (!StorageAccountUrlSegments.TryCreate(normalizedPath, out var withContainerSegments))
-                {
-                    throw new Exception(
-                        "Invalid path provided. The path must be a valid blob storage url or a path with the following format: /accountName/container");
-                }
-
-                return await GetMappedSasContainerUrlFromWsmAsync(withContainerSegments.BlobName);
+                return await MapAndGetSasContainerUrlFromWsmAsync(normalizedPath);
             }
 
             if (IsKnownExecutionFilePath(normalizedPath))
@@ -108,6 +97,22 @@ namespace TesApi.Web.Storage
             CheckIfAccountAndContainerAreWorkspaceStorage(segments.AccountName, segments.ContainerName);
 
             return await GetMappedSasUrlFromWsmAsync(segments.BlobName);
+        }
+
+        private async Task<string> MapAndGetSasContainerUrlFromWsmAsync(string inputPath)
+        {
+            if (IsKnownExecutionFilePath(inputPath))
+            {
+                return await GetMappedSasContainerUrlFromWsmAsync(inputPath);
+            }
+
+            if (!StorageAccountUrlSegments.TryCreate(inputPath, out var withContainerSegments))
+            {
+                throw new Exception(
+                    "Invalid path provided. The path must be a valid blob storage url or a path with the following format: /accountName/container");
+            }
+
+            return await GetMappedSasContainerUrlFromWsmAsync(withContainerSegments.BlobName);
         }
 
         private async Task<string> GetMappedSasContainerUrlFromWsmAsync(string pathToAppend)
