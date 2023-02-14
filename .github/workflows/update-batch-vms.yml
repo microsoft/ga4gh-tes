@@ -2,7 +2,7 @@ name: "UpdateBatchVmList"
 
 on:
   schedule:
-    - cron: '21 19 * * 0'
+    - cron: '15 10 * * 1'
   workflow_dispatch:
 
 jobs:
@@ -34,20 +34,22 @@ jobs:
     - name: Run GenerateBatchVmSkus
       run: ./src/GenerateBatchVmSkus/bin/Debug/net7.0/GenerateBatchVmSkus --subscriptionId ${{ secrets.AZURE_SUBSCRIPTION_ID }} --outputFilePath src/TesApi.Web/BatchSupportedVmSizeInformation.json
 
-    - run: if (( $(git diff src/TesApi.Web/BatchSupportedVmSizeInformation.json | wc -l) > 0 )); then echo "SUBMIT_PR=True" >> $GITHUB_ENV; fi
+    - run: if (( $(git diff src/TesApi.Web/BatchSupportedVmSizeInformation.json | wc -l) > 0 )); then echo "UPDATE_PR=True" >> $GITHUB_ENV; fi
 
     - name: Checkout branch, commit and push
-      if: env.SUBMIT_PR != null
+      if: env.UPDATE_PR != null
       run: |
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git config --global user.name "github-actions[bot]"
-        git checkout -b jsaun/update-batch-vms
+        git checkout -b update-batch-vms
         git add src/TesApi.Web/BatchSupportedVmSizeInformation.json
         git commit -m "Update src/TesApi.Web/BatchSupportedVmSizeInformation.json"
-        git push --force -u origin jsaun/update-batch-vms
+        git push --force -u origin update-batch-vms
+        
+    - run: if (( $(gh pr list -H update-batch-vms | wc -l) > 3 )); then echo "SUBMIT_PR=True" >> $GITHUB_ENV; fi
 
     - name: create pull request
-      if: env.SUBMIT_PR != null
-      run: gh pr create -B develop -H jsaun/update-batch-vms --title 'Merge jsaun/update-batch-vms into develop' --body 'Created by Github action'
+      if: env.UPDATE_PR != null && env.SUBMIT_PR != null
+      run: gh pr create --assignee jsaun -B develop -H update-batch-vms --title 'Update BatchSupportedVmSizeInformation.json'
       env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
