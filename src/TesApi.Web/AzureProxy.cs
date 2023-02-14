@@ -769,6 +769,7 @@ namespace TesApi.Web
         public async Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable)
             => await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable);
 
+        // https://learn.microsoft.com/azure/azure-resource-manager/management/move-resource-group-and-subscription#changed-resource-id
         [GeneratedRegex("/*/resourceGroups/([^/]*)/*")]
         private static partial Regex GetResourceGroupRegex();
 

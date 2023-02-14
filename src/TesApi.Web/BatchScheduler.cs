@@ -44,7 +44,7 @@ namespace TesApi.Web
         private static partial Regex GetQueryStringRegex();
 
         private const string AzureSupportUrl = "https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
-        private const int PoolKeyLength = 50; // 64 max pool name length - 16 chars generating unique pool names
+        private const int PoolKeyLength = 55; // 64 max pool name length - 9 chars generating unique pool names
         private const int DefaultCoreCount = 1;
         private const int DefaultMemoryGb = 2;
         private const int DefaultDiskGb = 10;
@@ -418,14 +418,14 @@ namespace TesApi.Web
         private async Task AddBatchTaskAsync(TesTask tesTask)
         {
             PoolInformation poolInformation = null;
-            string poolName = null;
+            string poolKey = null;
 
             try
             {
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask);
 
-                (poolName, var displayName) = this.enableBatchAutopool ? default : await GetPoolName(tesTask, virtualMachineInfo);
-                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, this.enableBatchAutopool || !IsPoolAvailable(poolName));
+                (poolKey, var displayName) = this.enableBatchAutopool ? default : await GetPoolKey(tesTask, virtualMachineInfo);
+                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, this.enableBatchAutopool || !IsPoolAvailable(poolKey));
 
                 var tesTaskLog = tesTask.AddTesTaskLog();
                 tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
@@ -463,7 +463,7 @@ namespace TesApi.Web
                 else
                 {
                     poolInformation = (await GetOrAddPoolAsync(
-                        key: poolName,
+                        key: poolKey,
                         isPreemptable: virtualMachineInfo.LowPriority,
                         modelPoolFactory: async id => ConvertPoolSpecificationToModelsPool(
                             name: id,
@@ -500,9 +500,9 @@ namespace TesApi.Web
             {
                 logger.LogWarning($"TES task: {tesTask.Id} AzureBatchQuotaMaxedOutException.Message: {exception.Message} . Not enough quota available.  Task will remain with state QUEUED.");
 
-                if (exception.Message.StartsWith("No remaining pool quota available", StringComparison.OrdinalIgnoreCase))
+                if (exception.Message.StartsWith("No remaining pool quota available.", StringComparison.OrdinalIgnoreCase) || exception.Message.StartsWith("No remaining active jobs quota available.", StringComparison.OrdinalIgnoreCase))
                 {
-                    neededPools.Add(poolName);
+                    neededPools.Add(poolKey);
                 }
             }
             catch (AzureBatchLowQuotaException exception)
@@ -533,18 +533,19 @@ namespace TesApi.Web
             }
             catch (BatchException exception) when (exception.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batcnErrorException && IsJobQuotaException(batcnErrorException.Body.Code))
             {
+                neededPools.Add(poolKey);
                 tesTask.SetWarning(batcnErrorException.Body.Message.Value, Array.Empty<string>());
                 logger.LogInformation($"Not enough quota available for task Id {tesTask.Id}. Reason: {batcnErrorException.Body.Message.Value}. Task will remain in queue.");
             }
             catch (BatchException exception) when (exception.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && IsPoolQuotaException(batchErrorException.Body.Code))
             {
-                neededPools.Add(poolName);
+                neededPools.Add(poolKey);
                 tesTask.SetWarning(batchErrorException.Body.Message.Value, Array.Empty<string>());
                 logger.LogInformation($"Not enough quota available for task Id {tesTask.Id}. Reason: {batchErrorException.Body.Message.Value}. Task will remain in queue.");
             }
             catch (Microsoft.Rest.Azure.CloudException exception) when (IsPoolQuotaException(exception.Body.Code))
             {
-                neededPools.Add(poolName);
+                neededPools.Add(poolKey);
                 tesTask.SetWarning(exception.Body.Message, Array.Empty<string>());
                 logger.LogInformation($"Not enough quota available for task Id {tesTask.Id}. Reason: {exception.Body.Message}. Task will remain in queue.");
             }
@@ -831,7 +832,7 @@ namespace TesApi.Web
         private async Task<CloudTask> ConvertTesTaskToBatchTaskAsync(string taskId, TesTask task, bool poolHasContainerConfig)
         {
             var cromwellExecutionDirectoryPath = GetCromwellExecutionDirectoryPath(task);
-            bool isCromwell = cromwellExecutionDirectoryPath is not null;
+            var isCromwell = cromwellExecutionDirectoryPath is not null;
             var batchExecutionPathPrefix = isCromwell ? CromwellPathPrefix : ExecutionsPathPrefix;
 
             var queryStringsToRemoveFromLocalFilePaths = task.Inputs?
@@ -890,7 +891,7 @@ namespace TesApi.Web
                         ? $"blobxfer download --storage-url \"$url\" --local-path \"$path\" --chunk-size-bytes 104857600 --rename --include '{StorageAccountUrlSegments.Create(f.Url).BlobName}'"
                         : "mkdir -p $(dirname \"$path\") && wget -O \"$path\" \"$url\"";
 
-                    return $"&& echo $(date +%T) && {setVariables} && {downloadSingleFile} && {exitIfDownloadedFileIsNotFound} && {incrementTotalBytesTransferred}";
+                    return $" && echo $(date +%T) && {setVariables} && {downloadSingleFile} && {exitIfDownloadedFileIsNotFound} && {incrementTotalBytesTransferred}";
                 }))
                 + $" && echo FileDownloadSizeInBytes=$total_bytes >> {metricsPath}";
 

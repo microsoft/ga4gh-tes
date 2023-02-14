@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -282,6 +283,13 @@ namespace TesDeployer
 
                     if (!configuration.Update)
                     {
+                        if (string.IsNullOrWhiteSpace(configuration.BatchPrefix))
+                        {
+                            var blob = new byte[10];
+                            RandomNumberGenerator.Fill(blob);
+                            configuration.BatchPrefix = CommonUtilities.Base32.ConvertToBase32(blob).TrimEnd('=')[..15];
+                        }
+
                         ValidateRegionName(configuration.RegionName);
                         ValidateMainIdentifierPrefix(configuration.MainIdentifierPrefix);
                         storageAccount = await ValidateAndGetExistingStorageAccountAsync();
@@ -879,7 +887,7 @@ namespace TesDeployer
 
             if (installedVersion is null)
             {
-                UpdateSetting(settings, defaults, "Name", configuration.Name, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "Name", configuration.BatchPrefix, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "DefaultStorageAccountName", configuration.StorageAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "CosmosDbAccountName", configuration.CosmosDbAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "BatchAccountName", configuration.BatchAccountName, ignoreDefaults: true);
@@ -1955,6 +1963,7 @@ namespace TesDeployer
 
             ThrowIfNotProvidedForUpdate(configuration.ResourceGroupName, nameof(configuration.ResourceGroupName));
 
+            ThrowIfProvidedForUpdate(configuration.BatchPrefix, nameof(configuration.BatchPrefix));
             ThrowIfProvidedForUpdate(configuration.RegionName, nameof(configuration.RegionName));
             ThrowIfProvidedForUpdate(configuration.BatchAccountName, nameof(configuration.BatchAccountName));
             ThrowIfProvidedForUpdate(configuration.CosmosDbAccountName, nameof(configuration.CosmosDbAccountName));
@@ -1986,6 +1995,14 @@ namespace TesDeployer
             //{
             //    ValidateDependantFeature(configuration.UseAks, nameof(configuration.UseAks), configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault(), nameof(configuration.ProvisionPostgreSqlOnAzure));
             //}
+
+            if (!configuration.Update)
+            {
+                if (configuration.BatchPrefix?.Length > 15 || (configuration.BatchPrefix?.Any(c => !char.IsAsciiLetterOrDigit(c)) ?? false))
+                {
+                    throw new ValidationException("BatchPrefix must not be longer than 15 chars and may contain only ASCII letters or digits", false);
+                }
+            }
         }
 
         private static void DisplayBillingReaderInsufficientAccessLevelWarning()
