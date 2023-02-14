@@ -70,10 +70,12 @@ public class TerraApiStubData
 
     public string GetWsmSasTokenApiResponseInJson()
     {
-        return $@"{{
-  ""token"": ""{SasToken}"",
-  ""url"": ""{WsmGetSasResponseStorageUrl}?sv={SasToken}""
-    }}";
+        return $$"""
+        {
+            "token": "{{SasToken}}",
+            "url": "{{WsmGetSasResponseStorageUrl}}?sv={{SasToken}}"
+        }
+        """;
     }
 
     public string GetResourceApiResponseInJson()
