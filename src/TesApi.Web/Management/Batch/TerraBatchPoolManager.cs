@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
@@ -21,6 +22,11 @@ namespace TesApi.Web.Management.Batch
     /// </summary>
     public class TerraBatchPoolManager : IBatchPoolManager
     {
+        /// <summary>
+        /// Metadata key for the entry that contains the terra wsm resource id. 
+        /// </summary>
+        public const string TerraResourceIdMetadataKey = "TerraBatchPoolResourceId";
+
         private const string CloningInstructionsCloneNothing = "COPY_NOTHING";
         private const string AccessScopeSharedAccess = "SHARED_ACCESS";
         private const string UserManaged = "USER";
@@ -66,25 +72,47 @@ namespace TesApi.Web.Management.Batch
         /// <returns></returns>
         public async Task<PoolInformation> CreateBatchPoolAsync(Pool poolInfo, bool isPreemptable)
         {
+            var resourceId = Guid.NewGuid();
+            var resourceName = $"TES-{resourceId}";
+
             var apiRequest = new ApiCreateBatchPoolRequest()
             {
                 Common = new ApiCommon
                 {
-                    Name = tesBatchPoolName,
+                    Name = resourceName,
                     Description = poolInfo.DisplayName,
                     CloningInstructions = CloningInstructionsCloneNothing,
                     AccessScope = AccessScopeSharedAccess,
                     ManagedBy = UserManaged,
-                    ResourceId = Guid.NewGuid()
+                    ResourceId = resourceId
                 },
                 AzureBatchPool = mapper.Map<ApiAzureBatchPool>(poolInfo),
             };
 
             apiRequest.AzureBatchPool.Id = poolInfo.Name;
 
+            AddResourceIdToPoolMetadata(apiRequest, resourceId);
+
             var response = await terraWsmApiClient.CreateBatchPool(Guid.Parse(terraOptions.WorkspaceId), apiRequest);
 
             return new PoolInformation() { PoolId = response.AzureBatchPool.Attributes.Id };
+        }
+
+        private void AddResourceIdToPoolMetadata(ApiCreateBatchPoolRequest apiRequest, Guid resourceId)
+        {
+            var resourceIdMetadataItem =
+                new ApiBatchPoolMetadataItem() { Name = TerraResourceIdMetadataKey, Value = resourceId.ToString() };
+            if (apiRequest.AzureBatchPool.Metadata is null)
+            {
+                apiRequest.AzureBatchPool.Metadata = new ApiBatchPoolMetadataItem[] { resourceIdMetadataItem };
+                return;
+            }
+
+            var metadataList = apiRequest.AzureBatchPool.Metadata.ToList();
+
+            metadataList.Add(resourceIdMetadataItem);
+
+            apiRequest.AzureBatchPool.Metadata = metadataList.ToArray();
         }
 
         /// <summary>

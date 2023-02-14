@@ -49,6 +49,17 @@ namespace TesApi.Web.Management.Models.Terra
 
         [JsonPropertyName("networkConfiguration")]
         public ApiNetworkConfiguration NetworkConfiguration { get; set; }
+
+        [JsonPropertyName("metadata")]
+        public ApiBatchPoolMetadataItem[] Metadata { get; set; }
+    }
+
+    public class ApiBatchPoolMetadataItem
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+        [JsonPropertyName("value")]
+        public string Value { get; set; }
     }
 
     public class ApiApplicationPackage

@@ -81,9 +81,11 @@ namespace TesApi.Web.Management.Clients
                     await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, uri) { Content = GetBatchPoolRequestContent(apiCreateBatchPool) },
                         setAuthorizationHeader: true);
 
+                var apiResponse = await GetApiResponseContentAsync<ApiCreateBatchPoolResponse>(response);
+
                 Logger.LogInformation($"Successfully created a batch pool using WSM for workspace:{workspaceId}");
 
-                return await GetApiResponseContentAsync<ApiCreateBatchPoolResponse>(response);
+                return apiResponse;
             }
             catch (Exception ex)
             {
