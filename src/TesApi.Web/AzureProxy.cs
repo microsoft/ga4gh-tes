@@ -173,8 +173,7 @@ namespace TesApi.Web
             };
 
             var lastAttemptNumber = (await batchRaceConditionJobNotFoundRetryPolicy.ExecuteAsync(() =>
-                        batchClient.JobOperations.ListTasks(batchJobId, taskFilter))
-                    .ToListAsync())
+                    batchClient.JobOperations.ListTasks(batchJobId, taskFilter).ToListAsync()))
                 .Select(j => int.Parse(j.Id.Split(BatchJobAttemptSeparator)[1]))
                 .OrderBy(a => a)
                 .LastOrDefault();
