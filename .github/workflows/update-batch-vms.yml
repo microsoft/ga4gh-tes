@@ -44,7 +44,7 @@ jobs:
         git checkout -b jsaun/update-batch-vms
         git add src/TesApi.Web/BatchSupportedVmSizeInformation.json
         git commit -m "Update src/TesApi.Web/BatchSupportedVmSizeInformation.json"
-        git push -u origin jsaun/update-batch-vms
+        git push --force -u origin jsaun/update-batch-vms
 
     - name: create pull request
       if: env.SUBMIT_PR != null
