@@ -42,10 +42,10 @@ namespace TesApi.Web
 
             // Build a PoolName that is of legal length, while exposing the most important metadata without requiring user to find DisplayName
             // Note that the hash covers all necessary parts to make name unique, so limiting the size of the other parts is not expected to appreciably change the risk of collisions. Those other parts are for convenience
-            var remainingLength = PoolKeyLength - hash.Length - 2; // 55 is max name length, 2 is number of inserted chars ('-'). This will always be 21 if we use an entire SHA1
+            var remainingLength = PoolKeyLength - hash.Length - 6; // 55 is max name length, 2 is number of inserted chars (prefix and '-'s). This will always be 21 if we use an entire SHA1
             var visibleVmSize = LimitVmSize(vmSize, Math.Max(remainingLength - vmName.Length, 6)); // At least 6 chars from the VmSize will be visible in the name
             var visibleHostName = vmName[0..Math.Min(vmName.Length, remainingLength - visibleVmSize.Length)]; // Fill up to the max length if needed with the "hostname"
-            var name = FlattenChars($"{visibleHostName}-{visibleVmSize}-{hash}");
+            var name = FlattenChars($"TES-{visibleHostName}-{visibleVmSize}-{hash}");
 
             // Trim DisplayName if needed
             if (displayName.Length > 1024)
