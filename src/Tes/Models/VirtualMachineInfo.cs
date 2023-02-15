@@ -1,5 +1,7 @@
-// Copyright (c) Microsoft Corporation.
+﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+
+using System.Collections.Generic;
 
 namespace Tes.Models
 {
@@ -35,25 +37,37 @@ namespace Tes.Models
         /// <summary>
         /// VM memory size, in GB
         /// </summary>
-        [TesTaskLogMetadataKey("vm_memory_in_gb")]
-        public double? MemoryInGB { get; set; }
+        [TesTaskLogMetadataKey("vm_memory_in_gib")]
+        public double? MemoryInGiB { get; set; }
 
         /// <summary>
         /// Number of cores for this VM
         /// </summary>
-        [TesTaskLogMetadataKey("vm_number_of_cores")]
-        public int? NumberOfCores { get; set; }
+        [TesTaskLogMetadataKey("vm_vcpus_available")]
+        public int? VCpusAvailable { get; set; }
 
         /// <summary>
         /// The resources disk size, in GB
         /// </summary>
-        [TesTaskLogMetadataKey("vm_resource_disk_size_in_gb")]
-        public double? ResourceDiskSizeInGB { get; set; }
+        [TesTaskLogMetadataKey("vm_resource_disk_size_in_gib")]
+        public double? ResourceDiskSizeInGiB { get; set; }
 
         /// <summary>
         /// The max number of data disks for this VM
         /// </summary>
         [TesTaskLogMetadataKey("vm_max_data_disk_count")]
         public int? MaxDataDiskCount { get; set; }
+
+        /// <summary>
+        /// HyperV Generations of VM this sku supports.
+        /// </summary>
+        [TesTaskLogMetadataKey("vm_hyper_v_generations")]
+        public IEnumerable<string> HyperVGenerations { get; set; }
+
+        /// <summary>
+        /// List of regions this VM can be provisioned by Batch.
+        /// </summary>
+        [TesTaskLogMetadataKey("vm_regions_available")]
+        public IEnumerable<string> RegionsAvailable { get; set; }
     }
 }

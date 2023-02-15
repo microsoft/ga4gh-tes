@@ -1,7 +1,12 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 
 namespace TesApi.Web.Management.Clients
@@ -9,27 +14,26 @@ namespace TesApi.Web.Management.Clients
     /// <summary>
     /// Terra Landing Zone api client. 
     /// </summary>
-    public class TerraLandingZoneApiClient : HttpApiClient
+    public class TerraLandingZoneApiClient : TerraApiClient
     {
-        private const string LandingZonesApiSegments = @"/api/landingzones/v1/azure";
-        private const string TokenScope = @"https://management.azure.com/.default";
+        private const string LandingZonesApiSegments = @"/api/landingzones/v1/azure/";
 
         private readonly string baseApiUrl;
 
         /// <summary>
         /// Constructor of TerraLandingZoneApiClient
         /// </summary>
-        /// <param name="apiHost"></param>
+        /// <param name="terraOptions"></param>
         /// <param name="tokenCredential"></param>
         /// <param name="cacheAndRetryHandler"></param>
         /// <param name="logger"></param>
-        public TerraLandingZoneApiClient(string apiHost, TokenCredential tokenCredential, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraLandingZoneApiClient> logger) : base(tokenCredential, TokenScope, cacheAndRetryHandler, logger)
+        public TerraLandingZoneApiClient(IOptions<TerraOptions> terraOptions, TokenCredential tokenCredential, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraLandingZoneApiClient> logger) : base(tokenCredential, cacheAndRetryHandler, logger)
         {
-            ArgumentException.ThrowIfNullOrEmpty(apiHost);
+            ArgumentException.ThrowIfNullOrEmpty(terraOptions.Value.LandingZoneApiHost, nameof(terraOptions.Value.LandingZoneApiHost));
             ArgumentNullException.ThrowIfNull(tokenCredential);
             ArgumentNullException.ThrowIfNull(cacheAndRetryHandler);
 
-            this.baseApiUrl = apiHost.TrimEnd('/') + LandingZonesApiSegments;
+            this.baseApiUrl = terraOptions.Value.LandingZoneApiHost.TrimEnd('/') + LandingZonesApiSegments;
         }
 
         /// <summary>
@@ -69,19 +73,29 @@ namespace TesApi.Web.Management.Clients
             var url = GetLandingZoneResourcesApiUrl(landingZoneId);
 
             return await HttpGetRequestAsync<LandingZoneResourcesApiResponse>(url, setAuthorizationHeader: true, cacheResults);
-
         }
 
-        private Uri GetQuotaApiUrl(Guid landingZoneId, string resourceId)
+        /// <summary>
+        /// Returns a parsed URL to get quota of a resource using the Terra landing zone API.
+        /// </summary>
+        /// <param name="landingZoneId">Landing zone id</param>
+        /// <param name="resourceId">Fully qualified Azure resource id</param>
+        /// <returns></returns>
+        public Uri GetQuotaApiUrl(Guid landingZoneId, string resourceId)
         {
             var uriBuilder = GetLandingZoneUriBuilder(landingZoneId, "/resource-quota");
-            uriBuilder.Query = $@"azureResourceId={resourceId}";
+            uriBuilder.Query = $@"azureResourceId={Uri.EscapeDataString(resourceId)}";
             return uriBuilder.Uri;
         }
 
-        private Uri GetLandingZoneResourcesApiUrl(Guid landingZoneId)
+        /// <summary>
+        /// Returns a parsed URL to get resources in a landing zone using the Terra landing zone API.
+        /// </summary>
+        /// <param name="landingZoneId">Landing zone id</param>
+        /// <returns></returns>
+        public Uri GetLandingZoneResourcesApiUrl(Guid landingZoneId)
         {
-            var uriBuilder = GetLandingZoneUriBuilder(landingZoneId, "/resource");
+            var uriBuilder = GetLandingZoneUriBuilder(landingZoneId, "/resources");
             return uriBuilder.Uri;
         }
 
@@ -92,6 +106,5 @@ namespace TesApi.Web.Management.Clients
             var uriBuilder = new UriBuilder(apiRequestUrl);
             return uriBuilder;
         }
-
     }
 }

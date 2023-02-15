@@ -1,4 +1,7 @@
-﻿namespace TesApi.Web.Management.Configuration
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+namespace TesApi.Web.Management.Configuration
 {
     /// <summary>
     /// Retry policy options
@@ -8,7 +11,7 @@
         /// <summary>
         /// Retry policy configuration section
         /// </summary>
-        public const string RetryPolicy = "RetryPolicy";
+        public const string SectionName = "RetryPolicy";
 
         private const int DefaultRetryCount = 3;
         private const int DefaultExponentialBackOffExponent = 2;

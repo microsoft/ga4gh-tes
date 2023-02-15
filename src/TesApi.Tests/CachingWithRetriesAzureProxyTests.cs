@@ -1,16 +1,13 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-
 using System;
 using System.Threading.Tasks;
-using LazyCache;
-using LazyCache.Providers;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Polly.Utilities;
 using TesApi.Web;
+using TesApi.Web.Storage;
 
 namespace TesApi.Tests
 {
@@ -77,62 +74,6 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        public async Task GetContainerRegistryInfoAsync_UsesCache()
-        {
-            var containerRegistryInfo = new ContainerRegistryInfo { RegistryServer = "registryServer1", Username = "default", Password = "placeholder" };
-
-            using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
-            {
-                PrepareAzureProxy(a);
-                a.Setup(a => a.GetContainerRegistryInfoAsync(It.IsAny<string>())).Returns(Task.FromResult(containerRegistryInfo));
-            });
-            var cachingAzureProxy = serviceProvider.GetT();
-
-            var info1 = await cachingAzureProxy.GetContainerRegistryInfoAsync("registryServer1/imageName1:tag1");
-            var info2 = await cachingAzureProxy.GetContainerRegistryInfoAsync("registryServer1/imageName1:tag1");
-
-            serviceProvider.AzureProxy.Verify(mock => mock.GetContainerRegistryInfoAsync("registryServer1/imageName1:tag1"), Times.Once());
-            Assert.AreEqual(containerRegistryInfo, info1);
-            Assert.AreEqual(info1, info2);
-        }
-
-        [TestMethod]
-        public async Task GetContainerRegistryInfoAsync_NullInfo_DoesNotSetCache()
-        {
-            using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
-            {
-                PrepareAzureProxy(a);
-                a.Setup(a => a.GetContainerRegistryInfoAsync(It.IsAny<string>())).Returns(Task.FromResult((ContainerRegistryInfo)null));
-            });
-            var cachingAzureProxy = serviceProvider.GetT();
-            var info1 = await cachingAzureProxy.GetContainerRegistryInfoAsync("registryServer1/imageName1:tag1");
-
-            var containerRegistryInfo = new ContainerRegistryInfo { RegistryServer = "registryServer1", Username = "default", Password = "placeholder" };
-            serviceProvider.AzureProxy.Setup(a => a.GetContainerRegistryInfoAsync(It.IsAny<string>())).Returns(Task.FromResult(containerRegistryInfo));
-            var info2 = await cachingAzureProxy.GetContainerRegistryInfoAsync("registryServer1/imageName1:tag1");
-
-            serviceProvider.AzureProxy.Verify(mock => mock.GetContainerRegistryInfoAsync("registryServer1/imageName1:tag1"), Times.Exactly(2));
-            Assert.IsNull(info1);
-            Assert.AreEqual(containerRegistryInfo, info2);
-        }
-
-        [TestMethod]
-        public async Task GetContainerRegistryInfoAsync_ThrowsException_DoesNotSetCache()
-        {
-            SystemClock.SleepAsync = (_, __) => Task.FromResult(true);
-            SystemClock.Sleep = (_, __) => { };
-            using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
-            {
-                PrepareAzureProxy(a);
-                a.Setup(a => a.GetContainerRegistryInfoAsync("throw/exception:tag1")).Throws<Exception>();
-            });
-            var cachingAzureProxy = serviceProvider.GetT();
-
-            await Assert.ThrowsExceptionAsync<Exception>(async () => await cachingAzureProxy.GetContainerRegistryInfoAsync("throw/exception:tag1"));
-            serviceProvider.AzureProxy.Verify(mock => mock.GetContainerRegistryInfoAsync("throw/exception:tag1"), Times.Exactly(4));
-        }
-
-        [TestMethod]
         public void GetBatchActivePoolCount_ThrowsException_RetriesThreeTimes()
         {
             SystemClock.SleepAsync = (_, __) => Task.FromResult(true);
@@ -168,10 +109,10 @@ namespace TesApi.Tests
         {
             //azureProxy.Setup(a => a.GetVmSizesAndPricesAsync()).Returns(Task.FromResult(
             //    new List<VirtualMachineInformation> {
-            //        new() { VmSize = "VmSizeLowPri1", LowPriority = true, NumberOfCores = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 1 },
-            //        new() { VmSize = "VmSizeLowPri2", LowPriority = true, NumberOfCores = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 2 },
-            //        new() { VmSize = "VmSizeDedicated1", LowPriority = false, NumberOfCores = 1, MemoryInGB = 4, ResourceDiskSizeInGB = 20, PricePerHour = 11 },
-            //        new() { VmSize = "VmSizeDedicated2", LowPriority = false, NumberOfCores = 2, MemoryInGB = 8, ResourceDiskSizeInGB = 40, PricePerHour = 22 }
+            //        new() { VmSize = "VmSizeLowPri1", LowPriority = true, VCpusAvailable = 1, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 1 },
+            //        new() { VmSize = "VmSizeLowPri2", LowPriority = true, VCpusAvailable = 2, MemoryInGiB = 8, ResourceDiskSizeInGiB = 40, PricePerHour = 2 },
+            //        new() { VmSize = "VmSizeDedicated1", LowPriority = false, VCpusAvailable = 1, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 11 },
+            //        new() { VmSize = "VmSizeDedicated2", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 8, ResourceDiskSizeInGiB = 40, PricePerHour = 22 }
             //    }));
         }
     }

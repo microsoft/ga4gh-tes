@@ -68,7 +68,7 @@ namespace TesApi.Web.Management
         {
             logger.LogInformation($"Getting VM sizes and price information for region:{region}");
 
-            var localVmSizeInfoForBatchSupportedSkus = await GetLocalVmSizeInformationForBatchSupportedSkusAsync();
+            var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync()).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase));
             var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region)
                 .ToListAsync();
 
@@ -111,12 +111,14 @@ namespace TesApi.Web.Management
             {
                 LowPriority = isLowPriority,
                 MaxDataDiskCount = vmReference.MaxDataDiskCount,
-                MemoryInGB = vmReference.MemoryInGB,
-                NumberOfCores = vmReference.NumberOfCores,
+                MemoryInGiB = vmReference.MemoryInGiB,
+                VCpusAvailable = vmReference.VCpusAvailable,
                 PricePerHour = pricePerHour,
-                ResourceDiskSizeInGB = vmReference.ResourceDiskSizeInGB,
+                ResourceDiskSizeInGiB = vmReference.ResourceDiskSizeInGiB,
                 VmFamily = vmReference.VmFamily,
-                VmSize = vmReference.VmSize
+                VmSize = vmReference.VmSize,
+                RegionsAvailable = vmReference.RegionsAvailable,
+                HyperVGenerations = vmReference.HyperVGenerations
             };
 
         private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync()

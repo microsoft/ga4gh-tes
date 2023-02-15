@@ -116,7 +116,7 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
         }
     }
 
-    private BatchVmFamilyQuotas ToVmFamilyBatchAccountQuotas(AzureBatchAccountQuotas batchAccountQuotas, string vmFamily, bool lowPriority, int? coresRequirement)
+    private static BatchVmFamilyQuotas ToVmFamilyBatchAccountQuotas(AzureBatchAccountQuotas batchAccountQuotas, string vmFamily, bool lowPriority, int? coresRequirement)
     {
 
         var isDedicated = !lowPriority;

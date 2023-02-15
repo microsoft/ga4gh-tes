@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.
+﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 namespace TesApi.Web
@@ -13,10 +13,12 @@ namespace TesApi.Web
         /// required Job Preparation task to complete on the node.
         /// </summary>
         Initializing,
+
         /// <summary>
         /// The task is running on a compute node.
         /// </summary>
         Running,
+
         /// <summary>
         /// The task is no longer eligible to run, usually because the task has
         /// finished successfully, or the task has finished unsuccessfully and
@@ -47,9 +49,9 @@ namespace TesApi.Web
         ErrorRetrievingJobs,
 
         /// <summary>
-        /// More than one active job is associated with a given task.  This may indicate an implementation defect due to an unforeseen edge case
+        /// More than one active batch job/task is associated with a given tes task.  This may indicate an implementation defect due to an unforeseen edge case
         /// </summary>
-        MoreThanOneActiveJobFound,
+        MoreThanOneActiveJobOrTaskFound,
 
         /// <summary>
         /// Azure Batch was unable to allocate a machine for the job.  This could be due to either a temporary or permanent unavailability of the given VM SKU

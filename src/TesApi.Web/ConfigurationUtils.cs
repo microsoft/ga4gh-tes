@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Tes.Models;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
+using TesApi.Web.Storage;
 
 namespace TesApi.Web
 {
@@ -161,9 +162,9 @@ namespace TesApi.Web
                     v.VmInfoWithDedicatedPrice.VmFamily,
                     PricePerHourDedicated = v.VmInfoWithDedicatedPrice.PricePerHour?.ToString("###0.000"),
                     PricePerHourLowPri = v.PricePerHourLowPri is not null ? v.PricePerHourLowPri?.ToString("###0.000") : "N/A",
-                    MemoryInGiB = v.VmInfoWithDedicatedPrice.MemoryInGB?.ToString(),
-                    NumberOfCores = v.VmInfoWithDedicatedPrice.NumberOfCores.ToString(),
-                    ResourceDiskSizeInGiB = v.VmInfoWithDedicatedPrice.ResourceDiskSizeInGB.ToString(),
+                    MemoryInGiB = v.VmInfoWithDedicatedPrice.MemoryInGiB?.ToString(),
+                    NumberOfCores = v.VmInfoWithDedicatedPrice.VCpusAvailable.ToString(),
+                    ResourceDiskSizeInGiB = v.VmInfoWithDedicatedPrice.ResourceDiskSizeInGiB.ToString(),
                     DedicatedQuota = batchAccountQuotas.IsDedicatedAndPerVmFamilyCoreQuotaEnforced
                         ? batchAccountQuotas.DedicatedCoreQuotas.FirstOrDefault(q => q.VmFamilyName.Equals(v.VmInfoWithDedicatedPrice.VmFamily, StringComparison.OrdinalIgnoreCase))?.CoreQuota.ToString() ?? "N/A"
                         : batchAccountQuotas.NumberOfCores.ToString()

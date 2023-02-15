@@ -12,19 +12,16 @@ using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 
-namespace TesApi.Web
+namespace TesApi.Web.Storage
 {
     /// <summary>
     /// Provides methods for blob storage access by using local path references in form of /storageaccount/container/blobpath
     /// </summary>
-    public class StorageAccessProvider : IStorageAccessProvider
+    public class DefaultStorageAccessProvider : StorageAccessProvider
     {
-        private readonly ILogger logger;
-        private readonly IAzureProxy azureProxy;
-        private const string CromwellPathPrefix = "/cromwell-executions/";
-        private const string BatchPathPrefix = "/executions/";
+
+        private static readonly TimeSpan SasTokenDuration = TimeSpan.FromDays(3); //TODO: refactor this to drive it from configuration.
         private readonly string defaultStorageAccountName;
-        private static readonly TimeSpan sasTokenDuration = TimeSpan.FromDays(3);
         private readonly List<ExternalStorageContainerInfo> externalStorageContainers;
 
         /// <summary>
@@ -33,12 +30,10 @@ namespace TesApi.Web
         /// <param name="logger">Logger <see cref="ILogger"/></param>
         /// <param name="configuration">Configuration <see cref="IConfiguration"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
-        public StorageAccessProvider(ILogger<StorageAccessProvider> logger, IConfiguration configuration, IAzureProxy azureProxy)
+        public DefaultStorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IConfiguration configuration, IAzureProxy azureProxy) : base(logger, azureProxy)
         {
-            this.logger = logger;
-            this.azureProxy = azureProxy;
-
-            this.defaultStorageAccountName = configuration["DefaultStorageAccountName"];    // This account contains the cromwell-executions container
+            //TODO: refactor to use the options pattern.
+            defaultStorageAccountName = configuration["DefaultStorageAccountName"];    // This account contains the cromwell-executions container
             logger.LogInformation($"DefaultStorageAccountName: {defaultStorageAccountName}");
 
             externalStorageContainers = configuration["ExternalStorageContainers"]?.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
@@ -59,45 +54,9 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc />
-        public async Task<string> DownloadBlobAsync(string blobRelativePath)
+        public override async Task<bool> IsPublicHttpUrlAsync(string uriString)
         {
-            try
-            {
-                return await this.azureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath)));
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        /// <inheritdoc />
-        public async Task<bool> TryDownloadBlobAsync(string blobRelativePath, Action<string> action)
-        {
-            try
-            {
-                var content = await this.azureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath)));
-                action?.Invoke(content);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        /// <inheritdoc />
-        public async Task UploadBlobAsync(string blobRelativePath, string content)
-            => await this.azureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), content);
-
-        /// <inheritdoc />
-        public async Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath)
-            => await this.azureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), sourceLocalFilePath);
-
-        /// <inheritdoc />
-        public async Task<bool> IsPublicHttpUrl(string uriString)
-        {
-            var isHttpUrl = Uri.TryCreate(uriString, UriKind.Absolute, out var uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
+            var isHttpUrl = TryParseHttpUrlFromInput(uriString, out var uri);
 
             if (!isHttpUrl)
             {
@@ -126,20 +85,20 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc />
-        public async Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false)
+        public override async Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false)
         {
             // TODO: Optional: If path is /container/... where container matches the name of the container in the default storage account, prepend the account name to the path.
             // This would allow the user to omit the account name for files stored in the default storage account
 
             // /cromwell-executions/... URLs become /defaultStorageAccountName/cromwell-executions/... to unify how URLs starting with /acct/container/... pattern are handled.
-            if (path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase) || path.StartsWith(BatchPathPrefix, StringComparison.OrdinalIgnoreCase))
+            if (IsKnownExecutionFilePath(path))
             {
                 path = $"/{defaultStorageAccountName}{path}";
             }
-
+            //TODO: refactor this to throw an exception instead of logging and error and returning null.
             if (!StorageAccountUrlSegments.TryCreate(path, out var pathSegments))
             {
-                logger.LogError($"Could not parse path '{path}'.");
+                Logger.LogError($"Could not parse path '{path}'.");
                 return null;
             }
 
@@ -153,13 +112,13 @@ namespace TesApi.Web
 
                 if (!await TryGetStorageAccountInfoAsync(pathSegments.AccountName, info => storageAccountInfo = info))
                 {
-                    logger.LogError($"Could not find storage account '{pathSegments.AccountName}' corresponding to path '{path}'. Either the account does not exist or the TES app service does not have permission to it.");
+                    Logger.LogError($"Could not find storage account '{pathSegments.AccountName}' corresponding to path '{path}'. Either the account does not exist or the TES app service does not have permission to it.");
                     return null;
                 }
 
                 try
                 {
-                    var accountKey = await azureProxy.GetStorageAccountKeyAsync(storageAccountInfo);
+                    var accountKey = await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo);
                     var resultPathSegments = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName);
 
                     if (pathSegments.IsContainer || getContainerSas)
@@ -167,7 +126,7 @@ namespace TesApi.Web
                         var policy = new SharedAccessBlobPolicy()
                         {
                             Permissions = SharedAccessBlobPermissions.Add | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.List | SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.Write,
-                            SharedAccessExpiryTime = DateTime.Now.Add(sasTokenDuration)
+                            SharedAccessExpiryTime = DateTime.Now.Add(SasTokenDuration)
                         };
 
                         var containerUri = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName).ToUri();
@@ -175,7 +134,7 @@ namespace TesApi.Web
                     }
                     else
                     {
-                        var policy = new SharedAccessBlobPolicy() { Permissions = SharedAccessBlobPermissions.Read, SharedAccessExpiryTime = DateTime.Now.Add(sasTokenDuration) };
+                        var policy = new SharedAccessBlobPolicy() { Permissions = SharedAccessBlobPermissions.Read, SharedAccessExpiryTime = DateTime.Now.Add(SasTokenDuration) };
                         resultPathSegments.SasToken = new CloudBlob(resultPathSegments.ToUri(), new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, null, SharedAccessProtocol.HttpsOnly, null);
                     }
 
@@ -183,7 +142,7 @@ namespace TesApi.Web
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, $"Could not get the key of storage account '{pathSegments.AccountName}'. Make sure that the TES app service has Contributor access to it.");
+                    Logger.LogError(ex, $"Could not get the key of storage account '{pathSegments.AccountName}'. Make sure that the TES app service has Contributor access to it.");
                     return null;
                 }
             }
@@ -193,7 +152,7 @@ namespace TesApi.Web
         {
             try
             {
-                var storageAccountInfo = await azureProxy.GetStorageAccountInfoAsync(accountName);
+                var storageAccountInfo = await AzureProxy.GetStorageAccountInfoAsync(accountName);
 
                 if (storageAccountInfo is not null)
                 {
@@ -202,12 +161,12 @@ namespace TesApi.Web
                 }
                 else
                 {
-                    logger.LogError($"Could not find storage account '{accountName}'. Either the account does not exist or the TES app service does not have permission to it.");
+                    Logger.LogError($"Could not find storage account '{accountName}'. Either the account does not exist or the TES app service does not have permission to it.");
                 }
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"Exception while getting storage account '{accountName}'");
+                Logger.LogError(ex, $"Exception while getting storage account '{accountName}'");
             }
 
             return false;
@@ -222,12 +181,5 @@ namespace TesApi.Web
             return result is not null;
         }
 
-        private class ExternalStorageContainerInfo
-        {
-            public string AccountName { get; set; }
-            public string ContainerName { get; set; }
-            public string BlobEndpoint { get; set; }
-            public string SasToken { get; set; }
-        }
     }
 }

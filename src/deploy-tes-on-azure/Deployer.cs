@@ -10,7 +10,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -156,7 +155,7 @@ namespace TesDeployer
                 var keyVaultUri = string.Empty;
                 IIdentity managedIdentity = null;
                 IPrivateDnsZone postgreSqlDnsZone = null;
-                
+
                 try
                 {
                     if (configuration.Update)
@@ -214,6 +213,16 @@ namespace TesDeployer
                             throw new ValidationException($"Could not retrieve account names from stored configuration in {storageAccount.Name}.", displayExample: false);
                         }
 
+                        if (aksValues.TryGetValue("EnableIngress", out var enableIngress))
+                        {
+                            configuration.EnableIngress = bool.TryParse(enableIngress, out var parsed) ? parsed : null;
+                        }
+
+                        if (!configuration.SkipTestWorkflow && configuration.EnableIngress.GetValueOrDefault() && string.IsNullOrEmpty(configuration.TesPassword))
+                        {
+                            throw new ValidationException($"{nameof(configuration.TesPassword)} is required for update.", false);
+                        }
+
                         if (!aksValues.TryGetValue("BatchAccountName", out var batchAccountName))
                         {
                             throw new ValidationException($"Could not retrieve the Batch account name from stored configuration in {storageAccount.Name}.", displayExample: false);
@@ -262,14 +271,13 @@ namespace TesDeployer
                         var installedVersion = !string.IsNullOrEmpty(versionString) && Version.TryParse(versionString, out var version) ? version : null;
                         var settings = ConfigureSettings(managedIdentity.ClientId, aksValues, installedVersion);
 
+                        //if (installedVersion is null || installedVersion < new Version(4, 0))
+                        //{
+                        //}
+
                         await kubernetesManager.UpgradeAKSDeploymentAsync(
                             settings,
                             storageAccount);
-
-                        if (aksValues.TryGetValue("EnableIngress", out var enableIngress))
-                        {
-                            configuration.EnableIngress = bool.TryParse(enableIngress, out var parsed) ? parsed : null;
-                        }
                     }
 
                     if (!configuration.Update)
@@ -600,7 +608,6 @@ namespace TesDeployer
             }
         }
 
-        // Currently fails with "Could not identify Cromwell execution directory path for task {task.Id}. This TES instance supports Cromwell tasks only."
         private static async Task<int> TestTaskAsync(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
         {
             using var client = new HttpClient();
@@ -640,6 +647,7 @@ namespace TesDeployer
 
         private static async Task<bool> RunTestTask(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
         {
+            await Task.Delay(System.TimeSpan.FromSeconds(90)); // Give Ingress a moment longer to complete its standup.
             var startTime = DateTime.UtcNow;
             var line = ConsoleEx.WriteLine("Running a test task...");
             var isTestWorkflowSuccessful = (await TestTaskAsync(tesEndpoint, preemptible, tesUsername, tesPassword)) < 1;
@@ -871,6 +879,7 @@ namespace TesDeployer
 
             if (installedVersion is null)
             {
+                UpdateSetting(settings, defaults, "Name", configuration.Name, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "DefaultStorageAccountName", configuration.StorageAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "CosmosDbAccountName", configuration.CosmosDbAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "BatchAccountName", configuration.BatchAccountName, ignoreDefaults: true);
@@ -892,9 +901,6 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
                 UpdateSetting(settings, defaults, "TesHostname", kubernetesManager.TesHostname, ignoreDefaults: true);
             }
-
-            //if (installedVersion is null || installedVersion < new Version(3, 3))
-            //{ }
 
             BackFillSettings(settings, defaults);
             return settings;

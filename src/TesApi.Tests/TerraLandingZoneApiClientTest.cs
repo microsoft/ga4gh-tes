@@ -1,13 +1,18 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Clients;
+using TesApi.Web.Management.Configuration;
 
 namespace TesApi.Tests
 {
@@ -22,10 +27,13 @@ namespace TesApi.Tests
         [TestInitialize]
         public void SetUp()
         {
-            terraApiStubData = new TerraApiStubData();
-            tokenCredential = new Mock<TokenCredential>();
-            cacheAndRetryHandler = new Mock<CacheAndRetryHandler>();
-            terraLandingZoneApiClient = new TerraLandingZoneApiClient(terraApiStubData.ApiHost, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
+            terraApiStubData = new();
+            tokenCredential = new();
+            cacheAndRetryHandler = new();
+            var terraOptions = new Mock<IOptions<TerraOptions>>();
+            terraOptions.Setup(o => o.Value)
+                .Returns(terraApiStubData.GetTerraOptions());
+            terraLandingZoneApiClient = new(terraOptions.Object, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
         }
 
         [TestMethod]
@@ -58,6 +66,7 @@ namespace TesApi.Tests
         public async Task GetLandingZoneResourcesAsync_ListOfLandingZoneResourcesAndGetsAuthToken()
         {
             var body = terraApiStubData.GetResourceApiResponseInJson();
+
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
                     It.IsAny<Func<Task<string>>>()))
                 .ReturnsAsync(body);
@@ -70,6 +79,28 @@ namespace TesApi.Tests
             tokenCredential.Verify(t => t.GetTokenAsync(It.IsAny<TokenRequestContext>(),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
+
+        }
+
+        [TestMethod]
+        public void GetLandingZoneResourcesApiUrl_CorrectUrlIsParsed()
+        {
+            var url = terraLandingZoneApiClient.GetLandingZoneResourcesApiUrl(terraApiStubData.LandingZoneId);
+
+            var expectedUrl = $"{TerraApiStubData.LandingZoneApiHost}/api/landingzones/v1/azure/{terraApiStubData.LandingZoneId}/resources";
+
+            Assert.AreEqual(expectedUrl, url.ToString());
+
+        }
+
+        [TestMethod]
+        public void GetQuotaApiUrl_CorrectUrlIsParsed()
+        {
+            var url = terraLandingZoneApiClient.GetQuotaApiUrl(terraApiStubData.LandingZoneId, terraApiStubData.BatchAccountId);
+
+            var expectedUrl = $"{TerraApiStubData.LandingZoneApiHost}/api/landingzones/v1/azure/{terraApiStubData.LandingZoneId}/resource-quota?azureResourceId={Uri.EscapeDataString(terraApiStubData.BatchAccountId)}";
+
+            Assert.AreEqual(expectedUrl, url.ToString());
 
         }
     }
