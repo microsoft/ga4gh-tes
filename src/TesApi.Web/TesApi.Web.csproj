@@ -55,9 +55,6 @@
     <ProjectReference Include="..\Tes\Tes.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Update="compliance-test\Dockerfile-Tes-Integration-Test">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <None Update="compliance-test\entrypoint.sh">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
