@@ -147,7 +147,7 @@ namespace TesApi.Web
                 BatchImagePublisher = GetStringValue(configuration, "Gen2BatchImagePublisher"),
                 BatchImageSku = GetStringValue(configuration, "Gen2BatchImageSku"),
                 BatchImageVersion = GetStringValue(configuration, "Gen2BatchImageVersion"),
-                BatchNodeAgentSkuId = GetStringValue(configuration, "Gen2BatchNodeAgentSkuId")
+                BatchNodeAgentSkuId = GetStringValue(configuration, "BatchNodeAgentSkuId")
             };
 
             this.gen1BatchNodeInfo = new BatchNodeInfo
@@ -445,10 +445,10 @@ namespace TesApi.Web
                 }
 
                 var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2");
-                string jobId = default;
+                string jobOrTaskId = default;
                 if (this.enableBatchAutopool)
                 {
-                    jobId = await azureProxy.GetNextBatchJobIdAsync(tesTask.Id);
+                    jobOrTaskId = await azureProxy.GetNextBatchJobIdAsync(tesTask.Id);
                     poolInformation = await CreateAutoPoolModePoolInformation(
                         poolSpecification: await GetPoolSpecification(
                         vmSize: virtualMachineInfo.VmSize,
@@ -457,7 +457,7 @@ namespace TesApi.Web
                         nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                         containerConfiguration: containerConfiguration),
                     tesTaskId: tesTask.Id,
-                    jobId: jobId,
+                    jobId: jobOrTaskId,
                     identityResourceIds: identities);
                 }
                 else
@@ -476,16 +476,16 @@ namespace TesApi.Web
                                 nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                                 containerConfiguration: containerConfiguration)))
                         ).Pool;
-                    jobId = await azureProxy.GetNextBatchTaskIdAsync(tesTask.Id, poolInformation.PoolId);
+                    jobOrTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
                 }
 
                 tesTask.PoolId = poolInformation.PoolId;
-                var cloudTask = await ConvertTesTaskToBatchTaskAsync(enableBatchAutopool ? tesTask.Id : jobId, tesTask, containerConfiguration is not null);
-                logger.LogInformation($"Creating batch job for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
+                var cloudTask = await ConvertTesTaskToBatchTaskAsync(enableBatchAutopool ? tesTask.Id : jobOrTaskId, tesTask, containerConfiguration is not null);
+                logger.LogInformation($"Creating batch task for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
 
                 if (this.enableBatchAutopool)
                 {
-                    await azureProxy.CreateAutoPoolModeBatchJobAsync(jobId, cloudTask, poolInformation);
+                    await azureProxy.CreateAutoPoolModeBatchJobAsync(jobOrTaskId, cloudTask, poolInformation);
                 }
                 else
                 {
@@ -496,64 +496,16 @@ namespace TesApi.Web
                 tesTask.State = TesState.INITIALIZINGEnum;
                 poolInformation = null;
             }
-            catch (AzureBatchQuotaMaxedOutException exception)
+            catch (AggregateException aggregateException)
             {
-                logger.LogWarning($"TES task: {tesTask.Id} AzureBatchQuotaMaxedOutException.Message: {exception.Message} . Not enough quota available.  Task will remain with state QUEUED.");
-
-                if (exception.Message.StartsWith("No remaining pool quota available.", StringComparison.OrdinalIgnoreCase) || exception.Message.StartsWith("No remaining active jobs quota available.", StringComparison.OrdinalIgnoreCase))
+                foreach (var exception in aggregateException.Flatten().InnerExceptions)
                 {
-                    neededPools.Add(poolKey);
+                    HandleException(exception);
                 }
-            }
-            catch (AzureBatchLowQuotaException exception)
-            {
-                tesTask.State = TesState.SYSTEMERROREnum;
-                tesTask.AddTesTaskLog(); // Adding new log here because this exception is thrown from CheckBatchAccountQuotas() and AddTesTaskLog() above is called after that. This way each attempt will have its own log entry.
-                tesTask.SetFailureReason("InsufficientBatchQuota", exception.Message);
-                logger.LogError(exception, $"TES task: {tesTask.Id} AzureBatchLowQuotaException.Message: {exception.Message}");
-            }
-            catch (AzureBatchVirtualMachineAvailabilityException exception)
-            {
-                tesTask.State = TesState.SYSTEMERROREnum;
-                tesTask.AddTesTaskLog(); // Adding new log here because this exception is thrown from GetVmSizeAsync() and AddTesTaskLog() above is called after that. This way each attempt will have its own log entry.
-                tesTask.SetFailureReason("NoVmSizeAvailable", exception.Message);
-                logger.LogError(exception, $"TES task: {tesTask.Id} AzureBatchVirtualMachineAvailabilityException.Message: {exception.Message}");
-            }
-            catch (TesException exception)
-            {
-                tesTask.State = TesState.SYSTEMERROREnum;
-                tesTask.SetFailureReason(exception);
-                logger.LogError(exception, $"TES task: {tesTask.Id} TesException.Message: {exception.Message}");
-            }
-            catch (BatchClientException exception)
-            {
-                tesTask.State = TesState.SYSTEMERROREnum;
-                tesTask.SetFailureReason("BatchClientException", string.Join(",", exception.Data.Values), exception.Message, exception.StackTrace);
-                logger.LogError(exception, $"TES task: {tesTask.Id} BatchClientException.Message: {exception.Message} {string.Join(",", exception?.Data?.Values)}");
-            }
-            catch (BatchException exception) when (exception.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batcnErrorException && IsJobQuotaException(batcnErrorException.Body.Code))
-            {
-                neededPools.Add(poolKey);
-                tesTask.SetWarning(batcnErrorException.Body.Message.Value, Array.Empty<string>());
-                logger.LogInformation($"Not enough quota available for task Id {tesTask.Id}. Reason: {batcnErrorException.Body.Message.Value}. Task will remain in queue.");
-            }
-            catch (BatchException exception) when (exception.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && IsPoolQuotaException(batchErrorException.Body.Code))
-            {
-                neededPools.Add(poolKey);
-                tesTask.SetWarning(batchErrorException.Body.Message.Value, Array.Empty<string>());
-                logger.LogInformation($"Not enough quota available for task Id {tesTask.Id}. Reason: {batchErrorException.Body.Message.Value}. Task will remain in queue.");
-            }
-            catch (Microsoft.Rest.Azure.CloudException exception) when (IsPoolQuotaException(exception.Body.Code))
-            {
-                neededPools.Add(poolKey);
-                tesTask.SetWarning(exception.Body.Message, Array.Empty<string>());
-                logger.LogInformation($"Not enough quota available for task Id {tesTask.Id}. Reason: {exception.Body.Message}. Task will remain in queue.");
             }
             catch (Exception exception)
             {
-                tesTask.State = TesState.SYSTEMERROREnum;
-                tesTask.SetFailureReason("UnknownError", exception.Message, exception.StackTrace);
-                logger.LogError(exception, $"TES task: {tesTask.Id} Exception.Message: {exception.Message}");
+                HandleException(exception);
             }
             finally
             {
@@ -563,16 +515,80 @@ namespace TesApi.Web
                 }
             }
 
-            static bool IsJobQuotaException(string code)
-                => @"ActiveJobAndScheduleQuotaReached".Equals(code, StringComparison.OrdinalIgnoreCase);
-
-            static bool IsPoolQuotaException(string code)
-                => code switch
+            void HandleException(Exception exception)
+            {
+                switch (exception)
                 {
-                    "AutoPoolCreationFailedWithQuotaReached" => true,
-                    "PoolQuotaReached" => true,
-                    _ => false,
-                };
+                    case AzureBatchPoolCreationException azureBatchPoolCreationException:
+                        logger.LogWarning(azureBatchPoolCreationException, "TES task: {TesTask} AzureBatchPoolCreationException.Message: {ExceptionMessage} . This might be a transient issue. Task will remain with state QUEUED.", tesTask.Id, azureBatchPoolCreationException.Message);
+                        break;
+
+                    case AzureBatchQuotaMaxedOutException azureBatchQuotaMaxedOutException:
+                        logger.LogWarning("TES task: {TesTask} AzureBatchQuotaMaxedOutException.Message: {ExceptionMessage} . Not enough quota available. Task will remain with state QUEUED.", tesTask.Id, azureBatchQuotaMaxedOutException.Message);
+                        neededPools.Add(poolKey);
+                        break;
+
+                    case AzureBatchLowQuotaException azureBatchLowQuotaException:
+                        tesTask.State = TesState.SYSTEMERROREnum;
+                        tesTask.AddTesTaskLog(); // Adding new log here because this exception is thrown from CheckBatchAccountQuotas() and AddTesTaskLog() above is called after that. This way each attempt will have its own log entry.
+                        tesTask.SetFailureReason("InsufficientBatchQuota", azureBatchLowQuotaException.Message);
+                        logger.LogError(azureBatchLowQuotaException, "TES task: {TesTask} AzureBatchLowQuotaException.Message: {ExceptionMessage}", tesTask.Id, azureBatchLowQuotaException.Message);
+                        break;
+
+                    case AzureBatchVirtualMachineAvailabilityException azureBatchVirtualMachineAvailabilityException:
+                        tesTask.State = TesState.SYSTEMERROREnum;
+                        tesTask.AddTesTaskLog(); // Adding new log here because this exception is thrown from GetVmSizeAsync() and AddTesTaskLog() above is called after that. This way each attempt will have its own log entry.
+                        tesTask.SetFailureReason("NoVmSizeAvailable", azureBatchVirtualMachineAvailabilityException.Message);
+                        logger.LogError(azureBatchVirtualMachineAvailabilityException, "TES task: {TesTask} AzureBatchVirtualMachineAvailabilityException.Message: {ExceptionMessage}", tesTask.Id, azureBatchVirtualMachineAvailabilityException.Message);
+                        break;
+
+                    case TesException tesException:
+                        tesTask.State = TesState.SYSTEMERROREnum;
+                        tesTask.SetFailureReason(tesException);
+                        logger.LogError(tesException, "TES task: {TesTask} TesException.Message: {ExceptionMessage}", tesTask.Id, tesException.Message);
+                        break;
+
+                    case BatchClientException batchClientException:
+                        tesTask.State = TesState.SYSTEMERROREnum;
+                        tesTask.SetFailureReason("BatchClientException", string.Join(",", batchClientException.Data.Values), batchClientException.Message, batchClientException.StackTrace);
+                        logger.LogError(batchClientException, "TES task: {TesTask} BatchClientException.Message: {ExceptionMessage} {ExceptionData}", tesTask.Id, batchClientException.Message, string.Join(",", batchClientException?.Data?.Values));
+                        break;
+
+                    case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && IsJobQuotaException(batchErrorException.Body.Code):
+                        tesTask.SetWarning(batchErrorException.Body.Message.Value, Array.Empty<string>());
+                        logger.LogInformation("Not enough job quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, batchErrorException.Body.Message.Value);
+                        break;
+
+                    case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && IsPoolQuotaException(batchErrorException.Body.Code):
+                        neededPools.Add(poolKey);
+                        tesTask.SetWarning(batchErrorException.Body.Message.Value, Array.Empty<string>());
+                        logger.LogInformation("Not enough pool quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, batchErrorException.Body.Message.Value);
+                        break;
+
+                    case Microsoft.Rest.Azure.CloudException cloudException when IsPoolQuotaException(cloudException.Body.Code):
+                        neededPools.Add(poolKey);
+                        tesTask.SetWarning(cloudException.Body.Message, Array.Empty<string>());
+                        logger.LogInformation("Not enough pool quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, cloudException.Body.Message);
+                        break;
+
+                    default:
+                        tesTask.State = TesState.SYSTEMERROREnum;
+                        tesTask.SetFailureReason("UnknownError", exception.Message, exception.StackTrace);
+                        logger.LogError(exception, "TES task: {TesTask} Exception.Message: {ExceptionMessage}", tesTask.Id, exception.Message);
+                        break;
+                }
+
+                static bool IsJobQuotaException(string code)
+                    => @"ActiveJobAndScheduleQuotaReached".Equals(code, StringComparison.OrdinalIgnoreCase);
+
+                static bool IsPoolQuotaException(string code)
+                    => code switch
+                    {
+                        "AutoPoolCreationFailedWithQuotaReached" => true,
+                        "PoolQuotaReached" => true,
+                        _ => false,
+                    };
+            }
         }
 
         /// <summary>
