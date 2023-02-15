@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-      <None Remove="scripts\task-run.sh" />
+     <None Remove="scripts\task-run.sh" />
   </ItemGroup>
 
   <ItemGroup>
