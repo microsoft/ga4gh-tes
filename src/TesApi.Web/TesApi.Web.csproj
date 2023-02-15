@@ -62,7 +62,5 @@
     <None Update="compliance-test\entrypoint.sh">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <Folder Include="Management\Clients\" />
-    <Folder Include="Management\Models\Terra\" />
   </ItemGroup>
 </Project>
