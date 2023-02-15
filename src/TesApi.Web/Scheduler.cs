@@ -26,7 +26,6 @@ namespace TesApi.Web
         private readonly IBatchScheduler batchScheduler;
         private readonly ILogger<Scheduler> logger;
         private readonly bool isDisabled;
-        private readonly bool usingBatchAutopools;
         private readonly TimeSpan runInterval = TimeSpan.FromSeconds(5);
 
         /// <summary>
@@ -42,7 +41,6 @@ namespace TesApi.Web
             this.batchScheduler = batchScheduler;
             this.logger = logger;
             isDisabled = configuration.GetValue("DisableBatchScheduling", false);
-            usingBatchAutopools = configuration.GetValue("UseLegacyBatchImplementationWithAutopools", false);
         }
 
         /// <summary>
