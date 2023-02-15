@@ -40,6 +40,7 @@ namespace TesApi.Web.Management.Batch
             CreateMap<ImageReference, ApiImageReference>();
             CreateMap<FixedScaleSettings, ApiFixedScale>();
             CreateMap<PublicIPAddressConfiguration, ApiPublicIpAddressConfiguration>();
+            CreateMap<MetadataItem, ApiBatchPoolMetadataItem>();
             //TODO: This mapping to be updated once the WSM API changes to support the correct values 
             CreateMap<UserAssignedIdentities, ApiUserAssignedIdentity>()
                 .ForMember(dest => dest.ClientId, opt => opt.MapFrom(src => src.ClientId))
