@@ -77,6 +77,26 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
+        [DataRow($"{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "", TerraApiStubData.WsmGetSasResponseStorageUrl)]
+        [DataRow($"/{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "", TerraApiStubData.WsmGetSasResponseStorageUrl)]
+        [DataRow($"/{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "/", TerraApiStubData.WsmGetSasResponseStorageUrl)]
+        [DataRow($"/cromwell-executions/test", "", $"{TerraApiStubData.WsmGetSasResponseStorageUrl}/cromwell-executions/test")]
+        [DataRow($"/{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "/dir/blobName", $"{TerraApiStubData.WsmGetSasResponseStorageUrl}/dir/blobName")]
+        [DataRow($"https://{WorkspaceStorageAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}", "", TerraApiStubData.WsmGetSasResponseStorageUrl)]
+        [DataRow($"https://{WorkspaceStorageAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}", "/dir/blob", $"{TerraApiStubData.WsmGetSasResponseStorageUrl}/dir/blob")]
+        public async Task MapLocalPathToSasUrlAsync_GetContainerSasIsTrue(string input, string blobPath, string expected)
+        {
+            wsmApiClientMock.Setup(a => a.GetSasTokenAsync(terraApiStubData.WorkspaceId,
+                    terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>()))
+                .ReturnsAsync(terraApiStubData.GetWsmSasTokenApiResponse());
+
+            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input + blobPath, true);
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual($"{expected}?sv={TerraApiStubData.SasToken}", result);
+        }
+
+        [TestMethod]
         [DataRow($"{WorkspaceStorageAccountName}/foo")]
         [DataRow($"/bar/{WorkspaceStorageContainerName}")]
         [DataRow($"/foo/bar/")]
@@ -87,22 +107,6 @@ namespace TesApi.Tests
         public async Task MapLocalPathToSasUrlAsync_InvalidInputs(string input)
         {
             await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input);
-        }
-
-        [TestMethod]
-        public async Task MapLocalPathToSasUrlAsync_ContainerSasTokenIsRequested()
-        {
-            var path = "/foo/bar";
-            wsmApiClientMock.Setup(a => a.GetSasTokenAsync(terraApiStubData.WorkspaceId,
-                    terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>()))
-                .ReturnsAsync(terraApiStubData.GetWsmSasTokenApiResponse());
-
-            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(path, true);
-
-            var builder = new UriBuilder(terraApiStubData.GetWsmSasTokenApiResponse().Url);
-            builder.Path += path.TrimStart('/');
-
-            Assert.IsNotNull(builder.ToString(), result);
         }
     }
 }

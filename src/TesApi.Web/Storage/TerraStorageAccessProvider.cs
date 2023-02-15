@@ -80,7 +80,7 @@ namespace TesApi.Web.Storage
 
             if (getContainerSas)
             {
-                return await GetMappedSasContainerUrlFromWsmAsync(normalizedPath);
+                return await MapAndGetSasContainerUrlFromWsmAsync(normalizedPath);
             }
 
             if (IsKnownExecutionFilePath(normalizedPath))
@@ -99,6 +99,22 @@ namespace TesApi.Web.Storage
             return await GetMappedSasUrlFromWsmAsync(segments.BlobName);
         }
 
+        private async Task<string> MapAndGetSasContainerUrlFromWsmAsync(string inputPath)
+        {
+            if (IsKnownExecutionFilePath(inputPath))
+            {
+                return await GetMappedSasContainerUrlFromWsmAsync(inputPath);
+            }
+
+            if (!StorageAccountUrlSegments.TryCreate(inputPath, out var withContainerSegments))
+            {
+                throw new Exception(
+                    "Invalid path provided. The path must be a valid blob storage url or a path with the following format: /accountName/container");
+            }
+
+            return await GetMappedSasContainerUrlFromWsmAsync(withContainerSegments.BlobName);
+        }
+
         private async Task<string> GetMappedSasContainerUrlFromWsmAsync(string pathToAppend)
         {
             //an empty blob name gets a container Sas token
@@ -106,9 +122,12 @@ namespace TesApi.Web.Storage
 
             var urlBuilder = new UriBuilder(tokenInfo.Url);
 
-            urlBuilder.Path += pathToAppend;
+            if (!string.IsNullOrEmpty(pathToAppend.TrimStart('/')))
+            {
+                urlBuilder.Path += $"/{pathToAppend.TrimStart('/')}";
+            }
 
-            return urlBuilder.ToString();
+            return urlBuilder.Uri.ToString();
         }
 
         private async Task<string> GetMappedSasUrlFromWsmAsync(string blobName)
@@ -128,7 +147,7 @@ namespace TesApi.Web.Storage
                 uriBuilder.Path += $"/{normalizedBlobName.TrimStart('/')}";
             }
 
-            return uriBuilder.ToString();
+            return uriBuilder.Uri.ToString();
         }
 
         private SasTokenApiParameters CreateTokenParamsFromOptions(string blobName, string sasPermissions)
@@ -143,7 +162,6 @@ namespace TesApi.Web.Storage
         {
             Logger.LogInformation(
                 $"Getting Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
-
             return await terraWsmApiClient.GetSasTokenAsync(
                 Guid.Parse(terraOptions.WorkspaceId),
                 Guid.Parse(terraOptions.WorkspaceStorageContainerResourceId),

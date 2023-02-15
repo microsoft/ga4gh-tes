@@ -164,24 +164,6 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<string> GetNextBatchTaskIdAsync(string tesTaskId, string batchJobId)
-        {
-            var taskFilter = new ODATADetailLevel
-            {
-                FilterClause = $"startswith(id,'{tesTaskId}{BatchJobAttemptSeparator}')",
-                SelectClause = "id"
-            };
-
-            var lastAttemptNumber = (await batchRaceConditionJobNotFoundRetryPolicy.ExecuteAsync(() =>
-                    batchClient.JobOperations.ListTasks(batchJobId, taskFilter).ToListAsync()))
-                .Select(j => int.Parse(j.Id.Split(BatchJobAttemptSeparator)[1]))
-                .OrderBy(a => a)
-                .LastOrDefault();
-
-            return $"{tesTaskId}{BatchJobAttemptSeparator}{lastAttemptNumber + 1}";
-        }
-
-        /// <inheritdoc/>
         public IEnumerable<AzureBatchNodeCount> GetBatchActiveNodeCountByVmSize()
             => batchClient.PoolOperations.ListPools()
                 .Select(p => new

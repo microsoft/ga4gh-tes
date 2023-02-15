@@ -26,14 +26,6 @@ namespace TesApi.Web
         Task<string> GetNextBatchJobIdAsync(string tesTaskId);
 
         /// <summary>
-        /// Gets a new Azure Batch task id to schedule another task
-        /// </summary>
-        /// <param name="tesTaskId">The unique TES task ID</param>
-        /// <param name="batchJobId">The azure job ID</param>
-        /// <returns>The next logical, new Azure Batch task ID</returns>
-        Task<string> GetNextBatchTaskIdAsync(string tesTaskId, string batchJobId);
-
-        /// <summary>
         /// Creates a new Azure Batch job for Autopools
         /// </summary>
         /// <param name="jobId"></param>

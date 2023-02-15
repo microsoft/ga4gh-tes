@@ -112,9 +112,6 @@ namespace TesApi.Web
         public Task<string> GetNextBatchJobIdAsync(string tesTaskId) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetNextBatchJobIdAsync(tesTaskId));
 
         /// <inheritdoc/>
-        public Task<string> GetNextBatchTaskIdAsync(string tesTaskId, string batchJobId) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetNextBatchTaskIdAsync(tesTaskId, batchJobId));
-
-        /// <inheritdoc/>
         public Task<IEnumerable<string>> GetPoolIdsReferencedByJobsAsync(CancellationToken cancellationToken) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetPoolIdsReferencedByJobsAsync(cancellationToken));
 
         /// <inheritdoc/>

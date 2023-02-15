@@ -585,7 +585,6 @@ namespace TesDeployer
             }
         }
 
-        // Currently fails with "Could not identify Cromwell execution directory path for task {task.Id}. This TES instance supports Cromwell tasks only."
         private static async Task<int> TestTaskAsync(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
         {
             using var client = new HttpClient();
@@ -625,6 +624,7 @@ namespace TesDeployer
 
         private static async Task<bool> RunTestTask(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
         {
+            await Task.Delay(System.TimeSpan.FromSeconds(90)); // Give Ingress a moment longer to complete its standup.
             var startTime = DateTime.UtcNow;
             var line = ConsoleEx.WriteLine("Running a test task...");
             var isTestWorkflowSuccessful = (await TestTaskAsync(tesEndpoint, preemptible, tesUsername, tesPassword)) < 1;

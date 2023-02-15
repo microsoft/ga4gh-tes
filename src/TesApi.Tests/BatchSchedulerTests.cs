@@ -12,6 +12,8 @@ using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Azure.Management.Batch.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Newtonsoft.Json;
@@ -310,6 +312,7 @@ namespace TesApi.Tests
             Assert.AreEqual("DiskFull", systemLog[0]);
             Assert.AreEqual("DiskFull", tesTask.FailureReason);
         }
+
         //TODO: This test (and potentially others) must be reviewed and see if they are necessary considering that the quota verification logic is its own class.
         // There are a couple of issues: a similar validation already exists in the quota verifier class, and in order to run this test a complex set up is required, which is hard to maintain.
         // Instead, this test should be refactor to validate if transitions occur in the scheduler when specific exceptions are thrown.  
@@ -357,6 +360,262 @@ namespace TesApi.Tests
             Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("cromwell-executions/workflow1/workflowId1/call-Task1/execution/__batch/batch_script")));
             Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("cromwell-executions/workflow1/workflowId1/call-Task1/execution/__batch/upload_files_script")));
             Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("cromwell-executions/workflow1/workflowId1/call-Task1/execution/__batch/download_files_script")));
+        }
+
+        private async Task AddBatchTaskHandlesExceptions(TesState newState, Func<AzureProxyReturnValues, (Action<IServiceCollection>, Action<Mock<IAzureProxy>>)> testArranger, Action<TesTask, IEnumerable<(LogLevel, Exception)>> resultValidator)
+        {
+            var logger = new Mock<ILogger<BatchScheduler>>();
+            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
+            var (providerModifier, azureProxyModifier) = testArranger?.Invoke(azureProxyReturnValues) ?? (default, default);
+            var azureProxy = new Action<Mock<IAzureProxy>>(mock =>
+            {
+                GetMockAzureProxy(azureProxyReturnValues)(mock);
+                azureProxyModifier?.Invoke(mock);
+            });
+            var task = GetTesTask();
+            task.State = TesState.QUEUEDEnum;
+
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(
+                task,
+                GetMockConfig(false)(),
+                azureProxy,
+                azureProxyReturnValues,
+                s =>
+                {
+                    providerModifier?.Invoke(s);
+                    s.AddTransient(p => logger.Object);
+                });
+
+            Assert.AreEqual(newState, task.State);
+            if (resultValidator is not null)
+            {
+                resultValidator(task, logger.Invocations.Where(i => nameof(ILogger.Log).Equals(i.Method.Name)).Select(i => (((LogLevel?)i.Arguments[0]) ?? LogLevel.None, (Exception)i.Arguments[3])));
+            }
+        }
+
+        [TestMethod]
+        public Task AddBatchTaskHandlesAzureBatchPoolCreationExceptionViaJobCreation()
+        {
+            return AddBatchTaskHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
+
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
+                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchJobAsync(It.IsAny<PoolInformation>(), It.IsAny<CancellationToken>()))
+                    .Callback<PoolInformation, CancellationToken>((poolInfo, cancellationToken)
+                        => throw new AzureBatchPoolCreationException("No job for you.", new Exception("No job for you."))));
+
+            void Validator(TesTask _1, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
+            {
+                var log = logs.LastOrDefault();
+                Assert.IsNotNull(log);
+                var (logLevel, exception) = log;
+                Assert.AreEqual(LogLevel.Warning, logLevel);
+                Assert.IsInstanceOfType<AzureBatchPoolCreationException>(exception);
+            }
+        }
+
+        [TestMethod]
+        public Task AddBatchTaskHandlesAzureBatchPoolCreationExceptionViaPoolCreation()
+        {
+            return AddBatchTaskHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
+
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
+                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>()))
+                    .Callback<Pool, bool>((poolInfo, isPreemptible)
+                        => throw new AzureBatchPoolCreationException("No pool for you.", new Exception("No pool for you."))));
+
+            void Validator(TesTask _1, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
+            {
+                var log = logs.LastOrDefault();
+                Assert.IsNotNull(log);
+                var (logLevel, exception) = log;
+                Assert.AreEqual(LogLevel.Warning, logLevel);
+                Assert.IsInstanceOfType<AzureBatchPoolCreationException>(exception);
+            }
+        }
+
+        [TestMethod]
+        public Task AddBatchTaskHandlesAzureBatchQuotaMaxedOutException()
+        {
+            var quotaVerifier = new Mock<IBatchQuotaVerifier>();
+            return AddBatchTaskHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
+
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
+                => (services => services.AddSingleton<IBatchQuotaVerifier, TestBatchQuotaVerifierQuotaMaxedOut>(), default);
+
+            void Validator(TesTask _1, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
+            {
+                var log = logs.LastOrDefault();
+                Assert.IsNotNull(log);
+                Assert.AreEqual(LogLevel.Warning, log.logLevel);
+            }
+        }
+
+        [TestMethod]
+        public Task AddBatchTaskHandlesAzureBatchLowQuotaException()
+        {
+            var quotaVerifier = new Mock<IBatchQuotaVerifier>();
+            return AddBatchTaskHandlesExceptions(TesState.SYSTEMERROREnum, Arranger, Validator);
+
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
+                => (services => services.AddSingleton<IBatchQuotaVerifier, TestBatchQuotaVerifierLowQuota>(), default);
+
+            void Validator(TesTask _1, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
+            {
+                var log = logs.LastOrDefault();
+                Assert.IsNotNull(log);
+                var (logLevel, exception) = log;
+                Assert.AreEqual(LogLevel.Error, logLevel);
+                Assert.IsInstanceOfType<AzureBatchLowQuotaException>(exception);
+            }
+        }
+
+        [TestMethod]
+        public Task AddBatchTaskHandlesAzureBatchVirtualMachineAvailabilityException()
+        {
+            return AddBatchTaskHandlesExceptions(TesState.SYSTEMERROREnum, Arranger, Validator);
+
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues proxy)
+            {
+                proxy.VmSizesAndPrices = Enumerable.Empty<VirtualMachineInformation>().ToList();
+                return (default, default);
+            }
+
+            void Validator(TesTask _1, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
+            {
+                var log = logs.LastOrDefault();
+                Assert.IsNotNull(log);
+                var (logLevel, exception) = log;
+                Assert.AreEqual(LogLevel.Error, logLevel);
+                Assert.IsInstanceOfType<AzureBatchVirtualMachineAvailabilityException>(exception);
+            }
+        }
+
+        [TestMethod]
+        public Task AddBatchTaskHandlesTesException()
+        {
+            return AddBatchTaskHandlesExceptions(TesState.SYSTEMERROREnum, Arranger, Validator);
+
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
+                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>()))
+                    .Callback<Pool, bool>((poolInfo, isPreemptible)
+                        => throw new TesException("TestFailureReason")));
+
+            void Validator(TesTask _1, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
+            {
+                var log = logs.LastOrDefault();
+                Assert.IsNotNull(log);
+                var (logLevel, exception) = log;
+                Assert.AreEqual(LogLevel.Error, logLevel);
+                Assert.IsInstanceOfType<TesException>(exception);
+            }
+        }
+
+        [TestMethod]
+        public Task AddBatchTaskHandlesBatchClientException()
+        {
+            return AddBatchTaskHandlesExceptions(TesState.SYSTEMERROREnum, Arranger, Validator);
+
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
+                => (default, azureProxy => azureProxy.Setup(b => b.AddBatchTaskAsync(It.IsAny<string>(), It.IsAny<CloudTask>(), It.IsAny<PoolInformation>(), It.IsAny<CancellationToken>()))
+                    .Callback<string, CloudTask, PoolInformation, CancellationToken>((tesTaskId, cloudTask, poolInfo, cancellationToken)
+                        => throw typeof(BatchClientException)
+                                .GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
+                                    new[] { typeof(string), typeof(Exception) })
+                                .Invoke(new object[] { null, null }) as Exception));
+
+            void Validator(TesTask _1, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
+            {
+                var log = logs.LastOrDefault();
+                Assert.IsNotNull(log);
+                var (logLevel, exception) = log;
+                Assert.AreEqual(LogLevel.Error, logLevel);
+                Assert.IsInstanceOfType<BatchClientException>(exception);
+            }
+        }
+
+        [TestMethod]
+        public Task AddBatchTaskHandlesBatchExceptionForJobQuota()
+        {
+            return AddBatchTaskHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
+
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
+                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchJobAsync(It.IsAny<PoolInformation>(), It.IsAny<CancellationToken>()))
+                    .Callback<PoolInformation, CancellationToken>((poolInfo, cancellationToken)
+                        => throw new BatchException(
+                            new Mock<RequestInformation>().Object,
+                            default,
+                            new Microsoft.Azure.Batch.Protocol.Models.BatchErrorException() { Body = new() { Code = "ActiveJobAndScheduleQuotaReached", Message = new(value: "No job for you.") } })));
+
+            void Validator(TesTask task, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
+            {
+                var log = logs.LastOrDefault();
+                Assert.IsNotNull(log);
+                Assert.AreEqual(LogLevel.Information, log.logLevel);
+                Assert.IsNotNull(task.Logs?.Last().Warning);
+            }
+        }
+
+        [TestMethod]
+        public Task AddBatchTaskHandlesBatchExceptionForPoolQuota()
+        {
+            return AddBatchTaskHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
+
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
+                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>()))
+                    .Callback<Pool, bool>((poolInfo, isPreemptible)
+                        => throw new BatchException(
+                            new Mock<RequestInformation>().Object,
+                            default,
+                            new Microsoft.Azure.Batch.Protocol.Models.BatchErrorException() { Body = new() { Code = "PoolQuotaReached", Message = new(value: "No pool for you.") } })));
+
+            void Validator(TesTask task, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
+            {
+                var log = logs.LastOrDefault();
+                Assert.IsNotNull(log);
+                Assert.AreEqual(LogLevel.Information, log.logLevel);
+                Assert.IsNotNull(task.Logs?.Last().Warning);
+            }
+        }
+
+        [TestMethod]
+        public Task AddBatchTaskHandlesCloudExceptionForPoolQuota()
+        {
+            return AddBatchTaskHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
+
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
+                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>()))
+                    .Callback<Pool, bool>((poolInfo, isPreemptible)
+                        => throw new Microsoft.Rest.Azure.CloudException() { Body = new() { Code = "AutoPoolCreationFailedWithQuotaReached", Message = "No autopool for you." } }));
+
+            void Validator(TesTask task, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
+            {
+                var log = logs.LastOrDefault();
+                Assert.IsNotNull(log);
+                Assert.AreEqual(LogLevel.Information, log.logLevel);
+                Assert.IsNotNull(task.Logs?.Last().Warning);
+            }
+        }
+
+        [TestMethod]
+        public Task AddBatchTaskHandlesUnknownException()
+        {
+            var exceptionMsg = "Successful Test";
+            var batchQuotaProvider = new Mock<IBatchQuotaProvider>();
+            batchQuotaProvider.Setup(p => p.GetVmCoreQuotaAsync(It.IsAny<bool>())).Callback<bool>(lowPriority => throw new InvalidOperationException(exceptionMsg));
+            return AddBatchTaskHandlesExceptions(TesState.SYSTEMERROREnum, Arranger, Validator);
+
+            (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
+                => (services => services.AddTransient(p => batchQuotaProvider.Object), default);
+
+            void Validator(TesTask _1, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
+            {
+                var log = logs.LastOrDefault();
+                Assert.IsNotNull(log);
+                var (logLevel, exception) = log;
+                Assert.AreEqual(LogLevel.Error, logLevel);
+                Assert.IsInstanceOfType<InvalidOperationException>(exception);
+                Assert.AreEqual(exceptionMsg, exception.Message);
+            }
         }
 
         [TestCategory("Batch Pools")]
@@ -1108,14 +1367,15 @@ namespace TesApi.Tests
         private static Task<(string JobId, CloudTask CloudTask, PoolInformation PoolInformation, Pool batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync(bool autopool)
             => ProcessTesTaskAndGetBatchJobArgumentsAsync(GetTesTask(), GetMockConfig(autopool)(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
 
-        private static async Task<(string JobId, CloudTask CloudTask, PoolInformation PoolInformation, Pool batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync(TesTask tesTask, IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, AzureProxyReturnValues azureProxyReturnValues)
+        private static async Task<(string JobId, CloudTask CloudTask, PoolInformation PoolInformation, Pool batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync(TesTask tesTask, IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, AzureProxyReturnValues azureProxyReturnValues, Action<IServiceCollection> additionalActions = default)
         {
             using var serviceProvider = GetServiceProvider(
                 configuration,
                 azureProxy,
                 GetMockQuotaProvider(azureProxyReturnValues),
                 GetMockSkuInfoProvider(azureProxyReturnValues),
-                GetContainerRegistryInfoProvider(azureProxyReturnValues));
+                GetContainerRegistryInfoProvider(azureProxyReturnValues),
+                additionalActions: additionalActions);
             var batchScheduler = serviceProvider.GetT();
 
             await batchScheduler.ProcessTesTaskAsync(tesTask);
@@ -1174,8 +1434,8 @@ namespace TesApi.Tests
                         new(batchQuotas.ActiveJobAndJobScheduleQuota, batchQuotas.PoolQuota, batchQuotas.DedicatedCoreQuota, batchQuotas.LowPriorityCoreQuota)));
             });
 
-        private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProvider(IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchQuotaProvider>> quotaProvider, Action<Mock<IBatchSkuInformationProvider>> skuInfoProvider, Action<Mock<ContainerRegistryProvider>> containerRegistryProviderSetup)
-            => new(wrapAzureProxy: true, configuration: configuration, azureProxy: azureProxy, batchQuotaProvider: quotaProvider, batchSkuInformationProvider: skuInfoProvider, accountResourceInformation: GetNewBatchResourceInfo(), batchPoolRepositoryArgs: ("endpoint", "key", "databaseId", "containerId", "partitionKeyValue"), containerRegistryProviderSetup: containerRegistryProviderSetup);
+        private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProvider(IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchQuotaProvider>> quotaProvider, Action<Mock<IBatchSkuInformationProvider>> skuInfoProvider, Action<Mock<ContainerRegistryProvider>> containerRegistryProviderSetup, Action<IServiceCollection> additionalActions = default)
+            => new(wrapAzureProxy: true, configuration: configuration, azureProxy: azureProxy, batchQuotaProvider: quotaProvider, batchSkuInformationProvider: skuInfoProvider, accountResourceInformation: GetNewBatchResourceInfo(), batchPoolRepositoryArgs: ("endpoint", "key", "databaseId", "containerId", "partitionKeyValue"), containerRegistryProviderSetup: containerRegistryProviderSetup, additionalActions: additionalActions);
 
         private static async Task<TesState> GetNewTesTaskStateAsync(TesTask tesTask, AzureProxyReturnValues azureProxyReturnValues)
         {
@@ -1227,9 +1487,6 @@ namespace TesApi.Tests
 
                 azureProxy.Setup(a => a.GetBatchJobAndTaskStateAsync(It.IsAny<TesTask>(), It.IsAny<bool>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.BatchJobAndTaskState));
-
-                azureProxy.Setup(a => a.GetNextBatchTaskIdAsync(It.IsAny<string>(), It.IsAny<string>()))
-                    .Returns(Task.FromResult(azureProxyReturnValues.NextBatchJobId));
 
                 azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount"))
                     .Returns(Task.FromResult(azureProxyReturnValues.StorageAccountInfos["defaultstorageaccount"]));
@@ -1446,6 +1703,35 @@ namespace TesApi.Tests
 
                 return BatchPoolTests.GeneratePool(poolId, metadata: items);
             }
+        }
+
+        private class TestBatchQuotaVerifierQuotaMaxedOut : TestBatchQuotaVerifierBase
+        {
+            public TestBatchQuotaVerifierQuotaMaxedOut(IBatchQuotaProvider batchQuotaProvider) : base(batchQuotaProvider) { }
+
+            public override Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck)
+                => throw new AzureBatchQuotaMaxedOutException("Test AzureBatchQuotaMaxedOutException");
+        }
+
+        private class TestBatchQuotaVerifierLowQuota : TestBatchQuotaVerifierBase
+        {
+            public TestBatchQuotaVerifierLowQuota(IBatchQuotaProvider batchQuotaProvider) : base(batchQuotaProvider) { }
+
+            public override Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck)
+                => throw new AzureBatchLowQuotaException("Test AzureBatchLowQuotaException");
+        }
+
+        private abstract class TestBatchQuotaVerifierBase : IBatchQuotaVerifier
+        {
+            private readonly IBatchQuotaProvider batchQuotaProvider;
+
+            protected TestBatchQuotaVerifierBase(IBatchQuotaProvider batchQuotaProvider)
+                => this.batchQuotaProvider = batchQuotaProvider;
+
+            public abstract Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck);
+
+            public IBatchQuotaProvider GetBatchQuotaProvider()
+                => batchQuotaProvider;
         }
 
         private class FileToDownload
