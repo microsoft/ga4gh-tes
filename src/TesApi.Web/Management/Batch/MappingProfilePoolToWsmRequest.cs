@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Linq;
 using AutoMapper;
 using Microsoft.Azure.Management.Batch.Models;
 using TesApi.Web.Management.Models.Terra;
@@ -47,7 +48,7 @@ namespace TesApi.Web.Management.Batch
                 .ForMember(dest => dest.ResourceGroupName, opt => opt.Ignore())
                 .ForMember(dest => dest.Name, opt => opt.Ignore());
             CreateMap<Pool, ApiAzureBatchPool>()
-               .ForMember(dest => dest.UserAssignedIdentities, opt => opt.MapFrom(src => src.Identity.UserAssignedIdentities.Values));
+               .ForMember(dest => dest.UserAssignedIdentities, opt => opt.MapFrom(src => src.Identity.UserAssignedIdentities.Select(kvp => new ApiUserAssignedIdentity() { Name = kvp.Key, ClientId = kvp.Value.ClientId })));
         }
     }
 }

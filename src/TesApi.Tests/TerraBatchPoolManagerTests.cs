@@ -127,5 +127,34 @@ namespace TesApi.Tests
             Assert.AreNotEqual(name, capturedApiCreateBatchPoolRequest.Common.Name);
             Assert.AreNotEqual(resourceId, capturedApiCreateBatchPoolRequest.Common.ResourceId);
         }
+
+        [TestMethod]
+        public async Task CreateBatchPoolAsync_UserIdentityMapsCorrectly()
+        {
+            var identities = new Dictionary<string, UserAssignedIdentities>();
+
+            var identityName = "MyTestIdentity";
+
+            identities.Add(identityName, new UserAssignedIdentities());
+
+            var poolInfo = new Pool()
+            {
+                DeploymentConfiguration = new DeploymentConfiguration()
+                {
+                    CloudServiceConfiguration = new CloudServiceConfiguration("osfamily", "osversion"),
+                    VirtualMachineConfiguration = new VirtualMachineConfiguration()
+                },
+                Identity = new BatchPoolIdentity(PoolIdentityType.UserAssigned, identities)
+            };
+
+            var pool = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false);
+
+            var name = capturedApiCreateBatchPoolRequest.Common.Name;
+            var resourceId = capturedApiCreateBatchPoolRequest.Common.ResourceId;
+
+            pool = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false);
+
+            Assert.AreEqual(identityName, capturedApiCreateBatchPoolRequest.AzureBatchPool.UserAssignedIdentities.SingleOrDefault().Name);
+        }
     }
 }
