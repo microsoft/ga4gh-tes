@@ -206,11 +206,11 @@ namespace TesApi.Web
             var targetVariable = preemptable ? "TargetLowPriorityNodes" : "TargetDedicated";
             return string.Join(Environment.NewLine, new[]
             {
-                @"$NodeDeallocationOption = taskcompletion;",
-                $"""lifespan = time() - time(""{DateTime.UtcNow:r}"");""",
-                @"span = TimeInterval_Second * 90;",
-                @"startup = TimeInterval_Minute * 2;",
-                @"ratio = 10;",
+                "$NodeDeallocationOption = taskcompletion;",
+                $"""lifespan = time() - time("{DateTime.UtcNow:r}");""",
+                "span = TimeInterval_Second * 90;",
+                "startup = TimeInterval_Minute * 2;",
+                "ratio = 10;",
                 $"${targetVariable} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {initialTarget});"
             });
         }
