@@ -80,7 +80,7 @@ namespace TesApi.Web
         private readonly string globalStartTaskPath;
         private readonly string globalManagedIdentity;
         private readonly ContainerRegistryProvider containerRegistryProvider;
-        private readonly string hostname;
+        private readonly string branchPrefix;
         private readonly IBatchPoolFactory _batchPoolFactory;
         private readonly string taskRunScriptContent;
 
@@ -136,8 +136,8 @@ namespace TesApi.Web
             if (!this.enableBatchAutopool)
             {
                 _batchPoolFactory = poolFactory;
-                hostname = GetStringValue(configuration, "Name");
-                logger.LogInformation($"hostname: {hostname}");
+                branchPrefix = GetStringValue(configuration, "BatchPrefix");
+                logger.LogInformation($"branch-prefix: {branchPrefix}");
                 taskRunScriptContent = string.Join(") && (", File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh")));
             }
 
@@ -291,7 +291,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudPool> GetCloudPools()
-            => azureProxy.GetActivePoolsAsync(this.hostname);
+            => azureProxy.GetActivePoolsAsync(this.branchPrefix);
 
         /// <inheritdoc/>
         public async Task LoadExistingPoolsAsync()
