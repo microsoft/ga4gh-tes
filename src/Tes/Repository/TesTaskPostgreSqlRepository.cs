@@ -135,6 +135,9 @@ namespace Tes.Repository
         public async Task<TesTask> UpdateItemAsync(TesTask tesTask)
         {
             using var dbContext = createDbContext();
+
+            // Manually set entity state to avoid potential NPG PostgreSql bug
+            dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
             var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == tesTask.Id);
 
             if (item is null)
@@ -143,6 +146,9 @@ namespace Tes.Repository
             }
 
             item.Json = tesTask;
+
+            // Manually set entity state to avoid potential NPG PostgreSql bug
+            dbContext.Entry(item).State = EntityState.Modified;
             await dbContext.SaveChangesAsync();
             return item.Json;
         }
