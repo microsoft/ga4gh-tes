@@ -13,6 +13,7 @@ using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Tes.Extensions;
 using Tes.Models;
@@ -90,6 +91,13 @@ namespace TesApi.Web
         /// Orchestrates <see cref="Tes.Models.TesTask"/>s on Azure Batch
         /// </summary>
         /// <param name="logger">Logger <see cref="ILogger"/></param>
+        /// <param name="batchGen1Options">Configuration of <see cref="Options.BatchImageGeneration1Options"/></param>
+        /// <param name="batchGen2Options">Configuration of <see cref="Options.BatchImageGeneration2Options"/></param>
+        /// <param name="marthaOptions">Configuration of <see cref="Options.MarthaOptions"/></param>
+        /// <param name="storageOptions">Configuration of <see cref="Options.StorageOptions"/></param>
+        /// <param name="batchImageNameOptions">Configuration of <see cref="Options.BatchImageNameOptions"/></param>
+        /// <param name="batchNodesOptions">Configuration of <see cref="Options.BatchNodesOptions"/></param>
+        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/></param>
         /// <param name="configuration">Configuration <see cref="IConfiguration"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         /// <param name="storageAccessProvider">Storage access provider <see cref="IStorageAccessProvider"/></param>
@@ -97,7 +105,22 @@ namespace TesApi.Web
         /// <param name="skuInformationProvider">Sku informatoin provider <see cref="IBatchSkuInformationProvider"/></param>
         /// <param name="containerRegistryProvider"></param>
         /// <param name="poolFactory"></param>
-        public BatchScheduler(ILogger<BatchScheduler> logger, IConfiguration configuration, IAzureProxy azureProxy, IStorageAccessProvider storageAccessProvider, IBatchQuotaVerifier quotaVerifier, IBatchSkuInformationProvider skuInformationProvider, ContainerRegistryProvider containerRegistryProvider, IBatchPoolFactory poolFactory)
+        public BatchScheduler(
+            ILogger<BatchScheduler> logger,
+            IOptions<Options.BatchImageGeneration1Options> batchGen1Options,
+            IOptions<Options.BatchImageGeneration2Options> batchGen2Options,
+            IOptions<Options.MarthaOptions> marthaOptions,
+            IOptions<Options.StorageOptions> storageOptions,
+            IOptions<Options.BatchImageNameOptions> batchImageNameOptions,
+            IOptions<Options.BatchNodesOptions> batchNodesOptions,
+            IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions,
+            IConfiguration configuration,
+            IAzureProxy azureProxy,
+            IStorageAccessProvider storageAccessProvider,
+            IBatchQuotaVerifier quotaVerifier,
+            IBatchSkuInformationProvider skuInformationProvider,
+            ContainerRegistryProvider containerRegistryProvider,
+            IBatchPoolFactory poolFactory)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(configuration);
@@ -115,51 +138,50 @@ namespace TesApi.Web
             this.skuInformationProvider = skuInformationProvider;
             this.containerRegistryProvider = containerRegistryProvider;
 
-            static bool GetBoolValue(IConfiguration configuration, string key, bool defaultValue) => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : bool.Parse(configuration[key]);
-            static string GetStringValue(IConfiguration configuration, string key, string defaultValue = "") => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : configuration[key];
-
             this.allowedVmSizes = GetStringValue(configuration, "AllowedVmSizes", null)?.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
-            this.usePreemptibleVmsOnly = GetBoolValue(configuration, "UsePreemptibleVmsOnly", false);
-            this.batchNodesSubnetId = GetStringValue(configuration, "BatchNodesSubnetId", string.Empty);
-            this.dockerInDockerImageName = GetStringValue(configuration, "DockerInDockerImageName", "docker");
-            this.blobxferImageName = GetStringValue(configuration, "BlobxferImageName", "mcr.microsoft.com/blobxfer");
-            this.cromwellDrsLocalizerImageName = GetStringValue(configuration, "CromwellDrsLocalizerImageName", "broadinstitute/cromwell-drs-localizer:develop");
-            this.disableBatchNodesPublicIpAddress = GetBoolValue(configuration, "DisableBatchNodesPublicIpAddress", false);
-            this.enableBatchAutopool = GetBoolValue(configuration, "UseLegacyBatchImplementationWithAutopools", false);
-            this.defaultStorageAccountName = GetStringValue(configuration, "DefaultStorageAccountName", string.Empty);
-            this.marthaUrl = GetStringValue(configuration, "MarthaUrl", string.Empty);
-            this.marthaKeyVaultName = GetStringValue(configuration, "MarthaKeyVaultName", string.Empty);
-            this.marthaSecretName = GetStringValue(configuration, "MarthaSecretName", string.Empty);
-            this.globalStartTaskPath = StandardizeStartTaskPath(GetStringValue(configuration, "GlobalStartTaskPath", string.Empty), this.defaultStorageAccountName);
-            this.globalManagedIdentity = GetStringValue(configuration, "GlobalManagedIdentity", string.Empty);
+            this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
+            this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
+            this.dockerInDockerImageName = batchImageNameOptions.Value.Docker;
+            this.blobxferImageName = batchImageNameOptions.Value.Blobxfer;
+            this.cromwellDrsLocalizerImageName = marthaOptions.Value.CromwellDrsLocalizer;
+            this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
+            this.enableBatchAutopool = batchSchedulingOptions.Value.UseLegacyAutopools;
+            this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
+            this.marthaUrl = marthaOptions.Value.Url;
+            this.marthaKeyVaultName = marthaOptions.Value.KeyVaultName;
+            this.marthaSecretName = marthaOptions.Value.SecretName;
+            this.globalStartTaskPath = StandardizeStartTaskPath(batchNodesOptions.Value.GlobalStartTask, this.defaultStorageAccountName);
+            this.globalManagedIdentity = batchNodesOptions.Value.GlobalManagedIdentity;
 
             if (!this.enableBatchAutopool)
             {
                 _batchPoolFactory = poolFactory;
-                hostname = GetStringValue(configuration, "Name");
+                hostname = batchSchedulingOptions.Value.Prefix;
                 logger.LogInformation($"hostname: {hostname}");
                 taskRunScriptContent = string.Join(") && (", File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh")));
             }
 
             this.gen2BatchNodeInfo = new BatchNodeInfo
             {
-                BatchImageOffer = GetStringValue(configuration, "Gen2BatchImageOffer"),
-                BatchImagePublisher = GetStringValue(configuration, "Gen2BatchImagePublisher"),
-                BatchImageSku = GetStringValue(configuration, "Gen2BatchImageSku"),
-                BatchImageVersion = GetStringValue(configuration, "Gen2BatchImageVersion"),
+                BatchImageOffer = batchGen2Options.Value.Offer,
+                BatchImagePublisher = batchGen2Options.Value.Publisher,
+                BatchImageSku = batchGen2Options.Value.Sku,
+                BatchImageVersion = batchGen2Options.Value.Version,
                 BatchNodeAgentSkuId = GetStringValue(configuration, "BatchNodeAgentSkuId")
             };
 
             this.gen1BatchNodeInfo = new BatchNodeInfo
             {
-                BatchImageOffer = GetStringValue(configuration, "Gen1BatchImageOffer"),
-                BatchImagePublisher = GetStringValue(configuration, "Gen1BatchImagePublisher"),
-                BatchImageSku = GetStringValue(configuration, "Gen1BatchImageSku"),
-                BatchImageVersion = GetStringValue(configuration, "Gen1BatchImageVersion"),
+                BatchImageOffer = batchGen1Options.Value.Offer,
+                BatchImagePublisher = batchGen1Options.Value.Publisher,
+                BatchImageSku = batchGen1Options.Value.Sku,
+                BatchImageVersion = batchGen1Options.Value.Version,
                 BatchNodeAgentSkuId = GetStringValue(configuration, "BatchNodeAgentSkuId")
             };
 
             logger.LogInformation($"usePreemptibleVmsOnly: {usePreemptibleVmsOnly}");
+
+            static string GetStringValue(IConfiguration configuration, string key, string defaultValue = "") => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : configuration[key];
 
             static bool tesTaskIsQueuedInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum || tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
             static bool tesTaskIsInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
@@ -848,7 +870,7 @@ namespace TesApi.Web
         private async Task<CloudTask> ConvertTesTaskToBatchTaskAsync(string taskId, TesTask task, bool poolHasContainerConfig)
         {
             var cromwellExecutionDirectoryPath = GetCromwellExecutionDirectoryPath(task);
-            bool isCromwell = cromwellExecutionDirectoryPath is not null;
+            var isCromwell = cromwellExecutionDirectoryPath is not null;
             var batchExecutionPathPrefix = isCromwell ? CromwellPathPrefix : ExecutionsPathPrefix;
 
             var queryStringsToRemoveFromLocalFilePaths = task.Inputs?
@@ -914,7 +936,7 @@ namespace TesApi.Web
             var downloadFilesScriptPath = $"{batchExecutionDirectoryPath}/{DownloadFilesScriptFileName}";
             var downloadFilesScriptUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{downloadFilesScriptPath}");
             await this.storageAccessProvider.UploadBlobAsync($"/{downloadFilesScriptPath}", downloadFilesScriptContent);
-            var filesToUpload = new TesOutput[0];
+            var filesToUpload = Array.Empty<TesOutput>();
 
             if (task.Outputs?.Count > 0)
             {

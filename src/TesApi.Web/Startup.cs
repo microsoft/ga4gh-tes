@@ -69,13 +69,12 @@ namespace TesApi.Web
                 .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.SectionName))
                 .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.SectionName))
                 .Configure<ContainerRegistryOptions>(Configuration.GetSection(ContainerRegistryOptions.SectionName))
-                .Configure<ApplicationInsightsOptions>(Configuration.GetSection(ApplicationInsightsOptions.SectionName))
                 .Configure<BatchImageGeneration1Options>(Configuration.GetSection(BatchImageGeneration1Options.SectionName))
                 .Configure<BatchImageGeneration2Options>(Configuration.GetSection(BatchImageGeneration2Options.SectionName))
                 .Configure<BatchImageNameOptions>(Configuration.GetSection(BatchImageNameOptions.SectionName))
                 .Configure<BatchNodesOptions>(Configuration.GetSection(BatchNodesOptions.SectionName))
                 .Configure<BatchSchedulingOptions>(Configuration.GetSection(BatchSchedulingOptions.SectionName))
-                .Configure<DefaultStorageOptions>(Configuration.GetSection(DefaultStorageOptions.SectionName))
+                .Configure<StorageOptions>(Configuration.GetSection(StorageOptions.SectionName))
                 .Configure<MarthaOptions>(Configuration.GetSection(MarthaOptions.SectionName))
 
                 .AddLogging()
@@ -169,6 +168,7 @@ namespace TesApi.Web
                 s.ConnectionString = $"InstrumentationKey={instrumentationKey}";
             });
         }
+
         private IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
         {
             var terraOptions = services.GetService<IOptions<TerraOptions>>();

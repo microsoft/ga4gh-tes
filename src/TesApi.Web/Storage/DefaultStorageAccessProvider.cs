@@ -6,8 +6,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Web;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
@@ -28,15 +28,15 @@ namespace TesApi.Web.Storage
         /// Provides methods for blob storage access by using local path references in form of /storageaccount/container/blobpath
         /// </summary>
         /// <param name="logger">Logger <see cref="ILogger"/></param>
-        /// <param name="configuration">Configuration <see cref="IConfiguration"/></param>
+        /// <param name="storageOptions">Configuration of <see cref="Options.StorageOptions"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
-        public DefaultStorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IConfiguration configuration, IAzureProxy azureProxy) : base(logger, azureProxy)
+        public DefaultStorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IOptions<Options.StorageOptions> storageOptions, IAzureProxy azureProxy) : base(logger, azureProxy)
         {
             //TODO: refactor to use the options pattern.
-            defaultStorageAccountName = configuration["DefaultStorageAccountName"];    // This account contains the cromwell-executions container
+            defaultStorageAccountName = storageOptions.Value.DefaultAccountName;    // This account contains the cromwell-executions container
             logger.LogInformation($"DefaultStorageAccountName: {defaultStorageAccountName}");
 
-            externalStorageContainers = configuration["ExternalStorageContainers"]?.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(uri =>
                 {
                     if (StorageAccountUrlSegments.TryCreate(uri, out var s))

@@ -766,7 +766,7 @@ namespace TesApi.Tests
             tesTask.Resources.Preemptible = false;
 
             var config = GetMockConfig(true)()
-                .Append(("UsePreemptibleVmsOnly", "true"));
+                .Append(("BatchScheduling:UsePreemptibleVmsOnly", "true"));
 
             (_, _, var poolInformation, _) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
 
@@ -1129,7 +1129,7 @@ namespace TesApi.Tests
         public async Task PublicHttpUrlsAreKeptIntact()
         {
             var config = GetMockConfig(true)()
-                .Append(("ExternalStorageContainers", "https://externalaccount1.blob.core.windows.net/container1?sas1; https://externalaccount2.blob.core.windows.net/container2/?sas2; https://externalaccount2.blob.core.windows.net?accountsas;"));
+                .Append(("Storage:ExternalStorageContainers", "https://externalaccount1.blob.core.windows.net/container1?sas1; https://externalaccount2.blob.core.windows.net/container2/?sas2; https://externalaccount2.blob.core.windows.net?accountsas;"));
 
             var tesTask = GetTesTask();
 
@@ -1162,7 +1162,7 @@ namespace TesApi.Tests
         public async Task PrivatePathsAndUrlsGetSasToken()
         {
             var config = GetMockConfig(true)()
-                .Append(("ExternalStorageContainers", "https://externalaccount1.blob.core.windows.net/container1?sas1; https://externalaccount2.blob.core.windows.net/container2/?sas2; https://externalaccount2.blob.core.windows.net?accountsas;"));
+                .Append(("Storage:ExternalStorageContainers", "https://externalaccount1.blob.core.windows.net/container1?sas1; https://externalaccount2.blob.core.windows.net/container2/?sas2; https://externalaccount2.blob.core.windows.net?accountsas;"));
 
             var tesTask = GetTesTask();
 
@@ -1323,7 +1323,7 @@ namespace TesApi.Tests
         public async Task PoolIsCreatedInSubnetWhenBatchNodesSubnetIdIsSet()
         {
             var config = GetMockConfig(true)()
-                .Append(("BatchNodesSubnetId", "subnet1"));
+                .Append(("BatchNodes:SubnetId", "subnet1"));
 
             var tesTask = GetTesTask();
             var azureProxy = GetMockAzureProxy(AzureProxyReturnValues.Defaults);
@@ -1340,8 +1340,8 @@ namespace TesApi.Tests
         public async Task PoolIsCreatedWithoutPublicIpWhenSubnetAndDisableBatchNodesPublicIpAddressAreSet()
         {
             var config = GetMockConfig(true)()
-                .Append(("BatchNodesSubnetId", "subnet1"))
-                .Append(("DisableBatchNodesPublicIpAddress", "true"));
+                .Append(("BatchNodes:SubnetId", "subnet1"))
+                .Append(("BatchNodes:DisablePublicIpAddress", "true"));
 
             var tesTask = GetTesTask();
             var azureProxy = GetMockAzureProxy(AzureProxyReturnValues.Defaults);
@@ -1542,11 +1542,11 @@ namespace TesApi.Tests
             => new(() =>
             {
                 var config = Enumerable.Empty<(string Key, string Value)>()
-                .Append(("DefaultStorageAccountName", "defaultstorageaccount"))
-                .Append(("Name", "hostname"));
+                .Append(("Storage:DefaultAccountName", "defaultstorageaccount"))
+                .Append(("BatchScheduling:Prefix", "hostname"));
                 if (autopool)
                 {
-                    config = config.Append(("UseLegacyBatchImplementationWithAutopools", "true"));
+                    config = config.Append(("BatchScheduling:UseLegacyAutopools", "true"));
                 }
 
                 return config;

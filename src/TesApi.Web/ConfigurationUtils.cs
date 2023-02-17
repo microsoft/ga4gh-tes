@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Tes.Models;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
@@ -20,6 +21,7 @@ namespace TesApi.Web
     public class ConfigurationUtils
     {
         private readonly IConfiguration configuration;
+        private readonly string defaultStorageAccountName;
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly ILogger<ConfigurationUtils> logger;
         private readonly IBatchQuotaProvider quotaProvider;
@@ -30,6 +32,7 @@ namespace TesApi.Web
         /// The constructor
         /// </summary>
         /// <param name="configuration"><see cref="IConfiguration"/></param>
+        /// <param name="defaultStorageOptions">Configuration of <see cref="Options.StorageOptions"/></param>
         /// <param name="storageAccessProvider"><see cref="IStorageAccessProvider"/></param>
         /// <param name="quotaProvider"><see cref="IBatchQuotaProvider"/>></param>
         /// <param name="skuInformationProvider"><see cref="IBatchSkuInformationProvider"/>></param>
@@ -37,13 +40,13 @@ namespace TesApi.Web
         /// <param name="logger"><see cref="ILogger"/></param>
         public ConfigurationUtils(
             IConfiguration configuration,
+            IOptions<Options.StorageOptions> defaultStorageOptions,
             IStorageAccessProvider storageAccessProvider,
             IBatchQuotaProvider quotaProvider,
             IBatchSkuInformationProvider skuInformationProvider,
             BatchAccountResourceInformation batchAccountResourceInformation,
             ILogger<ConfigurationUtils> logger)
         {
-
             ArgumentNullException.ThrowIfNull(configuration);
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(quotaProvider);
@@ -56,6 +59,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(logger);
 
             this.configuration = configuration;
+            this.defaultStorageAccountName = defaultStorageOptions.Value.DefaultAccountName;
             this.storageAccessProvider = storageAccessProvider;
             this.logger = logger;
             this.quotaProvider = quotaProvider;
@@ -70,7 +74,6 @@ namespace TesApi.Web
         /// <returns></returns>
         public async Task ProcessAllowedVmSizesConfigurationFileAsync()
         {
-            var defaultStorageAccountName = configuration["DefaultStorageAccountName"];
             var supportedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/supported-vm-sizes";
             var allowedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/allowed-vm-sizes";
 

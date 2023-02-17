@@ -11,6 +11,7 @@ using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace TesApi.Web
 {
@@ -38,24 +39,17 @@ namespace TesApi.Web
         /// Constructor of <see cref="BatchPool"/>.
         /// </summary>
         /// <param name="batchScheduler"></param>
-        /// <param name="configuration"></param>
+        /// <param name="batchSchedulingOptions"></param>
         /// <param name="azureProxy"></param>
         /// <param name="logger"></param>
         /// <exception cref="ArgumentException"></exception>
-        public BatchPool(IBatchScheduler batchScheduler, IConfiguration configuration, IAzureProxy azureProxy, ILogger<BatchPool> logger)
+        public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, ILogger<BatchPool> logger)
         {
-            _forcePoolRotationAge = TimeSpan.FromDays(GetConfigurationValue(configuration, "BatchPoolRotationForcedDays", 30));
+            _forcePoolRotationAge = TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays);
 
             this._azureProxy = azureProxy;
             this._logger = logger;
             _batchPools = batchScheduler as BatchScheduler ?? throw new ArgumentException("batchScheduler must be of type BatchScheduler", nameof(batchScheduler));
-
-            // IConfiguration.GetValue<double>(string key, double defaultValue) throws an exception if the value is defined as blank
-            static double GetConfigurationValue(IConfiguration configuration, string key, double defaultValue)
-            {
-                var value = configuration.GetValue(key, string.Empty);
-                return string.IsNullOrWhiteSpace(value) ? defaultValue : double.Parse(value);
-            }
         }
 
         private Queue<TaskFailureInformation> StartTaskFailures { get; } = new();

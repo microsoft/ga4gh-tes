@@ -3,7 +3,6 @@
 
 namespace TesApi.Web.Options
 {
-    // TODO: elaborate here. Also document this feature
     /// <summary>
     /// Martha configuration options
     /// </summary>
@@ -13,18 +12,23 @@ namespace TesApi.Web.Options
         /// Martha configuration section
         /// </summary>
         public const string SectionName = "Martha";
+        private const string DefaultCromwellDrsLocalizer = "broadinstitute/cromwell-drs-localizer:develop";
 
+        /// <summary>
+        /// Name of the cromwell drs locator image
+        /// </summary>
+        public string CromwellDrsLocalizer { get; set; } = DefaultCromwellDrsLocalizer;
         /// <summary>
         /// MarthaKeyVaultName
         /// </summary>
-        public string KeyVaultName { get; set; }
+        public string KeyVaultName { get; set; } = string.Empty;
         /// <summary>
         /// MarthaSecretName
         /// </summary>
-        public string SecretName { get; set; }
+        public string SecretName { get; set; } = string.Empty;
         /// <summary>
         /// MarthaUrl
         /// </summary>
-        public string Url { get; set; }
+        public string Url { get; set; } = string.Empty;
     }
 }

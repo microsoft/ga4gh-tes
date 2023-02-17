@@ -222,8 +222,7 @@ namespace TesApi.Tests
         private static IEnumerable<(string Key, string Value)> GetMockConfig()
             => Enumerable
                 .Empty<(string Key, string Value)>()
-                .Append(("BatchPoolIdlePoolDays", "0.000416667"))
-                .Append(("BatchPoolRotationForcedDays", "0.000694444"));
+                .Append(("BatchScheduling:PoolRotationForcedDays", "0.000694444"));
 
         private sealed class MockServiceClient : Microsoft.Azure.Batch.Protocol.BatchServiceClient
         {

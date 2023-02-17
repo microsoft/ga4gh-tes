@@ -6,17 +6,21 @@ namespace TesApi.Web.Options
     /// <summary>
     /// Default storage account configuration options
     /// </summary>
-    public class DefaultStorageOptions
+    public class StorageOptions
     {
         /// <summary>
         /// Default storage account configuration section
         /// </summary>
-        public const string SectionName = "DefaultStorage";
+        public const string SectionName = "Storage";
 
         /// <summary>
-        /// Account name.
+        /// External storage container information
         /// </summary>
-        public string AccountName { get; set; }
+        public string ExternalStorageContainers { get; set; }
+        /// <summary>
+        /// Default storage account name.
+        /// </summary>
+        public string DefaultAccountName { get; set; } = string.Empty;
         // TODO: add additional properties to run without a managed id?
     }
 }

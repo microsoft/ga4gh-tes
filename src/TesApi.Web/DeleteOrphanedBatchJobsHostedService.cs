@@ -4,9 +4,9 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Tes.Models;
 using Tes.Repository;
 
@@ -28,16 +28,16 @@ namespace TesApi.Web
         /// <summary>
         /// Default constructor
         /// </summary>
-        /// <param name="configuration">The configuration instance settings</param>
+        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/></param>
         /// <param name="azureProxy">Azure Proxy</param>
         /// <param name="repository">The main TES task database repository</param>
         /// <param name="logger">The logger instance</param>
-        public DeleteOrphanedBatchJobsHostedService(IConfiguration configuration, IAzureProxy azureProxy, IRepository<TesTask> repository, ILogger<DeleteOrphanedBatchJobsHostedService> logger)
+        public DeleteOrphanedBatchJobsHostedService(IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, IRepository<TesTask> repository, ILogger<DeleteOrphanedBatchJobsHostedService> logger)
         {
             this.repository = repository;
             this.azureProxy = azureProxy;
             this.logger = logger;
-            this.isDisabled = !configuration.GetValue("UseLegacyBatchImplementationWithAutopools", false);
+            this.isDisabled = !batchSchedulingOptions.Value.UseLegacyAutopools;
         }
 
         /// <inheritdoc />

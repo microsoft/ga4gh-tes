@@ -11,23 +11,23 @@ namespace TesApi.Web.Options
         /// <summary>
         /// Azure Batch image offer
         /// </summary>
-        public string BatchImageOffer { get; set; }
+        public string Offer { get; set; }
         /// <summary>
         /// Azure Batch image publisher
         /// </summary>
-        public string BatchImagePublisher { get; set; }
+        public string Publisher { get; set; }
         /// <summary>
         /// Azure Batch image SKU
         /// </summary>
-        public string BatchImageSku { get; set; }
+        public string Sku { get; set; }
         /// <summary>
         /// Azure Batch image version
         /// </summary>
-        public string BatchImageVersion { get; set; }
+        public string Version { get; set; }
         ///// <summary>
         ///// Azure Batch node agent sku ID
         ///// </summary>
-        //public string BatchNodeAgentSkuId { get; set; }
+        //public string NodeAgentSkuId { get; set; }
     }
 
     /// <summary>

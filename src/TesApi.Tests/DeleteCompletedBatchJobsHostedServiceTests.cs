@@ -99,7 +99,7 @@ namespace TesApi.Tests
             }
 
             using var serviceProvider = new TestServices.TestServiceProvider<DeleteCompletedBatchJobsHostedService>(
-                configuration: Enumerable.Repeat(("UseLegacyBatchImplementationWithAutopools", true.ToString()), 1),
+                configuration: Enumerable.Repeat(("BatchScheduling:UseLegacyAutopools", true.ToString()), 1),
                 azureProxy: a => a.Setup(p => p.ListOldJobsToDeleteAsync(oldestJobAge))
                     .ReturnsAsync(tasks.Select(i => i.Id + "-1")),
                 tesTaskRepository: SetupRepository);

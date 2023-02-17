@@ -6,9 +6,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Tes.Extensions;
 using Tes.Models;
 using Tes.Repository;
@@ -31,16 +31,16 @@ namespace TesApi.Web
         /// <summary>
         /// Default constructor
         /// </summary>
-        /// <param name="configuration">The configuration instance settings</param>
+        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/></param>
         /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler">The batch scheduler implementation</param>
         /// <param name="logger">The logger instance</param>
-        public Scheduler(IConfiguration configuration, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
+        public Scheduler(IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
         {
             this.repository = repository;
             this.batchScheduler = batchScheduler;
             this.logger = logger;
-            isDisabled = configuration.GetValue("DisableBatchScheduling", false);
+            isDisabled = batchSchedulingOptions.Value.Disable;
         }
 
         /// <summary>

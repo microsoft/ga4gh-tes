@@ -30,7 +30,7 @@ spec:
         - env:
             - name: ASPNETCORE_URLS
               value: http://0.0.0.0:{{ .Values.service.tesPort }}/
-            - name: DefaultStorageAccountName
+            - name: Storage__DefaultAccountName
               value: {{ .Values.persistence.storageAccount }}
             - name: AzureServicesAuthConnectionString
               value: {{ .Values.config.azureServicesAuthConnectionString }}
@@ -42,53 +42,53 @@ spec:
               value: {{ .Values.config.azureOfferDurableId }}
             - name: BatchAccount__AccountName
               value: {{ .Values.config.batchAccountName }}
-            - name: BatchNodesSubnetId
+            - name: BatchNodes__SubnetId
               value: {{ .Values.config.batchNodesSubnetId }}
-            - name: BlobxferImageName
+            - name: NodeImages__Blobxfer
               value: {{ .Values.config.blobxferImageName }}
-            - name: DisableBatchNodesPublicIpAddress
+            - name: BatchNodes__DisablePublicIpAddress
               value: {{ .Values.config.disableBatchNodesPublicIpAddress | quote }}
-            - name: DisableBatchScheduling
+            - name: BatchScheduling__Disable
               value: {{ .Values.config.disableBatchScheduling | quote }}
-            - name: DockerInDockerImageName
+            - name: NodeImages__Docker
               value: {{ .Values.config.dockerInDockerImageName }}
-            - name: UseLegacyBatchImplementationWithAutopools
+            - name: BatchScheduling__UseLegacyAutopools
               value: {{ .Values.config.useLegacyBatchImplementationWithAutopools | quote }}
-            - name: Gen2BatchImageOffer
+            - name: BatchImageGen1__Offer
               value: {{ .Values.config.gen2BatchImageOffer }}
-            - name: Gen2BatchImagePublisher
+            - name: BatchImageGen1__Publisher
               value: {{ .Values.config.gen2BatchImagePublisher }}
-            - name: Gen2BatchImageSku
+            - name: BatchImageGen1__Sku
               value: {{ .Values.config.gen2BatchImageSku | quote }}
-            - name: Gen2BatchImageVersion
+            - name: BatchImageGen2__Version
               value: {{ .Values.config.gen2BatchImageVersion }}
-            - name: Gen1BatchImageOffer
+            - name: BatchImageGen1__Offer
               value: {{ .Values.config.gen1BatchImageOffer }}
-            - name: Gen1BatchImagePublisher
+            - name: BatchImageGen1__Publisher
               value: {{ .Values.config.gen1BatchImagePublisher }}
-            - name: Gen1BatchImageSku
+            - name: BatchImageGen1__Sku
               value: {{ .Values.config.gen1BatchImageSku | quote }}
-            - name: Gen1BatchImageVersion
+            - name: BatchImageGen1__Version
               value: {{ .Values.config.gen1BatchImageVersion }}
             - name: BatchNodeAgentSkuId
               value: {{ .Values.config.batchNodeAgentSkuId }}
-            - name: BatchPoolRotationForcedDays
+            - name: BatchScheduling__PoolRotationForcedDays
               value: {{ .Values.config.batchPoolRotationForcedDays | quote }}
-            - name: Name
+            - name: BatchScheduling__Prefix
               value: {{ .Values.config.name | quote }}
-            - name: MarthaUrl
+            - name: Martha__Url
               value: {{ .Values.config.marthaUrl }}
-            - name: MarthaKeyVaultName
+            - name: Martha__KeyVaultName
               value: {{ .Values.config.marthaKeyVaultName }}
-            - name: MarthaSecretName
+            - name: Martha__SecretName
               value: {{ .Values.config.marthaSecretName }}
-            - name: UsePreemptibleVmsOnly
+            - name: BatchScheduling__UsePreemptibleVmsOnly
               value: {{ .Values.config.usePreemptibleVmsOnly | quote}}
-            - name: GlobalStartTaskPath
+            - name: BatchNodes__GlobalStartTask
               value: {{ .Values.config.globalStartTaskPath }}
-            - name: GlobalManagedIdentity
+            - name: BatchNodes__GlobalManagedIdentity
               value: {{ .Values.config.batchManagedIdentity }}
-            - name: ExternalStorageContainers
+            - name: Storage__ExternalStorageContainers
 {{- $containers  := list -}}
 {{- range .Values.externalSasContainers }}
 {{- $containers = append $containers (printf "https://%s.blob.core.windows.net/%s?%s" .accountName .containerName .sasToken) -}}

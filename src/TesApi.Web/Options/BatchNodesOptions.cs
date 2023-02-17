@@ -16,18 +16,18 @@ namespace TesApi.Web.Options
         /// <summary>
         /// True to disable providing compute nodes a public ip address, False otherwise
         /// </summary>
-        public bool DisablePublicIpAddress { get; set; }
+        public bool DisablePublicIpAddress { get; set; } = false;
         /// <summary>
         /// Full resource id to the subnet all batch nodes will be attached to
         /// </summary>
-        public string SubnetId { get; set; }
+        public string SubnetId { get; set; } = string.Empty;
         /// <summary>
         /// Full resource id to the global managed identity
         /// </summary>
-        public string GlobalManagedIdentity { get; set; }
+        public string GlobalManagedIdentity { get; set; } = string.Empty;
         /// <summary>
         /// Path to the global start task script
         /// </summary>
-        public string GlobalStartTask { get; set; }
+        public string GlobalStartTask { get; set; } = string.Empty;
     }
 }
