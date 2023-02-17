@@ -51,7 +51,6 @@ namespace TesApi.Tests.TestServices
                         .AddSingleton(_ => GetContainerRegisterProvider(containerRegistryProviderSetup).Object)
                         .AddSingleton(Configuration)
                         .AddSingleton(BindHelper<BatchAccountOptions>(BatchAccountOptions.SectionName))
-                        .AddSingleton(BindHelper<CosmosDbOptions>(CosmosDbOptions.CosmosDbAccount))
                         .AddSingleton(BindHelper<RetryPolicyOptions>(RetryPolicyOptions.SectionName))
                         .AddSingleton(BindHelper<TerraOptions>(TerraOptions.SectionName))
                         .AddSingleton(BindHelper<ContainerRegistryOptions>(ContainerRegistryOptions.SectionName))
