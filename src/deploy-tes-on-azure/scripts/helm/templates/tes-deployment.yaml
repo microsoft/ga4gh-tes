@@ -28,6 +28,20 @@ spec:
       terminationGracePeriodSeconds: 90
       containers:
         - env:
+            - name: TesPostgreSql__PostgreSqlServerName
+              value: {{ .Values.tesDatabase.postgreSqlServerName }}
+            - name: TesPostgreSql__PostgreSqlServerNameSuffix
+              value: {{ .Values.tesDatabase.postgreSqlServerNameSuffix }}
+            - name: TesPostgreSql__PostgreSqlServerSslMode
+              value: {{ .Values.tesDatabase.postgreSqlServerSslMode }}
+            - name: TesPostgreSql__PostgreSqlServerPort
+              value: {{ .Values.tesDatabase.postgreSqlServerPort | quote }}
+            - name: TesPostgreSql__PostgreSqlDatabaseName
+              value: {{ .Values.tesDatabase.postgreSqlDatabaseName }}
+            - name: TesPostgreSql__PostgreSqlDatabaseUserLogin
+              value: {{ .Values.tesDatabase.postgreSqlDatabaseUserLogin }}
+            - name: TesPostgreSql__PostgreSqlDatabaseUserPassword
+              value: {{ .Values.tesDatabase.postgreSqlDatabaseUserPassword }}
             - name: ASPNETCORE_URLS
               value: http://0.0.0.0:{{ .Values.service.tesPort }}/
             - name: Storage__DefaultAccountName
@@ -36,8 +50,6 @@ spec:
               value: {{ .Values.config.azureServicesAuthConnectionString }}
             - name: ApplicationInsightsAccountName
               value: {{ .Values.config.applicationInsightsAccountName }}
-            - name: CosmosDb__AccountName
-              value: {{ .Values.config.cosmosDbAccountName }}
             - name: AzureOfferDurableId
               value: {{ .Values.config.azureOfferDurableId }}
             - name: BatchAccount__AccountName
@@ -75,7 +87,7 @@ spec:
             - name: BatchScheduling__PoolRotationForcedDays
               value: {{ .Values.config.batchPoolRotationForcedDays | quote }}
             - name: BatchScheduling__Prefix
-              value: {{ .Values.config.name | quote }}
+              value: {{ .Values.config.batchPrefix | quote }}
             - name: Martha__Url
               value: {{ .Values.config.marthaUrl }}
             - name: Martha__KeyVaultName

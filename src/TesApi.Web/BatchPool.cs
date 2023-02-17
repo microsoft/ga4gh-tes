@@ -168,40 +168,46 @@ namespace TesApi.Web
         /// <remarks>Implements <see cref="IAzureProxy.BatchPoolAutoScaleFormulaFactory"/>.</remarks>
         /// <returns></returns>
         public static string AutoPoolFormula(bool preemptable, int initialTarget)
-            /*
-              Notes on the formula:
-                  Reference: https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling
+        /*
+          Notes on the formula:
+              Reference: https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling
 
-              In my not at all humble opinion, some of the builtin variable names in batch's autoscale formulas are very badly named:
-                  Running tasks are named RunningTasks, which is fine
-                  Queued tasks are named ActiveTasks, which matches the "state", but isn't the best name around
-                  The sum of running & queued tasks (what should be named TotalTasks) is named PendingTasks, an absolutely awful name
+          In order to avoid confusion, some of the builtin variable names in batch's autoscale formulas named in a way that may not appear intuitive:
+              Running tasks are named RunningTasks, which is fine
+              Queued tasks are named ActiveTasks, which matches the same value of the "state" property
+              The sum of running & queued tasks (what I would have named TotalTasks) is named PendingTasks
 
-              The type of ~Tasks is what batch calls a "doubleVec", which needs to be first turned into a "doubleVecList" before it can be turned into a scaler.
-              This is accomplished by calling doubleVec's GetSample method, which returns some number of the most recent available samples of the related metric.
-              Then, a function is used to extract a scaler from the list of scalers (measurements). NOTE: there does not seem to be a "last" function.
+          The type of ~Tasks is what batch calls a "doubleVec", which needs to be first turned into a "doubleVecList" before it can be turned into a scaler.
+          This is accomplished by calling doubleVec's GetSample method, which returns some number of the most recent available samples of the related metric.
+          Then, a function is used to extract a scaler from the list of scalers (measurements). NOTE: there does not seem to be a "last" function.
 
-              Whenever autoscaling is first turned on, including when the pool is first created, there are no sampled metrics available. Thus, we need to prevent the
-              expected errors that would result from trying to extract the samples. Later on, if recent samples aren't available, we prefer that the formula fails
-              (1- so we can potentially capture that, and 2- so that we don't suddenly try to remove all nodes from the pool when there's still demand) so we use a
-              timed scheme to substitue an "initial value" (aka initialTarget).
+          Whenever autoscaling is first turned on, including when the pool is first created, there are no sampled metrics available. Thus, we need to prevent the
+          expected errors that would result from trying to extract the samples. Later on, if recent samples aren't available, we prefer that the formula fails
+          (1- so we can potentially capture that, and 2- so that we don't suddenly try to remove all nodes from the pool when there's still demand) so we use a
+          timed scheme to substitue an "initial value" (aka initialTarget).
 
-              We set NodeDeallocationOption to taskcompletion to prevent wasting time/money by stopping a running task, only to requeue it onto another node, or worse,
-              fail it, just because batch's last sample was taken longer ago than a task's assignment was made to a node, because the formula evaluations are not coordinated
-              with the metric sampling based on my observations. This does mean that some resizes will time out, so we mustn't simply consider timeout to be a fatal error.
-            */
-            => string.Format(@"
-$NodeDeallocationOption=taskcompletion;
-lifespan         = time() - time(""{1}"");
-span             = TimeInterval_Second * 90;
-startup          = TimeInterval_Minute * 2;
-ratio            = 10;
-${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
-",
-                /* {0} */ preemptable ? "TargetLowPriorityNodes" : "TargetDedicated",
-                /* {1} */ DateTime.UtcNow.ToString("r"),
-                /* {2} */ initialTarget);
+          We set NodeDeallocationOption to taskcompletion to prevent wasting time/money by stopping a running task, only to requeue it onto another node, or worse,
+          fail it, just because batch's last sample was taken longer ago than a task's assignment was made to a node, because the formula evaluations are not coordinated
+          with the metric sampling based on my observations. This does mean that some resizes will time out, so we mustn't simply consider timeout to be a fatal error.
 
+          internal variables in this formula:
+            * lifespan: the amount of time between the creation of the formula and the evaluation time of the formula.
+            * span: the amount of time of sampled data to use.
+            * startup: the amount of time we use the initialTarget value instead of using the sampled data.
+            * ratio: the minimum percentage of "valid" measurements to within `span` needed to consider the data collection to be valid.
+        */
+        {
+            var targetVariable = preemptable ? "TargetLowPriorityNodes" : "TargetDedicated";
+            return string.Join(Environment.NewLine, new[]
+            {
+                "$NodeDeallocationOption = taskcompletion;",
+                $"""lifespan = time() - time("{DateTime.UtcNow:r}");""",
+                "span = TimeInterval_Second * 90;",
+                "startup = TimeInterval_Minute * 2;",
+                "ratio = 10;",
+                $"${targetVariable} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {initialTarget});"
+            });
+        }
 
         private async ValueTask ServicePoolManagePoolScalingAsync(CancellationToken cancellationToken)
         {
@@ -392,9 +398,9 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
         {
             var exceptions = new List<Exception>();
 
-            await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.GetResizeErrors, cancellationToken), cancellationToken);
-            await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.ManagePoolScaling, cancellationToken), cancellationToken);
-            await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.Rotate, cancellationToken), cancellationToken);
+            _ = await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.GetResizeErrors, cancellationToken), cancellationToken) &&
+            await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.ManagePoolScaling, cancellationToken), cancellationToken) &&
+            await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.Rotate, cancellationToken), cancellationToken) &&
             await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.RemovePoolIfEmpty, cancellationToken), cancellationToken);
 
             switch (exceptions.Count)
@@ -406,7 +412,7 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
                     throw exceptions.First();
 
                 default:
-                    throw new AggregateException(exceptions.SelectMany(Flatten).ToArray());
+                    throw new AggregateException(exceptions.SelectMany(Flatten));
             }
 
             static IEnumerable<Exception> Flatten(Exception ex)
@@ -416,41 +422,49 @@ ${0} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {2});
                     _ => Enumerable.Empty<Exception>().Append(ex),
                 };
 
-            async ValueTask PerformTask(ValueTask serviceAction, CancellationToken cancellationToken)
+            async ValueTask<bool> PerformTask(ValueTask serviceAction, CancellationToken cancellationToken)
             {
                 if (!cancellationToken.IsCancellationRequested)
                 {
                     try
                     {
                         await serviceAction;
+                        return true;
                     }
                     catch (Exception ex)
                     {
                         exceptions.Add(ex);
-                        RemoveMissingPools(ex);
+                        return await RemoveMissingPools(ex);
                     }
                 }
+
+                return false;
             }
 
-            void RemoveMissingPools(Exception ex)
+            async ValueTask<bool> RemoveMissingPools(Exception ex)
             {
                 switch (ex)
                 {
                     case AggregateException aggregateException:
+                        var result = true;
                         foreach (var e in aggregateException.InnerExceptions)
                         {
-                            RemoveMissingPools(e);
+                            result &= await RemoveMissingPools(e);
                         }
-                        break;
+                        return result;
 
                     case BatchException batchException:
                         if (batchException.RequestInformation.BatchError.Code == BatchErrorCodeStrings.PoolNotFound)
                         {
                             _logger.LogError(ex, "Batch pool {PoolId} is missing. Removing it from TES's active pool list.", Pool.PoolId);
                             _ = _batchPools.RemovePoolFromList(this);
+                            // TODO: Consider moving any remaining tasks to another pool, or failing tasks explicitly
+                            await _batchPools.DeletePoolAsync(this, cancellationToken); // Ensure job removal too
+                            return false;
                         }
                         break;
                 }
+                return true;
             }
         }
 

@@ -20,6 +20,7 @@ using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Serialization;
 using Tes.Models;
 using Tes.Repository;
+using Tes.Utilities;
 using TesApi.Filters;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
@@ -35,10 +36,6 @@ namespace TesApi.Web
     /// </summary>
     public class Startup
     {
-        private const string CosmosDbDatabaseId = "TES";
-        private const string CosmosDbContainerId = "Tasks";
-        private const string CosmosDbPartitionId = "01";
-
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
 
@@ -65,7 +62,7 @@ namespace TesApi.Web
         {
             services
                 .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.SectionName))
-                .Configure<CosmosDbOptions>(Configuration.GetSection(CosmosDbOptions.CosmosDbAccount))
+                .Configure<PostgreSqlOptions>(Configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
                 .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.SectionName))
                 .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.SectionName))
                 .Configure<ContainerRegistryOptions>(Configuration.GetSection(ContainerRegistryOptions.SectionName))
@@ -81,7 +78,7 @@ namespace TesApi.Web
 
                 .AddSingleton<IAppCache, CachingService>()
                 .AddSingleton<AzureProxy>()
-                .AddSingleton(CreateCosmosDbRepositoryFromConfiguration)
+                .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
                 .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                 .AddTransient<BatchPool>()
                 .AddSingleton(CreateBatchPoolManagerFromConfiguration)
@@ -216,25 +213,11 @@ namespace TesApi.Web
             return ActivatorUtilities.CreateInstance<ArmBatchPoolManager>(services);
         }
 
-        private IRepository<TesTask> CreateCosmosDbRepositoryFromConfiguration(IServiceProvider services)
+        private IRepository<TesTask> CreatePostgresSqlRepositoryFromConfiguration(IServiceProvider services)
         {
-            var options = services.GetRequiredService<IOptions<CosmosDbOptions>>();
-
-            if (!string.IsNullOrWhiteSpace(options.Value.CosmosDbKey))
-            {
-                return WrapService(ActivatorUtilities.CreateInstance<CosmosDbRepository<TesTask>>(services,
-                    options.Value.CosmosDbEndpoint, options.Value.CosmosDbKey, CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId));
-            }
-
-            var azureProxy = services.GetRequiredService<IAzureProxy>();
-
-            (var cosmosDbEndpoint, var cosmosDbKey) = azureProxy.GetCosmosDbEndpointAndKeyAsync(options.Value.AccountName).Result;
-
-            return WrapService(ActivatorUtilities.CreateInstance<CosmosDbRepository<TesTask>>(services,
-                cosmosDbEndpoint, cosmosDbKey, CosmosDbDatabaseId, CosmosDbContainerId, CosmosDbPartitionId));
-
-            IRepository<TesTask> WrapService(IRepository<TesTask> service)
-                => ActivatorUtilities.CreateInstance<CachingWithRetriesRepository<TesTask>>(services, service);
+            var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
+            string postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
+            return new TesTaskPostgreSqlRepository(postgresConnectionString);
         }
 
         private IStorageAccessProvider CreateStorageAccessProviderFromConfiguration(IServiceProvider services)
@@ -262,7 +245,7 @@ namespace TesApi.Web
             return ActivatorUtilities.CreateInstance<DefaultStorageAccessProvider>(services);
         }
 
-        private void ValidateRequiredOptionsForTerraStorageProvider(TerraOptions terraOptions)
+        private static void ValidateRequiredOptionsForTerraStorageProvider(TerraOptions terraOptions)
         {
             ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceId, nameof(terraOptions.WorkspaceId));
             ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageAccountName, nameof(terraOptions.WorkspaceStorageAccountName));

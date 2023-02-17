@@ -1,14 +1,11 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Net.Http.Headers;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Rest;
 
-namespace TesDeployer
+namespace CommonUtilities
 {
     /// <summary>
     /// ITokenProvider implementation based on AzureServiceTokenProvider from Microsoft.Azure.Services.AppAuthentication package.
@@ -16,7 +13,7 @@ namespace TesDeployer
     public class RefreshableAzureServiceTokenProvider : ITokenProvider
     {
         private readonly string resource;
-        private readonly string tenantId;
+        private readonly string? tenantId;
         private readonly AzureServiceTokenProvider tokenProvider;
 
         /// <summary>
@@ -25,12 +22,10 @@ namespace TesDeployer
         /// <param name="resource">Resource to request tokens for</param>
         /// <param name="tenantId">AAD tenant ID containing the resource</param>
         /// <param name="azureAdInstance">AAD instance to request tokens from</param>
-        public RefreshableAzureServiceTokenProvider(string resource, string tenantId = null, string azureAdInstance = "https://login.microsoftonline.com/")
+        public RefreshableAzureServiceTokenProvider(string resource, string? tenantId = null, string azureAdInstance = "https://login.microsoftonline.com/")
         {
-            if (string.IsNullOrEmpty(resource))
-            {
-                throw new ArgumentException(null, nameof(resource));
-            }
+            ArgumentException.ThrowIfNullOrEmpty(resource);
+            ArgumentException.ThrowIfNullOrEmpty(azureAdInstance);
 
             this.resource = resource;
             this.tenantId = tenantId;

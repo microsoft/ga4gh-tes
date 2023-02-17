@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -17,6 +18,7 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using Azure.Storage;
 using Azure.Storage.Blobs;
+using CommonUtilities;
 using IdentityModel.Client;
 using k8s;
 using Microsoft.Azure.Management.Batch;
@@ -26,7 +28,6 @@ using Microsoft.Azure.Management.ContainerRegistry.Fluent;
 using Microsoft.Azure.Management.ContainerService;
 using Microsoft.Azure.Management.ContainerService.Fluent;
 using Microsoft.Azure.Management.ContainerService.Models;
-using Microsoft.Azure.Management.CosmosDB.Fluent;
 using Microsoft.Azure.Management.Fluent;
 using Microsoft.Azure.Management.Graph.RBAC.Fluent;
 using Microsoft.Azure.Management.KeyVault;
@@ -74,14 +75,14 @@ namespace TesDeployer
 
         private static readonly AsyncRetryPolicy longRetryPolicy = Policy
             .Handle<Exception>()
-            .WaitAndRetryAsync(8, retryAttempt => System.TimeSpan.FromSeconds(15));
+            .WaitAndRetryAsync(15, retryAttempt => System.TimeSpan.FromSeconds(15));
 
         public const string ConfigurationContainerName = "configuration";
         public const string ContainersToMountFileName = "containers-to-mount";
         public const string AllowedVmSizesFileName = "allowed-vm-sizes";
         public const string InputsContainerName = "inputs";
-        //public const string SettingsDelimiter = "=:=";
         public const string StorageAccountKeySecretName = "CoAStorageKey";
+        public const string PostgresqlSslMode = "VerifyFull";
 
         private readonly CancellationTokenSource cts = new();
 
@@ -99,6 +100,7 @@ namespace TesDeployer
         };
 
         private Configuration configuration { get; set; }
+        private ITokenProvider tokenProvider;
         private TokenCredentials tokenCredentials;
         private IAzure azureSubscriptionClient { get; set; }
         private Microsoft.Azure.Management.Fluent.Azure.IAuthenticated azureClient { get; set; }
@@ -111,6 +113,7 @@ namespace TesDeployer
         private bool SkipBillingReaderRoleAssignment { get; set; }
         private bool isResourceGroupCreated { get; set; }
         private KubernetesManager kubernetesManager { get; set; }
+        private IKubernetes kubernetesClient { get; set; }
 
         public Deployer(Configuration configuration)
             => this.configuration = configuration;
@@ -129,7 +132,8 @@ namespace TesDeployer
 
                 await Execute("Connecting to Azure Services...", async () =>
                 {
-                    tokenCredentials = new(new RefreshableAzureServiceTokenProvider("https://management.azure.com/"));
+                    tokenProvider = new RefreshableAzureServiceTokenProvider("https://management.azure.com/");
+                    tokenCredentials = new(tokenProvider);
                     azureCredentials = new(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
                     azureClient = GetAzureClient(azureCredentials);
                     azureSubscriptionClient = azureClient.WithSubscription(configuration.SubscriptionId);
@@ -137,18 +141,16 @@ namespace TesDeployer
                     resourceManagerClient = GetResourceManagerClient(azureCredentials);
                     networkManagementClient = new Microsoft.Azure.Management.Network.NetworkManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
                     postgreSqlFlexManagementClient = new FlexibleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, LongRunningOperationRetryTimeout = 1200 };
-                    postgreSqlSingleManagementClient = new SingleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, LongRunningOperationRetryTimeout = 1200 };
-                    kubernetesManager = new(configuration, azureCredentials, cts);
+                    postgreSqlSingleManagementClient = new SingleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, LongRunningOperationRetryTimeout = 1200 };                    
                 });
 
                 await ValidateSubscriptionAndResourceGroupAsync(configuration);
-
+                kubernetesManager = new(configuration, azureCredentials, cts);
                 IResourceGroup resourceGroup = null;
                 ManagedCluster aksCluster = null;
                 BatchAccount batchAccount = null;
                 IGenericResource logAnalyticsWorkspace = null;
                 IGenericResource appInsights = null;
-                ICosmosDBAccount cosmosDb = null;
                 FlexibleServerModel.Server postgreSqlFlexServer = null;
                 SingleServerModel.Server postgreSqlSingleServer = null;
                 IStorageAccount storageAccount = null;
@@ -233,16 +235,6 @@ namespace TesDeployer
 
                         configuration.BatchAccountName = batchAccountName;
 
-                        if (!aksValues.TryGetValue("CosmosDbAccountName", out var cosmosDbAccountName))
-                        {
-                            throw new ValidationException($"Could not retrieve the CosmosDb account name from stored configuration in {storageAccount.Name}.", displayExample: false);
-                        }
-
-                        cosmosDb = await GetExistingCosmosDbAccountAsync(cosmosDbAccountName)
-                            ?? throw new ValidationException($"CosmosDb account {cosmosDbAccountName}, referenced by the stored configuration, does not exist in region {configuration.RegionName}", displayExample: false);
-
-                        configuration.CosmosDbAccountName = cosmosDbAccountName;
-
                         // Note: Current behavior is to block switching from Docker MySQL to Azure PostgreSql on Update.
                         // However we do ancitipate including this change, this code is here to facilitate this future behavior.
                         configuration.PostgreSqlServerName = aksValues.GetValueOrDefault("PostgreSqlServerName");
@@ -277,16 +269,23 @@ namespace TesDeployer
 
                         await kubernetesManager.UpgradeAKSDeploymentAsync(
                             settings,
-                            storageAccount);
+                            storageAccount,
+                            kubernetesClient);
                     }
 
                     if (!configuration.Update)
                     {
+                        if (string.IsNullOrWhiteSpace(configuration.BatchPrefix))
+                        {
+                            var blob = new byte[5];
+                            RandomNumberGenerator.Fill(blob);
+                            configuration.BatchPrefix = CommonUtilities.Base32.ConvertToBase32(blob).TrimEnd('=');
+                        }
+
                         ValidateRegionName(configuration.RegionName);
                         ValidateMainIdentifierPrefix(configuration.MainIdentifierPrefix);
                         storageAccount = await ValidateAndGetExistingStorageAccountAsync();
                         batchAccount = await ValidateAndGetExistingBatchAccountAsync();
-                        cosmosDb = await ValidateAndGetExistingCosmosDbAccountAsync();
                         aksCluster = await ValidateAndGetExistingAKSClusterAsync();
                         postgreSqlFlexServer = await ValidateAndGetExistingPostgresqlServerAsync();
                         var keyVault = await ValidateAndGetExistingKeyVaultAsync();
@@ -297,8 +296,8 @@ namespace TesDeployer
                             configuration.PostgreSqlServerName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
                         }
 
-                        configuration.PostgreSqlAdministratorPassword = Utility.GeneratePassword();
-                        configuration.PostgreSqlTesUserPassword = Utility.GeneratePassword();
+                        configuration.PostgreSqlAdministratorPassword = PasswordGenerator.GeneratePassword();
+                        configuration.PostgreSqlTesUserPassword = PasswordGenerator.GeneratePassword();
 
                         if (string.IsNullOrWhiteSpace(configuration.BatchAccountName))
                         {
@@ -315,11 +314,6 @@ namespace TesDeployer
                         //    configuration.NetworkSecurityGroupName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}", 15);
                         //}
 
-                        if (string.IsNullOrWhiteSpace(configuration.CosmosDbAccountName))
-                        {
-                            configuration.CosmosDbAccountName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
-                        }
-
                         if (string.IsNullOrWhiteSpace(configuration.ApplicationInsightsAccountName))
                         {
                             configuration.ApplicationInsightsAccountName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
@@ -327,7 +321,7 @@ namespace TesDeployer
 
                         if (string.IsNullOrWhiteSpace(configuration.TesPassword))
                         {
-                            configuration.TesPassword = Utility.GeneratePassword();
+                            configuration.TesPassword = PasswordGenerator.GeneratePassword();
                         }
 
                         if (string.IsNullOrWhiteSpace(configuration.AksClusterName))
@@ -446,22 +440,14 @@ namespace TesDeployer
                                 appInsights = await CreateAppInsightsResourceAsync(configuration.LogAnalyticsArmId);
                                 await AssignVmAsContributorToAppInsightsAsync(managedIdentity, appInsights);
                             }),
-                            Task.Run(async () =>
-                            {
-                                cosmosDb ??= await CreateCosmosDbAsync();
-                                await AssignVmAsContributorToCosmosDb(managedIdentity, cosmosDb);
-                            }),
                             Task.Run(async () => {
-                                if (configuration.ProvisionPostgreSqlOnAzure == true)
+                                if (configuration.UsePostgreSqlSingleServer)
                                 {
-                                    if (configuration.UsePostgreSqlSingleServer)
-                                    {
-                                        postgreSqlSingleServer ??= await CreateSinglePostgreSqlServerAndDatabaseAsync(postgreSqlSingleManagementClient, vnetAndSubnet.Value.vmSubnet, postgreSqlDnsZone);
-                                    }
-                                    else
-                                    {
-                                        postgreSqlFlexServer ??= await CreatePostgreSqlServerAndDatabaseAsync(postgreSqlFlexManagementClient, vnetAndSubnet.Value.postgreSqlSubnet, postgreSqlDnsZone);
-                                    }
+                                    postgreSqlSingleServer ??= await CreateSinglePostgreSqlServerAndDatabaseAsync(postgreSqlSingleManagementClient, vnetAndSubnet.Value.vmSubnet, postgreSqlDnsZone);
+                                }
+                                else
+                                {
+                                    postgreSqlFlexServer ??= await CreatePostgreSqlServerAndDatabaseAsync(postgreSqlFlexManagementClient, vnetAndSubnet.Value.postgreSqlSubnet, postgreSqlDnsZone);
                                 }
                             })
                         });
@@ -475,27 +461,28 @@ namespace TesDeployer
                         {
                             ConsoleEx.WriteLine($"Please modify: {kubernetesManager.TempHelmValuesYamlPath}");
                             ConsoleEx.WriteLine($"Then, deploy the helm chart, and press Enter to continue.");
-                            //ConsoleEx.WriteLine("\tPostgreSQL command: " + GetPostgreSQLCreateCromwellUserCommand(configuration.UsePostgreSqlSingleServer));
+                            ConsoleEx.WriteLine("\tPostgreSQL command: " + GetPostgreSQLCreateUserCommand(configuration.UsePostgreSqlSingleServer, configuration.PostgreSqlTesDatabaseName, GetCreateTesUserString()));
                             ConsoleEx.ReadLine();
                         }
                         else
                         {
-                            var kubernetesClient = await kubernetesManager.DeployCoADependenciesAsync(resourceGroup);
+                            kubernetesClient = await kubernetesManager.GetKubernetesClientAsync(resourceGroup);
+                            await kubernetesManager.DeployCoADependenciesAsync();
+
+                            // Deploy an ubuntu pod to run PSQL commands, then delete it
+                            const string deploymentName = "ubuntu";
+                            const string deploymentNamespace = "default";
+                            var ubuntuDeployment = kubernetesManager.GetUbuntuDeploymentTemplate();
+                            await kubernetesClient.AppsV1.CreateNamespacedDeploymentAsync(ubuntuDeployment, deploymentNamespace);
+                            await ExecuteQueriesOnAzurePostgreSQLDbFromK8(deploymentName, deploymentNamespace);
+                            await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace);
 
                             if (configuration.EnableIngress.GetValueOrDefault())
                             {
                                 _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
                             }
 
-                            _ = await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
-                        }
-
-                        if (configuration.ProvisionPostgreSqlOnAzure == true)
-                        {
-                            if (!configuration.ManualHelmDeployment)
-                            {
-                                //await ExecuteQueriesOnAzurePostgreSQLDbFromK8();
-                            }
+                            await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
                         }
                     }
                 }
@@ -647,7 +634,7 @@ namespace TesDeployer
 
         private static async Task<bool> RunTestTask(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
         {
-            await Task.Delay(System.TimeSpan.FromSeconds(90)); // Give Ingress a moment longer to complete its standup.
+            await Task.Delay(System.TimeSpan.FromMinutes(3)); // Give Ingress a moment longer to complete its standup.
             var startTime = DateTime.UtcNow;
             var line = ConsoleEx.WriteLine("Running a test task...");
             var isTestWorkflowSuccessful = (await TestTaskAsync(tesEndpoint, preemptible, tesUsername, tesPassword)) < 1;
@@ -879,9 +866,8 @@ namespace TesDeployer
 
             if (installedVersion is null)
             {
-                UpdateSetting(settings, defaults, "Name", configuration.Name, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "BatchPrefix", configuration.BatchPrefix, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "DefaultStorageAccountName", configuration.StorageAccountName, ignoreDefaults: true);
-                UpdateSetting(settings, defaults, "CosmosDbAccountName", configuration.CosmosDbAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "BatchAccountName", configuration.BatchAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ApplicationInsightsAccountName", configuration.ApplicationInsightsAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ManagedIdentityClientId", managedIdentityClientId, ignoreDefaults: true);
@@ -890,13 +876,14 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "AksCoANamespace", configuration.AksCoANamespace, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ProvisionPostgreSqlOnAzure", configuration.ProvisionPostgreSqlOnAzure, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "CrossSubscriptionAKSDeployment", configuration.CrossSubscriptionAKSDeployment);
-                var provisionPostgreSqlOnAzure = bool.TryParse(settings["ProvisionPostgreSqlOnAzure"], out var _provisionPostgreSqlOnAzure) && _provisionPostgreSqlOnAzure;
-                //UpdateSetting(settings, defaults, "PostgreSqlServerName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlServerName : string.Empty, ignoreDefaults: true);
-                //UpdateSetting(settings, defaults, "PostgreSqlDatabaseName", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesDatabaseName : string.Empty, ignoreDefaults: true);
-                //UpdateSetting(settings, defaults, "PostgreSqlUserLogin", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserLogin : string.Empty, ignoreDefaults: true);
-                //UpdateSetting(settings, defaults, "PostgreSqlUserPassword", provisionPostgreSqlOnAzure ? configuration.PostgreSqlTesUserPassword : string.Empty, ignoreDefaults: true);
-                //UpdateSetting(settings, defaults, "UsePostgreSqlSingleServer", provisionPostgreSqlOnAzure ? configuration.UsePostgreSqlSingleServer.ToString() : string.Empty, ignoreDefaults: true);
-
+                UpdateSetting(settings, defaults, "PostgreSqlServerName", configuration.PostgreSqlServerName, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlServerNameSuffix", configuration.PostgreSqlServerNameSuffix, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlServerPort", configuration.PostgreSqlServerPort.ToString(), ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlServerSslMode", configuration.PostgreSqlServerSslMode, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlTesDatabaseName", configuration.PostgreSqlTesDatabaseName, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlTesDatabaseUserLogin", GetFormattedPostgresqlUser(), ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "PostgreSqlTesDatabaseUserPassword", configuration.PostgreSqlTesUserPassword, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "UsePostgreSqlSingleServer", configuration.UsePostgreSqlSingleServer.ToString(), ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
                 UpdateSetting(settings, defaults, "TesHostname", kubernetesManager.TesHostname, ignoreDefaults: true);
@@ -1134,23 +1121,6 @@ namespace TesDeployer
                 .SelectMany(a => a)
                 .SingleOrDefault(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase) && a.Location.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
 
-        private async Task<ICosmosDBAccount> GetExistingCosmosDbAccountAsync(string cosmosDbAccountName)
-            => (await Task.WhenAll(subscriptionIds.Select(async s =>
-            {
-                try
-                {
-                    return await azureClient.WithSubscription(s).CosmosDBAccounts.ListAsync();
-                }
-                catch (Exception e)
-                {
-                    ConsoleEx.WriteLine(e.Message);
-                    return null;
-                }
-            })))
-                .Where(a => a is not null)
-                .SelectMany(a => a)
-                .SingleOrDefault(a => a.Name.Equals(cosmosDbAccountName, StringComparison.OrdinalIgnoreCase) && a.Region.Name.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
-
         private async Task CreateDefaultStorageContainersAsync(IStorageAccount storageAccount)
         {
             var blobClient = await GetBlobClientAsync(storageAccount);
@@ -1207,29 +1177,6 @@ namespace TesDeployer
                         .WithBuiltInRole(BuiltInRole.Contributor)
                         .WithScope(batchAccount.Id)
                         .CreateAsync(cts.Token)));
-
-        private Task AssignVmAsContributorToCosmosDb(IIdentity managedIdentity, IResource cosmosDb)
-            => Execute(
-                $"Assigning {BuiltInRole.Contributor} role for user-managed identity to Cosmos DB resource scope...",
-                () => roleAssignmentHashConflictRetryPolicy.ExecuteAsync(
-                    () => azureSubscriptionClient.AccessManagement.RoleAssignments
-                        .Define(Guid.NewGuid().ToString())
-                        .ForObjectId(managedIdentity.PrincipalId)
-                        .WithBuiltInRole(BuiltInRole.Contributor)
-                        .WithResourceScope(cosmosDb)
-                        .CreateAsync(cts.Token)));
-
-        private Task<ICosmosDBAccount> CreateCosmosDbAsync()
-            => Execute(
-                $"Creating Cosmos DB: {configuration.CosmosDbAccountName}...",
-                () => azureSubscriptionClient.CosmosDBAccounts
-                    .Define(configuration.CosmosDbAccountName)
-                    .WithRegion(configuration.RegionName)
-                    .WithExistingResourceGroup(configuration.ResourceGroupName)
-                    .WithDataModelSql()
-                    .WithSessionConsistency()
-                    .WithWriteReplication(Region.Create(configuration.RegionName))
-                    .CreateAsync(cts.Token));
 
         private async Task<FlexibleServerModel.Server> CreatePostgreSqlServerAndDatabaseAsync(FlexibleServer.IPostgreSQLManagementClient postgresManagementClient, ISubnet subnet, IPrivateDnsZone postgreSqlDnsZone)
         {
@@ -1327,6 +1274,65 @@ namespace TesDeployer
                     new()));
             return server;
         }
+
+        private string GetFormattedPostgresqlUser()
+        {
+            if (!configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault())
+            {
+                return string.Empty;
+            }
+
+            if (configuration.UsePostgreSqlSingleServer)
+            {
+                return $"{configuration.PostgreSqlTesUserLogin}@{configuration.PostgreSqlServerName}";
+            }
+            else
+            {
+                return configuration.PostgreSqlTesUserLogin;
+            }
+        }
+
+        private string GetCreateTesUserString()
+        {
+            return $"CREATE USER {configuration.PostgreSqlTesUserLogin} WITH PASSWORD '{configuration.PostgreSqlTesUserPassword}'; GRANT ALL PRIVILEGES ON DATABASE {configuration.PostgreSqlTesDatabaseName} TO {configuration.PostgreSqlTesUserLogin};";
+        }
+
+        private string GetPostgreSQLCreateUserCommand(bool useSingleServer, string dbName, string sqlCommand)
+        {
+            if (useSingleServer)
+            {
+                return $"PGPASSWORD={configuration.PostgreSqlAdministratorPassword} psql -U {configuration.PostgreSqlAdministratorLogin}@{configuration.PostgreSqlServerName} -h {configuration.PostgreSqlServerName}.postgres.database.azure.com -d {dbName}  -v sslmode=true -c \"{sqlCommand}\"";
+            }
+            else
+            {
+                return $"psql postgresql://{configuration.PostgreSqlAdministratorLogin}:{configuration.PostgreSqlAdministratorPassword}@{configuration.PostgreSqlServerName}.postgres.database.azure.com/{dbName} -c \"{sqlCommand}\"";
+            }
+        }
+
+        private Task ExecuteQueriesOnAzurePostgreSQLDbFromK8(string podName, string aksNamespace)
+            => Execute(
+                $"Executing scripts on postgresql...",
+                async () =>
+                {
+                    var tesScript = GetCreateTesUserString();
+                    var serverPath = $"{configuration.PostgreSqlServerName}.postgres.database.azure.com";
+                    var adminUser = configuration.PostgreSqlAdministratorLogin;
+
+                    if (configuration.UsePostgreSqlSingleServer)
+                    {
+                        adminUser = $"{configuration.PostgreSqlAdministratorLogin}@{configuration.PostgreSqlServerName}";
+                    }
+
+                    var commands = new List<string[]> {
+                        new string[] { "apt", "update" },
+                        new string[] { "apt", "install", "-y", "postgresql-client" },
+                        new string[] { "bash", "-lic", $"echo {configuration.PostgreSqlServerName}{configuration.PostgreSqlServerNameSuffix}:{configuration.PostgreSqlServerPort}:{configuration.PostgreSqlTesDatabaseName}:{adminUser}:{configuration.PostgreSqlAdministratorPassword} >> ~/.pgpass" },
+                        new string[] { "bash", "-lic", "chmod 0600 ~/.pgpass" },
+                        new string[] { "/usr/bin/psql", "-h", serverPath, "-U", adminUser, "-d", configuration.PostgreSqlTesDatabaseName, "-c", tesScript }
+                    };
+
+                    await kubernetesManager.ExecuteCommandsOnPodAsync(kubernetesClient, podName, commands, aksNamespace);
+                });
 
         private async Task AssignVmAsBillingReaderToSubscriptionAsync(IIdentity managedIdentity)
         {
@@ -1667,7 +1673,7 @@ namespace TesDeployer
                 throw new ValidationException($"If ResourceGroupName is provided, the resource group must already exist.", displayExample: false);
             }
 
-            var token = await new AzureServiceTokenProvider().GetAccessTokenAsync("https://management.azure.com/");
+            var token = (await tokenProvider.GetAuthenticationHeaderAsync(CancellationToken.None)).Parameter;
             var currentPrincipalObjectId = new JwtSecurityTokenHandler().ReadJwtToken(token).Claims.FirstOrDefault(c => c.Type == "oid").Value;
 
             var currentPrincipalSubscriptionRoleIds = (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeWithHttpMessagesAsync($"/subscriptions/{configuration.SubscriptionId}", new($"atScope() and assignedTo('{currentPrincipalObjectId}')")))
@@ -1698,6 +1704,15 @@ namespace TesDeployer
                     DisplayBillingReaderInsufficientAccessLevelWarning();
                 }
             }
+
+            if (configuration.UsePostgreSqlSingleServer && int.Parse(configuration.PostgreSqlVersion) > 11)
+            {
+                // https://learn.microsoft.com/en-us/azure/postgresql/single-server/concepts-version-policy
+                ConsoleEx.WriteLine($"Warning: as of 2/7/2023, Azure Database for PostgreSQL Single Server only supports up to PostgreSQL version 11", ConsoleColor.Yellow);
+                ConsoleEx.WriteLine($"{nameof(configuration.PostgreSqlVersion)} is currently set to {configuration.PostgreSqlVersion}", ConsoleColor.Yellow);
+                ConsoleEx.WriteLine($"Deployment will continue but could fail; please consider including '--{nameof(configuration.PostgreSqlVersion)} 11'", ConsoleColor.Yellow);
+                ConsoleEx.WriteLine("More info: https://learn.microsoft.com/en-us/azure/postgresql/single-server/concepts-version-policy");
+            }
         }
 
         private async Task<IStorageAccount> ValidateAndGetExistingStorageAccountAsync()
@@ -1720,17 +1735,6 @@ namespace TesDeployer
 
             return (await GetExistingBatchAccountAsync(configuration.BatchAccountName))
                 ?? throw new ValidationException($"If BatchAccountName is provided, the batch account must already exist in region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
-        }
-
-        private async Task<ICosmosDBAccount> ValidateAndGetExistingCosmosDbAccountAsync()
-        {
-            if (configuration.CosmosDbAccountName is null)
-            {
-                return null;
-            }
-
-            return (await GetExistingCosmosDbAccountAsync(configuration.CosmosDbAccountName))
-                ?? throw new ValidationException($"If CosmosDbAccountName is provided, the account must already exist in region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
         }
 
         private async Task<(INetwork virtualNetwork, ISubnet vmSubnet, ISubnet postgreSqlSubnet)?> ValidateAndGetExistingVirtualNetworkAsync()
@@ -1955,9 +1959,9 @@ namespace TesDeployer
 
             ThrowIfNotProvidedForUpdate(configuration.ResourceGroupName, nameof(configuration.ResourceGroupName));
 
+            ThrowIfProvidedForUpdate(configuration.BatchPrefix, nameof(configuration.BatchPrefix));
             ThrowIfProvidedForUpdate(configuration.RegionName, nameof(configuration.RegionName));
             ThrowIfProvidedForUpdate(configuration.BatchAccountName, nameof(configuration.BatchAccountName));
-            ThrowIfProvidedForUpdate(configuration.CosmosDbAccountName, nameof(configuration.CosmosDbAccountName));
             ThrowIfProvidedForUpdate(configuration.CrossSubscriptionAKSDeployment, nameof(configuration.CrossSubscriptionAKSDeployment));
             ThrowIfProvidedForUpdate(configuration.ProvisionPostgreSqlOnAzure, nameof(configuration.ProvisionPostgreSqlOnAzure));
             ThrowIfProvidedForUpdate(configuration.ApplicationInsightsAccountName, nameof(configuration.ApplicationInsightsAccountName));
@@ -1975,8 +1979,7 @@ namespace TesDeployer
                 ValidateHelmInstall(configuration.HelmBinaryPath, nameof(configuration.HelmBinaryPath));
             }
 
-            ValidateDependantFeature(!string.IsNullOrEmpty(configuration.LetsEncryptEmail), nameof(configuration.LetsEncryptEmail), configuration.EnableIngress.GetValueOrDefault(), nameof(configuration.EnableIngress));
-            ValidateDependantFeature(configuration.EnableIngress.GetValueOrDefault(), nameof(configuration.EnableIngress), !string.IsNullOrEmpty(configuration.LetsEncryptEmail), nameof(configuration.LetsEncryptEmail)); //TODO: is LetsEncryptEmail required when EnableIngress is enabled?
+            ValidateDependantFeature(configuration.EnableIngress.GetValueOrDefault(), nameof(configuration.EnableIngress), !string.IsNullOrEmpty(configuration.LetsEncryptEmail), nameof(configuration.LetsEncryptEmail));
 
             //if (configuration.ProvisionPostgreSqlOnAzure is null)
             //{
@@ -1986,6 +1989,14 @@ namespace TesDeployer
             //{
             //    ValidateDependantFeature(configuration.UseAks, nameof(configuration.UseAks), configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault(), nameof(configuration.ProvisionPostgreSqlOnAzure));
             //}
+
+            if (!configuration.Update)
+            {
+                if (configuration.BatchPrefix?.Length > 11 || (configuration.BatchPrefix?.Any(c => !char.IsAsciiLetterOrDigit(c)) ?? false))
+                {
+                    throw new ValidationException("BatchPrefix must not be longer than 11 chars and may contain only ASCII letters or digits", false);
+                }
+            }
         }
 
         private static void DisplayBillingReaderInsufficientAccessLevelWarning()
