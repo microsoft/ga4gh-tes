@@ -59,4 +59,9 @@
     <ProjectReference Include="..\CommonUtilities\CommonUtilities.csproj" />
     <ProjectReference Include="..\Tes\Tes.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Update="tes-compliance-test\entrypoint.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>
