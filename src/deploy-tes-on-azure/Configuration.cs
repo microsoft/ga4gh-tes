@@ -11,15 +11,15 @@ namespace TesDeployer
 {
     public class Configuration : UserAccessibleConfiguration
     {
-        public string PostgreSqlTesDatabaseName { get; set; } = "tes_db";
-        public string PostgreSqlAdministratorLogin { get; set; } = "coa_admin";
+        public string PostgreSqlAdministratorLogin { get; set; } = "tes_admin";
         public string PostgreSqlAdministratorPassword { get; set; }
+        public string PostgreSqlTesDatabaseName { get; set; } = "tes_db";
         public string PostgreSqlTesUserLogin { get; set; } = "tes";
         public string PostgreSqlTesUserPassword { get; set; }
         public string PostgreSqlSkuName { get; set; } = "Standard_B2s";
         public string PostgreSqlTier { get; set; } = "Burstable";
         public string DefaultVmSubnetName { get; set; } = "vmsubnet";
-        public string PostgreSqlVersion { get; set; } = "11";
+        public string PostgreSqlVersion { get; set; } = "14";
         public string DefaultPostgreSqlSubnetName { get; set; } = "sqlsubnet";
         public int PostgreSqlStorageSize { get; set; } = 128;  // GiB
         public string Name { get; set; } = CreateNewName();
@@ -36,10 +36,10 @@ namespace TesDeployer
     {
         public string SubscriptionId { get; set; }
         public string RegionName { get; set; }
-        public string MainIdentifierPrefix { get; set; } = "coa";
+        public string MainIdentifierPrefix { get; set; } = "tes";
         public string VmSize { get; set; } = "Standard_D3_v2";
         public string VnetAddressSpace { get; set; } = "10.1.0.0/16"; // 10.1.0.0 - 10.1.255.255, 65536 IPs
-        // Address space for CoA services.
+        // Address space for TES services.
         public string VmSubnetAddressSpace { get; set; } = "10.1.0.0/24"; // 10.1.0.0 - 10.1.0.255, 256 IPs
         public string PostgreSqlSubnetAddressSpace { get; set; } = "10.1.1.0/24"; // 10.1.1.0 - 10.1.1.255, 256 IPs
         // Address space for kubernetes system services, must not overlap with any subnet.
@@ -51,11 +51,10 @@ namespace TesDeployer
         public string BatchAccountName { get; set; }
         public string StorageAccountName { get; set; }
         //public string NetworkSecurityGroupName { get; set; }
-        public string CosmosDbAccountName { get; set; }
         public string LogAnalyticsArmId { get; set; }
         public string ApplicationInsightsAccountName { get; set; }
         public string AksClusterName { get; set; }
-        public string AksCoANamespace { get; set; } = "coa";
+        public string AksCoANamespace { get; set; } = "tes";
         public bool ManualHelmDeployment { get; set; }
         public string HelmBinaryPath { get; set; } = OperatingSystem.IsWindows() ? @"C:\ProgramData\chocolatey\bin\helm.exe" : "/usr/local/bin/helm";
         public int AksPoolSize { get; set; } = 2;
@@ -78,8 +77,11 @@ namespace TesDeployer
         public string BlobxferImageName { get; set; } = null;
         public bool? DisableBatchNodesPublicIpAddress { get; set; } = null;
         public bool DebugLogging { get; set; } = false;
-        public bool? ProvisionPostgreSqlOnAzure { get; set; } = null;
+        public bool? ProvisionPostgreSqlOnAzure { get; set; } = true;
         public string PostgreSqlServerName { get; set; }
+        public string PostgreSqlServerNameSuffix { get; set; } = ".postgres.database.azure.com";
+        public int PostgreSqlServerPort { get; set; } = 5432;
+        public string PostgreSqlServerSslMode { get; set; } = "VerifyFull";
         public bool UsePostgreSqlSingleServer { get; set; } = false;
         public string KeyVaultName { get; set; }
         public bool? EnableIngress { get; set; } = null;

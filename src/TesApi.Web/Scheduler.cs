@@ -184,27 +184,28 @@ namespace TesApi.Web
                         await repository.UpdateItemAsync(tesTask);
                     }
                 }
-                catch (Microsoft.Azure.Cosmos.CosmosException exc)
-                {
-                    TesTask currentTesTask = default;
-                    _ = await repository.TryGetItemAsync(tesTask.Id, t => currentTesTask = t);
+                // TODO catch EF / postgres exception?
+                //catch (Microsoft.Azure.Cosmos.CosmosException exc)
+                //{
+                //    TesTask currentTesTask = default;
+                //    _ = await repository.TryGetItemAsync(tesTask.Id, t => currentTesTask = t);
 
-                    if (exc.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
-                    {
-                        logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw an exception attempting to set state: {tesTask.State}. Another actor set state: {currentTesTask?.State}");
-                        currentTesTask?.SetWarning("ConcurrencyWriteFailure", tesTask.State.ToString(), exc.Message, exc.StackTrace);
-                    }
-                    else
-                    {
-                        logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw {exc.GetType().FullName}: '{exc.Message}'. Stack trace: {exc.StackTrace}");
-                        currentTesTask?.SetWarning("UnknownError", exc.Message, exc.StackTrace);
-                    }
+                //    if (exc.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
+                //    {
+                //        logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw an exception attempting to set state: {tesTask.State}. Another actor set state: {currentTesTask?.State}");
+                //        currentTesTask?.SetWarning("ConcurrencyWriteFailure", tesTask.State.ToString(), exc.Message, exc.StackTrace);
+                //    }
+                //    else
+                //    {
+                //        logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw {exc.GetType().FullName}: '{exc.Message}'. Stack trace: {exc.StackTrace}");
+                //        currentTesTask?.SetWarning("UnknownError", exc.Message, exc.StackTrace);
+                //    }
 
-                    if (currentTesTask is not null)
-                    {
-                        await repository.UpdateItemAsync(currentTesTask);
-                    }
-                }
+                //    if (currentTesTask is not null)
+                //    {
+                //        await repository.UpdateItemAsync(currentTesTask);
+                //    }
+                //}
                 catch (Exception exc)
                 {
                     logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw {exc.GetType().FullName}: '{exc.Message}'. Stack trace: {exc.StackTrace}");

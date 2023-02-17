@@ -18,6 +18,7 @@ using Microsoft.Azure.Management.ContainerService.Fluent;
 using Microsoft.Azure.Management.Msi.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
+using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Azure.Management.Storage.Fluent;
 using Polly;
 using Polly.Retry;
@@ -27,7 +28,7 @@ namespace TesDeployer
     /// <summary>
     /// Class to hold all the kubernetes specific deployer logic.
     /// </summary>
-    internal class KubernetesManager
+    public class KubernetesManager
     {
         private static readonly AsyncRetryPolicy WorkloadReadyRetryPolicy = Policy
             .Handle<Exception>()
@@ -77,25 +78,56 @@ namespace TesDeployer
             AzureDnsLabelName = TesCname;
         }
 
-        public async Task<IKubernetes> GetKubernetesClientAsync()
+        public async Task<IKubernetes> GetKubernetesClientAsync(IResource resourceGroupObject)
         {
+            var resourceGroup = resourceGroupObject.Name;
             var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
 
             // Write kubeconfig in the working directory, because KubernetesClientConfiguration needs to read from a file, TODO figure out how to pass this directly. 
-            var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(configuration.ResourceGroupName, configuration.AksClusterName);
+            var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(resourceGroup, configuration.AksClusterName);
             var kubeConfigFile = new FileInfo(kubeConfigPath);
             await File.WriteAllTextAsync(kubeConfigFile.FullName, Encoding.Default.GetString(creds.Kubeconfigs.First().Value));
-            kubeConfigFile.Refresh();
-
             var k8sConfiguration = KubernetesClientConfiguration.LoadKubeConfig(kubeConfigFile, false);
             var k8sClientConfiguration = KubernetesClientConfiguration.BuildConfigFromConfigObject(k8sConfiguration);
             return new Kubernetes(k8sClientConfiguration);
         }
 
-        public async Task<IKubernetes> DeployCoADependenciesAsync(IResourceGroup _/*resourceGroup*/, IKubernetes client = default) //TODO: use or remove resourceGroup
+        public V1Deployment GetUbuntuDeploymentTemplate()
         {
-            client ??= await GetKubernetesClientAsync();
+            return KubernetesYaml.Deserialize<V1Deployment>(
+                """
+                apiVersion: apps/v1
+                kind: Deployment
+                metadata:
+                  creationTimestamp: null
+                  labels:
+                    io.kompose.service: ubuntu
+                  name: ubuntu
+                spec:
+                  replicas: 1
+                  selector:
+                    matchLabels:
+                      io.kompose.service: ubuntu
+                  strategy: {}
+                  template:
+                    metadata:
+                      creationTimestamp: null
+                      labels:
+                        io.kompose.service: ubuntu
+                    spec:
+                      containers:
+                        - name: ubuntu
+                          image: mcr.microsoft.com/mirror/docker/library/ubuntu:22.04
+                          command: [ "/bin/bash", "-c", "--" ]
+                          args: [ "while true; do sleep 30; done;" ]
+                          resources: {}
+                      restartPolicy: Always
+                status: {}
+                """);
+        }
 
+        public async Task DeployCoADependenciesAsync()
+        {
             var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
 
             if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("aad-pod-identity", StringComparison.OrdinalIgnoreCase))
@@ -105,18 +137,14 @@ namespace TesDeployer
 
             await ExecHelmProcessAsync($"repo update");
             await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig {kubeConfigPath}");
-
-            return client;
         }
 
-        public async Task<IKubernetes> EnableIngress(string tesUsername, string tesPassword, IKubernetes client = default)
+        public async Task<IKubernetes> EnableIngress(string tesUsername, string tesPassword, IKubernetes client)
         {
             var certManagerRegistry = "quay.io";
             var certImageController = $"{certManagerRegistry}/jetstack/cert-manager-controller";
             var certImageWebhook = $"{certManagerRegistry}/jetstack/cert-manager-webhook";
             var certImageCainjector = $"{certManagerRegistry}/jetstack/cert-manager-cainjector";
-
-            client ??= await GetKubernetesClientAsync();
 
             await client.CoreV1.CreateNamespaceAsync(new V1Namespace()
             {
@@ -206,23 +234,25 @@ namespace TesDeployer
             return client;
         }
 
-        public async Task<IKubernetes> DeployHelmChartToClusterAsync(IKubernetes client = default)
+        public async Task DeployHelmChartToClusterAsync(IKubernetes kubernetesClient)
         {
-            client ??= await GetKubernetesClientAsync();
-
             // https://helm.sh/docs/helm/helm_upgrade/
             // The chart argument can be either: a chart reference('example/mariadb'), a path to a chart directory, a packaged chart, or a fully qualified URL
             await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig {kubeConfigPath} --namespace {configuration.AksCoANamespace} --create-namespace",
                 workingDirectory: workingDirectoryTemp);
-            await WaitForWorkloadAsync(client, "tes", configuration.AksCoANamespace, cts.Token);
-
-            return client;
+            await WaitForWorkloadAsync(kubernetesClient, "tes", configuration.AksCoANamespace, cts.Token);
         }
 
+        public async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath)
+        {
+            var templateText = await File.ReadAllTextAsync(valuesTemplatePath);
+            var values = KubernetesYaml.Deserialize<HelmValues>(templateText);
+            return values;
+        }
 
         public async Task UpdateHelmValuesAsync(IStorageAccount storageAccount, string keyVaultUrl, string resourceGroupName, Dictionary<string, string> settings, IIdentity managedId)
         {
-            var values = KubernetesYaml.Deserialize<HelmValues>(await File.ReadAllTextAsync(valuesTemplatePath));
+            var values = await GetHelmValuesAsync(valuesTemplatePath);
             UpdateValuesFromSettings(values, settings);
             values.Config["resourceGroup"] = resourceGroupName;
             values.Identity["name"] = managedId.Name;
@@ -340,10 +370,10 @@ namespace TesDeployer
             }
         }
 
-        public async Task UpgradeAKSDeploymentAsync(Dictionary<string, string> settings, IStorageAccount storageAccount)
+        public async Task UpgradeAKSDeploymentAsync(Dictionary<string, string> settings, IStorageAccount storageAccount, IKubernetes kubernetesClient)
         {
             await UpgradeValuesYamlAsync(storageAccount, settings);
-            _ = await DeployHelmChartToClusterAsync();
+            await DeployHelmChartToClusterAsync(kubernetesClient);
         }
 
         public void DeleteTempFiles()
@@ -380,7 +410,6 @@ namespace TesDeployer
             values.Config["tesOnAzureVersion"] = settings["TesOnAzureVersion"];
             values.Config["azureServicesAuthConnectionString"] = settings["AzureServicesAuthConnectionString"];
             values.Config["applicationInsightsAccountName"] = settings["ApplicationInsightsAccountName"];
-            values.Config["cosmosDbAccountName"] = settings["CosmosDbAccountName"];
             values.Config["batchAccountName"] = settings["BatchAccountName"];
             values.Config["batchNodesSubnetId"] = settings["BatchNodesSubnetId"];
             values.Config["coaNamespace"] = settings["AksCoANamespace"];
@@ -403,16 +432,19 @@ namespace TesDeployer
             values.Config["marthaSecretName"] = settings["MarthaSecretName"];
             values.Config["name"] = settings["Name"];
             values.Config["crossSubscriptionAKSDeployment"] = settings["CrossSubscriptionAKSDeployment"];
-            //values.Config["postgreSqlServerName"] = settings["PostgreSqlServerName"];
-            //values.Config["postgreSqlDatabaseName"] = settings["PostgreSqlDatabaseName"];
-            //values.Config["postgreSqlUserLogin"] = settings["PostgreSqlUserLogin"];
-            //values.Config["postgreSqlUserPassword"] = settings["PostgreSqlUserPassword"];
-            //values.Config["usePostgreSqlSingleServer"] = settings["UsePostgreSqlSingleServer"];
             values.Images["tes"] = settings["TesImageName"];
             values.Service["tesHostname"] = settings["TesHostname"];
             values.Service["enableIngress"] = settings["EnableIngress"];
             values.Config["letsEncryptEmail"] = settings["LetsEncryptEmail"];
             values.Persistence["storageAccount"] = settings["DefaultStorageAccountName"];
+            values.TesDatabase["postgreSqlServerName"] = settings["PostgreSqlServerName"];
+            values.TesDatabase["postgreSqlServerNameSuffix"] = settings["PostgreSqlServerNameSuffix"];
+            values.TesDatabase["postgreSqlServerPort"] = settings["PostgreSqlServerPort"];
+            values.TesDatabase["postgreSqlServerSslMode"] = settings["PostgreSqlServerSslMode"];
+            // Note: Notice "Tes" is omitted from the property name since it's now in the TesDatabase section
+            values.TesDatabase["postgreSqlDatabaseName"] = settings["PostgreSqlTesDatabaseName"];
+            values.TesDatabase["postgreSqlDatabaseUserLogin"] = settings["PostgreSqlTesDatabaseUserLogin"];
+            values.TesDatabase["postgreSqlDatabaseUserPassword"] = settings["PostgreSqlTesDatabaseUserPassword"];
         }
 
         private static Dictionary<string, string> ValuesToSettings(HelmValues values)
@@ -421,7 +453,6 @@ namespace TesDeployer
                 ["TesOnAzureVersion"] = values.Config["tesOnAzureVersion"],
                 ["AzureServicesAuthConnectionString"] = values.Config["azureServicesAuthConnectionString"],
                 ["ApplicationInsightsAccountName"] = values.Config["applicationInsightsAccountName"],
-                ["CosmosDbAccountName"] = values.Config["cosmosDbAccountName"],
                 ["BatchAccountName"] = values.Config["batchAccountName"],
                 ["BatchNodesSubnetId"] = values.Config["batchNodesSubnetId"],
                 ["AksCoANamespace"] = values.Config["coaNamespace"],
@@ -444,17 +475,21 @@ namespace TesDeployer
                 ["MarthaSecretName"] = values.Config["marthaSecretName"],
                 ["Name"] = values.Config["name"],
                 ["CrossSubscriptionAKSDeployment"] = values.Config["crossSubscriptionAKSDeployment"],
-                //["PostgreSqlServerName"] = values.Config["postgreSqlServerName"],
-                //["PostgreSqlDatabaseName"] = values.Config["postgreSqlDatabaseName"],
-                //["PostgreSqlUserLogin"] = values.Config["postgreSqlUserLogin"],
-                //["PostgreSqlUserPassword"] = values.Config["postgreSqlUserPassword"],
-                //["UsePostgreSqlSingleServer"] = values.Config["usePostgreSqlSingleServer"],
+                ["UsePostgreSqlSingleServer"] = values.Config["usePostgreSqlSingleServer"],
                 ["ManagedIdentityClientId"] = values.Identity["clientId"],
                 ["TesImageName"] = values.Images["tes"],
                 ["TesHostname"] = values.Service["tesHostname"],
                 ["EnableIngress"] = values.Service["enableIngress"],
                 ["LetsEncryptEmail"] = values.Config["letsEncryptEmail"],
                 ["DefaultStorageAccountName"] = values.Persistence["storageAccount"],
+                ["PostgreSqlServerName"] = values.TesDatabase["postgreSqlServerName"],
+                ["PostgreSqlServerNameSuffix"] = values.TesDatabase["postgreSqlServerNameSuffix"],
+                ["PostgreSqlServerPort"] = values.TesDatabase["postgreSqlServerPort"],
+                ["PostgreSqlServerSslMode"] = values.TesDatabase["postgreSqlServerSslMode"],
+                // Note: Notice "Tes" is added to the property name since it's coming from the TesDatabase section
+                ["PostgreSqlTesDatabaseName"] = values.TesDatabase["postgreSqlDatabaseName"],
+                ["PostgreSqlTesDatabaseUserLogin"] = values.TesDatabase["postgreSqlDatabaseUserLogin"],
+                ["PostgreSqlTesDatabaseUserPassword"] = values.TesDatabase["postgreSqlDatabaseUserPassword"],
             };
 
         /// <summary>
@@ -541,14 +576,14 @@ namespace TesDeployer
             return output;
         }
 
-        private static async Task<bool> WaitForWorkloadAsync(IKubernetes client, string deploymentName, string deploymentNamespace, CancellationToken cancellationToken)
+        private static async Task<bool> WaitForWorkloadAsync(IKubernetes client, string deploymentName, string aksNamespace, CancellationToken cancellationToken)
         {
-            var deployments = await client.AppsV1.ListNamespacedDeploymentAsync(deploymentNamespace, cancellationToken: cancellationToken);
+            var deployments = await client.AppsV1.ListNamespacedDeploymentAsync(aksNamespace, cancellationToken: cancellationToken);
             var deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
 
             var result = await WorkloadReadyRetryPolicy.ExecuteAndCaptureAsync(async () =>
             {
-                deployments = await client.AppsV1.ListNamespacedDeploymentAsync(deploymentNamespace, cancellationToken: cancellationToken);
+                deployments = await client.AppsV1.ListNamespacedDeploymentAsync(aksNamespace, cancellationToken: cancellationToken);
                 deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
 
                 if ((deployment?.Status?.ReadyReplicas ?? 0) < 1)
@@ -560,10 +595,11 @@ namespace TesDeployer
             return result.Outcome == OutcomeType.Successful;
         }
 
-        private class HelmValues
+        public class HelmValues
         {
             public Dictionary<string, string> Service { get; set; }
             public Dictionary<string, string> Config { get; set; }
+            public Dictionary<string, string> TesDatabase { get; set; }
             public Dictionary<string, string> Images { get; set; }
             public List<string> DefaultContainers { get; set; }
             public List<Dictionary<string, string>> InternalContainersMIAuth { get; set; }
