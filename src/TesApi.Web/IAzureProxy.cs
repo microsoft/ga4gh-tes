@@ -19,13 +19,6 @@ namespace TesApi.Web
     public interface IAzureProxy
     {
         /// <summary>
-        /// Gets CosmosDB endpoint and key
-        /// </summary>
-        /// <param name="cosmosDbAccountName">The CosmosDB account's name</param>
-        /// <returns>The CosmosDB endpoint and key of the specified account</returns>
-        Task<(string, string)> GetCosmosDbEndpointAndKeyAsync(string cosmosDbAccountName);
-
-        /// <summary>
         /// Gets a new Azure Batch job id to schedule another task
         /// </summary>
         /// <param name="tesTaskId">The unique TES task ID</param>

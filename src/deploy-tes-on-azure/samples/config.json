@@ -1,7 +1,7 @@
 ﻿{
   "SubscriptionId": "",
   "RegionName": "westus2",
-  "MainIdentifierPrefix": "coa",
+  "MainIdentifierPrefix": "tes",
   "VmOsVersion": "18.04-LTS",
   "VmSize": "Standard_D3_v2",
   "VnetAddressSpace": "10.0.0.0/24",
@@ -10,7 +10,6 @@
   "ResourceGroupName": "",
   "BatchAccountName": "",
   "StorageAccountName": "",
-  "CosmosDbAccountName": "",
   "ApplicationInsightsAccountName": "",
   "VmName": "",
   "Silent": false,
