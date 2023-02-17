@@ -236,7 +236,7 @@ namespace TesApi.Web
             return ActivatorUtilities.CreateInstance<DefaultStorageAccessProvider>(services);
         }
 
-        private void ValidateRequiredOptionsForTerraStorageProvider(TerraOptions terraOptions)
+        private static void ValidateRequiredOptionsForTerraStorageProvider(TerraOptions terraOptions)
         {
             ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceId, nameof(terraOptions.WorkspaceId));
             ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageAccountName, nameof(terraOptions.WorkspaceStorageAccountName));

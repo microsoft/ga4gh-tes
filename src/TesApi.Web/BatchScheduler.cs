@@ -44,7 +44,7 @@ namespace TesApi.Web
         private static partial Regex GetQueryStringRegex();
 
         private const string AzureSupportUrl = "https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
-        private const int PoolKeyLength = 50; // 64 max pool name length - 16 chars generating unique pool names
+        private const int PoolKeyLength = 55; // 64 max pool name length - 9 chars generating unique pool names
         private const int DefaultCoreCount = 1;
         private const int DefaultMemoryGb = 2;
         private const int DefaultDiskGb = 10;
@@ -80,7 +80,7 @@ namespace TesApi.Web
         private readonly string globalStartTaskPath;
         private readonly string globalManagedIdentity;
         private readonly ContainerRegistryProvider containerRegistryProvider;
-        private readonly string hostname;
+        private readonly string branchPrefix;
         private readonly IBatchPoolFactory _batchPoolFactory;
         private readonly string taskRunScriptContent;
 
@@ -136,8 +136,8 @@ namespace TesApi.Web
             if (!this.enableBatchAutopool)
             {
                 _batchPoolFactory = poolFactory;
-                hostname = GetStringValue(configuration, "Name");
-                logger.LogInformation($"hostname: {hostname}");
+                branchPrefix = GetStringValue(configuration, "BatchPrefix");
+                logger.LogInformation($"branch-prefix: {branchPrefix}");
                 taskRunScriptContent = string.Join(") && (", File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh")));
             }
 
@@ -291,7 +291,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudPool> GetCloudPools()
-            => azureProxy.GetActivePoolsAsync(this.hostname);
+            => azureProxy.GetActivePoolsAsync(this.branchPrefix);
 
         /// <inheritdoc/>
         public async Task LoadExistingPoolsAsync()
@@ -418,14 +418,14 @@ namespace TesApi.Web
         private async Task AddBatchTaskAsync(TesTask tesTask)
         {
             PoolInformation poolInformation = null;
-            string poolName = null;
+            string poolKey = null;
 
             try
             {
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask);
 
-                (poolName, var displayName) = this.enableBatchAutopool ? default : await GetPoolName(tesTask, virtualMachineInfo);
-                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, this.enableBatchAutopool || !IsPoolAvailable(poolName));
+                (poolKey, var displayName) = this.enableBatchAutopool ? default : await GetPoolKey(tesTask, virtualMachineInfo);
+                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, this.enableBatchAutopool || !IsPoolAvailable(poolKey));
 
                 var tesTaskLog = tesTask.AddTesTaskLog();
                 tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
@@ -463,7 +463,7 @@ namespace TesApi.Web
                 else
                 {
                     poolInformation = (await GetOrAddPoolAsync(
-                        key: poolName,
+                        key: poolKey,
                         isPreemptable: virtualMachineInfo.LowPriority,
                         modelPoolFactory: async id => ConvertPoolSpecificationToModelsPool(
                             name: id,
@@ -525,7 +525,7 @@ namespace TesApi.Web
 
                     case AzureBatchQuotaMaxedOutException azureBatchQuotaMaxedOutException:
                         logger.LogWarning("TES task: {TesTask} AzureBatchQuotaMaxedOutException.Message: {ExceptionMessage} . Not enough quota available. Task will remain with state QUEUED.", tesTask.Id, azureBatchQuotaMaxedOutException.Message);
-                        neededPools.Add(poolName);
+                        neededPools.Add(poolKey);
                         break;
 
                     case AzureBatchLowQuotaException azureBatchLowQuotaException:
@@ -560,13 +560,13 @@ namespace TesApi.Web
                         break;
 
                     case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && IsPoolQuotaException(batchErrorException.Body.Code):
-                        neededPools.Add(poolName);
+                        neededPools.Add(poolKey);
                         tesTask.SetWarning(batchErrorException.Body.Message.Value, Array.Empty<string>());
                         logger.LogInformation("Not enough pool quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, batchErrorException.Body.Message.Value);
                         break;
 
                     case Microsoft.Rest.Azure.CloudException cloudException when IsPoolQuotaException(cloudException.Body.Code):
-                        neededPools.Add(poolName);
+                        neededPools.Add(poolKey);
                         tesTask.SetWarning(cloudException.Body.Message, Array.Empty<string>());
                         logger.LogInformation("Not enough pool quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, cloudException.Body.Message);
                         break;
@@ -848,7 +848,7 @@ namespace TesApi.Web
         private async Task<CloudTask> ConvertTesTaskToBatchTaskAsync(string taskId, TesTask task, bool poolHasContainerConfig)
         {
             var cromwellExecutionDirectoryPath = GetCromwellExecutionDirectoryPath(task);
-            bool isCromwell = cromwellExecutionDirectoryPath is not null;
+            var isCromwell = cromwellExecutionDirectoryPath is not null;
             var batchExecutionPathPrefix = isCromwell ? CromwellPathPrefix : ExecutionsPathPrefix;
 
             var queryStringsToRemoveFromLocalFilePaths = task.Inputs?
@@ -907,7 +907,7 @@ namespace TesApi.Web
                         ? $"blobxfer download --storage-url \"$url\" --local-path \"$path\" --chunk-size-bytes 104857600 --rename --include '{StorageAccountUrlSegments.Create(f.Url).BlobName}'"
                         : "mkdir -p $(dirname \"$path\") && wget -O \"$path\" \"$url\"";
 
-                    return $"&& echo $(date +%T) && {setVariables} && {downloadSingleFile} && {exitIfDownloadedFileIsNotFound} && {incrementTotalBytesTransferred}";
+                    return $" && echo $(date +%T) && {setVariables} && {downloadSingleFile} && {exitIfDownloadedFileIsNotFound} && {incrementTotalBytesTransferred}";
                 }))
                 + $" && echo FileDownloadSizeInBytes=$total_bytes >> {metricsPath}";
 

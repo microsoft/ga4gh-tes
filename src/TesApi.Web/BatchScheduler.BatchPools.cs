@@ -24,28 +24,28 @@ namespace TesApi.Web
 
         internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId);
 
-        private async Task<(string PoolName, string DisplayName)> GetPoolName(TesTask tesTask, VirtualMachineInformation virtualMachineInformation)
+        private async Task<(string PoolKey, string DisplayName)> GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation)
         {
             var identityResourceId = tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true ? tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) : default;
             var containerInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(tesTask.Executors.FirstOrDefault()?.Image);
             var registryServer = containerInfo is null ? default : containerInfo.RegistryServer;
 
-            var vmName = string.IsNullOrWhiteSpace(hostname) ? "<none>" : hostname;
+            var label = string.IsNullOrWhiteSpace(branchPrefix) ? "<none>" : branchPrefix;
             var vmSize = virtualMachineInformation.VmSize ?? "<none>";
             var isPreemptable = virtualMachineInformation.LowPriority;
             registryServer ??= "<none>";
             identityResourceId ??= "<none>";
 
             // Generate hash of everything that differentiates this group of pools
-            var displayName = $"{vmName}:{vmSize}:{isPreemptable}:{registryServer}:{identityResourceId}";
+            var displayName = $"{label}:{vmSize}:{isPreemptable}:{registryServer}:{identityResourceId}";
             var hash = CommonUtilities.Base32.ConvertToBase32(SHA1.HashData(Encoding.UTF8.GetBytes(displayName))).TrimEnd('='); // This becomes 32 chars
 
             // Build a PoolName that is of legal length, while exposing the most important metadata without requiring user to find DisplayName
             // Note that the hash covers all necessary parts to make name unique, so limiting the size of the other parts is not expected to appreciably change the risk of collisions. Those other parts are for convenience
-            var remainingLength = PoolKeyLength - hash.Length - 2; // 50 is max name length, 2 is number of inserted chars. This will always be 16 if we use an entire SHA1
-            var visibleVmSize = LimitVmSize(vmSize, Math.Max(remainingLength - vmName.Length, 6));
-            var visibleHostName = vmName[0..Math.Min(vmName.Length, remainingLength - visibleVmSize.Length)];
-            var name = LimitChars($"{visibleHostName}-{visibleVmSize}-{hash}");
+            var remainingLength = PoolKeyLength - hash.Length - 6; // 55 is max name length, 2 is number of inserted chars (prefix and '-'s). This will always be 21 if we use an entire SHA1
+            var visibleVmSize = LimitVmSize(vmSize, Math.Max(remainingLength - label.Length, 6)); // At least 6 chars from the VmSize will be visible in the name
+            var visibleLabel = label[0..Math.Min(label.Length, remainingLength - visibleVmSize.Length)]; // Fill up to the max length if needed with the "branchPrefix", truncating as needed
+            var name = FlattenChars($"TES-{visibleLabel}-{visibleVmSize}-{hash}");
 
             // Trim DisplayName if needed
             if (displayName.Length > 1024)
@@ -64,6 +64,7 @@ namespace TesApi.Web
             static string LimitVmSize(string vmSize, int limit)
             {
                 // First try optimizing by removing "Standard_" prefix.
+                // Then remove chars from the front until it fits
                 var standard = "Standard_";
                 return vmSize.Length <= limit
                     ? vmSize
@@ -72,11 +73,11 @@ namespace TesApi.Web
                     : vmSize[^limit..];
             }
 
-            static string LimitChars(string text) // ^[a-zA-Z0-9_-]+$
+            static string FlattenChars(string text) // ^[a-zA-Z0-9_-]+$
             {
-                return new(text.AsEnumerable().Select(Limit).ToArray());
+                return new(text.AsEnumerable().Select(Flatten).ToArray());
 
-                static char Limit(char ch)
+                static char Flatten(char ch)
                     => ch switch
                     {
                         var x when char.IsAsciiLetterOrDigit(x) => x,
@@ -126,20 +127,28 @@ namespace TesApi.Web
 
             if (pool is null)
             {
+                var quota = (await quotaVerifier.GetBatchQuotaProvider().GetVmCoreQuotaAsync(isPreemptable)).AccountQuota;
+                var poolQuota = quota?.PoolQuota;
+                var jobQuota = quota?.ActiveJobAndJobScheduleQuota;
                 var activePoolsCount = azureProxy.GetBatchActivePoolCount();
-                var poolQuota = (await quotaVerifier.GetBatchQuotaProvider().GetVmCoreQuotaAsync(isPreemptable)).AccountQuota?.PoolQuota;
+                var activeJobsCount = azureProxy.GetBatchActiveJobCount();
 
                 if (poolQuota is null || activePoolsCount + 1 > poolQuota)
                 {
                     throw new AzureBatchQuotaMaxedOutException($"No remaining pool quota available. There are {activePoolsCount} pools in use out of {poolQuota}.");
                 }
 
-                var uniquifier = new byte[8]; // This always becomes 13 chars when converted to base32 after removing the three '='s at the end. We won't ever decode this, so we don't need the '='s
+                if (jobQuota is null || activeJobsCount + 1 > jobQuota)
+                {
+                    throw new AzureBatchQuotaMaxedOutException($"No remaining active jobs quota available. There are {activeJobsCount} active jobs out of {jobQuota}.");
+                }
+
+                var uniquifier = new byte[5]; // This always becomes 8 chars when converted to base32
                 RandomNumberGenerator.Fill(uniquifier);
                 var poolId = $"{key}-{CommonUtilities.Base32.ConvertToBase32(uniquifier).TrimEnd('=')}"; // embedded '-' is required by GetKeyFromPoolId()
                 var modelPool = await modelPoolFactory(poolId);
                 modelPool.Metadata ??= new List<BatchModels.MetadataItem>();
-                modelPool.Metadata.Add(new(PoolHostName, this.hostname));
+                modelPool.Metadata.Add(new(PoolHostName, this.branchPrefix));
                 modelPool.Metadata.Add(new(PoolIsDedicated, (!isPreemptable).ToString()));
                 var batchPool = _batchPoolFactory.CreateNew();
                 await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, CancellationToken.None);

@@ -13,7 +13,7 @@ namespace CommonUtilities
     public class RefreshableAzureServiceTokenProvider : ITokenProvider
     {
         private readonly string resource;
-        private readonly string tenantId;
+        private readonly string? tenantId;
         private readonly AzureServiceTokenProvider tokenProvider;
 
         /// <summary>
@@ -22,12 +22,10 @@ namespace CommonUtilities
         /// <param name="resource">Resource to request tokens for</param>
         /// <param name="tenantId">AAD tenant ID containing the resource</param>
         /// <param name="azureAdInstance">AAD instance to request tokens from</param>
-        public RefreshableAzureServiceTokenProvider(string resource, string tenantId = null, string azureAdInstance = "https://login.microsoftonline.com/")
+        public RefreshableAzureServiceTokenProvider(string resource, string? tenantId = null, string azureAdInstance = "https://login.microsoftonline.com/")
         {
-            if (string.IsNullOrEmpty(resource))
-            {
-                throw new ArgumentException(null, nameof(resource));
-            }
+            ArgumentException.ThrowIfNullOrEmpty(resource);
+            ArgumentException.ThrowIfNullOrEmpty(azureAdInstance);
 
             this.resource = resource;
             this.tenantId = tenantId;

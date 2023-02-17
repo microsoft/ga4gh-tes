@@ -430,7 +430,7 @@ namespace TesDeployer
             values.Config["marthaUrl"] = settings["MarthaUrl"];
             values.Config["marthaKeyVaultName"] = settings["MarthaKeyVaultName"];
             values.Config["marthaSecretName"] = settings["MarthaSecretName"];
-            values.Config["name"] = settings["Name"];
+            values.Config["batchPrefix"] = settings["BatchPrefix"];
             values.Config["crossSubscriptionAKSDeployment"] = settings["CrossSubscriptionAKSDeployment"];
             values.Images["tes"] = settings["TesImageName"];
             values.Service["tesHostname"] = settings["TesHostname"];
@@ -473,7 +473,7 @@ namespace TesDeployer
                 ["MarthaUrl"] = values.Config["marthaUrl"],
                 ["MarthaKeyVaultName"] = values.Config["marthaKeyVaultName"],
                 ["MarthaSecretName"] = values.Config["marthaSecretName"],
-                ["Name"] = values.Config["name"],
+                ["BatchPrefix"] = values.Config["batchPrefix"],
                 ["CrossSubscriptionAKSDeployment"] = values.Config["crossSubscriptionAKSDeployment"],
                 ["UsePostgreSqlSingleServer"] = values.Config["usePostgreSqlSingleServer"],
                 ["ManagedIdentityClientId"] = values.Identity["clientId"],
