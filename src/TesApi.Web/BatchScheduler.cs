@@ -167,7 +167,7 @@ namespace TesApi.Web
                 BatchImagePublisher = batchGen2Options.Value.Publisher,
                 BatchImageSku = batchGen2Options.Value.Sku,
                 BatchImageVersion = batchGen2Options.Value.Version,
-                BatchNodeAgentSkuId = GetStringValue(configuration, "BatchNodeAgentSkuId")
+                BatchNodeAgentSkuId = batchGen2Options.Value.NodeAgentSkuId
             };
 
             this.gen1BatchNodeInfo = new BatchNodeInfo
@@ -176,7 +176,7 @@ namespace TesApi.Web
                 BatchImagePublisher = batchGen1Options.Value.Publisher,
                 BatchImageSku = batchGen1Options.Value.Sku,
                 BatchImageVersion = batchGen1Options.Value.Version,
-                BatchNodeAgentSkuId = GetStringValue(configuration, "BatchNodeAgentSkuId")
+                BatchNodeAgentSkuId = batchGen1Options.Value.NodeAgentSkuId
             };
 
             logger.LogInformation($"usePreemptibleVmsOnly: {usePreemptibleVmsOnly}");

@@ -30,12 +30,13 @@ config:
     publisher: RUNTIME_PARAMETER
     sku: RUNTIME_PARAMETER
     version: RUNTIME_PARAMETER
+    nodeAgentSkuId: RUNTIME_PARAMETER
   batchImageGen1:
     offer: RUNTIME_PARAMETER
     publisher: RUNTIME_PARAMETER
     sku: RUNTIME_PARAMETER
     version: RUNTIME_PARAMETER
-  batchNodeAgentSkuId: RUNTIME_PARAMETER
+    nodeAgentSkuId: RUNTIME_PARAMETER
   martha:
     url: RUNTIME_PARAMETER
     keyVaultName: RUNTIME_PARAMETER

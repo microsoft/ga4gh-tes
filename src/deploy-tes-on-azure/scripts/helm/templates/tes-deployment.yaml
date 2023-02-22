@@ -84,6 +84,8 @@ spec:
               value: {{ .Values.config.batchImageGen2.sku | quote }}
             - name: BatchImageGen2__Version
               value: {{ .Values.config.batchImageGen2.version }}
+            - name: BatchImageGen2__NodeAgentSkuId
+              value: {{ .Values.config.batchImageGen2.nodeAgentSkuId }}
             - name: BatchImageGen1__Offer
               value: {{ .Values.config.batchImageGen1.offer }}
             - name: BatchImageGen1__Publisher
@@ -92,8 +94,8 @@ spec:
               value: {{ .Values.config.batchImageGen1.sku | quote }}
             - name: BatchImageGen1__Version
               value: {{ .Values.config.batchImageGen1.version }}
-            - name: BatchNodeAgentSkuId
-              value: {{ .Values.config.batchNodeAgentSkuId }}
+            - name: BatchImageGen1__NodeAgentSkuId
+              value: {{ .Values.config.batchImageGen1.nodeAgentSkuId }}
             - name: Martha__Url
               value: {{ .Values.config.martha.url }}
             - name: Martha__KeyVaultName

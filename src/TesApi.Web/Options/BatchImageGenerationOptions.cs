@@ -24,10 +24,10 @@ namespace TesApi.Web.Options
         /// Azure Batch image version
         /// </summary>
         public string Version { get; set; }
-        ///// <summary>
-        ///// Azure Batch node agent sku ID
-        ///// </summary>
-        //public string NodeAgentSkuId { get; set; }
+        /// <summary>
+        /// Azure Batch node agent sku ID
+        /// </summary>
+        public string NodeAgentSkuId { get; set; }
     }
 
     /// <summary>
