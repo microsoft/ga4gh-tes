@@ -34,7 +34,7 @@ namespace TesApi.Web.Storage
         {
             //TODO: refactor to use the options pattern.
             defaultStorageAccountName = storageOptions.Value.DefaultAccountName;    // This account contains the cromwell-executions container
-            logger.LogInformation($"DefaultStorageAccountName: {defaultStorageAccountName}");
+            Logger.LogInformation($"DefaultStorageAccountName: {defaultStorageAccountName}");
 
             externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(uri =>

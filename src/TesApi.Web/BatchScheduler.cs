@@ -81,7 +81,7 @@ namespace TesApi.Web
         private readonly string globalStartTaskPath;
         private readonly string globalManagedIdentity;
         private readonly ContainerRegistryProvider containerRegistryProvider;
-        private readonly string branchPrefix;
+        private readonly string batchPrefix;
         private readonly IBatchPoolFactory _batchPoolFactory;
         private readonly string taskRunScriptContent;
 
@@ -102,9 +102,9 @@ namespace TesApi.Web
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         /// <param name="storageAccessProvider">Storage access provider <see cref="IStorageAccessProvider"/></param>
         /// <param name="quotaVerifier">Quota verifier <see cref="IBatchQuotaVerifier"/>></param>
-        /// <param name="skuInformationProvider">Sku informatoin provider <see cref="IBatchSkuInformationProvider"/></param>
-        /// <param name="containerRegistryProvider"></param>
-        /// <param name="poolFactory"></param>
+        /// <param name="skuInformationProvider">Sku information provider <see cref="IBatchSkuInformationProvider"/></param>
+        /// <param name="containerRegistryProvider">Container registry information <see cref="ContainerRegistryProvider"/></param>
+        /// <param name="poolFactory">Batch pool factory <see cref="IBatchPoolFactory"/></param>
         public BatchScheduler(
             ILogger<BatchScheduler> logger,
             IOptions<Options.BatchImageGeneration1Options> batchGen1Options,
@@ -156,8 +156,8 @@ namespace TesApi.Web
             if (!this.enableBatchAutopool)
             {
                 _batchPoolFactory = poolFactory;
-                branchPrefix = batchSchedulingOptions.Value.Prefix;
-                logger.LogInformation($"branch-prefix: {branchPrefix}");
+                batchPrefix = batchSchedulingOptions.Value.Prefix;
+                logger.LogInformation("BatchPrefix: {BatchPrefix}", batchPrefix);
                 taskRunScriptContent = string.Join(") && (", File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh")));
             }
 
@@ -313,7 +313,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudPool> GetCloudPools()
-            => azureProxy.GetActivePoolsAsync(this.branchPrefix);
+            => azureProxy.GetActivePoolsAsync(this.batchPrefix);
 
         /// <inheritdoc/>
         public async Task LoadExistingPoolsAsync()

@@ -92,9 +92,8 @@ namespace TesDeployer
             return new Kubernetes(k8sClientConfiguration);
         }
 
-        public V1Deployment GetUbuntuDeploymentTemplate()
-        {
-            return KubernetesYaml.Deserialize<V1Deployment>(
+        public static V1Deployment GetUbuntuDeploymentTemplate()
+            => KubernetesYaml.Deserialize<V1Deployment>(
                 """
                 apiVersion: apps/v1
                 kind: Deployment
@@ -124,7 +123,6 @@ namespace TesDeployer
                       restartPolicy: Always
                 status: {}
                 """);
-        }
 
         public async Task DeployCoADependenciesAsync()
         {
@@ -243,7 +241,7 @@ namespace TesDeployer
             await WaitForWorkloadAsync(kubernetesClient, "tes", configuration.AksCoANamespace, cts.Token);
         }
 
-        public async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath)
+        public static async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath)
         {
             var templateText = await File.ReadAllTextAsync(valuesTemplatePath);
             var values = KubernetesYaml.Deserialize<HelmValues>(templateText);
@@ -437,14 +435,14 @@ namespace TesDeployer
             values.Service["enableIngress"] = settings["EnableIngress"];
             values.Config["letsEncryptEmail"] = settings["LetsEncryptEmail"];
             values.Persistence["storageAccount"] = settings["DefaultStorageAccountName"];
-            values.TesDatabase["postgreSqlServerName"] = settings["PostgreSqlServerName"];
-            values.TesDatabase["postgreSqlServerNameSuffix"] = settings["PostgreSqlServerNameSuffix"];
-            values.TesDatabase["postgreSqlServerPort"] = settings["PostgreSqlServerPort"];
-            values.TesDatabase["postgreSqlServerSslMode"] = settings["PostgreSqlServerSslMode"];
+            values.TesDatabase["serverName"] = settings["PostgreSqlServerName"];
+            values.TesDatabase["serverNameSuffix"] = settings["PostgreSqlServerNameSuffix"];
+            values.TesDatabase["serverPort"] = settings["PostgreSqlServerPort"];
+            values.TesDatabase["serverSslMode"] = settings["PostgreSqlServerSslMode"];
             // Note: Notice "Tes" is omitted from the property name since it's now in the TesDatabase section
-            values.TesDatabase["postgreSqlDatabaseName"] = settings["PostgreSqlTesDatabaseName"];
-            values.TesDatabase["postgreSqlDatabaseUserLogin"] = settings["PostgreSqlTesDatabaseUserLogin"];
-            values.TesDatabase["postgreSqlDatabaseUserPassword"] = settings["PostgreSqlTesDatabaseUserPassword"];
+            values.TesDatabase["databaseName"] = settings["PostgreSqlTesDatabaseName"];
+            values.TesDatabase["databaseUserLogin"] = settings["PostgreSqlTesDatabaseUserLogin"];
+            values.TesDatabase["databaseUserPassword"] = settings["PostgreSqlTesDatabaseUserPassword"];
         }
 
         private static Dictionary<string, string> ValuesToSettings(HelmValues values)
@@ -482,14 +480,14 @@ namespace TesDeployer
                 ["EnableIngress"] = values.Service["enableIngress"],
                 ["LetsEncryptEmail"] = values.Config["letsEncryptEmail"],
                 ["DefaultStorageAccountName"] = values.Persistence["storageAccount"],
-                ["PostgreSqlServerName"] = values.TesDatabase["postgreSqlServerName"],
-                ["PostgreSqlServerNameSuffix"] = values.TesDatabase["postgreSqlServerNameSuffix"],
-                ["PostgreSqlServerPort"] = values.TesDatabase["postgreSqlServerPort"],
-                ["PostgreSqlServerSslMode"] = values.TesDatabase["postgreSqlServerSslMode"],
+                ["PostgreSqlServerName"] = values.TesDatabase["serverName"],
+                ["PostgreSqlServerNameSuffix"] = values.TesDatabase["serverNameSuffix"],
+                ["PostgreSqlServerPort"] = values.TesDatabase["serverPort"],
+                ["PostgreSqlServerSslMode"] = values.TesDatabase["serverSslMode"],
                 // Note: Notice "Tes" is added to the property name since it's coming from the TesDatabase section
-                ["PostgreSqlTesDatabaseName"] = values.TesDatabase["postgreSqlDatabaseName"],
-                ["PostgreSqlTesDatabaseUserLogin"] = values.TesDatabase["postgreSqlDatabaseUserLogin"],
-                ["PostgreSqlTesDatabaseUserPassword"] = values.TesDatabase["postgreSqlDatabaseUserPassword"],
+                ["PostgreSqlTesDatabaseName"] = values.TesDatabase["databaseName"],
+                ["PostgreSqlTesDatabaseUserLogin"] = values.TesDatabase["databaseUserLogin"],
+                ["PostgreSqlTesDatabaseUserPassword"] = values.TesDatabase["databaseUserPassword"],
             };
 
         /// <summary>
@@ -497,13 +495,13 @@ namespace TesDeployer
         /// </summary>
         /// <param name="maxLength">Max length of the cname</param>
         /// <returns></returns>
-        private string GetTesCname(string prefix, int maxLength = 40)
+        private static string GetTesCname(string prefix, int maxLength = 40)
         {
             var tempCname = SdkContext.RandomResourceName($"{prefix.Replace(".", "")}-", maxLength);
 
             if (tempCname.Length > maxLength)
             {
-                tempCname = tempCname.Substring(0, maxLength);
+                tempCname = tempCname[..maxLength];
             }
 
             return tempCname.TrimEnd('-').ToLowerInvariant();

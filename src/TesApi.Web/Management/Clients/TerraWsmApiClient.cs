@@ -110,10 +110,8 @@ namespace TesApi.Web.Management.Clients
         }
 
         private HttpContent GetBatchPoolRequestContent(ApiCreateBatchPoolRequest apiCreateBatchPool)
-        {
-            return new StringContent(JsonSerializer.Serialize(apiCreateBatchPool,
+            => new StringContent(JsonSerializer.Serialize(apiCreateBatchPool,
                 new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }), Encoding.UTF8, "application/json");
-        }
 
         private string ToQueryString(SasTokenApiParameters sasTokenApiParameters)
             => AppendQueryStringParams(

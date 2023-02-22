@@ -36,13 +36,13 @@ config:
   letsEncryptEmail: RUNTIME_PARAMETER
 
 tesDatabase:
-  postgreSqlServerName: RUNTIME_PARAMETER
-  postgreSqlServerNameSuffix: RUNTIME_PARAMETER
-  postgreSqlServerPort: RUNTIME_PARAMETER
-  postgreSqlServerSslMode: RUNTIME_PARAMETER
-  postgreSqlDatabaseName: RUNTIME_PARAMETER
-  postgreSqlDatabaseUserLogin: RUNTIME_PARAMETER
-  postgreSqlDatabaseUserPassword: RUNTIME_PARAMETER
+  serverName: RUNTIME_PARAMETER
+  serverNameSuffix: RUNTIME_PARAMETER
+  serverPort: RUNTIME_PARAMETER
+  serverSslMode: RUNTIME_PARAMETER
+  databaseName: RUNTIME_PARAMETER
+  databaseUserLogin: RUNTIME_PARAMETER
+  databaseUserPassword: RUNTIME_PARAMETER
 
 images:
   tes: RUNTIME_PARAMETER

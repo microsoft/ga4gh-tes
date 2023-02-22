@@ -4,7 +4,6 @@
 using System;
 using System.IO;
 using System.Reflection;
-using AutoMapper;
 using Azure.Core;
 using Azure.Identity;
 using LazyCache;
@@ -15,7 +14,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.OpenApi.Models;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Serialization;
 using Tes.Models;
@@ -36,6 +34,7 @@ namespace TesApi.Web
     /// </summary>
     public class Startup
     {
+        private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
 
@@ -44,15 +43,10 @@ namespace TesApi.Web
         /// </summary>
         public Startup(IConfiguration configuration, ILogger<Startup> logger, IWebHostEnvironment hostingEnvironment)
         {
-            Configuration = configuration;
+            this.configuration = configuration;
             this.hostingEnvironment = hostingEnvironment;
             this.logger = logger;
         }
-
-        /// <summary>
-        /// The application configuration
-        /// </summary>
-        private IConfiguration Configuration { get; }
 
         /// <summary>
         /// This method gets called by the runtime. Use this method to add services to the container.
@@ -61,26 +55,27 @@ namespace TesApi.Web
         public void ConfigureServices(IServiceCollection services)
         {
             services
-                .Configure<BatchAccountOptions>(Configuration.GetSection(BatchAccountOptions.SectionName))
-                .Configure<PostgreSqlOptions>(Configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
-                .Configure<RetryPolicyOptions>(Configuration.GetSection(RetryPolicyOptions.SectionName))
-                .Configure<TerraOptions>(Configuration.GetSection(TerraOptions.SectionName))
-                .Configure<ContainerRegistryOptions>(Configuration.GetSection(ContainerRegistryOptions.SectionName))
-                .Configure<BatchImageGeneration1Options>(Configuration.GetSection(BatchImageGeneration1Options.SectionName))
-                .Configure<BatchImageGeneration2Options>(Configuration.GetSection(BatchImageGeneration2Options.SectionName))
-                .Configure<BatchImageNameOptions>(Configuration.GetSection(BatchImageNameOptions.SectionName))
-                .Configure<BatchNodesOptions>(Configuration.GetSection(BatchNodesOptions.SectionName))
-                .Configure<BatchSchedulingOptions>(Configuration.GetSection(BatchSchedulingOptions.SectionName))
-                .Configure<StorageOptions>(Configuration.GetSection(StorageOptions.SectionName))
-                .Configure<MarthaOptions>(Configuration.GetSection(MarthaOptions.SectionName))
+                .Configure<BatchAccountOptions>(configuration.GetSection(BatchAccountOptions.SectionName))
+                .Configure<PostgreSqlOptions>(configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
+                .Configure<RetryPolicyOptions>(configuration.GetSection(RetryPolicyOptions.SectionName))
+                .Configure<TerraOptions>(configuration.GetSection(TerraOptions.SectionName))
+                .Configure<ContainerRegistryOptions>(configuration.GetSection(ContainerRegistryOptions.SectionName))
+                .Configure<BatchImageGeneration1Options>(configuration.GetSection(BatchImageGeneration1Options.SectionName))
+                .Configure<BatchImageGeneration2Options>(configuration.GetSection(BatchImageGeneration2Options.SectionName))
+                .Configure<BatchImageNameOptions>(configuration.GetSection(BatchImageNameOptions.SectionName))
+                .Configure<BatchNodesOptions>(configuration.GetSection(BatchNodesOptions.SectionName))
+                .Configure<BatchSchedulingOptions>(configuration.GetSection(BatchSchedulingOptions.SectionName))
+                .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
+                .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
 
                 .AddLogging()
 
                 .AddSingleton<IAppCache, CachingService>()
                 .AddSingleton<AzureProxy>()
                 .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
-                .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                 .AddTransient<BatchPool>()
+                .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
+                .AddTransient<TerraWsmApiClient>()
                 .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
                 .AddControllers()
@@ -110,17 +105,17 @@ namespace TesApi.Web
 
                 .AddSwaggerGen(c =>
                 {
-                    c.SwaggerDoc("0.4.0", new OpenApiInfo
+                    c.SwaggerDoc("0.4.0", new()
                     {
                         Version = "0.4.0",
                         Title = "Task Execution Service",
                         Description = "Task Execution Service (ASP.NET Core 7.0)",
-                        Contact = new OpenApiContact()
+                        Contact = new()
                         {
                             Name = "Microsoft Biomedical Platforms and Genomics",
-                            Url = new Uri("https://github.com/microsoft/CromwellOnAzure")
+                            Url = new("https://github.com/microsoft/CromwellOnAzure")
                         },
-                        License = new OpenApiLicense()
+                        License = new()
                         {
                             Name = "MIT License",
                             // Identifier = "MIT" //TODO: when available, remove Url -- https://spec.openapis.org/oas/v3.1.0#fixed-fields-2
@@ -133,155 +128,120 @@ namespace TesApi.Web
                     c.OperationFilter<GeneratePathParamsValidationFilter>();
                 })
 
+                // Order is important for hosted services
                 .AddHostedService<DoOnceAtStartUpService>()
                 .AddHostedService<BatchPoolService>()
                 .AddHostedService<Scheduler>()
                 .AddHostedService<DeleteCompletedBatchJobsHostedService>()
                 .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
-                .AddHostedService<DeleteOrphanedAutoPoolsHostedService>();
-            //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
+                .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
+                //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
 
+                .AddApplicationInsightsTelemetry(configuration);
 
-            AddAppInsightsWithDefaultOrLookingUpTheConnectionString(services);
-        }
-
-        private void AddAppInsightsWithDefaultOrLookingUpTheConnectionString(IServiceCollection services)
-        {
-            var accountName = Configuration["ApplicationInsightsAccountName"];
-
-            if (string.IsNullOrEmpty(accountName))
+            IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
             {
-                //use default settings that will use the app insights configuration
-                services.AddApplicationInsightsTelemetry();
-                return;
-            }
+                var terraOptions = services.GetService<IOptions<TerraOptions>>();
 
-            services.AddApplicationInsightsTelemetry(s =>
-            {
-                var instrumentationKey = ArmResourceInformationFinder
-                    .GetAppInsightsInstrumentationKeyAsync(accountName)
-                    .Result;
+                logger.LogInformation("Attempting to create a Batch Quota Provider");
 
-                s.ConnectionString = $"InstrumentationKey={instrumentationKey}";
-            });
-        }
-
-        private IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
-        {
-            var terraOptions = services.GetService<IOptions<TerraOptions>>();
-
-            logger.LogInformation("Attempting to create a Batch Quota Provider");
-
-            logger.LogInformation("Attempting to create a Batch Quota Provider");
-
-            if (!string.IsNullOrEmpty(terraOptions?.Value.LandingZoneApiHost))
-            {
-                var terraApiClient = ActivatorUtilities.CreateInstance<TerraLandingZoneApiClient>(services);
-
-                logger.LogInformation("Terra Landing Zone API Host is set. Using the Terra Quota Provider.");
-
-                return new TerraQuotaProvider(terraApiClient, terraOptions);
-            }
-
-            logger.LogInformation("Using default ARM Quota Provider.");
-
-            return ActivatorUtilities.CreateInstance<ArmBatchQuotaProvider>(services);
-        }
-
-        private IBatchPoolManager CreateBatchPoolManagerFromConfiguration(IServiceProvider services)
-        {
-            var terraOptions = services.GetService<IOptions<TerraOptions>>();
-
-            logger.LogInformation("Attempting to create a Batch Pool Manager");
-
-            logger.LogInformation("Attempting to create a Batch Pool Manager");
-
-            if (!string.IsNullOrEmpty(terraOptions?.Value.WsmApiHost))
-            {
-                logger.LogInformation("Terra WSM API Host is set. Using Terra Batch Pool Manager");
-
-                return new TerraBatchPoolManager(
-                    ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services),
-                    services.GetRequiredService<IMapper>(),
-                    terraOptions,
-                    services.GetService<IOptions<BatchAccountOptions>>(),
-                    services.GetService<ILogger<TerraBatchPoolManager>>());
-            }
-
-            logger.LogInformation("Using default Batch Pool Manager.");
-
-            return ActivatorUtilities.CreateInstance<ArmBatchPoolManager>(services);
-        }
-
-        private IRepository<TesTask> CreatePostgresSqlRepositoryFromConfiguration(IServiceProvider services)
-        {
-            var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
-            string postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
-            return new TesTaskPostgreSqlRepository(postgresConnectionString);
-        }
-
-        private IStorageAccessProvider CreateStorageAccessProviderFromConfiguration(IServiceProvider services)
-        {
-            var options = services.GetRequiredService<IOptions<TerraOptions>>();
-
-            logger.LogInformation("Attempting to create a Storage Access Provider");
-
-            //if workspace id is set, then we are assuming we are running in terra
-            if (!string.IsNullOrEmpty(options.Value.WorkspaceId))
-            {
-                logger.LogInformation("Terra Workspace Id is set. Using Terra Storage Provider");
-
-                ValidateRequiredOptionsForTerraStorageProvider(options.Value);
-
-                return new TerraStorageAccessProvider(
-                    services.GetRequiredService<ILogger<TerraStorageAccessProvider>>(),
-                    options,
-                    services.GetRequiredService<IAzureProxy>(),
-                    ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services));
-            }
-
-            logger.LogInformation("Using Default Storage Provider");
-
-            return ActivatorUtilities.CreateInstance<DefaultStorageAccessProvider>(services);
-        }
-
-        private static void ValidateRequiredOptionsForTerraStorageProvider(TerraOptions terraOptions)
-        {
-            ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceId, nameof(terraOptions.WorkspaceId));
-            ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageAccountName, nameof(terraOptions.WorkspaceStorageAccountName));
-            ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerName, nameof(terraOptions.WorkspaceStorageContainerName));
-            ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerResourceId, nameof(terraOptions.WorkspaceStorageContainerResourceId));
-            ArgumentException.ThrowIfNullOrEmpty(terraOptions.LandingZoneApiHost, nameof(terraOptions.WsmApiHost));
-        }
-
-        private BatchAccountResourceInformation CreateBatchAccountResourceInformation(IServiceProvider services)
-        {
-            var options = services.GetRequiredService<IOptions<BatchAccountOptions>>();
-
-            if (string.IsNullOrEmpty(options.Value.AccountName))
-            {
-                throw new InvalidOperationException(
-                    "The batch account name is missing. Please check your configuration.");
-            }
-
-
-            if (string.IsNullOrWhiteSpace(options.Value.AppKey))
-            {
-                //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
-                var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName);
-                task.Wait();
-
-                if (task.Result == null)
+                if (!string.IsNullOrEmpty(terraOptions?.Value.LandingZoneApiHost))
                 {
-                    throw new InvalidOperationException(
-                        $"Failed to get the resource information for the Batch account using ARM. Please check the options provided. Provided Batch account name:{options.Value.AccountName}");
+                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraLandingZoneApiClient>(services);
+
+                    logger.LogInformation("Terra Landing Zone API Host is set. Using the Terra Quota Provider.");
+
+                    return new TerraQuotaProvider(terraApiClient, terraOptions);
                 }
 
-                return task.Result;
+                logger.LogInformation("Using default ARM Quota Provider.");
+
+                return ActivatorUtilities.CreateInstance<ArmBatchQuotaProvider>(services);
             }
 
-            //assume the information was provided via configuration
-            return new BatchAccountResourceInformation(options.Value.AccountName, options.Value.ResourceGroup, options.Value.SubscriptionId, options.Value.Region);
+            IBatchPoolManager CreateBatchPoolManagerFromConfiguration(IServiceProvider services)
+            {
+                var terraOptions = services.GetService<IOptions<TerraOptions>>();
+
+                logger.LogInformation("Attempting to create a Batch Pool Manager");
+
+                if (!string.IsNullOrEmpty(terraOptions?.Value.WsmApiHost))
+                {
+                    logger.LogInformation("Terra WSM API Host is set. Using Terra Batch Pool Manager");
+
+                    return ActivatorUtilities.CreateInstance<TerraBatchPoolManager>(services);
+                }
+
+                logger.LogInformation("Using default Batch Pool Manager.");
+
+                return ActivatorUtilities.CreateInstance<ArmBatchPoolManager>(services);
+            }
+
+            IRepository<TesTask> CreatePostgresSqlRepositoryFromConfiguration(IServiceProvider services)
+            {
+                var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
+                var postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
+                return new TesTaskPostgreSqlRepository(postgresConnectionString);
+            }
+
+            IStorageAccessProvider CreateStorageAccessProviderFromConfiguration(IServiceProvider services)
+            {
+                var options = services.GetRequiredService<IOptions<TerraOptions>>();
+
+                logger.LogInformation("Attempting to create a Storage Access Provider");
+
+                //if workspace id is set, then we are assuming we are running in terra
+                if (!string.IsNullOrEmpty(options.Value.WorkspaceId))
+                {
+                    logger.LogInformation("Terra Workspace Id is set. Using Terra Storage Provider");
+
+                    ValidateRequiredOptionsForTerraStorageProvider(options.Value);
+
+                    return ActivatorUtilities.CreateInstance<TerraStorageAccessProvider>(services);
+                }
+
+                logger.LogInformation("Using Default Storage Provider");
+
+                return ActivatorUtilities.CreateInstance<DefaultStorageAccessProvider>(services);
+            }
+
+            static void ValidateRequiredOptionsForTerraStorageProvider(TerraOptions terraOptions)
+            {
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceId, nameof(terraOptions.WorkspaceId));
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageAccountName, nameof(terraOptions.WorkspaceStorageAccountName));
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerName, nameof(terraOptions.WorkspaceStorageContainerName));
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerResourceId, nameof(terraOptions.WorkspaceStorageContainerResourceId));
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.LandingZoneApiHost, nameof(terraOptions.WsmApiHost));
+            }
+
+            BatchAccountResourceInformation CreateBatchAccountResourceInformation(IServiceProvider services)
+            {
+                var options = services.GetRequiredService<IOptions<BatchAccountOptions>>();
+
+                if (string.IsNullOrEmpty(options.Value.AccountName))
+                {
+                    throw new InvalidOperationException(
+                        "The batch account name is missing. Please check your configuration.");
+                }
+
+                if (string.IsNullOrWhiteSpace(options.Value.AppKey))
+                {
+                    //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
+                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName);
+                    task.Wait();
+
+                    if (task.Result is null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Failed to get the resource information for the Batch account using ARM. Please check the options provided. Provided Batch account name:{options.Value.AccountName}");
+                    }
+
+                    return task.Result;
+                }
+
+                //assume the information was provided via configuration
+                return new BatchAccountResourceInformation(options.Value.AccountName, options.Value.ResourceGroup, options.Value.SubscriptionId, options.Value.Region);
+            }
         }
 
         /// <summary>
@@ -289,7 +249,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="app">An Microsoft.AspNetCore.Builder.IApplicationBuilder for the app to configure.</param>
         public void Configure(IApplicationBuilder app)
-        => app.UseRouting()
+            => app.UseRouting()
                 .UseEndpoints(endpoints =>
                 {
                     endpoints.MapControllers();
@@ -313,13 +273,11 @@ namespace TesApi.Web
                     {
                         var r = s.UseDeveloperExceptionPage();
                         logger.LogInformation("Configuring for Development environment");
-                        return r;
                     },
                     s =>
                     {
                         var r = s.UseHsts();
                         logger.LogInformation("Configuring for Production environment");
-                        return r;
                     });
     }
 
@@ -328,7 +286,25 @@ namespace TesApi.Web
         public static IApplicationBuilder IfThenElse(this IApplicationBuilder builder, bool @if, Func<IApplicationBuilder, IApplicationBuilder> then, Func<IApplicationBuilder, IApplicationBuilder> @else)
             => @if ? then(builder) : @else(builder);
 
+        public static IApplicationBuilder IfThenElse(this IApplicationBuilder builder, bool @if, Action<IApplicationBuilder> then, Action<IApplicationBuilder> _else)
+            => builder.IfThenElse(@if, b => builder.Wrap(then), b => builder.Wrap(_else));
+
+        private static IApplicationBuilder Wrap(this IApplicationBuilder builder, Action<IApplicationBuilder> action)
+        {
+            action?.Invoke(builder);
+            return builder;
+        }
+
         public static IServiceCollection IfThenElse(this IServiceCollection services, bool @if, Func<IServiceCollection, IServiceCollection> then, Func<IServiceCollection, IServiceCollection> @else)
             => @if ? then(services) : @else(services);
+
+        public static IServiceCollection IfThenElse(this IServiceCollection services, bool @if, Action<IServiceCollection> then, Action<IServiceCollection> @else)
+            => services.IfThenElse(@if, s => services.Wrap(then), s => services.Wrap(@else));
+
+        private static IServiceCollection Wrap(this IServiceCollection services, Action<IServiceCollection> action)
+        {
+            action?.Invoke(services);
+            return services;
+        }
     }
 }

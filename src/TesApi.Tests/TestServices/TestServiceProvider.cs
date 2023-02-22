@@ -33,12 +33,10 @@ namespace TesApi.Tests.TestServices
         internal TestServiceProvider(
             bool mockStorageAccessProvider = false,
             bool wrapAzureProxy = false,
-            //bool wrapBatchSkuInformationProvider = true,
             IEnumerable<(string Key, string Value)> configuration = default,
             BatchAccountResourceInformation accountResourceInformation = default,
             Action<Mock<IAzureProxy>> azureProxy = default,
             Action<Mock<IRepository<TesTask>>> tesTaskRepository = default,
-            (string endpoint, string key, string databaseId, string containerId, string partitionKeyValue) batchPoolRepositoryArgs = default,
             Action<Mock<IStorageAccessProvider>> storageAccessProvider = default,
             Action<Mock<IBatchSkuInformationProvider>> batchSkuInformationProvider = default,
             Action<Mock<IBatchQuotaProvider>> batchQuotaProvider = default,
@@ -86,7 +84,7 @@ namespace TesApi.Tests.TestServices
                         .AddSingleton<IBatchScheduler, BatchScheduler>()
                         .AddSingleton(s => GetArmBatchQuotaProvider(s, armBatchQuotaProvider)) //added so config utils gets the arm implementation, to be removed once config utils is refactored.
                         .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
-                        .IfThenElse(additionalActions is null, s => s, s => { additionalActions(s); return s; })
+                        .IfThenElse(additionalActions is null, s => { }, s => additionalActions(s))
                     .BuildServiceProvider();
 
             IOptions<TOption> BindHelper<TOption>(string key) where TOption : class, new()

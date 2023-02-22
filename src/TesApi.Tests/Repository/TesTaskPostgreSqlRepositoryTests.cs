@@ -41,7 +41,7 @@ namespace Tes.Repository.Tests
         private static readonly string postgreSqlDatabaseName = "tes_db";
         private static readonly string adminLogin = $"tes{Guid.NewGuid().ToString().Substring(0, 8)}";
         private static readonly string adminPw = PasswordGenerator.GeneratePassword();
-        
+
 
         [ClassInitialize]
         public async static Task ClassInitializeAsync(TestContext context)
@@ -52,10 +52,10 @@ namespace Tes.Repository.Tests
 
             var options = new PostgreSqlOptions
             {
-                PostgreSqlServerName = postgreSqlServerName,
-                PostgreSqlDatabaseName = postgreSqlDatabaseName,
-                PostgreSqlDatabaseUserLogin = adminLogin,
-                PostgreSqlDatabaseUserPassword = adminPw
+                ServerName = postgreSqlServerName,
+                DatabaseName = postgreSqlDatabaseName,
+                DatabaseUserLogin = adminLogin,
+                DatabaseUserPassword = adminPw
             };
 
             var optionsMock = new Mock<IOptions<PostgreSqlOptions>>();
@@ -154,7 +154,7 @@ namespace Tes.Repository.Tests
             Assert.IsTrue(runningTasks.Count() != allOtherTasks.Count());
             Assert.IsTrue(runningTasks.All(c => c.State == Models.TesState.RUNNINGEnum));
             Assert.IsTrue(allOtherTasks.All(c => c.State != Models.TesState.RUNNINGEnum));
-            
+
         }
 
         [TestMethod]
@@ -247,7 +247,7 @@ namespace Tes.Repository.Tests
             var azureSubscriptionClient = azureClient.WithSubscription(subscriptionId);
 
             var rgs = (await azureSubscriptionClient.ResourceGroups.ListAsync()).ToList();
-            
+
             if (rgs.Any(r => r.Name.Equals(resourceGroupName, StringComparison.OrdinalIgnoreCase)))
             {
                 return;
@@ -274,7 +274,7 @@ namespace Tes.Repository.Tests
                         ));
 
             await postgresManagementClient.Databases.CreateAsync(resourceGroupName, postgreSqlServerName, postgreSqlDatabaseName, new());
-            
+
             var startIp = "0.0.0.0";
             var endIp = "255.255.255.255";
 
@@ -283,7 +283,7 @@ namespace Tes.Repository.Tests
             //var ip = (await client.GetStringAsync("https://checkip.amazonaws.com")).Trim();
             //startIp = ip;
             //endIp = ip;
-            
+
             await postgresManagementClient.FirewallRules.CreateOrUpdateAsync(
                 resourceGroupName,
                 postgreSqlServerName,

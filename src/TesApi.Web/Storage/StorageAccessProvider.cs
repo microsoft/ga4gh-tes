@@ -90,9 +90,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <param name="uri">resulting Url if successful</param>
     /// <returns>true if the input is a Url, false otherwise</returns>
     protected static bool TryParseHttpUrlFromInput(string input, out Uri uri)
-    {
-        return Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
-    }
+        => Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// True if the path is the cromwell or executions folder
@@ -100,8 +98,6 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <param name="path"></param>
     /// <returns></returns>
     protected bool IsKnownExecutionFilePath(string path)
-    {
-        return path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase)
+        => path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase)
                || path.StartsWith(BatchPathPrefix, StringComparison.OrdinalIgnoreCase);
-    }
 }
