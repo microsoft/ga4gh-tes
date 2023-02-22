@@ -48,58 +48,58 @@ spec:
               value: {{ .Values.persistence.storageAccount }}
             - name: AzureServicesAuthConnectionString
               value: {{ .Values.config.azureServicesAuthConnectionString }}
-            - name: ApplicationInsightsAccountName
+            - name: ApplicationInsights__AccountName
               value: {{ .Values.config.applicationInsightsAccountName }}
             - name: AzureOfferDurableId
               value: {{ .Values.config.azureOfferDurableId }}
             - name: BatchAccount__AccountName
-              value: {{ .Values.config.batchAccountName }}
+              value: {{ .Values.config.batchAccount.accountName }}
             - name: BatchNodes__SubnetId
-              value: {{ .Values.config.batchNodesSubnetId }}
-            - name: NodeImages__Blobxfer
-              value: {{ .Values.config.blobxferImageName }}
+              value: {{ .Values.config.batchNodes.subnetId }}
             - name: BatchNodes__DisablePublicIpAddress
-              value: {{ .Values.config.disableBatchNodesPublicIpAddress | quote }}
+              value: {{ .Values.config.batchNodes.disablePublicIpAddress | quote }}
+            - name: BatchNodes__GlobalStartTask
+              value: {{ .Values.config.batchNodes.globalStartTask }}
+            - name: BatchNodes__GlobalManagedIdentity
+              value: {{ .Values.config.batchNodes.globalManagedIdentity }}
             - name: BatchScheduling__Disable
-              value: {{ .Values.config.disableBatchScheduling | quote }}
-            - name: NodeImages__Docker
-              value: {{ .Values.config.dockerInDockerImageName }}
+              value: {{ .Values.config.batchScheduling.disable | quote }}
+            - name: BatchScheduling__UsePreemptibleVmsOnly
+              value: {{ .Values.config.batchScheduling.usePreemptibleVmsOnly | quote}}
             - name: BatchScheduling__UseLegacyAutopools
-              value: {{ .Values.config.useLegacyBatchImplementationWithAutopools | quote }}
+              value: {{ .Values.config.batchScheduling.useLegacyAutopools | quote }}
+            - name: BatchScheduling__PoolRotationForcedDays
+              value: {{ .Values.config.batchScheduling.poolRotationForcedDays | quote }}
+            - name: BatchScheduling__Prefix
+              value: {{ .Values.config.batchScheduling.prefix | quote }}
+            - name: NodeImages__Blobxfer
+              value: {{ .Values.config.nodeImages.blobxfer }}
+            - name: NodeImages__Docker
+              value: {{ .Values.config.docker }}
             - name: BatchImageGen1__Offer
-              value: {{ .Values.config.gen2BatchImageOffer }}
+              value: {{ .Values.config.batchImageGen2.offer }}
             - name: BatchImageGen1__Publisher
-              value: {{ .Values.config.gen2BatchImagePublisher }}
+              value: {{ .Values.config.batchImageGen2.publisher }}
             - name: BatchImageGen1__Sku
-              value: {{ .Values.config.gen2BatchImageSku | quote }}
+              value: {{ .Values.config.batchImageGen2.sku | quote }}
             - name: BatchImageGen2__Version
-              value: {{ .Values.config.gen2BatchImageVersion }}
+              value: {{ .Values.config.batchImageGen2.version }}
             - name: BatchImageGen1__Offer
-              value: {{ .Values.config.gen1BatchImageOffer }}
+              value: {{ .Values.config.batchImageGen1.offer }}
             - name: BatchImageGen1__Publisher
-              value: {{ .Values.config.gen1BatchImagePublisher }}
+              value: {{ .Values.config.batchImageGen1.publisher }}
             - name: BatchImageGen1__Sku
-              value: {{ .Values.config.gen1BatchImageSku | quote }}
+              value: {{ .Values.config.batchImageGen1.sku | quote }}
             - name: BatchImageGen1__Version
-              value: {{ .Values.config.gen1BatchImageVersion }}
+              value: {{ .Values.config.batchImageGen1.version }}
             - name: BatchNodeAgentSkuId
               value: {{ .Values.config.batchNodeAgentSkuId }}
-            - name: BatchScheduling__PoolRotationForcedDays
-              value: {{ .Values.config.batchPoolRotationForcedDays | quote }}
-            - name: BatchScheduling__Prefix
-              value: {{ .Values.config.batchPrefix | quote }}
             - name: Martha__Url
-              value: {{ .Values.config.marthaUrl }}
+              value: {{ .Values.config.martha.url }}
             - name: Martha__KeyVaultName
-              value: {{ .Values.config.marthaKeyVaultName }}
+              value: {{ .Values.config.martha.keyVaultName }}
             - name: Martha__SecretName
-              value: {{ .Values.config.marthaSecretName }}
-            - name: BatchScheduling__UsePreemptibleVmsOnly
-              value: {{ .Values.config.usePreemptibleVmsOnly | quote}}
-            - name: BatchNodes__GlobalStartTask
-              value: {{ .Values.config.globalStartTaskPath }}
-            - name: BatchNodes__GlobalManagedIdentity
-              value: {{ .Values.config.batchManagedIdentity }}
+              value: {{ .Values.config.martha.secretName }}
             - name: Storage__ExternalStorageContainers
 {{- $containers  := list -}}
 {{- range .Values.externalSasContainers }}
