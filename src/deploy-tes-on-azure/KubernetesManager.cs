@@ -53,7 +53,7 @@ namespace TesDeployer
         private string workingDirectoryTemp { get; set; }
         private string kubeConfigPath { get; set; }
         private string valuesTemplatePath { get; set; }
-        private string helmScriptsRootDirectory { get; set; }
+        public string helmScriptsRootDirectory { get; set; }
         public string TempHelmValuesYamlPath { get; set; }
         public string TesCname { get; set; }
         public string TesHostname { get; set; }

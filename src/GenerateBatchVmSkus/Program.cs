@@ -12,6 +12,7 @@ using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.Compute.Models;
 using Azure.ResourceManager.Resources.Models;
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using Tes.Models;
 
 namespace TesUtils
@@ -20,6 +21,7 @@ namespace TesUtils
     {
         public string? SubscriptionId { get; set; }
         public string? OutputFilePath { get; set; }
+        public string? TestedVmSkus { get; set; }
 
         public static Configuration BuildConfiguration(string[] args)
         {
@@ -69,6 +71,15 @@ namespace TesUtils
         {
             ArgumentException.ThrowIfNullOrEmpty(configuration.OutputFilePath);
             ArgumentException.ThrowIfNullOrEmpty(configuration.SubscriptionId);
+            ArgumentException.ThrowIfNullOrEmpty(configuration.TestedVmSkus);
+
+            var vmPrices = JsonConvert.DeserializeObject<IEnumerable<VmPrice>>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, configuration.TestedVmSkus)));
+            if (vmPrices is null)
+            {
+                throw new Exception($"Error parsing {configuration.TestedVmSkus}");
+            }
+
+            var validSet = vmPrices.Select(vm => vm.VmSize).ToHashSet();
 
             var client = new ArmClient(new DefaultAzureCredential());
             static double ConvertMiBToGiB(int value) => Math.Round(value / 1024.0, 2);
@@ -127,6 +138,12 @@ namespace TesUtils
 
             var batchVmInfo = batchSupportedVmSet.Select((s) =>
             {
+                if (!validSet.Contains(s))
+                {
+                    Console.WriteLine($"Skipping {s} not in valid vm skus file.");
+                    return null;
+                }
+
                 var sizeInfo = sizeForVm[s];
                 var sku = skuForVm[s];
 
@@ -161,15 +178,25 @@ namespace TesUtils
                     HyperVGenerations = generationList,
                     RegionsAvailable = new List<string>(regionsForVm[s])
                 };
-            }).OrderBy(x => x.VmSize).ToList();
+            }).Where(x => x is not null).OrderBy(x => x.VmSize).ToList();
 
             var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.General)
             {
                 WriteIndented = true
             };
-            var data = JsonSerializer.Serialize(batchVmInfo, options: jsonOptions);
+            var data = System.Text.Json.JsonSerializer.Serialize(batchVmInfo, options: jsonOptions);
             await File.WriteAllTextAsync(configuration.OutputFilePath!, data);
             return 0;
         }
+    }
+
+    public class VmPrice
+    {
+        public string VmSize { get; set; }
+        public decimal? PricePerHourDedicated { get; set; }
+        public decimal? PricePerHourLowPriority { get; set; }
+
+        [JsonIgnore]
+        public bool LowPriorityAvailable => PricePerHourLowPriority is not null;
     }
 }
