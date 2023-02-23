@@ -24,7 +24,7 @@ namespace TesApi.Web.Management.Batch
             CreateMap<CloudServiceConfiguration, ApiCloudServiceConfiguration>();
             CreateMap<ScaleSettings, ApiScaleSettings>();
             CreateMap<AutoScaleSettings, ApiAutoScale>()
-                .ForMember(dest => dest.EvaluationInterval, opt => opt.MapFrom(src => Convert.ToInt64(src.EvaluationInterval.Value.TotalSeconds)));
+                .ForMember(dest => dest.EvaluationInterval, opt => opt.MapFrom(src => Convert.ToInt64(src.EvaluationInterval.Value.TotalMinutes)));
             CreateMap<StartTask, ApiStartTask>();
             CreateMap<ResourceFile, ApiResourceFile>();
             CreateMap<ComputeNodeIdentityReference, ApiIdentityReference>();
