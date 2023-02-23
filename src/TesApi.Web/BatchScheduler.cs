@@ -1246,14 +1246,14 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Constructs an Azure Batch PoolInformation instance
+        /// Constructs either an <see cref="AutoPoolSpecification"/> or a new pool in the batch account ready for a job to be attached.
         /// </summary>
         /// <param name="poolSpecification"></param>
         /// <param name="tesTaskId"></param>
         /// <param name="jobId"></param>
         /// <param name="identityResourceIds"></param>
-        /// <remarks>If <paramref name="identityResourceIds"/> is provided, <paramref name="jobId"/> must also be provided.</remarks>
-        /// <returns>An Azure Batch Pool specifier</returns>
+        /// <remarks>If <paramref name="identityResourceIds"/> is provided, <paramref name="jobId"/> must also be provided.<br/>This method does not support autscaled pools.</remarks>
+        /// <returns>An <see cref="PoolInformation"/></returns>
         private async Task<PoolInformation> CreateAutoPoolModePoolInformation(PoolSpecification poolSpecification, string tesTaskId, string jobId, IEnumerable<string> identityResourceIds = null)
         {
             var identities = identityResourceIds?.ToArray() ?? Array.Empty<string>();
@@ -1303,19 +1303,22 @@ namespace TesApi.Web
         /// <param name="identities"></param>
         /// <returns></returns>
         private static BatchModels.BatchPoolIdentity GetBatchPoolIdentity(string[] identities)
-            => identities is null || !identities.Any() ? null : new(BatchModels.PoolIdentityType.UserAssigned, identities.ToDictionary(x => x, x => new BatchModels.UserAssignedIdentities()));
+            => identities is null || !identities.Any() ? null : new(BatchModels.PoolIdentityType.UserAssigned, identities.ToDictionary(identity => identity, _ => new BatchModels.UserAssignedIdentities()));
 
         /// <summary>
-        /// Generate the PoolSpecification object
+        /// Generate the PoolSpecification for the needed pool.
         /// </summary>
         /// <param name="vmSize"></param>
         /// <param name="autoscaled"></param>
         /// <param name="preemptable"></param>
         /// <param name="nodeInfo"></param>
         /// <param name="containerConfiguration"></param>
-        /// <returns></returns>
+        /// <returns><see cref="PoolSpecification"/></returns>
+        /// <remarks>We use the PoolSpecification for both the namespace of all the constituent parts and for the fact that it allows us to configure shared and autopools using the same code.</remarks>
         private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, ContainerConfiguration containerConfiguration)
         {
+            // Any changes to any properties set in this method will require corresponding changes to ConvertPoolSpecificationToModelsPool()
+
             var vmConfig = new VirtualMachineConfiguration(
                 imageReference: new ImageReference(
                     nodeInfo.BatchImageOffer,
@@ -1333,6 +1336,7 @@ namespace TesApi.Web
                 VirtualMachineSize = vmSize,
                 ResizeTimeout = TimeSpan.FromMinutes(30),
                 StartTask = await StartTaskIfNeeded(),
+                TargetNodeCommunicationMode = NodeCommunicationMode.Simplified,
             };
 
             if (autoscaled)
@@ -1363,7 +1367,10 @@ namespace TesApi.Web
         /// <summary>
         /// Convert PoolSpecification to Models.Pool, including any BatchPoolIdentity
         /// </summary>
-        /// <remarks>Note: this is not a complete conversion. It only converts properties we are currently using (including on referenced objects). TODO: add new properties we set in the future on <see cref="PoolSpecification"/> and/or its contained objects.</remarks>
+        /// <remarks>
+        /// Note: this is not a complete conversion. It only converts properties we are currently using (including referenced objects).<br/>
+        /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the possible exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
+        /// </remarks>
         /// <param name="name"></param>
         /// <param name="displayName"></param>
         /// <param name="poolIdentity"></param>
@@ -1371,26 +1378,30 @@ namespace TesApi.Web
         /// <returns>A <see cref="BatchModels.Pool"/>.</returns>
         private static BatchModels.Pool ConvertPoolSpecificationToModelsPool(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, PoolSpecification pool)
         {
+            // Don't add feature work here that isn't necesitated by a change to GetPoolSpecification() unless it's a feature that PoolSpecification does not support.
+            // TODO: (perpetually) add new properties we set in the future on <see cref="PoolSpecification"/> and/or its contained objects, if possible. When not, update CreateAutoPoolModePoolInformation().
+
             ValidateString(name, nameof(name), 64);
             ValidateString(displayName, nameof(displayName), 1024);
-
-            var scaleSettings = true == pool.AutoScaleEnabled ? ConvertAutoScale() : ConvertManualScale();
 
             return new(name: name, displayName: displayName, identity: poolIdentity)
             {
                 VmSize = pool.VirtualMachineSize,
-                ScaleSettings = scaleSettings,
-                DeploymentConfiguration = new()
-                {
-                    VirtualMachineConfiguration = new(ConvertImageReference(pool.VirtualMachineConfiguration.ImageReference), pool.VirtualMachineConfiguration.NodeAgentSkuId, containerConfiguration: ConvertContainerConfiguration(pool.VirtualMachineConfiguration.ContainerConfiguration))
-                },
-                ApplicationPackages = pool.ApplicationPackageReferences is null ? default : pool.ApplicationPackageReferences.Select(ConvertApplicationPackage).ToList(),
+                ScaleSettings = true == pool.AutoScaleEnabled ? ConvertAutoScale(pool) : ConvertManualScale(pool),
+                DeploymentConfiguration = new(virtualMachineConfiguration: ConvertVirtualMachineConfiguration(pool.VirtualMachineConfiguration)),
+                ApplicationPackages = pool.ApplicationPackageReferences?.Select(ConvertApplicationPackage).ToList(),
                 NetworkConfiguration = ConvertNetworkConfiguration(pool.NetworkConfiguration),
                 StartTask = ConvertStartTask(pool.StartTask),
-                TargetNodeCommunicationMode = BatchModels.NodeCommunicationMode.Simplified,
+                TargetNodeCommunicationMode = ConvertNodeCommunicationMode(pool.TargetNodeCommunicationMode),
             };
 
-            BatchModels.ScaleSettings ConvertManualScale()
+            static void ValidateString(string value, string name, int length)
+            {
+                ArgumentNullException.ThrowIfNull(value, name);
+                if (value.Length > length) throw new ArgumentException($"{name} exceeds maximum length {length}", name);
+            }
+
+            static BatchModels.ScaleSettings ConvertManualScale(PoolSpecification pool)
                 => new()
                 {
                     FixedScale = new()
@@ -1402,7 +1413,7 @@ namespace TesApi.Web
                     }
                 };
 
-            BatchModels.ScaleSettings ConvertAutoScale()
+            static BatchModels.ScaleSettings ConvertAutoScale(PoolSpecification pool)
                 => new()
                 {
                     AutoScale = new()
@@ -1412,11 +1423,8 @@ namespace TesApi.Web
                     }
                 };
 
-            static void ValidateString(string value, string name, int length)
-            {
-                if (value is null) throw new ArgumentNullException(name);
-                if (value.Length > length) throw new ArgumentException($"{name} exceeds maximum length {length}", name);
-            }
+            static BatchModels.VirtualMachineConfiguration ConvertVirtualMachineConfiguration(VirtualMachineConfiguration virtualMachineConfiguration)
+                => virtualMachineConfiguration is null ? default : new(ConvertImageReference(virtualMachineConfiguration.ImageReference), virtualMachineConfiguration.NodeAgentSkuId, containerConfiguration: ConvertContainerConfiguration(virtualMachineConfiguration.ContainerConfiguration));
 
             static BatchModels.ContainerConfiguration ConvertContainerConfiguration(ContainerConfiguration containerConfiguration)
                 => containerConfiguration is null ? default : new(containerConfiguration.ContainerImageNames, containerConfiguration.ContainerRegistries?.Select(ConvertContainerRegistry).ToList());
@@ -1456,6 +1464,9 @@ namespace TesApi.Web
 
             static BatchModels.PublicIPAddressConfiguration ConvertPublicIPAddressConfiguration(PublicIPAddressConfiguration publicIPAddressConfiguration)
                 => publicIPAddressConfiguration is null ? default : new(provision: (BatchModels.IPAddressProvisioningType?)publicIPAddressConfiguration.Provision);
+
+            static BatchModels.NodeCommunicationMode? ConvertNodeCommunicationMode(NodeCommunicationMode? nodeCommunicationMode)
+                => (BatchModels.NodeCommunicationMode?)nodeCommunicationMode;
         }
 
         /// <summary>

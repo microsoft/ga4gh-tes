@@ -61,7 +61,6 @@
     <EmbeddedResource Include="scripts\env-01-account-names.txt" />
     <EmbeddedResource Include="scripts\env-02-internal-images.txt" />
     <EmbeddedResource Include="scripts\env-04-settings.txt" />
-    <EmbeddedResource Include="scripts\env-13-postgre-sql-db.txt" />
     <EmbeddedResource Include="test.wdl" />
     <EmbeddedResource Include="testInputs.json" />
     <Content Update="samples\config.json">
