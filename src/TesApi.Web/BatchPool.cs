@@ -44,7 +44,9 @@ namespace TesApi.Web
         /// <exception cref="ArgumentException"></exception>
         public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, ILogger<BatchPool> logger)
         {
-            _forcePoolRotationAge = TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays);
+            var rotationDays = batchSchedulingOptions.Value.PoolRotationForcedDays;
+            if (rotationDays == 0) { rotationDays = Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays; }
+            _forcePoolRotationAge = TimeSpan.FromDays(rotationDays);
 
             this._azureProxy = azureProxy;
             this._logger = logger;

@@ -13,7 +13,10 @@ namespace TesApi.Web.Options
         /// </summary>
         public const string SectionName = "BatchScheduling";
 
-        private const double DefaultPoolRotationForcedDays = 30.0;
+        /// <summary>
+        /// Default value for <see cref="PoolRotationForcedDays"/>
+        /// </summary>
+        public const double DefaultPoolRotationForcedDays = 30.0;
 
         /// <summary>
         /// Disable flag (this instance only services the API and only accesses the TesTask repository)

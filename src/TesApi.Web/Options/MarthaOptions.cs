@@ -12,7 +12,11 @@ namespace TesApi.Web.Options
         /// Martha configuration section
         /// </summary>
         public const string SectionName = "Martha";
-        private const string DefaultCromwellDrsLocalizer = "broadinstitute/cromwell-drs-localizer:develop";
+
+        /// <summary>
+        /// Default value for <see cref="CromwellDrsLocalizer"/>
+        /// </summary>
+        public const string DefaultCromwellDrsLocalizer = "broadinstitute/cromwell-drs-localizer:develop";
 
         /// <summary>
         /// Name of the cromwell drs locator image
