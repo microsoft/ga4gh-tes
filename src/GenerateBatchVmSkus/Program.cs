@@ -178,7 +178,7 @@ namespace TesUtils
                     HyperVGenerations = generationList,
                     RegionsAvailable = new List<string>(regionsForVm[s])
                 };
-            }).Where(x => x is not null).OrderBy(x => x.VmSize).ToList();
+            }).Where(x => x is not null).OrderBy(x => x!.VmSize).ToList();
 
             var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.General)
             {
@@ -192,7 +192,9 @@ namespace TesUtils
 
     public class VmPrice
     {
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         public string VmSize { get; set; }
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         public decimal? PricePerHourDedicated { get; set; }
         public decimal? PricePerHourLowPriority { get; set; }
 
