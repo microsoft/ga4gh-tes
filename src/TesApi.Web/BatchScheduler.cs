@@ -1291,7 +1291,7 @@ namespace TesApi.Web
         /// <param name="preemptable"></param>
         /// <param name="nodeInfo"></param>
         /// <param name="containerConfiguration"></param>
-        /// <returns></returns>
+        /// <returns>A <see cref="PoolSpecification"/>.</returns>
         private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, ContainerConfiguration containerConfiguration)
         {
             var vmConfig = new VirtualMachineConfiguration(
@@ -1311,6 +1311,7 @@ namespace TesApi.Web
                 VirtualMachineSize = vmSize,
                 ResizeTimeout = TimeSpan.FromMinutes(30),
                 StartTask = await StartTaskIfNeeded(),
+                TargetNodeCommunicationMode = NodeCommunicationMode.Simplified,
             };
 
             if (autoscaled)
@@ -1365,7 +1366,7 @@ namespace TesApi.Web
                 ApplicationPackages = pool.ApplicationPackageReferences is null ? default : pool.ApplicationPackageReferences.Select(ConvertApplicationPackage).ToList(),
                 NetworkConfiguration = ConvertNetworkConfiguration(pool.NetworkConfiguration),
                 StartTask = ConvertStartTask(pool.StartTask),
-                TargetNodeCommunicationMode = BatchModels.NodeCommunicationMode.Simplified,
+                TargetNodeCommunicationMode = ConvertTargetNodeCommunicationMode(pool.TargetNodeCommunicationMode),
             };
 
             BatchModels.ScaleSettings ConvertManualScale()
@@ -1434,6 +1435,9 @@ namespace TesApi.Web
 
             static BatchModels.PublicIPAddressConfiguration ConvertPublicIPAddressConfiguration(PublicIPAddressConfiguration publicIPAddressConfiguration)
                 => publicIPAddressConfiguration is null ? default : new(provision: (BatchModels.IPAddressProvisioningType?)publicIPAddressConfiguration.Provision);
+
+            static BatchModels.NodeCommunicationMode? ConvertTargetNodeCommunicationMode(NodeCommunicationMode? targetNodeCommunicationMode)
+                => targetNodeCommunicationMode is null ? default : (BatchModels.NodeCommunicationMode)targetNodeCommunicationMode;
         }
 
         /// <summary>
