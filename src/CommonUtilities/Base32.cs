@@ -1,33 +1,41 @@
-﻿using System.Collections;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System.Collections;
 
 namespace CommonUtilities
 {
     public static class Base32
     {
         private static readonly char[] Rfc4648Base32 = new[] { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '2', '3', '4', '5', '6', '7' };
+        const int GroupBitlength = 5;
+        const int BitsPerByte = 8;
+        const int LargestBitPosition = GroupBitlength - 1;
 
         /// <summary>
         /// Converts binary to Base32
         /// </summary>
         /// <param name="bytes">Data to convert.</param>
         /// <returns>RFC 4648 Base32 representation</returns>
-        /// <exception cref="InvalidOperationException"></exception>
         public static string ConvertToBase32(byte[] bytes) // https://datatracker.ietf.org/doc/html/rfc4648#section-6
-        {
-            const int groupBitlength = 5;
 
-            if (BitConverter.IsLittleEndian)
-            {
-                bytes = bytes.Select(FlipByte).ToArray();
-            }
+            // The RFC 4648 Base32 algorithm requires that each byte be presented in MSB order, but BitArray on every platform presents them in LSB order.
+            => new string(new BitArray(bytes).Cast<bool>()
 
-            return new string(new BitArray(bytes)
-                    .Cast<bool>()
-                    .Select((b, i) => (Index: i, Value: b ? 1 << (groupBitlength - 1 - (i % groupBitlength)) : 0))
-                    .GroupBy(t => t.Index / groupBitlength)
-                    .Select(g => Rfc4648Base32[g.Sum(t => t.Value)])
+                    // Reverse each byte's bits to convert the stream from LSB to MSB
+                    .ConvertGroup(BitsPerByte,
+                        (bit, _) => bit,
+                        (bits) => bits.Reverse())
+                    .SelectMany(b => b)
+
+                    // Convert each 5-bit group in the stream into its final character
+                    .ConvertGroup(GroupBitlength,
+                        (bit, index) => bit ? 1 << LargestBitPosition - index : 0,
+                        (values) => Rfc4648Base32[values.Sum(value => value)])
                     .ToArray())
-                + (bytes.Length % groupBitlength) switch
+
+                // Append suffix
+                + (bytes.Length % GroupBitlength) switch
                 {
                     0 => string.Empty,
                     1 => @"======",
@@ -37,16 +45,25 @@ namespace CommonUtilities
                     _ => throw new InvalidOperationException(), // Keeps the compiler happy.
                 };
 
-            static byte FlipByte(byte data)
-                => (byte)(
-                    (((data & 1 << 0) == 0) ? 0 : 1 << 7) |
-                    (((data & 1 << 1) == 0) ? 0 : 1 << 6) |
-                    (((data & 1 << 2) == 0) ? 0 : 1 << 5) |
-                    (((data & 1 << 3) == 0) ? 0 : 1 << 4) |
-                    (((data & 1 << 4) == 0) ? 0 : 1 << 3) |
-                    (((data & 1 << 5) == 0) ? 0 : 1 << 2) |
-                    (((data & 1 << 6) == 0) ? 0 : 1 << 1) |
-                    (((data & 1 << 7) == 0) ? 0 : 1 << 0));
-        }
+        /// <summary>
+        /// Converts each group (fixed number) of items into a new item
+        /// </summary>
+        /// <typeparam name="TSource">Type of source items</typeparam>
+        /// <typeparam name="TGroupItem">Intermediate type</typeparam>
+        /// <typeparam name="TResult">Type of the resultant items</typeparam>
+        /// <param name="ts">The source enumerable of type <typeparamref name="TSource"/>.</param>
+        /// <param name="itemsPerGroup">The size of each group to create out of the entire enumeration. The last group may be smaller.</param>
+        /// <param name="groupMemberFunc">The function that prepares each <typeparamref name="TSource"/> into the value expected by <paramref name="groupResultFunc"/>. Its parameters are <typeparamref name="TSource"/> and the index if that item (starting from zero) within each grouping.</param>
+        /// <param name="groupResultFunc">The function that creates the <typeparamref name="TResult"/> from each group of <typeparamref name="TGroupItem"/>.</param>
+        /// <returns>An enumeration of <typeparamref name="TResult"/> from all of the groups.</returns>
+        static IEnumerable<TResult> ConvertGroup<TSource, TGroupItem, TResult>(
+            this IEnumerable<TSource> ts,
+            int itemsPerGroup,
+            Func<TSource, int, TGroupItem> groupMemberFunc,
+            Func<IEnumerable<TGroupItem>, TResult> groupResultFunc)
+            => ts
+                .Select((value, index) => (Index: index, Value: value))
+                .GroupBy(tuple => tuple.Index / itemsPerGroup)
+                .Select(items => groupResultFunc(items.Select(i => groupMemberFunc(i.Value, i.Index % itemsPerGroup))));
     }
 }
