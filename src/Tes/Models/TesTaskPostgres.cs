@@ -6,7 +6,6 @@ namespace Tes.Models
     /// <summary>
     /// Database schema for encapsulating a TesTask as Json for Postgresql.
     /// </summary>
-    
     [Table(Repository.TesDbContext.TesTasksPostgresTableName)]
     public class TesTaskDatabaseItem
     {
