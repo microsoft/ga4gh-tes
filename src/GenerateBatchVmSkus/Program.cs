@@ -73,7 +73,7 @@ namespace TesUtils
             ArgumentException.ThrowIfNullOrEmpty(configuration.SubscriptionId);
             ArgumentException.ThrowIfNullOrEmpty(configuration.TestedVmSkus);
 
-            var vmPrices = JsonConvert.DeserializeObject<IEnumerable<VmPrice>>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, configuration.TestedVmSkus)));
+            var vmPrices = JsonConvert.DeserializeObject<IEnumerable<VmPrice>>(File.ReadAllText(configuration.TestedVmSkus));
             if (vmPrices is null)
             {
                 throw new Exception($"Error parsing {configuration.TestedVmSkus}");
