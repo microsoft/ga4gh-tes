@@ -16,7 +16,7 @@
         {
             return $"{serviceName}{ConfigurationSectionNameSuffix}";
         }
-        
+
         public string PostgreSqlServerName { get; set; }
         public string PostgreSqlServerNameSuffix { get; set; } = ".postgres.database.azure.com";
         public string PostgreSqlServerPort { get; set; } = "5432";

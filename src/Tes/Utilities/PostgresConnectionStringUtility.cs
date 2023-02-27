@@ -16,7 +16,6 @@ namespace Tes.Utilities
             ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlDatabaseName, nameof(options.Value.PostgreSqlDatabaseName));
             ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlDatabaseUserLogin, nameof(options.Value.PostgreSqlDatabaseUserLogin));
             ArgumentException.ThrowIfNullOrEmpty(options.Value.PostgreSqlDatabaseUserPassword, nameof(options.Value.PostgreSqlDatabaseUserPassword));
-            
 
             if (options.Value.PostgreSqlServerName.Contains(options.Value.PostgreSqlServerNameSuffix, StringComparison.OrdinalIgnoreCase))
             {

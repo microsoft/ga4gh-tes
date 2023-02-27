@@ -88,7 +88,7 @@ namespace Tes.Repository
 
             // Search for items in the JSON
             var query = dbContext.TesTasks.Select(t => t.Json).Where(predicate);
-            
+
             //var sqlQuery = query.ToQueryString();
             //Debugger.Break();
             return await query.ToListAsync();
@@ -117,7 +117,7 @@ namespace Tes.Repository
         {
             using var dbContext = createDbContext();
 
-            foreach (var item in items) 
+            foreach (var item in items)
             {
                 var dbItem = new TesTaskDatabaseItem { Json = item };
                 dbContext.TesTasks.Add(dbItem);
