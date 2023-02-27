@@ -17,6 +17,11 @@ namespace TesApi.Web.Options
         /// Account name.
         /// </summary>
         public string AccountName { get; set; }
+
+        /// <summary>
+        /// Connection string.
+        /// </summary>
+	public string ConnectionString  { get; set; }
         // TODO: add additional properties to run without a managed id?
     }
 }

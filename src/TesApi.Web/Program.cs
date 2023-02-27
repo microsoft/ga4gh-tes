@@ -31,31 +31,37 @@ namespace TesApi.Web
         /// <returns><see cref="IWebHostBuilder"/></returns>
         public static IWebHostBuilder CreateWebHostBuilder(string[] args)
         {
-            string applicationInsightsConnectionString = default;
+            Options.ApplicationInsightsOptions applicationInsightsOptions = default;
             var builder = WebHost.CreateDefaultBuilder<Startup>(args);
 
             builder.ConfigureAppConfiguration((context, config) =>
             {
                 config.AddEnvironmentVariables(); // For Docker-Compose
-                applicationInsightsConnectionString = GetApplicationInsightsConnectionString(config.Build());
+                applicationInsightsOptions = GetApplicationInsightsConnectionString(config.Build());
 
-                if (!string.IsNullOrEmpty(applicationInsightsConnectionString))
+                if (!string.IsNullOrEmpty(applicationInsightsOptions?.ConnectionString))
                 {
-                    config.AddApplicationInsightsSettings(applicationInsightsConnectionString, developerMode: context.HostingEnvironment.IsDevelopment() ? true : null);
+                    config.AddApplicationInsightsSettings(applicationInsightsOptions.ConnectionString, developerMode: context.HostingEnvironment.IsDevelopment() ? true : null);
                 }
 
-                static string GetApplicationInsightsConnectionString(IConfiguration configuration)
+                static Options.ApplicationInsightsOptions GetApplicationInsightsConnectionString(IConfiguration configuration)
                 {
-                    var applicationInsightsAccountName = configuration.GetSection(Options.ApplicationInsightsOptions.SectionName).Get<Options.ApplicationInsightsOptions>()?.AccountName;
+                    var applicationInsightsOptions = configuration.GetSection(Options.ApplicationInsightsOptions.SectionName).Get<Options.ApplicationInsightsOptions>();
+                    var applicationInsightsAccountName = applicationInsightsOptions?.AccountName;
                     Console.WriteLine($"ApplicationInsightsAccountName: {applicationInsightsAccountName}");
 
-                    if (applicationInsightsAccountName is null)
+                    if (applicationInsightsAccountName is null || !string.IsNullOrWhiteSpace(applicationInsightsOptions?.ConnectionString))
                     {
-                        return default;
+                        return applicationInsightsOptions;
                     }
 
                     var instrumentationKey = AzureProxy.GetAppInsightsInstrumentationKeyAsync(applicationInsightsAccountName).Result;
-                    return instrumentationKey is null ? string.Empty : $"InstrumentationKey={instrumentationKey}";
+                    if (!string.IsNullOrWhiteSpace(instrumentationKey))
+                    {
+                        applicationInsightsOptions.ConnectionString = $"InstrumentationKey={instrumentationKey}";
+                    }
+
+                    return applicationInsightsOptions;
                 }
             });
 
@@ -65,9 +71,10 @@ namespace TesApi.Web
                 {
                     if (context.HostingEnvironment.IsProduction())
                     {
-                        if (!string.IsNullOrEmpty(applicationInsightsConnectionString))
+
+                        if (!string.IsNullOrEmpty(applicationInsightsOptions?.ConnectionString))
                         {
-                            logging.AddApplicationInsights(configuration => configuration.ConnectionString = applicationInsightsConnectionString, options => { });
+                            logging.AddApplicationInsights(configuration => configuration.ConnectionString = applicationInsightsOptions.ConnectionString, options => { });
                         }
                     }
                     else
