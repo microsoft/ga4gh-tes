@@ -54,10 +54,10 @@ namespace Tes.Repository.Tests
 
             var options = new PostgreSqlOptions
             {
-                PostgreSqlServerName = postgreSqlServerName,
-                PostgreSqlDatabaseName = postgreSqlDatabaseName,
-                PostgreSqlDatabaseUserLogin = adminLogin,
-                PostgreSqlDatabaseUserPassword = adminPw
+                ServerName = postgreSqlServerName,
+                DatabaseName = postgreSqlDatabaseName,
+                DatabaseUserLogin = adminLogin,
+                DatabaseUserPassword = adminPw
             };
 
             var optionsMock = new Mock<IOptions<PostgreSqlOptions>>();

@@ -27,10 +27,9 @@ namespace TesApi.Web
         private async Task<(string PoolKey, string DisplayName)> GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation)
         {
             var identityResourceId = tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true ? tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) : default;
-            var containerInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(tesTask.Executors.FirstOrDefault()?.Image);
-            var registryServer = containerInfo is null ? default : containerInfo.RegistryServer;
+            var registryServer = (await containerRegistryProvider.GetContainerRegistryInfoAsync(tesTask.Executors.FirstOrDefault()?.Image))?.RegistryServer;
 
-            var label = string.IsNullOrWhiteSpace(branchPrefix) ? "<none>" : branchPrefix;
+            var label = string.IsNullOrWhiteSpace(batchPrefix) ? "<none>" : batchPrefix;
             var vmSize = virtualMachineInformation.VmSize ?? "<none>";
             var isPreemptable = virtualMachineInformation.LowPriority;
             registryServer ??= "<none>";
@@ -42,7 +41,7 @@ namespace TesApi.Web
 
             // Build a PoolName that is of legal length, while exposing the most important metadata without requiring user to find DisplayName
             // Note that the hash covers all necessary parts to make name unique, so limiting the size of the other parts is not expected to appreciably change the risk of collisions. Those other parts are for convenience
-            var remainingLength = PoolKeyLength - hash.Length - 6; // 55 is max name length, 2 is number of inserted chars (prefix and '-'s). This will always be 21 if we use an entire SHA1
+            var remainingLength = PoolKeyLength - hash.Length - 6; // 55 is max name length, 6 is number of inserted chars (prefix and '-'s). This will always be 21 if we use an entire SHA1
             var visibleVmSize = LimitVmSize(vmSize, Math.Max(remainingLength - label.Length, 6)); // At least 6 chars from the VmSize will be visible in the name
             var visibleLabel = label[0..Math.Min(label.Length, remainingLength - visibleVmSize.Length)]; // Fill up to the max length if needed with the "branchPrefix", truncating as needed
             var name = FlattenChars($"TES-{visibleLabel}-{visibleVmSize}-{hash}");
@@ -148,7 +147,7 @@ namespace TesApi.Web
                 var poolId = $"{key}-{CommonUtilities.Base32.ConvertToBase32(uniquifier).TrimEnd('=')}"; // embedded '-' is required by GetKeyFromPoolId()
                 var modelPool = await modelPoolFactory(poolId);
                 modelPool.Metadata ??= new List<BatchModels.MetadataItem>();
-                modelPool.Metadata.Add(new(PoolHostName, this.branchPrefix));
+                modelPool.Metadata.Add(new(PoolHostName, this.batchPrefix));
                 modelPool.Metadata.Add(new(PoolIsDedicated, (!isPreemptable).ToString()));
                 var batchPool = _batchPoolFactory.CreateNew();
                 await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, CancellationToken.None);

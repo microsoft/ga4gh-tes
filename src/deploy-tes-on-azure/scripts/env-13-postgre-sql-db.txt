@@ -1,3 +1,0 @@
-﻿PostgreSqlTesDatabaseName={PostgreSqlTesDatabaseName}
-PostgreSqlTesUserLogin={PostgreSqlTesUserLogin}
-PostgreSqlTesUserPassword={PostgreSqlTesUserPassword}

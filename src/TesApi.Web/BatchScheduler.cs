@@ -13,6 +13,7 @@ using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Tes.Extensions;
 using Tes.Models;
@@ -80,7 +81,7 @@ namespace TesApi.Web
         private readonly string globalStartTaskPath;
         private readonly string globalManagedIdentity;
         private readonly ContainerRegistryProvider containerRegistryProvider;
-        private readonly string branchPrefix;
+        private readonly string batchPrefix;
         private readonly IBatchPoolFactory _batchPoolFactory;
         private readonly string taskRunScriptContent;
 
@@ -90,14 +91,36 @@ namespace TesApi.Web
         /// Orchestrates <see cref="Tes.Models.TesTask"/>s on Azure Batch
         /// </summary>
         /// <param name="logger">Logger <see cref="ILogger"/></param>
+        /// <param name="batchGen1Options">Configuration of <see cref="Options.BatchImageGeneration1Options"/></param>
+        /// <param name="batchGen2Options">Configuration of <see cref="Options.BatchImageGeneration2Options"/></param>
+        /// <param name="marthaOptions">Configuration of <see cref="Options.MarthaOptions"/></param>
+        /// <param name="storageOptions">Configuration of <see cref="Options.StorageOptions"/></param>
+        /// <param name="batchImageNameOptions">Configuration of <see cref="Options.BatchImageNameOptions"/></param>
+        /// <param name="batchNodesOptions">Configuration of <see cref="Options.BatchNodesOptions"/></param>
+        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/></param>
         /// <param name="configuration">Configuration <see cref="IConfiguration"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         /// <param name="storageAccessProvider">Storage access provider <see cref="IStorageAccessProvider"/></param>
         /// <param name="quotaVerifier">Quota verifier <see cref="IBatchQuotaVerifier"/>></param>
-        /// <param name="skuInformationProvider">Sku informatoin provider <see cref="IBatchSkuInformationProvider"/></param>
-        /// <param name="containerRegistryProvider"></param>
-        /// <param name="poolFactory"></param>
-        public BatchScheduler(ILogger<BatchScheduler> logger, IConfiguration configuration, IAzureProxy azureProxy, IStorageAccessProvider storageAccessProvider, IBatchQuotaVerifier quotaVerifier, IBatchSkuInformationProvider skuInformationProvider, ContainerRegistryProvider containerRegistryProvider, IBatchPoolFactory poolFactory)
+        /// <param name="skuInformationProvider">Sku information provider <see cref="IBatchSkuInformationProvider"/></param>
+        /// <param name="containerRegistryProvider">Container registry information <see cref="ContainerRegistryProvider"/></param>
+        /// <param name="poolFactory">Batch pool factory <see cref="IBatchPoolFactory"/></param>
+        public BatchScheduler(
+            ILogger<BatchScheduler> logger,
+            IOptions<Options.BatchImageGeneration1Options> batchGen1Options,
+            IOptions<Options.BatchImageGeneration2Options> batchGen2Options,
+            IOptions<Options.MarthaOptions> marthaOptions,
+            IOptions<Options.StorageOptions> storageOptions,
+            IOptions<Options.BatchImageNameOptions> batchImageNameOptions,
+            IOptions<Options.BatchNodesOptions> batchNodesOptions,
+            IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions,
+            IConfiguration configuration,
+            IAzureProxy azureProxy,
+            IStorageAccessProvider storageAccessProvider,
+            IBatchQuotaVerifier quotaVerifier,
+            IBatchSkuInformationProvider skuInformationProvider,
+            ContainerRegistryProvider containerRegistryProvider,
+            IBatchPoolFactory poolFactory)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(configuration);
@@ -115,51 +138,53 @@ namespace TesApi.Web
             this.skuInformationProvider = skuInformationProvider;
             this.containerRegistryProvider = containerRegistryProvider;
 
-            static bool GetBoolValue(IConfiguration configuration, string key, bool defaultValue) => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : bool.Parse(configuration[key]);
-            static string GetStringValue(IConfiguration configuration, string key, string defaultValue = "") => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : configuration[key];
-
             this.allowedVmSizes = GetStringValue(configuration, "AllowedVmSizes", null)?.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
-            this.usePreemptibleVmsOnly = GetBoolValue(configuration, "UsePreemptibleVmsOnly", false);
-            this.batchNodesSubnetId = GetStringValue(configuration, "BatchNodesSubnetId", string.Empty);
-            this.dockerInDockerImageName = GetStringValue(configuration, "DockerInDockerImageName", "docker");
-            this.blobxferImageName = GetStringValue(configuration, "BlobxferImageName", "mcr.microsoft.com/blobxfer");
-            this.cromwellDrsLocalizerImageName = GetStringValue(configuration, "CromwellDrsLocalizerImageName", "broadinstitute/cromwell-drs-localizer:develop");
-            this.disableBatchNodesPublicIpAddress = GetBoolValue(configuration, "DisableBatchNodesPublicIpAddress", false);
-            this.enableBatchAutopool = GetBoolValue(configuration, "UseLegacyBatchImplementationWithAutopools", false);
-            this.defaultStorageAccountName = GetStringValue(configuration, "DefaultStorageAccountName", string.Empty);
-            this.marthaUrl = GetStringValue(configuration, "MarthaUrl", string.Empty);
-            this.marthaKeyVaultName = GetStringValue(configuration, "MarthaKeyVaultName", string.Empty);
-            this.marthaSecretName = GetStringValue(configuration, "MarthaSecretName", string.Empty);
-            this.globalStartTaskPath = StandardizeStartTaskPath(GetStringValue(configuration, "GlobalStartTaskPath", string.Empty), this.defaultStorageAccountName);
-            this.globalManagedIdentity = GetStringValue(configuration, "GlobalManagedIdentity", string.Empty);
+            this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
+            this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
+            this.dockerInDockerImageName = batchImageNameOptions.Value.Docker;
+            if (string.IsNullOrWhiteSpace(this.dockerInDockerImageName)) { this.dockerInDockerImageName = Options.BatchImageNameOptions.DefaultDocker; }
+            this.blobxferImageName = batchImageNameOptions.Value.Blobxfer;
+            if (string.IsNullOrWhiteSpace(this.blobxferImageName)) { this.blobxferImageName = Options.BatchImageNameOptions.DefaultBlobxfer; }
+            this.cromwellDrsLocalizerImageName = marthaOptions.Value.CromwellDrsLocalizer;
+            if (string.IsNullOrWhiteSpace(this.cromwellDrsLocalizerImageName)) { this.cromwellDrsLocalizerImageName = Options.MarthaOptions.DefaultCromwellDrsLocalizer; }
+            this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
+            this.enableBatchAutopool = batchSchedulingOptions.Value.UseLegacyAutopools;
+            this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
+            this.marthaUrl = marthaOptions.Value.Url;
+            this.marthaKeyVaultName = marthaOptions.Value.KeyVaultName;
+            this.marthaSecretName = marthaOptions.Value.SecretName;
+            this.globalStartTaskPath = StandardizeStartTaskPath(batchNodesOptions.Value.GlobalStartTask, this.defaultStorageAccountName);
+            this.globalManagedIdentity = batchNodesOptions.Value.GlobalManagedIdentity;
 
             if (!this.enableBatchAutopool)
             {
                 _batchPoolFactory = poolFactory;
-                branchPrefix = GetStringValue(configuration, "BatchPrefix");
-                logger.LogInformation($"branch-prefix: {branchPrefix}");
+                batchPrefix = batchSchedulingOptions.Value.Prefix;
+                logger.LogInformation("BatchPrefix: {BatchPrefix}", batchPrefix);
                 taskRunScriptContent = string.Join(") && (", File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh")));
             }
 
             this.gen2BatchNodeInfo = new BatchNodeInfo
             {
-                BatchImageOffer = GetStringValue(configuration, "Gen2BatchImageOffer"),
-                BatchImagePublisher = GetStringValue(configuration, "Gen2BatchImagePublisher"),
-                BatchImageSku = GetStringValue(configuration, "Gen2BatchImageSku"),
-                BatchImageVersion = GetStringValue(configuration, "Gen2BatchImageVersion"),
-                BatchNodeAgentSkuId = GetStringValue(configuration, "BatchNodeAgentSkuId")
+                BatchImageOffer = batchGen2Options.Value.Offer,
+                BatchImagePublisher = batchGen2Options.Value.Publisher,
+                BatchImageSku = batchGen2Options.Value.Sku,
+                BatchImageVersion = batchGen2Options.Value.Version,
+                BatchNodeAgentSkuId = batchGen2Options.Value.NodeAgentSkuId
             };
 
             this.gen1BatchNodeInfo = new BatchNodeInfo
             {
-                BatchImageOffer = GetStringValue(configuration, "Gen1BatchImageOffer"),
-                BatchImagePublisher = GetStringValue(configuration, "Gen1BatchImagePublisher"),
-                BatchImageSku = GetStringValue(configuration, "Gen1BatchImageSku"),
-                BatchImageVersion = GetStringValue(configuration, "Gen1BatchImageVersion"),
-                BatchNodeAgentSkuId = GetStringValue(configuration, "BatchNodeAgentSkuId")
+                BatchImageOffer = batchGen1Options.Value.Offer,
+                BatchImagePublisher = batchGen1Options.Value.Publisher,
+                BatchImageSku = batchGen1Options.Value.Sku,
+                BatchImageVersion = batchGen1Options.Value.Version,
+                BatchNodeAgentSkuId = batchGen1Options.Value.NodeAgentSkuId
             };
 
             logger.LogInformation($"usePreemptibleVmsOnly: {usePreemptibleVmsOnly}");
+
+            static string GetStringValue(IConfiguration configuration, string key, string defaultValue = "") => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : configuration[key];
 
             static bool tesTaskIsQueuedInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum || tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
             static bool tesTaskIsInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
@@ -291,7 +316,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudPool> GetCloudPools()
-            => azureProxy.GetActivePoolsAsync(this.branchPrefix);
+            => azureProxy.GetActivePoolsAsync(this.batchPrefix);
 
         /// <inheritdoc/>
         public async Task LoadExistingPoolsAsync()
@@ -914,7 +939,7 @@ namespace TesApi.Web
             var downloadFilesScriptPath = $"{batchExecutionDirectoryPath}/{DownloadFilesScriptFileName}";
             var downloadFilesScriptUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{downloadFilesScriptPath}");
             await this.storageAccessProvider.UploadBlobAsync($"/{downloadFilesScriptPath}", downloadFilesScriptContent);
-            var filesToUpload = new TesOutput[0];
+            var filesToUpload = Array.Empty<TesOutput>();
 
             if (task.Outputs?.Count > 0)
             {
@@ -1224,14 +1249,14 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Constructs an Azure Batch PoolInformation instance
+        /// Constructs either an <see cref="AutoPoolSpecification"/> or a new pool in the batch account ready for a job to be attached.
         /// </summary>
         /// <param name="poolSpecification"></param>
         /// <param name="tesTaskId"></param>
         /// <param name="jobId"></param>
         /// <param name="identityResourceIds"></param>
-        /// <remarks>If <paramref name="identityResourceIds"/> is provided, <paramref name="jobId"/> must also be provided.</remarks>
-        /// <returns>An Azure Batch Pool specifier</returns>
+        /// <remarks>If <paramref name="identityResourceIds"/> is provided, <paramref name="jobId"/> must also be provided.<br/>This method does not support autscaled pools.</remarks>
+        /// <returns>An <see cref="PoolInformation"/></returns>
         private async Task<PoolInformation> CreateAutoPoolModePoolInformation(PoolSpecification poolSpecification, string tesTaskId, string jobId, IEnumerable<string> identityResourceIds = null)
         {
             var identities = identityResourceIds?.ToArray() ?? Array.Empty<string>();
@@ -1281,19 +1306,22 @@ namespace TesApi.Web
         /// <param name="identities"></param>
         /// <returns></returns>
         private static BatchModels.BatchPoolIdentity GetBatchPoolIdentity(string[] identities)
-            => identities is null || !identities.Any() ? null : new(BatchModels.PoolIdentityType.UserAssigned, identities.ToDictionary(x => x, x => new BatchModels.UserAssignedIdentities()));
+            => identities is null || !identities.Any() ? null : new(BatchModels.PoolIdentityType.UserAssigned, identities.ToDictionary(identity => identity, _ => new BatchModels.UserAssignedIdentities()));
 
         /// <summary>
-        /// Generate the PoolSpecification object
+        /// Generate the PoolSpecification for the needed pool.
         /// </summary>
         /// <param name="vmSize"></param>
         /// <param name="autoscaled"></param>
         /// <param name="preemptable"></param>
         /// <param name="nodeInfo"></param>
         /// <param name="containerConfiguration"></param>
-        /// <returns>A <see cref="PoolSpecification"/>.</returns>
+        /// <returns><see cref="PoolSpecification"/></returns>
+        /// <remarks>We use the PoolSpecification for both the namespace of all the constituent parts and for the fact that it allows us to configure shared and autopools using the same code.</remarks>
         private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, ContainerConfiguration containerConfiguration)
         {
+            // Any changes to any properties set in this method will require corresponding changes to ConvertPoolSpecificationToModelsPool()
+
             var vmConfig = new VirtualMachineConfiguration(
                 imageReference: new ImageReference(
                     nodeInfo.BatchImageOffer,
@@ -1342,7 +1370,10 @@ namespace TesApi.Web
         /// <summary>
         /// Convert PoolSpecification to Models.Pool, including any BatchPoolIdentity
         /// </summary>
-        /// <remarks>Note: this is not a complete conversion. It only converts properties we are currently using (including on referenced objects). TODO: add new properties we set in the future on <see cref="PoolSpecification"/> and/or its contained objects.</remarks>
+        /// <remarks>
+        /// Note: this is not a complete conversion. It only converts properties we are currently using (including referenced objects).<br/>
+        /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the possible exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
+        /// </remarks>
         /// <param name="name"></param>
         /// <param name="displayName"></param>
         /// <param name="poolIdentity"></param>
@@ -1350,26 +1381,30 @@ namespace TesApi.Web
         /// <returns>A <see cref="BatchModels.Pool"/>.</returns>
         private static BatchModels.Pool ConvertPoolSpecificationToModelsPool(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, PoolSpecification pool)
         {
+            // Don't add feature work here that isn't necesitated by a change to GetPoolSpecification() unless it's a feature that PoolSpecification does not support.
+            // TODO: (perpetually) add new properties we set in the future on <see cref="PoolSpecification"/> and/or its contained objects, if possible. When not, update CreateAutoPoolModePoolInformation().
+
             ValidateString(name, nameof(name), 64);
             ValidateString(displayName, nameof(displayName), 1024);
-
-            var scaleSettings = true == pool.AutoScaleEnabled ? ConvertAutoScale() : ConvertManualScale();
 
             return new(name: name, displayName: displayName, identity: poolIdentity)
             {
                 VmSize = pool.VirtualMachineSize,
-                ScaleSettings = scaleSettings,
-                DeploymentConfiguration = new()
-                {
-                    VirtualMachineConfiguration = new(ConvertImageReference(pool.VirtualMachineConfiguration.ImageReference), pool.VirtualMachineConfiguration.NodeAgentSkuId, containerConfiguration: ConvertContainerConfiguration(pool.VirtualMachineConfiguration.ContainerConfiguration))
-                },
-                ApplicationPackages = pool.ApplicationPackageReferences is null ? default : pool.ApplicationPackageReferences.Select(ConvertApplicationPackage).ToList(),
+                ScaleSettings = true == pool.AutoScaleEnabled ? ConvertAutoScale(pool) : ConvertManualScale(pool),
+                DeploymentConfiguration = new(virtualMachineConfiguration: ConvertVirtualMachineConfiguration(pool.VirtualMachineConfiguration)),
+                ApplicationPackages = pool.ApplicationPackageReferences?.Select(ConvertApplicationPackage).ToList(),
                 NetworkConfiguration = ConvertNetworkConfiguration(pool.NetworkConfiguration),
                 StartTask = ConvertStartTask(pool.StartTask),
-                TargetNodeCommunicationMode = ConvertTargetNodeCommunicationMode(pool.TargetNodeCommunicationMode),
+                TargetNodeCommunicationMode = ConvertNodeCommunicationMode(pool.TargetNodeCommunicationMode),
             };
 
-            BatchModels.ScaleSettings ConvertManualScale()
+            static void ValidateString(string value, string name, int length)
+            {
+                ArgumentNullException.ThrowIfNull(value, name);
+                if (value.Length > length) throw new ArgumentException($"{name} exceeds maximum length {length}", name);
+            }
+
+            static BatchModels.ScaleSettings ConvertManualScale(PoolSpecification pool)
                 => new()
                 {
                     FixedScale = new()
@@ -1381,7 +1416,7 @@ namespace TesApi.Web
                     }
                 };
 
-            BatchModels.ScaleSettings ConvertAutoScale()
+            static BatchModels.ScaleSettings ConvertAutoScale(PoolSpecification pool)
                 => new()
                 {
                     AutoScale = new()
@@ -1391,11 +1426,8 @@ namespace TesApi.Web
                     }
                 };
 
-            static void ValidateString(string value, string name, int length)
-            {
-                if (value is null) throw new ArgumentNullException(name);
-                if (value.Length > length) throw new ArgumentException($"{name} exceeds maximum length {length}", name);
-            }
+            static BatchModels.VirtualMachineConfiguration ConvertVirtualMachineConfiguration(VirtualMachineConfiguration virtualMachineConfiguration)
+                => virtualMachineConfiguration is null ? default : new(ConvertImageReference(virtualMachineConfiguration.ImageReference), virtualMachineConfiguration.NodeAgentSkuId, containerConfiguration: ConvertContainerConfiguration(virtualMachineConfiguration.ContainerConfiguration));
 
             static BatchModels.ContainerConfiguration ConvertContainerConfiguration(ContainerConfiguration containerConfiguration)
                 => containerConfiguration is null ? default : new(containerConfiguration.ContainerImageNames, containerConfiguration.ContainerRegistries?.Select(ConvertContainerRegistry).ToList());
@@ -1436,8 +1468,8 @@ namespace TesApi.Web
             static BatchModels.PublicIPAddressConfiguration ConvertPublicIPAddressConfiguration(PublicIPAddressConfiguration publicIPAddressConfiguration)
                 => publicIPAddressConfiguration is null ? default : new(provision: (BatchModels.IPAddressProvisioningType?)publicIPAddressConfiguration.Provision);
 
-            static BatchModels.NodeCommunicationMode? ConvertTargetNodeCommunicationMode(NodeCommunicationMode? targetNodeCommunicationMode)
-                => targetNodeCommunicationMode is null ? default : (BatchModels.NodeCommunicationMode)targetNodeCommunicationMode;
+            static BatchModels.NodeCommunicationMode? ConvertNodeCommunicationMode(NodeCommunicationMode? nodeCommunicationMode)
+                => (BatchModels.NodeCommunicationMode?)nodeCommunicationMode;
         }
 
         /// <summary>

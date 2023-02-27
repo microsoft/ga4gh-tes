@@ -5,9 +5,9 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace TesApi.Web
 {
@@ -30,15 +30,15 @@ namespace TesApi.Web
         /// <summary>
         /// Default constructor
         /// </summary>
-        /// <param name="configuration"></param>
+        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/></param>
         /// <param name="batchScheduler"></param>
         /// <param name="logger"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public BatchPoolService(IConfiguration configuration, IBatchScheduler batchScheduler, ILogger<BatchPoolService> logger)
+        public BatchPoolService(IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IBatchScheduler batchScheduler, ILogger<BatchPoolService> logger)
         {
             _batchScheduler = batchScheduler ?? throw new ArgumentNullException(nameof(batchScheduler));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _isDisabled = configuration.GetValue("DisableBatchScheduling", false) || configuration.GetValue("UseLegacyBatchImplementationWithAutopools", false);
+            _isDisabled = batchSchedulingOptions.Value.Disable || batchSchedulingOptions.Value.UseLegacyAutopools;
         }
 
         /// <inheritdoc />

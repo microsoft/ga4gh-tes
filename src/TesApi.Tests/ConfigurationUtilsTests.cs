@@ -91,7 +91,7 @@ namespace TesApi.Tests
         }
 
         private static IEnumerable<(string Key, string Value)> GetInMemoryConfig()
-            => Enumerable.Repeat(("DefaultStorageAccountName", "defaultstorageaccount"), 1);
+            => Enumerable.Repeat(("Storage:DefaultAccountName", "defaultstorageaccount"), 1);
 
         private static void PrepareAzureProxy(Mock<IAzureProxy> azureProxy)
         {

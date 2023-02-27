@@ -17,12 +17,12 @@
             return $"{serviceName}{ConfigurationSectionNameSuffix}";
         }
 
-        public string PostgreSqlServerName { get; set; }
-        public string PostgreSqlServerNameSuffix { get; set; } = ".postgres.database.azure.com";
-        public string PostgreSqlServerPort { get; set; } = "5432";
-        public string PostgreSqlServerSslMode { get; set; } = "VerifyFull";
-        public string PostgreSqlDatabaseName { get; set; } = "tes_db";
-        public string PostgreSqlDatabaseUserLogin { get; set; }
-        public string PostgreSqlDatabaseUserPassword { get; set; }
+        public string ServerName { get; set; }
+        public string ServerNameSuffix { get; set; } = ".postgres.database.azure.com";
+        public string ServerPort { get; set; } = "5432";
+        public string ServerSslMode { get; set; } = "VerifyFull";
+        public string DatabaseName { get; set; } = "tes_db";
+        public string DatabaseUserLogin { get; set; }
+        public string DatabaseUserPassword { get; set; }
     }
 }

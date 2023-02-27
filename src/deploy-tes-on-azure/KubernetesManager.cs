@@ -92,9 +92,8 @@ namespace TesDeployer
             return new Kubernetes(k8sClientConfiguration);
         }
 
-        public V1Deployment GetUbuntuDeploymentTemplate()
-        {
-            return KubernetesYaml.Deserialize<V1Deployment>(
+        public static V1Deployment GetUbuntuDeploymentTemplate()
+            => KubernetesYaml.Deserialize<V1Deployment>(
                 """
                 apiVersion: apps/v1
                 kind: Deployment
@@ -124,7 +123,6 @@ namespace TesDeployer
                       restartPolicy: Always
                 status: {}
                 """);
-        }
 
         public async Task DeployCoADependenciesAsync()
         {
@@ -243,7 +241,7 @@ namespace TesDeployer
             await WaitForWorkloadAsync(kubernetesClient, "tes", configuration.AksCoANamespace, cts.Token);
         }
 
-        public async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath)
+        public static async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath)
         {
             var templateText = await File.ReadAllTextAsync(valuesTemplatePath);
             var values = KubernetesYaml.Deserialize<HelmValues>(templateText);
@@ -407,103 +405,134 @@ namespace TesDeployer
 
         private static void UpdateValuesFromSettings(HelmValues values, Dictionary<string, string> settings)
         {
+            var batchAccount = GetObjectFromConfig(values, "batchAccount") ?? new Dictionary<string, string>();
+            var batchNodes = GetObjectFromConfig(values, "batchNodes") ?? new Dictionary<string, string>();
+            var batchScheduling = GetObjectFromConfig(values, "batchScheduling") ?? new Dictionary<string, string>();
+            var nodeImages = GetObjectFromConfig(values, "nodeImages") ?? new Dictionary<string, string>();
+            var batchImageGen2 = GetObjectFromConfig(values, "batchImageGen2") ?? new Dictionary<string, string>();
+            var batchImageGen1 = GetObjectFromConfig(values, "batchImageGen1") ?? new Dictionary<string, string>();
+            var martha = GetObjectFromConfig(values, "martha") ?? new Dictionary<string, string>();
+
             values.Config["tesOnAzureVersion"] = settings["TesOnAzureVersion"];
             values.Config["azureServicesAuthConnectionString"] = settings["AzureServicesAuthConnectionString"];
             values.Config["applicationInsightsAccountName"] = settings["ApplicationInsightsAccountName"];
-            values.Config["batchAccountName"] = settings["BatchAccountName"];
-            values.Config["batchNodesSubnetId"] = settings["BatchNodesSubnetId"];
+            batchAccount["accountName"] = settings["BatchAccountName"];
+            batchNodes["subnetId"] = settings["BatchNodesSubnetId"];
             values.Config["coaNamespace"] = settings["AksCoANamespace"];
-            values.Config["disableBatchNodesPublicIpAddress"] = settings["DisableBatchNodesPublicIpAddress"];
-            values.Config["disableBatchScheduling"] = settings["DisableBatchScheduling"];
-            values.Config["usePreemptibleVmsOnly"] = settings["UsePreemptibleVmsOnly"];
-            values.Config["blobxferImageName"] = settings["BlobxferImageName"];
-            values.Config["dockerInDockerImageName"] = settings["DockerInDockerImageName"];
-            values.Config["gen2BatchImageOffer"] = settings["Gen2BatchImageOffer"];
-            values.Config["gen2BatchImagePublisher"] = settings["Gen2BatchImagePublisher"];
-            values.Config["gen2BatchImageSku"] = settings["Gen2BatchImageSku"];
-            values.Config["gen2BatchImageVersion"] = settings["Gen2BatchImageVersion"];
-            values.Config["gen1BatchImageOffer"] = settings["Gen1BatchImageOffer"];
-            values.Config["gen1BatchImagePublisher"] = settings["Gen1BatchImagePublisher"];
-            values.Config["gen1BatchImageSku"] = settings["Gen1BatchImageSku"];
-            values.Config["gen1BatchImageVersion"] = settings["Gen1BatchImageVersion"];
-            values.Config["batchNodeAgentSkuId"] = settings["BatchNodeAgentSkuId"];
-            values.Config["marthaUrl"] = settings["MarthaUrl"];
-            values.Config["marthaKeyVaultName"] = settings["MarthaKeyVaultName"];
-            values.Config["marthaSecretName"] = settings["MarthaSecretName"];
-            values.Config["batchPrefix"] = settings["BatchPrefix"];
+            batchNodes["disablePublicIpAddress"] = settings["DisableBatchNodesPublicIpAddress"];
+            batchScheduling["disable"] = settings["DisableBatchScheduling"];
+            batchScheduling["usePreemptibleVmsOnly"] = settings["UsePreemptibleVmsOnly"];
+            nodeImages["blobxfer"] = settings["BlobxferImageName"];
+            nodeImages["docker"] = settings["DockerInDockerImageName"];
+            batchImageGen2["offer"] = settings["Gen2BatchImageOffer"];
+            batchImageGen2["publisher"] = settings["Gen2BatchImagePublisher"];
+            batchImageGen2["sku"] = settings["Gen2BatchImageSku"];
+            batchImageGen2["version"] = settings["Gen2BatchImageVersion"];
+            batchImageGen2["nodeAgentSkuId"] = settings["Gen2BatchNodeAgentSkuId"];
+            batchImageGen1["offer"] = settings["Gen1BatchImageOffer"];
+            batchImageGen1["publisher"] = settings["Gen1BatchImagePublisher"];
+            batchImageGen1["sku"] = settings["Gen1BatchImageSku"];
+            batchImageGen1["version"] = settings["Gen1BatchImageVersion"];
+            batchImageGen1["nodeAgentSkuId"] = settings["Gen1BatchNodeAgentSkuId"];
+            martha["url"] = settings["MarthaUrl"];
+            martha["keyVaultName"] = settings["MarthaKeyVaultName"];
+            martha["secretName"] = settings["MarthaSecretName"];
+            batchScheduling["prefix"] = settings["BatchPrefix"];
             values.Config["crossSubscriptionAKSDeployment"] = settings["CrossSubscriptionAKSDeployment"];
             values.Images["tes"] = settings["TesImageName"];
             values.Service["tesHostname"] = settings["TesHostname"];
             values.Service["enableIngress"] = settings["EnableIngress"];
             values.Config["letsEncryptEmail"] = settings["LetsEncryptEmail"];
             values.Persistence["storageAccount"] = settings["DefaultStorageAccountName"];
-            values.TesDatabase["postgreSqlServerName"] = settings["PostgreSqlServerName"];
-            values.TesDatabase["postgreSqlServerNameSuffix"] = settings["PostgreSqlServerNameSuffix"];
-            values.TesDatabase["postgreSqlServerPort"] = settings["PostgreSqlServerPort"];
-            values.TesDatabase["postgreSqlServerSslMode"] = settings["PostgreSqlServerSslMode"];
+            values.TesDatabase["serverName"] = settings["PostgreSqlServerName"];
+            values.TesDatabase["serverNameSuffix"] = settings["PostgreSqlServerNameSuffix"];
+            values.TesDatabase["serverPort"] = settings["PostgreSqlServerPort"];
+            values.TesDatabase["serverSslMode"] = settings["PostgreSqlServerSslMode"];
             // Note: Notice "Tes" is omitted from the property name since it's now in the TesDatabase section
-            values.TesDatabase["postgreSqlDatabaseName"] = settings["PostgreSqlTesDatabaseName"];
-            values.TesDatabase["postgreSqlDatabaseUserLogin"] = settings["PostgreSqlTesDatabaseUserLogin"];
-            values.TesDatabase["postgreSqlDatabaseUserPassword"] = settings["PostgreSqlTesDatabaseUserPassword"];
+            values.TesDatabase["databaseName"] = settings["PostgreSqlTesDatabaseName"];
+            values.TesDatabase["databaseUserLogin"] = settings["PostgreSqlTesDatabaseUserLogin"];
+            values.TesDatabase["databaseUserPassword"] = settings["PostgreSqlTesDatabaseUserPassword"];
+
+            values.Config["batchAccount"] = batchAccount;
+            values.Config["batchNodes"] = batchNodes;
+            values.Config["batchScheduling"] = batchScheduling;
+            values.Config["nodeImages"] = nodeImages;
+            values.Config["batchImageGen2"] = batchImageGen2;
+            values.Config["batchImageGen1"] = batchImageGen1;
+            values.Config["martha"] = martha;
         }
 
+        private static IDictionary<string, string> GetObjectFromConfig(HelmValues values, string key)
+            => (values?.Config[key] as IDictionary<object, object>)?.ToDictionary(p => p.Key as string, p => p.Value as string);
+
         private static Dictionary<string, string> ValuesToSettings(HelmValues values)
-            => new()
+        {
+            var batchAccount = GetObjectFromConfig(values, "batchAccount") ?? new Dictionary<string, string>();
+            var batchNodes = GetObjectFromConfig(values, "batchNodes") ?? new Dictionary<string, string>();
+            var batchScheduling = GetObjectFromConfig(values, "batchScheduling") ?? new Dictionary<string, string>();
+            var nodeImages = GetObjectFromConfig(values, "nodeImages") ?? new Dictionary<string, string>();
+            var batchImageGen2 = GetObjectFromConfig(values, "batchImageGen2") ?? new Dictionary<string, string>();
+            var batchImageGen1 = GetObjectFromConfig(values, "batchImageGen1") ?? new Dictionary<string, string>();
+            var martha = GetObjectFromConfig(values, "martha") ?? new Dictionary<string, string>();
+
+            return new()
             {
-                ["TesOnAzureVersion"] = values.Config["tesOnAzureVersion"],
-                ["AzureServicesAuthConnectionString"] = values.Config["azureServicesAuthConnectionString"],
-                ["ApplicationInsightsAccountName"] = values.Config["applicationInsightsAccountName"],
-                ["BatchAccountName"] = values.Config["batchAccountName"],
-                ["BatchNodesSubnetId"] = values.Config["batchNodesSubnetId"],
-                ["AksCoANamespace"] = values.Config["coaNamespace"],
-                ["DisableBatchNodesPublicIpAddress"] = values.Config["disableBatchNodesPublicIpAddress"],
-                ["DisableBatchScheduling"] = values.Config["disableBatchScheduling"],
-                ["UsePreemptibleVmsOnly"] = values.Config["usePreemptibleVmsOnly"],
-                ["BlobxferImageName"] = values.Config["blobxferImageName"],
-                ["DockerInDockerImageName"] = values.Config["dockerInDockerImageName"],
-                ["Gen2BatchImageOffer"] = values.Config["gen2BatchImageOffer"],
-                ["Gen2BatchImagePublisher"] = values.Config["gen2BatchImagePublisher"],
-                ["Gen2BatchImageSku"] = values.Config["gen2BatchImageSku"],
-                ["Gen2BatchImageVersion"] = values.Config["gen2BatchImageVersion"],
-                ["Gen1BatchImageOffer"] = values.Config["gen1BatchImageOffer"],
-                ["Gen1BatchImagePublisher"] = values.Config["gen1BatchImagePublisher"],
-                ["Gen1BatchImageSku"] = values.Config["gen1BatchImageSku"],
-                ["Gen1BatchImageVersion"] = values.Config["gen1BatchImageVersion"],
-                ["BatchNodeAgentSkuId"] = values.Config["batchNodeAgentSkuId"],
-                ["MarthaUrl"] = values.Config["marthaUrl"],
-                ["MarthaKeyVaultName"] = values.Config["marthaKeyVaultName"],
-                ["MarthaSecretName"] = values.Config["marthaSecretName"],
-                ["BatchPrefix"] = values.Config["batchPrefix"],
-                ["CrossSubscriptionAKSDeployment"] = values.Config["crossSubscriptionAKSDeployment"],
-                ["UsePostgreSqlSingleServer"] = values.Config["usePostgreSqlSingleServer"],
+                ["TesOnAzureVersion"] = values.Config["tesOnAzureVersion"] as string,
+                ["AzureServicesAuthConnectionString"] = values.Config["azureServicesAuthConnectionString"] as string,
+                ["ApplicationInsightsAccountName"] = values.Config["applicationInsightsAccountName"] as string,
+                ["BatchAccountName"] = batchAccount["accountName"],
+                ["BatchNodesSubnetId"] = batchNodes["subnetId"],
+                ["AksCoANamespace"] = values.Config["coaNamespace"] as string,
+                ["DisableBatchNodesPublicIpAddress"] = batchNodes["disablePublicIpAddress"],
+                ["DisableBatchScheduling"] = batchScheduling["disable"],
+                ["UsePreemptibleVmsOnly"] = batchScheduling["usePreemptibleVmsOnly"],
+                ["BlobxferImageName"] = nodeImages["blobxfer"],
+                ["DockerInDockerImageName"] = nodeImages["docker"],
+                ["Gen2BatchImageOffer"] = batchImageGen2["offer"],
+                ["Gen2BatchImagePublisher"] = batchImageGen2["publisher"],
+                ["Gen2BatchImageSku"] = batchImageGen2["sku"],
+                ["Gen2BatchImageVersion"] = batchImageGen2["version"],
+                ["Gen2BatchNodeAgentSkuId"] = batchImageGen2["nodeAgentSkuId"],
+                ["Gen1BatchImageOffer"] = batchImageGen1["offer"],
+                ["Gen1BatchImagePublisher"] = batchImageGen1["publisher"],
+                ["Gen1BatchImageSku"] = batchImageGen1["sku"],
+                ["Gen1BatchImageVersion"] = batchImageGen1["version"],
+                ["Gen1BatchNodeAgentSkuId"] = batchImageGen1["nodeAgentSkuId"],
+                ["MarthaUrl"] = martha["url"],
+                ["MarthaKeyVaultName"] = martha["keyVaultName"],
+                ["MarthaSecretName"] = martha["secretName"],
+                ["BatchPrefix"] = batchScheduling["prefix"],
+                ["CrossSubscriptionAKSDeployment"] = values.Config["crossSubscriptionAKSDeployment"] as string,
+                ["UsePostgreSqlSingleServer"] = values.Config["usePostgreSqlSingleServer"] as string,
                 ["ManagedIdentityClientId"] = values.Identity["clientId"],
                 ["TesImageName"] = values.Images["tes"],
                 ["TesHostname"] = values.Service["tesHostname"],
                 ["EnableIngress"] = values.Service["enableIngress"],
-                ["LetsEncryptEmail"] = values.Config["letsEncryptEmail"],
+                ["LetsEncryptEmail"] = values.Config["letsEncryptEmail"] as string,
                 ["DefaultStorageAccountName"] = values.Persistence["storageAccount"],
-                ["PostgreSqlServerName"] = values.TesDatabase["postgreSqlServerName"],
-                ["PostgreSqlServerNameSuffix"] = values.TesDatabase["postgreSqlServerNameSuffix"],
-                ["PostgreSqlServerPort"] = values.TesDatabase["postgreSqlServerPort"],
-                ["PostgreSqlServerSslMode"] = values.TesDatabase["postgreSqlServerSslMode"],
+                ["PostgreSqlServerName"] = values.TesDatabase["serverName"],
+                ["PostgreSqlServerNameSuffix"] = values.TesDatabase["serverNameSuffix"],
+                ["PostgreSqlServerPort"] = values.TesDatabase["serverPort"],
+                ["PostgreSqlServerSslMode"] = values.TesDatabase["serverSslMode"],
                 // Note: Notice "Tes" is added to the property name since it's coming from the TesDatabase section
-                ["PostgreSqlTesDatabaseName"] = values.TesDatabase["postgreSqlDatabaseName"],
-                ["PostgreSqlTesDatabaseUserLogin"] = values.TesDatabase["postgreSqlDatabaseUserLogin"],
-                ["PostgreSqlTesDatabaseUserPassword"] = values.TesDatabase["postgreSqlDatabaseUserPassword"],
+                ["PostgreSqlTesDatabaseName"] = values.TesDatabase["databaseName"],
+                ["PostgreSqlTesDatabaseUserLogin"] = values.TesDatabase["databaseUserLogin"],
+                ["PostgreSqlTesDatabaseUserPassword"] = values.TesDatabase["databaseUserPassword"],
             };
+        }
 
         /// <summary>
         /// Return a cname derived from the resource group name
         /// </summary>
         /// <param name="maxLength">Max length of the cname</param>
         /// <returns></returns>
-        private string GetTesCname(string prefix, int maxLength = 40)
+        private static string GetTesCname(string prefix, int maxLength = 40)
         {
             var tempCname = SdkContext.RandomResourceName($"{prefix.Replace(".", "")}-", maxLength);
 
             if (tempCname.Length > maxLength)
             {
-                tempCname = tempCname.Substring(0, maxLength);
+                tempCname = tempCname[..maxLength];
             }
 
             return tempCname.TrimEnd('-').ToLowerInvariant();
@@ -598,7 +627,7 @@ namespace TesDeployer
         public class HelmValues
         {
             public Dictionary<string, string> Service { get; set; }
-            public Dictionary<string, string> Config { get; set; }
+            public Dictionary<string, object> Config { get; set; }
             public Dictionary<string, string> TesDatabase { get; set; }
             public Dictionary<string, string> Images { get; set; }
             public List<string> DefaultContainers { get; set; }

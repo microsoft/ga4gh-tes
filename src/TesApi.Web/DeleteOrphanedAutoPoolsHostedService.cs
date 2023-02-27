@@ -5,9 +5,9 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace TesApi.Web
 {
@@ -28,14 +28,14 @@ namespace TesApi.Web
         /// <summary>
         /// Default constructor
         /// </summary>
-        /// <param name="configuration">The configuration instance settings</param>
+        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/></param>
         /// <param name="azureProxy">Azure Proxy</param>
         /// <param name="logger">The logger instance</param>
-        public DeleteOrphanedAutoPoolsHostedService(IConfiguration configuration, IAzureProxy azureProxy, ILogger<DeleteOrphanedAutoPoolsHostedService> logger)
+        public DeleteOrphanedAutoPoolsHostedService(IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, ILogger<DeleteOrphanedAutoPoolsHostedService> logger)
         {
             this.azureProxy = azureProxy;
             this.logger = logger;
-            this.isDisabled = !configuration.GetValue("UseLegacyBatchImplementationWithAutopools", false);
+            this.isDisabled = !batchSchedulingOptions.Value.UseLegacyAutopools;
         }
 
         /// <inheritdoc />
