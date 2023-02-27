@@ -64,6 +64,7 @@ namespace CommonUtilities
             => ts
                 .Select((value, index) => (Index: index, Value: value))
                 .GroupBy(tuple => tuple.Index / itemsPerGroup)
+                .OrderBy(tuple => tuple.Key)
                 .Select(items => groupResultFunc(items.Select(i => groupMemberFunc(i.Value, i.Index % itemsPerGroup))));
     }
 }

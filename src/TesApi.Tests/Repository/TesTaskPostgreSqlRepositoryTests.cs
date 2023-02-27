@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -41,7 +44,6 @@ namespace Tes.Repository.Tests
         private static readonly string postgreSqlDatabaseName = "tes_db";
         private static readonly string adminLogin = $"tes{Guid.NewGuid().ToString().Substring(0, 8)}";
         private static readonly string adminPw = PasswordGenerator.GeneratePassword();
-
 
         [ClassInitialize]
         public async static Task ClassInitializeAsync(TestContext context)
@@ -154,7 +156,6 @@ namespace Tes.Repository.Tests
             Assert.IsTrue(runningTasks.Count() != allOtherTasks.Count());
             Assert.IsTrue(runningTasks.All(c => c.State == Models.TesState.RUNNINGEnum));
             Assert.IsTrue(allOtherTasks.All(c => c.State != Models.TesState.RUNNINGEnum));
-
         }
 
         [TestMethod]
