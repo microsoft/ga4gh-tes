@@ -8,5 +8,7 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.Azure.Services.AppAuthentication" Version="1.6.2" />
         <PackageReference Include="Microsoft.Azure.Management.Fluent" Version="1.38.1" />
+        <!--Mitigate reported security issues-->
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.2" />
     </ItemGroup>
 </Project>
