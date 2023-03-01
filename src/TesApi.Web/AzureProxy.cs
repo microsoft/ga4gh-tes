@@ -207,6 +207,7 @@ namespace TesApi.Web
             job.OnAllTasksComplete = OnAllTasksComplete.TerminateJob;
             await job.CommitAsync(cancellationToken: cancellationToken);
             logger.LogInformation($"TES task: {cloudTask.Id} - Batch job committed successfully.");
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
 
             try
             {
@@ -248,6 +249,7 @@ namespace TesApi.Web
 
             await job.CommitAsync(cancellationToken: cancellationToken);
             logger.LogInformation("TES: Batch job {BatchJob} committed successfully", poolInformation.PoolId);
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
         }
 
         /// <inheritdoc/>
