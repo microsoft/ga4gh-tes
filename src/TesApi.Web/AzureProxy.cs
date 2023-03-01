@@ -48,7 +48,7 @@ namespace TesApi.Web
         private const char BatchJobAttemptSeparator = '-';
         private static readonly AsyncRetryPolicy batchRaceConditionJobNotFoundRetryPolicy = Policy
             .Handle<BatchException>(ex => ex.RequestInformation.BatchError.Code == BatchErrorCodeStrings.JobNotFound)
-            .WaitAndRetryAsync(10, retryAttempt => TimeSpan.FromSeconds(1));
+            .WaitAndRetryAsync(5, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
 
         private readonly ILogger logger;
         private readonly BatchClient batchClient;
@@ -207,12 +207,14 @@ namespace TesApi.Web
             job.OnAllTasksComplete = OnAllTasksComplete.TerminateJob;
             await job.CommitAsync(cancellationToken: cancellationToken);
             logger.LogInformation($"TES task: {cloudTask.Id} - Batch job committed successfully.");
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
 
             try
             {
                 logger.LogInformation($"TES task: {cloudTask.Id} adding task to job.");
-                job = await batchRaceConditionJobNotFoundRetryPolicy.ExecuteAsync(() =>
-                    batchClient.JobOperations.GetJobAsync(job.Id, cancellationToken: cancellationToken));
+                job = await batchRaceConditionJobNotFoundRetryPolicy.ExecuteAsync(ct =>
+                    batchClient.JobOperations.GetJobAsync(job.Id, cancellationToken: ct),
+                    cancellationToken);
 
                 await job.AddTaskAsync(cloudTask, cancellationToken: cancellationToken);
                 logger.LogInformation($"TES task: {cloudTask.Id} added task successfully.");
@@ -247,6 +249,7 @@ namespace TesApi.Web
 
             await job.CommitAsync(cancellationToken: cancellationToken);
             logger.LogInformation("TES: Batch job {BatchJob} committed successfully", poolInformation.PoolId);
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -255,8 +258,9 @@ namespace TesApi.Web
             ArgumentException.ThrowIfNullOrEmpty(poolInformation?.PoolId, nameof(poolInformation));
 
             logger.LogInformation("TES task: {TesTask} - Adding task to job {BatchJob}", tesTaskId, poolInformation.PoolId);
-            var job = await batchRaceConditionJobNotFoundRetryPolicy.ExecuteAsync(() =>
-                    batchClient.JobOperations.GetJobAsync(poolInformation.PoolId));
+            var job = await batchRaceConditionJobNotFoundRetryPolicy.ExecuteAsync(ct =>
+                    batchClient.JobOperations.GetJobAsync(poolInformation.PoolId, cancellationToken: ct),
+                    cancellationToken);
 
             await job.AddTaskAsync(cloudTask, cancellationToken: cancellationToken);
             logger.LogInformation("TES task: {TesTask} - Added task successfully", tesTaskId);
