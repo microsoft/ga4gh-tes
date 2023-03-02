@@ -1,8 +1,12 @@
 <Project>
  <Target Name="EmitCustomMessage" BeforeTargets="Restore">
-   <PropertyGroup>
+   <!--PropertyGroup>
      <__TeamProject>$([System.Environment]::GetEnvironmentVariable(System.TeamProject))</__TeamProject>
    </PropertyGroup>
-   <Move SourceFiles="nuget.config" DestinationFiles="nuget.config.bak" Condition=" '$(__TeamProject)' != 'Emmons' "/>
+   <Move SourceFiles="nuget.config" DestinationFiles="nuget.config.bak" Condition=" '$(__TeamProject)' != 'Emmons' "/-->
+   <ItemGroup>
+     <__TeamProject Include="$([System.Environment]::GetEnvironmentVariables())"/>
+   </ItemGroup>
+   <Message Importance="high" Text="@(__TeamProject, '%0D%0A')"/>
  </Target>
 </Project>
