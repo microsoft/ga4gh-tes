@@ -1,0 +1,8 @@
+<Project>
+ <Target Name="EmitCustomMessage" BeforeTargets="Restore">
+   <PropertyGroup>
+     <__TeamProject>$([System.Environment]::GetEnvironmentVariable(System.TeamProject))</__TeamProject>
+   </PropertyGroup>
+   <Move SourceFiles="nuget.config" DestinationFiles="nuget.config.bak" Condition=" '$(__TeamProject)' != 'Emmons' "/>
+ </Target>
+</Project>
