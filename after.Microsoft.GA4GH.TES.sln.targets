@@ -1,0 +1,12 @@
+<!--
+    Note: this file is a hack and will change from time to time.
+    If you are not building in the project's release pipeline, you will probably want to delete both this and nuget.config.
+    This may not work if you are building in Visual Studio.
+
+    DO NOT COMMIT ANY EDIT, INCLUDING REMOVAL, OF EITHER OF THESE TWO MENTIONED FILES BACK TO THE OFFICIAL REPO! Any such pull request will be refused.
+-->
+<Project>
+ <Target Name="EmitCustomMessage" BeforeTargets="Restore">
+   <Delete Files="nuget.config" Condition=" '$(GITHUB_ACTIONS)' == 'true' "/>
+ </Target>
+</Project>
