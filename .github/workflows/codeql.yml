@@ -39,6 +39,11 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
+      
+    - name: Remove nuget.config
+      uses: JesseTG/rm@v1.0.3
+      with:
+        path: nuget.config
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
