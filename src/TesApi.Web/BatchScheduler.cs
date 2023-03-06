@@ -1364,6 +1364,7 @@ namespace TesApi.Web
                 },
                 ApplicationPackages = pool.ApplicationPackageReferences is null ? default : pool.ApplicationPackageReferences.Select(ConvertApplicationPackage).ToList(),
                 NetworkConfiguration = ConvertNetworkConfiguration(pool.NetworkConfiguration),
+                TargetNodeCommunicationMode = BatchModels.NodeCommunicationMode.Simplified,
                 StartTask = ConvertStartTask(pool.StartTask)
             };
 
