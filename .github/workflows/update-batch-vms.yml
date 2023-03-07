@@ -39,6 +39,9 @@ jobs:
     - name: Run GenerateBatchVmSkus
       run: ./src/GenerateBatchVmSkus/bin/Debug/net7.0/GenerateBatchVmSkus --subscriptionId ${{ secrets.AZURE_SUBSCRIPTION_ID }} --outputFilePath src/TesApi.Web/BatchSupportedVmSizeInformation.json --TestedVmSkus src/TesApi.Web/DefaultVmPrices.json
 
+    - name: Restore nuget.config
+      run: git restore nuget.config
+
     - run: if (( $(git diff src/TesApi.Web/BatchSupportedVmSizeInformation.json | wc -l) > 0 )); then echo "UPDATE_PR=True" >> $GITHUB_ENV; fi
 
     - name: Checkout branch, commit and push
