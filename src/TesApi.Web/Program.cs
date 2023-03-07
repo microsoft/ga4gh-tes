@@ -55,6 +55,15 @@ namespace TesApi.Web
                         return applicationInsightsOptions;
                     }
 
+                    var applicationInsightsConnectionString = configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+
+                    if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
+                    {
+                        applicationInsightsOptions ??= new Options.ApplicationInsightsOptions();
+                        applicationInsightsOptions.ConnectionString = applicationInsightsConnectionString;
+                        return applicationInsightsOptions;
+                    }
+
                     var instrumentationKey = AzureProxy.GetAppInsightsInstrumentationKeyAsync(applicationInsightsAccountName).Result;
                     if (!string.IsNullOrWhiteSpace(instrumentationKey))
                     {
