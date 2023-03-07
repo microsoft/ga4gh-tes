@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
+    },
+    "GenerateBatchVmSkus": {
+      "commandName": "Project",
+      "commandLineArgs": "--SubscriptionId 594bef42-33f3-42df-b056-e7399d6ae7a0 \r\n--OutputFilePath BatchSupportedVmSizeInformation.json"
+    }
+  }
+}
