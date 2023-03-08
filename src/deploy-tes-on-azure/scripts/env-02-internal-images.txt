@@ -1,1 +1,1 @@
-﻿TesImageName=mcr.microsoft.com/cromwellonazure/tes:3
+﻿TesImageName=mcr.microsoft.com/ga4gh/tes:4
