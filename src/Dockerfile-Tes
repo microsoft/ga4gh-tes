@@ -5,13 +5,13 @@ FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build-env
 WORKDIR /app
 
 # Restore packages in separate layer
-COPY TesApi.Web/TesApi.Web.csproj TesApi.Web/
+COPY CommonUtilities/CommonUtilities.csproj CommonUtilities/
 COPY Tes/Tes.csproj Tes/
-RUN dotnet restore TesApi.Web/TesApi.Web.csproj
+COPY TesApi.Web/TesApi.Web.csproj TesApi.Web/
 
 # Copy the rest of the files and publish
 COPY . ./
-RUN dotnet publish -c Release -o out --no-restore TesApi.Web/TesApi.Web.csproj
+RUN dotnet publish -c Release /p:PublishDir=/app/out TesApi.Web/TesApi.Web.csproj
 
 # Build runtime image
 FROM mcr.microsoft.com/dotnet/aspnet:7.0
