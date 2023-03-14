@@ -58,8 +58,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: create pull request
-      if: env.UPDATE_PR != null && env.SUBMIT_PR != null
-      run: gh pr create --assignee jsaun -B develop -H update-batch-vms --title 'Update BatchSupportedVmSizeInformation.json' --body 'Update BatchSupportedVmSizeInformation.json'
-      env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #- name: create pull request
+    #  if: env.UPDATE_PR != null && env.SUBMIT_PR != null
+    #  run: gh pr create --assignee jsaun -B develop -H update-batch-vms --title 'Update BatchSupportedVmSizeInformation.json' --body 'Update BatchSupportedVmSizeInformation.json'
+    #  env:
+    #      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
