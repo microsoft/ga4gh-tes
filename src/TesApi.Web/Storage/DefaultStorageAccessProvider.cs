@@ -20,7 +20,7 @@ namespace TesApi.Web.Storage
     public class DefaultStorageAccessProvider : StorageAccessProvider
     {
 
-        private static readonly TimeSpan SasTokenDuration = TimeSpan.FromDays(3); //TODO: refactor this to drive it from configuration.
+        private static readonly TimeSpan SasTokenDuration = TimeSpan.FromDays(7); //TODO: refactor this to drive it from configuration.
         private readonly string defaultStorageAccountName;
         private readonly List<ExternalStorageContainerInfo> externalStorageContainers;
 
