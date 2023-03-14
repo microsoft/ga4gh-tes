@@ -226,14 +226,6 @@ namespace TesApi.Web
         Task<CloudJob> GetBatchJobAsync(string jobId, DetailLevel detailLevel = default, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Commits all pending changes to this Microsoft.Azure.Batch.CloudPool to the Azure Batch service.
-        /// </summary>
-        /// <param name="pool">The <see cref="CloudPool"/> to change.</param>
-        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        Task CommitBatchPoolChangesAsync(CloudPool pool, CancellationToken cancellationToken = default);
-
-        /// <summary>
         /// Lists compute nodes in batch pool <paramref name="poolId"/>
         /// </summary>
         /// <param name="poolId">The id of the pool.</param>
