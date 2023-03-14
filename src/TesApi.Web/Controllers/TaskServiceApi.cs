@@ -202,7 +202,7 @@ namespace TesApi.Controllers
         /// </summary>
         /// <response code="200"></response>
         [HttpGet]
-        [Route("/v1/tasks/service-info")]
+        [Route("/v1/service-info")]
         [ValidateModelState]
         [SwaggerOperation("GetServiceInfo")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesServiceInfo), description: "")]
