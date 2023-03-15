@@ -51,6 +51,8 @@ namespace TesApi.Web
             .Handle<BatchException>(ex => ex.RequestInformation.BatchError.Code == BatchErrorCodeStrings.JobNotFound)
             .WaitAndRetryAsync(5, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
 
+        private readonly AsyncRetryPolicy batchNodeNotReadyRetryPolicy;
+
         private readonly ILogger logger;
         private readonly BatchClient batchClient;
         private readonly string subscriptionId;
@@ -83,6 +85,19 @@ namespace TesApi.Web
             }
 
             this.logger = logger;
+
+            this.batchNodeNotReadyRetryPolicy = Policy
+            .Handle<BatchException>(ex => "NodeNotReady".Equals(ex.RequestInformation?.BatchError?.Code, StringComparison.InvariantCultureIgnoreCase))
+            .WaitAndRetryAsync(
+                5,
+                (retryAttempt, exception, _) => (exception as BatchException).RequestInformation?.RetryAfter ?? TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                (exception, delay, retryAttempt, _) =>
+                {
+                    var requestId = (exception as BatchException).RequestInformation?.ServiceRequestId;
+                    var reason = (exception.InnerException as Microsoft.Azure.Batch.Protocol.Models.BatchErrorException)?.Response?.ReasonPhrase;
+                    logger.LogDebug(exception, "Exception: ServiceRequestId: {ServiceRequestId}, BatchErrorCode: NodeNotReady, Reason: {ReasonPhrase}", requestId, reason);
+                    return Task.FromResult(false);
+                });
 
             if (!string.IsNullOrWhiteSpace(batchAccountOptions.Value.AppKey))
             {
@@ -145,30 +160,6 @@ namespace TesApi.Web
             }
 
             return null;
-        }
-
-        private void ProcessException(Exception exception, [CallerMemberName] string caller = default)
-        {
-            switch (exception)
-            {
-                case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException:
-                    {
-                        var hResult = batchException.HResult;
-                        var request = batchException.RequestInformation;
-                        var statusCode = batchErrorException.Response?.StatusCode;
-                        var reasonPhrase = batchErrorException.Response?.ReasonPhrase;
-
-                        logger.LogError("Exception in {AzureProxyMethod}: ServiceRequestId: {ServiceRequestId}, BatchErrorCode: {BatchErrorCode}, HResult: {HResult}, HttpStatus: {HttpStatus}, Reason: {Reason}, Values: {Values}",
-                            caller,
-                            request?.ServiceRequestId,
-                            request?.BatchError?.Code,
-                            hResult,
-                            statusCode,
-                            reasonPhrase,
-                            string.Join(", ", request?.BatchError?.Values?.Select(d => $"{d.Key}={d.Value}") ?? Enumerable.Empty<string>()));
-                    }
-                    break;
-            }
         }
 
         /// <inheritdoc/>
@@ -267,22 +258,14 @@ namespace TesApi.Web
         {
             ArgumentException.ThrowIfNullOrEmpty(poolInformation?.PoolId, nameof(poolInformation));
 
-            try
-            {
-                logger.LogInformation("TES: Creating Batch job {BatchJob}", poolInformation.PoolId);
-                var job = batchClient.JobOperations.CreateJob(poolInformation.PoolId, poolInformation);
-                job.OnAllTasksComplete = OnAllTasksComplete.NoAction;
-                job.OnTaskFailure = OnTaskFailure.NoAction;
+            logger.LogInformation("TES: Creating Batch job {BatchJob}", poolInformation.PoolId);
+            var job = batchClient.JobOperations.CreateJob(poolInformation.PoolId, poolInformation);
+            job.OnAllTasksComplete = OnAllTasksComplete.NoAction;
+            job.OnTaskFailure = OnTaskFailure.NoAction;
 
-                await job.CommitAsync(cancellationToken: cancellationToken);
-                logger.LogInformation("TES: Batch job {BatchJob} committed successfully", poolInformation.PoolId);
-                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                ProcessException(exception);
-                throw;
-            }
+            await job.CommitAsync(cancellationToken: cancellationToken);
+            logger.LogInformation("TES: Batch job {BatchJob} committed successfully", poolInformation.PoolId);
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -290,21 +273,13 @@ namespace TesApi.Web
         {
             ArgumentException.ThrowIfNullOrEmpty(poolInformation?.PoolId, nameof(poolInformation));
 
-            try
-            {
-                logger.LogInformation("TES task: {TesTask} - Adding task to job {BatchJob}", tesTaskId, poolInformation.PoolId);
-                var job = await batchRaceConditionJobNotFoundRetryPolicy.ExecuteAsync(ct =>
-                        batchClient.JobOperations.GetJobAsync(poolInformation.PoolId, cancellationToken: ct),
-                        cancellationToken);
+            logger.LogInformation("TES task: {TesTask} - Adding task to job {BatchJob}", tesTaskId, poolInformation.PoolId);
+            var job = await batchRaceConditionJobNotFoundRetryPolicy.ExecuteAsync(ct =>
+                    batchClient.JobOperations.GetJobAsync(poolInformation.PoolId, cancellationToken: ct),
+                    cancellationToken);
 
-                await job.AddTaskAsync(cloudTask, cancellationToken: cancellationToken);
-                logger.LogInformation("TES task: {TesTask} - Added task successfully", tesTaskId);
-            }
-            catch (Exception exception)
-            {
-                ProcessException(exception);
-                throw;
-            }
+            await job.AddTaskAsync(cloudTask, cancellationToken: cancellationToken);
+            logger.LogInformation("TES task: {TesTask} - Added task successfully", tesTaskId);
         }
 
         /// <inheritdoc/>
@@ -312,16 +287,8 @@ namespace TesApi.Web
         {
             ArgumentException.ThrowIfNullOrEmpty(poolInformation?.PoolId, nameof(poolInformation));
 
-            try
-            {
-                logger.LogInformation("Deleting job {BatchJob}", poolInformation.PoolId);
-                await batchClient.JobOperations.DeleteJobAsync(poolInformation.PoolId, cancellationToken: cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                ProcessException(exception);
-                throw;
-            }
+            logger.LogInformation("Deleting job {BatchJob}", poolInformation.PoolId);
+            await batchClient.JobOperations.DeleteJobAsync(poolInformation.PoolId, cancellationToken: cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -450,7 +417,7 @@ namespace TesApi.Web
                         if (node is not null)
                         {
                             nodeState = node.State;
-                            var nodeError = node.Errors?.FirstOrDefault();
+                            var nodeError = node.Errors?.FirstOrDefault(e => "DiskFull".Equals(e.Code, StringComparison.InvariantCultureIgnoreCase)) ?? node.Errors?.FirstOrDefault();
                             nodeErrorCode = nodeError?.Code;
                             nodeErrorDetails = nodeError?.ErrorDetails?.Select(e => e.Value);
                         }
@@ -518,15 +485,7 @@ namespace TesApi.Web
             {
                 logger.LogInformation($"Deleting job {job.Id}");
 
-                try
-                {
-                    await job.DeleteAsync(cancellationToken: cancellationToken);
-                }
-                catch (Exception exception)
-                {
-                    ProcessException(exception);
-                    throw;
-                }
+                await job.DeleteAsync(cancellationToken: cancellationToken);
             }
         }
 
@@ -550,15 +509,7 @@ namespace TesApi.Web
             {
                 logger.LogInformation("Deleting task {BatchTask}", task.Id);
 
-                try
-                {
-                    await task.DeleteAsync(cancellationToken: cancellationToken);
-                }
-                catch (Exception exception)
-                {
-                    ProcessException(exception);
-                    throw;
-                }
+                await batchNodeNotReadyRetryPolicy.ExecuteAsync(ct => task.DeleteAsync(cancellationToken: ct), cancellationToken);
             }
         }
 
@@ -624,31 +575,11 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async Task DeleteBatchComputeNodesAsync(string poolId, IEnumerable<ComputeNode> computeNodes, CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                await batchClient.PoolOperations.RemoveFromPoolAsync(poolId, computeNodes, deallocationOption: ComputeNodeDeallocationOption.TaskCompletion, cancellationToken: cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                ProcessException(exception);
-                throw;
-            }
-        }
+            => await batchClient.PoolOperations.RemoveFromPoolAsync(poolId, computeNodes, deallocationOption: ComputeNodeDeallocationOption.TaskCompletion, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
         public async Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                await batchPoolManager.DeleteBatchPoolAsync(poolId, cancellationToken: cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                ProcessException(exception);
-                throw;
-            }
-        }
+            => await batchPoolManager.DeleteBatchPoolAsync(poolId, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
         public async Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken = default)
@@ -818,17 +749,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable)
-        {
-            try
-            {
-                return await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable);
-            }
-            catch (Exception exception)
-            {
-                ProcessException(exception);
-                throw;
-            }
-        }
+            => await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable);
 
         // https://learn.microsoft.com/azure/azure-resource-manager/management/move-resource-group-and-subscription#changed-resource-id
         [GeneratedRegex("/*/resourceGroups/([^/]*)/*")]
@@ -873,17 +794,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async Task DisableBatchPoolAutoScaleAsync(string poolId, CancellationToken cancellationToken)
-        {
-            try
-            {
-                await batchClient.PoolOperations.DisableAutoScaleAsync(poolId, cancellationToken: cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                ProcessException(exception);
-                throw;
-            }
-        }
+            => await batchClient.PoolOperations.DisableAutoScaleAsync(poolId, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
         public async Task EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, IAzureProxy.BatchPoolAutoScaleFormulaFactory formulaFactory, CancellationToken cancellationToken)
@@ -895,15 +806,7 @@ namespace TesApi.Web
                 throw new InvalidOperationException();
             }
 
-            try
-            {
-                await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formulaFactory(preemptable, preemptable ? currentLowPriority ?? 0 : currentDedicated ?? 0), interval, cancellationToken: cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                ProcessException(exception);
-                throw;
-            }
+            await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formulaFactory(preemptable, preemptable ? currentLowPriority ?? 0 : currentDedicated ?? 0), interval, cancellationToken: cancellationToken);
         }
     }
 }
