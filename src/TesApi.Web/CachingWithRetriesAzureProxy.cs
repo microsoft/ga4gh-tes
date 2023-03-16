@@ -74,9 +74,6 @@ namespace TesApi.Web
         public Task<CloudJob> GetBatchJobAsync(string jobId, DetailLevel detailLevel, CancellationToken cancellationToken) => asyncRetryPolicy.ExecuteAsync(ct => azureProxy.GetBatchJobAsync(jobId, detailLevel, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task CommitBatchPoolChangesAsync(CloudPool pool, CancellationToken cancellationToken) => asyncRetryPolicy.ExecuteAsync(ct => azureProxy.CommitBatchPoolChangesAsync(pool, ct), cancellationToken);
-
-        /// <inheritdoc/>
         public Task DeleteBatchComputeNodesAsync(string poolId, IEnumerable<ComputeNode> computeNodes, CancellationToken cancellationToken)
         {
             cache.Remove(poolId);

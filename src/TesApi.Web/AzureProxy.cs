@@ -607,10 +607,6 @@ namespace TesApi.Web
             => batchClient.JobOperations.GetJobAsync(jobId, detailLevel, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
-        public Task CommitBatchPoolChangesAsync(CloudPool pool, CancellationToken cancellationToken = default)
-            => pool.CommitChangesAsync(cancellationToken: cancellationToken);
-
-        /// <inheritdoc/>
         public async Task<(AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken = default)
         {
             var pool = await batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: new ODATADetailLevel(selectClause: "allocationState,enableAutoScale,targetLowPriorityNodes,currentLowPriorityNodes,targetDedicatedNodes,currentDedicatedNodes"), cancellationToken: cancellationToken);
