@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -50,6 +51,8 @@ namespace TesApi.Web
             .Handle<BatchException>(ex => ex.RequestInformation.BatchError.Code == BatchErrorCodeStrings.JobNotFound)
             .WaitAndRetryAsync(5, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
 
+        private readonly AsyncRetryPolicy batchNodeNotReadyRetryPolicy;
+
         private readonly ILogger logger;
         private readonly BatchClient batchClient;
         private readonly string subscriptionId;
@@ -82,6 +85,19 @@ namespace TesApi.Web
             }
 
             this.logger = logger;
+
+            this.batchNodeNotReadyRetryPolicy = Policy
+               .Handle<BatchException>(ex => "NodeNotReady".Equals(ex.RequestInformation?.BatchError?.Code, StringComparison.InvariantCultureIgnoreCase))
+               .WaitAndRetryAsync(
+                    5,
+                    (retryAttempt, exception, _) => (exception as BatchException).RequestInformation?.RetryAfter ?? TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                    (exception, delay, retryAttempt, _) =>
+                        {
+                            var requestId = (exception as BatchException).RequestInformation?.ServiceRequestId;
+                            var reason = (exception.InnerException as Microsoft.Azure.Batch.Protocol.Models.BatchErrorException)?.Response?.ReasonPhrase;
+                            logger.LogDebug(exception, "Retry attempt {RetryAttempt} after delay {DelaySeconds} for NodeNotReady exception: ServiceRequestId: {ServiceRequestId}, BatchErrorCode: NodeNotReady, Reason: {ReasonPhrase}", retryAttempt, delay.TotalSeconds, requestId, reason);
+                            return Task.FromResult(false);
+                        });
 
             if (!string.IsNullOrWhiteSpace(batchAccountOptions.Value.AppKey))
             {
@@ -490,7 +506,7 @@ namespace TesApi.Web
             foreach (var task in batchTasksToDelete)
             {
                 logger.LogInformation("Deleting task {BatchTask}", task.Id);
-                await task.DeleteAsync(cancellationToken: cancellationToken);
+                await batchNodeNotReadyRetryPolicy.ExecuteAsync(ct => task.DeleteAsync(cancellationToken: ct), cancellationToken);
             }
         }
 
