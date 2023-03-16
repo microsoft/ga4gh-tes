@@ -143,7 +143,32 @@ namespace TesApi.Web
                             tesTask.SetFailureReason("UnknownError", exc.Message, exc.StackTrace);
                         }
 
-                        logger.LogError(exc, $"TES task: {tesTask.Id} threw an exception in OrchestrateTesTasksOnBatch().");
+                        if (exc is Microsoft.Azure.Batch.Common.BatchException batchException)
+                        {
+                            var requestInfo = batchException.RequestInformation;
+                            //var requestId = batchException.RequestInformation?.ServiceRequestId;
+                            var reason = (batchException.InnerException as Microsoft.Azure.Batch.Protocol.Models.BatchErrorException)?.Response?.ReasonPhrase;
+                            var logs = new List<string>();
+
+                            if (requestInfo?.ServiceRequestId is not null)
+                            {
+                                logs.Add($"Azure batch ServiceRequestId: {requestInfo.ServiceRequestId}");
+                            }
+
+                            if (requestInfo?.BatchError is not null)
+                            {
+                                logs.Add($"BatchErrorCode: {requestInfo.BatchError.Code}");
+                                logs.Add($"BatchErrorMessage: {requestInfo.BatchError.Message}");
+                                foreach (var detail in requestInfo.BatchError.Values?.Select(d => $"{d.Key}={d.Value}") ?? Enumerable.Empty<string>())
+                                {
+                                    logs.Add(detail);
+                                }
+                            }
+
+                            tesTask.AddToSystemLog(logs);
+                        }
+
+                        logger.LogError(exc, "TES task: {TesTask} threw an exception in OrchestrateTesTasksOnBatch().", tesTask.Id);
                         await repository.UpdateItemAsync(tesTask);
                     }
 
@@ -176,7 +201,7 @@ namespace TesApi.Web
 
                         if (hasErrored)
                         {
-                            logger.LogDebug($"{tesTask.Id} failed, state: {tesTask.State}, reason: {tesTask.FailureReason}");
+                            logger.LogDebug("{TesTask} failed, state: {TesTaskState}, reason: {TesTaskFailureReason}", tesTask.Id, tesTask.State, tesTask.FailureReason);
                         }
 
                         await repository.UpdateItemAsync(tesTask);
@@ -206,7 +231,7 @@ namespace TesApi.Web
                 //}
                 catch (Exception exc)
                 {
-                    logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw {exc.GetType().FullName}: '{exc.Message}'. Stack trace: {exc.StackTrace}");
+                    logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
                 }
 
                 if (!string.IsNullOrWhiteSpace(tesTask.PoolId) && (TesState.QUEUEDEnum == tesTask.State || TesState.RUNNINGEnum == tesTask.State))
@@ -220,7 +245,7 @@ namespace TesApi.Web
                 await batchScheduler.FlushPoolsAsync(pools, stoppingToken);
             }
 
-            logger.LogDebug($"OrchestrateTesTasksOnBatch for {tesTasks.Count} tasks completed in {DateTime.UtcNow.Subtract(startTime).TotalSeconds} seconds.");
+            logger.LogDebug("OrchestrateTesTasksOnBatch for {TaskCount} tasks completed in {TotalSeconds} seconds.", tesTasks.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
         }
     }
 }
