@@ -416,7 +416,7 @@ namespace TesApi.Web
                         if (node is not null)
                         {
                             nodeState = node.State;
-                            var nodeError = node.Errors?.FirstOrDefault();
+                            var nodeError = node.Errors?.FirstOrDefault(e => "DiskFull".Equals(e.Code, StringComparison.InvariantCultureIgnoreCase)) ?? node.Errors?.FirstOrDefault(); // Prioritize DiskFull errors
                             nodeErrorCode = nodeError?.Code;
                             nodeErrorDetails = nodeError?.ErrorDetails?.Select(e => e.Value);
                         }
