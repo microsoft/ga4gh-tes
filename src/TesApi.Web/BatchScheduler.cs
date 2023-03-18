@@ -1080,7 +1080,7 @@ namespace TesApi.Web
 
             var batchRunCommand = enableBatchAutopool
                 ? $"/bin/bash {batchScriptPath}"
-                : $"/bin/bash -c \"({taskRunScriptContent.Replace(@"{BatchScriptPath}", batchScriptPath).Replace(@"{TaskExecutor}", executor.Image).Replace(@"{ExecutionPathPrefix}", batchExecutionPathPrefix.TrimStart('/'))})\"";
+                : $"/bin/bash -c \"({MungeBatchScriptPath()})\"";
 
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
@@ -1105,6 +1105,12 @@ namespace TesApi.Web
             }
 
             return cloudTask;
+
+            string MungeBatchScriptPath()
+                => (poolHasContainerConfig
+                    ? string.Join(") && (", taskRunScriptContent.Split(") && (").SkipWhile(l => l.Contains(@"{TaskExecutor}"))).Replace(">>", ">")
+                    : taskRunScriptContent)
+                .Replace(@"{BatchScriptPath}", batchScriptPath).Replace(@"{TaskExecutor}", executor.Image).Replace(@"{ExecutionPathPrefix}", batchExecutionPathPrefix.TrimStart('/'));
 
             static bool UrlContainsSas(string url)
             {
