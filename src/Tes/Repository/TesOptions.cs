@@ -1,4 +1,7 @@
-﻿using Tes.Models;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using Tes.Models;
 
 namespace Tes.Repository
 {
