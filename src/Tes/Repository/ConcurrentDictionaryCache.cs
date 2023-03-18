@@ -8,10 +8,8 @@ namespace Tes.Repository
 {
     public class ConcurrentDictionaryCache<T> : ICache<T> where T : class
     {
-        // Assume object uses a max of 4096 byes of memory
-        
         public const int DefaultMaxMemoryBytes = 1 << 29; // 536,870,912
-        public const int DefaultMaxObjectSizeBytes = 4096;
+        public const int DefaultMaxObjectSizeBytes = 4096;  // Assume object uses a max of 4096 byes of memory
         private readonly ConcurrentDictionary<string, T> concurrentDictionary = new ConcurrentDictionary<string, T>();
         private readonly ConcurrentQueue<string> keysToRemove = new ConcurrentQueue<string>();
 
@@ -23,12 +21,12 @@ namespace Tes.Repository
 
         public ConcurrentDictionaryCache(IOptions<TesOptions> options)
         {
-
+            MaxCount = options.Value.TesTaskCacheMaxMemoryBytes / options.Value.TesTaskCacheMaxObjectSizeBytes;
         }
 
-        public ConcurrentDictionaryCache(int maxMemory = DefaultMaxMemoryBytes, int maxObjectSize = DefaultMaxObjectSizeBytes)
+        public ConcurrentDictionaryCache(int maxMemoryBytes = DefaultMaxMemoryBytes, int maxObjectSizeBytes = DefaultMaxObjectSizeBytes)
         {
-            MaxCount = maxMemory / maxObjectSize;
+            MaxCount = maxMemoryBytes / maxObjectSizeBytes;
         }
 
         public int Count()
