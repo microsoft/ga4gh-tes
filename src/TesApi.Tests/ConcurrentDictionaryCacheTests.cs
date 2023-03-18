@@ -17,7 +17,7 @@ namespace TesApi.Tests
         [TestMethod]
         public void CacheNeverUsesMoreThanMaxSizeTest()
         {
-            for (var i = 0; i < cache.MaxSize * 1.1; i++)
+            for (var i = 0; i < cache.MaxCount * 1.1; i++)
             {
                 var task = new TesTask
                 {
@@ -29,10 +29,10 @@ namespace TesApi.Tests
 
                 cache.TryAdd(task.Id, task);
 
-                Assert.IsTrue(cache.Count() <= cache.MaxSize);
+                Assert.IsTrue(cache.Count() <= cache.MaxCount);
             }
 
-            Assert.IsTrue(cache.Count() == cache.MaxSize);
+            Assert.IsTrue(cache.Count() == cache.MaxCount);
         }
     }
 }

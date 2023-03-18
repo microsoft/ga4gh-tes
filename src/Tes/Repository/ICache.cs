@@ -6,7 +6,7 @@ namespace Tes.Repository
     public interface ICache<T>
     {
         int Count();
-        int MaxSize { get; set; }
+        int MaxCount { get; set; }
         bool TryGetValue(string key, out T task);
         bool TryAdd(string key, T task);
         bool TryUpdate(string key, T task);

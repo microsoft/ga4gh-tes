@@ -8,8 +8,8 @@ namespace Tes.Repository
     public class ConcurrentDictionaryCache<T> : ICache<T> where T : class
     {
         // Assume object uses a max of 4096 byes of memory
-        private const int defaultMaxObjectSize = 4096;
-        private const int defaultMaxMemory = 1 << 29; // 536,870,912
+        private const int defaultMaxObjectSizeBytes = 4096;
+        private const int defaultMaxMemoryBytes = 1 << 29; // 536,870,912
         private readonly ConcurrentDictionary<string, T> concurrentDictionary = new ConcurrentDictionary<string, T>();
         private readonly ConcurrentQueue<string> keysToRemove = new ConcurrentQueue<string>();
 
@@ -17,11 +17,11 @@ namespace Tes.Repository
         /// <summary>
         /// Total number of items in the cache, defaults to 131,072 tasks (about 2,620 concurrent Mutect2 workflows, and about 204 server racks)
         /// </summary>
-        public int MaxSize { get; set; } = defaultMaxMemory / defaultMaxObjectSize;
+        public int MaxCount { get; set; } = defaultMaxMemoryBytes / defaultMaxObjectSizeBytes;
 
-        public ConcurrentDictionaryCache(int maxMemory = defaultMaxMemory, int maxObjectSize = defaultMaxObjectSize)
+        public ConcurrentDictionaryCache(int maxMemory = defaultMaxMemoryBytes, int maxObjectSize = defaultMaxObjectSizeBytes)
         {
-            MaxSize = maxMemory / maxObjectSize;
+            MaxCount = maxMemory / maxObjectSize;
         }
 
         public int Count()
@@ -31,7 +31,7 @@ namespace Tes.Repository
 
         public bool TryAdd(string key, T item)
         {
-            while (concurrentDictionary.Count > MaxSize - 1) // Don't allow concurrentDictionary to exceed MaxSize on last item add
+            while (concurrentDictionary.Count > MaxCount - 1) // Don't allow concurrentDictionary to exceed MaxSize on last item add
             {
                 // Remove oldest first
                 if (keysToRemove.TryDequeue(out string keyToRemove))
