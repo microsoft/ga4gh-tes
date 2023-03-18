@@ -55,6 +55,7 @@ namespace TesApi.Web
         public void ConfigureServices(IServiceCollection services)
         {
             services
+                .Configure<TesOptions>(configuration.GetSection(TesOptions.SectionName))
                 .Configure<BatchAccountOptions>(configuration.GetSection(BatchAccountOptions.SectionName))
                 .Configure<PostgreSqlOptions>(configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
                 .Configure<RetryPolicyOptions>(configuration.GetSection(RetryPolicyOptions.SectionName))
@@ -181,7 +182,15 @@ namespace TesApi.Web
             {
                 var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
                 var postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
-                return new TesTaskPostgreSqlRepository(postgresConnectionString, new ConcurrentDictionaryCache<TesTask>());
+                var tesOptions = services.GetRequiredService<IOptions<TesOptions>>();
+                var cache = new ConcurrentDictionaryCache<TesTask>();
+
+                if (tesOptions != null)
+                {
+                    cache = new ConcurrentDictionaryCache<TesTask>(tesOptions);
+                }
+
+                return new TesTaskPostgreSqlRepository(postgresConnectionString, cache);
             }
 
             IStorageAccessProvider CreateStorageAccessProviderFromConfiguration(IServiceProvider services)

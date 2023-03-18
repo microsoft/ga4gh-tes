@@ -2,14 +2,16 @@
 // Licensed under the MIT License.
 
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Options;
 
 namespace Tes.Repository
 {
     public class ConcurrentDictionaryCache<T> : ICache<T> where T : class
     {
         // Assume object uses a max of 4096 byes of memory
-        private const int defaultMaxObjectSizeBytes = 4096;
-        private const int defaultMaxMemoryBytes = 1 << 29; // 536,870,912
+        
+        public const int DefaultMaxMemoryBytes = 1 << 29; // 536,870,912
+        public const int DefaultMaxObjectSizeBytes = 4096;
         private readonly ConcurrentDictionary<string, T> concurrentDictionary = new ConcurrentDictionary<string, T>();
         private readonly ConcurrentQueue<string> keysToRemove = new ConcurrentQueue<string>();
 
@@ -17,9 +19,14 @@ namespace Tes.Repository
         /// <summary>
         /// Total number of items in the cache, defaults to 131,072 tasks (about 2,620 concurrent Mutect2 workflows, and about 204 server racks)
         /// </summary>
-        public int MaxCount { get; set; } = defaultMaxMemoryBytes / defaultMaxObjectSizeBytes;
+        public int MaxCount { get; set; } = DefaultMaxMemoryBytes / DefaultMaxObjectSizeBytes;
 
-        public ConcurrentDictionaryCache(int maxMemory = defaultMaxMemoryBytes, int maxObjectSize = defaultMaxObjectSizeBytes)
+        public ConcurrentDictionaryCache(IOptions<TesOptions> options)
+        {
+
+        }
+
+        public ConcurrentDictionaryCache(int maxMemory = DefaultMaxMemoryBytes, int maxObjectSize = DefaultMaxObjectSizeBytes)
         {
             MaxCount = maxMemory / maxObjectSize;
         }
