@@ -16,9 +16,10 @@ namespace Tes.Repository
 
         // 
         /// <summary>
-        /// Total number of items in the cache, defaults to 131,072 tasks (about 2,620 concurrent Mutect2 workflows, and about 204 server racks)
+        /// Total number of items in the cache, defaults to 129,930 tasks (about 2,598 concurrent Mutect2 workflows during scatter).
+        /// An ID is a Guid, so also take into account the keysToRemove usage
         /// </summary>
-        public int MaxCount { get; set; } = defaultMaxMemoryBytes / defaultMaxObjectSizeBytes;
+        public int MaxCount { get; set; } = defaultMaxMemoryBytes / (defaultMaxObjectSizeBytes + Guid.Empty.ToString().Length);
 
         public ConcurrentDictionaryCache(int maxMemory = defaultMaxMemoryBytes, int maxObjectSize = defaultMaxObjectSizeBytes)
         {
