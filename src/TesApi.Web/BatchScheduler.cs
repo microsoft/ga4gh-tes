@@ -1080,7 +1080,7 @@ namespace TesApi.Web
 
             var batchRunCommand = enableBatchAutopool
                 ? $"/bin/bash {batchScriptPath}"
-                : $"/bin/bash -c \"({taskRunScriptContent.Replace(@"{BatchScriptPath}", batchScriptPath).Replace(@"{BatchScriptPath}", batchScriptPath).Replace(@"{ExecutionPathPrefix}", batchExecutionPathPrefix.TrimStart('/'))})\"";
+                : $"/bin/bash -c \"({taskRunScriptContent.Replace(@"{BatchScriptPath}", batchScriptPath).Replace(@"{TaskExecutor}", executor.Image).Replace(@"{ExecutionPathPrefix}", batchExecutionPathPrefix.TrimStart('/'))})\"";
 
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
