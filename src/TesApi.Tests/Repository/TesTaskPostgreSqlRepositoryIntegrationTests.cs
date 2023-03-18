@@ -34,7 +34,7 @@ namespace Tes.Repository.Tests
     /// </summary>
     [Ignore]
     [TestClass]
-    public class TesTaskPostgreSqlRepositoryTests
+    public class TesTaskPostgreSqlRepositoryIntegrationTests
     {
         private static TesTaskPostgreSqlRepository repository;
         private static readonly string subscriptionId = "";

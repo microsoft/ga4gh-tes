@@ -81,5 +81,13 @@ namespace Tes.Models
         /// </summary>
         [IgnoreDataMember]
         public int? CromwellAttempt => this.Description == null ? null : (int.TryParse(CromwellAttemptRegex.Match(this.Description).Groups[1].Value, out var result) ? result : null);
+
+        public bool IsTerminalState()
+        {
+            return this.State == TesState.COMPLETEEnum
+                || this.State == TesState.EXECUTORERROREnum
+                || this.State == TesState.SYSTEMERROREnum
+                || this.State == TesState.CANCELEDEnum;
+        }
     }
 }
