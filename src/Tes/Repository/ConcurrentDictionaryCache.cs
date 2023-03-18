@@ -31,7 +31,7 @@ namespace Tes.Repository
 
         public bool TryAdd(string key, T item)
         {
-            while (concurrentDictionary.Count > MaxCount - 1) // Don't allow concurrentDictionary to exceed MaxSize on last item add
+            while (concurrentDictionary.Count > MaxCount - 1) // Don't allow concurrentDictionary to exceed MaxCount on last item add
             {
                 // Remove oldest first
                 if (keysToRemove.TryDequeue(out string keyToRemove))
