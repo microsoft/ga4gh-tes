@@ -21,7 +21,7 @@ namespace Tes.Repository
 
         public ConcurrentDictionaryCache(IOptions<TaskCacheOptions> options)
         {
-            MaxCount = options.Value.TesTaskCacheMaxMemoryBytes / options.Value.TesTaskCacheMaxObjectSizeBytes;
+            MaxCount = options.Value.MaxMemoryBytes / options.Value.MaxObjectSizeBytes;
         }
 
         public ConcurrentDictionaryCache(int maxMemoryBytes = DefaultMaxMemoryBytes, int maxObjectSizeBytes = DefaultMaxObjectSizeBytes)

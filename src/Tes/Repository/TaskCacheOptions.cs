@@ -9,7 +9,7 @@ namespace Tes.Repository
     {
         public const string SectionName = "TaskCacheOptions";
 
-        public int TesTaskCacheMaxMemoryBytes { get; set; } = ConcurrentDictionaryCache<TesTask>.DefaultMaxMemoryBytes;
-        public int TesTaskCacheMaxObjectSizeBytes { get; set; } = ConcurrentDictionaryCache<TesTask>.DefaultMaxObjectSizeBytes;
+        public int MaxMemoryBytes { get; set; } = ConcurrentDictionaryCache<TesTask>.DefaultMaxMemoryBytes;
+        public int MaxObjectSizeBytes { get; set; } = ConcurrentDictionaryCache<TesTask>.DefaultMaxObjectSizeBytes;
     }
 }
