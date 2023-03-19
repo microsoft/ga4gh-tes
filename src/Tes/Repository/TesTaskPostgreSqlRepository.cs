@@ -58,6 +58,17 @@ namespace Tes.Repository
             dbContext.Database.EnsureCreatedAsync().Wait();
         }
 
+        public async Task RehydrateAsync()
+        {
+            var activeTasks = await GetItemsAsync(task => TesTask.TerminalStates.Contains(task.State));
+
+            foreach (var task in activeTasks)
+            {
+                cache.TryAdd(task.Id, task);
+            }
+        }
+
+
         /// <summary>
         /// Get a TesTask by the TesTask.ID
         /// </summary>

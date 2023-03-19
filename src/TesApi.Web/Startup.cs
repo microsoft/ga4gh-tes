@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Threading.Tasks;
 using Azure.Core;
 using Azure.Identity;
 using LazyCache;
@@ -181,7 +182,10 @@ namespace TesApi.Web
             {
                 var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
                 var postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
-                return new TesTaskPostgreSqlRepository(postgresConnectionString, new ConcurrentDictionaryCache<TesTask>());
+                var cache = new ConcurrentDictionaryCache<TesTask>();
+                var repo = new TesTaskPostgreSqlRepository(postgresConnectionString, cache);
+                repo.RehydrateAsync().Wait();
+                return repo;
             }
 
             IStorageAccessProvider CreateStorageAccessProviderFromConfiguration(IServiceProvider services)

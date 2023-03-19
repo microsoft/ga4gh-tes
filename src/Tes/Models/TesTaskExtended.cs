@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
@@ -14,6 +15,11 @@ namespace Tes.Models
         private static readonly Regex CromwellTaskInstanceNameRegex = new("(.*):[^:]*:[^:]*");
         private static readonly Regex CromwellShardRegex = new(".*:([^:]*):[^:]*");
         private static readonly Regex CromwellAttemptRegex = new(".*:([^:]*)");
+        public static readonly List<TesState> TerminalStates = new List<TesState> {
+            TesState.COMPLETEEnum,
+            TesState.EXECUTORERROREnum,
+            TesState.SYSTEMERROREnum,
+            TesState.CANCELEDEnum };
 
         /// <summary>
         /// Number of retries attempted
@@ -84,10 +90,7 @@ namespace Tes.Models
 
         public bool IsTerminalState()
         {
-            return this.State == TesState.COMPLETEEnum
-                || this.State == TesState.EXECUTORERROREnum
-                || this.State == TesState.SYSTEMERROREnum
-                || this.State == TesState.CANCELEDEnum;
+            return TerminalStates.Contains(this.State);
         }
     }
 }
