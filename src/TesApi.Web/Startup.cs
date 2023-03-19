@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Serialization;
+using Polly;
 using Tes.Models;
 using Tes.Repository;
 using Tes.Utilities;
@@ -184,9 +185,15 @@ namespace TesApi.Web
                 var postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
                 var cache = new ConcurrentDictionaryCache<TesTask>();
                 var repo = new TesTaskPostgreSqlRepository(postgresConnectionString, cache);
+
                 // Don't allow the state of the system to change until the cache and system are consistent;
                 // this is a fast PostgreSQL query even for 1m items
-                repo.WarmCacheAsync().Wait(); 
+                var policy = Policy
+                    .Handle<Exception>()
+                    .WaitAndRetryForeverAsync(
+                    retryAttempt => TimeSpan.FromSeconds(1));
+
+                policy.ExecuteAsync(repo.WarmCacheAsync).Wait();
                 return repo;
             }
 
