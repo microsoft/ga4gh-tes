@@ -60,7 +60,7 @@ namespace Tes.Repository
 
         public async Task RehydrateAsync()
         {
-            var activeTasks = await GetItemsAsync(task => TesTask.TerminalStates.Contains(task.State));
+            var activeTasks = await GetItemsAsync(task => !TesTask.TerminalStates.Contains(task.State));
 
             foreach (var task in activeTasks)
             {
