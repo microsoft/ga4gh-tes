@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -186,15 +187,27 @@ namespace TesApi.Web
                 var cache = new ConcurrentDictionaryCache<TesTask>();
                 var repo = new TesTaskPostgreSqlRepository(postgresConnectionString, cache);
 
+                var sw = Stopwatch.StartNew();
+                logger.LogInformation("Warming cache...");
+
                 // Don't allow the state of the system to change until the cache and system are consistent;
                 // this is a fast PostgreSQL query even for 1m items
                 // If the DB is offline, retry forever until it comes back online
-                var policy = Policy
+                var retryDatabaseForeverPolicy = Policy
                     .Handle<Exception>()
                     .WaitAndRetryForeverAsync(
-                    retryAttempt => TimeSpan.FromSeconds(1));
+                        retryAttempt =>
+                        {
+                            logger.LogWarning($"Warming cache retry attempt #{retryAttempt}");
+                            return TimeSpan.FromSeconds(5);
+                        },
+                        (ex, ts) =>
+                        {
+                            logger.LogCritical(ex, "Couldn't warm cache, is the database online?");
+                        });
 
-                policy.ExecuteAsync(repo.WarmCacheAsync).Wait();
+                retryDatabaseForeverPolicy.ExecuteAsync(repo.WarmCacheAsync).Wait();
+                logger.LogInformation($"Cache warmed successfully in {sw.Elapsed.TotalSeconds:n3} seconds");
                 return repo;
             }
 
