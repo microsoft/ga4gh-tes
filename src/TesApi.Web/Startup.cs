@@ -184,7 +184,9 @@ namespace TesApi.Web
                 var postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
                 var cache = new ConcurrentDictionaryCache<TesTask>();
                 var repo = new TesTaskPostgreSqlRepository(postgresConnectionString, cache);
-                _ = repo.WarmCacheAsync();
+                // Don't allow the state of the system to change until the cache and system are consistent;
+                // this is a fast PostgreSQL query even for 1m items
+                repo.WarmCacheAsync().Wait(); 
                 return repo;
             }
 
