@@ -58,7 +58,7 @@ namespace Tes.Repository
             dbContext.Database.EnsureCreatedAsync().Wait();
         }
 
-        public async Task RehydrateCacheAsync()
+        public async Task WarmCacheAsync()
         {
             var activeTasks = await GetItemsAsync(task => !TesTask.TerminalStates.Contains(task.State));
 
