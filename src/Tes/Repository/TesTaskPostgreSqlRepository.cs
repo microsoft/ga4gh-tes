@@ -60,6 +60,11 @@ namespace Tes.Repository
 
         public async Task WarmCacheAsync()
         {
+            if (cache == null)
+            {
+                return;
+            }
+
             var activeTasks = await GetItemsAsync(task => !TesTask.TerminalStates.Contains(task.State));
 
             foreach (var task in activeTasks)
