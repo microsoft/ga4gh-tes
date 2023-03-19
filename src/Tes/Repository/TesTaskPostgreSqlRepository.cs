@@ -64,7 +64,7 @@ namespace Tes.Repository
 
             foreach (var task in activeTasks)
             {
-                cache.TryAdd(task.Id, task);
+                cache?.TryAdd(task.Id, task);
             }
         }
 
