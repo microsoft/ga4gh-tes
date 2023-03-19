@@ -188,6 +188,7 @@ namespace TesApi.Web
 
                 // Don't allow the state of the system to change until the cache and system are consistent;
                 // this is a fast PostgreSQL query even for 1m items
+                // If the DB is offline, retry forever until it comes back online
                 var policy = Policy
                     .Handle<Exception>()
                     .WaitAndRetryForeverAsync(
