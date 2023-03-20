@@ -12,6 +12,7 @@ namespace Tes.Repository
         {
             // default constructor for EF migration generation
         }
+
         public TesDbContext(string connectionString)
         {
             ArgumentException.ThrowIfNullOrEmpty(connectionString, nameof(connectionString));
@@ -32,6 +33,10 @@ namespace Tes.Repository
             }
         }
 
+        // Adds a GIN index for fast queries within the JSON
+        // docs: https://www.npgsql.org/efcore/modeling/indexes.html#index-methods
+        // https://www.postgresql.org/docs/current/gin-intro.html
+        // Equivalent of: CREATE INDEX ix_testasks_json ON testasks USING gin (json);
         protected override void OnModelCreating(ModelBuilder modelBuilder)
             => modelBuilder.Entity<TesTaskDatabaseItem>()
                 .HasIndex(b => new { b.Json })
