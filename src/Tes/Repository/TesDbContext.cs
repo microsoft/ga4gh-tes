@@ -8,6 +8,10 @@ namespace Tes.Repository
     {
         public const string TesTasksPostgresTableName = "testasks";
 
+        public TesDbContext()
+        {
+            // default constructor for EF migration generation
+        }
         public TesDbContext(string connectionString)
         {
             ArgumentException.ThrowIfNullOrEmpty(connectionString, nameof(connectionString));
@@ -27,5 +31,10 @@ namespace Tes.Repository
                     .UseLowerCaseNamingConvention();
             }
         }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+            => modelBuilder.Entity<TesTaskDatabaseItem>()
+                .HasIndex(b => new { b.Json })
+                .HasMethod("gin");
     }
 }
