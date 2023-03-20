@@ -267,7 +267,7 @@ namespace TesApi.Web
                 {
                     c.SwaggerEndpoint("/swagger/0.4.0/openapi.json", "Task Execution Service");
                 })
-
+                .UseMiddleware<DatabaseOverloadedExceptionMiddleware>()
                 .IfThenElse(hostingEnvironment.IsDevelopment(),
                     s =>
                     {

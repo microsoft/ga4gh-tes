@@ -10,6 +10,7 @@ namespace Tes.Repository
     using System.Threading.Tasks;
     using Microsoft.EntityFrameworkCore;
     using Microsoft.Extensions.Options;
+    using Npgsql;
     using Tes.Models;
     using Tes.Utilities;
 
@@ -63,18 +64,19 @@ namespace Tes.Repository
         /// <returns></returns>
         public async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess = null)
         {
-            using var dbContext = createDbContext();
-
-            // Search for Id within the JSON
-            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id);
-
-            if (item is null)
+            return await ExecuteAsync(async dbContext =>
             {
-                return false;
-            }
+                // Search for Id within the JSON
+                var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id);
 
-            onSuccess?.Invoke(item.Json);
-            return true;
+                if (item is null)
+                {
+                    return false;
+                }
+
+                onSuccess?.Invoke(item.Json);
+                return true;
+            });
         }
 
         /// <summary>
@@ -84,14 +86,15 @@ namespace Tes.Repository
         /// <returns></returns>
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate)
         {
-            using var dbContext = createDbContext();
+            return await ExecuteAsync(async dbContext =>
+            {
+                // Search for items in the JSON
+                var query = dbContext.TesTasks.Select(t => t.Json).Where(predicate);
 
-            // Search for items in the JSON
-            var query = dbContext.TesTasks.Select(t => t.Json).Where(predicate);
-
-            //var sqlQuery = query.ToQueryString();
-            //Debugger.Break();
-            return await query.ToListAsync();
+                //var sqlQuery = query.ToQueryString();
+                //Debugger.Break();
+                return await query.ToListAsync();
+            });
         }
 
         /// <summary>
@@ -101,11 +104,13 @@ namespace Tes.Repository
         /// <returns></returns>
         public async Task<TesTask> CreateItemAsync(TesTask item)
         {
-            using var dbContext = createDbContext();
-            var dbItem = new TesTaskDatabaseItem { Json = item };
-            dbContext.TesTasks.Add(dbItem);
-            await dbContext.SaveChangesAsync();
-            return item;
+            return await ExecuteAsync(async dbContext =>
+            {
+                var dbItem = new TesTaskDatabaseItem { Json = item };
+                dbContext.TesTasks.Add(dbItem);
+                await dbContext.SaveChangesAsync();
+                return item;
+            });
         }
 
         /// <summary>
@@ -115,16 +120,18 @@ namespace Tes.Repository
         /// <returns></returns>
         public async Task<List<TesTask>> CreateItemsAsync(List<TesTask> items)
         {
-            using var dbContext = createDbContext();
-
-            foreach (var item in items)
+            return await ExecuteAsync(async dbContext =>
             {
-                var dbItem = new TesTaskDatabaseItem { Json = item };
-                dbContext.TesTasks.Add(dbItem);
-            }
+                foreach (var item in items)
+                {
+                    var dbItem = new TesTaskDatabaseItem { Json = item };
+                    dbContext.TesTasks.Add(dbItem);
+                }
 
-            await dbContext.SaveChangesAsync();
-            return items;
+                await dbContext.SaveChangesAsync();
+
+                return items;
+            });
         }
 
         /// <summary>
@@ -134,23 +141,24 @@ namespace Tes.Repository
         /// <returns></returns>
         public async Task<TesTask> UpdateItemAsync(TesTask tesTask)
         {
-            using var dbContext = createDbContext();
-
-            // Manually set entity state to avoid potential NPG PostgreSql bug
-            dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
-            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == tesTask.Id);
-
-            if (item is null)
+            return await ExecuteAsync(async dbContext =>
             {
-                throw new Exception($"No TesTask with ID {tesTask.Id} found in the database.");
-            }
+                // Manually set entity state to avoid potential NPG PostgreSql bug
+                dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
+                var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == tesTask.Id);
 
-            item.Json = tesTask;
+                if (item is null)
+                {
+                    throw new Exception($"No TesTask with ID {tesTask.Id} found in the database.");
+                }
 
-            // Manually set entity state to avoid potential NPG PostgreSql bug
-            dbContext.Entry(item).State = EntityState.Modified;
-            await dbContext.SaveChangesAsync();
-            return item.Json;
+                item.Json = tesTask;
+
+                // Manually set entity state to avoid potential NPG PostgreSql bug
+                dbContext.Entry(item).State = EntityState.Modified;
+                await dbContext.SaveChangesAsync();
+                return item.Json;
+            });
         }
 
         /// <summary>
@@ -160,16 +168,18 @@ namespace Tes.Repository
         /// <returns></returns>
         public async Task DeleteItemAsync(string id)
         {
-            using var dbContext = createDbContext();
-            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id);
-
-            if (item is null)
+            await ExecuteAsync(async dbContext =>
             {
-                throw new Exception($"No TesTask with ID {item.Id} found in the database.");
-            }
+                var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id);
 
-            dbContext.TesTasks.Remove(item);
-            await dbContext.SaveChangesAsync();
+                if (item is null)
+                {
+                    throw new Exception($"No TesTask with ID {item.Id} found in the database.");
+                }
+
+                dbContext.TesTasks.Remove(item);
+                await dbContext.SaveChangesAsync();
+            });
         }
 
         /// <summary>
@@ -182,8 +192,45 @@ namespace Tes.Repository
         public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken)
         {
             // TODO paging support
-            var results = await GetItemsAsync(predicate);
-            return (null, results);
+            return (null, await GetItemsAsync(predicate));
+        }
+
+        private async Task<T> ExecuteAsync<T>(Func<TesDbContext, Task<T>> action)
+        {
+            try
+            {
+                using var dbContext = createDbContext();
+                return await action(dbContext);
+            }
+            catch (NpgsqlException npgEx) when (npgEx.InnerException is TimeoutException)
+            {
+                throw new DatabaseOverloadedException();
+            }
+            catch (InvalidOperationException ioEx) when
+                (ioEx.InnerException is NpgsqlException npgSqlEx
+                && npgSqlEx.Message?.StartsWith("The connection pool has been exhausted", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                throw new DatabaseOverloadedException();
+            }
+        }
+
+        private async Task ExecuteAsync(Func<TesDbContext, Task> action)
+        {
+            try
+            {
+                using var dbContext = createDbContext();
+                await action(dbContext);
+            }
+            catch (NpgsqlException npgEx) when (npgEx.InnerException is TimeoutException)
+            {
+                throw new DatabaseOverloadedException();
+            }
+            catch (InvalidOperationException ioEx) when
+                (ioEx.InnerException is NpgsqlException npgSqlEx
+                && npgSqlEx.Message?.StartsWith("The connection pool has been exhausted", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                throw new DatabaseOverloadedException();
+            }
         }
 
         public void Dispose()

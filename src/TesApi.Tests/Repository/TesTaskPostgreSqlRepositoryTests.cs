@@ -14,9 +14,11 @@ using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Extensions.Options;
+using Microsoft.OpenApi.Models;
 using Microsoft.Rest;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
+using Npgsql;
 using Tes.Models;
 using Tes.Utilities;
 using FlexibleServer = Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
@@ -114,32 +116,12 @@ namespace Tes.Repository.Tests
         {
             const bool createItems = true;
 
-            var sw = Stopwatch.StartNew();
             if (createItems)
             {
-                var rng = new Random(Guid.NewGuid().GetHashCode());
-                var states = Enum.GetValues(typeof(Models.TesState));
-
-                var items = new List<Models.TesTask>();
-
-                for (int i = 0; i < 1_000_000; i++)
-                {
-                    var randomState = (Models.TesState)states.GetValue(rng.Next(states.Length));
-                    items.Add(new Models.TesTask
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        Description = Guid.NewGuid().ToString(),
-                        CreationTime = DateTime.UtcNow,
-                        State = randomState
-                    });
-                }
-
-                await repository.CreateItemsAsync(items);
-                Console.WriteLine($"Total seconds to insert {items.Count} items: {sw.Elapsed.TotalSeconds:n2}s");
-                sw.Restart();
+                await Create1mItemsAsync();
             }
 
-            sw.Restart();
+            var sw = Stopwatch.StartNew();
             var runningTasks = await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum);
 
             // Ensure performance is decent.  In manual testing on fast internet, this takes less than 5s typically
@@ -156,6 +138,70 @@ namespace Tes.Repository.Tests
             Assert.IsTrue(runningTasks.Count() != allOtherTasks.Count());
             Assert.IsTrue(runningTasks.All(c => c.State == Models.TesState.RUNNINGEnum));
             Assert.IsTrue(allOtherTasks.All(c => c.State != Models.TesState.RUNNINGEnum));
+        }
+
+        private static async Task Create1mItemsAsync()
+        {
+            var sw = Stopwatch.StartNew();
+            var rng = new Random(Guid.NewGuid().GetHashCode());
+            var states = Enum.GetValues(typeof(Models.TesState));
+
+            var items = new List<Models.TesTask>();
+
+            for (int i = 0; i < 1_000_000; i++)
+            {
+                var randomState = (Models.TesState)states.GetValue(rng.Next(states.Length));
+                items.Add(new Models.TesTask
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Description = Guid.NewGuid().ToString(),
+                    CreationTime = DateTime.UtcNow,
+                    State = randomState
+                });
+            }
+
+            await repository.CreateItemsAsync(items);
+            Console.WriteLine($"Total seconds to insert {items.Count} items: {sw.Elapsed.TotalSeconds:n2}s");
+            sw.Restart();
+        }
+
+        [TestMethod]
+        public async Task OverloadedDbIsHandled()
+        {
+            await Create1mItemsAsync();
+            var tasks = new List<Task>();
+            long overloadedDbExceptionCount = 0;
+            long exceptionCount = 0;
+
+            for (int i = 0; i < 1000; i++)
+            {
+                tasks.Add(Task.Run(async () =>
+                {
+                    try
+                    {
+                        var allOtherTasks = await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum);
+                    }
+                    catch (DatabaseOverloadedException)
+                    {
+                        Interlocked.Increment(ref overloadedDbExceptionCount);
+                    }
+                    catch (Exception ex)
+                    {
+                        Interlocked.Increment(ref exceptionCount);
+                        var exType = ex.GetType();
+                        var inexType = ex.InnerException?.GetType();
+                        var n1 = exType.Name;
+                        var n2 = inexType.Name;
+                        Debugger.Break();
+                    }
+
+                }));
+            }
+
+            await Task.WhenAll(tasks);
+            Console.WriteLine(overloadedDbExceptionCount);
+            Assert.IsTrue(overloadedDbExceptionCount > 0);
+            Assert.IsTrue(exceptionCount == 0);
         }
 
         [TestMethod]
