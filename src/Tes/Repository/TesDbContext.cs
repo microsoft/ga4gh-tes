@@ -10,7 +10,8 @@ namespace Tes.Repository
 
         public TesDbContext()
         {
-            // Default constructor for EF migrations
+            // Default constructor, which is required to run the EF migrations tool,
+            // "dotnet ef migrations add InitialCreate"
         }
 
         public TesDbContext(string connectionString)
