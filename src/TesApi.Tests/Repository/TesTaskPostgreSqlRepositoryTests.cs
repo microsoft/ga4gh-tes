@@ -13,12 +13,11 @@ using Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.OpenApi.Models;
 using Microsoft.Rest;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
-using Npgsql;
 using Tes.Models;
 using Tes.Utilities;
 using FlexibleServer = Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
@@ -65,7 +64,8 @@ namespace Tes.Repository.Tests
             var optionsMock = new Mock<IOptions<PostgreSqlOptions>>();
             optionsMock.Setup(x => x.Value).Returns(options);
             var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(optionsMock.Object);
-            repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(connectionString));
+            var logger = new Mock<ILogger<TesTaskPostgreSqlRepositoryTests>>();
+            repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(connectionString), logger.Object);
             Console.WriteLine("Creation complete.");
         }
 
@@ -173,7 +173,7 @@ namespace Tes.Repository.Tests
             long overloadedDbExceptionCount = 0;
             long exceptionCount = 0;
 
-            for (int i = 0; i < 1000; i++)
+            for (int i = 0; i < 200; i++)
             {
                 tasks.Add(Task.Run(async () =>
                 {

@@ -31,11 +31,11 @@
             {
                 await nextRequestDelegate(context);
             }
-            catch (DatabaseOverloadedException)
+            catch (DatabaseOverloadedException ex)
             {
                 context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
                 context.Response.ContentType = "text/plain";
-                await context.Response.WriteAsync("The database is currently overloaded; consider scaling the database up or reduce the number of requests");
+                await context.Response.WriteAsync(ex.Message);
             }
         }
     }

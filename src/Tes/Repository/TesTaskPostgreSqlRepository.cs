@@ -9,6 +9,7 @@ namespace Tes.Repository
     using System.Linq.Expressions;
     using System.Threading.Tasks;
     using Microsoft.EntityFrameworkCore;
+    using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
     using Npgsql;
     using Tes.Models;
@@ -21,13 +22,15 @@ namespace Tes.Repository
     public class TesTaskPostgreSqlRepository : IRepository<TesTask>
     {
         private readonly Func<TesDbContext> createDbContext;
+        private readonly ILogger logger;
 
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
         /// <param name="connectionString">The PostgreSql connection string</param>
-        public TesTaskPostgreSqlRepository(string connectionString)
+        public TesTaskPostgreSqlRepository(string connectionString, ILogger logger)
         {
+            this.logger = logger;
             createDbContext = () => { return new TesDbContext(connectionString); };
             using var dbContext = createDbContext();
             dbContext.Database.EnsureCreatedAsync().Wait();
@@ -37,8 +40,9 @@ namespace Tes.Repository
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
         /// <param name="connectionString">The PostgreSql connection string</param>
-        public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options)
+        public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, ILogger logger)
         {
+            this.logger = logger;
             var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
             createDbContext = () => { return new TesDbContext(connectionString); };
             using var dbContext = createDbContext();
@@ -49,8 +53,9 @@ namespace Tes.Repository
         /// Constructor for testing to enable mocking DbContext 
         /// </summary>
         /// <param name="createDbContext">A delegate that creates a TesTaskPostgreSqlRepository context</param>
-        public TesTaskPostgreSqlRepository(Func<TesDbContext> createDbContext)
+        public TesTaskPostgreSqlRepository(Func<TesDbContext> createDbContext, ILogger logger)
         {
+            this.logger = logger;
             this.createDbContext = createDbContext;
             using var dbContext = createDbContext();
             dbContext.Database.EnsureCreatedAsync().Wait();
@@ -204,17 +209,17 @@ namespace Tes.Repository
             }
             catch (NpgsqlException npgEx) when (npgEx.InnerException is TimeoutException)
             {
-                throw new DatabaseOverloadedException();
+                throw LogAndThrowDatabaseOverloadedException();
             }
             catch (InvalidOperationException ioEx) when (ioEx.InnerException is TimeoutException)
             {
-                throw new DatabaseOverloadedException();
+                throw LogAndThrowDatabaseOverloadedException();
             }
             catch (InvalidOperationException ioEx) when
                 (ioEx.InnerException is NpgsqlException npgSqlEx
                 && npgSqlEx.Message?.StartsWith("The connection pool has been exhausted", StringComparison.OrdinalIgnoreCase) == true)
             {
-                throw new DatabaseOverloadedException();
+                throw LogAndThrowDatabaseOverloadedException();
             }
         }
 
@@ -227,18 +232,25 @@ namespace Tes.Repository
             }
             catch (NpgsqlException npgEx) when (npgEx.InnerException is TimeoutException)
             {
-                throw new DatabaseOverloadedException();
+                throw LogAndThrowDatabaseOverloadedException();
             }
             catch (InvalidOperationException ioEx) when (ioEx.InnerException is TimeoutException)
             {
-                throw new DatabaseOverloadedException();
+                throw LogAndThrowDatabaseOverloadedException();
             }
             catch (InvalidOperationException ioEx) when
                 (ioEx.InnerException is NpgsqlException npgSqlEx
                 && npgSqlEx.Message?.StartsWith("The connection pool has been exhausted", StringComparison.OrdinalIgnoreCase) == true)
             {
-                throw new DatabaseOverloadedException();
+                throw LogAndThrowDatabaseOverloadedException();
             }
+        }
+
+        public DatabaseOverloadedException LogAndThrowDatabaseOverloadedException()
+        {
+            var exception = new DatabaseOverloadedException();
+            logger.LogCritical(exception, exception.Message);
+            return exception;
         }
 
         public void Dispose()
