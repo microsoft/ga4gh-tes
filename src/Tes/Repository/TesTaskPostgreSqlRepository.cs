@@ -206,6 +206,10 @@ namespace Tes.Repository
             {
                 throw new DatabaseOverloadedException();
             }
+            catch (InvalidOperationException ioEx) when (ioEx.InnerException is TimeoutException)
+            {
+                throw new DatabaseOverloadedException();
+            }
             catch (InvalidOperationException ioEx) when
                 (ioEx.InnerException is NpgsqlException npgSqlEx
                 && npgSqlEx.Message?.StartsWith("The connection pool has been exhausted", StringComparison.OrdinalIgnoreCase) == true)
@@ -222,6 +226,10 @@ namespace Tes.Repository
                 await action(dbContext);
             }
             catch (NpgsqlException npgEx) when (npgEx.InnerException is TimeoutException)
+            {
+                throw new DatabaseOverloadedException();
+            }
+            catch (InvalidOperationException ioEx) when (ioEx.InnerException is TimeoutException)
             {
                 throw new DatabaseOverloadedException();
             }
