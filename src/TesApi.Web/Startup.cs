@@ -184,8 +184,9 @@ namespace TesApi.Web
             {
                 var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
                 var postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
-                var cache = new ConcurrentDictionaryCache<TesTask>();
-                var repo = new TesTaskPostgreSqlRepository(postgresConnectionString, cache);
+                var appCache = services.GetRequiredService<IAppCache>();
+                var lazyCache = new TesRepositoryLazyCache<TesTask>(appCache);
+                var repo = new TesTaskPostgreSqlRepository(postgresConnectionString, lazyCache);
 
                 var sw = Stopwatch.StartNew();
                 logger.LogInformation("Warming cache...");

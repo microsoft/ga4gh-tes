@@ -67,7 +67,7 @@ namespace Tes.Repository
 
             var activeTasks = await GetItemsAsync(task => !TesTask.TerminalStates.Contains(task.State));
 
-            foreach (var task in activeTasks)
+            foreach (var task in activeTasks.OrderBy(t => t.CreationTime))
             {
                 cache?.TryAdd(task.Id, task);
             }
