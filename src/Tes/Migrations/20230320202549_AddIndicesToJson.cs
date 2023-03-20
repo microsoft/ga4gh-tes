@@ -10,8 +10,9 @@ namespace Tes.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql("CREATE INDEX ix_testasks_json_id ON testasks USING HASH (json->'id');");
-            migrationBuilder.Sql("CREATE INDEX ix_testasks_json_state ON testasks USING HASH (json->'state');");
+            // https://www.postgresql.org/docs/current/datatype-json.html#JSON-INDEXING
+            migrationBuilder.Sql("CREATE INDEX ix_testasks_json_id ON testasks USING HASH ((json->'id'));");
+            migrationBuilder.Sql("CREATE INDEX ix_testasks_json_state ON testasks USING HASH ((json->'state'));");
         }
 
         /// <inheritdoc />
