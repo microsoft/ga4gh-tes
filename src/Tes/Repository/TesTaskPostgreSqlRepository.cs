@@ -209,17 +209,17 @@ namespace Tes.Repository
             }
             catch (NpgsqlException npgEx) when (npgEx.InnerException is TimeoutException)
             {
-                throw LogAndThrowDatabaseOverloadedException();
+                throw LogDatabaseOverloadedException();
             }
             catch (InvalidOperationException ioEx) when (ioEx.InnerException is TimeoutException)
             {
-                throw LogAndThrowDatabaseOverloadedException();
+                throw LogDatabaseOverloadedException();
             }
             catch (InvalidOperationException ioEx) when
                 (ioEx.InnerException is NpgsqlException npgSqlEx
                 && npgSqlEx.Message?.StartsWith("The connection pool has been exhausted", StringComparison.OrdinalIgnoreCase) == true)
             {
-                throw LogAndThrowDatabaseOverloadedException();
+                throw LogDatabaseOverloadedException();
             }
         }
 
@@ -232,21 +232,21 @@ namespace Tes.Repository
             }
             catch (NpgsqlException npgEx) when (npgEx.InnerException is TimeoutException)
             {
-                throw LogAndThrowDatabaseOverloadedException();
+                throw LogDatabaseOverloadedException();
             }
             catch (InvalidOperationException ioEx) when (ioEx.InnerException is TimeoutException)
             {
-                throw LogAndThrowDatabaseOverloadedException();
+                throw LogDatabaseOverloadedException();
             }
             catch (InvalidOperationException ioEx) when
                 (ioEx.InnerException is NpgsqlException npgSqlEx
                 && npgSqlEx.Message?.StartsWith("The connection pool has been exhausted", StringComparison.OrdinalIgnoreCase) == true)
             {
-                throw LogAndThrowDatabaseOverloadedException();
+                throw LogDatabaseOverloadedException();
             }
         }
 
-        public DatabaseOverloadedException LogAndThrowDatabaseOverloadedException()
+        public DatabaseOverloadedException LogDatabaseOverloadedException()
         {
             var exception = new DatabaseOverloadedException();
             logger.LogCritical(exception, exception.Message);
