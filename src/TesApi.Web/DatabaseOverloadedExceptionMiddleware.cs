@@ -9,7 +9,7 @@
     /// </summary>
     public class DatabaseOverloadedExceptionMiddleware
     {
-        private readonly RequestDelegate _next;
+        private readonly RequestDelegate nextRequestDelegate;
 
         /// <summary>
         /// Default constructor
@@ -17,7 +17,7 @@
         /// <param name="next"></param>
         public DatabaseOverloadedExceptionMiddleware(RequestDelegate next)
         {
-            _next = next;
+            this.nextRequestDelegate = next;
         }
 
         /// <summary>
@@ -29,7 +29,7 @@
         {
             try
             {
-                await _next(context);
+                await nextRequestDelegate(context);
             }
             catch (DatabaseOverloadedException)
             {
