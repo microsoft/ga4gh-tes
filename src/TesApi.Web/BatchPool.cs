@@ -269,6 +269,7 @@ namespace TesApi.Web
                             else
                             {
                                 _scalingMode = ScalingMode.RemovingFailedNodes;
+                                goto case ScalingMode.RemovingFailedNodes;
                             }
                         }
                         break;
