@@ -31,7 +31,7 @@ namespace Tes.Repository
             this.cache = cache;
             createDbContext = () => { return new TesDbContext(connectionString); };
             using var dbContext = createDbContext();
-            dbContext.Database.EnsureCreatedAsync().Wait();
+            dbContext.Database.MigrateAsync().Wait();
         }
 
         /// <summary>
@@ -44,7 +44,7 @@ namespace Tes.Repository
             var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
             createDbContext = () => { return new TesDbContext(connectionString); };
             using var dbContext = createDbContext();
-            dbContext.Database.EnsureCreatedAsync().Wait();
+            dbContext.Database.MigrateAsync().Wait();
         }
 
         /// <summary>
@@ -55,7 +55,7 @@ namespace Tes.Repository
         {
             this.createDbContext = createDbContext;
             using var dbContext = createDbContext();
-            dbContext.Database.EnsureCreatedAsync().Wait();
+            dbContext.Database.MigrateAsync().Wait();
         }
 
         public async Task WarmCacheAsync()
