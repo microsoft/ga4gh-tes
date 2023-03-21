@@ -363,13 +363,15 @@ namespace TesApi.Web
             }
         }
 
-
         /// <inheritdoc/>
         public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessTesTasksAsync(IEnumerable<TesTask> tesTasks, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var (TesTasks, State) = await GetState(tesTasks.ToList());
 
-            await foreach(var item in WhenEach(TesTasks.ToAsyncEnumerable().SelectAwait(async t => await ProcessTesTaskAsync(t, State)).ToEnumerable(), t => t.IsModified, cancellationToken))
+            logger.LogInformation("PoolsAndNodes: {PoolsAndNodes}", JsonConvert.SerializeObject(State.PoolsAndNodes));
+            logger.LogInformation("JobsAndTasks: {JobsAndTasks}", JsonConvert.SerializeObject(State.JobsAndTasks));
+
+            await foreach (var item in WhenEach(TesTasks.ToAsyncEnumerable().SelectAwait(async t => await ProcessTesTaskAsync(t, State)).ToEnumerable(), t => t.IsModified, cancellationToken))
             {
                 yield return item;
             }
