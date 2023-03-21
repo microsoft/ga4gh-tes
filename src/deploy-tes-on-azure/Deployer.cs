@@ -673,22 +673,29 @@ namespace TesDeployer
                     {
                         if (string.IsNullOrWhiteSpace(response.FailureReason))
                         {
+                            ConsoleEx.WriteLine($"TES Task State: {response.State}");
                             return true;
                         }
-                        else
-                        {
-                            return false;
-                        }
+
+                        ConsoleEx.WriteLine($"Failure reason: {response.FailureReason}");
+                        return false;
                     }
                     else if (response.State == TesState.EXECUTORERROREnum || response.State == TesState.SYSTEMERROREnum || response.State == TesState.CANCELEDEnum)
                     {
+                        ConsoleEx.WriteLine($"TES Task State: {response.State}");
+
+                        if (!string.IsNullOrWhiteSpace(response.FailureReason))
+                        {
+                            ConsoleEx.WriteLine($"Failure reason: {response.FailureReason}");
+                        }
+
                         return false;
                     }
                 }
                 catch (Exception exc)
                 {
                     // "Server is busy" occasionally can be ignored
-                    ConsoleEx.WriteLine(exc.Message);
+                    ConsoleEx.WriteLine($"Transient error: '{exc.Message}' Will retry again in 10s.");
                 }
 
                 await Task.Delay(System.TimeSpan.FromSeconds(10));
