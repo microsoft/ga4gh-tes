@@ -57,90 +57,99 @@ namespace TesApi.Web
         /// <param name="services">The Microsoft.Extensions.DependencyInjection.IServiceCollection to add the services to.</param>
         public void ConfigureServices(IServiceCollection services)
         {
-            services
-                .Configure<BatchAccountOptions>(configuration.GetSection(BatchAccountOptions.SectionName))
-                .Configure<PostgreSqlOptions>(configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
-                .Configure<RetryPolicyOptions>(configuration.GetSection(RetryPolicyOptions.SectionName))
-                .Configure<TerraOptions>(configuration.GetSection(TerraOptions.SectionName))
-                .Configure<ContainerRegistryOptions>(configuration.GetSection(ContainerRegistryOptions.SectionName))
-                .Configure<BatchImageGeneration1Options>(configuration.GetSection(BatchImageGeneration1Options.SectionName))
-                .Configure<BatchImageGeneration2Options>(configuration.GetSection(BatchImageGeneration2Options.SectionName))
-                .Configure<BatchImageNameOptions>(configuration.GetSection(BatchImageNameOptions.SectionName))
-                .Configure<BatchNodesOptions>(configuration.GetSection(BatchNodesOptions.SectionName))
-                .Configure<BatchSchedulingOptions>(configuration.GetSection(BatchSchedulingOptions.SectionName))
-                .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
-                .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
+            try
+            {
+                services
+                    .Configure<BatchAccountOptions>(configuration.GetSection(BatchAccountOptions.SectionName))
+                    .Configure<PostgreSqlOptions>(configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
+                    .Configure<RetryPolicyOptions>(configuration.GetSection(RetryPolicyOptions.SectionName))
+                    .Configure<TerraOptions>(configuration.GetSection(TerraOptions.SectionName))
+                    .Configure<ContainerRegistryOptions>(configuration.GetSection(ContainerRegistryOptions.SectionName))
+                    .Configure<BatchImageGeneration1Options>(configuration.GetSection(BatchImageGeneration1Options.SectionName))
+                    .Configure<BatchImageGeneration2Options>(configuration.GetSection(BatchImageGeneration2Options.SectionName))
+                    .Configure<BatchImageNameOptions>(configuration.GetSection(BatchImageNameOptions.SectionName))
+                    .Configure<BatchNodesOptions>(configuration.GetSection(BatchNodesOptions.SectionName))
+                    .Configure<BatchSchedulingOptions>(configuration.GetSection(BatchSchedulingOptions.SectionName))
+                    .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
+                    .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
 
-                .AddLogging()
+                    .AddLogging()
 
-                .AddSingleton<IAppCache, CachingService>()
-                .AddSingleton<AzureProxy>()
-                .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
-                .AddTransient<BatchPool>()
-                .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
-                .AddTransient<TerraWsmApiClient>()
-                .AddSingleton(CreateBatchPoolManagerFromConfiguration)
+                    .AddSingleton<IAppCache, CachingService>()
+                    .AddSingleton<AzureProxy>()
+                    .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
+                    .AddTransient<BatchPool>()
+                    .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
+                    .AddTransient<TerraWsmApiClient>()
+                    .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
-                .AddControllers()
-                .AddNewtonsoftJson(opts =>
-                {
-                    opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                    opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
-                }).Services
-
-                .AddSingleton<IBatchScheduler, BatchScheduler>()
-                .AddSingleton(CreateStorageAccessProviderFromConfiguration)
-                .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
-
-
-                .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
-                .AddSingleton<ContainerRegistryProvider>()
-                .AddSingleton<CacheAndRetryHandler>()
-                .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
-                .AddSingleton<IBatchScheduler, BatchScheduler>()
-                .AddSingleton<PriceApiClient>()
-                .AddSingleton<IBatchSkuInformationProvider, PriceApiBatchSkuInformationProvider>()
-                .AddSingleton(CreateBatchAccountResourceInformation)
-                .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
-                .AddSingleton<AzureManagementClientsFactory>()
-                .AddSingleton<ConfigurationUtils>()
-                .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
-
-                .AddSwaggerGen(c =>
-                {
-                    c.SwaggerDoc("0.4.0", new()
+                    .AddControllers()
+                    .AddNewtonsoftJson(opts =>
                     {
-                        Version = "0.4.0",
-                        Title = "Task Execution Service",
-                        Description = "Task Execution Service (ASP.NET Core 7.0)",
-                        Contact = new()
-                        {
-                            Name = "Microsoft Biomedical Platforms and Genomics",
-                            Url = new("https://github.com/microsoft/CromwellOnAzure")
-                        },
-                        License = new()
-                        {
-                            Name = "MIT License",
-                            // Identifier = "MIT" //TODO: when available, remove Url -- https://spec.openapis.org/oas/v3.1.0#fixed-fields-2
-                            Url = new("https://spdx.org/licenses/MIT", UriKind.Absolute)
-                        },
-                    });
-                    c.CustomSchemaIds(type => type.FullName);
-                    c.IncludeXmlComments(
-                        $"{AppContext.BaseDirectory}{Path.DirectorySeparatorChar}{Assembly.GetEntryAssembly().GetName().Name}.xml");
-                    c.OperationFilter<GeneratePathParamsValidationFilter>();
-                })
+                        opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                        opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
+                    }).Services
 
-                // Order is important for hosted services
-                .AddHostedService<DoOnceAtStartUpService>()
-                .AddHostedService<BatchPoolService>()
-                .AddHostedService<Scheduler>()
-                .AddHostedService<DeleteCompletedBatchJobsHostedService>()
-                .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
-                .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
-                //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
+                    .AddSingleton<IBatchScheduler, BatchScheduler>()
+                    .AddSingleton(CreateStorageAccessProviderFromConfiguration)
+                    .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
 
-                .AddApplicationInsightsTelemetry(configuration);
+
+                    .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
+                    .AddSingleton<ContainerRegistryProvider>()
+                    .AddSingleton<CacheAndRetryHandler>()
+                    .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
+                    .AddSingleton<IBatchScheduler, BatchScheduler>()
+                    .AddSingleton<PriceApiClient>()
+                    .AddSingleton<IBatchSkuInformationProvider, PriceApiBatchSkuInformationProvider>()
+                    .AddSingleton(CreateBatchAccountResourceInformation)
+                    .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
+                    .AddSingleton<AzureManagementClientsFactory>()
+                    .AddSingleton<ConfigurationUtils>()
+                    .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
+
+                    .AddSwaggerGen(c =>
+                    {
+                        c.SwaggerDoc("0.4.0", new()
+                        {
+                            Version = "0.4.0",
+                            Title = "Task Execution Service",
+                            Description = "Task Execution Service (ASP.NET Core 7.0)",
+                            Contact = new()
+                            {
+                                Name = "Microsoft Biomedical Platforms and Genomics",
+                                Url = new("https://github.com/microsoft/CromwellOnAzure")
+                            },
+                            License = new()
+                            {
+                                Name = "MIT License",
+                                // Identifier = "MIT" //TODO: when available, remove Url -- https://spec.openapis.org/oas/v3.1.0#fixed-fields-2
+                                Url = new("https://spdx.org/licenses/MIT", UriKind.Absolute)
+                            },
+                        });
+                        c.CustomSchemaIds(type => type.FullName);
+                        c.IncludeXmlComments(
+                            $"{AppContext.BaseDirectory}{Path.DirectorySeparatorChar}{Assembly.GetEntryAssembly().GetName().Name}.xml");
+                        c.OperationFilter<GeneratePathParamsValidationFilter>();
+                    })
+
+                    // Order is important for hosted services
+                    .AddHostedService<DoOnceAtStartUpService>()
+                    .AddHostedService<BatchPoolService>()
+                    .AddHostedService<Scheduler>()
+                    .AddHostedService<DeleteCompletedBatchJobsHostedService>()
+                    .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
+                    .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
+                    //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
+
+                    .AddApplicationInsightsTelemetry(configuration);
+            }
+            catch (Exception exc)
+            {
+                logger?.LogCritical(exc, $"TES could not start: {exc.Message}");
+                Console.WriteLine($"TES could not start: {exc}");
+                throw;
+            }
 
             IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
             {
