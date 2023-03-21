@@ -209,16 +209,19 @@ namespace Tes.Repository
             }
             catch (NpgsqlException npgEx) when (npgEx.InnerException is TimeoutException)
             {
+                logger.LogError(npgEx, npgEx.Message);
                 throw LogDatabaseOverloadedException();
             }
             catch (InvalidOperationException ioEx) when (ioEx.InnerException is TimeoutException)
             {
+                logger.LogError(ioEx, ioEx.Message);
                 throw LogDatabaseOverloadedException();
             }
             catch (InvalidOperationException ioEx) when
                 (ioEx.InnerException is NpgsqlException npgSqlEx
                 && npgSqlEx.Message?.StartsWith("The connection pool has been exhausted", StringComparison.OrdinalIgnoreCase) == true)
             {
+                logger.LogError(ioEx, ioEx.Message);
                 throw LogDatabaseOverloadedException();
             }
         }
@@ -232,16 +235,19 @@ namespace Tes.Repository
             }
             catch (NpgsqlException npgEx) when (npgEx.InnerException is TimeoutException)
             {
+                logger.LogError(npgEx, npgEx.Message);
                 throw LogDatabaseOverloadedException();
             }
             catch (InvalidOperationException ioEx) when (ioEx.InnerException is TimeoutException)
             {
+                logger.LogError(ioEx, ioEx.Message);
                 throw LogDatabaseOverloadedException();
             }
             catch (InvalidOperationException ioEx) when
                 (ioEx.InnerException is NpgsqlException npgSqlEx
                 && npgSqlEx.Message?.StartsWith("The connection pool has been exhausted", StringComparison.OrdinalIgnoreCase) == true)
             {
+                logger.LogError(ioEx, ioEx.Message);
                 throw LogDatabaseOverloadedException();
             }
         }
