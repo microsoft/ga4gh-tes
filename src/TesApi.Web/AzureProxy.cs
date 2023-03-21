@@ -312,6 +312,11 @@ namespace TesApi.Web
                 SelectClause = "id,state,startTaskInfo,errors"
             };
 
+            var taskFilter = new ODATADetailLevel
+            {
+                SelectClause = "id,state,executionInfo"
+            };
+
             var idStartsWith = new Func<string, string, bool>((id, format) => ids.Select(i => string.Format(format, i)).Any(s => id.StartsWith(s)));
 
             if (usingAutoPools)
@@ -357,7 +362,7 @@ namespace TesApi.Web
             foreach(var job in jobs)
             {
                 jobsAndTasks[job] = (await CachingWithRetriesAzureProxy.asyncRetryPolicy.ExecuteAsync(() =>
-                            batchClient.JobOperations.ListTasks(job.Id).ToAsyncEnumerable(),
+                            batchClient.JobOperations.ListTasks(job.Id, taskFilter).ToAsyncEnumerable(),
                             CachingWithRetriesAzureProxy.retryPolicy)
                         .ToListAsync(cancellationToken))
                     .AsReadOnly();
