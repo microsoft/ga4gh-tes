@@ -205,11 +205,11 @@ namespace TesApi.Web
                 // If the DB is offline, retry forever until it comes back online
                 var retryDatabaseForeverPolicy = Policy
                     .Handle<Exception>()
-                    .WaitAndRetryForeverAsync(
+                    .WaitAndRetryAsync(3, 
                         retryAttempt =>
                         {
                             logger.LogWarning($"Warming cache retry attempt #{retryAttempt}");
-                            return TimeSpan.FromSeconds(5);
+                            return TimeSpan.FromSeconds(10);
                         },
                         (ex, ts) =>
                         {
