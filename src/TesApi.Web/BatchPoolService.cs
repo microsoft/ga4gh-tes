@@ -101,7 +101,11 @@ namespace TesApi.Web
 
             var startTime = DateTime.UtcNow;
 
-            foreach (var pool in pools)
+            await Task.WhenAll(pools.Select(ServiceBatchPool));
+
+            _logger.LogDebug(@"ServiceBatchPools for {PoolsCount} pools completed in {TotalSeconds} seconds.", pools.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
+
+            async Task ServiceBatchPool(IBatchPool pool)
             {
                 try
                 {
@@ -112,8 +116,6 @@ namespace TesApi.Web
                     _logger.LogError(exc, "Batch pool {PoolId} threw an exception in ServiceBatchPools.", pool.Pool?.PoolId);
                 }
             }
-
-            _logger.LogDebug(@"ServiceBatchPools for {PoolsCount} pools completed in {TotalSeconds} seconds.", pools.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
         }
     }
 }

@@ -400,10 +400,10 @@ namespace TesApi.Web
         {
             var exceptions = new List<Exception>();
 
-            _ = await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.GetResizeErrors, cancellationToken), cancellationToken) &&
-            await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.ManagePoolScaling, cancellationToken), cancellationToken) &&
-            await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.Rotate, cancellationToken), cancellationToken) &&
-            await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.RemovePoolIfEmpty, cancellationToken), cancellationToken);
+            _ = await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.GetResizeErrors, cancellationToken), cancellationToken)
+            && await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.ManagePoolScaling, cancellationToken), cancellationToken)
+            && await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.Rotate, cancellationToken), cancellationToken)
+            && await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.RemovePoolIfEmpty, cancellationToken), cancellationToken);
 
             switch (exceptions.Count)
             {

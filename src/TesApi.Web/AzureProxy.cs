@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -291,8 +290,88 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
+        public async Task<(IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks)> GetBatchAccountStateAsync(bool usingAutoPools, IEnumerable<string> ids, CancellationToken cancellationToken)
+        {
+            List<CloudJob> jobs = default;
+            IAsyncEnumerable<CloudPool> pools = default;
+
+            var idList = ids.ToList();
+
+            var jobFilter = new ODATADetailLevel
+            {
+                SelectClause = "id,state,executionInfo,creationTime"
+            };
+
+            var poolFilter = new ODATADetailLevel
+            {
+                SelectClause = "id,resizeErrors"
+            };
+
+            var nodeFilter = new ODATADetailLevel
+            {
+                SelectClause = "id,state,startTaskInfo,errors"
+            };
+
+            var idStartsWith = new Func<string, string, bool>((id, format) => ids.Select(i => string.Format(format, i)).Any(s => id.StartsWith(s)));
+
+            if (usingAutoPools)
+            {
+                jobs = await CachingWithRetriesAzureProxy.asyncRetryPolicy.ExecuteAsync(() =>
+                        batchClient.JobOperations.ListJobs(jobFilter).ToAsyncEnumerable(),
+                        CachingWithRetriesAzureProxy.retryPolicy)
+                    .Where(j => idStartsWith(j.Id, $"{{0}}{BatchJobAttemptSeparator}"))
+                    .ToListAsync(cancellationToken);
+
+                var poolIds = jobs.Select(j => j.ExecutionInformation?.PoolId).Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+
+                pools = CachingWithRetriesAzureProxy.asyncRetryPolicy.ExecuteAsync(() =>
+                        batchClient.PoolOperations.ListPools(poolFilter).ToAsyncEnumerable(),
+                        CachingWithRetriesAzureProxy.retryPolicy)
+                    .Where(p => poolIds.Contains(p.Id));
+            }
+            else
+            {
+                jobs = await CachingWithRetriesAzureProxy.asyncRetryPolicy.ExecuteAsync(() =>
+                        batchClient.JobOperations.ListJobs(jobFilter).ToAsyncEnumerable(),
+                        CachingWithRetriesAzureProxy.retryPolicy)
+                    .Where(j => idList.Contains(j.Id))
+                    .ToListAsync(cancellationToken);
+
+                pools = CachingWithRetriesAzureProxy.asyncRetryPolicy.ExecuteAsync(() =>
+                        batchClient.PoolOperations.ListPools(poolFilter).ToAsyncEnumerable(),
+                        CachingWithRetriesAzureProxy.retryPolicy)
+                    .Where(p => idList.Contains(p.Id));
+            }
+
+            var poolsAndNodes = new Dictionary<CloudPool, IReadOnlyList<ComputeNode>>();
+            await foreach (var pool in pools)
+            {
+                poolsAndNodes[pool] = (await CachingWithRetriesAzureProxy.asyncRetryPolicy.ExecuteAsync(() =>
+                            batchClient.PoolOperations.ListComputeNodes(pool.Id, nodeFilter).ToAsyncEnumerable(),
+                            CachingWithRetriesAzureProxy.retryPolicy)
+                        .ToListAsync(cancellationToken))
+                    .AsReadOnly();
+            }
+
+            var jobsAndTasks = new Dictionary<CloudJob, IReadOnlyList<CloudTask>>();
+            foreach(var job in jobs)
+            {
+                jobsAndTasks[job] = (await CachingWithRetriesAzureProxy.asyncRetryPolicy.ExecuteAsync(() =>
+                            batchClient.JobOperations.ListTasks(job.Id).ToAsyncEnumerable(),
+                            CachingWithRetriesAzureProxy.retryPolicy)
+                        .ToListAsync(cancellationToken))
+                    .AsReadOnly();
+            }
+
+            return (poolsAndNodes.AsReadOnly(), jobsAndTasks.AsReadOnly());
+
+            //string CombineProperties(params string[] properties)
+            //    => string.Join(',', new HashSet<string>(properties.SelectMany(s => s.Split(',')).Select(s => s.Trim())));
+        }
+
+        /// <inheritdoc/>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1826:Do not use Enumerable methods on indexable collections", Justification = "FirstOrDefault() is straightforward, the alternative is less clear.")]
-        public async Task<AzureBatchJobAndTaskState> GetBatchJobAndTaskStateAsync(TesTask tesTask, bool usingAutoPools)
+        public AzureBatchJobAndTaskState GetBatchJobAndTaskState(TesTask tesTask, bool usingAutoPools, (IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks) batchAccountState)
         {
             try
             {
@@ -308,18 +387,14 @@ namespace TesApi.Web
                 var attemptNumber = 0;
                 CloudTask batchTask = null;
 
-                var jobOrTaskFilter = new ODATADetailLevel
-                {
-                    FilterClause = $"startswith(id,'{tesTask.Id}{BatchJobAttemptSeparator}')",
-                    SelectClause = "*"
-                };
+                var jobOrTaskFilter = new Func<string, string, bool>((id, key) => id.StartsWith(string.Format($"{{0}}{BatchJobAttemptSeparator}", key)));
 
                 if (usingAutoPools)
                 {
                     // Normally, we will only find one job. If we find more, we always want the latest one. Thus, we use ListJobs()
-                    var jobInfos = await batchClient.JobOperations.ListJobs(jobOrTaskFilter).ToAsyncEnumerable()
+                    var jobInfos = batchAccountState.JobsAndTasks.Keys.Where(j => jobOrTaskFilter(j.Id, tesTask.Id))
                         .Select(j => new { Job = j, AttemptNumber = int.Parse(j.Id.Split(BatchJobAttemptSeparator)[1]) })
-                        .ToListAsync();
+                        .ToList();
 
                     if (!jobInfos.Any())
                     {
@@ -336,13 +411,11 @@ namespace TesApi.Web
                     job = lastJobInfo.Job;
                     attemptNumber = lastJobInfo.AttemptNumber;
 
-                    try
+                    batchTask = batchAccountState.JobsAndTasks[job].FirstOrDefault(t => t.Id.Equals(tesTask.Id, StringComparison.OrdinalIgnoreCase));
+
+                    if (batchTask is null)
                     {
-                        batchTask = await batchClient.JobOperations.GetTaskAsync(job.Id, tesTask.Id);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, @"Failed to get task for TesTask {TesTask}", tesTask.Id);
+                        logger.LogError(@"Failed to get task for TesTask {TesTask}", tesTask.Id);
                     }
                 }
                 else
@@ -352,19 +425,18 @@ namespace TesApi.Web
                         return new AzureBatchJobAndTaskState { JobState = null };
                     }
 
-                    try
+                    var jobPair = batchAccountState.JobsAndTasks.FirstOrDefault(p => p.Key.Id.Equals(tesTask.PoolId, StringComparison.OrdinalIgnoreCase));
+                    job = jobPair.Key;
+
+                    if (job is null)
                     {
-                        job = await batchClient.JobOperations.GetJobAsync(tesTask.PoolId);
-                    }
-                    catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException e && e.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                    {
-                        logger.LogError(ex, @"Failed to get job for TesTask {TesTask}", tesTask.Id);
+                        logger.LogError(@"Failed to get job for TesTask {TesTask}", tesTask.Id);
                         return new AzureBatchJobAndTaskState { JobState = null };
                     }
 
-                    var taskInfos = await batchClient.JobOperations.ListTasks(tesTask.PoolId, jobOrTaskFilter).ToAsyncEnumerable()
+                    var taskInfos = jobPair.Value.Where(t => jobOrTaskFilter(t.Id, tesTask.PoolId))
                         .Select(t => new { Task = t, AttemptNumber = int.Parse(t.Id.Split(BatchJobAttemptSeparator)[1]) })
-                        .ToListAsync();
+                        .ToList();
 
                     if (!taskInfos.Any())
                     {
@@ -391,27 +463,14 @@ namespace TesApi.Web
 
                 if (job.State == JobState.Active && poolId is not null)
                 {
-                    var poolFilter = new ODATADetailLevel
-                    {
-                        SelectClause = "*"
-                    };
-
-                    CloudPool pool;
-
-                    try
-                    {
-                        pool = await batchClient.PoolOperations.GetPoolAsync(poolId, poolFilter);
-                    }
-                    catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException e && e.Response?.StatusCode == System.Net.HttpStatusCode.NotFound)
-                    {
-                        pool = default;
-                    }
+                    var poolPair = batchAccountState.PoolsAndNodes.FirstOrDefault(p => p.Key.Id.Equals(poolId, StringComparison.OrdinalIgnoreCase));
+                    var pool = poolPair.Key;
 
                     if (pool is not null)
                     {
                         nodeAllocationFailed = usingAutoPools && pool.ResizeErrors?.Count > 0; // When not using autopools, NodeAllocationFailed will be determined in BatchScheduler.GetBatchTaskStateAsync()
 
-                        var node = await pool.ListComputeNodes().ToAsyncEnumerable().FirstOrDefaultAsync(computeNodePredicate);
+                        var node = poolPair.Value.FirstOrDefault(computeNodePredicate);
 
                         if (node is not null)
                         {

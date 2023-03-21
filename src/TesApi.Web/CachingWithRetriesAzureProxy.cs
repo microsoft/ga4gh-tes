@@ -26,11 +26,11 @@ namespace TesApi.Web
         private static TimeSpan SleepDurationProvider(int attempt)
             => TimeSpan.FromSeconds(Math.Pow(2, attempt));
 
-        private readonly AsyncRetryPolicy asyncRetryPolicy = Policy
+        internal static readonly AsyncRetryPolicy asyncRetryPolicy = Policy
             .Handle<Exception>()
             .WaitAndRetryAsync(RetryCount, SleepDurationProvider);
 
-        private readonly RetryPolicy retryPolicy = Policy
+        internal static readonly RetryPolicy retryPolicy = Policy
             .Handle<Exception>()
             .WaitAndRetry(RetryCount, SleepDurationProvider);
 
@@ -103,7 +103,12 @@ namespace TesApi.Web
         public int GetBatchActivePoolCount() => retryPolicy.Execute(() => azureProxy.GetBatchActivePoolCount());
 
         /// <inheritdoc/>
-        public Task<AzureBatchJobAndTaskState> GetBatchJobAndTaskStateAsync(Tes.Models.TesTask tesTask, bool usingAutoPools) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetBatchJobAndTaskStateAsync(tesTask, usingAutoPools));
+        public Task<(IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks)> GetBatchAccountStateAsync(bool usingAutoPools, IEnumerable<string> ids, CancellationToken cancellationToken)
+            => asyncRetryPolicy.ExecuteAsync(ct => azureProxy.GetBatchAccountStateAsync(usingAutoPools, ids, ct), cancellationToken);
+
+        /// <inheritdoc/>
+        public AzureBatchJobAndTaskState GetBatchJobAndTaskState(Tes.Models.TesTask tesTask, bool usingAutoPools, (IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks) batchAccountState)
+            => azureProxy.GetBatchJobAndTaskState(tesTask, usingAutoPools, batchAccountState);
 
         /// <inheritdoc/>
         public Task<string> GetNextBatchJobIdAsync(string tesTaskId) => asyncRetryPolicy.ExecuteAsync(() => azureProxy.GetNextBatchJobIdAsync(tesTaskId));

@@ -631,7 +631,7 @@ namespace TesApi.Tests
                 GetContainerRegistryInfoProvider(AzureProxyReturnValues.Defaults));
             var batchScheduler = serviceProvider.GetT();
 
-            await batchScheduler.ProcessTesTaskAsync(tesTask);
+            _ = await batchScheduler.ProcessTesTasksAsync(Enumerable.Empty<TesTask>().Append(tesTask)).FirstAsync();
 
             var createBatchPoolAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateBatchPoolAsync));
             var addBatchTaskAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.AddBatchTaskAsync));
@@ -1378,7 +1378,7 @@ namespace TesApi.Tests
                 additionalActions: additionalActions);
             var batchScheduler = serviceProvider.GetT();
 
-            await batchScheduler.ProcessTesTaskAsync(tesTask);
+            _ = await batchScheduler.ProcessTesTasksAsync(Enumerable.Empty<TesTask>().Append(tesTask)).FirstAsync();
 
             var createBatchPoolAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateBatchPoolAsync));
             var createAutoPoolBatchJobAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateAutoPoolModeBatchJobAsync));
@@ -1485,8 +1485,8 @@ namespace TesApi.Tests
                 azureProxy.Setup(a => a.GetNextBatchJobIdAsync(It.IsAny<string>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.NextBatchJobId));
 
-                azureProxy.Setup(a => a.GetBatchJobAndTaskStateAsync(It.IsAny<TesTask>(), It.IsAny<bool>()))
-                    .Returns(Task.FromResult(azureProxyReturnValues.BatchJobAndTaskState));
+                azureProxy.Setup(a => a.GetBatchJobAndTaskState(It.IsAny<TesTask>(), It.IsAny<bool>(), It.IsAny<(IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks)>()))
+                    .Returns(azureProxyReturnValues.BatchJobAndTaskState);
 
                 azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount"))
                     .Returns(Task.FromResult(azureProxyReturnValues.StorageAccountInfos["defaultstorageaccount"]));

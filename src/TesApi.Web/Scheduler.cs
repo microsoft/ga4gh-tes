@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Azure.Management.Compute.Fluent.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -125,14 +126,24 @@ namespace TesApi.Web
 
             var startTime = DateTime.UtcNow;
 
-            foreach (var tesTask in tesTasks)
+            await Task.WhenAll(await batchScheduler.ProcessTesTasksAsync(tesTasks, stoppingToken).Select(ProcessOrchestrationResult).ToArrayAsync(stoppingToken));
+
+            if (batchScheduler.NeedPoolFlush)
             {
+                await batchScheduler.FlushPoolsAsync(pools, stoppingToken);
+            }
+
+            logger.LogDebug("OrchestrateTesTasksOnBatch for {TaskCount} tasks completed in {TotalSeconds} seconds.", tesTasks.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
+
+            async Task ProcessOrchestrationResult((TesTask TesTask, Task<bool> Task) item)
+            {
+                var (tesTask, result) = item;
                 try
                 {
                     var isModified = false;
                     try
                     {
-                        isModified = await batchScheduler.ProcessTesTaskAsync(tesTask);
+                        isModified = await result;
                     }
                     catch (Exception exc)
                     {
@@ -239,13 +250,6 @@ namespace TesApi.Web
                     pools.Add(tesTask.PoolId);
                 }
             }
-
-            if (batchScheduler.NeedPoolFlush)
-            {
-                await batchScheduler.FlushPoolsAsync(pools, stoppingToken);
-            }
-
-            logger.LogDebug("OrchestrateTesTasksOnBatch for {TaskCount} tasks completed in {TotalSeconds} seconds.", tesTasks.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
         }
     }
 }

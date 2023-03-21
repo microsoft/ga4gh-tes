@@ -167,14 +167,6 @@ namespace TesApi.Web
                 .ToListAsync(cancellationToken);
 
         /// <inheritdoc/>
-        public async ValueTask<IEnumerable<Task>> GetShutdownCandidatePools(CancellationToken cancellationToken)
-            => (await GetEmptyPools(cancellationToken))
-                .Select(DeletePoolAsyncWrapper);
-
-        private Task DeletePoolAsyncWrapper(IBatchPool pool)
-            => DeletePoolAsync(pool, CancellationToken.None);
-
-        /// <inheritdoc/>
         public IEnumerable<IBatchPool> GetPools()
             => batchPools.GetAllPools();
 

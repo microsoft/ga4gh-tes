@@ -27,11 +27,12 @@ namespace TesApi.Web
         Task LoadExistingPoolsAsync();
 
         /// <summary>
-        /// Iteratively schedule a <see cref="TesTask"/> on a batch system until completion or failure
+        /// Schedule an enumeration of <see cref="TesTask"/> on a batch system until completion or failure
         /// </summary>
-        /// <param name="tesTask"><see cref="TesTask"/> to schedule on the batch system</param>
-        /// <returns>Whether the <see cref="TesTask"/> was modified.</returns>
-        ValueTask<bool> ProcessTesTaskAsync(TesTask tesTask);
+        /// <param name="tesTasks">An enumeration of <see cref="TesTask"/> to schedule on the batch system</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns>Whether each <see cref="TesTask"/> was modified.</returns>
+        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessTesTasksAsync(IEnumerable<TesTask> tesTasks, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Adds <see cref="IBatchPool"/> to the managed batch pools.
@@ -53,13 +54,6 @@ namespace TesApi.Web
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Provides a list of pools that can safely be disposed of.
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        ValueTask<IEnumerable<Task>> GetShutdownCandidatePools(CancellationToken cancellationToken);
 
         /// <summary>
         /// Retrieves pools associated with this TES from the batch account.

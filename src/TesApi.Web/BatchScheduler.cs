@@ -5,9 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
@@ -361,14 +363,89 @@ namespace TesApi.Web
             }
         }
 
+
+        /// <inheritdoc/>
+        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessTesTasksAsync(IEnumerable<TesTask> tesTasks, [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            var (TesTasks, State) = await GetState(tesTasks.ToList());
+
+            await foreach(var item in WhenEach(TesTasks.ToAsyncEnumerable().SelectAwait(async t => await ProcessTesTaskAsync(t, State)).ToEnumerable(), t => t.IsModified, cancellationToken))
+            {
+                yield return item;
+            }
+
+            async Task<(List<TesTask> TesTasks, (IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks) State)> GetState(List<TesTask> listOfTasks)
+                => (listOfTasks, await azureProxy.GetBatchAccountStateAsync(
+                enableBatchAutopool,
+                enableBatchAutopool
+                    ? listOfTasks.Select(t => t.Id)
+                    : GetPools().Select(p => p.Pool.PoolId),
+                cancellationToken));
+        }
+
+        // Adapted from https://stackoverflow.com/a/70026589
+        private static async IAsyncEnumerable<T> WhenEach<T>(IEnumerable<T> items, Func<T, Task> getTask, [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(items);
+            ArgumentNullException.ThrowIfNull(cancellationToken);
+            var itemList = items.ToList();
+
+            foreach (var task in itemList)
+            {
+                if (task is null)
+                {
+                    throw new ArgumentException("Argument contained null value.", nameof(items));
+                }
+            }
+
+            var channel = Channel.CreateBounded<T>(itemList.Count);
+            var continuations = new List<Task>(itemList.Count);
+
+            try
+            {
+                var pendingCount = itemList.Count;
+
+                foreach (var task in itemList)
+                {
+                    continuations.Add(getTask(task).ContinueWith(t =>
+                    {
+                        _ = channel.Writer.TryWrite(task);
+                        if (Interlocked.Decrement(ref pendingCount) == 0)
+                        {
+                            channel.Writer.Complete();
+                        }
+                    },
+                    cancellationToken,
+                    TaskContinuationOptions.DenyChildAttach,
+                    TaskScheduler.Default));
+                }
+
+                await foreach(var task in channel.Reader.ReadAllAsync(cancellationToken))
+                {
+                    yield return task;
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+            }
+            finally
+            {
+                try
+                {
+                    await Task.WhenAll(continuations);
+                }
+                catch (OperationCanceledException)
+                { } // Ignore
+            }
+        }
+
         /// <summary>
         /// Iteratively manages execution of a <see cref="TesTask"/> on Azure Batch until completion or failure
         /// </summary>
         /// <param name="tesTask">The <see cref="TesTask"/></param>
+        /// <param name="batchAccountState"></param>
         /// <returns>True if the TES task needs to be persisted.</returns>
-        public async ValueTask<bool> ProcessTesTaskAsync(TesTask tesTask)
+        private async Task<(TesTask TesTask, Task<bool> IsModified)> ProcessTesTaskAsync(TesTask tesTask, (IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks) batchAccountState)
         {
-            var combinedBatchTaskInfo = await GetBatchTaskStateAsync(tesTask);
+            var combinedBatchTaskInfo = await GetBatchTaskStateAsync(tesTask, batchAccountState);
             var msg = $"TES task: {tesTask.Id} BatchTaskState: {combinedBatchTaskInfo.BatchTaskState}";
 
             if (!onlyLogBatchTaskStateOnce.Contains(msg))
@@ -377,7 +454,7 @@ namespace TesApi.Web
                 onlyLogBatchTaskStateOnce.Add(msg);
             }
 
-            return await HandleTesTaskTransitionAsync(tesTask, combinedBatchTaskInfo);
+            return (tesTask, HandleTesTaskTransitionAsync(tesTask, combinedBatchTaskInfo));
         }
 
         /// <summary>
@@ -643,11 +720,12 @@ namespace TesApi.Web
         /// Gets the current state of the Azure Batch task
         /// </summary>
         /// <param name="tesTask"><see cref="TesTask"/></param>
+        /// <param name="batchAccountState"></param>
         /// <returns>A higher-level abstraction of the current state of the Azure Batch task</returns>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1826:Do not use Enumerable methods on indexable collections", Justification = "FirstOrDefault() is straightforward, the alternative is less clear.")]
-        private async ValueTask<CombinedBatchTaskInfo> GetBatchTaskStateAsync(TesTask tesTask)
+        private async ValueTask<CombinedBatchTaskInfo> GetBatchTaskStateAsync(TesTask tesTask, (IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks) batchAccountState)
         {
-            var azureBatchJobAndTaskState = await azureProxy.GetBatchJobAndTaskStateAsync(tesTask, enableBatchAutopool);
+            var azureBatchJobAndTaskState = azureProxy.GetBatchJobAndTaskState(tesTask, enableBatchAutopool, batchAccountState);
 
             tesTask.PoolId ??= azureBatchJobAndTaskState.Pool?.PoolId;
 
@@ -695,7 +773,8 @@ namespace TesApi.Web
             {
                 if (this.enableBatchAutopool)
                 {
-                    _ = ProcessStartTaskFailure((await azureProxy.ListComputeNodesAsync(azureBatchJobAndTaskState.Pool.PoolId, new ODATADetailLevel { FilterClause = "state eq 'starttaskfailed'", SelectClause = "id,startTaskInfo" }).FirstOrDefaultAsync())?.StartTaskInformation?.FailureInformation);
+                    _ = ProcessStartTaskFailure(batchAccountState.PoolsAndNodes.FirstOrDefault(p => p.Key.Id.Equals(azureBatchJobAndTaskState.Pool.PoolId, StringComparison.OrdinalIgnoreCase))
+                        .Value.FirstOrDefault(n => ComputeNodeState.StartTaskFailed == n.State)?.StartTaskInformation?.FailureInformation);
                 }
                 else
                 {
@@ -877,7 +956,7 @@ namespace TesApi.Web
         /// <param name="tesTask">TES task</param>
         /// <param name="combinedBatchTaskInfo">Current Azure Batch task info</param>
         /// <returns>True if the TES task was changed.</returns>
-        private async ValueTask<bool> HandleTesTaskTransitionAsync(TesTask tesTask, CombinedBatchTaskInfo combinedBatchTaskInfo)
+        private async Task<bool> HandleTesTaskTransitionAsync(TesTask tesTask, CombinedBatchTaskInfo combinedBatchTaskInfo)
             // When task is executed the following may be touched:
             // tesTask.Log[].SystemLog
             // tesTask.Log[].FailureReason

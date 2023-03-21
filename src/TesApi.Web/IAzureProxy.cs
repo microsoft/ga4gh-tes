@@ -72,12 +72,26 @@ namespace TesApi.Web
         Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable);
 
         /// <summary>
+        /// Gets the combined state of Azure Batch jobs, tasks, nodes and pools.
+        /// </summary>
+        /// <param name="usingAutoPools"></param>
+        /// <param name="ids">Relevant identifiers for the operation. See Remarks.</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns>Batch account state</returns>
+        /// <remarks>
+        /// When <paramref name="usingAutoPools"/> is true, <paramref name="ids"/> is an enumeration of active <see cref="TesTask.Id"/>.
+        /// When <paramref name="usingAutoPools"/> is false, <paramref name="ids"/> is an enumeration of <see cref="PoolInformation.PoolId"/> corresponding to all of the associated <see cref="IBatchPool"/>.
+        /// </remarks>
+        Task<(IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks)> GetBatchAccountStateAsync(bool usingAutoPools, IEnumerable<string> ids, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Gets the combined state of Azure Batch job, task and pool that corresponds to the given TES task
         /// </summary>
-        /// <param name="tesTask">The TES task</param>
+        /// <param name="tesTask">>The TES task</param>
         /// <param name="usingAutoPools"></param>
+        /// <param name="batchAccountState">Batch account state</param>
         /// <returns>Job state information</returns>
-        Task<AzureBatchJobAndTaskState> GetBatchJobAndTaskStateAsync(TesTask tesTask, bool usingAutoPools);
+        AzureBatchJobAndTaskState GetBatchJobAndTaskState(TesTask tesTask, bool usingAutoPools, (IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks) batchAccountState);
 
         /// <summary>
         /// Deletes an Azure Batch job for Autopools
