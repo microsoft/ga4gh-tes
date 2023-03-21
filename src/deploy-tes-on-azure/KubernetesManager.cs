@@ -32,11 +32,11 @@ namespace TesDeployer
     {
         private static readonly AsyncRetryPolicy WorkloadReadyRetryPolicy = Policy
             .Handle<Exception>()
-            .WaitAndRetryAsync(12, retryAttempt => TimeSpan.FromSeconds(15));
+            .WaitAndRetryAsync(80, retryAttempt => TimeSpan.FromSeconds(15));
 
         private static readonly AsyncRetryPolicy KubeExecRetryPolicy = Policy
             .Handle<WebSocketException>(ex => ex.WebSocketErrorCode == WebSocketError.NotAWebSocket)
-            .WaitAndRetryAsync(8, retryAttempt => TimeSpan.FromSeconds(5));
+            .WaitAndRetryAsync(200, retryAttempt => TimeSpan.FromSeconds(5));
 
         // "master" is used despite not being a best practice: https://github.com/kubernetes-sigs/blob-csi-driver/issues/783
         private const string NginxIngressRepo = "https://kubernetes.github.io/ingress-nginx";
