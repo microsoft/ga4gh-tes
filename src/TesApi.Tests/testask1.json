@@ -66,7 +66,7 @@
   },
   "executors": [
     {
-      "image": "registryServer1/imageName1:tag1",
+      "image": "registryServer1.io/imageName1:tag1",
       "command": [
         "/bin/bash",
         "/cromwell-executions/workflow1/workflowId1/call-Task1/execution/script"
