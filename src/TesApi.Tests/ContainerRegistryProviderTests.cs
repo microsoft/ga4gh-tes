@@ -45,7 +45,6 @@ namespace TesApi.Tests
                 retryHandlerMock.Object, clientFactoryMock.Object, loggerMock.Object);
         }
 
-        // TODO fix
         [TestMethod]
         public async Task GetContainerRegistryInfoAsync_ServerIsAccessible_ReturnsAndAddsToCacheRegistryInformation()
         {
@@ -96,7 +95,6 @@ namespace TesApi.Tests
             loggerMock.Verify(logger => logger.Log(LogLevel.Warning, It.IsAny<EventId>(), It.IsAny<object>(), It.IsAny<Exception>(), (Func<object, Exception, string>)It.IsAny<object>()), Times.Never);
         }
 
-        // TODO fix
         [TestMethod]
         public async Task GetContainerRegistryInfoAsync_NoAccessibleServerNoServerCached_ReturnsNullNotAddedToCache()
         {
