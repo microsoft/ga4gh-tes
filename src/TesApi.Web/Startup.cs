@@ -179,9 +179,10 @@ namespace TesApi.Web
 
             IRepository<TesTask> CreatePostgresSqlRepositoryFromConfiguration(IServiceProvider services)
             {
+                var logger = services.GetRequiredService<ILogger>();
                 var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
                 var postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
-                return new TesTaskPostgreSqlRepository(postgresConnectionString);
+                return new TesTaskPostgreSqlRepository(postgresConnectionString, logger);
             }
 
             IStorageAccessProvider CreateStorageAccessProviderFromConfiguration(IServiceProvider services)
@@ -267,7 +268,7 @@ namespace TesApi.Web
                 {
                     c.SwaggerEndpoint("/swagger/0.4.0/openapi.json", "Task Execution Service");
                 })
-
+                .UseMiddleware<DatabaseOverloadedExceptionMiddleware>()
                 .IfThenElse(hostingEnvironment.IsDevelopment(),
                     s =>
                     {
