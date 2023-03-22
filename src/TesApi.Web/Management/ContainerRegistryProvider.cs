@@ -18,6 +18,10 @@ namespace TesApi.Web.Management
     /// </summary>
     public class ContainerRegistryProvider : AzureProvider
     {
+        /// <summary>
+        /// If users give TES access to their container registry, it will take max 5 minutes until its available
+        /// </summary>
+        private const int GetAccessibleContainerRegistriesAsyncCacheLifetimeMinutes = 5;
         private readonly ContainerRegistryOptions options;
         private readonly string[] knownContainerRegistries = new string[] { "mcr.microsoft.com" };
 
@@ -72,7 +76,10 @@ namespace TesApi.Web.Management
 
         private async Task<ContainerRegistryInfo> LookUpAndAddToCacheContainerRegistryInfoAsync(string imageName)
         {
-            var repositories = await CacheAndRetryHandler.ExecuteWithRetryAsync(GetAccessibleContainerRegistriesAsync);
+            var repositories = await CacheAndRetryHandler.ExecuteWithRetryAndCachingAsync(
+                nameof(GetAccessibleContainerRegistriesAsync), 
+                GetAccessibleContainerRegistriesAsync, 
+                DateTimeOffset.UtcNow.AddMinutes(GetAccessibleContainerRegistriesAsyncCacheLifetimeMinutes));
 
             var requestedRepo = repositories.FirstOrDefault(reg =>
                 reg.RegistryServer.Equals(imageName.Split('/').FirstOrDefault(), StringComparison.OrdinalIgnoreCase));
@@ -113,7 +120,7 @@ namespace TesApi.Web.Management
         /// Gets the list of container registries the TES service has access to
         /// </summary>
         /// <returns>List of container registries. null if the TES service does not have access if auto-discovery is enabled </returns>
-        private async Task<IEnumerable<ContainerRegistryInfo>> GetAccessibleContainerRegistriesAsync()
+        private async Task<List<ContainerRegistryInfo>> GetAccessibleContainerRegistriesAsync()
         {
             if (!options.AutoDiscoveryEnabled)
             {
