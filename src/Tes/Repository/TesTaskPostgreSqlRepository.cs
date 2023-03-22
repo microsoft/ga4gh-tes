@@ -65,7 +65,7 @@ namespace Tes.Repository
                 return;
             }
 
-            var activeTasks = await GetItemsAsync(task => !TesTask.TerminalStates.Contains(task.State));
+            var activeTasks = await GetItemsAsync(task => TesTask.ActiveStates.Contains(task.State));
 
             foreach (var task in activeTasks.OrderBy(t => t.CreationTime))
             {
@@ -86,7 +86,7 @@ namespace Tes.Repository
             {
                 onSuccess?.Invoke(task);
 
-                if (task.IsTerminalState())
+                if (!task.IsActiveState())
                 {
                     // Cache optimization because we can assume that most of the time, the workflow engine will no longer "GET" after a terminal state
                     cache?.TryRemove(task.Id);
