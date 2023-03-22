@@ -70,17 +70,32 @@ namespace TesApi.Web.Management
             }
 
             return await LookUpAndAddToCacheContainerRegistryInfoAsync(imageName);
+        }
 
+        /// <summary>
+        /// Checks if the image is a public image
+        /// </summary>
+        /// <param name="imageName">the name of the image, i.e. mcr.microsoft.com/ga4gh/tes or ubuntu</param>
+        /// <returns>True if the image is expected to be publically available, otherwise false</returns>
+        public bool IsImagePublic(string imageName)
+        {
+            // imcr.microsoft.com = public
+            // is there is no domain specified = public
+            string host = imageName.Split('/', StringSplitOptions.RemoveEmptyEntries).First();
+
+            if (host.Equals("mcr.microsoft.com", StringComparison.OrdinalIgnoreCase) || !host.Contains('.'))
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private async Task<ContainerRegistryInfo> LookUpAndAddToCacheContainerRegistryInfoAsync(string imageName)
         {
-            var repositories = await CacheAndRetryHandler.ExecuteWithRetryAndCachingAsync(
-                nameof(GetAccessibleContainerRegistriesAsync), 
-                GetAccessibleContainerRegistriesAsync, 
-                DateTimeOffset.UtcNow.AddHours(options.RegistryInfoCacheExpirationInHours));
+            var repositories = await CacheAndRetryHandler.ExecuteWithRetryAsync(GetAccessibleContainerRegistriesAsync);
 
-            var requestedRepo = repositories.FirstOrDefault(reg =>
+            var requestedRepo = repositories?.FirstOrDefault(reg =>
                 reg.RegistryServer.Equals(imageName.Split('/').FirstOrDefault(), StringComparison.OrdinalIgnoreCase));
 
             if (requestedRepo is not null)
@@ -119,7 +134,7 @@ namespace TesApi.Web.Management
         /// Gets the list of container registries the TES service has access to
         /// </summary>
         /// <returns>List of container registries. null if the TES service does not have access if auto-discovery is enabled </returns>
-        private async Task<List<ContainerRegistryInfo>> GetAccessibleContainerRegistriesAsync()
+        private async Task<IEnumerable<ContainerRegistryInfo>> GetAccessibleContainerRegistriesAsync()
         {
             if (!options.AutoDiscoveryEnabled)
             {

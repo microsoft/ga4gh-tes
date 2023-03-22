@@ -46,26 +46,26 @@ namespace TesApi.Tests
         }
 
         // TODO fix
-        //[TestMethod]
-        //public async Task GetContainerRegistryInfoAsync_ServerIsAccessible_ReturnsAndAddsToCacheRegistryInformation()
-        //{
-        //    var server = "registry";
-        //    var image = $"{server}/image";
-        //    retryHandlerMock.Setup(r =>
-        //            r.ExecuteWithRetryAsync(It.IsAny<Func<Task<IEnumerable<ContainerRegistryInfo>>>>()))
-        //        .ReturnsAsync(new List<ContainerRegistryInfo>()
-        //        {
-        //            new ContainerRegistryInfo() { RegistryServer = server }
-        //        });
+        [TestMethod]
+        public async Task GetContainerRegistryInfoAsync_ServerIsAccessible_ReturnsAndAddsToCacheRegistryInformation()
+        {
+            var server = "registry.com";
+            var image = $"{server}/image";
+            retryHandlerMock.Setup(r =>
+                    r.ExecuteWithRetryAsync(It.IsAny<Func<Task<IEnumerable<ContainerRegistryInfo>>>>()))
+                .ReturnsAsync(new List<ContainerRegistryInfo>()
+                {
+                    new ContainerRegistryInfo() { RegistryServer = server }
+                });
 
-        //    var container = await containerRegistryProvider.GetContainerRegistryInfoAsync(image);
+            var container = await containerRegistryProvider.GetContainerRegistryInfoAsync(image);
 
-        //    Assert.IsNotNull(container);
-        //    Assert.AreEqual(server, container.RegistryServer);
-        //    appCacheMock.Verify(
-        //        c => c.Add(It.Is<string>(v => v.Equals(image)), It.IsAny<ContainerRegistryInfo>(),
-        //            It.IsAny<MemoryCacheEntryOptions>()), Times.Once());
-        //}
+            Assert.IsNotNull(container);
+            Assert.AreEqual(server, container.RegistryServer);
+            appCacheMock.Verify(
+                c => c.Add(It.Is<string>(v => v.Equals(image)), It.IsAny<ContainerRegistryInfo>(),
+                    It.IsAny<MemoryCacheEntryOptions>()), Times.Once());
+        }
 
         [TestMethod]
         public async Task GetContainerRegistryInfoAsync_ServerInCache_ReturnsRegistryInformationFromCacheAndNoListingOfRegistries()
@@ -97,24 +97,24 @@ namespace TesApi.Tests
         }
 
         // TODO fix
-        //[TestMethod]
-        //public async Task GetContainerRegistryInfoAsync_NoAccessibleServerNoServerCached_ReturnsNullNotAddedToCache()
-        //{
-        //    var server = "registry";
-        //    var image = $"{server}_other/image";
-        //    retryHandlerMock.Setup(r =>
-        //            r.ExecuteWithRetryAsync(It.IsAny<Func<Task<IEnumerable<ContainerRegistryInfo>>>>()))
-        //        .ReturnsAsync(new List<ContainerRegistryInfo>()
-        //        {
-        //            new ContainerRegistryInfo() { RegistryServer = server }
-        //        });
+        [TestMethod]
+        public async Task GetContainerRegistryInfoAsync_NoAccessibleServerNoServerCached_ReturnsNullNotAddedToCache()
+        {
+            var server = "registry";
+            var image = $"{server}_other/image";
+            retryHandlerMock.Setup(r =>
+                    r.ExecuteWithRetryAsync(It.IsAny<Func<Task<IEnumerable<ContainerRegistryInfo>>>>()))
+                .ReturnsAsync(new List<ContainerRegistryInfo>()
+                {
+                    new ContainerRegistryInfo() { RegistryServer = server }
+                });
 
-        //    var container = await containerRegistryProvider.GetContainerRegistryInfoAsync(image);
+            var container = await containerRegistryProvider.GetContainerRegistryInfoAsync(image);
 
-        //    Assert.IsNull(container);
-        //    appCacheMock.Verify(
-        //        c => c.Add(It.Is<string>(v => v.Equals(image)), It.IsAny<ContainerRegistryInfo>(),
-        //            It.IsAny<MemoryCacheEntryOptions>()), Times.Never);
-        //}
+            Assert.IsNull(container);
+            appCacheMock.Verify(
+                c => c.Add(It.Is<string>(v => v.Equals(image)), It.IsAny<ContainerRegistryInfo>(),
+                    It.IsAny<MemoryCacheEntryOptions>()), Times.Never);
+        }
     }
 }
