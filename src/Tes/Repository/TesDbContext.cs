@@ -8,6 +8,12 @@ namespace Tes.Repository
     {
         public const string TesTasksPostgresTableName = "testasks";
 
+        public TesDbContext()
+        {
+            // Default constructor, which is required to run the EF migrations tool,
+            // "dotnet ef migrations add InitialCreate"
+        }
+
         public TesDbContext(string connectionString)
         {
             ArgumentException.ThrowIfNullOrEmpty(connectionString, nameof(connectionString));
