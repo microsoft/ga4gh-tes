@@ -5,11 +5,14 @@ namespace Tes.Repository
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Threading.Tasks;
     using Microsoft.EntityFrameworkCore;
+    using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
+    using Polly;
     using Tes.Models;
     using Tes.Utilities;
 
@@ -21,30 +24,21 @@ namespace Tes.Repository
     {
         private readonly Func<TesDbContext> createDbContext;
         private readonly ICache<TesTask> cache;
+        private readonly ILogger logger;
 
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
         /// <param name="connectionString">The PostgreSql connection string</param>
-        public TesTaskPostgreSqlRepository(string connectionString, ICache<TesTask> cache)
+        public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTask> cache = null)
         {
             this.cache = cache;
-            createDbContext = () => { return new TesDbContext(connectionString); };
-            using var dbContext = createDbContext();
-            dbContext.Database.MigrateAsync().Wait();
-        }
-
-        /// <summary>
-        /// Default constructor that also will create the schema if it does not exist
-        /// </summary>
-        /// <param name="connectionString">The PostgreSql connection string</param>
-        public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, ICache<TesTask> cache)
-        {
-            this.cache = cache;
+            this.logger = logger;
             var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
             createDbContext = () => { return new TesDbContext(connectionString); };
             using var dbContext = createDbContext();
             dbContext.Database.MigrateAsync().Wait();
+            WarmCacheAsync().Wait();
         }
 
         /// <summary>
@@ -58,19 +52,43 @@ namespace Tes.Repository
             dbContext.Database.MigrateAsync().Wait();
         }
 
-        public async Task WarmCacheAsync()
+        private async Task WarmCacheAsync()
         {
             if (cache == null)
             {
                 return;
             }
 
-            var activeTasks = await GetItemsAsync(task => TesTask.ActiveStates.Contains(task.State));
+            var sw = Stopwatch.StartNew();
+            logger.LogInformation("Warming cache...");
 
-            foreach (var task in activeTasks.OrderBy(t => t.CreationTime))
+            // Don't allow the state of the system to change until the cache and system are consistent;
+            // this is a fast PostgreSQL query even for 1 million items
+            var retryDatabaseForeverPolicy = Policy
+                .Handle<Exception>()
+                .WaitAndRetryAsync(3,
+                    retryAttempt =>
+                    {
+                        logger.LogWarning($"Warming cache retry attempt #{retryAttempt}");
+                        return TimeSpan.FromSeconds(10);
+                    },
+                    (ex, ts) =>
+                    {
+                        logger.LogCritical(ex, "Couldn't warm cache, is the database online?");
+                    });
+
+            await retryDatabaseForeverPolicy.ExecuteAsync(async () =>
             {
-                cache?.TryAdd(task.Id, task);
-            }
+                var activeTasks = await GetItemsAsync(task => TesTask.ActiveStates.Contains(task.State));
+
+                foreach (var task in activeTasks.OrderBy(t => t.CreationTime))
+                {
+                    cache?.TryAdd(task.Id, task);
+                }
+
+            });
+
+            logger.LogInformation($"Cache warmed successfully in {sw.Elapsed.TotalSeconds:n3} seconds");
         }
 
 

@@ -76,8 +76,9 @@ namespace TesApi.Web
                     .AddLogging()
 
                     .AddSingleton<IAppCache, CachingService>()
+                    .AddSingleton<ICache<TesTask>, TesRepositoryLazyCache<TesTask>>()
                     .AddSingleton<AzureProxy>()
-                    .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
+                    .AddSingleton<IRepository<TesTask>, TesTaskPostgreSqlRepository>()
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                     .AddTransient<TerraWsmApiClient>()
@@ -187,37 +188,6 @@ namespace TesApi.Web
                 logger.LogInformation("Using default Batch Pool Manager.");
 
                 return ActivatorUtilities.CreateInstance<ArmBatchPoolManager>(services);
-            }
-
-            IRepository<TesTask> CreatePostgresSqlRepositoryFromConfiguration(IServiceProvider services)
-            {
-                var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
-                var postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
-                var appCache = services.GetRequiredService<IAppCache>();
-                var lazyCache = new TesRepositoryLazyCache<TesTask>(appCache);
-                var repo = new TesTaskPostgreSqlRepository(postgresConnectionString, lazyCache);
-
-                var sw = Stopwatch.StartNew();
-                logger.LogInformation("Warming cache...");
-
-                // Don't allow the state of the system to change until the cache and system are consistent;
-                // this is a fast PostgreSQL query even for 1 million items
-                var retryDatabaseForeverPolicy = Policy
-                    .Handle<Exception>()
-                    .WaitAndRetryAsync(3, 
-                        retryAttempt =>
-                        {
-                            logger.LogWarning($"Warming cache retry attempt #{retryAttempt}");
-                            return TimeSpan.FromSeconds(10);
-                        },
-                        (ex, ts) =>
-                        {
-                            logger.LogCritical(ex, "Couldn't warm cache, is the database online?");
-                        });
-
-                retryDatabaseForeverPolicy.ExecuteAsync(repo.WarmCacheAsync).Wait();
-                logger.LogInformation($"Cache warmed successfully in {sw.Elapsed.TotalSeconds:n3} seconds");
-                return repo;
             }
 
             IStorageAccessProvider CreateStorageAccessProviderFromConfiguration(IServiceProvider services)
