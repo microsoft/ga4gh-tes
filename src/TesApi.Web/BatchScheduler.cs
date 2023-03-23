@@ -369,7 +369,7 @@ namespace TesApi.Web
         public async ValueTask<bool> ProcessTesTaskAsync(TesTask tesTask)
         {
             var combinedBatchTaskInfo = await GetBatchTaskStateAsync(tesTask);
-            var msg = $"TES task: {tesTask.Id} BatchTaskState: {combinedBatchTaskInfo.BatchTaskState}";
+            var msg = $"TES task: {tesTask.Id} TES task state: {tesTask.State} BatchTaskState: {combinedBatchTaskInfo.BatchTaskState}";
 
             if (!onlyLogBatchTaskStateOnce.Contains(msg))
             {
