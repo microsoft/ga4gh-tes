@@ -1115,9 +1115,9 @@ namespace TesApi.Web
 
             var volumeMountsOption = $"-v $AZ_BATCH_TASK_WORKING_DIR{batchExecutionPathPrefix}:{batchExecutionPathPrefix}";
 
-            var executorImageIsPublic = (await containerRegistryProvider.GetContainerRegistryInfoAsync(executor.Image)) is null;
-            var dockerInDockerImageIsPublic = (await containerRegistryProvider.GetContainerRegistryInfoAsync(dockerInDockerImageName)) is null;
-            var blobXferImageIsPublic = (await containerRegistryProvider.GetContainerRegistryInfoAsync(blobxferImageName)) is null;
+            var executorImageIsPublic = containerRegistryProvider.IsImagePublic(executor.Image);
+            var dockerInDockerImageIsPublic = containerRegistryProvider.IsImagePublic(dockerInDockerImageName);
+            var blobXferImageIsPublic = containerRegistryProvider.IsImagePublic(blobxferImageName);
 
             var sb = new StringBuilder();
 
@@ -1345,6 +1345,11 @@ namespace TesApi.Web
         /// <returns></returns>
         private async ValueTask<ContainerConfiguration> GetContainerConfigurationIfNeededAsync(string executorImage)
         {
+            if (containerRegistryProvider.IsImagePublic(executorImage))
+            {
+                return default;
+            }
+
             BatchModels.ContainerConfiguration result = default;
             var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage);
 
@@ -1364,24 +1369,32 @@ namespace TesApi.Web
                     }
                 };
 
-                var containerRegistryInfoForDockerInDocker = await containerRegistryProvider.GetContainerRegistryInfoAsync(dockerInDockerImageName);
+                ContainerRegistryInfo containerRegistryInfoForDockerInDocker = null;
 
-                if (containerRegistryInfoForDockerInDocker is not null && containerRegistryInfoForDockerInDocker.RegistryServer != containerRegistryInfo.RegistryServer)
+                if (!containerRegistryProvider.IsImagePublic(dockerInDockerImageName))
                 {
-                    result.ContainerRegistries.Add(new(
-                        userName: containerRegistryInfoForDockerInDocker.Username,
-                        registryServer: containerRegistryInfoForDockerInDocker.RegistryServer,
-                        password: containerRegistryInfoForDockerInDocker.Password));
+                    containerRegistryInfoForDockerInDocker = await containerRegistryProvider.GetContainerRegistryInfoAsync(dockerInDockerImageName);
+
+                    if (containerRegistryInfoForDockerInDocker is not null && containerRegistryInfoForDockerInDocker.RegistryServer != containerRegistryInfo.RegistryServer)
+                    {
+                        result.ContainerRegistries.Add(new(
+                            userName: containerRegistryInfoForDockerInDocker.Username,
+                            registryServer: containerRegistryInfoForDockerInDocker.RegistryServer,
+                            password: containerRegistryInfoForDockerInDocker.Password));
+                    }
                 }
 
-                var containerRegistryInfoForBlobXfer = await containerRegistryProvider.GetContainerRegistryInfoAsync(blobxferImageName);
-
-                if (containerRegistryInfoForBlobXfer is not null && containerRegistryInfoForBlobXfer.RegistryServer != containerRegistryInfo.RegistryServer && containerRegistryInfoForBlobXfer.RegistryServer != containerRegistryInfoForDockerInDocker.RegistryServer)
+                if (!containerRegistryProvider.IsImagePublic(blobxferImageName))
                 {
-                    result.ContainerRegistries.Add(new(
-                        userName: containerRegistryInfoForBlobXfer.Username,
-                        registryServer: containerRegistryInfoForBlobXfer.RegistryServer,
-                        password: containerRegistryInfoForBlobXfer.Password));
+                    var containerRegistryInfoForBlobXfer = await containerRegistryProvider.GetContainerRegistryInfoAsync(blobxferImageName);
+
+                    if (containerRegistryInfoForBlobXfer is not null && containerRegistryInfoForBlobXfer.RegistryServer != containerRegistryInfo.RegistryServer && containerRegistryInfoForBlobXfer.RegistryServer != containerRegistryInfoForDockerInDocker?.RegistryServer)
+                    {
+                        result.ContainerRegistries.Add(new(
+                            userName: containerRegistryInfoForBlobXfer.Username,
+                            registryServer: containerRegistryInfoForBlobXfer.RegistryServer,
+                            password: containerRegistryInfoForBlobXfer.Password));
+                    }
                 }
             }
 

@@ -20,28 +20,31 @@ namespace Tes.Repository
     public class TesTaskPostgreSqlRepository : IRepository<TesTask>
     {
         private readonly Func<TesDbContext> createDbContext;
+        private readonly ICache<TesTask> cache;
 
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
         /// <param name="connectionString">The PostgreSql connection string</param>
-        public TesTaskPostgreSqlRepository(string connectionString)
+        public TesTaskPostgreSqlRepository(string connectionString, ICache<TesTask> cache)
         {
+            this.cache = cache;
             createDbContext = () => { return new TesDbContext(connectionString); };
             using var dbContext = createDbContext();
-            dbContext.Database.EnsureCreatedAsync().Wait();
+            dbContext.Database.MigrateAsync().Wait();
         }
 
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
         /// <param name="connectionString">The PostgreSql connection string</param>
-        public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options)
+        public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, ICache<TesTask> cache)
         {
+            this.cache = cache;
             var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
             createDbContext = () => { return new TesDbContext(connectionString); };
             using var dbContext = createDbContext();
-            dbContext.Database.EnsureCreatedAsync().Wait();
+            dbContext.Database.MigrateAsync().Wait();
         }
 
         /// <summary>
@@ -52,8 +55,24 @@ namespace Tes.Repository
         {
             this.createDbContext = createDbContext;
             using var dbContext = createDbContext();
-            dbContext.Database.EnsureCreatedAsync().Wait();
+            dbContext.Database.MigrateAsync().Wait();
         }
+
+        public async Task WarmCacheAsync()
+        {
+            if (cache == null)
+            {
+                return;
+            }
+
+            var activeTasks = await GetItemsAsync(task => TesTask.ActiveStates.Contains(task.State));
+
+            foreach (var task in activeTasks.OrderBy(t => t.CreationTime))
+            {
+                cache?.TryAdd(task.Id, task);
+            }
+        }
+
 
         /// <summary>
         /// Get a TesTask by the TesTask.ID
@@ -63,6 +82,19 @@ namespace Tes.Repository
         /// <returns></returns>
         public async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess = null)
         {
+            if (cache?.TryGetValue(id, out TesTask task) == true)
+            {
+                onSuccess?.Invoke(task);
+
+                if (!task.IsActiveState())
+                {
+                    // Cache optimization because we can assume that most of the time, the workflow engine will no longer "GET" after a terminal state
+                    cache?.TryRemove(task.Id);
+                }
+
+                return true;
+            }
+
             using var dbContext = createDbContext();
 
             // Search for Id within the JSON
@@ -74,6 +106,7 @@ namespace Tes.Repository
             }
 
             onSuccess?.Invoke(item.Json);
+            cache?.TryAdd(id, item.Json);
             return true;
         }
 
@@ -105,6 +138,7 @@ namespace Tes.Repository
             var dbItem = new TesTaskDatabaseItem { Json = item };
             dbContext.TesTasks.Add(dbItem);
             await dbContext.SaveChangesAsync();
+            cache?.TryAdd(item.Id, item);
             return item;
         }
 
@@ -150,6 +184,7 @@ namespace Tes.Repository
             // Manually set entity state to avoid potential NPG PostgreSql bug
             dbContext.Entry(item).State = EntityState.Modified;
             await dbContext.SaveChangesAsync();
+            cache?.TryUpdate(tesTask.Id, tesTask);
             return item.Json;
         }
 
@@ -170,6 +205,8 @@ namespace Tes.Repository
 
             dbContext.TesTasks.Remove(item);
             await dbContext.SaveChangesAsync();
+            cache?.TryRemove(id);
+            
         }
 
         /// <summary>

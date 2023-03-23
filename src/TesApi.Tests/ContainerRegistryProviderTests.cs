@@ -48,7 +48,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetContainerRegistryInfoAsync_ServerIsAccessible_ReturnsAndAddsToCacheRegistryInformation()
         {
-            var server = "registry";
+            var server = "registry.com";
             var image = $"{server}/image";
             retryHandlerMock.Setup(r =>
                     r.ExecuteWithRetryAsync(It.IsAny<Func<Task<IEnumerable<ContainerRegistryInfo>>>>()))

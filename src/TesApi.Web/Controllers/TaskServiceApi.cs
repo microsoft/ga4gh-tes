@@ -210,7 +210,7 @@ namespace TesApi.Controllers
         {
             var serviceInfo = new TesServiceInfo
             {
-                Name = "Microsoft Genomics Task Execution Service",
+                Name = "GA4GH Task Execution Service",
                 Doc = string.Empty,
                 Storage = new List<string>(),
                 TesResourcesSupportedBackendParameters = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList()

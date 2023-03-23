@@ -642,7 +642,7 @@ namespace TesApi.Tests
 
             Assert.IsNull(poolInformation.AutoPoolSpecification);
             Assert.IsNotNull(poolInformation.PoolId);
-            Assert.AreEqual("TES-hostname-edicated1-W4ULCECZZWRHTX2HMNJHRZBQDXDPCRND-", poolInformation.PoolId[0..^8]);
+            Assert.AreEqual("TES-hostname-edicated1-GMNSLIORI642MUKLUE6IZYSBJL4QOYPJ-", poolInformation.PoolId[0..^8]);
             Assert.AreEqual("VmSizeDedicated1", pool.VmSize);
             Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(poolInformation.PoolId, out _));
             Assert.AreEqual(1, pool.DeploymentConfiguration.VirtualMachineConfiguration.ContainerConfiguration.ContainerRegistries.Count);
@@ -1241,7 +1241,7 @@ namespace TesApi.Tests
             var batchScript = (string)azureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.UploadBlobAsync) && i.Arguments[0].ToString().Contains("/batch_script"))?.Arguments[1];
 
             Assert.IsNotNull(poolInformation.AutoPoolSpecification.PoolSpecification.VirtualMachineConfiguration.ContainerConfiguration);
-            Assert.AreEqual("registryServer1", poolInformation.AutoPoolSpecification.PoolSpecification.VirtualMachineConfiguration.ContainerConfiguration.ContainerRegistries.FirstOrDefault()?.RegistryServer);
+            Assert.AreEqual("registryServer1.io", poolInformation.AutoPoolSpecification.PoolSpecification.VirtualMachineConfiguration.ContainerConfiguration.ContainerRegistries.FirstOrDefault()?.RegistryServer);
             Assert.AreEqual(2, Regex.Matches(batchScript, tesTask.Executors.First().Image, RegexOptions.IgnoreCase).Count);
             Assert.IsFalse(batchScript.Contains($"docker pull --quiet {tesTask.Executors.First().Image}"));
         }
@@ -1472,7 +1472,7 @@ namespace TesApi.Tests
             AzureProxyReturnValues azureProxyReturnValues)
             => containerRegistryProvider =>
             {
-                containerRegistryProvider.Setup(p => p.GetContainerRegistryInfoAsync("registryServer1/imageName1:tag1"))
+                containerRegistryProvider.Setup(p => p.GetContainerRegistryInfoAsync("registryServer1.io/imageName1:tag1"))
                     .Returns(Task.FromResult(azureProxyReturnValues.ContainerRegistryInfo));
             };
 
@@ -1632,7 +1632,7 @@ namespace TesApi.Tests
                     { "defaultstorageaccount", new() { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount.blob.core.windows.net/", SubscriptionId = "SubId" } },
                     { "storageaccount1", new() { Name = "storageaccount1", Id = "Id", BlobEndpoint = "https://storageaccount1.blob.core.windows.net/", SubscriptionId = "SubId" } }
                 },
-                ContainerRegistryInfo = new() { RegistryServer = "registryServer1", Username = "default", Password = "placeholder" },
+                ContainerRegistryInfo = new() { RegistryServer = "registryServer1.io", Username = "default", Password = "placeholder" },
                 VmSizesAndPrices = new() {
                     new() { VmSize = "VmSizeLowPri1", VmFamily = "VmFamily1", LowPriority = true, VCpusAvailable = 1, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 1 },
                     new() { VmSize = "VmSizeLowPri2", VmFamily = "VmFamily2", LowPriority = true, VCpusAvailable = 2, MemoryInGiB = 8, ResourceDiskSizeInGiB = 40, PricePerHour = 2 },
