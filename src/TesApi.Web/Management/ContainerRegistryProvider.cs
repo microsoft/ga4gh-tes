@@ -18,6 +18,9 @@ namespace TesApi.Web.Management
     /// </summary>
     public class ContainerRegistryProvider : AzureProvider
     {
+        /// <summary>
+        /// If users give TES access to their container registry, it will take max 5 minutes until its available
+        /// </summary>
         private readonly ContainerRegistryOptions options;
         private readonly string[] knownContainerRegistries = new string[] { "mcr.microsoft.com" };
 
@@ -67,14 +70,32 @@ namespace TesApi.Web.Management
             }
 
             return await LookUpAndAddToCacheContainerRegistryInfoAsync(imageName);
+        }
 
+        /// <summary>
+        /// Checks if the image is a public image
+        /// </summary>
+        /// <param name="imageName">the name of the image, i.e. mcr.microsoft.com/ga4gh/tes or ubuntu</param>
+        /// <returns>True if the image is expected to be publically available, otherwise false</returns>
+        public bool IsImagePublic(string imageName)
+        {
+            // mcr.microsoft.com = public
+            // no domain specified = public
+            string host = imageName.Split('/', StringSplitOptions.RemoveEmptyEntries).First();
+
+            if (host.Equals("mcr.microsoft.com", StringComparison.OrdinalIgnoreCase) || !host.Contains('.'))
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private async Task<ContainerRegistryInfo> LookUpAndAddToCacheContainerRegistryInfoAsync(string imageName)
         {
             var repositories = await CacheAndRetryHandler.ExecuteWithRetryAsync(GetAccessibleContainerRegistriesAsync);
 
-            var requestedRepo = repositories.FirstOrDefault(reg =>
+            var requestedRepo = repositories?.FirstOrDefault(reg =>
                 reg.RegistryServer.Equals(imageName.Split('/').FirstOrDefault(), StringComparison.OrdinalIgnoreCase));
 
             if (requestedRepo is not null)

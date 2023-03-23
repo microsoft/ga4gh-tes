@@ -27,8 +27,14 @@ namespace TesApi.Web
         private async Task<(string PoolKey, string DisplayName)> GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation)
         {
             var identityResourceId = tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true ? tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) : default;
-            var registryServer = (await containerRegistryProvider.GetContainerRegistryInfoAsync(tesTask.Executors.FirstOrDefault()?.Image))?.RegistryServer;
-
+            var executorImage = tesTask.Executors.First().Image;
+            string registryServer = null;
+            
+            if (!containerRegistryProvider.IsImagePublic(executorImage))
+            {
+                registryServer = (await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage))?.RegistryServer;
+            }
+            
             var label = string.IsNullOrWhiteSpace(batchPrefix) ? "<none>" : batchPrefix;
             var vmSize = virtualMachineInformation.VmSize ?? "<none>";
             var isPreemptable = virtualMachineInformation.LowPriority;

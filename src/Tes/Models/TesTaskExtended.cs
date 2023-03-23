@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
@@ -14,6 +15,11 @@ namespace Tes.Models
         private static readonly Regex CromwellTaskInstanceNameRegex = new("(.*):[^:]*:[^:]*");
         private static readonly Regex CromwellShardRegex = new(".*:([^:]*):[^:]*");
         private static readonly Regex CromwellAttemptRegex = new(".*:([^:]*)");
+        public static readonly List<TesState> ActiveStates = new List<TesState> {
+            TesState.QUEUEDEnum,
+            TesState.RUNNINGEnum,
+            TesState.PAUSEDEnum,
+            TesState.INITIALIZINGEnum};
 
         /// <summary>
         /// Number of retries attempted
@@ -81,5 +87,10 @@ namespace Tes.Models
         /// </summary>
         [IgnoreDataMember]
         public int? CromwellAttempt => this.Description == null ? null : (int.TryParse(CromwellAttemptRegex.Match(this.Description).Groups[1].Value, out var result) ? result : null);
+
+        public bool IsActiveState()
+        {
+            return ActiveStates.Contains(this.State);
+        }
     }
 }
