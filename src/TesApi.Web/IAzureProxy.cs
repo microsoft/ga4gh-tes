@@ -82,7 +82,7 @@ namespace TesApi.Web
         /// When <paramref name="usingAutoPools"/> is true, <paramref name="ids"/> is an enumeration of active <see cref="TesTask.Id"/>.
         /// When <paramref name="usingAutoPools"/> is false, <paramref name="ids"/> is an enumeration of <see cref="PoolInformation.PoolId"/> corresponding to all of the associated <see cref="IBatchPool"/>.
         /// </remarks>
-        Task<(IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks)> GetBatchAccountStateAsync(bool usingAutoPools, IEnumerable<string> ids, CancellationToken cancellationToken = default);
+        Task<BatchAccountState> GetBatchAccountStateAsync(bool usingAutoPools, IEnumerable<string> ids, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets the combined state of Azure Batch job, task and pool that corresponds to the given TES task
@@ -91,7 +91,7 @@ namespace TesApi.Web
         /// <param name="usingAutoPools"></param>
         /// <param name="batchAccountState">Batch account state</param>
         /// <returns>Job state information</returns>
-        AzureBatchJobAndTaskState GetBatchJobAndTaskState(TesTask tesTask, bool usingAutoPools, (IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks) batchAccountState);
+        AzureBatchJobAndTaskState GetBatchJobAndTaskState(TesTask tesTask, bool usingAutoPools, BatchAccountState batchAccountState);
 
         /// <summary>
         /// Deletes an Azure Batch job for Autopools

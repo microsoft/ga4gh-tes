@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -88,7 +87,8 @@ namespace TesApi.Web
         }
 
         private readonly BatchPools batchPools = new();
-        private readonly HashSet<string> neededPools = new();
+        private readonly ConcurrentHashSet<string> neededPools = new();
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Nito.AsyncEx.PauseTokenSource> poolWaiters = new(StringComparer.OrdinalIgnoreCase);
 
         /// <inheritdoc/>
         public bool NeedPoolFlush
@@ -101,7 +101,29 @@ namespace TesApi.Web
         }
 
         internal bool IsPoolAvailable(string key)
-            => batchPools.TryGetValue(key, out var pools) && pools.Any(p => p.IsAvailable);
+            => batchPools.TryGetValue(key, out var pools) && ((IEnumerable<IBatchPool>)pools).Any(p => p.IsAvailable);
+
+        private async Task<bool> WaitForTurn(string key) // returns true if did wait, false if first in line.
+        {
+            var trial = new Nito.AsyncEx.PauseTokenSource { IsPaused = true };
+            var source = poolWaiters.GetOrAdd(key, trial);
+
+            if (source == trial)
+            {
+                return false;
+            }
+
+            await source.Token.WaitWhilePausedAsync();
+            return true;
+        }
+
+        private void ReleaseWaiters(string key)
+        {
+            if (poolWaiters.TryRemove(key, out var source))
+            {
+                source.IsPaused = false;
+            }
+        }
 
         internal async Task<IBatchPool> GetOrAddPoolAsync(string key, bool isPreemptable, ModelPoolFactory modelPoolFactory)
         {
@@ -122,36 +144,48 @@ namespace TesApi.Web
                 throw new ArgumentException("Key contains unsupported characters", nameof(key));
             }
 
-            var pool = batchPools.TryGetValue(key, out var set) ? set.LastOrDefault(Available) : default;
+            var pool = batchPools.TryGetValue(key, out var set) ? ((IEnumerable<IBatchPool>)set).LastOrDefault(Available) : default;
 
             if (pool is null)
             {
-                var quota = (await quotaVerifier.GetBatchQuotaProvider().GetVmCoreQuotaAsync(isPreemptable)).AccountQuota;
-                var poolQuota = quota?.PoolQuota;
-                var jobQuota = quota?.ActiveJobAndJobScheduleQuota;
-                var activePoolsCount = azureProxy.GetBatchActivePoolCount();
-                var activeJobsCount = azureProxy.GetBatchActiveJobCount();
-
-                if (poolQuota is null || activePoolsCount + 1 > poolQuota)
+                if (await WaitForTurn(key))
                 {
-                    throw new AzureBatchQuotaMaxedOutException($"No remaining pool quota available. There are {activePoolsCount} pools in use out of {poolQuota}.");
+                    return await GetOrAddPoolAsync(key, isPreemptable, modelPoolFactory);
                 }
 
-                if (jobQuota is null || activeJobsCount + 1 > jobQuota)
+                try
                 {
-                    throw new AzureBatchQuotaMaxedOutException($"No remaining active jobs quota available. There are {activeJobsCount} active jobs out of {jobQuota}.");
-                }
+                    var quota = (await quotaVerifier.GetBatchQuotaProvider().GetVmCoreQuotaAsync(isPreemptable)).AccountQuota;
+                    var poolQuota = quota?.PoolQuota;
+                    var jobQuota = quota?.ActiveJobAndJobScheduleQuota;
+                    var activePoolsCount = azureProxy.GetBatchActivePoolCount();
+                    var activeJobsCount = azureProxy.GetBatchActiveJobCount();
 
-                var uniquifier = new byte[5]; // This always becomes 8 chars when converted to base32
-                RandomNumberGenerator.Fill(uniquifier);
-                var poolId = $"{key}-{CommonUtilities.Base32.ConvertToBase32(uniquifier).TrimEnd('=')}"; // embedded '-' is required by GetKeyFromPoolId()
-                var modelPool = await modelPoolFactory(poolId);
-                modelPool.Metadata ??= new List<BatchModels.MetadataItem>();
-                modelPool.Metadata.Add(new(PoolHostName, this.batchPrefix));
-                modelPool.Metadata.Add(new(PoolIsDedicated, (!isPreemptable).ToString()));
-                var batchPool = _batchPoolFactory.CreateNew();
-                await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, CancellationToken.None);
-                pool = batchPool;
+                    if (poolQuota is null || activePoolsCount + 1 > poolQuota)
+                    {
+                        throw new AzureBatchQuotaMaxedOutException($"No remaining pool quota available. There are {activePoolsCount} pools in use out of {poolQuota}.");
+                    }
+
+                    if (jobQuota is null || activeJobsCount + 1 > jobQuota)
+                    {
+                        throw new AzureBatchQuotaMaxedOutException($"No remaining active jobs quota available. There are {activeJobsCount} active jobs out of {jobQuota}.");
+                    }
+
+                    var uniquifier = new byte[5]; // This always becomes 8 chars when converted to base32
+                    RandomNumberGenerator.Fill(uniquifier);
+                    var poolId = $"{key}-{CommonUtilities.Base32.ConvertToBase32(uniquifier).TrimEnd('=')}"; // embedded '-' is required by GetKeyFromPoolId()
+                    var modelPool = await modelPoolFactory(poolId);
+                    modelPool.Metadata ??= new List<BatchModels.MetadataItem>();
+                    modelPool.Metadata.Add(new(PoolHostName, this.batchPrefix));
+                    modelPool.Metadata.Add(new(PoolIsDedicated, (!isPreemptable).ToString()));
+                    var batchPool = _batchPoolFactory.CreateNew();
+                    await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, CancellationToken.None);
+                    pool = batchPool;
+                }
+                finally
+                {
+                    ReleaseWaiters(key);
+                }
             }
 
             return pool;
@@ -240,78 +274,60 @@ namespace TesApi.Web
             => batchPools.GetPoolKeys();
         #endregion
 
-        internal sealed class BatchPools : KeyedCollection<string, PoolSet>
+        internal sealed class BatchPools : System.Collections.Concurrent.ConcurrentDictionary<string, PoolSet>
         {
+            private readonly object SyncRoot = new();
+
             public BatchPools()
                 : base(StringComparer.OrdinalIgnoreCase)
             { }
-
-            protected override string GetKeyForItem(PoolSet item)
-                => item.Key;
 
             private static string GetKeyForItem(IBatchPool pool)
                 => pool is null ? default : GetKeyFromPoolId(pool.Pool.PoolId);
 
             public IEnumerable<IBatchPool> GetAllPools()
-                => this.SelectMany(s => s);
+                => this.Values.Select<PoolSet, IEnumerable<IBatchPool>>(s => s).SelectMany(s => s);
 
             public IBatchPool GetPoolOrDefault(string poolId)
-                => TryGetValue(GetKeyFromPoolId(poolId), out var poolSet) ? poolSet.FirstOrDefault(p => p.Pool.PoolId.Equals(poolId, StringComparison.OrdinalIgnoreCase)) : default;
+                => TryGetValue(GetKeyFromPoolId(poolId), out var poolSet) ? ((IEnumerable<IBatchPool>)poolSet).FirstOrDefault(p => p.Pool.PoolId.Equals(poolId, StringComparison.OrdinalIgnoreCase)) : default;
 
             public bool Add(IBatchPool pool)
             {
-                return TryGetValue(GetKeyForItem(pool), out var poolSet)
-                    ? poolSet.Add(pool)
-                    : AddSet();
-
-                bool AddSet()
+                lock (SyncRoot)
                 {
-                    Add(new PoolSet(pool));
-                    return true;
+                    return GetOrAdd(GetKeyForItem(pool), k => new PoolSet(GetKeyForItem(pool))).Add(pool);
                 }
             }
 
             public bool Remove(IBatchPool pool)
             {
-                if (TryGetValue(GetKeyForItem(pool), out var poolSet))
+                lock (SyncRoot)
                 {
-                    if (poolSet.Remove(pool))
+                    if (TryGetValue(GetKeyForItem(pool), out var poolSet) && poolSet.Remove(pool))
                     {
-                        if (0 == poolSet.Count)
+                        if (poolSet.IsEmpty)
                         {
-                            if (!Remove(poolSet))
-                            {
-                                throw new InvalidOperationException();
-                            }
+                            _ = TryRemove(GetKeyForItem(pool), out _);
                         }
 
                         return true;
                     }
-                }
 
-                return false;
+                    return false;
+                }
             }
 
             internal IEnumerable<string> GetPoolKeys()
-                => this.Select(GetKeyForItem);
+                => Keys;
 
-            internal sealed class PoolSet : HashSet<IBatchPool>
+            internal sealed class PoolSet : ConcurrentHashSet<IBatchPool>
             {
                 public string Key { get; }
-                public PoolSet(IBatchPool pool)
+                public PoolSet(string key)
                     : base(new BatchPoolEqualityComparer())
                 {
-                    Key = GetKeyForItem(pool);
-
-                    if (string.IsNullOrWhiteSpace(Key))
-                    {
-                        throw new ArgumentException(default, nameof(pool));
-                    }
-
-                    if (!Add(pool))
-                    {
-                        throw new InvalidOperationException();
-                    }
+                    ArgumentException.ThrowIfNullOrEmpty(key);
+                    Key = key;
                 }
             }
         }

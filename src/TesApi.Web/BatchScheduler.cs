@@ -13,6 +13,8 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
+using Microsoft.Azure.KeyVault.Models;
+using Microsoft.Azure.Management.Monitor.Fluent.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -66,10 +68,10 @@ namespace TesApi.Web
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
         private readonly IStorageAccessProvider storageAccessProvider;
-        private readonly IEnumerable<string> allowedVmSizes;
+        private readonly IReadOnlyList<string> allowedVmSizes;
         private readonly IBatchQuotaVerifier quotaVerifier;
         private readonly IBatchSkuInformationProvider skuInformationProvider;
-        private readonly List<TesTaskStateTransition> tesTaskStateTransitions;
+        private readonly IList<TesTaskStateTransition> tesTaskStateTransitions;
         private readonly bool usePreemptibleVmsOnly;
         private readonly string batchNodesSubnetId;
         private readonly bool disableBatchNodesPublicIpAddress;
@@ -87,7 +89,7 @@ namespace TesApi.Web
         private readonly IBatchPoolFactory _batchPoolFactory;
         private readonly string taskRunScriptContent;
 
-        private HashSet<string> onlyLogBatchTaskStateOnce = new();
+        private ConcurrentHashSet<string> onlyLogBatchTaskStateOnce = new();
 
         /// <summary>
         /// Orchestrates <see cref="Tes.Models.TesTask"/>s on Azure Batch
@@ -140,7 +142,7 @@ namespace TesApi.Web
             this.skuInformationProvider = skuInformationProvider;
             this.containerRegistryProvider = containerRegistryProvider;
 
-            this.allowedVmSizes = GetStringValue(configuration, "AllowedVmSizes", null)?.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+            this.allowedVmSizes = GetStringValue(configuration, "AllowedVmSizes", null)?.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList().AsReadOnly();
             this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
             this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
             this.dockerInDockerImageName = batchImageNameOptions.Value.Docker;
@@ -300,7 +302,7 @@ namespace TesApi.Web
                 new TesTaskStateTransition(tesTaskIsInitializingOrRunning, BatchTaskState.JobNotFound, BatchTaskState.JobNotFound.ToString(), SetTaskSystemError),
                 new TesTaskStateTransition(tesTaskIsInitializingOrRunning, BatchTaskState.MissingBatchTask, BatchTaskState.MissingBatchTask.ToString(), DeleteBatchJobAndSetTaskSystemErrorAsync),
                 new TesTaskStateTransition(tesTaskIsInitializingOrRunning, BatchTaskState.NodePreempted, alternateSystemLogItem: null, HandlePreemptedNodeAsync)
-            };
+            }.AsReadOnly();
         }
 
         private Task DeleteBatchJobOrTaskAsync(string taskId, PoolInformation poolInformation, CancellationToken cancellationToken = default)
@@ -364,78 +366,104 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessTesTasksAsync(IEnumerable<TesTask> tesTasks, [EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedResult)> ProcessTesTasksAsync(IEnumerable<TesTask> tesTasks, [EnumeratorCancellation] CancellationToken cancellationToken)
+        /*
+         * This method's implementation consists of the following ordered steps:
+         *  1. Returning early if by some mistake, this method was called with either a null or an empty enumerated list of tasks.
+         *  2. Calling IAzureProxy.GetBatchAccountStateAsync() once for the entire list. This will greatly reduce the total calls to the batch account compared with the "old" way of serially processing each and every task.
+         *  3. Calling ProcessTesTaskAsync() with each task in parallel (to reduce the time it takes to process all tasks at scale). Note that calling that method this way doesn't await each call serially. The ".ToList()" call in WhenEach() will ensure that all the calls to ProcessTesTaskAsync() will be started.
+         *  4. Use WhenEach() to stream results back to the caller as they are individually available.
+         */
         {
-            var (TesTasks, State) = await GetState(tesTasks.ToList());
+            var (TesTasks, State) = await GetState(tesTasks?.ToList());
 
-            logger.LogInformation("PoolsAndNodes: {PoolsAndNodes}", JsonConvert.SerializeObject(State.PoolsAndNodes));
-            logger.LogInformation("JobsAndTasks: {JobsAndTasks}", JsonConvert.SerializeObject(State.JobsAndTasks));
-
-            await foreach (var item in WhenEach(TesTasks.ToAsyncEnumerable().SelectAwait(async t => await ProcessTesTaskAsync(t, State)).ToEnumerable(), t => t.IsModified, cancellationToken))
+            if (!TesTasks.Any())
             {
-                yield return item;
+                yield break;
             }
 
-            async Task<(List<TesTask> TesTasks, (IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks) State)> GetState(List<TesTask> listOfTasks)
-                => (listOfTasks, await azureProxy.GetBatchAccountStateAsync(
-                enableBatchAutopool,
-                enableBatchAutopool
-                    ? listOfTasks.Select(t => t.Id)
-                    : GetPools().Select(p => p.Pool.PoolId),
-                cancellationToken));
+            // WhenEach() allows us to have Scheduler's OrchestrateTesTasksOnBatch() method call it's local ProcessOrchestrationResult() as soon as ProcessTesTaskAsync() has returned that task and its result instead of batching all the database updates all at once at the end.
+            await foreach (var result in WhenEach(TesTasks.ToAsyncEnumerable().SelectAwait(async tesTask => await ProcessTesTaskAsync(tesTask, State, cancellationToken)).ToEnumerable(), cancellationToken, result => result.IsModifiedResult))
+            {
+                yield return result;
+            }
+
+            async Task<(List<TesTask> TesTasks, BatchAccountState State)> GetState(List<TesTask> listOfTasks)
+                => listOfTasks?.Any() ?? false
+                    ? (listOfTasks, await azureProxy.GetBatchAccountStateAsync(
+                        enableBatchAutopool,
+                        enableBatchAutopool
+                            ? listOfTasks.Select(t => t.Id)
+                            : GetPools().Select(p => p.Pool.PoolId),
+                        cancellationToken))
+                    : default;
         }
 
-        // Adapted from https://stackoverflow.com/a/70026589
-        private static async IAsyncEnumerable<T> WhenEach<T>(IEnumerable<T> items, Func<T, Task> getTask, [EnumeratorCancellation] CancellationToken cancellationToken)
+        /// <summary>
+        /// Streams items when their associated tasks complete.
+        /// </summary>
+        /// <typeparam name="T">A type that is associated 1:1 with a <see cref="Task"/>.</typeparam>
+        /// <param name="collection">Items to be streamed in the order of completion of their associated <see cref="Task"/>s.</param>
+        /// <param name="cancellationToken">Required parameter. Must not be <see cref="CancellationToken.None"/>.</param>
+        /// <param name="getTask">Required if <typeparamref name="T"/> is not derived from <see cref="Task"/>. Obtains the <see cref="Task"/> associated with each element in <paramref name="collection"/>.</param>
+        /// <returns><paramref name="collection"/> in the order of the completion of their associated <see cref="Task"/>s.</returns>
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <remarks>
+        /// A task is sent to the return enumeration when it is "complete", which is when it either completes successfully, fails (queues an exception), or is cancelled.<br/>
+        /// No items in <paramref name="collection"/> should share <see cref="Task"/>s.
+        /// </remarks>
+        private static async IAsyncEnumerable<T> WhenEach<T>(IEnumerable<T> collection, [EnumeratorCancellation] CancellationToken cancellationToken, Func<T, Task> getTask = default)
         {
-            ArgumentNullException.ThrowIfNull(items);
+            ArgumentNullException.ThrowIfNull(collection);
             ArgumentNullException.ThrowIfNull(cancellationToken);
-            var itemList = items.ToList();
 
-            foreach (var task in itemList)
+            if (getTask is null)
             {
-                if (task is null)
+                if (typeof(T).IsAssignableTo(typeof(Task)))
                 {
-                    throw new ArgumentException("Argument contained null value.", nameof(items));
+                    getTask = new(i => i as Task);
+                }
+                else
+                {
+                    throw new ArgumentNullException(nameof(getTask));
                 }
             }
 
-            var channel = Channel.CreateBounded<T>(itemList.Count);
-            var continuations = new List<Task>(itemList.Count);
+            var list = collection.ToList();
+            var channel = Channel.CreateBounded<T>(list.Count);
+            var pendingCount = list.Count;
 
-            try
+            foreach (var entry in list)
             {
-                var pendingCount = itemList.Count;
-
-                foreach (var task in itemList)
+                if (entry is null)
                 {
-                    continuations.Add(getTask(task).ContinueWith(t =>
-                    {
-                        _ = channel.Writer.TryWrite(task);
-                        if (Interlocked.Decrement(ref pendingCount) == 0)
-                        {
-                            channel.Writer.Complete();
-                        }
-                    },
-                    cancellationToken,
-                    TaskContinuationOptions.DenyChildAttach,
-                    TaskScheduler.Default));
+                    DecrementPendingCountAndCompleteWriter();
+                    continue;
                 }
 
-                await foreach(var task in channel.Reader.ReadAllAsync(cancellationToken))
+                // The continuation task returned by ContinueWith() is attached to the associated task and will be disposed with it. In the case of cancellation while any are still pending, we are expecting the entire process to go away, so there's no utility in any additional mangement of them.
+                _ = getTask(entry).ContinueWith(t =>
                 {
-                    yield return task;
-                    cancellationToken.ThrowIfCancellationRequested();
-                }
+                    _ = channel.Writer.TryWrite(entry);
+                    DecrementPendingCountAndCompleteWriter();
+                },
+                cancellationToken,
+                TaskContinuationOptions.DenyChildAttach,
+                TaskScheduler.Default);
             }
-            finally
+
+            await foreach(var entry in channel.Reader.ReadAllAsync(cancellationToken))
             {
-                try
+                yield return entry;
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            void DecrementPendingCountAndCompleteWriter()
+            {
+                if (Interlocked.Decrement(ref pendingCount) == 0)
                 {
-                    await Task.WhenAll(continuations);
+                    channel.Writer.Complete();
                 }
-                catch (OperationCanceledException)
-                { } // Ignore
             }
         }
 
@@ -444,19 +472,25 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="tesTask">The <see cref="TesTask"/></param>
         /// <param name="batchAccountState"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns>True if the TES task needs to be persisted.</returns>
-        private async Task<(TesTask TesTask, Task<bool> IsModified)> ProcessTesTaskAsync(TesTask tesTask, (IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks) batchAccountState)
+        private async Task<(TesTask TesTask, Task<bool> IsModifiedResult)> ProcessTesTaskAsync(TesTask tesTask, BatchAccountState batchAccountState, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var combinedBatchTaskInfo = await GetBatchTaskStateAsync(tesTask, batchAccountState);
-            var msg = $"TES task: {tesTask.Id} BatchTaskState: {combinedBatchTaskInfo.BatchTaskState}";
+            const string template = "TES task: {TesTask} BatchTaskState: {BatchTaskState}";
+            var msg = string.Format(ConvertTemplateToFormat(template), tesTask.Id, combinedBatchTaskInfo.BatchTaskState);
+            //var msg = string.Format$"TES task: {tesTask.Id} BatchTaskState: {combinedBatchTaskInfo.BatchTaskState}";
 
-            if (!onlyLogBatchTaskStateOnce.Contains(msg))
+            if (onlyLogBatchTaskStateOnce.Add(msg))
             {
-                logger.LogInformation(msg);
-                onlyLogBatchTaskStateOnce.Add(msg);
+                logger.LogInformation(template, tesTask.Id, combinedBatchTaskInfo.BatchTaskState);
             }
 
             return (tesTask, HandleTesTaskTransitionAsync(tesTask, combinedBatchTaskInfo));
+
+            static string ConvertTemplateToFormat(string template)
+                => string.Join(null, template.Split('{', '}').Select((s, i) => (s, i)).Select(t => t.i % 2 == 0 ? t.s : $"{t.i / 2}"));
         }
 
         /// <summary>
@@ -725,7 +759,7 @@ namespace TesApi.Web
         /// <param name="batchAccountState"></param>
         /// <returns>A higher-level abstraction of the current state of the Azure Batch task</returns>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1826:Do not use Enumerable methods on indexable collections", Justification = "FirstOrDefault() is straightforward, the alternative is less clear.")]
-        private async ValueTask<CombinedBatchTaskInfo> GetBatchTaskStateAsync(TesTask tesTask, (IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks) batchAccountState)
+        private async ValueTask<CombinedBatchTaskInfo> GetBatchTaskStateAsync(TesTask tesTask, BatchAccountState batchAccountState)
         {
             var azureBatchJobAndTaskState = azureProxy.GetBatchJobAndTaskState(tesTask, enableBatchAutopool, batchAccountState);
 
@@ -1899,6 +1933,49 @@ namespace TesApi.Web
             public IEnumerable<string> SystemLogItems { get; set; }
             public PoolInformation Pool { get; set; }
             public string AlternateSystemLogItem { get; set; }
+        }
+
+        internal class ConcurrentHashSet<T> : System.Collections.Concurrent.ConcurrentDictionary<T, byte>, ISet<T>, IEnumerable<T>
+        {
+            public ConcurrentHashSet()
+            { }
+
+            public ConcurrentHashSet(IEqualityComparer<T> comparer) : base(comparer)
+            { }
+
+            public bool Add(T item) => TryAdd(item, 0);
+
+            public bool Remove(T item) => TryRemove(item, out _);
+
+            IEnumerator<T> IEnumerable<T>.GetEnumerator() => Keys.GetEnumerator();
+
+            void ICollection<T>.Add(T item) => _ = Add(item);
+
+            bool ICollection<T>.Contains(T item) => ContainsKey(item);
+
+            void ICollection<T>.CopyTo(T[] array, int arrayIndex) => Keys.CopyTo(array, arrayIndex);
+
+            bool ICollection<T>.IsReadOnly => throw new NotImplementedException();
+
+            void ISet<T>.ExceptWith(IEnumerable<T> other) => throw new NotImplementedException();
+
+            void ISet<T>.IntersectWith(IEnumerable<T> other) => throw new NotImplementedException();
+
+            bool ISet<T>.IsProperSubsetOf(IEnumerable<T> other) => throw new NotImplementedException();
+
+            bool ISet<T>.IsProperSupersetOf(IEnumerable<T> other) => throw new NotImplementedException();
+
+            bool ISet<T>.IsSubsetOf(IEnumerable<T> other) => throw new NotImplementedException();
+
+            bool ISet<T>.IsSupersetOf(IEnumerable<T> other) => throw new NotImplementedException();
+
+            bool ISet<T>.Overlaps(IEnumerable<T> other) => throw new NotImplementedException();
+
+            bool ISet<T>.SetEquals(IEnumerable<T> other) => throw new NotImplementedException();
+
+            void ISet<T>.SymmetricExceptWith(IEnumerable<T> other) => throw new NotImplementedException();
+
+            void ISet<T>.UnionWith(IEnumerable<T> other) => throw new NotImplementedException();
         }
     }
 }

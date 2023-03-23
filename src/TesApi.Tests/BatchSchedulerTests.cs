@@ -1485,7 +1485,7 @@ namespace TesApi.Tests
                 azureProxy.Setup(a => a.GetNextBatchJobIdAsync(It.IsAny<string>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.NextBatchJobId));
 
-                azureProxy.Setup(a => a.GetBatchJobAndTaskState(It.IsAny<TesTask>(), It.IsAny<bool>(), It.IsAny<(IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks)>()))
+                azureProxy.Setup(a => a.GetBatchJobAndTaskState(It.IsAny<TesTask>(), It.IsAny<bool>(), It.IsAny<BatchAccountState>()))
                     .Returns(azureProxyReturnValues.BatchJobAndTaskState);
 
                 azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount"))

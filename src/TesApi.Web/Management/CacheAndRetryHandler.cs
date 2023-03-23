@@ -4,6 +4,7 @@
 using System;
 using System.Net;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using LazyCache;
 using Microsoft.Extensions.Options;
@@ -20,9 +21,18 @@ namespace TesApi.Web.Management
     public class CacheAndRetryHandler
     {
         private readonly IAppCache appCache;
+        private readonly RetryPolicy retryPolicy;
         private readonly AsyncRetryPolicy asyncRetryPolicy;
         private readonly AsyncRetryPolicy<HttpResponseMessage> asyncHttpRetryPolicy;
 
+        /// <summary>
+        /// Synchronous retry policy instance.
+        /// </summary>
+        public virtual RetryPolicy RetryPolicy => retryPolicy;
+        /// <summary>
+        /// Asynchronous retry policy instance.
+        /// </summary>
+        public virtual AsyncRetryPolicy AsyncRetryPolicy => asyncRetryPolicy;
         /// <summary>
         /// App cache instance.
         /// </summary>
@@ -39,6 +49,11 @@ namespace TesApi.Web.Management
             ArgumentNullException.ThrowIfNull(retryPolicyOptions);
 
             this.appCache = appCache;
+            this.retryPolicy = Policy
+                .Handle<Exception>()
+                .WaitAndRetry(retryPolicyOptions.Value.MaxRetryCount,
+                    (attempt) => TimeSpan.FromSeconds(Math.Pow(retryPolicyOptions.Value.ExponentialBackOffExponent,
+                        attempt)));
             this.asyncRetryPolicy = Policy
                 .Handle<Exception>()
                 .WaitAndRetryAsync(retryPolicyOptions.Value.MaxRetryCount,
@@ -57,6 +72,30 @@ namespace TesApi.Web.Management
         protected CacheAndRetryHandler() { }
 
 
+
+        /// <summary>
+        /// Executes a delegate with the specified policy.
+        /// </summary>
+        /// <param name="action">Action to execute</param>
+        /// <returns>Result instance</returns>
+        public void ExecuteWithRetry(Action action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            retryPolicy.Execute(action);
+        }
+
+        /// <summary>
+        /// Executes a delegate with the specified policy.
+        /// </summary>
+        /// <param name="action">Action to execute</param>
+        /// <returns>Result instance</returns>
+        public TResult ExecuteWithRetry<TResult>(Func<TResult> action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            return retryPolicy.Execute(action);
+        }
 
         /// <summary>
         /// Executes a delegate with the specified async policy. 
@@ -81,6 +120,33 @@ namespace TesApi.Web.Management
             ArgumentNullException.ThrowIfNull(action);
 
             await asyncRetryPolicy.ExecuteAsync(action);
+        }
+
+        /// <summary>
+        /// Executes a delegate with the specified async policy.
+        /// </summary>
+        /// <param name="action">Action to execute</param>
+        /// <param name="cancellationToken"></param>
+        /// <typeparam name="TResult">Result type</typeparam>
+        /// <returns>Result instance</returns>
+        public virtual Task<TResult> ExecuteWithRetryAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            return asyncRetryPolicy.ExecuteAsync(ct => action(ct), cancellationToken);
+        }
+
+        /// <summary>
+        /// Executes a delegate with the specified async policy.
+        /// </summary>
+        /// <param name="action">Action to execute</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns>Result instance</returns>
+        public async Task ExecuteWithRetryAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            await asyncRetryPolicy.ExecuteAsync(ct => action(ct), cancellationToken);
         }
 
         /// <summary>

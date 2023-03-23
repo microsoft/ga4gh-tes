@@ -6,8 +6,6 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
-using Polly;
-using Polly.Retry;
 using Tes.Repository;
 
 namespace TesApi.Web
@@ -22,30 +20,26 @@ namespace TesApi.Web
         private readonly object cacheLock = new();
         private readonly IMemoryCache cache = new MemoryCache(new MemoryCacheOptions());
         private readonly IList<object> itemsPredicateCachedKeys = new List<object>();
-
-        private static readonly int RetryCount = 3;
-        private static TimeSpan SleepDurationProvider(int attempt)
-            => TimeSpan.FromSeconds(Math.Pow(2, attempt));
-
-        private readonly RetryPolicy retryPolicy = Policy
-                .Handle<Exception>()
-                .WaitAndRetry(RetryCount, SleepDurationProvider);
-
-        private readonly AsyncRetryPolicy asyncRetryPolicy = Policy
-                .Handle<Exception>()
-                .WaitAndRetryAsync(RetryCount, SleepDurationProvider);
+        private readonly Management.CacheAndRetryHandler cacheAndRetryHandler;
 
         /// <summary>
         /// Constructor to create a cache and retry wrapper for <see cref="IRepository{T}"/>
         /// </summary>
         /// <param name="repository"><see cref="IRepository{T}"/> to wrap with caching and retries</param>
-        public CachingWithRetriesRepository(IRepository<T> repository)
-            => this.repository = repository;
+        /// <param name="cacheAndRetryHandler"></param>
+        public CachingWithRetriesRepository(IRepository<T> repository, Management.CacheAndRetryHandler cacheAndRetryHandler)
+        {
+            ArgumentNullException.ThrowIfNull(repository);
+            ArgumentNullException.ThrowIfNull(cacheAndRetryHandler);
+
+            this.cacheAndRetryHandler = cacheAndRetryHandler;
+            this.repository = repository;
+        }
 
         /// <inheritdoc/>
         public async Task<T> CreateItemAsync(T item)
         {
-            var repositoryItem = await asyncRetryPolicy.ExecuteAsync(() => repository.CreateItemAsync(item));
+            var repositoryItem = await cacheAndRetryHandler.ExecuteWithRetryAsync(() => repository.CreateItemAsync(item));
             ClearAllItemsPredicateCachedKeys();
             return repositoryItem;
         }
@@ -58,7 +52,7 @@ namespace TesApi.Web
                 cache.Remove(id);
             }
 
-            await asyncRetryPolicy.ExecuteAsync(() => repository.DeleteItemAsync(id));
+            await cacheAndRetryHandler.ExecuteWithRetryAsync(() => repository.DeleteItemAsync(id));
             ClearAllItemsPredicateCachedKeys();
         }
 
@@ -71,7 +65,7 @@ namespace TesApi.Web
                 return true;
             }
 
-            var repositoryItemFound = await asyncRetryPolicy.ExecuteAsync(() => repository.TryGetItemAsync(id, item => repositoryItem = item));
+            var repositoryItemFound = await cacheAndRetryHandler.ExecuteWithRetryAsync(() => repository.TryGetItemAsync(id, item => repositoryItem = item));
 
             if (repositoryItemFound)
             {
@@ -84,7 +78,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken)
-            => asyncRetryPolicy.ExecuteAsync(() => repository.GetItemsAsync(predicate, pageSize, continuationToken));
+            => cacheAndRetryHandler.ExecuteWithRetryAsync(() => repository.GetItemsAsync(predicate, pageSize, continuationToken));
 
         /// <inheritdoc/>
         public async Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate)
@@ -97,7 +91,7 @@ namespace TesApi.Web
                 return repositoryItems;
             }
 
-            repositoryItems = await asyncRetryPolicy.ExecuteAsync(() => repository.GetItemsAsync(predicate));
+            repositoryItems = await cacheAndRetryHandler.ExecuteWithRetryAsync(() => repository.GetItemsAsync(predicate));
 
             lock (cacheLock)
             {
@@ -118,7 +112,7 @@ namespace TesApi.Web
                 cache.Remove(id);
             }
 
-            var repositoryItem = await asyncRetryPolicy.ExecuteAsync(() => repository.UpdateItemAsync(item));
+            var repositoryItem = await cacheAndRetryHandler.ExecuteWithRetryAsync(() => repository.UpdateItemAsync(item));
             ClearAllItemsPredicateCachedKeys();
             return repositoryItem;
         }

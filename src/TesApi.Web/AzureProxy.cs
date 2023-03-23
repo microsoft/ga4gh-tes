@@ -46,11 +46,9 @@ namespace TesApi.Web
     public partial class AzureProxy : IAzureProxy
     {
         private const char BatchJobAttemptSeparator = '-';
-        private static readonly AsyncRetryPolicy batchRaceConditionJobNotFoundRetryPolicy = Policy
-            .Handle<BatchException>(ex => ex.RequestInformation.BatchError.Code == BatchErrorCodeStrings.JobNotFound)
-            .WaitAndRetryAsync(5, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
-
+        private readonly AsyncRetryPolicy batchRaceConditionJobNotFoundRetryPolicy;
         private readonly AsyncRetryPolicy batchNodeNotReadyRetryPolicy;
+        private readonly Management.CacheAndRetryHandler cacheAndRetryHandler;
 
         private readonly ILogger logger;
         private readonly BatchClient batchClient;
@@ -67,14 +65,18 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="batchAccountOptions">The Azure Batch Account options</param>
         /// <param name="batchPoolManager"><inheritdoc cref="IBatchPoolManager"/></param>
+        /// <param name="retryPolicyOptions"></param>
+        /// <param name="cacheAndRetryHandler"></param>
         /// <param name="logger">The logger</param>
         /// <exception cref="InvalidOperationException"></exception>
-        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, IBatchPoolManager batchPoolManager, ILogger<AzureProxy> logger)
+        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, IBatchPoolManager batchPoolManager, IOptions<RetryPolicyOptions> retryPolicyOptions, Management.CacheAndRetryHandler cacheAndRetryHandler, ILogger<AzureProxy> logger)
         {
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(batchPoolManager);
+            ArgumentNullException.ThrowIfNull(cacheAndRetryHandler);
 
+            this.cacheAndRetryHandler = cacheAndRetryHandler;
             this.batchPoolManager = batchPoolManager;
 
             if (string.IsNullOrWhiteSpace(batchAccountOptions.Value.AccountName))
@@ -85,11 +87,15 @@ namespace TesApi.Web
 
             this.logger = logger;
 
+            this.batchRaceConditionJobNotFoundRetryPolicy = Policy
+                .Handle<BatchException>(ex => ex.RequestInformation.BatchError.Code == BatchErrorCodeStrings.JobNotFound)
+                .WaitAndRetryAsync(retryPolicyOptions.Value.MaxRetryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(retryPolicyOptions.Value.ExponentialBackOffExponent, retryAttempt)));
+
             this.batchNodeNotReadyRetryPolicy = Policy
                .Handle<BatchException>(ex => "NodeNotReady".Equals(ex.RequestInformation?.BatchError?.Code, StringComparison.InvariantCultureIgnoreCase))
                .WaitAndRetryAsync(
-                    5,
-                    (retryAttempt, exception, _) => (exception as BatchException).RequestInformation?.RetryAfter ?? TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                    retryPolicyOptions.Value.MaxRetryCount,
+                    (retryAttempt, exception, _) => (exception as BatchException).RequestInformation?.RetryAfter ?? TimeSpan.FromSeconds(Math.Pow(retryPolicyOptions.Value.ExponentialBackOffExponent, retryAttempt)),
                     (exception, delay, retryAttempt, _) =>
                         {
                             var requestId = (exception as BatchException).RequestInformation?.ServiceRequestId;
@@ -106,7 +112,6 @@ namespace TesApi.Web
                 location = batchAccountOptions.Value.Region;
                 subscriptionId = batchAccountOptions.Value.SubscriptionId;
                 batchResourceGroupName = batchAccountOptions.Value.ResourceGroup;
-
             }
             else
             {
@@ -290,85 +295,54 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<(IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks)> GetBatchAccountStateAsync(bool usingAutoPools, IEnumerable<string> ids, CancellationToken cancellationToken)
+        public async Task<BatchAccountState> GetBatchAccountStateAsync(bool usingAutoPools, IEnumerable<string> ids, CancellationToken cancellationToken)
         {
-            List<CloudJob> jobs = default;
-            IAsyncEnumerable<CloudPool> pools = default;
+            var jobFilter = new ODATADetailLevel { SelectClause = "id,state,executionInfo,creationTime" };
+            var poolFilter = new ODATADetailLevel { SelectClause = "id,resizeErrors" };
+            var nodeFilter = new ODATADetailLevel { SelectClause = "id,state,startTaskInfo,errors" };
+            var taskFilter = new ODATADetailLevel { SelectClause = "id,state,executionInfo" };
+            var idStartsWith = new Func<string, string, bool>((id, format) => ids.Select(i => string.Format(format, i)).Any(s => id.StartsWith(s, StringComparison.OrdinalIgnoreCase)));
+            IAsyncEnumerable<CloudJob> jobs;
+            IAsyncEnumerable<CloudPool> pools;
 
             var idList = ids.ToList();
 
-            var jobFilter = new ODATADetailLevel
-            {
-                SelectClause = "id,state,executionInfo,creationTime"
-            };
-
-            var poolFilter = new ODATADetailLevel
-            {
-                SelectClause = "id,resizeErrors"
-            };
-
-            var nodeFilter = new ODATADetailLevel
-            {
-                SelectClause = "id,state,startTaskInfo,errors"
-            };
-
-            var taskFilter = new ODATADetailLevel
-            {
-                SelectClause = "id,state,executionInfo"
-            };
-
-            var idStartsWith = new Func<string, string, bool>((id, format) => ids.Select(i => string.Format(format, i)).Any(s => id.StartsWith(s)));
-
             if (usingAutoPools)
             {
-                jobs = await CachingWithRetriesAzureProxy.asyncRetryPolicy.ExecuteAsync(() =>
+                var jobsList = await cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
                         batchClient.JobOperations.ListJobs(jobFilter).ToAsyncEnumerable(),
-                        CachingWithRetriesAzureProxy.retryPolicy)
+                        cacheAndRetryHandler.RetryPolicy)
                     .Where(j => idStartsWith(j.Id, $"{{0}}{BatchJobAttemptSeparator}"))
                     .ToListAsync(cancellationToken);
 
-                var poolIds = jobs.Select(j => j.ExecutionInformation?.PoolId).Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+                var poolIds = jobsList.Select(j => j.ExecutionInformation?.PoolId).Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
 
-                pools = CachingWithRetriesAzureProxy.asyncRetryPolicy.ExecuteAsync(() =>
+                pools = cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
                         batchClient.PoolOperations.ListPools(poolFilter).ToAsyncEnumerable(),
-                        CachingWithRetriesAzureProxy.retryPolicy)
+                        cacheAndRetryHandler.RetryPolicy)
                     .Where(p => poolIds.Contains(p.Id));
+                jobs = jobsList.ToAsyncEnumerable();
             }
             else
             {
-                jobs = await CachingWithRetriesAzureProxy.asyncRetryPolicy.ExecuteAsync(() =>
+                jobs = cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
                         batchClient.JobOperations.ListJobs(jobFilter).ToAsyncEnumerable(),
-                        CachingWithRetriesAzureProxy.retryPolicy)
-                    .Where(j => idList.Contains(j.Id))
-                    .ToListAsync(cancellationToken);
+                        cacheAndRetryHandler.RetryPolicy)
+                    .Where(j => idList.Contains(j.Id));
 
-                pools = CachingWithRetriesAzureProxy.asyncRetryPolicy.ExecuteAsync(() =>
+                pools = cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
                         batchClient.PoolOperations.ListPools(poolFilter).ToAsyncEnumerable(),
-                        CachingWithRetriesAzureProxy.retryPolicy)
+                        cacheAndRetryHandler.RetryPolicy)
                     .Where(p => idList.Contains(p.Id));
             }
 
-            var poolsAndNodes = new Dictionary<CloudPool, IReadOnlyList<ComputeNode>>();
-            await foreach (var pool in pools)
-            {
-                poolsAndNodes[pool] = (await CachingWithRetriesAzureProxy.asyncRetryPolicy.ExecuteAsync(() =>
-                            batchClient.PoolOperations.ListComputeNodes(pool.Id, nodeFilter).ToAsyncEnumerable(),
-                            CachingWithRetriesAzureProxy.retryPolicy)
-                        .ToListAsync(cancellationToken))
-                    .AsReadOnly();
-            }
-
-            var jobsAndTasks = new Dictionary<CloudJob, IReadOnlyList<CloudTask>>();
-            foreach(var job in jobs)
-            {
-                jobsAndTasks[job] = (await CachingWithRetriesAzureProxy.asyncRetryPolicy.ExecuteAsync(() =>
-                            batchClient.JobOperations.ListTasks(job.Id, taskFilter).ToAsyncEnumerable(),
-                            CachingWithRetriesAzureProxy.retryPolicy)
-                        .ToListAsync(cancellationToken))
-                    .AsReadOnly();
-            }
-
-            return (poolsAndNodes.AsReadOnly(), jobsAndTasks.AsReadOnly());
+            return new(pools, jobs,
+                pool => cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
+                    batchClient.PoolOperations.ListComputeNodes(pool.Id, nodeFilter).ToAsyncEnumerable(),
+                    cacheAndRetryHandler.RetryPolicy),
+                job => cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
+                    batchClient.JobOperations.ListTasks(job.Id, taskFilter).ToAsyncEnumerable(),
+                    cacheAndRetryHandler.RetryPolicy));
 
             //string CombineProperties(params string[] properties)
             //    => string.Join(',', new HashSet<string>(properties.SelectMany(s => s.Split(',')).Select(s => s.Trim())));
@@ -376,7 +350,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1826:Do not use Enumerable methods on indexable collections", Justification = "FirstOrDefault() is straightforward, the alternative is less clear.")]
-        public AzureBatchJobAndTaskState GetBatchJobAndTaskState(TesTask tesTask, bool usingAutoPools, (IReadOnlyDictionary<CloudPool, IReadOnlyList<ComputeNode>> PoolsAndNodes, IReadOnlyDictionary<CloudJob, IReadOnlyList<CloudTask>> JobsAndTasks) batchAccountState)
+        public AzureBatchJobAndTaskState GetBatchJobAndTaskState(TesTask tesTask, bool usingAutoPools, BatchAccountState batchAccountState)
         {
             try
             {
@@ -392,7 +366,7 @@ namespace TesApi.Web
                 var attemptNumber = 0;
                 CloudTask batchTask = null;
 
-                var jobOrTaskFilter = new Func<string, string, bool>((id, key) => id.StartsWith(string.Format($"{{0}}{BatchJobAttemptSeparator}", key)));
+                var jobOrTaskFilter = new Func<string, string, bool>((id, key) => id.StartsWith(string.Format($"{{0}}{BatchJobAttemptSeparator}", key), StringComparison.OrdinalIgnoreCase));
 
                 if (usingAutoPools)
                 {
@@ -439,7 +413,7 @@ namespace TesApi.Web
                         return new AzureBatchJobAndTaskState { JobState = null };
                     }
 
-                    var taskInfos = jobPair.Value.Where(t => jobOrTaskFilter(t.Id, tesTask.PoolId))
+                    var taskInfos = jobPair.Value.Where(t => jobOrTaskFilter(t.Id, tesTask.Id))
                         .Select(t => new { Task = t, AttemptNumber = int.Parse(t.Id.Split(BatchJobAttemptSeparator)[1]) })
                         .ToList();
 
