@@ -265,6 +265,7 @@ namespace TesApi.Web
                             if (nodesToRemove.Any())
                             {
                                 await RemoveNodesAsync((IList<ComputeNode>)nodesToRemove, cancellationToken);
+                                _scalingMode = ScalingMode.RemovingFailedNodes;
                             }
                             else
                             {
@@ -279,7 +280,7 @@ namespace TesApi.Web
                         _resizeErrorsRetrieved = true;
                         _logger.LogInformation(@"Switching pool {PoolId} back to autoscale.", Pool.PoolId);
                         await _azureProxy.EnableBatchPoolAutoScaleAsync(Pool.PoolId, !IsDedicated, AutoScaleEvaluationInterval, AutoPoolFormula, cancellationToken);
-                        _autoScaleWaitTime = DateTime.UtcNow + AutoScaleEvaluationInterval;
+                        _autoScaleWaitTime = DateTime.UtcNow + AutoScaleEvaluationInterval + BatchPoolService.RunInterval;
                         _scalingMode = _resetAutoScalingRequired ? ScalingMode.WaitingForAutoScale : ScalingMode.SettingAutoScale;
                         break;
 
