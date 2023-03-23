@@ -64,7 +64,7 @@ namespace Tes.Repository
 
             // Don't allow the state of the system to change until the cache and system are consistent;
             // this is a fast PostgreSQL query even for 1 million items
-            var retryDatabaseForeverPolicy = Policy
+            await Policy
                 .Handle<Exception>()
                 .WaitAndRetryAsync(3,
                     retryAttempt =>
@@ -75,18 +75,16 @@ namespace Tes.Repository
                     (ex, ts) =>
                     {
                         logger.LogCritical(ex, "Couldn't warm cache, is the database online?");
-                    });
-
-            await retryDatabaseForeverPolicy.ExecuteAsync(async () =>
-            {
-                var activeTasks = await GetItemsAsync(task => TesTask.ActiveStates.Contains(task.State));
-
-                foreach (var task in activeTasks.OrderBy(t => t.CreationTime))
+                    })
+                .ExecuteAsync(async () =>
                 {
-                    cache?.TryAdd(task.Id, task);
-                }
+                    var activeTasks = await GetItemsAsync(task => TesTask.ActiveStates.Contains(task.State));
 
-            });
+                    foreach (var task in activeTasks.OrderBy(t => t.CreationTime))
+                    {
+                        cache?.TryAdd(task.Id, task);
+                    }
+                });
 
             logger.LogInformation($"Cache warmed successfully in {sw.Elapsed.TotalSeconds:n3} seconds");
         }
