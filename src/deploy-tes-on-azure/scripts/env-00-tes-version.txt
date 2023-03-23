@@ -1,1 +1,1 @@
-﻿TesOnAzureVersion=4.0.0
+﻿TesOnAzureVersion=4.1.0
