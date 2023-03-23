@@ -52,7 +52,7 @@ namespace TesApi.Web.Management.Clients
         /// <returns></returns>
         public virtual async Task<WsmSasTokenApiResponse> GetSasTokenAsync(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
         {
-            var url = GetContainerSasTokenApiUrl(workspaceId, resourceId, sasTokenApiParameters);
+            var url = GetSasTokenApiUrl(workspaceId, resourceId, sasTokenApiParameters);
 
             var response = await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, url),
                 setAuthorizationHeader: true);
@@ -121,13 +121,13 @@ namespace TesApi.Web.Management.Clients
                 ParseQueryStringParameter("sasBlobName", sasTokenApiParameters.SasBlobName));
 
         /// <summary>
-        /// Gets the Api Url to get a container sas token
+        /// Gets the Api Url to get a container or blob sas token
         /// </summary>
         /// <param name="workspaceId">Workspace Id</param>
         /// <param name="resourceId">WSM resource Id of the container</param>
         /// <param name="sasTokenApiParameters"><see cref="SasTokenApiParameters"/></param>
         /// <returns></returns>
-        public virtual Uri GetContainerSasTokenApiUrl(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
+        public virtual Uri GetSasTokenApiUrl(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
         {
             var segments = $"/resources/controlled/azure/storageContainer/{resourceId}/getSasToken";
 
