@@ -30,7 +30,7 @@ namespace Tes.Repository
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
         /// <param name="connectionString">The PostgreSql connection string</param>
-        public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTask> cache = null)
+        public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTask> cache)
         {
             this.cache = cache;
             this.logger = logger;
