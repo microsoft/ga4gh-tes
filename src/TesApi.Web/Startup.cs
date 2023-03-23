@@ -110,15 +110,15 @@ namespace TesApi.Web
 
                     .AddSwaggerGen(c =>
                     {
-                        c.SwaggerDoc("0.4.0", new()
+                        c.SwaggerDoc("4.1.0", new()
                         {
-                            Version = "0.4.0",
-                            Title = "Task Execution Service",
+                            Version = "4.1.0",
+                            Title = "GA4GH Task Execution Service",
                             Description = "Task Execution Service (ASP.NET Core 7.0)",
                             Contact = new()
                             {
                                 Name = "Microsoft Biomedical Platforms and Genomics",
-                                Url = new("https://github.com/microsoft/CromwellOnAzure")
+                                Url = new("https://github.com/ga4gh/tes")
                             },
                             License = new()
                             {
