@@ -16,8 +16,8 @@ public class TerraApiStubData
     public const string WorkspaceAccountName = "fooaccount";
     public const string WorkspaceContainerName = "foocontainer";
     public const string SasToken = "SASTOKENSTUB=";
-    public const string WsmGetSasResponseStorageUrl = "https://bloburl.foo/container";
-
+    public const string WsmGetSasResponseStorageUrl = $"https://bloburl.foo/{WorkspaceContainerName}";
+    
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
     public Guid WorkspaceId { get; } = Guid.NewGuid();
@@ -37,9 +37,9 @@ public class TerraApiStubData
         return JsonSerializer.Deserialize<QuotaApiResponse>(GetResourceQuotaApiResponseInJson());
     }
 
-    public WsmSasTokenApiResponse GetWsmSasTokenApiResponse()
+    public WsmSasTokenApiResponse GetWsmSasTokenApiResponse(string blobName = null)  
     {
-        return JsonSerializer.Deserialize<WsmSasTokenApiResponse>(GetWsmSasTokenApiResponseInJson());
+        return JsonSerializer.Deserialize<WsmSasTokenApiResponse>(GetWsmSasTokenApiResponseInJson(blobName));
     }
 
     public TerraOptions GetTerraOptions()
@@ -68,16 +68,22 @@ public class TerraApiStubData
         };
     }
 
-    public string GetWsmSasTokenApiResponseInJson()
+    public string GetWsmSasTokenApiResponseInJson(string blobName = null)
     {
+        var blobToAppend = blobName;
+        if (!string.IsNullOrEmpty(blobName))
+        {
+            blobToAppend = $"/{blobName.TrimStart('/')}";
+        }
+
         return $$"""
         {
             "token": "{{SasToken}}",
-            "url": "{{WsmGetSasResponseStorageUrl}}?sv={{SasToken}}"
+            "url": "{{WsmGetSasResponseStorageUrl}}{{blobToAppend}}?sv={{SasToken}}"
         }
         """;
     }
-
+    
     public string GetResourceApiResponseInJson()
     {
         return $@"{{
