@@ -148,6 +148,8 @@ namespace TesApi.Web
                 throw;
             }
 
+            logger?.LogInformation("TES successfully configured dependent services in ConfigureServices(IServiceCollection services)");
+
             IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
             {
                 var terraOptions = services.GetService<IOptions<TerraOptions>>();
