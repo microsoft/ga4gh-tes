@@ -5,7 +5,7 @@ using System;
 using LazyCache;
 using Tes.Repository;
 
-namespace TesApi.Web
+namespace Tes.Repository
 {
     /// <summary>
     /// A wrapper for LazyCache.IAppCache
