@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Threading;
@@ -19,10 +18,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Serialization;
-using Polly;
 using Tes.Models;
 using Tes.Repository;
-using Tes.Utilities;
 using TesApi.Filters;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
@@ -61,6 +58,9 @@ namespace TesApi.Web
             try
             {
                 services
+                    .AddLogging()
+                    .AddApplicationInsightsTelemetry(configuration)
+
                     .Configure<BatchAccountOptions>(configuration.GetSection(BatchAccountOptions.SectionName))
                     .Configure<PostgreSqlOptions>(configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
                     .Configure<RetryPolicyOptions>(configuration.GetSection(RetryPolicyOptions.SectionName))
@@ -74,11 +74,10 @@ namespace TesApi.Web
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
 
-                    .AddLogging()
-
                     .AddSingleton<IAppCache, CachingService>()
+                    .AddSingleton<ICache<TesTask>, TesRepositoryLazyCache<TesTask>>()
+                    .AddSingleton<IRepository<TesTask>, TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
-                    .AddSingleton(CreatePostgresSqlRepositoryFromConfiguration)
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                     .AddTransient<TerraWsmApiClient>()
@@ -94,7 +93,6 @@ namespace TesApi.Web
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
                     .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
-
 
                     .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
                     .AddSingleton<ContainerRegistryProvider>()
@@ -140,10 +138,8 @@ namespace TesApi.Web
                     .AddHostedService<Scheduler>()
                     .AddHostedService<DeleteCompletedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
-                    .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
+                    .AddHostedService<DeleteOrphanedAutoPoolsHostedService>();
                     //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
-
-                    .AddApplicationInsightsTelemetry(configuration);
             }
             catch (Exception exc)
             {
@@ -151,6 +147,8 @@ namespace TesApi.Web
                 Console.WriteLine($"TES could not start: {exc}");
                 throw;
             }
+
+            logger?.LogInformation("TES successfully configured dependent services in ConfigureServices(IServiceCollection services)");
 
             IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
             {
@@ -188,37 +186,6 @@ namespace TesApi.Web
                 logger.LogInformation("Using default Batch Pool Manager.");
 
                 return ActivatorUtilities.CreateInstance<ArmBatchPoolManager>(services);
-            }
-
-            IRepository<TesTask> CreatePostgresSqlRepositoryFromConfiguration(IServiceProvider services)
-            {
-                var options = services.GetRequiredService<IOptions<PostgreSqlOptions>>();
-                var postgresConnectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
-                var appCache = services.GetRequiredService<IAppCache>();
-                var lazyCache = new TesRepositoryLazyCache<TesTask>(appCache);
-                var repo = new TesTaskPostgreSqlRepository(postgresConnectionString, lazyCache);
-
-                var sw = Stopwatch.StartNew();
-                logger.LogInformation("Warming cache...");
-
-                // Don't allow the state of the system to change until the cache and system are consistent;
-                // this is a fast PostgreSQL query even for 1 million items
-                var retryDatabaseForeverPolicy = Policy
-                    .Handle<Exception>()
-                    .WaitAndRetryAsync(3, 
-                        retryAttempt =>
-                        {
-                            logger.LogWarning($"Warming cache retry attempt #{retryAttempt}");
-                            return TimeSpan.FromSeconds(10);
-                        },
-                        (ex, ts) =>
-                        {
-                            logger.LogCritical(ex, "Couldn't warm cache, is the database online?");
-                        });
-
-                retryDatabaseForeverPolicy.ExecuteAsync(repo.WarmCacheAsync).Wait();
-                logger.LogInformation($"Cache warmed successfully in {sw.Elapsed.TotalSeconds:n3} seconds");
-                return repo;
             }
 
             IStorageAccessProvider CreateStorageAccessProviderFromConfiguration(IServiceProvider services)

@@ -104,6 +104,10 @@ namespace TesApi.Web
                     // The following configures LogLevel Information or above to be sent to
                     // Application Insights for categories starting with "TesApi".
                     logging.AddFilter<ApplicationInsightsLoggerProvider>("TesApi", LogLevel.Information);
+
+                    // The following configures LogLevel Information or above to be sent to
+                    // Application Insights for categories starting with "Tes".
+                    logging.AddFilter<ApplicationInsightsLoggerProvider>("Tes", LogLevel.Information);
                 }
                 catch (Exception exc)
                 {

@@ -108,5 +108,22 @@ namespace TesApi.Tests
         {
             await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input, System.Threading.CancellationToken.None);
         }
+
+        [TestMethod]
+        [DataRow("")]
+        [DataRow("blobName")]
+        public async Task GetMappedSasUrlFromWsmAsync_WithOrWithOutBlobName_ReturnsValidURLWithBlobName(string responseBlobName)
+        {
+            wsmApiClientMock.Setup(a => a.GetSasTokenAsync(terraApiStubData.WorkspaceId,
+                    terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>(), It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync(terraApiStubData.GetWsmSasTokenApiResponse(responseBlobName));
+
+           var url =  await terraStorageAccessProvider.GetMappedSasUrlFromWsmAsync("blobName", System.Threading.CancellationToken.None);
+           
+           Assert.IsNotNull(url);
+           var uri = new Uri(url);
+
+           Assert.AreEqual(uri.AbsolutePath,$"/{TerraApiStubData.WorkspaceContainerName}/blobName");
+        }
     }
 }

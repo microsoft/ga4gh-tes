@@ -476,13 +476,12 @@ namespace TesApi.Web
         {
             cancellationToken.ThrowIfCancellationRequested();
             var combinedBatchTaskInfo = await GetBatchTaskStateAsync(tesTask, batchAccountState, cancellationToken);
-            const string template = "TES task: {TesTask} BatchTaskState: {BatchTaskState}";
-            var msg = string.Format(ConvertTemplateToFormat(template), tesTask.Id, combinedBatchTaskInfo.BatchTaskState);
-            //var msg = string.Format$"TES task: {tesTask.Id} BatchTaskState: {combinedBatchTaskInfo.BatchTaskState}";
+            const string template = "TES task: {TesTask} TES task state: {TesTaskState} BatchTaskState: {BatchTaskState}";
+            var msg = string.Format(ConvertTemplateToFormat(template), tesTask.Id, tesTask.State, combinedBatchTaskInfo.BatchTaskState);
 
             if (onlyLogBatchTaskStateOnce.Add(msg))
             {
-                logger.LogInformation(template, tesTask.Id, combinedBatchTaskInfo.BatchTaskState);
+                logger.LogInformation(template, tesTask.Id, tesTask.State, combinedBatchTaskInfo.BatchTaskState);
             }
 
             return (tesTask, HandleTesTaskTransitionAsync(tesTask, combinedBatchTaskInfo, cancellationToken));
