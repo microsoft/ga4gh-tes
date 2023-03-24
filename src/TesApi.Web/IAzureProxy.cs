@@ -22,8 +22,9 @@ namespace TesApi.Web
         /// Gets a new Azure Batch job id to schedule another task
         /// </summary>
         /// <param name="tesTaskId">The unique TES task ID</param>
+        /// <param name="cancellationToken"></param>
         /// <returns>The next logical, new Azure Batch job ID</returns>
-        Task<string> GetNextBatchJobIdAsync(string tesTaskId);
+        Task<string> GetNextBatchJobIdAsync(string tesTaskId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Creates a new Azure Batch job for Autopools
@@ -32,14 +33,14 @@ namespace TesApi.Web
         /// <param name="cloudTask"></param>
         /// <param name="poolInformation"></param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
-        Task CreateAutoPoolModeBatchJobAsync(string jobId, CloudTask cloudTask, PoolInformation poolInformation, CancellationToken cancellationToken = default);
+        Task CreateAutoPoolModeBatchJobAsync(string jobId, CloudTask cloudTask, PoolInformation poolInformation, CancellationToken cancellationToken);
 
         /// <summary>
         /// Creates a new Azure Batch job for <see cref="IBatchPool"/>
         /// </summary>
         /// <param name="poolInformation"></param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
-        Task CreateBatchJobAsync(PoolInformation poolInformation, CancellationToken cancellationToken = default);
+        Task CreateBatchJobAsync(PoolInformation poolInformation, CancellationToken cancellationToken);
 
         /// <summary>
         /// Adds a task to the batch job paired to the <paramref name="poolInformation"/>."/>
@@ -48,28 +49,30 @@ namespace TesApi.Web
         /// <param name="cloudTask"></param>
         /// <param name="poolInformation"></param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
-        Task AddBatchTaskAsync(string tesTaskId, CloudTask cloudTask, PoolInformation poolInformation, CancellationToken cancellationToken = default);
+        Task AddBatchTaskAsync(string tesTaskId, CloudTask cloudTask, PoolInformation poolInformation, CancellationToken cancellationToken);
 
         /// <summary>
         /// Terminates and deletes an Azure Batch job for <see cref="IBatchPool"/>
         /// </summary>
         /// <param name="poolInformation"></param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
-        Task DeleteBatchJobAsync(PoolInformation poolInformation, CancellationToken cancellationToken = default);
+        Task DeleteBatchJobAsync(PoolInformation poolInformation, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the <see cref="StorageAccountInfo"/> for the given storage account name
         /// </summary>
         /// <param name="storageAccountName">Storage account name</param>
+        /// <param name="cancellationToken"></param>
         /// <returns><see cref="StorageAccountInfo"/></returns>
-        Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName);
+        Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken);
 
         /// <summary>
         /// Creates an Azure Batch pool who's lifecycle must be manually managed
         /// </summary>
         /// <param name="poolInfo">Contains information about the pool. <see cref="BatchModels.ProxyResource.Name"/> becomes the <see cref="Microsoft.Azure.Batch.Protocol.Models.CloudPool.Id"/></param>
         /// <param name="isPreemptable">True if nodes in this pool will all be preemptable. False if nodes will all be dedicated.</param>
-        Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable);
+        /// <param name="cancellationToken"></param>
+        Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the combined state of Azure Batch jobs, tasks, nodes and pools.
@@ -82,7 +85,7 @@ namespace TesApi.Web
         /// When <paramref name="usingAutoPools"/> is true, <paramref name="ids"/> is an enumeration of active <see cref="TesTask.Id"/>.
         /// When <paramref name="usingAutoPools"/> is false, <paramref name="ids"/> is an enumeration of <see cref="PoolInformation.PoolId"/> corresponding to all of the associated <see cref="IBatchPool"/>.
         /// </remarks>
-        Task<BatchAccountState> GetBatchAccountStateAsync(bool usingAutoPools, IEnumerable<string> ids, CancellationToken cancellationToken = default);
+        Task<BatchAccountState> GetBatchAccountStateAsync(bool usingAutoPools, IEnumerable<string> ids, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the combined state of Azure Batch job, task and pool that corresponds to the given TES task
@@ -98,7 +101,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="taskId">The unique TES task ID</param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
-        Task DeleteBatchJobAsync(string taskId, CancellationToken cancellationToken = default);
+        Task DeleteBatchJobAsync(string taskId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Deletes an Azure Batch task
@@ -106,7 +109,7 @@ namespace TesApi.Web
         /// <param name="taskId">The unique TES task ID</param>
         /// <param name="poolInformation"></param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
-        Task DeleteBatchTaskAsync(string taskId, PoolInformation poolInformation, CancellationToken cancellationToken = default);
+        Task DeleteBatchTaskAsync(string taskId, PoolInformation poolInformation, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the counts of active batch nodes, grouped by VmSize
@@ -130,8 +133,9 @@ namespace TesApi.Web
         /// Gets the primary key of the given storage account.
         /// </summary>
         /// <param name="storageAccountInfo">Storage account info</param>
+        /// <param name="cancellationToken"></param>
         /// <returns>The primary key</returns>
-        Task<string> GetStorageAccountKeyAsync(StorageAccountInfo storageAccountInfo);
+        Task<string> GetStorageAccountKeyAsync(StorageAccountInfo storageAccountInfo, CancellationToken cancellationToken);
 
         /// <summary>
         /// Uploads the text content to a blob
@@ -184,7 +188,7 @@ namespace TesApi.Web
         /// <param name="minJobAge"></param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>List of Batch job ids</returns>
-        Task<IEnumerable<string>> ListOrphanedJobsToDeleteAsync(TimeSpan minJobAge, CancellationToken cancellationToken = default);
+        Task<IEnumerable<string>> ListOrphanedJobsToDeleteAsync(TimeSpan minJobAge, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the list of active pool ids matching the prefix and with creation time older than the minAge
@@ -214,12 +218,12 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="poolId">The id of the pool.</param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
-        Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken = default);
+        Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Deletes the specified pool if it exists
         /// </summary>
-        Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken = default);
+        Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Retrieves the specified pool
@@ -228,7 +232,7 @@ namespace TesApi.Web
         /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for controlling which properties are retrieved from the service.</param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         /// <returns><see cref="CloudPool"/></returns>
-        Task<CloudPool> GetBatchPoolAsync(string poolId, DetailLevel detailLevel = default, CancellationToken cancellationToken = default);
+        Task<CloudPool> GetBatchPoolAsync(string poolId, CancellationToken cancellationToken, DetailLevel detailLevel = default);
 
         /// <summary>
         /// Retrieves the specified batch job.
@@ -237,7 +241,7 @@ namespace TesApi.Web
         /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for controlling which properties are retrieved from the service.</param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        Task<CloudJob> GetBatchJobAsync(string jobId, DetailLevel detailLevel = default, CancellationToken cancellationToken = default);
+        Task<CloudJob> GetBatchJobAsync(string jobId, CancellationToken cancellationToken, DetailLevel detailLevel = default);
 
         /// <summary>
         /// Lists compute nodes in batch pool <paramref name="poolId"/>

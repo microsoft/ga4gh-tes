@@ -52,31 +52,31 @@ namespace TesApi.Web.Management
         /// </summary>
         protected AzureManagementClientsFactory() { }
 
-        private static Task<string> GetAzureAccessTokenAsync(string resource = "https://management.azure.com/")
-            => new AzureServiceTokenProvider().GetAccessTokenAsync(resource);
+        private static Task<string> GetAzureAccessTokenAsync(System.Threading.CancellationToken cancellationToken, string resource = "https://management.azure.com/")
+            => new AzureServiceTokenProvider().GetAccessTokenAsync(resource, cancellationToken: cancellationToken);
 
         /// <summary>
         /// Creates Batch Account management client using AAD authentication.
         /// Configure to the subscription id that contains the batch account.
         /// </summary>
         /// <returns></returns>
-        public async Task<BatchManagementClient> CreateBatchAccountManagementClient()
-            => new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync())) { SubscriptionId = batchAccountInformation.SubscriptionId };
+        public async Task<BatchManagementClient> CreateBatchAccountManagementClient(System.Threading.CancellationToken cancellationToken)
+            => new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken))) { SubscriptionId = batchAccountInformation.SubscriptionId };
 
         /// <summary>
         /// Creates a new instance of Azure Management Client with the default credentials and subscription.
         /// </summary>
         /// <returns></returns>
-        public async Task<FluentAzure.IAuthenticated> CreateAzureManagementClientAsync()
-            => await AzureManagementClientsFactory.GetAzureManagementClientAsync();
+        public async Task<FluentAzure.IAuthenticated> CreateAzureManagementClientAsync(System.Threading.CancellationToken cancellationToken)
+            => await AzureManagementClientsFactory.GetAzureManagementClientAsync(cancellationToken);
 
         /// <summary>
         /// Creates a new instance of Azure Management client
         /// </summary>
         /// <returns></returns>
-        public static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync()
+        public static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(System.Threading.CancellationToken cancellationToken)
         {
-            var accessToken = await GetAzureAccessTokenAsync();
+            var accessToken = await GetAzureAccessTokenAsync(cancellationToken);
             var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, AzureEnvironment.AzureGlobalCloud);
             var azureClient = FluentAzure.Authenticate(azureCredentials);
 

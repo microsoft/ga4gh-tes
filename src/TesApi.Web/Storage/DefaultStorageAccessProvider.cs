@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using Microsoft.Extensions.Logging;
@@ -19,7 +20,6 @@ namespace TesApi.Web.Storage
     /// </summary>
     public class DefaultStorageAccessProvider : StorageAccessProvider
     {
-
         private static readonly TimeSpan SasTokenDuration = TimeSpan.FromDays(7); //TODO: refactor this to drive it from configuration.
         private readonly string defaultStorageAccountName;
         private readonly List<ExternalStorageContainerInfo> externalStorageContainers;
@@ -54,7 +54,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<bool> IsPublicHttpUrlAsync(string uriString)
+        public override async Task<bool> IsPublicHttpUrlAsync(string uriString, CancellationToken cancellationToken)
         {
             var isHttpUrl = TryParseHttpUrlFromInput(uriString, out var uri);
 
@@ -70,7 +70,7 @@ namespace TesApi.Web.Storage
 
             if (StorageAccountUrlSegments.TryCreate(uriString, out var parts))
             {
-                if (await TryGetStorageAccountInfoAsync(parts.AccountName))
+                if (await TryGetStorageAccountInfoAsync(parts.AccountName, cancellationToken))
                 {
                     return false;
                 }
@@ -85,7 +85,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false)
+        public override async Task<string> MapLocalPathToSasUrlAsync(string path, System.Threading.CancellationToken cancellationToken, bool getContainerSas = false)
         {
             // TODO: Optional: If path is /container/... where container matches the name of the container in the default storage account, prepend the account name to the path.
             // This would allow the user to omit the account name for files stored in the default storage account
@@ -110,7 +110,7 @@ namespace TesApi.Web.Storage
             {
                 StorageAccountInfo storageAccountInfo = null;
 
-                if (!await TryGetStorageAccountInfoAsync(pathSegments.AccountName, info => storageAccountInfo = info))
+                if (!await TryGetStorageAccountInfoAsync(pathSegments.AccountName, cancellationToken, info => storageAccountInfo = info))
                 {
                     Logger.LogError($"Could not find storage account '{pathSegments.AccountName}' corresponding to path '{path}'. Either the account does not exist or the TES app service does not have permission to it.");
                     return null;
@@ -118,7 +118,7 @@ namespace TesApi.Web.Storage
 
                 try
                 {
-                    var accountKey = await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo);
+                    var accountKey = await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, cancellationToken);
                     var resultPathSegments = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName);
 
                     if (pathSegments.IsContainer || getContainerSas)
@@ -148,11 +148,11 @@ namespace TesApi.Web.Storage
             }
         }
 
-        private async Task<bool> TryGetStorageAccountInfoAsync(string accountName, Action<StorageAccountInfo> onSuccess = null)
+        private async Task<bool> TryGetStorageAccountInfoAsync(string accountName, CancellationToken cancellationToken, Action<StorageAccountInfo> onSuccess = null)
         {
             try
             {
-                var storageAccountInfo = await AzureProxy.GetStorageAccountInfoAsync(accountName);
+                var storageAccountInfo = await AzureProxy.GetStorageAccountInfoAsync(accountName, cancellationToken);
 
                 if (storageAccountInfo is not null)
                 {

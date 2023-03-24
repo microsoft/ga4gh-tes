@@ -118,7 +118,7 @@ namespace TesApi.Web
                     if (!_resizeErrorsRetrieved)
                     {
                         ResizeErrors.Clear();
-                        var pool = await _azureProxy.GetBatchPoolAsync(Pool.PoolId, new ODATADetailLevel { SelectClause = "resizeErrors" }, cancellationToken);
+                        var pool = await _azureProxy.GetBatchPoolAsync(Pool.PoolId, cancellationToken, new ODATADetailLevel { SelectClause = "resizeErrors" });
 
                         foreach (var error in pool.ResizeErrors ?? Enumerable.Empty<ResizeError>())
                         {
@@ -473,7 +473,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async ValueTask<DateTime> GetAllocationStateTransitionTime(CancellationToken cancellationToken = default)
-            => (await _azureProxy.GetBatchPoolAsync(Pool.PoolId, new ODATADetailLevel { SelectClause = "allocationStateTransitionTime" }, cancellationToken)).AllocationStateTransitionTime ?? DateTime.UtcNow;
+            => (await _azureProxy.GetBatchPoolAsync(Pool.PoolId, cancellationToken, new ODATADetailLevel { SelectClause = "allocationStateTransitionTime" })).AllocationStateTransitionTime ?? DateTime.UtcNow;
 
         /// <inheritdoc/>
         public async ValueTask CreatePoolAndJobAsync(Microsoft.Azure.Management.Batch.Models.Pool poolModel, bool isPreemptible, CancellationToken cancellationToken)
@@ -481,10 +481,10 @@ namespace TesApi.Web
             try
             {
                 CloudPool pool = default;
-                var poolInfo = await _azureProxy.CreateBatchPoolAsync(poolModel, isPreemptible);
+                var poolInfo = await _azureProxy.CreateBatchPoolAsync(poolModel, isPreemptible, cancellationToken);
 
                 await Task.WhenAll(
-                    Task.Run(async () => pool = await _azureProxy.GetBatchPoolAsync(poolInfo.PoolId, new ODATADetailLevel { SelectClause = CloudPoolSelectClause }, cancellationToken)),
+                    Task.Run(async () => pool = await _azureProxy.GetBatchPoolAsync(poolInfo.PoolId, cancellationToken, new ODATADetailLevel { SelectClause = CloudPoolSelectClause })),
                     _azureProxy.CreateBatchJobAsync(poolInfo, cancellationToken));
 
                 Configure(pool);
@@ -541,10 +541,16 @@ namespace TesApi.Web
             }
 
             // Pool is "broken" if job is missing/not active. Reject this pool via the side effect of the exception that is thrown.
-            if (1 != (await _azureProxy.GetBatchJobAsync(pool.Id, new ODATADetailLevel { SelectClause = "id,state"/*, FilterClause = "state eq 'active'"*/ }, cancellationToken).ToAsyncEnumerable().Where(j => j.State == JobState.Active).ToListAsync(cancellationToken)).Count)
+            try
             {
-                // TODO: investigate why FilterClause throws "Type Microsoft.Azure.Batch.Protocol.BatchRequests.JobGetBatchRequest does not support a filter clause. (Parameter 'detailLevel')"
-                throw new InvalidOperationException($"Active Job not found for Pool {pool.Id}");
+                if ((await _azureProxy.GetBatchJobAsync(pool.Id, cancellationToken, new ODATADetailLevel { SelectClause = "id,state" })).State != JobState.Active)
+                {
+                    throw new InvalidOperationException($"Active Job not found for Pool {pool.Id}");
+                }
+            }
+            catch(Exception ex)
+            {
+                throw new InvalidOperationException($"Active Job not found for Pool {pool.Id}", ex);
             }
 
             Configure(pool);

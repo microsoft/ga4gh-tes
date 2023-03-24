@@ -21,9 +21,13 @@ namespace TesApi.Web
         [GeneratedRegex("^[a-zA-Z0-9_-]+$")]
         private static partial Regex PoolNameRegex();
 
-        internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId);
+        internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
-        private async Task<(string PoolKey, string DisplayName)> GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation)
+        private readonly BatchPools batchPools = new();
+        private readonly ConcurrentHashSet<string> neededPools = new();
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Nito.AsyncEx.PauseTokenSource> poolWaiters = new(StringComparer.OrdinalIgnoreCase);
+
+        private async Task<(string PoolKey, string DisplayName)> GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, CancellationToken cancellationToken)
         {
             var identityResourceId = tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true ? tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) : default;
             var executorImage = tesTask.Executors.First().Image;
@@ -31,7 +35,7 @@ namespace TesApi.Web
             
             if (!containerRegistryProvider.IsImagePublic(executorImage))
             {
-                registryServer = (await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage))?.RegistryServer;
+                registryServer = (await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage, cancellationToken))?.RegistryServer;
             }
             
             var label = string.IsNullOrWhiteSpace(batchPrefix) ? "<none>" : batchPrefix;
@@ -92,10 +96,6 @@ namespace TesApi.Web
             }
         }
 
-        private readonly BatchPools batchPools = new();
-        private readonly ConcurrentHashSet<string> neededPools = new();
-        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Nito.AsyncEx.PauseTokenSource> poolWaiters = new(StringComparer.OrdinalIgnoreCase);
-
         /// <inheritdoc/>
         public bool NeedPoolFlush
             => 0 != neededPools.Count;
@@ -109,7 +109,8 @@ namespace TesApi.Web
         internal bool IsPoolAvailable(string key)
             => batchPools.TryGetValue(key, out var pools) && ((IEnumerable<IBatchPool>)pools).Any(p => p.IsAvailable);
 
-        private async Task<bool> WaitForTurn(string key) // returns true if did wait, false if first in line.
+        // returns true if did wait, false if first in line.
+        private async Task<bool> WaitForTurn(string key, CancellationToken cancellationToken)
         {
             var trial = new Nito.AsyncEx.PauseTokenSource { IsPaused = true };
             var source = poolWaiters.GetOrAdd(key, trial);
@@ -119,7 +120,7 @@ namespace TesApi.Web
                 return false;
             }
 
-            await source.Token.WaitWhilePausedAsync();
+            await source.Token.WaitWhilePausedAsync(cancellationToken);
             return true;
         }
 
@@ -131,7 +132,7 @@ namespace TesApi.Web
             }
         }
 
-        internal async Task<IBatchPool> GetOrAddPoolAsync(string key, bool isPreemptable, ModelPoolFactory modelPoolFactory)
+        internal async Task<IBatchPool> GetOrAddPoolAsync(string key, bool isPreemptable, ModelPoolFactory modelPoolFactory, CancellationToken cancellationToken)
         {
             if (enableBatchAutopool)
             {
@@ -154,14 +155,14 @@ namespace TesApi.Web
 
             if (pool is null)
             {
-                if (await WaitForTurn(key))
+                if (await WaitForTurn(key, cancellationToken))
                 {
-                    return await GetOrAddPoolAsync(key, isPreemptable, modelPoolFactory);
+                    return await GetOrAddPoolAsync(key, isPreemptable, modelPoolFactory, cancellationToken);
                 }
 
                 try
                 {
-                    var quota = (await quotaVerifier.GetBatchQuotaProvider().GetVmCoreQuotaAsync(isPreemptable)).AccountQuota;
+                    var quota = (await quotaVerifier.GetBatchQuotaProvider().GetVmCoreQuotaAsync(isPreemptable, cancellationToken)).AccountQuota;
                     var poolQuota = quota?.PoolQuota;
                     var jobQuota = quota?.ActiveJobAndJobScheduleQuota;
                     var activePoolsCount = azureProxy.GetBatchActivePoolCount();
@@ -180,12 +181,12 @@ namespace TesApi.Web
                     var uniquifier = new byte[5]; // This always becomes 8 chars when converted to base32
                     RandomNumberGenerator.Fill(uniquifier);
                     var poolId = $"{key}-{CommonUtilities.Base32.ConvertToBase32(uniquifier).TrimEnd('=')}"; // embedded '-' is required by GetKeyFromPoolId()
-                    var modelPool = await modelPoolFactory(poolId);
+                    var modelPool = await modelPoolFactory(poolId, cancellationToken);
                     modelPool.Metadata ??= new List<BatchModels.MetadataItem>();
                     modelPool.Metadata.Add(new(PoolHostName, this.batchPrefix));
                     modelPool.Metadata.Add(new(PoolIsDedicated, (!isPreemptable).ToString()));
                     var batchPool = _batchPoolFactory.CreateNew();
-                    await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, CancellationToken.None);
+                    await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, cancellationToken);
                     pool = batchPool;
                 }
                 finally

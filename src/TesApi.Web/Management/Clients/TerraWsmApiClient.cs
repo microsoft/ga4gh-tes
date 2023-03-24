@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Extensions.Logging;
@@ -49,15 +50,16 @@ namespace TesApi.Web.Management.Clients
         /// <param name="workspaceId">Terra workspace id</param>
         /// <param name="resourceId">Terra resource id</param>
         /// <param name="sasTokenApiParameters">Sas token parameters</param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public virtual async Task<WsmSasTokenApiResponse> GetSasTokenAsync(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters)
+        public virtual async Task<WsmSasTokenApiResponse> GetSasTokenAsync(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters, CancellationToken cancellationToken)
         {
             var url = GetContainerSasTokenApiUrl(workspaceId, resourceId, sasTokenApiParameters);
 
             var response = await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, url),
-                setAuthorizationHeader: true);
+                cancellationToken, setAuthorizationHeader: true);
 
-            return await GetApiResponseContentAsync<WsmSasTokenApiResponse>(response);
+            return await GetApiResponseContentAsync<WsmSasTokenApiResponse>(response, cancellationToken);
         }
 
         /// <summary>
@@ -65,8 +67,9 @@ namespace TesApi.Web.Management.Clients
         /// </summary>
         /// <param name="workspaceId">Wsm Workspace id</param>
         /// <param name="apiCreateBatchPool">Create batch pool request</param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public virtual async Task<ApiCreateBatchPoolResponse> CreateBatchPool(Guid workspaceId, ApiCreateBatchPoolRequest apiCreateBatchPool)
+        public virtual async Task<ApiCreateBatchPoolResponse> CreateBatchPool(Guid workspaceId, ApiCreateBatchPoolRequest apiCreateBatchPool, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(apiCreateBatchPool);
 
@@ -79,9 +82,9 @@ namespace TesApi.Web.Management.Clients
 
                 response =
                     await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, uri) { Content = GetBatchPoolRequestContent(apiCreateBatchPool) },
-                        setAuthorizationHeader: true);
+                        cancellationToken, setAuthorizationHeader: true);
 
-                var apiResponse = await GetApiResponseContentAsync<ApiCreateBatchPoolResponse>(response);
+                var apiResponse = await GetApiResponseContentAsync<ApiCreateBatchPoolResponse>(response, cancellationToken);
 
                 Logger.LogInformation($"Successfully created a batch pool using WSM for workspace:{workspaceId}");
 
@@ -92,7 +95,7 @@ namespace TesApi.Web.Management.Clients
                 var responseContent = "";
                 if (response is not null)
                 {
-                    responseContent = await response.Content.ReadAsStringAsync();
+                    responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
                 }
 
                 Logger.LogError(ex, $"Failed to create a batch pool using wsm. Response content:{responseContent}");

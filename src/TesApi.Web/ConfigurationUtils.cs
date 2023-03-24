@@ -72,25 +72,25 @@ namespace TesApi.Web
         /// entries in the allowed-vm-sizes file with a warning. Sets the AllowedVmSizes configuration key.
         /// </summary>
         /// <returns></returns>
-        public async Task ProcessAllowedVmSizesConfigurationFileAsync()
+        public async Task ProcessAllowedVmSizesConfigurationFileAsync(System.Threading.CancellationToken cancellationToken)
         {
             var supportedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/supported-vm-sizes";
             var allowedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/allowed-vm-sizes";
 
-            var supportedVmSizes = (await skuInformationProvider.GetVmSizesAndPricesAsync(batchAccountResourceInformation.Region)).ToList();
-            var batchAccountQuotas = await quotaProvider.GetVmCoreQuotaAsync(lowPriority: false);
+            var supportedVmSizes = (await skuInformationProvider.GetVmSizesAndPricesAsync(batchAccountResourceInformation.Region, cancellationToken)).ToList();
+            var batchAccountQuotas = await quotaProvider.GetVmCoreQuotaAsync(lowPriority: false, cancellationToken);
             var supportedVmSizesFileContent = VirtualMachineInfoToFixedWidthColumns(supportedVmSizes.OrderBy(v => v.VmFamily).ThenBy(v => v.VmSize), batchAccountQuotas);
 
             try
             {
-                await storageAccessProvider.UploadBlobAsync(supportedVmSizesFilePath, supportedVmSizesFileContent);
+                await storageAccessProvider.UploadBlobAsync(supportedVmSizesFilePath, supportedVmSizesFileContent, cancellationToken);
             }
             catch
             {
                 logger.LogWarning($"Failed to write {supportedVmSizesFilePath}. Updated VM size information will not be available in the configuration directory. This will not impact the workflow execution.");
             }
 
-            var allowedVmSizesFileContent = await storageAccessProvider.DownloadBlobAsync(allowedVmSizesFilePath);
+            var allowedVmSizesFileContent = await storageAccessProvider.DownloadBlobAsync(allowedVmSizesFilePath, cancellationToken);
 
             if (allowedVmSizesFileContent is null)
             {
@@ -132,7 +132,7 @@ namespace TesApi.Web
                 {
                     try
                     {
-                        await storageAccessProvider.UploadBlobAsync(allowedVmSizesFilePath, allowedVmSizesFileContentWithWarningsAdded);
+                        await storageAccessProvider.UploadBlobAsync(allowedVmSizesFilePath, allowedVmSizesFileContentWithWarningsAdded, cancellationToken);
                     }
                     catch
                     {

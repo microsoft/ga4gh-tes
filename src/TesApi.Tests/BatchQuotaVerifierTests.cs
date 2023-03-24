@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -53,10 +54,10 @@ public class BatchQuotaVerifierTests
         var vmInfo = new VirtualMachineInformation();
 
         BatchVmFamilyQuotas batchVmFamilyQuotas = null;
-        services.BatchQuotaProvider.Setup(p => p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>()))
+        services.BatchQuotaProvider.Setup(p => p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(batchVmFamilyQuotas);
 
-        await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo, true);
+        await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo, true, CancellationToken.None);
 
         logger.Verify(l => l.LogError(It.IsAny<string>(), It.IsAny<Exception>()), Times.Once);
 
@@ -91,15 +92,15 @@ public class BatchQuotaVerifierTests
 
         var batchAccountQuotas = new BatchVmFamilyQuotas(totalCoreQuota, vmFamilyQuota, poolQuota, activeJobAndJobScheduleQuota, true, VmFamily);
 
-        services.BatchQuotaProvider.Setup(p => p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>()))
+        services.BatchQuotaProvider.Setup(p => p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(batchAccountQuotas);
 
-        services.BatchSkuInformationProvider.Setup(p => p.GetVmSizesAndPricesAsync(It.IsAny<string>())).ReturnsAsync(CreateVmSkuList(10));
+        services.BatchSkuInformationProvider.Setup(p => p.GetVmSizesAndPricesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(CreateVmSkuList(10));
         services.AzureProxy.Setup(p => p.GetBatchActiveJobCount()).Returns(activeJobCount);
         services.AzureProxy.Setup(p => p.GetBatchActivePoolCount()).Returns(activePoolCount);
-        services.BatchSkuInformationProvider.Setup(p => p.GetVmSizesAndPricesAsync(Region)).ReturnsAsync(CreateBatchSupportedVmSkuList(10));
+        services.BatchSkuInformationProvider.Setup(p => p.GetVmSizesAndPricesAsync(Region, It.IsAny<CancellationToken>())).ReturnsAsync(CreateBatchSupportedVmSkuList(10));
 
-        await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo, true);
+        await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo, true, CancellationToken.None);
     }
 
     private static List<VirtualMachineInformation> CreateBatchSupportedVmSkuList(int maxNumberOfCores)

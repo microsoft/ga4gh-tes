@@ -3,6 +3,7 @@
 
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
@@ -60,7 +61,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
     }
 
     /// <inheritdoc cref="IBatchQuotaProvider"/>
-    public async Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck)
+    public async Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck, CancellationToken cancellationToken)
     {
         var workflowCoresRequirement = virtualMachineInformation.VCpusAvailable ?? 0;
         var isDedicated = !virtualMachineInformation.LowPriority;
@@ -72,7 +73,8 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
             batchVmFamilyBatchQuotas = await batchQuotaProvider.GetQuotaForRequirementAsync(
                 virtualMachineInformation.VmFamily,
                 virtualMachineInformation.LowPriority,
-                virtualMachineInformation.VCpusAvailable);
+                virtualMachineInformation.VCpusAvailable,
+                cancellationToken);
 
             if (batchVmFamilyBatchQuotas is null)
             {
@@ -87,7 +89,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
         }
 
         var isDedicatedAndPerVmFamilyCoreQuotaEnforced = isDedicated && batchVmFamilyBatchQuotas.DedicatedCoreQuotaPerVmFamilyEnforced;
-        var batchUtilization = await GetBatchAccountUtilizationAsync(virtualMachineInformation);
+        var batchUtilization = await GetBatchAccountUtilizationAsync(virtualMachineInformation, cancellationToken);
 
 
         if (workflowCoresRequirement > batchVmFamilyBatchQuotas.TotalCoreQuota)
@@ -128,13 +130,13 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
     public IBatchQuotaProvider GetBatchQuotaProvider()
         => batchQuotaProvider;
 
-    private async Task<BatchAccountUtilization> GetBatchAccountUtilizationAsync(VirtualMachineInformation vmInfo)
+    private async Task<BatchAccountUtilization> GetBatchAccountUtilizationAsync(VirtualMachineInformation vmInfo, CancellationToken cancellationToken)
     {
         var isDedicated = !vmInfo.LowPriority;
         var activeJobsCount = azureProxy.GetBatchActiveJobCount();
         var activePoolsCount = azureProxy.GetBatchActivePoolCount();
         var activeNodeCountByVmSize = azureProxy.GetBatchActiveNodeCountByVmSize().ToList();
-        var virtualMachineInfoList = await batchSkuInformationProvider.GetVmSizesAndPricesAsync(batchAccountInformation.Region);
+        var virtualMachineInfoList = await batchSkuInformationProvider.GetVmSizesAndPricesAsync(batchAccountInformation.Region, cancellationToken);
 
         var totalCoresInUse = activeNodeCountByVmSize
             .Sum(x =>

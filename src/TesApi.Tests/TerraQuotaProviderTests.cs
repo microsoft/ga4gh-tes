@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -34,10 +35,10 @@ namespace TesApi.Tests
             optionsMock.Setup(o => o.Value).Returns(new TerraOptions() { LandingZoneApiHost = TerraApiStubData.LandingZoneApiHost, LandingZoneId = terraApiStubData.LandingZoneId.ToString() });
 
             terraLandingZoneApiClientMock
-                .Setup(t => t.GetLandingZoneResourcesAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.LandingZoneId)), It.Is<bool>(c => c == true)))
+                .Setup(t => t.GetLandingZoneResourcesAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.LandingZoneId)), It.IsAny<CancellationToken>(), It.Is<bool>(c => c == true)))
                 .ReturnsAsync(resourcesApiResponse);
             terraLandingZoneApiClientMock
-                .Setup(t => t.GetResourceQuotaAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.LandingZoneId)), It.Is<string>(b => string.Equals(b, terraApiStubData.BatchAccountId, StringComparison.OrdinalIgnoreCase)), It.Is<bool>(c => c == true)))
+                .Setup(t => t.GetResourceQuotaAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.LandingZoneId)), It.Is<string>(b => string.Equals(b, terraApiStubData.BatchAccountId, StringComparison.OrdinalIgnoreCase)), It.Is<bool>(c => c == true), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(quotaApiResponse);
             terraQuotaProvider = new(terraLandingZoneApiClientMock.Object, optionsMock.Object);
         }
@@ -45,7 +46,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetVmCoreQuotaAsync_LowPriorityFalseReturnsQuotaInformationForDedicatedVms()
         {
-            var quota = await terraQuotaProvider.GetVmCoreQuotaAsync(lowPriority: false);
+            var quota = await terraQuotaProvider.GetVmCoreQuotaAsync(lowPriority: false, CancellationToken.None);
 
             Assert.IsFalse(quota.IsLowPriority);
             Assert.AreEqual(quotaApiResponse.QuotaValues.DedicatedCoreQuota, quota.NumberOfCores);
@@ -56,7 +57,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetVmCoreQuotaAsync_LowPriorityTrueReturnsQuotaInformationForLowPriorityOnly()
         {
-            var quota = await terraQuotaProvider.GetVmCoreQuotaAsync(lowPriority: true);
+            var quota = await terraQuotaProvider.GetVmCoreQuotaAsync(lowPriority: true, CancellationToken.None);
 
             Assert.IsTrue(quota.IsLowPriority);
             Assert.AreEqual(quotaApiResponse.QuotaValues.LowPriorityCoreQuota, quota.NumberOfCores);
@@ -69,7 +70,7 @@ namespace TesApi.Tests
         {
             var vmFamily = "standardDSv2Family";
             var vmFamilyQuota = 350;
-            var quota = await terraQuotaProvider.GetQuotaForRequirementAsync(vmFamily, lowPriority: false, 10);
+            var quota = await terraQuotaProvider.GetQuotaForRequirementAsync(vmFamily, lowPriority: false, 10, CancellationToken.None);
 
             Assert.AreEqual(vmFamily, quota.VmFamily);
             Assert.AreEqual(vmFamilyQuota, quota.VmFamilyQuota);
@@ -83,7 +84,7 @@ namespace TesApi.Tests
         {
             var vmFamily = "standardDSv2Family";
             quotaApiResponse.QuotaValues.DedicatedCoreQuotaPerVmFamilyEnforced = false;
-            var quota = await terraQuotaProvider.GetQuotaForRequirementAsync(vmFamily, lowPriority: false, 10);
+            var quota = await terraQuotaProvider.GetQuotaForRequirementAsync(vmFamily, lowPriority: false, 10, CancellationToken.None);
 
             Assert.AreEqual(vmFamily, quota.VmFamily);
             Assert.AreEqual(10, quota.VmFamilyQuota);

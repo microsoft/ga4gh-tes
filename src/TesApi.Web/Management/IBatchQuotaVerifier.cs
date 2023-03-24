@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Threading;
 using System.Threading.Tasks;
 using Tes.Models;
 
@@ -16,9 +17,10 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <param name="virtualMachineInformation"></param>
         /// <param name="needPoolOrJobQuotaCheck">Flag to enable checking pool and job quotas.</param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
         /// <exception cref="AzureBatchQuotaMaxedOutException">Thrown when a max quota condition was identified</exception>
-        Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck);
+        Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the instance of the batch quota provider.

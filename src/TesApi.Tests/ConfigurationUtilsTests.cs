@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using LazyCache;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,7 +35,7 @@ namespace TesApi.Tests
             //  armBatchQuotaProvider: (GetMockQuotaProviderExpression, GetMockQuotaProvider()));
             var configurationUtils = serviceProvider.GetT();
 
-            await configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync();
+            await configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync(CancellationToken.None);
 
             var expectedSupportedVmSizesFileContent =
                 "VM Size Family       $/hour   $/hour  Memory  CPUs   Disk     Dedicated CPU\n" +
@@ -57,12 +58,12 @@ namespace TesApi.Tests
 
         private static Action<Mock<IBatchQuotaProvider>> GetMockQuotaProvider()
             => new(mockArmQuotaProvider =>
-                mockArmQuotaProvider.Setup(p => p.GetVmCoreQuotaAsync(It.IsAny<bool>()))
+                mockArmQuotaProvider.Setup(p => p.GetVmCoreQuotaAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(GetNewAzureBatchAccountQuotas));
 
         private static Action<Mock<IBatchSkuInformationProvider>> GetMockSkuInformationProvider()
             => new(mockSkuProvider =>
-                mockSkuProvider.Setup(p => p.GetVmSizesAndPricesAsync(It.IsAny<string>()))
+                mockSkuProvider.Setup(p => p.GetVmSizesAndPricesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(GetNewVmSizeAndPricingList));
 
         [TestMethod]
@@ -76,7 +77,7 @@ namespace TesApi.Tests
                 batchQuotaProvider: GetMockQuotaProvider());
             var configurationUtils = serviceProvider.GetT();
 
-            await configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync();
+            await configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync(CancellationToken.None);
 
             Assert.AreEqual("VmSize1,VmSize2,VmFamily3", serviceProvider.Configuration["AllowedVmSizes"]);
 
@@ -105,8 +106,8 @@ namespace TesApi.Tests
              };
 
             azureProxy.Setup(a => a.DownloadBlobAsync(It.IsAny<Uri>())).Returns(Task.FromResult(allowedVmSizesFileContent));
-            azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount")).Returns(Task.FromResult(storageAccountInfos["defaultstorageaccount"]));
-            azureProxy.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>())).Returns(Task.FromResult("Key1"));
+            azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount", It.IsAny<CancellationToken>())).Returns(Task.FromResult(storageAccountInfos["defaultstorageaccount"]));
+            azureProxy.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<CancellationToken>())).Returns(Task.FromResult("Key1"));
         }
 
         private static List<VirtualMachineInformation> GetNewVmSizeAndPricingList()

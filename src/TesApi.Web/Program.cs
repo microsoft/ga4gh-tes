@@ -64,7 +64,7 @@ namespace TesApi.Web
                         return applicationInsightsOptions;
                     }
 
-                    var instrumentationKey = AzureProxy.GetAppInsightsInstrumentationKeyAsync(applicationInsightsAccountName).Result;
+                    var instrumentationKey = AzureProxy.GetAppInsightsInstrumentationKeyAsync(applicationInsightsAccountName, System.Threading.CancellationToken.None).Result;
                     if (!string.IsNullOrWhiteSpace(instrumentationKey))
                     {
                         applicationInsightsOptions.ConnectionString = $"InstrumentationKey={instrumentationKey}";

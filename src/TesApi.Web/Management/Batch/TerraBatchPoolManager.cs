@@ -69,8 +69,9 @@ namespace TesApi.Web.Management.Batch
         /// </summary>
         /// <param name="poolInfo"></param>
         /// <param name="isPreemptable"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task<PoolInformation> CreateBatchPoolAsync(Pool poolInfo, bool isPreemptable)
+        public async Task<PoolInformation> CreateBatchPoolAsync(Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
         {
             var resourceId = Guid.NewGuid();
             var resourceName = $"TES-{resourceId}";
@@ -93,7 +94,7 @@ namespace TesApi.Web.Management.Batch
 
             AddResourceIdToPoolMetadata(apiRequest, resourceId);
 
-            var response = await terraWsmApiClient.CreateBatchPool(Guid.Parse(terraOptions.WorkspaceId), apiRequest);
+            var response = await terraWsmApiClient.CreateBatchPool(Guid.Parse(terraOptions.WorkspaceId), apiRequest, cancellationToken);
 
             return new PoolInformation() { PoolId = response.AzureBatchPool.Attributes.Id };
         }
@@ -120,7 +121,7 @@ namespace TesApi.Web.Management.Batch
         /// </summary>
         /// <param name="poolId"></param>
         /// <param name="cancellationToken"></param>
-        public async Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken = default)
+        public async Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrEmpty(poolId);
 

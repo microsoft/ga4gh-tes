@@ -41,10 +41,10 @@ namespace TesApi.Tests
         {
             var body = terraApiStubData.GetResourceQuotaApiResponseInJson();
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
-                    It.IsAny<Func<Task<string>>>()))
+                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(body);
 
-            var quota = await terraLandingZoneApiClient.GetResourceQuotaAsync(terraApiStubData.LandingZoneId, terraApiStubData.BatchAccountId, cacheResults: true);
+            var quota = await terraLandingZoneApiClient.GetResourceQuotaAsync(terraApiStubData.LandingZoneId, terraApiStubData.BatchAccountId, cacheResults: true, CancellationToken.None);
 
             Assert.IsNotNull(quota);
             Assert.AreEqual(terraApiStubData.LandingZoneId, quota.LandingZoneId);
@@ -68,10 +68,10 @@ namespace TesApi.Tests
             var body = terraApiStubData.GetResourceApiResponseInJson();
 
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
-                    It.IsAny<Func<Task<string>>>()))
+                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(body);
 
-            var resources = await terraLandingZoneApiClient.GetLandingZoneResourcesAsync(terraApiStubData.LandingZoneId);
+            var resources = await terraLandingZoneApiClient.GetLandingZoneResourcesAsync(terraApiStubData.LandingZoneId, CancellationToken.None);
 
             Assert.IsNotNull(resources);
             Assert.AreEqual(terraApiStubData.LandingZoneId, resources.Id);

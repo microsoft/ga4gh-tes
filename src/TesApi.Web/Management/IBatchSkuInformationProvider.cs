@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Tes.Models;
 
@@ -16,7 +17,8 @@ namespace TesApi.Web.Management
         /// Returns the size and pricing information for Batch supported VMs
         /// </summary>
         /// <param name="region"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync(string region);
+        public Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync(string region, CancellationToken cancellationToken);
     }
 }

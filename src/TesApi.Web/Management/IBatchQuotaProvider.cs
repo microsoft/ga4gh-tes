@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Threading;
 using System.Threading.Tasks;
 using TesApi.Web.Management.Models.Quotas;
 
@@ -17,18 +18,21 @@ namespace TesApi.Web.Management
         /// <param name="vmFamily"></param>
         /// <param name="lowPriority"></param>
         /// <param name="coresRequirement"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
         Task<BatchVmFamilyQuotas> GetQuotaForRequirementAsync(
             string vmFamily,
             bool lowPriority,
-            int? coresRequirement);
+            int? coresRequirement,
+            CancellationToken cancellationToken);
 
         /// <summary>
         /// Returns a list of vm core quota per family.
         /// If quota per family is not enforced, returns the total core quota for low or normal priority vms.
         /// </summary>
         /// <param name="lowPriority"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority);
+        Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority, CancellationToken cancellationToken);
     }
 }

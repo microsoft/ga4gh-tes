@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using TesApi.Web.Management.Clients;
@@ -48,20 +49,20 @@ namespace TesApi.Web.Management
         }
 
         /// <inheritdoc />
-        public async Task<BatchVmFamilyQuotas> GetQuotaForRequirementAsync(string vmFamily, bool lowPriority, int? coresRequirement)
+        public async Task<BatchVmFamilyQuotas> GetQuotaForRequirementAsync(string vmFamily, bool lowPriority, int? coresRequirement, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrEmpty(vmFamily);
 
-            var quotas = await GetBatchAccountQuotaFromTerraAsync();
+            var quotas = await GetBatchAccountQuotaFromTerraAsync(cancellationToken);
 
             return ToVmFamilyBatchAccountQuotas(quotas, vmFamily, lowPriority, coresRequirement);
         }
 
         /// <inheritdoc />
-        public async Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority)
+        public async Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority, CancellationToken cancellationToken)
         {
             var isDedicated = !lowPriority;
-            var batchQuota = await GetBatchAccountQuotaFromTerraAsync();
+            var batchQuota = await GetBatchAccountQuotaFromTerraAsync(cancellationToken);
             var isDedicatedAndPerVmFamilyCoreQuotaEnforced =
                 isDedicated && batchQuota.QuotaValues.DedicatedCoreQuotaPerVmFamilyEnforced;
             var numberOfCores = lowPriority ? batchQuota.QuotaValues.LowPriorityCoreQuota : batchQuota.QuotaValues.DedicatedCoreQuota;
@@ -84,16 +85,16 @@ namespace TesApi.Web.Management
                     batchQuota.QuotaValues.LowPriorityCoreQuota));
         }
 
-        private async Task<QuotaApiResponse> GetBatchAccountQuotaFromTerraAsync()
+        private async Task<QuotaApiResponse> GetBatchAccountQuotaFromTerraAsync(CancellationToken cancellationToken)
         {
-            var batchResourceId = await GetBatchAccountResourceIdFromLandingZone();
+            var batchResourceId = await GetBatchAccountResourceIdFromLandingZone(cancellationToken);
 
-            return await terraLandingZoneClient.GetResourceQuotaAsync(landingZoneId, batchResourceId, cacheResults: true);
+            return await terraLandingZoneClient.GetResourceQuotaAsync(landingZoneId, batchResourceId, cacheResults: true, cancellationToken);
         }
 
-        private async Task<string> GetBatchAccountResourceIdFromLandingZone()
+        private async Task<string> GetBatchAccountResourceIdFromLandingZone(CancellationToken cancellationToken)
         {
-            var resources = await terraLandingZoneClient.GetLandingZoneResourcesAsync(landingZoneId);
+            var resources = await terraLandingZoneClient.GetLandingZoneResourcesAsync(landingZoneId, cancellationToken);
 
             var sharedResources = resources.Resources.FirstOrDefault(r => r.Purpose.Equals(SharedResourcePurpose));
 

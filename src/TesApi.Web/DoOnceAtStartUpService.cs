@@ -39,7 +39,7 @@ namespace TesApi.Web
                 try
                 {
                     logger.LogInformation("Executing Configuration Utils Setup");
-                    await configUtils.ProcessAllowedVmSizesConfigurationFileAsync();
+                    await configUtils.ProcessAllowedVmSizesConfigurationFileAsync(stoppingToken);
                 }
                 catch (Exception e)
                 {

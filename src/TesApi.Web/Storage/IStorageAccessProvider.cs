@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace TesApi.Web.Storage
@@ -15,39 +16,35 @@ namespace TesApi.Web.Storage
         /// Retrieves file content
         /// </summary>
         /// <param name="blobRelativePath">Path to the file in form of /storageaccountname/container/path</param>
+        /// <param name="cancellationToken"></param>
         /// <returns>The content of the file</returns>
-        public Task<string> DownloadBlobAsync(string blobRelativePath);
-
-        /// <summary>
-        /// Tries to retrieves file content
-        /// </summary>
-        /// <param name="blobRelativePath">Path to the file in form of /storageaccountname/container/path</param>
-        /// <param name="action">Action to invoke if content is downloaded</param>
-        /// <returns>True if content was downloaded</returns>
-        public Task<bool> TryDownloadBlobAsync(string blobRelativePath, Action<string> action);
+        public Task<string> DownloadBlobAsync(string blobRelativePath, CancellationToken cancellationToken);
 
         /// <summary>
         /// Updates the content of the file, creating the file if necessary
         /// </summary>
         /// <param name="blobRelativePath">Path to the file in form of /storageaccountname/container/path</param>
         /// <param name="content">The new content</param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public Task UploadBlobAsync(string blobRelativePath, string content);
+        public Task UploadBlobAsync(string blobRelativePath, string content, CancellationToken cancellationToken);
 
         /// <summary>
         /// Updates the content of the file, creating the file if necessary
         /// </summary>
         /// <param name="blobRelativePath">Path to the file in form of /storageaccountname/container/path</param>
         /// <param name="sourceLocalFilePath">Path to the local file to get the content from</param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath);
+        public Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath, CancellationToken cancellationToken);
 
         /// <summary>
         /// Checks if the specified string represents a HTTP URL that is publicly accessible
         /// </summary>
         /// <param name="uriString">URI string</param>
+        /// <param name="cancellationToken"></param>
         /// <returns>True if the URL can be used as is, without adding SAS token to it</returns>
-        public Task<bool> IsPublicHttpUrlAsync(string uriString);
+        public Task<bool> IsPublicHttpUrlAsync(string uriString, CancellationToken cancellationToken);
 
         /// <summary>
         /// Returns an Azure Storage Blob or Container URL with SAS token given a path that uses one of the following formats: 
@@ -58,8 +55,9 @@ namespace TesApi.Web.Storage
         /// - https://accountName.blob.core.windows.net/containerName/blobName
         /// </summary>
         /// <param name="path">The file path to convert. Two-part path is treated as container path. Paths with three or more parts are treated as blobs.</param>
+        /// <param name="cancellationToken"></param>
         /// <param name="getContainerSas">Get the container SAS even if path is longer than two parts</param>
         /// <returns>An Azure Block Blob or Container URL with SAS token</returns>
-        public Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false);
+        public Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, bool getContainerSas = false);
     }
 }
