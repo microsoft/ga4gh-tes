@@ -134,7 +134,7 @@ namespace TesDeployer
             }
 
             await ExecHelmProcessAsync($"repo update");
-            await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig {kubeConfigPath}");
+            await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig \"{kubeConfigPath}\"");
         }
 
         public async Task<IKubernetes> EnableIngress(string tesUsername, string tesPassword, IKubernetes client)
@@ -215,9 +215,9 @@ namespace TesDeployer
 
             var dnsAnnotation = $"--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-dns-label-name\"={AzureDnsLabelName}";
             var healthProbeAnnotation = "--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-load-balancer-health-probe-request-path\"=/healthz";
-            await ExecHelmProcessAsync($"install ingress-nginx ingress-nginx/ingress-nginx --namespace {configuration.AksCoANamespace} --kubeconfig {kubeConfigPath} --version {NginxIngressVersion} {healthProbeAnnotation} {dnsAnnotation}");
+            await ExecHelmProcessAsync($"install ingress-nginx ingress-nginx/ingress-nginx --namespace {configuration.AksCoANamespace} --kubeconfig \"{kubeConfigPath}\" --version {NginxIngressVersion} {healthProbeAnnotation} {dnsAnnotation}");
             await ExecHelmProcessAsync("install cert-manager jetstack/cert-manager " +
-                    $"--namespace {configuration.AksCoANamespace} --kubeconfig {kubeConfigPath} " +
+                    $"--namespace {configuration.AksCoANamespace} --kubeconfig \"{kubeConfigPath}\" " +
                     $"--version {CertManagerVersion} --set installCRDs=true " +
                     "--set nodeSelector.\"kubernetes\\.io/os\"=linux " +
                     $"--set image.repository={certImageController}  " +
@@ -236,7 +236,7 @@ namespace TesDeployer
         {
             // https://helm.sh/docs/helm/helm_upgrade/
             // The chart argument can be either: a chart reference('example/mariadb'), a path to a chart directory, a packaged chart, or a fully qualified URL
-            await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig {kubeConfigPath} --namespace {configuration.AksCoANamespace} --create-namespace",
+            await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig \"{kubeConfigPath}\" --namespace {configuration.AksCoANamespace} --create-namespace",
                 workingDirectory: workingDirectoryTemp);
             await WaitForWorkloadAsync(kubernetesClient, "tes", configuration.AksCoANamespace, cts.Token);
         }
