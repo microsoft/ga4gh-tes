@@ -56,6 +56,9 @@ namespace TesApi.Web
             try
             {
                 services
+                    .AddLogging()
+                    .AddApplicationInsightsTelemetry(configuration)
+
                     .Configure<BatchAccountOptions>(configuration.GetSection(BatchAccountOptions.SectionName))
                     .Configure<PostgreSqlOptions>(configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
                     .Configure<RetryPolicyOptions>(configuration.GetSection(RetryPolicyOptions.SectionName))
@@ -69,12 +72,10 @@ namespace TesApi.Web
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
 
-                    .AddLogging()
-
                     .AddSingleton<IAppCache, CachingService>()
                     .AddSingleton<ICache<TesTask>, TesRepositoryLazyCache<TesTask>>()
-                    .AddSingleton<AzureProxy>()
                     .AddSingleton<IRepository<TesTask>, TesTaskPostgreSqlRepository>()
+                    .AddSingleton<AzureProxy>()
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                     .AddTransient<TerraWsmApiClient>()
@@ -90,7 +91,6 @@ namespace TesApi.Web
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
                     .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
-
 
                     .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
                     .AddSingleton<ContainerRegistryProvider>()
@@ -136,10 +136,10 @@ namespace TesApi.Web
                     .AddHostedService<Scheduler>()
                     .AddHostedService<DeleteCompletedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
-                    .AddHostedService<DeleteOrphanedAutoPoolsHostedService>()
+                    .AddHostedService<DeleteOrphanedAutoPoolsHostedService>();
                     //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
 
-                    .AddApplicationInsightsTelemetry(configuration);
+                    
             }
             catch (Exception exc)
             {
