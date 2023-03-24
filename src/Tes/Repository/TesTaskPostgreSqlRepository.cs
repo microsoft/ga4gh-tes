@@ -38,7 +38,7 @@ namespace Tes.Repository
             createDbContext = () => { return new TesDbContext(connectionString); };
             using var dbContext = createDbContext();
             dbContext.Database.MigrateAsync().Wait();
-            WarmCacheAsync().Wait();
+            //WarmCacheAsync().Wait();
         }
 
         /// <summary>
