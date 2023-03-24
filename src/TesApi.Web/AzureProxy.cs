@@ -135,7 +135,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="appInsightsApplicationId">Application Insights application id</param>
         /// <returns>Application Insights instrumentation key</returns>
-        public static async Task<string> GetAppInsightsInstrumentationKeyAsync(string appInsightsApplicationId)
+        public static async Task<string> GetAppInsightsConnectionStringAsync(string appInsightsApplicationId)
         {
             var azureClient = await GetAzureManagementClientAsync();
             var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
@@ -151,7 +151,7 @@ namespace TesApi.Web
 
                     if (app is not null)
                     {
-                        return app.InstrumentationKey;
+                        return app.ConnectionString;
                     }
                 }
                 catch
