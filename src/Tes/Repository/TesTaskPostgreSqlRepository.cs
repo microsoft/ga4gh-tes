@@ -80,14 +80,16 @@ namespace Tes.Repository
                 .ExecuteAsync(async () =>
                 {
                     var activeTasks = await GetItemsAsync(task => TesTask.ActiveStates.Contains(task.State));
+                    var tasksAddedCount = 0;
 
                     foreach (var task in activeTasks.OrderBy(t => t.CreationTime))
                     {
                         cache?.TryAdd(task.Id, task);
+                        tasksAddedCount++;
                     }
-                });
 
-            logger.LogInformation($"Cache warmed successfully in {sw.Elapsed.TotalSeconds:n3} seconds");
+                    logger.LogInformation($"Cache warmed successfully in {sw.Elapsed.TotalSeconds:n3} seconds. Added {tasksAddedCount:n0} items to the cache.");
+                });
         }
 
 
