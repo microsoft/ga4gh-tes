@@ -111,6 +111,39 @@ namespace TesApi.Web.Management.Clients
             {
                 var uri = GetDeleteBatchPoolUrl(workspaceId, wsmBatchPoolResourceId);
 
+                Logger.LogInformation($"Deleting the batch pool using WSM for workspace:{workspaceId} WSM resource id:{wsmBatchPoolResourceId}");
+
+                response =
+                    await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Delete, uri),
+                        setAuthorizationHeader: true);
+
+                response.EnsureSuccessStatusCode();
+
+                Logger.LogInformation($"Successfully deleted  batch pool, WSM resource id: {wsmBatchPoolResourceId} using WSM for workspace:{workspaceId}");
+            }
+            catch (Exception ex)
+            {
+                await LogResponseContentAsync(response, "Failed to create a Batch Pool via WSM", ex);
+                throw;
+            }
+        }
+
+
+        /// <summary>
+        /// Deletes a batch pool using the WSM API
+        /// </summary>
+        /// <param name="workspaceId">WSM workspace id</param>
+        /// <param name="wsmBatchPoolResourceId">WSM resource id</param>
+        public virtual async Task DeleteBatchPoolAsync(Guid workspaceId, Guid wsmBatchPoolResourceId)
+        {
+            ArgumentNullException.ThrowIfNull(workspaceId);
+            ArgumentNullException.ThrowIfNull(wsmBatchPoolResourceId);
+
+            HttpResponseMessage response = null;
+            try
+            {
+                var uri = GetDeleteBatchPoolUrl(workspaceId, wsmBatchPoolResourceId);
+
                 Logger.LogInformation($"Deleting the Batch pool using WSM for workspace: {workspaceId} WSM resource ID: {wsmBatchPoolResourceId}");
 
                 response =
