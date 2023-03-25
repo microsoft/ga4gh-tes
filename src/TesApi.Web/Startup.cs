@@ -269,7 +269,7 @@ namespace TesApi.Web
                 })
                 .UseSwaggerUI(c =>
                 {
-                    c.SwaggerEndpoint("/swagger/0.4.0/openapi.json", "Task Execution Service");
+                    c.SwaggerEndpoint("/swagger/4.1.0/openapi.json", "Task Execution Service");
                 })
 
                 .IfThenElse(hostingEnvironment.IsDevelopment(),
