@@ -157,7 +157,7 @@ namespace TesApi.Web.Management.Batch
 
             var metadataItem = pool.Metadata.SingleOrDefault(m => m.Name.Equals(TerraResourceIdMetadataKey));
 
-            if (metadataItem is null || string.IsNullOrEmpty(metadataItem.Value))
+            if (string.IsNullOrEmpty(metadataItem?.Value))
             {
                 throw new InvalidOperationException("The WSM resource ID was not found in the pool's metadata.");
             }
