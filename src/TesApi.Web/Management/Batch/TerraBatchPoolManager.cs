@@ -127,14 +127,14 @@ namespace TesApi.Web.Management.Batch
             try
             {
                 logger.LogInformation(
-                    $"Deleting pool with the id/name:{poolId}");
+                    $"Deleting pool with the ID/name: {poolId}");
 
                 var wsmResourceId = await GetWsmResourceIdFromBatchPoolMetadataAsync(poolId, cancellationToken);
 
                 await terraWsmApiClient.DeleteBatchPoolAsync(Guid.Parse(terraOptions.WorkspaceId), wsmResourceId);
 
                 logger.LogInformation(
-                    $"Successfully deleted pool with the id/name via WSM:{poolId}");
+                    $"Successfully deleted pool with the ID/name via WSM: {poolId}");
             }
             catch (Exception e)
             {
@@ -152,14 +152,14 @@ namespace TesApi.Web.Management.Batch
 
             if (pool is null)
             {
-                throw new InvalidOperationException($"The batch pool was not found. Pool id:{poolId}");
+                throw new InvalidOperationException($"The Batch pool was not found. Pool ID: {poolId}");
             }
 
             var metadataItem = pool.Metadata.SingleOrDefault(m => m.Name.Equals(TerraResourceIdMetadataKey));
 
             if (metadataItem is null || string.IsNullOrEmpty(metadataItem.Value))
             {
-                throw new InvalidOperationException("The WSM resource id was not found in the pool's metadata.");
+                throw new InvalidOperationException("The WSM resource ID was not found in the pool's metadata.");
             }
 
             var wsmResourceId = Guid.Parse(metadataItem.Value);

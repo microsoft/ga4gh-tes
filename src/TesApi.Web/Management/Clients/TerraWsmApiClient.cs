@@ -76,7 +76,7 @@ namespace TesApi.Web.Management.Clients
             {
                 var uri = GetCreateBatchPoolUrl(workspaceId);
 
-                Logger.LogInformation($"Creating a batch pool using WSM for workspace:{workspaceId}");
+                Logger.LogInformation($"Creating a batch pool using WSM for workspace: {workspaceId}");
 
                 response =
                     await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, uri) { Content = GetBatchPoolRequestContent(apiCreateBatchPool) },
@@ -84,7 +84,7 @@ namespace TesApi.Web.Management.Clients
 
                 var apiResponse = await GetApiResponseContentAsync<ApiCreateBatchPoolResponse>(response);
 
-                Logger.LogInformation($"Successfully created a batch pool using WSM for workspace:{workspaceId}");
+                Logger.LogInformation($"Successfully created a batch pool using WSM for workspace: {workspaceId}");
 
                 return apiResponse;
             }
@@ -111,7 +111,7 @@ namespace TesApi.Web.Management.Clients
             {
                 var uri = GetDeleteBatchPoolUrl(workspaceId, wsmBatchPoolResourceId);
 
-                Logger.LogInformation($"Deleting the batch pool using WSM for workspace:{workspaceId} WSM resource id:{wsmBatchPoolResourceId}");
+                Logger.LogInformation($"Deleting the Batch pool using WSM for workspace: {workspaceId} WSM resource ID: {wsmBatchPoolResourceId}");
 
                 response =
                     await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Delete, uri),
@@ -119,11 +119,11 @@ namespace TesApi.Web.Management.Clients
 
                 response.EnsureSuccessStatusCode();
 
-                Logger.LogInformation($"Successfully deleted  batch pool, WSM resource id: {wsmBatchPoolResourceId} using WSM for workspace:{workspaceId}");
+                Logger.LogInformation($"Successfully deleted Batch pool, WSM resource ID: {wsmBatchPoolResourceId} using WSM for workspace: {workspaceId}");
             }
             catch (Exception ex)
             {
-                await LogResponseContentAsync(response, "Failed to delete a Batch Pool via WSM", ex);
+                await LogResponseContentAsync(response, "Failed to delete the Batch pool via WSM", ex);
                 throw;
             }
         }
