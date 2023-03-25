@@ -111,7 +111,7 @@ namespace TesApi.Web.Management.Clients
             {
                 var uri = GetDeleteBatchPoolUrl(workspaceId, wsmBatchPoolResourceId);
 
-                Logger.LogInformation($"Deleting the batch pool using WSM for workspace:{workspaceId} WSM resource id:{wsmBatchPoolResourceId}");
+                Logger.LogInformation($"Deleting the Batch pool using WSM for workspace: {workspaceId} WSM resource ID: {wsmBatchPoolResourceId}");
 
                 response =
                     await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Delete, uri),
@@ -119,7 +119,7 @@ namespace TesApi.Web.Management.Clients
 
                 response.EnsureSuccessStatusCode();
 
-                Logger.LogInformation($"Successfully deleted  batch pool, WSM resource id: {wsmBatchPoolResourceId} using WSM for workspace:{workspaceId}");
+                Logger.LogInformation($"Successfully deleted Batch pool, WSM resource ID: {wsmBatchPoolResourceId} using WSM for workspace: {workspaceId}");
             }
             catch (Exception ex)
             {
