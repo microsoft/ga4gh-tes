@@ -114,50 +114,6 @@ Started BlobOperation:
         //no configuration..
     }
 
-    private async ValueTask StartReadPipelineAsync()
-    {
-        var tasks = new List<Task>();
-
-        Logger.LogInformation($"Starting Read Pipeline with {PipelineOptions.NumberOfReaders} readers");
-
-        for (int i = 0; i < PipelineOptions.NumberOfReaders; i++)
-        {
-            tasks.Add(Task.Run(async () =>
-                {
-                    PipelineBuffer? buffer;
-
-                    while (await ReadBufferChannel.Reader.WaitToReadAsync())
-                    {
-
-                        while (ReadBufferChannel.Reader.TryRead(out buffer))
-                        {
-                            try
-                            {
-
-                                buffer.Data = await MemoryBufferChannel.Reader.ReadAsync();
-
-                                Logger.LogDebug($"Executing read operation fileName:{buffer.FileName} ordinal:{buffer.Ordinal} numberOfParts:{buffer.NumberOfParts}");
-
-                                await ExecuteReadAsync(buffer);
-
-                                await WriteBufferChannel.Writer.WriteAsync(buffer);
-                            }
-                            catch (Exception e)
-                            {
-                                Logger.LogError(e, "Failed to execute read operation.");
-                                throw;
-                            }
-                        }
-                    }
-                }
-            ));
-        }
-
-        await Task.WhenAll(tasks);
-
-        WriteBufferChannel.Writer.Complete();
-    }
-
     private async ValueTask<long> StartProcessedPipelineAsync(int numberOfFiles)
     {
         var tasks = new List<Task>();
@@ -308,6 +264,82 @@ Started BlobOperation:
         await Task.WhenAll(tasks);
 
         ProcessedBufferChannel.Writer.Complete();
+    }
+    private async ValueTask StartReadPipelineAsync()
+    {
+        var tasks = new List<Task>();
+
+        Logger.LogInformation($"Starting Read Pipeline with {PipelineOptions.NumberOfReaders} readers");
+
+        for (int i = 0; i < PipelineOptions.NumberOfReaders; i++)
+        {
+            tasks.Add(Task.Run(async () =>
+                {
+                    PipelineBuffer? buffer;
+
+                    while (await ReadBufferChannel.Reader.WaitToReadAsync())
+                    {
+
+                        while (ReadBufferChannel.Reader.TryRead(out buffer))
+                        {
+                            try
+                            {
+
+                                buffer.Data = await MemoryBufferChannel.Reader.ReadAsync();
+
+                                Logger.LogDebug($"Executing read operation fileName:{buffer.FileName} ordinal:{buffer.Ordinal} numberOfParts:{buffer.NumberOfParts}");
+
+                                await ExecuteReadAsync(buffer);
+
+                                await WriteBufferChannel.Writer.WriteAsync(buffer);
+                            }
+                            catch (Exception e)
+                            {
+                                Logger.LogError(e, "Failed to execute read operation.");
+                                throw;
+                            }
+                        }
+                    }
+                }
+            ));
+        }
+
+        await Task.WhenAll(tasks);
+
+        WriteBufferChannel.Writer.Complete();
+    }
+    private async ValueTask StartAndWaitPipelineWorkersAsync(int numberOfWorkers, Channel<PipelineBuffer> pipelineChannel, Func<PipelineBuffer,ValueTask> onReadAsync, Action<Channel<PipelineBuffer>>? onDone)
+    {
+        var tasks = new List<Task>();
+
+        for (var workers = 0; workers < numberOfWorkers; workers++)
+        {
+            tasks.Add(Task.Run(async () =>
+            {
+                PipelineBuffer? buffer;
+
+                while (await pipelineChannel.Reader.WaitToReadAsync())
+                {
+                    while (pipelineChannel.Reader.TryRead(out buffer))
+                    {
+                        try
+                        {
+                            await onReadAsync(buffer);
+                        }
+                        catch (Exception e)
+                        {
+                            Logger.LogError(e, "Failed to process pipeline buffer");
+                            throw;
+                        }
+
+                    }
+                }
+            }));
+        }
+
+        await Task.WhenAll(tasks);
+
+        onDone?.Invoke(pipelineChannel);
     }
 
     private void CloseFileHandler(FileStream? fileStream)
