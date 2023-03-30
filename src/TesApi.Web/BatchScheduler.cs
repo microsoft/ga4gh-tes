@@ -670,8 +670,7 @@ namespace TesApi.Web
 
             if (azureBatchJobAndTaskState.ActiveJobWithMissingAutoPool)
             {
-                var batchJobInfo = JsonConvert.SerializeObject(azureBatchJobAndTaskState);
-                logger.LogWarning($"Found active job without auto pool for TES task {tesTask.Id}. Deleting the job and requeuing the task. BatchJobInfo: {batchJobInfo}");
+                logger.LogWarning("Found active job without auto pool for TES task {TesTask}. Deleting the job and requeuing the task. BatchJobInfo: {BatchJobInfo}", tesTask.Id, JsonConvert.SerializeObject(azureBatchJobAndTaskState));
                 return new CombinedBatchTaskInfo
                 {
                     BatchTaskState = BatchTaskState.ActiveJobWithMissingAutoPool,
@@ -834,8 +833,6 @@ namespace TesApi.Web
                         Pool = azureBatchJobAndTaskState.Pool
                     };
                 case TaskState.Completed:
-                    var batchJobInfo = JsonConvert.SerializeObject(azureBatchJobAndTaskState);
-
                     if (azureBatchJobAndTaskState.TaskExitCode == 0 && azureBatchJobAndTaskState.TaskFailureInformation is null)
                     {
                         var metrics = await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask);
@@ -853,7 +850,7 @@ namespace TesApi.Web
                     }
                     else
                     {
-                        logger.LogError($"Task {tesTask.Id} failed. ExitCode: {azureBatchJobAndTaskState.TaskExitCode}, BatchJobInfo: {batchJobInfo}");
+                        logger.LogError("Task {TesTask} failed. ExitCode: {TaskExitCode}, BatchJobInfo: {BatchJobInfo}", tesTask.Id, azureBatchJobAndTaskState.TaskExitCode, JsonConvert.SerializeObject(azureBatchJobAndTaskState));
 
                         return new CombinedBatchTaskInfo
                         {
@@ -862,7 +859,9 @@ namespace TesApi.Web
                             BatchTaskExitCode = azureBatchJobAndTaskState.TaskExitCode,
                             BatchTaskStartTime = azureBatchJobAndTaskState.TaskStartTime,
                             BatchTaskEndTime = azureBatchJobAndTaskState.TaskEndTime,
-                            SystemLogItems = new[] { azureBatchJobAndTaskState.TaskFailureInformation?.Details?.FirstOrDefault()?.Value },
+                            SystemLogItems = Enumerable.Empty<string>()
+                                .Append($"Batch task ExitCode: {azureBatchJobAndTaskState.TaskExitCode}, Failure message: {azureBatchJobAndTaskState.TaskFailureInformation?.Message}")
+                                .Concat(azureBatchJobAndTaskState.TaskFailureInformation?.Details?.Select(d => $"{d.Name}: {d.Value}") ?? Enumerable.Empty<string>()),
                             Pool = azureBatchJobAndTaskState.Pool
                         };
                     }
