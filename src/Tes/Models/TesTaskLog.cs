@@ -63,7 +63,7 @@ namespace Tes.Models
         /// </summary>
         /// <value>Information about all output files. Directory outputs are flattened into separate items.</value>
         [DataMember(Name = "outputs")]
-        public List<TesOutputFileLog> Outputs { get; set; }
+        public List<TesOutputFileLog> Outputs { get; set; } = new List<TesOutputFileLog>();
 
         /// <summary>
         /// System logs are any logs the system decides are relevant, which are not tied directly to an Executor process. Content is implementation specific: format, size, etc.  System logs may be collected here to provide convenient access.  For example, the system may include the name of the host where the task is executing, an error message that caused a SYSTEM_ERROR state (e.g. disk is full), etc.  System logs are only included in the FULL task view.
