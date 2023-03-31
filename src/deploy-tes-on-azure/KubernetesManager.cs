@@ -92,8 +92,8 @@ namespace TesDeployer
             return new Kubernetes(k8sClientConfiguration);
         }
 
-        public static V1Deployment GetUbuntuDeploymentTemplate()
-            => KubernetesYaml.Deserialize<V1Deployment>(
+        public static (string, V1Deployment) GetUbuntuDeploymentTemplate()
+            => ("ubuntu", KubernetesYaml.Deserialize<V1Deployment>(
                 """
                 apiVersion: apps/v1
                 kind: Deployment
@@ -122,7 +122,7 @@ namespace TesDeployer
                           resources: {}
                       restartPolicy: Always
                 status: {}
-                """);
+                """));
 
         public async Task DeployCoADependenciesAsync()
         {

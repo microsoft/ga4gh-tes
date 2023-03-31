@@ -502,9 +502,8 @@ namespace TesDeployer
                                 await kubernetesManager.DeployCoADependenciesAsync();
 
                                 // Deploy an ubuntu pod to run PSQL commands, then delete it
-                                const string deploymentName = "ubuntu";
                                 const string deploymentNamespace = "default";
-                                var ubuntuDeployment = KubernetesManager.GetUbuntuDeploymentTemplate();
+                                var (deploymentName, ubuntuDeployment) = KubernetesManager.GetUbuntuDeploymentTemplate();
                                 await kubernetesClient.AppsV1.CreateNamespacedDeploymentAsync(ubuntuDeployment, deploymentNamespace);
                                 await ExecuteQueriesOnAzurePostgreSQLDbFromK8(kubernetesClient, deploymentName, deploymentNamespace);
                                 await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace);
