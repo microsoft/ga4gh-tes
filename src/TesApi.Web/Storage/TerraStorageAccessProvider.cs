@@ -149,7 +149,7 @@ namespace TesApi.Web.Storage
 
             if (normalizedBlobName != string.Empty)
             {
-                if (!uriBuilder.Path.Contains(normalizedBlobName,StringComparison.OrdinalIgnoreCase))
+                if (!uriBuilder.Path.Contains(normalizedBlobName, StringComparison.OrdinalIgnoreCase))
                 {
                     uriBuilder.Path += $"/{normalizedBlobName}";
                 }

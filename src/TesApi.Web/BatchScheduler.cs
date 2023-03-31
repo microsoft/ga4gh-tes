@@ -218,7 +218,7 @@ namespace TesApi.Web
                 }
                 else if (!string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem))
                 {
-                    tesTask.AddToSystemLog(new [] { batchInfo.AlternateSystemLogItem });
+                    tesTask.AddToSystemLog(new[] { batchInfo.AlternateSystemLogItem });
                 }
             }
 

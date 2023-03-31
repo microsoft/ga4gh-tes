@@ -225,7 +225,7 @@ namespace Tes.Repository
             dbContext.TesTasks.Remove(item);
             await dbContext.SaveChangesAsync();
             cache?.TryRemove(id);
-            
+
         }
 
         /// <summary>
