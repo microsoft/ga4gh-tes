@@ -599,29 +599,30 @@ namespace TesDeployer
             }
             catch (Exception exc)
             {
-                if (configuration.DebugLogging)
-                {
-                    if (exc is KubernetesException kExc)
-                    {
-                        ConsoleEx.WriteLine($"Kubenetes Status: {kExc.Status}");
-                    }
-
-                    if (exc is WebSocketException wExc)
-                    {
-                        ConsoleEx.WriteLine($"WebSocket ErrorCode: {wExc.WebSocketErrorCode}");
-                    }
-
-                    if (exc is HttpOperationException hExc)
-                    {
-                        ConsoleEx.WriteLine($"HTTP Response: {hExc.Response.Content}");
-                    }
-                    ConsoleEx.WriteLine(exc.StackTrace, ConsoleColor.Red);
-                }
-
                 if (!(exc is OperationCanceledException && cts.Token.IsCancellationRequested))
                 {
                     ConsoleEx.WriteLine();
                     ConsoleEx.WriteLine($"{exc.GetType().Name}: {exc.Message}", ConsoleColor.Red);
+
+                    if (configuration.DebugLogging)
+                    {
+                        ConsoleEx.WriteLine(exc.StackTrace, ConsoleColor.Red);
+
+                        if (exc is KubernetesException kExc)
+                        {
+                            ConsoleEx.WriteLine($"Kubenetes Status: {kExc.Status}");
+                        }
+
+                        if (exc is WebSocketException wExc)
+                        {
+                            ConsoleEx.WriteLine($"WebSocket ErrorCode: {wExc.WebSocketErrorCode}");
+                        }
+
+                        if (exc is HttpOperationException hExc)
+                        {
+                            ConsoleEx.WriteLine($"HTTP Response: {hExc.Response.Content}");
+                        }
+                    }
                 }
 
                 ConsoleEx.WriteLine();
@@ -922,7 +923,8 @@ namespace TesDeployer
             UpdateSetting(settings, defaults, "RegionName", configuration.RegionName, ignoreDefaults: false);
 
             // Process images
-            UpdateSetting(settings, defaults, "TesImageName", configuration.TesImageName, ignoreDefaults: ImageNameIgnoreDefaults(settings, defaults, "TesImageName", configuration.TesImageName is null, installedVersion));
+            UpdateSetting(settings, defaults, "TesImageName", configuration.TesImageName,
+                ignoreDefaults: ImageNameIgnoreDefaults(settings, defaults, "TesImageName", configuration.TesImageName is null, installedVersion));
 
             // Additional non-personalized settings
             UpdateSetting(settings, defaults, "BatchNodesSubnetId", configuration.BatchNodesSubnetId);
@@ -962,12 +964,13 @@ namespace TesDeployer
         /// <summary>
         /// Determines if current setting should be ignored (used for product image names)
         /// </summary>
-        /// <param name="settings"></param>
-        /// <param name="defaults"></param>
-        /// <param name="key"></param>
-        /// <param name="valueIsNull"></param>
-        /// <param name="installedVersion"></param>
-        /// <returns>false if current setting should be ignored, null otherwise.</returns>
+        /// <param name="settings">Property bag being updated.</param>
+        /// <param name="defaults">Property bag containing default values.</param>
+        /// <param name="key">Key of value in both <paramref name="settings"/> and <paramref name="defaults"/>.</param>
+        /// <param name="valueIsNull">True if configuration value to set is null, otherwise False.</param>
+        /// <param name="installedVersion"><see cref="Version"/> of currently installed deployment, or null if not an update.</param>
+        /// <returns>False if current setting should be ignored, null otherwise.</returns>
+        /// <remarks>This method provides a value for the "ignoreDefaults" parameter to <see cref="UpdateSetting{T}(Dictionary{string, string}, Dictionary{string, string}, string, T, Func{T, string}, string, bool?)"/> for use with container image names.</remarks>
         private static bool? ImageNameIgnoreDefaults(Dictionary<string, string> settings, Dictionary<string, string> defaults, string key, bool valueIsNull, Version installedVersion)
         {
             if (installedVersion is null || !valueIsNull)
@@ -1013,7 +1016,7 @@ namespace TesDeployer
         /// </summary>
         /// <param name="settings">Property bag being updated.</param>
         /// <param name="defaults">Property bag containing default values.</param>
-        /// <remarks>Copy to settings any missing values found in defaults</remarks>
+        /// <remarks>Copy to settings any missing values found in defaults.</remarks>
         private static void BackFillSettings(Dictionary<string, string> settings, Dictionary<string, string> defaults)
         {
             foreach (var key in defaults.Keys.Except(settings.Keys))
@@ -1028,14 +1031,14 @@ namespace TesDeployer
         /// <typeparam name="T">Type of <paramref name="value"/>.</typeparam>
         /// <param name="settings">Property bag being updated.</param>
         /// <param name="defaults">Property bag containing default values.</param>
-        /// <param name="key">Key of value in both <paramref name="settings"/> and <paramref name="defaults"/></param>
+        /// <param name="key">Key of value in both <paramref name="settings"/> and <paramref name="defaults"/>.</param>
         /// <param name="value">Configuration value to set. Nullable. See remarks.</param>
         /// <param name="ConvertValue">Function that converts <paramref name="value"/> to a string. Can be used for formatting. Defaults to returning the value's string.</param>
         /// <param name="defaultValue">Value to use if <paramref name="defaults"/> does not contain a record for <paramref name="key"/> when <paramref name="value"/> is null.</param>
         /// <param name="ignoreDefaults">True to never use value from <paramref name="defaults"/>, False to never keep the value from <paramref name="settings"/>, null to follow remarks.</param>
         /// <remarks>
-        /// If value is null, keep the value already in settings. If the key is not in settings, set the corresponding value from defaults. If key is not found in defaults, use defaultValue.
-        /// Otherwise, convert value to a string using convertValue().
+        /// If value is null, keep the value already in <paramref name="settings"/>. If the key is not in <paramref name="settings"/>, set the corresponding value from <paramref name="defaults"/>. If key is not found in <paramref name="defaults"/>, use <paramref name="defaultValue"/>.
+        /// Otherwise, convert value to a string using <paramref name="ConvertValue"/>.
         /// </remarks>
         private static void UpdateSetting<T>(Dictionary<string, string> settings, Dictionary<string, string> defaults, string key, T value, Func<T, string> ConvertValue = default, string defaultValue = "", bool? ignoreDefaults = null)
         {
