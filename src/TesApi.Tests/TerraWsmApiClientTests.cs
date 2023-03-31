@@ -109,5 +109,30 @@ namespace TesApi.Tests
             Assert.IsTrue(!string.IsNullOrEmpty(apiResponse.Token));
             Assert.IsTrue(!string.IsNullOrEmpty(apiResponse.Url));
         }
+
+        [TestMethod]
+        public async Task DeleteBatchPoolAsync_204Response_Succeeds()
+        {
+            var wsmResourceId = Guid.NewGuid();
+            var response = new HttpResponseMessage(HttpStatusCode.NoContent);
+
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(response);
+
+            await terraWsmApiClient.DeleteBatchPoolAsync(terraApiStubData.WorkspaceId, wsmResourceId, CancellationToken.None);
+        }
+
+        [TestMethod]
+        public void GetDeleteBatchPoolUrl_ValidWorkspaceAndResourceId_ValidWSMUrl()
+        {
+            var wsmResourceId = Guid.NewGuid();
+
+            var url = terraWsmApiClient.GetDeleteBatchPoolUrl(terraApiStubData.WorkspaceId, wsmResourceId);
+
+            Assert.IsNotNull(url);
+            var expectedUrl = $"{TerraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/batchpool/{wsmResourceId}";
+            Assert.AreEqual(expectedUrl,url);
+        }
+
     }
 }

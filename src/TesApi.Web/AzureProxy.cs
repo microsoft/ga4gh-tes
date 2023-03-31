@@ -140,7 +140,7 @@ namespace TesApi.Web
         /// <param name="appInsightsApplicationId">Application Insights application id</param>
         /// <param name="cancellationToken"></param>
         /// <returns>Application Insights instrumentation key</returns>
-        public static async Task<string> GetAppInsightsInstrumentationKeyAsync(string appInsightsApplicationId, CancellationToken cancellationToken)
+        public static async Task<string> GetAppInsightsConnectionStringAsync(string appInsightsApplicationId, CancellationToken cancellationToken)
         {
             var azureClient = await GetAzureManagementClientAsync(cancellationToken);
             var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
@@ -156,7 +156,7 @@ namespace TesApi.Web
 
                     if (app is not null)
                     {
-                        return app.InstrumentationKey;
+                        return app.ConnectionString;
                     }
                 }
                 catch

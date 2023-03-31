@@ -64,10 +64,10 @@ namespace TesApi.Web
                         return applicationInsightsOptions;
                     }
 
-                    var instrumentationKey = AzureProxy.GetAppInsightsInstrumentationKeyAsync(applicationInsightsAccountName, System.Threading.CancellationToken.None).Result;
-                    if (!string.IsNullOrWhiteSpace(instrumentationKey))
+                    var connectionString = AzureProxy.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, System.Threading.CancellationToken.None).Result;
+                    if (!string.IsNullOrWhiteSpace(connectionString))
                     {
-                        applicationInsightsOptions.ConnectionString = $"InstrumentationKey={instrumentationKey}";
+                        applicationInsightsOptions.ConnectionString = connectionString;
                     }
 
                     return applicationInsightsOptions;

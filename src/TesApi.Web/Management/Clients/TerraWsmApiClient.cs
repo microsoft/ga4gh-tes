@@ -9,6 +9,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
+using Microsoft.Azure.Management.Sql.Fluent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TesApi.Web.Management.Configuration;
@@ -78,7 +79,7 @@ namespace TesApi.Web.Management.Clients
             {
                 var uri = GetCreateBatchPoolUrl(workspaceId);
 
-                Logger.LogInformation($"Creating a batch pool using WSM for workspace:{workspaceId}");
+                Logger.LogInformation($"Creating a batch pool using WSM for workspace: {workspaceId}");
 
                 response =
                     await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, uri) { Content = GetBatchPoolRequestContent(apiCreateBatchPool) },
@@ -86,21 +87,75 @@ namespace TesApi.Web.Management.Clients
 
                 var apiResponse = await GetApiResponseContentAsync<ApiCreateBatchPoolResponse>(response, cancellationToken);
 
-                Logger.LogInformation($"Successfully created a batch pool using WSM for workspace:{workspaceId}");
+                Logger.LogInformation($"Successfully created a batch pool using WSM for workspace: {workspaceId}");
 
                 return apiResponse;
             }
             catch (Exception ex)
             {
-                var responseContent = "";
-                if (response is not null)
-                {
-                    responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                }
-
-                Logger.LogError(ex, $"Failed to create a batch pool using wsm. Response content:{responseContent}");
+                await LogResponseContentAsync(response, "Failed to create a Batch Pool via WSM", ex, cancellationToken);
                 throw;
             }
+        }
+
+
+        /// <summary>
+        /// Deletes a batch pool using the WSM API
+        /// </summary>
+        /// <param name="workspaceId">WSM workspace id</param>
+        /// <param name="wsmBatchPoolResourceId">WSM resource id</param>
+        /// <param name="cancellationToken"></param>
+        public virtual async Task DeleteBatchPoolAsync(Guid workspaceId, Guid wsmBatchPoolResourceId, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(workspaceId);
+            ArgumentNullException.ThrowIfNull(wsmBatchPoolResourceId);
+
+            HttpResponseMessage response = null;
+            try
+            {
+                var uri = GetDeleteBatchPoolUrl(workspaceId, wsmBatchPoolResourceId);
+
+                Logger.LogInformation($"Deleting the Batch pool using WSM for workspace: {workspaceId} WSM resource ID: {wsmBatchPoolResourceId}");
+
+                response =
+                    await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Delete, uri),
+                        cancellationToken, setAuthorizationHeader: true);
+
+                response.EnsureSuccessStatusCode();
+
+                Logger.LogInformation($"Successfully deleted Batch pool, WSM resource ID: {wsmBatchPoolResourceId} using WSM for workspace: {workspaceId}");
+            }
+            catch (Exception ex)
+            {
+                await LogResponseContentAsync(response, "Failed to delete the Batch pool via WSM", ex, cancellationToken);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Gets the WSM delete batch pool URL
+        /// </summary>
+        /// <param name="workspaceId">WSM workspace id</param>
+        /// <param name="wsmBatchPoolResourceId">WSM batch pool resource id</param>
+        /// <returns></returns>
+        public string GetDeleteBatchPoolUrl(Guid workspaceId, Guid wsmBatchPoolResourceId)
+        {
+            var segments = $"/resources/controlled/azure/batchpool/{wsmBatchPoolResourceId}";
+
+            var builder = GetWsmUriBuilder(workspaceId, segments);
+
+            return builder.Uri.AbsoluteUri;
+        }
+
+        private async Task LogResponseContentAsync(HttpResponseMessage response, string errMessage, Exception ex, CancellationToken cancellationToken)
+        {
+            var responseContent = "";
+            if (response is not null)
+            {
+                responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            }
+
+            Logger.LogError(ex, $"{errMessage}. Response content:{responseContent}");
         }
 
         private string GetCreateBatchPoolUrl(Guid workspaceId)
@@ -109,7 +164,7 @@ namespace TesApi.Web.Management.Clients
 
             var builder = GetWsmUriBuilder(workspaceId, segments);
 
-            return builder.ToString();
+            return builder.Uri.AbsoluteUri;
         }
 
         private HttpContent GetBatchPoolRequestContent(ApiCreateBatchPoolRequest apiCreateBatchPool)
