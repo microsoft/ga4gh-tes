@@ -302,7 +302,7 @@ namespace TesApi.Web
         }
 
         private Task DeleteBatchJobOrTaskAsync(string taskId, PoolInformation poolInformation, CancellationToken cancellationToken = default)
-            => enableBatchAutopool ? azureProxy.DeleteBatchJobAsync(taskId, cancellationToken) : azureProxy.DeleteBatchTaskAsync(taskId, poolInformation, cancellationToken);
+            => enableBatchAutopool ? azureProxy.DeleteBatchJobAsync(taskId, cancellationToken) : poolInformation is null ? Task.CompletedTask : azureProxy.DeleteBatchTaskAsync(taskId, poolInformation, cancellationToken);
 
         private async Task DeleteBatchJobAndPoolIfExists(IAzureProxy azureProxy, TesTask tesTask, CombinedBatchTaskInfo batchInfo)
         {
@@ -649,7 +649,15 @@ namespace TesApi.Web
         {
             var azureBatchJobAndTaskState = await azureProxy.GetBatchJobAndTaskStateAsync(tesTask, enableBatchAutopool);
 
-            tesTask.PoolId ??= azureBatchJobAndTaskState.Pool?.PoolId;
+            if (enableBatchAutopool)
+            {
+                tesTask.PoolId ??= azureBatchJobAndTaskState.Pool?.PoolId;
+            }
+
+            if (azureBatchJobAndTaskState.Pool?.PoolId is null)
+            {
+                azureBatchJobAndTaskState.Pool = tesTask.PoolId is null ? default : new() { PoolId = tesTask.PoolId };
+            }
 
             static IEnumerable<string> ConvertNodeErrorsToSystemLogItems(AzureBatchJobAndTaskState azureBatchJobAndTaskState)
             {
