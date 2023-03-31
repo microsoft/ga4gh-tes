@@ -31,6 +31,13 @@ namespace Tes.Models
             => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         /// <summary>
+        /// Returns the id of the service, e.g. \&quot;ohsu-compbio-funnel\&quot;.
+        /// </summary>
+        /// <value>Returns the id of the service, e.g. \&quot;ohsu-compbio-funnel\&quot;.</value>
+        [DataMember(Name = "id")]
+        public string Id { get; set; }
+
+        /// <summary>
         /// Returns the name of the service, e.g. \&quot;ohsu-compbio-funnel\&quot;.
         /// </summary>
         /// <value>Returns the name of the service, e.g. \&quot;ohsu-compbio-funnel\&quot;.</value>
@@ -38,11 +45,52 @@ namespace Tes.Models
         public string Name { get; set; }
 
         /// <summary>
-        /// Returns a documentation string, e.g. \&quot;Hey, we&#39;re OHSU Comp. Bio!\&quot;.
+        /// Returns the type of a GA4GH service.
         /// </summary>
-        /// <value>Returns a documentation string, e.g. \&quot;Hey, we&#39;re OHSU Comp. Bio!\&quot;.</value>
-        [DataMember(Name = "doc")]
-        public string Doc { get; set; }
+        /// <value>Returns the type of the service.</value>
+        [DataMember(Name = "type")]
+        public TesServiceType Type { get; set; }
+
+        /// <summary>
+        /// Returns the organization providing the service.
+        /// </summary>
+        /// <value>Returns the organization providing the service.</value>
+        [DataMember(Name = "organization")]
+        public TesOrganization Organization { get; set; }
+
+        /// <summary>
+        /// Returns the version of the service being described.
+        /// </summary>
+        /// <value>Returns the version of the service being described.</value>
+        [DataMember(Name = "version")]
+        public string Version { get; set; }
+
+        /// <summary>
+        /// Returns the description of the service being described.
+        /// </summary>
+        /// <value>Returns the description of the service being described.</value>
+        [DataMember(Name = "description")]
+        public string Description { get; set; }
+
+        /// <summary>
+        /// Gets or Sets Resources
+        /// </summary>
+        [DataMember(Name = "resources")]
+        public TesResources Resources { get; set; }
+
+        /// <summary>
+        /// Returns a documentation url, e.g. \&quot;https://docs.myservice.example.com\&quot;.
+        /// </summary>
+        /// <value>Returns a documentation url, e.g. \&quot;https://docs.myservice.example.com\&quot;.</value>
+        [DataMember(Name = "documentationUrl")]
+        public string DocumentationUrl { get; set; }
+
+        /// <summary>
+        /// Returns  contact url.
+        /// </summary>
+        /// <value>Returns  contact url.</value>
+        [DataMember(Name = "contactUrl")]
+        public string ContactUrl { get; set; }
 
         /// <summary>
         /// Lists some, but not necessarily all, storage locations supported by the service.  Must be in a valid URL format. e.g.  file:///path/to/local/funnel-storage s3://ohsu-compbio-funnel/storage etc.
@@ -58,14 +106,36 @@ namespace Tes.Models
         public List<string> TesResourcesSupportedBackendParameters { get; set; }
 
         /// <summary>
+        /// Timestamp describing when the service was first deployed and available, in RFC 3339 format. This is set by the system, not the client.
+        /// </summary>
+        /// <value>Timestamp describing when the service was first deployed and available, in RFC 3339 format. This is set by the system, not the client.</value>
+        [DataMember(Name = "createdAt")]
+        public DateTimeOffset? CreatedAt { get; set; }
+
+        /// <summary>
+        /// Timestamp describing when the service was last updated, in RFC 3339 format. This is set by the system, not the client.
+        /// </summary>
+        /// <value>Timestamp describing when the service was last updated, in RFC 3339 format. This is set by the system, not the client.</value>
+        [DataMember(Name = "updatedAt")]
+        public DateTimeOffset? UpdatedAt { get; set; }
+
+        /// <summary>
         /// Returns the string presentation of the object
         /// </summary>
         /// <returns>String presentation of the object</returns>
         public override string ToString()
             => new StringBuilder()
                 .Append("class TesServiceInfo {\n")
+                .Append("  Id: ").Append(Id).Append('\n')
                 .Append("  Name: ").Append(Name).Append('\n')
-                .Append("  Doc: ").Append(Doc).Append('\n')
+                .Append("  Type: ").Append(TesServiceType).Append('\n')
+                .Append("  Organization: ").Append(TesOrganization).Append('\n')
+                .Append("  Version: ").Append(Version).Append('\n')
+                .Append("  Description: ").Append(Description).Append('\n')
+                .Append("  DocumentationUrl: ").Append(DocumentationUrl).Append('\n')
+                .Append("  ContactUrl: ").Append(ContactUrl).Append('\n')
+                .Append("  CreatedAt: ").Append(CreatedAt).Append('\n')
+                .Append("  UpdatedAt: ").Append(UpdatedAt).Append('\n')
                 .Append("  Storage: ")
                 .Append(
                     Storage?.Count > 0 ?
@@ -111,14 +181,54 @@ namespace Tes.Models
                 var x when ReferenceEquals(this, x) => true,
                 _ =>
                 (
+                    Id == other.Id ||
+                    Id is not null &&
+                    Id.Equals(other.Id)
+                ) &&
+                (
                     Name == other.Name ||
                     Name is not null &&
                     Name.Equals(other.Name)
                 ) &&
                 (
-                    Doc == other.Doc ||
-                    Doc is not null &&
-                    Doc.Equals(other.Doc)
+                    Type == other.Type ||
+                    Type is not null &&
+                    Type.Equals(other.Type)
+                ) &&
+                (
+                    Organization == other.Organization ||
+                    Organization is not null &&
+                    Organization.Equals(other.Organization)
+                ) &&
+                (
+                    Version == other.Version ||
+                    Version is not null &&
+                    Version.Equals(other.Version)
+                ) &&
+                (
+                    Description == other.Description ||
+                    Description is not null &&
+                    Description.Equals(other.Description)
+                ) &&
+                 (
+                    DocumentationUrl == other.DocumentationUrl ||
+                    DocumentationUrl is not null &&
+                    DocumentationUrl.Equals(other.DocumentationUrl)
+                ) &&
+                (
+                    ContactUrl == other.ContactUrl ||
+                    ContactUrl is not null &&
+                    ContactUrl.Equals(other.ContactUrl)
+                ) &&
+                (
+                    CreatedAt == other.CreatedAt ||
+                    CreatedAt is not null &&
+                    CreatedAt.Equals(other.CreatedAt)
+                ) &&
+                (
+                    UpdatedAt == other.UpdatedAt ||
+                    UpdatedAt is not null &&
+                    UpdatedAt.Equals(other.UpdatedAt)
                 ) &&
                 (
                     Storage == other.Storage ||
@@ -142,15 +252,56 @@ namespace Tes.Models
             {
                 var hashCode = 41;
                 // Suitable nullity checks etc, of course :)
+                if (Id is not null)
+                {
+                    hashCode = hashCode * 59 + Id.GetHashCode();
+                }
+
                 if (Name is not null)
                 {
                     hashCode = hashCode * 59 + Name.GetHashCode();
                 }
 
-                if (Doc is not null)
+                if (Type is not null)
                 {
-                    hashCode = hashCode * 59 + Doc.GetHashCode();
+                    hashCode = hashCode * 59 + Type.GetHashCode();
                 }
+
+                if (Organization is not null)
+                {
+                    hashCode = hashCode * 59 + Organization.GetHashCode();
+                }
+
+                if (Version is not null)
+                {
+                    hashCode = hashCode * 59 + Version.GetHashCode();
+                }
+
+                if (Description is not null)
+                {
+                    hashCode = hashCode * 59 + Description.GetHashCode();
+                }
+
+                if (DocumentationUrl is not null)
+                {
+                    hashCode = hashCode * 59 + DocumentationUrl.GetHashCode();
+                }
+
+                if (ContactUrl is not null)
+                {
+                    hashCode = hashCode * 59 + ContactUrl.GetHashCode();
+                }
+
+                if (CreatedAt is not null)
+                {
+                    hashCode = hashCode * 59 + CreatedAt.GetHashCode();
+                }
+
+                if (UpdatedAt is not null)
+                {
+                    hashCode = hashCode * 59 + UpdatedAt.GetHashCode();
+                }
+
 
                 if (Storage is not null)
                 {

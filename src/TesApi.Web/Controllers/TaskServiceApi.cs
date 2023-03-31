@@ -210,13 +210,21 @@ namespace TesApi.Controllers
         {
             var serviceInfo = new TesServiceInfo
             {
+                Id = "tesprefixname",
                 Name = "GA4GH Task Execution Service",
-                Doc = string.Empty,
+                Type = new <string>(),
+                Organization = new <string>(),
+                Version = "4.2.0",
+                Description = "GA4GH TES on Azure",
+                DocumentationURL = "https://github.com/microsoft/ga4gh-tes/wiki",
+                ContactUrl = "letsencryptemail",
+                CreatedAt = "Date Created",
+                UpdatedAt = "Date Updated"
                 Storage = new List<string>(),
                 TesResourcesSupportedBackendParameters = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList()
             };
 
-            logger.LogInformation($"Name: {serviceInfo.Name} Doc: {serviceInfo.Doc} Storage: {serviceInfo.Storage} TesResourcesSupportedBackendParameters: {string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters)}");
+            logger.LogInformation($"Id: {serviceInfo.Id} Name: {serviceInfo.Name} Type: {serviceInfo.Type} Organization: {serviceInfo.Organization} Version: {serviceInfo.Version} Description: {serviceInfo.Description} DocumentationURL: {serviceInfo.DocumentationURL} DocumentationURL: {serviceInfo.ContactUrl} CreatedAt:{serviceInfo.CreatedAt} UpdatedAt:{serviceInfo.UpdatedAt} Storage: {serviceInfo.Storage} TesResourcesSupportedBackendParameters: {string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters)}");
             return StatusCode(200, serviceInfo);
         }
 
