@@ -80,9 +80,12 @@ namespace TesDeployer
         public const string ConfigurationContainerName = "configuration";
         public const string ContainersToMountFileName = "containers-to-mount";
         public const string AllowedVmSizesFileName = "allowed-vm-sizes";
+        public const string TesCredentialsFileName = "TesCredentials.json";
         public const string InputsContainerName = "inputs";
         public const string StorageAccountKeySecretName = "CoAStorageKey";
         public const string PostgresqlSslMode = "VerifyFull";
+
+        private record TesCredentials(string TesHostname, string TesUsername, string TesPassword);
 
         private readonly CancellationTokenSource cts = new();
 
@@ -112,7 +115,6 @@ namespace TesDeployer
         private IEnumerable<string> subscriptionIds { get; set; }
         private bool isResourceGroupCreated { get; set; }
         private KubernetesManager kubernetesManager { get; set; }
-        private IKubernetes kubernetesClient { get; set; }
 
         public Deployer(Configuration configuration)
             => this.configuration = configuration;
@@ -214,9 +216,37 @@ namespace TesDeployer
                             throw new ValidationException($"Could not retrieve account names from stored configuration in {storageAccount.Name}.", displayExample: false);
                         }
 
-                        if (aksValues.TryGetValue("EnableIngress", out var enableIngress))
+                        if (aksValues.TryGetValue("EnableIngress", out var enableIngress) && aksValues.TryGetValue("TesHostname", out var tesHostname))
                         {
+                            kubernetesManager.TesHostname = tesHostname;
                             configuration.EnableIngress = bool.TryParse(enableIngress, out var parsed) ? parsed : null;
+
+                            var tesCredentials = new FileInfo(Path.Combine(Directory.GetCurrentDirectory(), TesCredentialsFileName));
+                            if (configuration.EnableIngress.GetValueOrDefault() && tesCredentials.Exists)
+                            {
+                                try
+                                {
+                                    using var stream = tesCredentials.OpenRead();
+                                    var (hostname, tesUsername, tesPassword) = System.Text.Json.JsonSerializer.Deserialize<TesCredentials>(stream,
+                                        new System.Text.Json.JsonSerializerOptions() { IncludeFields = true, PropertyNameCaseInsensitive = true });
+
+                                    if (kubernetesManager.TesHostname.Equals(hostname, StringComparison.InvariantCultureIgnoreCase) && string.IsNullOrEmpty(configuration.TesPassword))
+                                    {
+                                        configuration.TesPassword = tesPassword;
+                                        configuration.TesUsername = tesUsername;
+                                    }
+                                }
+                                catch (NotSupportedException)
+                                { }
+                                catch (ArgumentException)
+                                { }
+                                catch (IOException)
+                                { }
+                                catch (UnauthorizedAccessException)
+                                { }
+                                catch (System.Text.Json.JsonException)
+                                { }
+                            }
                         }
 
                         if (!configuration.SkipTestWorkflow && configuration.EnableIngress.GetValueOrDefault() && string.IsNullOrEmpty(configuration.TesPassword))
@@ -260,20 +290,31 @@ namespace TesDeployer
                         // Override any configuration that is used by the update.
                         var versionString = aksValues["TesOnAzureVersion"];
                         var installedVersion = !string.IsNullOrEmpty(versionString) && Version.TryParse(versionString, out var version) ? version : null;
+
+                        if (installedVersion is null || installedVersion < new Version(4, 1)) // Assume 4.0.0. The work needed to upgrade from this version shouldn't apply to other releases of TES.
+                        {
+                            var tesImageString = aksValues["TesImageName"];
+                            if (!string.IsNullOrEmpty(tesImageString) && tesImageString.EndsWith("/tes:4"))
+                            {
+                                aksValues["TesImageName"] = tesImageString + ".0";
+                                installedVersion = new("4.0");
+                            }
+                        }
+
                         var settings = ConfigureSettings(managedIdentity.ClientId, aksValues, installedVersion);
 
-                        //if (installedVersion is null || installedVersion < new Version(4, 0))
+                        //if (installedVersion is null || installedVersion < new Version(4, 2))
                         //{
                         //}
 
-                        await kubernetesManager.UpgradeAKSDeploymentAsync(
-                            settings,
-                            storageAccount,
-                            kubernetesClient);
+                        await kubernetesManager.UpgradeValuesYamlAsync(storageAccount, settings);
+                        await PerformHelmDeploymentAsync(resourceGroup);
                     }
 
                     if (!configuration.Update)
                     {
+                        configuration.ProvisionPostgreSqlOnAzure ??= true;
+
                         if (string.IsNullOrWhiteSpace(configuration.BatchPrefix))
                         {
                             var blob = new byte[5];
@@ -450,35 +491,33 @@ namespace TesDeployer
                         var settings = ConfigureSettings(clientId);
 
                         await kubernetesManager.UpdateHelmValuesAsync(storageAccount, keyVaultUri, resourceGroup.Name, settings, managedIdentity);
-
-                        if (configuration.ManualHelmDeployment)
-                        {
-                            ConsoleEx.WriteLine($"Helm chart written to disk at: {kubernetesManager.helmScriptsRootDirectory}");
-                            ConsoleEx.WriteLine($"Please update values file if needed here: {kubernetesManager.TempHelmValuesYamlPath}");
-                            ConsoleEx.WriteLine("Run the following postgresql command to setup the database.");
-                            ConsoleEx.WriteLine("\tPostgreSQL command: " + GetPostgreSQLCreateUserCommand(configuration.UsePostgreSqlSingleServer, configuration.PostgreSqlTesDatabaseName, GetCreateTesUserString()));
-                            ConsoleEx.WriteLine($"Then, deploy the helm chart, and press Enter to continue.");
-                            ConsoleEx.ReadLine();
-                        }
-                        else
-                        {
-                            kubernetesClient = await kubernetesManager.GetKubernetesClientAsync(resourceGroup);
-                            await kubernetesManager.DeployCoADependenciesAsync();
-
-                            // Deploy an ubuntu pod to run PSQL commands, then delete it
-                            const string deploymentName = "ubuntu";
-                            const string deploymentNamespace = "default";
-                            var ubuntuDeployment = KubernetesManager.GetUbuntuDeploymentTemplate();
-                            await kubernetesClient.AppsV1.CreateNamespacedDeploymentAsync(ubuntuDeployment, deploymentNamespace);
-                            await ExecuteQueriesOnAzurePostgreSQLDbFromK8(deploymentName, deploymentNamespace);
-                            await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace);
-
-                            if (configuration.EnableIngress.GetValueOrDefault())
+                        await PerformHelmDeploymentAsync(resourceGroup,
+                            new[]
                             {
-                                _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
-                            }
+                                "Run the following postgresql command to setup the database.",
+                                "\tPostgreSQL command: " + GetPostgreSQLCreateUserCommand(configuration.UsePostgreSqlSingleServer, configuration.PostgreSqlTesDatabaseName, GetCreateTesUserString()),
+                            },
+                            async kubernetesClient =>
+                            {
+                                await kubernetesManager.DeployCoADependenciesAsync();
 
-                            await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
+                                // Deploy an ubuntu pod to run PSQL commands, then delete it
+                                const string deploymentName = "ubuntu";
+                                const string deploymentNamespace = "default";
+                                var ubuntuDeployment = KubernetesManager.GetUbuntuDeploymentTemplate();
+                                await kubernetesClient.AppsV1.CreateNamespacedDeploymentAsync(ubuntuDeployment, deploymentNamespace);
+                                await ExecuteQueriesOnAzurePostgreSQLDbFromK8(kubernetesClient, deploymentName, deploymentNamespace);
+                                await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace);
+
+                                if (configuration.EnableIngress.GetValueOrDefault())
+                                {
+                                    _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
+                                }
+                            });
+
+                        if (configuration.EnableIngress.GetValueOrDefault() && !configuration.SkipTestWorkflow)
+                        {
+                            await Task.Delay(System.TimeSpan.FromMinutes(3)); // Give Ingress a moment longer to complete its standup.
                         }
                     }
                 }
@@ -503,10 +542,10 @@ namespace TesDeployer
                     if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
                     {
                         // Write credentials to JSON file in working directory
-                        var credentialsJson = System.Text.Json.JsonSerializer.Serialize(
-                            new { kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword });
+                        var credentialsJson = System.Text.Json.JsonSerializer.Serialize<TesCredentials>(
+                            new(kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword));
 
-                        var credentialsPath = Path.Combine(Directory.GetCurrentDirectory(), "TesCredentials.json");
+                        var credentialsPath = Path.Combine(Directory.GetCurrentDirectory(), TesCredentialsFileName);
                         await File.WriteAllTextAsync(credentialsPath, credentialsJson);
                         ConsoleEx.WriteLine($"TES credentials file written to: {credentialsPath}");
                     }
@@ -594,6 +633,29 @@ namespace TesDeployer
             }
         }
 
+        private async Task PerformHelmDeploymentAsync(IResourceGroup resourceGroup, IEnumerable<string> manualPrecommands = default, Func<IKubernetes, Task> asyncTask = default)
+        {
+            if (configuration.ManualHelmDeployment)
+            {
+                ConsoleEx.WriteLine($"Helm chart written to disk at: {kubernetesManager.helmScriptsRootDirectory}");
+                ConsoleEx.WriteLine($"Please update values file if needed here: {kubernetesManager.TempHelmValuesYamlPath}");
+
+                foreach (var line in manualPrecommands ?? Enumerable.Empty<string>())
+                {
+                    ConsoleEx.WriteLine(line);
+                }
+
+                ConsoleEx.WriteLine($"Then, deploy the helm chart, and press Enter to continue.");
+                ConsoleEx.ReadLine();
+            }
+            else
+            {
+                var kubernetesClient = await kubernetesManager.GetKubernetesClientAsync(resourceGroup);
+                await (asyncTask?.Invoke(kubernetesClient) ?? Task.CompletedTask);
+                await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
+            }
+        }
+
         private static async Task<int> TestTaskAsync(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
         {
             using var client = new HttpClient();
@@ -633,7 +695,6 @@ namespace TesDeployer
 
         private static async Task<bool> RunTestTask(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
         {
-            await Task.Delay(System.TimeSpan.FromMinutes(3)); // Give Ingress a moment longer to complete its standup.
             var startTime = DateTime.UtcNow;
             var line = ConsoleEx.WriteLine("Running a test task...");
             var isTestWorkflowSuccessful = (await TestTaskAsync(tesEndpoint, preemptible, tesUsername, tesPassword)) < 1;
@@ -862,7 +923,7 @@ namespace TesDeployer
             UpdateSetting(settings, defaults, "RegionName", configuration.RegionName, ignoreDefaults: false);
 
             // Process images
-            UpdateSetting(settings, defaults, "TesImageName", configuration.TesImageName);
+            UpdateSetting(settings, defaults, "TesImageName", configuration.TesImageName, ignoreDefaults: ImageNameIgnoreDefaults(settings, defaults, "TesImageName", configuration.TesImageName is null, installedVersion));
 
             // Additional non-personalized settings
             UpdateSetting(settings, defaults, "BatchNodesSubnetId", configuration.BatchNodesSubnetId);
@@ -897,6 +958,55 @@ namespace TesDeployer
 
             BackFillSettings(settings, defaults);
             return settings;
+        }
+
+        /// <summary>
+        /// Determines if current setting should be ignored (used for product image names)
+        /// </summary>
+        /// <param name="settings"></param>
+        /// <param name="defaults"></param>
+        /// <param name="key"></param>
+        /// <param name="valueIsNull"></param>
+        /// <param name="installedVersion"></param>
+        /// <returns>false if current setting should be ignored, null otherwise.</returns>
+        private static bool? ImageNameIgnoreDefaults(Dictionary<string, string> settings, Dictionary<string, string> defaults, string key, bool valueIsNull, Version installedVersion)
+        {
+            if (installedVersion is null || !valueIsNull)
+            {
+                return null;
+            }
+
+            var sameVersionUpgrade = installedVersion.Equals(new(defaults["TesOnAzureVersion"]));
+            _ = settings.TryGetValue(key, out var installed);
+            _ = defaults.TryGetValue(key, out var @default);
+            var defaultPath = @default?[..@default.LastIndexOf(':')];
+            var installedTag = installed?[(installed.LastIndexOf(':') + 1)..];
+            bool? result;
+
+            try
+            {
+                // Is this our official prepository/image?
+                result = installed.StartsWith(defaultPath + ":")
+                        // Is the tag a version (without decorations)?
+                        && Version.TryParse(installedTag, out var version)
+                        // Is the image version the same as the installed version?
+                        && version.Equals(installedVersion)
+                    // Upgrade image
+                    ? false
+                    // Preserve configured image
+                    : null;
+            }
+            catch (ArgumentException)
+            {
+                result = null;
+            }
+
+            if (result is null && !sameVersionUpgrade)
+            {
+                ConsoleEx.WriteLine($"Warning: TES on Azure is being upgraded, but {key} was customized, and is not being upgraded, which might not be what you want. (To remove the customization of {key}, set it to the empty string.)", ConsoleColor.Yellow);
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -1315,7 +1425,7 @@ namespace TesDeployer
             }
         }
 
-        private Task ExecuteQueriesOnAzurePostgreSQLDbFromK8(string podName, string aksNamespace)
+        private Task ExecuteQueriesOnAzurePostgreSQLDbFromK8(IKubernetes kubernetesClient, string podName, string aksNamespace)
             => Execute(
                 $"Executing scripts on postgresql...",
                 async () =>
