@@ -302,7 +302,7 @@ namespace TesApi.Web
         }
 
         private Task DeleteBatchJobOrTaskAsync(string taskId, PoolInformation poolInformation, CancellationToken cancellationToken = default)
-            => enableBatchAutopool ? azureProxy.DeleteBatchJobAsync(taskId, cancellationToken) : poolInformation is null ? Task.CompletedTask : azureProxy.DeleteBatchTaskAsync(taskId, poolInformation, cancellationToken);
+            => enableBatchAutopool ? azureProxy.DeleteBatchJobAsync(taskId, cancellationToken) : poolInformation is null || poolInformation.PoolId is null ? Task.CompletedTask : azureProxy.DeleteBatchTaskAsync(taskId, poolInformation, cancellationToken);
 
         private async Task DeleteBatchJobAndPoolIfExists(IAzureProxy azureProxy, TesTask tesTask, CombinedBatchTaskInfo batchInfo)
         {
