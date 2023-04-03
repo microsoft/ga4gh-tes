@@ -269,18 +269,18 @@ namespace TesApi.Web
                             }
                             else
                             {
-                                _scalingMode = ScalingMode.RemovingFailedNodes;
                                 goto case ScalingMode.RemovingFailedNodes;
                             }
                         }
                         break;
 
                     case ScalingMode.RemovingFailedNodes:
+                        _scalingMode = ScalingMode.RemovingFailedNodes;
                         ResizeErrors.Clear();
                         _resizeErrorsRetrieved = true;
                         _logger.LogInformation(@"Switching pool {PoolId} back to autoscale.", Pool.PoolId);
                         await _azureProxy.EnableBatchPoolAutoScaleAsync(Pool.PoolId, !IsDedicated, AutoScaleEvaluationInterval, AutoPoolFormula, cancellationToken);
-                        _autoScaleWaitTime = DateTime.UtcNow + AutoScaleEvaluationInterval + BatchPoolService.RunInterval;
+                        _autoScaleWaitTime = DateTime.UtcNow + (3 * AutoScaleEvaluationInterval) + BatchPoolService.RunInterval;
                         _scalingMode = _resetAutoScalingRequired ? ScalingMode.WaitingForAutoScale : ScalingMode.SettingAutoScale;
                         break;
 
