@@ -973,6 +973,8 @@ namespace TesApi.Web
                 blobxferChunkSizeBytes = 33_554_432; // max file size = 32 MiB * 50k blocks = 1,677,721,600,000 bytes
             }
 
+            logger.LogInformation($"Configuring blobxfer with {vmVCpusAvailable} vCPUS to use blobxferChunkSizeBytes={blobxferChunkSizeBytes:D} blobxferOneShotBytes={blobxferOneShotBytes:D}");
+
             // Using --include and not using --no-recursive as a workaround for https://github.com/Azure/blobxfer/issues/123
             var downloadFilesScriptContent = "total_bytes=0"
                 + string.Join("", filesToDownload.Select(f =>
