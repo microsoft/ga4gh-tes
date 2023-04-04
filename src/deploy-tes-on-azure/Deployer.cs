@@ -75,7 +75,7 @@ namespace TesDeployer
 
         private static readonly AsyncRetryPolicy longRetryPolicy = Policy
             .Handle<Exception>()
-            .WaitAndRetryAsync(15, retryAttempt => System.TimeSpan.FromSeconds(15));
+            .WaitAndRetryAsync(60, retryAttempt => System.TimeSpan.FromSeconds(15));
 
         public const string ConfigurationContainerName = "configuration";
         public const string ContainersToMountFileName = "containers-to-mount";
