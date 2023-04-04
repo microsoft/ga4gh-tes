@@ -12,14 +12,14 @@ jobs:
 
       - name: Install dotnet-format tool
         run: dotnet tool install -g dotnet-format
-        
-      - name: Install dependencies
-        run: dotnet restore
 
       - name: Check out code
         uses: actions/checkout@v3.3.0
         with:
           fetch-depth: 0
+          
+      - name: Install dependencies
+        run: dotnet restore
 
       - name: Run dotnet format
         shell: bash
