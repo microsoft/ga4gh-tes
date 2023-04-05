@@ -99,7 +99,8 @@ namespace TesDeployer
             "Microsoft.insights",
             "Microsoft.Network",
             "Microsoft.Storage",
-            "Microsoft.DBforPostgreSQL"
+            "Microsoft.DBforPostgreSQL",
+            "Microsoft.ContainerService"
         };
 
         private Configuration configuration { get; set; }
