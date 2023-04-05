@@ -27,7 +27,7 @@ namespace TesApi.Web
         /// <summary>
         /// Autoscale evalutation interval
         /// </summary>
-        public static TimeSpan AutoScaleEvaluationInterval { get; } = TimeSpan.FromMinutes(5);
+        public static TimeSpan AutoScaleEvaluationInterval { get; } = TimeSpan.FromSeconds(30);
 
         private const int MaxComputeNodesToRemoveAtOnce = 100; // https://learn.microsoft.com/en-us/rest/api/batchservice/pool/remove-nodes?tabs=HTTP#request-body nodeList description
 
