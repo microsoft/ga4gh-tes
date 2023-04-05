@@ -684,7 +684,11 @@ namespace TesApi.Web
                 switch (exception)
                 {
                     case AzureBatchPoolCreationException azureBatchPoolCreationException:
-                        logger.LogWarning(azureBatchPoolCreationException, "TES task: {TesTask} AzureBatchPoolCreationException.Message: {ExceptionMessage} . This might be a transient issue. Task will remain with state QUEUED.", tesTask.Id, azureBatchPoolCreationException.Message);
+                        logger.LogWarning(azureBatchPoolCreationException, "TES task: {TesTask} AzureBatchPoolCreationException.Message: {ExceptionMessage} . This might be a transient issue. Task will remain with state QUEUED. Confirmed timeout: {ConfirmedTimeout}", tesTask.Id, azureBatchPoolCreationException.Message, azureBatchPoolCreationException.IsTimeout);
+                        if (azureBatchPoolCreationException.IsJobQuota || azureBatchPoolCreationException.IsPoolQuota)
+                        {
+                            neededPools.Add(poolKey);
+                        }
                         break;
 
                     case AzureBatchQuotaMaxedOutException azureBatchQuotaMaxedOutException:
@@ -718,18 +722,18 @@ namespace TesApi.Web
                         logger.LogError(batchClientException, "TES task: {TesTask} BatchClientException.Message: {ExceptionMessage} {ExceptionData}", tesTask.Id, batchClientException.Message, string.Join(",", batchClientException?.Data?.Values));
                         break;
 
-                    case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && IsJobQuotaException(batchErrorException.Body.Code):
+                    case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && AzureBatchPoolCreationException.IsJobQuotaException(batchErrorException.Body.Code):
                         tesTask.SetWarning(batchErrorException.Body.Message.Value, Array.Empty<string>());
                         logger.LogInformation("Not enough job quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, batchErrorException.Body.Message.Value);
                         break;
 
-                    case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && IsPoolQuotaException(batchErrorException.Body.Code):
+                    case BatchException batchException when batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException && AzureBatchPoolCreationException.IsPoolQuotaException(batchErrorException.Body.Code):
                         neededPools.Add(poolKey);
                         tesTask.SetWarning(batchErrorException.Body.Message.Value, Array.Empty<string>());
                         logger.LogInformation("Not enough pool quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, batchErrorException.Body.Message.Value);
                         break;
 
-                    case Microsoft.Rest.Azure.CloudException cloudException when IsPoolQuotaException(cloudException.Body.Code):
+                    case Microsoft.Rest.Azure.CloudException cloudException when AzureBatchPoolCreationException.IsPoolQuotaException(cloudException.Body.Code):
                         neededPools.Add(poolKey);
                         tesTask.SetWarning(cloudException.Body.Message, Array.Empty<string>());
                         logger.LogInformation("Not enough pool quota available for task Id {TesTask}. Reason: {BodyMessage}. Task will remain in queue.", tesTask.Id, cloudException.Body.Message);
@@ -741,17 +745,6 @@ namespace TesApi.Web
                         logger.LogError(exception, "TES task: {TesTask} Exception.Message: {ExceptionMessage}", tesTask.Id, exception.Message);
                         break;
                 }
-
-                static bool IsJobQuotaException(string code)
-                    => @"ActiveJobAndScheduleQuotaReached".Equals(code, StringComparison.OrdinalIgnoreCase);
-
-                static bool IsPoolQuotaException(string code)
-                    => code switch
-                    {
-                        "AutoPoolCreationFailedWithQuotaReached" => true,
-                        "PoolQuotaReached" => true,
-                        _ => false,
-                    };
             }
         }
 

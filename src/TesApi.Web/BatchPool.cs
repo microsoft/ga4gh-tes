@@ -480,12 +480,13 @@ namespace TesApi.Web
         {
             try
             {
-                CloudPool pool = default;
-                var poolInfo = await _azureProxy.CreateBatchPoolAsync(poolModel, isPreemptible, cancellationToken);
-
+                PoolInformation poolInfo = default;
                 await Task.WhenAll(
-                    Task.Run(async () => pool = await _azureProxy.GetBatchPoolAsync(poolInfo.PoolId, cancellationToken, new ODATADetailLevel { SelectClause = CloudPoolSelectClause })),
-                    _azureProxy.CreateBatchJobAsync(poolInfo, cancellationToken));
+                    Task.Run(async () => poolInfo = await _azureProxy.CreateBatchPoolAsync(poolModel, isPreemptible, cancellationToken)),
+                    _azureProxy.CreateBatchJobAsync(new() { PoolId = poolModel.Name }, cancellationToken));
+
+                CloudPool pool = default;
+                pool = await _azureProxy.GetBatchPoolAsync(poolInfo.PoolId, cancellationToken, new ODATADetailLevel { SelectClause = CloudPoolSelectClause });
 
                 Configure(pool);
                 _ = _batchPools.AddPool(this);
@@ -493,7 +494,7 @@ namespace TesApi.Web
             catch (AggregateException ex)
             {
                 var exception = ex.Flatten();
-                if (exception.InnerExceptions.Count < 2)
+                if (exception.InnerExceptions?.Count != 1)
                 {
                     throw new AggregateException(exception.Message, exception.InnerExceptions?.Select(HandleException) ?? Enumerable.Empty<Exception>());
                 }
@@ -512,10 +513,10 @@ namespace TesApi.Web
                 _ = _batchPools.AddPool(this);
                 return ex switch
                 {
-                    OperationCanceledException => ex.InnerException is null ? ex : new AzureBatchPoolCreationException("Pool creation was cancelled out", ex),
-                    var x when x is RequestFailedException rfe && rfe.Status == 0 && rfe.InnerException is System.Net.WebException webException && webException.Status == System.Net.WebExceptionStatus.Timeout => new AzureBatchPoolCreationException("Pool creation timed out", ex),
-                    var x when IsInnermostExceptionSocketException(x) => new AzureBatchPoolCreationException("Pool creation likely timed out", ex),
-                    _ => ex,
+                    OperationCanceledException => ex.InnerException is null ? ex : new AzureBatchPoolCreationException(ex.Message, true, ex),
+                    var x when x is RequestFailedException rfe && rfe.Status == 0 && rfe.InnerException is System.Net.WebException webException && webException.Status == System.Net.WebExceptionStatus.Timeout => new AzureBatchPoolCreationException(ex.Message, true, ex),
+                    var x when IsInnermostExceptionSocketException(x) => new AzureBatchPoolCreationException(ex.Message, ex),
+                    _ => new AzureBatchPoolCreationException(ex.Message, ex),
                 };
 
                 static bool IsInnermostExceptionSocketException(Exception ex)
