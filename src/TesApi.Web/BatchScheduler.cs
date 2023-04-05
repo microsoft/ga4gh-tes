@@ -1030,7 +1030,7 @@ namespace TesApi.Web
 
             var sb = new StringBuilder();
 
-            sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath}; }} && \\");  // Function that appends key=value pair to metrics.txt file
+            sb.AppendLinuxLine($"(write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath}; }} && \\");  // Function that appends key=value pair to metrics.txt file
             sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
             sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/{batchExecutionDirectoryPath} && \\");
 
@@ -1095,13 +1095,11 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath} && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath}' && \\");
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {blobxferImageName} upload --storage-url \"{metricsUrl}\" --local-path \"{metricsPath}\" --rename --no-recursive && \\");
-            sb.AppendLinuxLine($"rm -rf $AZ_BATCH_TASK_WORKING_DIR");
-
-            // If a task fails, delete the working directory and exit with the original exit code
-            var batchScript = $"({sb}) || {{ exit_code=$?; rm -rf $AZ_BATCH_TASK_WORKING_DIR; exit $exit_code; }}";
+            sb.AppendLinuxLine($"rm -rf $AZ_BATCH_TASK_WORKING_DIR) || \\");
+            sb.AppendLinuxLine($"{{ exit_code=$?; rm -rf $AZ_BATCH_TASK_WORKING_DIR; exit $exit_code; }}"); // If a task fails, delete the working directory and exit with the original exit code
 
             var batchScriptPath = $"{batchExecutionDirectoryPath}/{BatchScriptFileName}";
-            await this.storageAccessProvider.UploadBlobAsync($"/{batchScriptPath}", batchScript);
+            await this.storageAccessProvider.UploadBlobAsync($"/{batchScriptPath}", sb.ToString());
 
             var batchScriptSasUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchScriptPath}");
             var batchExecutionDirectorySasUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchExecutionDirectoryPath}/", getContainerSas: true);
