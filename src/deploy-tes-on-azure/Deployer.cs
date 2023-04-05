@@ -94,14 +94,14 @@ namespace TesDeployer
             "Microsoft.Authorization",
             "Microsoft.Batch",
             "Microsoft.Compute",
+            "Microsoft.ContainerService",
             "Microsoft.DocumentDB",
             "Microsoft.OperationalInsights",
+            "Microsoft.OperationsManagement"
             "Microsoft.insights",
             "Microsoft.Network",
             "Microsoft.Storage",
-            "Microsoft.DBforPostgreSQL",
-            "Microsoft.ContainerService",
-            "Microsoft.OperationsManagement"
+            "Microsoft.DBforPostgreSQL"
         };
 
         private Configuration configuration { get; set; }
