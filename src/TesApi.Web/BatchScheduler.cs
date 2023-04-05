@@ -1095,12 +1095,13 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath} && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath}' && \\");
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {blobxferImageName} upload --storage-url \"{metricsUrl}\" --local-path \"{metricsPath}\" --rename --no-recursive && \\");
-            sb.AppendLinuxLine("rm -rf $AZ_BATCH_TASK_WORKING_DIR || {exit_code =$?; rm -rf $AZ_BATCH_TASK_WORKING_DIR; exit $exit_code; }");
+            sb.AppendLinuxLine($"rm -rf $AZ_BATCH_TASK_WORKING_DIR");
 
             // If a task fails, delete the working directory and exit with the original exit code
+            var batchScript = $"({sb}) || {{ exit_code=$?; rm -rf $AZ_BATCH_TASK_WORKING_DIR; exit $exit_code; }}";
 
             var batchScriptPath = $"{batchExecutionDirectoryPath}/{BatchScriptFileName}";
-            await this.storageAccessProvider.UploadBlobAsync($"/{batchScriptPath}", sb.ToString());
+            await this.storageAccessProvider.UploadBlobAsync($"/{batchScriptPath}", batchScript);
 
             var batchScriptSasUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchScriptPath}");
             var batchExecutionDirectorySasUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchExecutionDirectoryPath}/", getContainerSas: true);
