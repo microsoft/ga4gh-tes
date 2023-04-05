@@ -97,7 +97,7 @@ namespace TesDeployer
             "Microsoft.ContainerService",
             "Microsoft.DocumentDB",
             "Microsoft.OperationalInsights",
-            "Microsoft.OperationsManagement"
+            "Microsoft.OperationsManagement",
             "Microsoft.insights",
             "Microsoft.Network",
             "Microsoft.Storage",
