@@ -622,6 +622,15 @@ namespace TesDeployer
                         {
                             ConsoleEx.WriteLine($"HTTP Response: {hExc.Response.Content}");
                         }
+                        
+                        if (exc is HttpRequestException rExc)
+                        {
+                            ConsoleEx.WriteLine($"HTTP Request StatusCode: {rExc.StatusCode.ToString()}");
+                            if (rExc.InnerException is not null)
+                            {
+                                ConsoleEx.WriteLine($"InnerException: {.Message.GetType().FullName}: {rExc.InnerException.Message}");
+                            }
+                        }
                     }
                 }
 
