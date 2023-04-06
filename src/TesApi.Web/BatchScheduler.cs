@@ -1153,7 +1153,8 @@ namespace TesApi.Web
                     .Replace(@"{CleanupScriptLines}", string.Join("\n", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
                     .Replace(@"{BatchScriptPath}", batchScriptPath)
                     .Replace(@"{TaskExecutor}", executor.Image)
-                    .Replace(@"{ExecutionPathPrefix}", batchExecutionPathPrefix.TrimStart('/'));
+                    .Replace(@"{ExecutionPathPrefix}", batchExecutionPathPrefix.TrimStart('/'))
+                    .Replace("\"", "\\\"");
 
             static IEnumerable<string> MungeCleanupScript(IEnumerable<string> content)
             {
