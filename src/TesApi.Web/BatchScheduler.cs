@@ -85,7 +85,7 @@ namespace TesApi.Web
         private readonly ContainerRegistryProvider containerRegistryProvider;
         private readonly string batchPrefix;
         private readonly IBatchPoolFactory _batchPoolFactory;
-        private readonly string taskRunScriptContent;
+        private readonly string[] taskRunScriptContent;
         private readonly string[] taskCleanupScriptContent;
 
         private HashSet<string> onlyLogBatchTaskStateOnce = new();
@@ -164,7 +164,7 @@ namespace TesApi.Web
                 _batchPoolFactory = poolFactory;
                 batchPrefix = batchSchedulingOptions.Value.Prefix;
                 logger.LogInformation("BatchPrefix: {BatchPrefix}", batchPrefix);
-                taskRunScriptContent = string.Join(") && (", File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh")));
+                taskRunScriptContent = File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh"));
                 taskCleanupScriptContent = File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/clean-executor.sh"));
             }
 
@@ -1106,7 +1106,7 @@ namespace TesApi.Web
 
             var batchRunCommand = enableBatchAutopool
                 ? $"/bin/bash {batchScriptPath}"
-                : $"/bin/bash -c \"({MungeBatchScript()})\"";
+                : $"/bin/bash -c \"{MungeBatchScript()}\"";
 
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
@@ -1149,8 +1149,8 @@ namespace TesApi.Web
             }
 
             string MungeBatchScript()
-                => taskRunScriptContent
-                    .Replace(@"{CleanupScriptLines}", string.Join(") && (", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
+                => string.Join("\n", taskRunScriptContent)
+                    .Replace(@"{CleanupScriptLines}", string.Join("\n", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
                     .Replace(@"{BatchScriptPath}", batchScriptPath)
                     .Replace(@"{TaskExecutor}", executor.Image)
                     .Replace(@"{ExecutionPathPrefix}", batchExecutionPathPrefix.TrimStart('/'));
