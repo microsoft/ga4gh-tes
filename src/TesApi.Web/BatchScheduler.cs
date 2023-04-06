@@ -85,7 +85,8 @@ namespace TesApi.Web
         private readonly ContainerRegistryProvider containerRegistryProvider;
         private readonly string batchPrefix;
         private readonly IBatchPoolFactory _batchPoolFactory;
-        private readonly string taskRunScriptContent;
+        private readonly string[] taskRunScriptContent;
+        private readonly string[] taskCleanupScriptContent;
 
         private HashSet<string> onlyLogBatchTaskStateOnce = new();
 
@@ -163,7 +164,8 @@ namespace TesApi.Web
                 _batchPoolFactory = poolFactory;
                 batchPrefix = batchSchedulingOptions.Value.Prefix;
                 logger.LogInformation("BatchPrefix: {BatchPrefix}", batchPrefix);
-                taskRunScriptContent = string.Join(") && (", File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh")));
+                taskRunScriptContent = File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh"));
+                taskCleanupScriptContent = File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/clean-executor.sh"));
             }
 
             this.gen2BatchNodeInfo = new BatchNodeInfo
@@ -1104,7 +1106,7 @@ namespace TesApi.Web
 
             var batchRunCommand = enableBatchAutopool
                 ? $"/bin/bash {batchScriptPath}"
-                : $"/bin/bash -c \"({MungeBatchScriptPath()})\"";
+                : $"/bin/bash -c \"{MungeBatchScript()}\"";
 
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
@@ -1130,12 +1132,6 @@ namespace TesApi.Web
 
             return cloudTask;
 
-            string MungeBatchScriptPath()
-                => (poolHasContainerConfig
-                    ? string.Join(") && (", taskRunScriptContent.Split(") && (").SkipWhile(l => l.Contains(@"{TaskExecutor}"))).Replace(">>", ">")
-                    : taskRunScriptContent)
-                .Replace(@"{BatchScriptPath}", batchScriptPath).Replace(@"{TaskExecutor}", executor.Image).Replace(@"{ExecutionPathPrefix}", batchExecutionPathPrefix.TrimStart('/'));
-
             static bool UrlContainsSas(string url)
             {
                 var uri = new Uri(url, UriKind.Absolute);
@@ -1151,6 +1147,25 @@ namespace TesApi.Web
                         _ => false,
                     };
             }
+
+            string MungeBatchScript()
+                => string.Join("\n", taskRunScriptContent)
+                    .Replace(@"{CleanupScriptLines}", string.Join("\n", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
+                    .Replace(@"{BatchScriptPath}", batchScriptPath)
+                    .Replace(@"{TaskExecutor}", executor.Image)
+                    .Replace(@"{ExecutionPathPrefix}", batchExecutionPathPrefix.TrimStart('/'))
+                    .Replace("\"", "\\\"");
+
+            static IEnumerable<string> MungeCleanupScript(IEnumerable<string> content)
+            {
+                return content.Select((line, index) => $"echo '{line}' {Redirect(index)} ../clean-executor.sh");
+
+                static string Redirect(int index)
+                    => index == 0 ? ">" : ">>";
+            }
+
+            static IEnumerable<string> MungeCleanupScriptForContainerConfig(IEnumerable<string> content)
+                => MungeCleanupScript(content.Where(line => !line.Contains(@"{TaskExecutor}")));
         }
 
         /// <summary>
