@@ -744,6 +744,12 @@ namespace TesApi.Web
                 }
             }
 
+            if (TaskFailureInformationCodes.DiskFull.Equals(azureBatchJobAndTaskState.NodeErrorCode, StringComparison.OrdinalIgnoreCase))
+            {
+                azureBatchJobAndTaskState.NodeErrorDetails = (azureBatchJobAndTaskState.NodeErrorDetails ?? Enumerable.Empty<string>())
+                    .Append($"Compute Node Error: {TaskFailureInformationCodes.DiskFull} Id: {azureBatchJobAndTaskState.NodeId}");
+            }
+
             switch (azureBatchJobAndTaskState.JobState)
             {
                 case null:
@@ -797,7 +803,7 @@ namespace TesApi.Web
                                 {
                                     BatchTaskState = BatchTaskState.NodeFailedDuringStartupOrExecution,
                                     FailureReason = azureBatchJobAndTaskState.NodeErrorCode,
-                                    SystemLogItems = Enumerable.Empty<string>().Append(azureBatchJobAndTaskState.NodeErrorCode),
+                                    SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
                                     Pool = azureBatchJobAndTaskState.Pool
                                 };
                             }
