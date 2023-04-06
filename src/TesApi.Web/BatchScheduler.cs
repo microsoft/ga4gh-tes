@@ -1158,7 +1158,7 @@ namespace TesApi.Web
 
             static IEnumerable<string> MungeCleanupScript(IEnumerable<string> content)
             {
-                return content.Select((line, index) => $"echo -n '{line}' {Redirect(index)} ../clean-executor.sh");
+                return content.Select((line, index) => $"echo '{line}' {Redirect(index)} ../clean-executor.sh");
 
                 static string Redirect(int index)
                     => index == 0 ? ">" : ">>";
