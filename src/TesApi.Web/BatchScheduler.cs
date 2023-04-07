@@ -675,9 +675,9 @@ namespace TesApi.Web
             }
             finally
             {
-                if (enableBatchAutopool && poolInformation is not null && poolInformation.AutoPoolSpecification is null)
+                if (enableBatchAutopool && poolInformation?.AutoPoolSpecification is not null)
                 {
-                    await azureProxy.DeleteBatchPoolIfExistsAsync(poolInformation.PoolId, cancellationToken);
+                    await azureProxy.DeleteBatchPoolIfExistsAsync(tesTask.Id, cancellationToken);
                 }
             }
 

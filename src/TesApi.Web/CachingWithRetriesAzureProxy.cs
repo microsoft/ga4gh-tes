@@ -161,8 +161,7 @@ namespace TesApi.Web
         public Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken) => azureProxy.CreateBatchPoolAsync(poolInfo, isPreemptable, cancellationToken);
 
         /// <inheritdoc/>
-        public Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken)
-            => azureProxy.DeleteBatchPoolIfExistsAsync(poolId, cancellationToken);
+        public Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken) => azureProxy.DeleteBatchPoolIfExistsAsync(poolId, cancellationToken);
 
         /// <inheritdoc/>
         public async Task<(Microsoft.Azure.Batch.Common.AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken)
