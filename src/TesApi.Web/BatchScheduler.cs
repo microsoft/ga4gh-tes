@@ -757,8 +757,8 @@ namespace TesApi.Web
 
                     default:
                         tesTask.State = TesState.SYSTEMERROREnum;
-                        tesTask.SetFailureReason("UnknownError", exception.Message, exception.StackTrace);
-                        logger.LogError(exception, "TES task: {TesTask} Exception.Message: {ExceptionMessage}", tesTask.Id, exception.Message);
+                        tesTask.SetFailureReason("UnknownError", $"{exception?.GetType().FullName}: {exception?.Message}", exception?.StackTrace);
+                        logger.LogError(exception, "TES task: {TesTask} Exception: {ExceptionType}: {ExceptionMessage}", tesTask.Id, exception?.GetType().FullName, exception?.Message);
                         break;
                 }
             }

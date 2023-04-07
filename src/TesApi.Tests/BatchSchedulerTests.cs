@@ -398,14 +398,14 @@ namespace TesApi.Tests
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchJobAsync(It.IsAny<PoolInformation>(), It.IsAny<CancellationToken>()))
                     .Callback<PoolInformation, CancellationToken>((_1, _2)
-                        => throw new AzureBatchPoolCreationException("No job for you.", new Exception("No job for you."))));
+                        => throw new Microsoft.Rest.Azure.CloudException("No job for you.") { Body = new() { Code = BatchErrorCodeStrings.OperationTimedOut } }));
 
             void Validator(TesTask _1, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
             {
                 var log = logs.LastOrDefault();
                 Assert.IsNotNull(log);
                 var (logLevel, exception) = log;
-                Assert.AreEqual(LogLevel.Warning, logLevel);
+                Assert.AreEqual(LogLevel.Information, logLevel);
                 Assert.IsInstanceOfType<AzureBatchPoolCreationException>(exception);
             }
         }
@@ -418,14 +418,14 @@ namespace TesApi.Tests
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
                     .Callback<Pool, bool, CancellationToken>((_1, _2, _3)
-                        => throw new AzureBatchPoolCreationException("No pool for you.", new Exception("No pool for you."))));
+                        => throw new Microsoft.Rest.Azure.CloudException("No pool for you.") { Body = new() { Code = BatchErrorCodeStrings.OperationTimedOut } }));
 
             void Validator(TesTask _1, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
             {
                 var log = logs.LastOrDefault();
                 Assert.IsNotNull(log);
                 var (logLevel, exception) = log;
-                Assert.AreEqual(LogLevel.Warning, logLevel);
+                Assert.AreEqual(LogLevel.Information, logLevel);
                 Assert.IsInstanceOfType<AzureBatchPoolCreationException>(exception);
             }
         }
