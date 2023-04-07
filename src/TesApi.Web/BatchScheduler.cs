@@ -481,17 +481,17 @@ namespace TesApi.Web
             cancellationToken.ThrowIfCancellationRequested();
             var combinedBatchTaskInfo = await GetBatchTaskStateAsync(tesTask, batchAccountState, cancellationToken);
             const string template = "TES task: {TesTask} TES task state: {TesTaskState} BatchTaskState: {BatchTaskState}";
-            var msg = string.Format(ConvertTemplateToFormat(template), tesTask.Id, tesTask.State, combinedBatchTaskInfo.BatchTaskState);
+            var msg = string.Format(ConvertTemplateToFormat(template), tesTask.Id, tesTask.State.ToString(), combinedBatchTaskInfo.BatchTaskState.ToString());
 
             if (onlyLogBatchTaskStateOnce.Add(msg))
             {
-                logger.LogInformation(template, tesTask.Id, tesTask.State, combinedBatchTaskInfo.BatchTaskState);
+                logger.LogInformation(template, tesTask.Id, tesTask.State.ToString(), combinedBatchTaskInfo.BatchTaskState.ToString());
             }
 
             return (tesTask, HandleTesTaskTransitionAsync(tesTask, combinedBatchTaskInfo, cancellationToken));
 
             static string ConvertTemplateToFormat(string template)
-                => string.Join(null, template.Split('{', '}').Select((s, i) => (s, i)).Select(t => t.i % 2 == 0 ? t.s : $"{t.i / 2}"));
+                => string.Join(null, template.Split('{', '}').Select((s, i) => (s, i)).Select(t => t.i % 2 == 0 ? t.s : $"{{{t.i / 2}}}"));
         }
 
         /// <summary>
@@ -686,10 +686,24 @@ namespace TesApi.Web
                 switch (exception)
                 {
                     case AzureBatchPoolCreationException azureBatchPoolCreationException:
-                        logger.LogWarning(azureBatchPoolCreationException, "TES task: {TesTask} AzureBatchPoolCreationException.Message: {ExceptionMessage} . This might be a transient issue. Task will remain with state QUEUED. Confirmed timeout: {ConfirmedTimeout}", tesTask.Id, azureBatchPoolCreationException.Message, azureBatchPoolCreationException.IsTimeout);
+                        if (!azureBatchPoolCreationException.IsTimeout && !azureBatchPoolCreationException.IsJobQuota && !azureBatchPoolCreationException.IsPoolQuota && azureBatchPoolCreationException.InnerException is not null)
+                        {
+                            HandleException(azureBatchPoolCreationException.InnerException);
+                            return;
+                        }
+
+                        logger.LogInformation(azureBatchPoolCreationException, "TES task: {TesTask} AzureBatchPoolCreationException.Message: {ExceptionMessage} . This might be a transient issue. Task will remain with state QUEUED. Confirmed timeout: {ConfirmedTimeout}", tesTask.Id, azureBatchPoolCreationException.Message, azureBatchPoolCreationException.IsTimeout);
                         if (azureBatchPoolCreationException.IsJobQuota || azureBatchPoolCreationException.IsPoolQuota)
                         {
                             neededPools.Add(poolKey);
+                            tesTask.SetWarning(azureBatchPoolCreationException.InnerException switch
+                                {
+                                    null => "Unknown reason",
+                                    Microsoft.Rest.Azure.CloudException cloudException => cloudException.Body.Message,
+                                    var e when e is BatchException batchException && batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException => batchErrorException.Body.Message.Value,
+                                    _ => "Unknown reason",
+                                },
+                                Array.Empty<string>());
                         }
                         break;
 
