@@ -234,9 +234,27 @@ namespace TesApi.Controllers
         public virtual async Task<IActionResult> GetTaskAsync([FromRoute][Required] string id, [FromQuery] string view)
         {
             TesTask tesTask = null;
+
             var itemFound = await repository.TryGetItemAsync(id, item => tesTask = item);
 
-            return itemFound ? TesJsonResult(tesTask, view) : NotFound($"The task with id {id} does not exist.");
+            if (!itemFound)
+            {
+                return NotFound($"The task with id {id} does not exist.");
+            }
+
+            if (((tesTask.State == TesState.SYSTEMERROREnum || tesTask.State == TesState.EXECUTORERROREnum) 
+                && !string.IsNullOrEmpty(view) 
+                && Enum.Parse<TesView>(view, true) == TesView.FULL)
+                || tesTask.State == TesState.COMPLETEEnum
+                || tesTask.State == TesState.CANCELEDEnum)
+            {
+                // Cache optimization:
+                // If the task failed with an error, Cromwell will call a second time requesting FULL view, at which point can remove from cache
+                // OR, if a task completed with no errors, Cromwell will not call again
+                await repository.RemoveFromCacheAsync(tesTask);
+            }
+
+            return TesJsonResult(tesTask, view);
         }
 
         /// <summary>

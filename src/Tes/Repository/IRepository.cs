@@ -58,5 +58,11 @@ namespace Tes.Repository
         /// <param name="item">The item to persist</param>
         /// <returns>The created document</returns>
         Task<T> UpdateItemAsync(T item);
+
+        /// <summary>
+        /// Removes an item from the cache if it exists.  This method exists for cache optimizations
+        /// </summary>
+        /// <param name="Item">The item to remove</param>
+        ValueTask RemoveFromCacheAsync(T Item);
     }
 }

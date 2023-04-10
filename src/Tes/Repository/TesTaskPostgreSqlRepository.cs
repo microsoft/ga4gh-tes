@@ -104,13 +104,6 @@ namespace Tes.Repository
             if (cache?.TryGetValue(id, out TesTask task) == true)
             {
                 onSuccess?.Invoke(task);
-
-                if (!task.IsActiveState())
-                {
-                    // Cache optimization because we can assume that most of the time, the workflow engine will no longer "GET" after a terminal state
-                    cache?.TryRemove(task.Id);
-                }
-
                 return true;
             }
 
@@ -240,6 +233,13 @@ namespace Tes.Repository
             // TODO paging support
             var results = await GetItemsAsync(predicate);
             return (null, results);
+        }
+
+        /// <inheritdoc/>
+        public ValueTask RemoveFromCacheAsync(TesTask item)
+        {
+            cache?.TryRemove(item.Id);
+            return ValueTask.CompletedTask;
         }
 
         public void Dispose()
