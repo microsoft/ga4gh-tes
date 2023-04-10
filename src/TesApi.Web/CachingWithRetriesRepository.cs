@@ -137,7 +137,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public ValueTask<bool> TryRemoveFromCacheAsync(T item)
+        public ValueTask<bool> TryRemoveItemFromCacheAsync(T item)
         {
             cache?.Remove(item);
             return ValueTask.FromResult(true);

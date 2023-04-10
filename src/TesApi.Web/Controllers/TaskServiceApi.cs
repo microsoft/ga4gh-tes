@@ -241,7 +241,7 @@ namespace TesApi.Controllers
                 return NotFound($"The task with id {id} does not exist.");
             }
 
-            await TryRemoveFromCacheAsync(tesTask, view);
+            await TryRemoveItemFromCacheAsync(tesTask, view);
             return TesJsonResult(tesTask, view);
         }
 
@@ -280,7 +280,7 @@ namespace TesApi.Controllers
             return TesJsonResult(response, view);
         }
 
-        private async ValueTask<bool> TryRemoveFromCacheAsync(TesTask tesTask, string view)
+        private async ValueTask<bool> TryRemoveItemFromCacheAsync(TesTask tesTask, string view)
         {
             try
             {
@@ -293,7 +293,7 @@ namespace TesApi.Controllers
                     // Cache optimization:
                     // If the task failed with an error, Cromwell will call a second time requesting FULL view, at which point can remove from cache
                     // OR, if a task completed with no errors, Cromwell will not call again
-                    return await repository.TryRemoveFromCacheAsync(tesTask);
+                    return await repository.TryRemoveItemFromCacheAsync(tesTask);
                 }
             }
             catch (Exception exc)
