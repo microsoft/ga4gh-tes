@@ -246,32 +246,6 @@ namespace TesApi.Controllers
             return TesJsonResult(tesTask, view);
         }
 
-
-        private async ValueTask<bool> TryRemoveFromCacheAsync(TesTask tesTask, string view)
-        {
-            try
-            {
-                if (((tesTask.State == TesState.SYSTEMERROREnum || tesTask.State == TesState.EXECUTORERROREnum)
-                    && !string.IsNullOrEmpty(view)
-                    && Enum.Parse<TesView>(view, true) == TesView.FULL)
-                    || tesTask.State == TesState.COMPLETEEnum
-                    || tesTask.State == TesState.CANCELEDEnum)
-                {
-                    // Cache optimization:
-                    // If the task failed with an error, Cromwell will call a second time requesting FULL view, at which point can remove from cache
-                    // OR, if a task completed with no errors, Cromwell will not call again
-                    return await repository.TryRemoveFromCacheAsync(tesTask);
-                }
-            }
-            catch (Exception exc)
-            {
-                // Do not re-throw, since a cache issue should not fail the GET request
-                logger.LogWarning(exc, $"An exception occurred while trying to remove TesTask with ID {tesTask.Id} with view {view} from the cache");
-            }
-
-            return false;
-        }
-
         /// <summary>
         /// List tasks. TaskView is requested as such: \&quot;v1/tasks?view&#x3D;BASIC\&quot;
         /// </summary>
@@ -305,6 +279,31 @@ namespace TesApi.Controllers
             var response = new TesListTasksResponse { Tasks = tasks.ToList(), NextPageToken = encodedNextPageToken };
 
             return TesJsonResult(response, view);
+        }
+
+        private async ValueTask<bool> TryRemoveFromCacheAsync(TesTask tesTask, string view)
+        {
+            try
+            {
+                if (((tesTask.State == TesState.SYSTEMERROREnum || tesTask.State == TesState.EXECUTORERROREnum)
+                    && !string.IsNullOrEmpty(view)
+                    && Enum.Parse<TesView>(view, true) == TesView.FULL)
+                    || tesTask.State == TesState.COMPLETEEnum
+                    || tesTask.State == TesState.CANCELEDEnum)
+                {
+                    // Cache optimization:
+                    // If the task failed with an error, Cromwell will call a second time requesting FULL view, at which point can remove from cache
+                    // OR, if a task completed with no errors, Cromwell will not call again
+                    return await repository.TryRemoveFromCacheAsync(tesTask);
+                }
+            }
+            catch (Exception exc)
+            {
+                // Do not re-throw, since a cache issue should not fail the GET request
+                logger.LogWarning(exc, $"An exception occurred while trying to remove TesTask with ID {tesTask.Id} with view {view} from the cache");
+            }
+
+            return false;
         }
 
         private IActionResult TesJsonResult(object value, string view)
