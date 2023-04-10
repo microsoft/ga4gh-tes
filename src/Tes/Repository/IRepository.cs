@@ -63,6 +63,6 @@ namespace Tes.Repository
         /// Removes an item from the cache if it exists.  This method exists for cache optimizations
         /// </summary>
         /// <param name="Item">The item to remove</param>
-        ValueTask RemoveFromCacheAsync(T Item);
+        ValueTask RemoveFromCacheAsync(T item);
     }
 }

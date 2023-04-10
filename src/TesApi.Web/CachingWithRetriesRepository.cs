@@ -137,9 +137,9 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public ValueTask RemoveFromCacheAsync(T Item)
+        public ValueTask RemoveFromCacheAsync(T item)
         {
-            cache?.Remove(Item);
+            cache?.Remove(item);
             return ValueTask.CompletedTask;
         }
 
