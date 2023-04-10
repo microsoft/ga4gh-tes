@@ -234,7 +234,6 @@ namespace TesApi.Controllers
         public virtual async Task<IActionResult> GetTaskAsync([FromRoute][Required] string id, [FromQuery] string view)
         {
             TesTask tesTask = null;
-
             var itemFound = await repository.TryGetItemAsync(id, item => tesTask = item);
 
             if (!itemFound)
