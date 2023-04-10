@@ -1243,6 +1243,7 @@ namespace TesApi.Web
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
                 UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
+                Constraints = new(retentionTime: TimeSpan.Zero),
                 ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(batchScriptSasUrl, batchScriptPath), ResourceFile.FromUrl(downloadFilesScriptUrl, downloadFilesScriptPath), ResourceFile.FromUrl(uploadFilesScriptSasUrl, uploadFilesScriptPath) },
                 OutputFiles = new List<OutputFile> {
                     new OutputFile(
