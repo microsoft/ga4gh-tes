@@ -242,19 +242,34 @@ namespace TesApi.Controllers
                 return NotFound($"The task with id {id} does not exist.");
             }
 
-            if (((tesTask.State == TesState.SYSTEMERROREnum || tesTask.State == TesState.EXECUTORERROREnum) 
-                && !string.IsNullOrEmpty(view) 
-                && Enum.Parse<TesView>(view, true) == TesView.FULL)
-                || tesTask.State == TesState.COMPLETEEnum
-                || tesTask.State == TesState.CANCELEDEnum)
+            await TryRemoveFromCacheAsync(tesTask, view);
+            return TesJsonResult(tesTask, view);
+        }
+
+
+        private async ValueTask<bool> TryRemoveFromCacheAsync(TesTask tesTask, string view)
+        {
+            try
             {
-                // Cache optimization:
-                // If the task failed with an error, Cromwell will call a second time requesting FULL view, at which point can remove from cache
-                // OR, if a task completed with no errors, Cromwell will not call again
-                await repository.RemoveFromCacheAsync(tesTask);
+                if (((tesTask.State == TesState.SYSTEMERROREnum || tesTask.State == TesState.EXECUTORERROREnum)
+                    && !string.IsNullOrEmpty(view)
+                    && Enum.Parse<TesView>(view, true) == TesView.FULL)
+                    || tesTask.State == TesState.COMPLETEEnum
+                    || tesTask.State == TesState.CANCELEDEnum)
+                {
+                    // Cache optimization:
+                    // If the task failed with an error, Cromwell will call a second time requesting FULL view, at which point can remove from cache
+                    // OR, if a task completed with no errors, Cromwell will not call again
+                    return await repository.TryRemoveFromCacheAsync(tesTask);
+                }
+            }
+            catch (Exception exc)
+            {
+                // Do not re-throw, since a cache issue should not fail the GET request
+                logger.LogWarning(exc, $"An exception occurred while trying to remove TesTask with ID {tesTask.Id} with view {view} from the cache");
             }
 
-            return TesJsonResult(tesTask, view);
+            return false;
         }
 
         /// <summary>

@@ -236,10 +236,9 @@ namespace Tes.Repository
         }
 
         /// <inheritdoc/>
-        public ValueTask RemoveFromCacheAsync(TesTask item)
+        public ValueTask<bool> TryRemoveFromCacheAsync(TesTask item)
         {
-            cache?.TryRemove(item.Id);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(cache?.TryRemove(item.Id) ?? false);
         }
 
         public void Dispose()
