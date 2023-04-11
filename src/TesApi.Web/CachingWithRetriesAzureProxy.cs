@@ -3,10 +3,18 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using LazyCache;
 using Microsoft.Azure.Batch;
+using Microsoft.Azure.Batch.Common;
+using Microsoft.Extensions.Options;
+using Polly;
+using Polly.Retry;
+using Polly.Utilities;
+using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
@@ -19,19 +27,39 @@ namespace TesApi.Web
     {
         private readonly IAzureProxy azureProxy;
         private readonly Management.CacheAndRetryHandler cacheAndRetryHandler;
+        private readonly AsyncRetryPolicy batchPoolOrJobCreateHandler;
 
         /// <summary>
         /// Contructor to create a cache of <see cref="IAzureProxy"/>
         /// </summary>
         /// <param name="azureProxy"><see cref="IAzureProxy"/></param>
+        /// <param name="retryPolicyOptions"></param>
         /// <param name="cacheAndRetryHandler"></param>
-        public CachingWithRetriesAzureProxy(IAzureProxy azureProxy, Management.CacheAndRetryHandler cacheAndRetryHandler)
+        public CachingWithRetriesAzureProxy(IAzureProxy azureProxy, IOptions<RetryPolicyOptions> retryPolicyOptions, Management.CacheAndRetryHandler cacheAndRetryHandler)
         {
             ArgumentNullException.ThrowIfNull(azureProxy);
             ArgumentNullException.ThrowIfNull(cacheAndRetryHandler);
 
             this.cacheAndRetryHandler = cacheAndRetryHandler;
             this.azureProxy = azureProxy;
+
+            var creationErrorFoundCodes = new string[]
+            {
+                BatchErrorCodeStrings.JobExists,
+                BatchErrorCodeStrings.PoolExists
+            };
+
+            batchPoolOrJobCreateHandler = Policy
+                .Handle<Exception>()
+                .WaitAndRetryAsync(retryPolicyOptions.Value.MaxRetryCount,
+                    (attempt) => TimeSpan.FromSeconds(Math.Pow(retryPolicyOptions.Value.ExponentialBackOffExponent, attempt)),
+                    (exception, timeSpan) =>
+                    {
+                        if (exception is BatchException batchException && creationErrorFoundCodes.Contains(batchException.RequestInformation?.BatchError?.Code, StringComparer.OrdinalIgnoreCase))
+                        {
+                            ExceptionDispatchInfo.Capture(exception).Throw();
+                        }
+                    });
         }
 
 
@@ -39,7 +67,15 @@ namespace TesApi.Web
         public Task CreateAutoPoolModeBatchJobAsync(string jobId, CloudTask cloudTask, PoolInformation poolInformation, CancellationToken cancellationToken) => azureProxy.CreateAutoPoolModeBatchJobAsync(jobId, cloudTask, poolInformation, cancellationToken);
 
         /// <inheritdoc/>
-        public Task CreateBatchJobAsync(PoolInformation poolInformation, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.CreateBatchJobAsync(poolInformation, ct), cancellationToken);
+        public async Task CreateBatchJobAsync(PoolInformation poolInformation, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await batchPoolOrJobCreateHandler.ExecuteAsync(ct => azureProxy.CreateBatchJobAsync(poolInformation, ct), cancellationToken);
+            }
+            catch (BatchException exc) when (BatchErrorCodeStrings.JobExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
+            { }
+        }
 
         /// <inheritdoc/>
         public Task AddBatchTaskAsync(string tesTaskId, CloudTask cloudTask, PoolInformation poolInformation, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.AddBatchTaskAsync(tesTaskId, cloudTask, poolInformation, ct), cancellationToken);
@@ -158,28 +194,23 @@ namespace TesApi.Web
         public string GetArmRegion() => azureProxy.GetArmRegion();
 
         /// <inheritdoc/>
-        public Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken) => azureProxy.CreateBatchPoolAsync(poolInfo, isPreemptable, cancellationToken);
+        public async Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await batchPoolOrJobCreateHandler.ExecuteAsync(ct => azureProxy.CreateBatchPoolAsync(poolInfo, isPreemptable, ct), cancellationToken);
+            }
+            catch (BatchException exc) when (BatchErrorCodeStrings.PoolExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
+            {
+                return new() { PoolId = poolInfo.Name };
+            }
+        }
 
         /// <inheritdoc/>
         public Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken) => azureProxy.DeleteBatchPoolIfExistsAsync(poolId, cancellationToken);
 
         /// <inheritdoc/>
-        public async Task<(Microsoft.Azure.Batch.Common.AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken)
-        {
-            var allocationState = cacheAndRetryHandler.AppCache.Get<(Microsoft.Azure.Batch.Common.AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)>($"{nameof(CachingWithRetriesAzureProxy)}:{poolId}");
-
-            if (default == allocationState)
-            {
-                allocationState = await cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.GetFullAllocationStateAsync(poolId, ct), cancellationToken);
-
-                if (default != allocationState)
-                {
-                    cacheAndRetryHandler.AppCache.Add($"{nameof(CachingWithRetriesAzureProxy)}:{poolId}", allocationState, DateTimeOffset.Now.Add(BatchPoolService.RunInterval).Subtract(TimeSpan.FromSeconds(1)));
-                }
-            }
-
-            return allocationState;
-        }
+        public Task<AzureBatchPoolAllocationState> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken) => cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(ct => azureProxy.GetFullAllocationStateAsync(poolId, ct), cancellationToken);
 
         /// <inheritdoc/>
         public IAsyncEnumerable<ComputeNode> ListComputeNodesAsync(string poolId, DetailLevel detailLevel) => cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() => azureProxy.ListComputeNodesAsync(poolId, detailLevel), cacheAndRetryHandler.RetryPolicy);

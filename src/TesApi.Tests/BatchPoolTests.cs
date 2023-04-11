@@ -26,10 +26,10 @@ namespace TesApi.Tests
         public async Task RotateDoesNothingWhenPoolIsNotAvailable()
         {
             var services = GetServiceProvider();
-            var pool = await AddPool(services.GetT(), false);
-            ((BatchPool)pool).TestSetAvailable(false);
+            var pool = (BatchPool) await AddPool(services.GetT(), false);
+            pool.TestSetAvailable(false);
 
-            await pool.ServicePoolAsync(IBatchPool.ServiceKind.Rotate);
+            await pool.ServicePoolAsync(BatchPool.ServiceKind.Rotate);
 
             Assert.IsFalse(pool.IsAvailable);
         }
@@ -38,17 +38,17 @@ namespace TesApi.Tests
         public async Task RotateMarksPoolUnavailableWhenRotateIntervalHasPassed()
         {
             var azureProxy = AzureProxyReturnValues.Get();
-            azureProxy.AzureProxyGetComputeNodeAllocationState = id => (Microsoft.Azure.Batch.Common.AllocationState.Steady, true, 0, 0, 1, 1);
+            azureProxy.AzureProxyGetComputeNodeAllocationState = id => new(DateTime.UtcNow, true, 0, 0, 1, 1) { AllocationState = Microsoft.Azure.Batch.Common.AllocationState.Steady };
             azureProxy.AzureProxyListTasks = (jobId, detailLevel) => AsyncEnumerable.Empty<CloudTask>().Append(GenerateTask(jobId, "job1"));
             azureProxy.AzureProxyListComputeNodesAsync = (i, d) => AsyncEnumerable.Empty<ComputeNode>();
             var services = GetServiceProvider(azureProxy);
-            var pool = await AddPool(services.GetT(), false);
-            TimeShift(((BatchPool)pool).TestRotatePoolTime, pool);
+            var pool = (BatchPool) await AddPool(services.GetT(), false);
+            TimeShift(pool.TestRotatePoolTime, pool);
 
-            await pool.ServicePoolAsync(IBatchPool.ServiceKind.Rotate);
+            await pool.ServicePoolAsync(BatchPool.ServiceKind.Rotate);
 
             Assert.IsFalse(pool.IsAvailable);
-            Assert.AreNotEqual(0, ((BatchPool)pool).TestTargetDedicated + ((BatchPool)pool).TestTargetLowPriority);
+            Assert.AreNotEqual(0, pool.TestTargetDedicated + pool.TestTargetLowPriority);
         }
 
         [TestMethod]
@@ -57,37 +57,36 @@ namespace TesApi.Tests
             var azureProxy = AzureProxyReturnValues.Get();
             azureProxy.AzureProxyDeleteBatchPool = (poolId, cancellationToken) => Assert.Fail();
             var services = GetServiceProvider(azureProxy);
-            var pool = await AddPool(services.GetT(), false);
+            var pool = (BatchPool) await AddPool(services.GetT(), false);
 
-            await pool.ServicePoolAsync(IBatchPool.ServiceKind.RemovePoolIfEmpty);
+            await pool.ServicePoolAsync(BatchPool.ServiceKind.RemovePoolIfEmpty);
         }
 
         [TestMethod]
         public async Task RemovePoolIfEmptyDoesNotDeletePoolIfPoolHasComputeNodes()
         {
-            IBatchPool pool = default;
             var azureProxy = AzureProxyReturnValues.Get();
-            azureProxy.AzureProxyGetComputeNodeAllocationState = id => (Microsoft.Azure.Batch.Common.AllocationState.Steady, true, 0, 0, 1, 1);
+            azureProxy.AzureProxyGetComputeNodeAllocationState = id => new(DateTime.UtcNow, true, 0, 0, 1, 1) { AllocationState = Microsoft.Azure.Batch.Common.AllocationState.Steady };
             azureProxy.AzureProxyDeleteBatchPool = (poolId, cancellationToken) => Assert.Fail();
             var services = GetServiceProvider(azureProxy);
-            pool = await AddPool(services.GetT(), false);
-            ((BatchPool)pool).TestSetAvailable(false);
+            var pool = (BatchPool) await AddPool(services.GetT(), false);
+            pool.TestSetAvailable(false);
 
-            await pool.ServicePoolAsync(IBatchPool.ServiceKind.RemovePoolIfEmpty);
+            await pool.ServicePoolAsync(BatchPool.ServiceKind.RemovePoolIfEmpty);
         }
 
         [TestMethod]
         public async Task RemovePoolIfEmptyDeletesPoolIfPoolIsNotAvailableAndHasNoComputeNodes()
         {
-            IBatchPool pool = default;
+            BatchPool pool = default;
             var azureProxy = AzureProxyReturnValues.Get();
             azureProxy.AzureProxyDeleteBatchPool = DeletePool;
             var services = GetServiceProvider(azureProxy);
-            pool = await AddPool(services.GetT(), false);
-            ((BatchPool)pool).TestSetAvailable(false);
+            pool = (BatchPool) await AddPool(services.GetT(), false);
+            pool.TestSetAvailable(false);
             var isDeleted = false;
 
-            await pool.ServicePoolAsync(IBatchPool.ServiceKind.RemovePoolIfEmpty);
+            await pool.ServicePoolAsync(BatchPool.ServiceKind.RemovePoolIfEmpty);
 
             Assert.IsTrue(isDeleted);
 
@@ -127,7 +126,7 @@ namespace TesApi.Tests
 
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<ComputeNode>> AzureProxyListComputeNodesAsync { get; set; } = (poolId, detailLevel) => AsyncEnumerable.Empty<ComputeNode>();
             internal Action<string, IEnumerable<ComputeNode>, CancellationToken> AzureProxyDeleteBatchComputeNodes { get; set; } = (poolId, computeNodes, cancellationToken) => { };
-            internal Func<string, (Microsoft.Azure.Batch.Common.AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)> AzureProxyGetComputeNodeAllocationState { get; set; } = id => (Microsoft.Azure.Batch.Common.AllocationState.Steady, true, 0, 0, 0, 0);
+            internal Func<string, AzureBatchPoolAllocationState> AzureProxyGetComputeNodeAllocationState { get; set; } = id => new(DateTime.UtcNow, true, 0, 0, 0, 0) { AllocationState = Microsoft.Azure.Batch.Common.AllocationState.Steady };
             internal Action<string, CancellationToken> AzureProxyDeleteBatchPool { get; set; } = (poolId, cancellationToken) => { };
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<CloudTask>> AzureProxyListTasks { get; set; } = (jobId, detailLevel) => AsyncEnumerable.Empty<CloudTask>();
             internal List<VirtualMachineInformation> VmSizesAndPrices { get; set; } = new();

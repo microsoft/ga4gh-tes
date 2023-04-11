@@ -771,7 +771,6 @@ namespace TesApi.Web
         /// <param name="batchAccountState"></param>
         /// <param name="cancellationToken"></param>
         /// <returns>A higher-level abstraction of the current state of the Azure Batch task</returns>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1826:Do not use Enumerable methods on indexable collections", Justification = "FirstOrDefault() is straightforward, the alternative is less clear.")]
         private async ValueTask<CombinedBatchTaskInfo> GetBatchTaskStateAsync(TesTask tesTask, BatchAccountState batchAccountState, CancellationToken cancellationToken)
         {
             var azureBatchJobAndTaskState = azureProxy.GetBatchJobAndTaskState(tesTask, enableBatchAutopool, batchAccountState);
