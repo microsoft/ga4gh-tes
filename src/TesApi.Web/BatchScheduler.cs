@@ -248,7 +248,7 @@ namespace TesApi.Web
 
             async Task DeleteBatchJobAndSetTaskStateAsync(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await DeleteBatchJobOrTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
+                await DeleteBatchJobOrTaskAsync(tesTask, batchInfo.Pool, cancellationToken);
                 await azureProxy.DeleteBatchPoolIfExistsAsync(tesTask.Id, cancellationToken);
                 SetTaskStateAndLog(tesTask, newTaskState, batchInfo);
             }
@@ -269,7 +269,7 @@ namespace TesApi.Web
 
             async Task CancelTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await DeleteBatchJobOrTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
+                await DeleteBatchJobOrTaskAsync(tesTask, batchInfo.Pool, cancellationToken);
                 await azureProxy.DeleteBatchPoolIfExistsAsync(tesTask.Id, cancellationToken);
                 tesTask.IsCancelRequested = false;
             }
@@ -307,8 +307,15 @@ namespace TesApi.Web
             }.AsReadOnly();
         }
 
-        private Task DeleteBatchJobOrTaskAsync(string taskId, PoolInformation poolInformation, CancellationToken cancellationToken)
-            => enableBatchAutopool ? azureProxy.DeleteBatchJobAsync(taskId, cancellationToken) : poolInformation?.PoolId is null ? Task.CompletedTask : azureProxy.DeleteBatchTaskAsync(taskId, poolInformation, cancellationToken);
+        private Task DeleteBatchJobOrTaskAsync(TesTask tesTask, PoolInformation poolInformation, CancellationToken cancellationToken)
+            => enableBatchAutopool ? azureProxy.DeleteBatchJobAsync(tesTask.Id, cancellationToken) : poolInformation?.PoolId is null ? WarnWhenUnableToFindPoolToDeleteTask(tesTask) : azureProxy.DeleteBatchTaskAsync(tesTask.Id, poolInformation, cancellationToken);
+
+        private Task WarnWhenUnableToFindPoolToDeleteTask(TesTask tesTask)
+        {
+            logger.LogWarning("Unable to delete batch task for task {TesTask} because of missing pool/job information.", tesTask.Id);
+            tesTask.SetWarning("Unable to delete batch task because of missing pool/job information.");
+            return Task.CompletedTask;
+        }
 
         private async Task DeleteBatchTaskAndOrJobAndOrPoolIfExists(IAzureProxy azureProxy, TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
         {
@@ -316,7 +323,7 @@ namespace TesApi.Web
 
             try
             {
-                await DeleteBatchJobOrTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
+                await DeleteBatchJobOrTaskAsync(tesTask, batchInfo.Pool, cancellationToken);
             }
             catch (Exception exc)
             {
