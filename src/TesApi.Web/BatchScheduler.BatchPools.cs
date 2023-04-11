@@ -46,7 +46,7 @@ namespace TesApi.Web
 
             // Generate hash of everything that differentiates this group of pools
             var displayName = $"{label}:{vmSize}:{isPreemptable}:{registryServer}:{identityResourceId}";
-            var hash = CommonUtilities.Base32.ConvertToBase32(SHA1.HashData(Encoding.UTF8.GetBytes(displayName))).TrimEnd('='); // This becomes 32 chars
+            var hash = CommonUtilities.Base32.ConvertToBase32(SHA1.HashData(Encoding.UTF8.GetBytes(displayName))).TrimEnd('=').ToLowerInvariant(); // This becomes 32 chars
 
             // Build a PoolName that is of legal length, while exposing the most important metadata without requiring user to find DisplayName
             // Note that the hash covers all necessary parts to make name unique, so limiting the size of the other parts is not expected to appreciably change the risk of collisions. Those other parts are for convenience
@@ -180,7 +180,7 @@ namespace TesApi.Web
 
                     var uniquifier = new byte[5]; // This always becomes 8 chars when converted to base32
                     RandomNumberGenerator.Fill(uniquifier);
-                    var poolId = $"{key}-{CommonUtilities.Base32.ConvertToBase32(uniquifier).TrimEnd('=')}"; // embedded '-' is required by GetKeyFromPoolId()
+                    var poolId = $"{key}-{CommonUtilities.Base32.ConvertToBase32(uniquifier).TrimEnd('=').ToLowerInvariant()}"; // embedded '-' is required by GetKeyFromPoolId()
                     var modelPool = await modelPoolFactory(poolId, cancellationToken);
                     modelPool.Metadata ??= new List<BatchModels.MetadataItem>();
                     modelPool.Metadata.Add(new(PoolHostName, this.batchPrefix));
