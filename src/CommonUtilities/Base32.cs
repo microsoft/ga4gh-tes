@@ -31,7 +31,7 @@ namespace CommonUtilities
                     // Convert each 5-bit group in the stream into its final character
                     .ConvertGroup(GroupBitlength,
                         (bit, index) => bit ? 1 << LargestBitPosition - index : 0,
-                        (values) => Rfc4648Base32[values.Sum(value => value)])
+                        (values) => Rfc4648Base32[values.Sum()])
                     .ToArray())
 
                 // Append suffix
@@ -53,7 +53,7 @@ namespace CommonUtilities
         /// <typeparam name="TResult">Type of the resultant items</typeparam>
         /// <param name="ts">The source enumerable of type <typeparamref name="TSource"/>.</param>
         /// <param name="itemsPerGroup">The size of each group to create out of the entire enumeration. The last group may be smaller.</param>
-        /// <param name="groupMemberFunc">The function that prepares each <typeparamref name="TSource"/> into the value expected by <paramref name="groupResultFunc"/>. Its parameters are <typeparamref name="TSource"/> and the index if that item (starting from zero) within each grouping.</param>
+        /// <param name="groupMemberFunc">The function that prepares each <typeparamref name="TSource"/> into the value expected by <paramref name="groupResultFunc"/>. Its parameters are <typeparamref name="TSource"/> and the index of that item (starting from zero) within each grouping.</param>
         /// <param name="groupResultFunc">The function that creates the <typeparamref name="TResult"/> from each group of <typeparamref name="TGroupItem"/>.</param>
         /// <returns>An enumeration of <typeparamref name="TResult"/> from all of the groups.</returns>
         static IEnumerable<TResult> ConvertGroup<TSource, TGroupItem, TResult>(
