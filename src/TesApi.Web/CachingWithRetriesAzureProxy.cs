@@ -27,7 +27,7 @@ namespace TesApi.Web
     {
         private readonly IAzureProxy azureProxy;
         private readonly Management.CacheAndRetryHandler cacheAndRetryHandler;
-        private readonly AsyncRetryPolicy batchPoolOrJobCreateHandler;
+        private readonly AsyncRetryPolicy batchPoolOrJobCreateOrTaskAddHandler;
 
         /// <summary>
         /// Contructor to create a cache of <see cref="IAzureProxy"/>
@@ -45,11 +45,12 @@ namespace TesApi.Web
 
             var creationErrorFoundCodes = new string[]
             {
-                BatchErrorCodeStrings.JobExists,
-                BatchErrorCodeStrings.PoolExists
+                BatchErrorCodeStrings.TaskExists,
+                BatchErrorCodeStrings.PoolExists,
+                BatchErrorCodeStrings.JobExists
             };
 
-            batchPoolOrJobCreateHandler = Policy
+            batchPoolOrJobCreateOrTaskAddHandler = Policy
                 .Handle<Exception>()
                 .WaitAndRetryAsync(retryPolicyOptions.Value.MaxRetryCount,
                     (attempt) => TimeSpan.FromSeconds(Math.Pow(retryPolicyOptions.Value.ExponentialBackOffExponent, attempt)),
@@ -71,14 +72,22 @@ namespace TesApi.Web
         {
             try
             {
-                await batchPoolOrJobCreateHandler.ExecuteAsync(ct => azureProxy.CreateBatchJobAsync(poolInformation, ct), cancellationToken);
+                await batchPoolOrJobCreateOrTaskAddHandler.ExecuteAsync(ct => azureProxy.CreateBatchJobAsync(poolInformation, ct), cancellationToken);
             }
             catch (BatchException exc) when (BatchErrorCodeStrings.JobExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             { }
         }
 
         /// <inheritdoc/>
-        public Task AddBatchTaskAsync(string tesTaskId, CloudTask cloudTask, PoolInformation poolInformation, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.AddBatchTaskAsync(tesTaskId, cloudTask, poolInformation, ct), cancellationToken);
+        public async Task AddBatchTaskAsync(string tesTaskId, CloudTask cloudTask, PoolInformation poolInformation, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await batchPoolOrJobCreateOrTaskAddHandler.ExecuteAsync(ct => azureProxy.AddBatchTaskAsync(tesTaskId, cloudTask, poolInformation, ct), cancellationToken);
+            }
+            catch (BatchException exc) when (BatchErrorCodeStrings.TaskExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
+            { }
+        }
 
         /// <inheritdoc/>
         public Task DeleteBatchJobAsync(PoolInformation poolInformation, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchJobAsync(poolInformation, ct), cancellationToken);
@@ -198,7 +207,7 @@ namespace TesApi.Web
         {
             try
             {
-                return await batchPoolOrJobCreateHandler.ExecuteAsync(ct => azureProxy.CreateBatchPoolAsync(poolInfo, isPreemptable, ct), cancellationToken);
+                return await batchPoolOrJobCreateOrTaskAddHandler.ExecuteAsync(ct => azureProxy.CreateBatchPoolAsync(poolInfo, isPreemptable, ct), cancellationToken);
             }
             catch (BatchException exc) when (BatchErrorCodeStrings.PoolExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             {
