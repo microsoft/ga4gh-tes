@@ -4,7 +4,12 @@ jobs:
   dotnet-format:
     runs-on: ubuntu-latest
 
-    steps:        
+    steps:     
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+          creds: '${{ secrets.AZURE_CREDENTIALS }}'
+          
       - name: Setup .NET Core
         uses: actions/setup-dotnet@v3
         with:
