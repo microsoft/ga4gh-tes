@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -148,18 +151,19 @@ namespace Tes.Repository
 
         private async Task<IList<T>> DownloadBlobsAsync(List<string> blobNames)
         {
+            var downloadQueue = new ConcurrentQueue<string>(blobNames);
             var items = new ConcurrentBag<T>();
-            long taskCount = 0;
-            var queue = new ConcurrentQueue<string>(blobNames);
-            while (queue.TryDequeue(out var blobName))
+            long runningTasksCount = 0;
+
+            while (downloadQueue.TryDequeue(out var blobName))
             {
-                while (Interlocked.Read(ref taskCount) >= maxConcurrentItemDownloads)
+                while (Interlocked.Read(ref runningTasksCount) >= maxConcurrentItemDownloads)
                 {
                     // Pause while maxed out
                     await Task.Delay(50);
                 }
 
-                Interlocked.Increment(ref taskCount);
+                Interlocked.Increment(ref runningTasksCount);
 
                 _ = Task.Run(async () =>
                 {
@@ -172,14 +176,14 @@ namespace Tes.Repository
                     catch (Exception exc)
                     {
                         // TODO log?
-                        queue.Enqueue(blobName);
+                        downloadQueue.Enqueue(blobName);
                     }
 
-                    Interlocked.Decrement(ref taskCount);
+                    Interlocked.Decrement(ref runningTasksCount);
                 });
             }
 
-            while (Interlocked.Read(ref taskCount) > 0)
+            while (Interlocked.Read(ref runningTasksCount) > 0)
             {
                 // Wait for all downloads to complete
                 await Task.Delay(50);
