@@ -9,6 +9,11 @@ jobs:
         uses: azure/login@v1
         with:
           creds: '${{ secrets.AZURE_CREDENTIALS }}'
+          
+      - name: Remove nuget.config
+        uses: JesseTG/rm@v1.0.3
+        with:
+          path: nuget.config
         
       - name: Setup .NET Core
         uses: actions/setup-dotnet@v3
