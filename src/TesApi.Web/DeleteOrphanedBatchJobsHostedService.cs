@@ -92,7 +92,7 @@ namespace TesApi.Web
 
                 TesTask tesTask = null;
 
-                if (await repository.TryGetItemAsync(tesTaskId, item => tesTask = item)) // TODO: Add CancellationToken to IRepository and add unit tests
+                if (await repository.TryGetItemAsync(tesTaskId, item => tesTask = item, cancellationToken)) // TODO: Add unit tests
                 {
                     if (tesTask.State == TesState.COMPLETEEnum ||
                         tesTask.State == TesState.EXECUTORERROREnum ||

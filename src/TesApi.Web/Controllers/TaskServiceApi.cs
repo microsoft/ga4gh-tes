@@ -16,6 +16,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
@@ -63,17 +64,18 @@ namespace TesApi.Controllers
         /// Cancel a task
         /// </summary>
         /// <param name="id">The id of the <see cref="TesTask"/> to cancel</param>
+        /// <param name="cancellationToken">A<see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <response code="200"></response>
         [HttpPost]
         [Route("/v1/tasks/{id}:cancel")]
         [ValidateModelState]
         [SwaggerOperation("CancelTask")]
         [SwaggerResponse(statusCode: 200, type: typeof(object), description: "")]
-        public virtual async Task<IActionResult> CancelTask([FromRoute][Required] string id)
+        public virtual async Task<IActionResult> CancelTask([FromRoute][Required] string id, CancellationToken cancellationToken)
         {
             TesTask tesTask = null;
 
-            if (await repository.TryGetItemAsync(id, item => tesTask = item))
+            if (await repository.TryGetItemAsync(id, item => tesTask = item, cancellationToken))
             {
                 if (tesTask.State == TesState.COMPLETEEnum ||
                     tesTask.State == TesState.EXECUTORERROREnum ||
@@ -86,7 +88,7 @@ namespace TesApi.Controllers
                     logger.LogInformation("Canceling task");
                     tesTask.IsCancelRequested = true;
                     tesTask.State = TesState.CANCELEDEnum;
-                    await repository.UpdateItemAsync(tesTask);
+                    await repository.UpdateItemAsync(tesTask, cancellationToken);
                 }
             }
             else
@@ -102,13 +104,14 @@ namespace TesApi.Controllers
         /// Create a new task                               
         /// </summary>
         /// <param name="tesTask">The <see cref="TesTask"/> to add to the repository</param>
+        /// <param name="cancellationToken">A<see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <response code="200"></response>
         [HttpPost]
         [Route("/v1/tasks")]
         [ValidateModelState]
         [SwaggerOperation("CreateTask")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesCreateTaskResponse), description: "")]
-        public virtual async Task<IActionResult> CreateTaskAsync([FromBody] TesTask tesTask)
+        public virtual async Task<IActionResult> CreateTaskAsync([FromBody] TesTask tesTask, CancellationToken cancellationToken)
         {
             if (!string.IsNullOrWhiteSpace(tesTask.Id))
             {
@@ -193,7 +196,7 @@ namespace TesApi.Controllers
             }
 
             logger.LogDebug($"Creating task with id {tesTask.Id} state {tesTask.State}");
-            await repository.CreateItemAsync(tesTask);
+            await repository.CreateItemAsync(tesTask, cancellationToken);
             return StatusCode(200, new TesCreateTaskResponse { Id = tesTask.Id });
         }
 
@@ -225,16 +228,17 @@ namespace TesApi.Controllers
         /// </summary>
         /// <param name="id">The id of the <see cref="TesTask"/> to get</param>
         /// <param name="view">OPTIONAL. Affects the fields included in the returned Task messages. See TaskView below.   - MINIMAL: Task message will include ONLY the fields:   Task.Id   Task.State  - BASIC: Task message will include all fields EXCEPT:   Task.ExecutorLog.stdout   Task.ExecutorLog.stderr   Input.content   TaskLog.system_logs  - FULL: Task message includes all fields.</param>
+        /// <param name="cancellationToken">A<see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <response code="200"></response>
         [HttpGet]
         [Route("/v1/tasks/{id}")]
         [ValidateModelState]
         [SwaggerOperation("GetTask")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesTask), description: "")]
-        public virtual async Task<IActionResult> GetTaskAsync([FromRoute][Required] string id, [FromQuery] string view)
+        public virtual async Task<IActionResult> GetTaskAsync([FromRoute][Required] string id, [FromQuery] string view, CancellationToken cancellationToken)
         {
             TesTask tesTask = null;
-            var itemFound = await repository.TryGetItemAsync(id, item => tesTask = item);
+            var itemFound = await repository.TryGetItemAsync(id, item => tesTask = item, cancellationToken);
 
             return itemFound ? TesJsonResult(tesTask, view) : NotFound($"The task with id {id} does not exist.");
         }
@@ -246,13 +250,14 @@ namespace TesApi.Controllers
         /// <param name="pageSize">OPTIONAL. Number of tasks to return in one page. Must be less than 2048. Defaults to 256.</param>
         /// <param name="pageToken">OPTIONAL. Page token is used to retrieve the next page of results. If unspecified, returns the first page of results. See ListTasksResponse.next_page_token</param>
         /// <param name="view">OPTIONAL. Affects the fields included in the returned Task messages. See TaskView below.   - MINIMAL: Task message will include ONLY the fields:   Task.Id   Task.State  - BASIC: Task message will include all fields EXCEPT:   Task.ExecutorLog.stdout   Task.ExecutorLog.stderr   Input.content   TaskLog.system_logs  - FULL: Task message includes all fields.</param>
+        /// <param name="cancellationToken">A<see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <response code="200"></response>
         [HttpGet]
         [Route("/v1/tasks")]
         [ValidateModelState]
         [SwaggerOperation("ListTasks")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesListTasksResponse), description: "")]
-        public virtual async Task<IActionResult> ListTasks([FromQuery] string namePrefix, [FromQuery] long? pageSize, [FromQuery] string pageToken, [FromQuery] string view)
+        public virtual async Task<IActionResult> ListTasks([FromQuery] string namePrefix, [FromQuery] long? pageSize, [FromQuery] string pageToken, [FromQuery] string view, CancellationToken cancellationToken)
         {
             var decodedPageToken =
                 pageToken is not null ? Encoding.UTF8.GetString(Base64UrlTextEncoder.Decode(pageToken)) : null;
@@ -266,7 +271,8 @@ namespace TesApi.Controllers
             (var nextPageToken, var tasks) = await repository.GetItemsAsync(
                 t => string.IsNullOrWhiteSpace(namePrefix) || t.Name.StartsWith(namePrefix),
                 pageSize.HasValue ? (int)pageSize : 256,
-                decodedPageToken);
+                decodedPageToken,
+                cancellationToken);
 
             var encodedNextPageToken = nextPageToken is not null ? Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(nextPageToken)) : null;
             var response = new TesListTasksResponse { Tasks = tasks.ToList(), NextPageToken = encodedNextPageToken };

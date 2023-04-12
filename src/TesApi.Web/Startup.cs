@@ -83,7 +83,7 @@ namespace TesApi.Web
                     .AddTransient<TerraWsmApiClient>()
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
-                    .AddControllers()
+                    .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
                     .AddNewtonsoftJson(opts =>
                     {
                         opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();

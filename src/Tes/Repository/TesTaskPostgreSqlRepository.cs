@@ -8,6 +8,7 @@ namespace Tes.Repository
     using System.Diagnostics;
     using System.Linq;
     using System.Linq.Expressions;
+    using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.EntityFrameworkCore;
     using Microsoft.Extensions.Logging;
@@ -20,7 +21,7 @@ namespace Tes.Repository
     /// A TesTask specific repository for storing the TesTask as JSON within an Entity Framework Postgres table
     /// </summary>
     /// <typeparam name="TesTask"></typeparam>
-    public class TesTaskPostgreSqlRepository : IRepository<TesTask>
+    public sealed class TesTaskPostgreSqlRepository : IRepository<TesTask>
     {
         private readonly Func<TesDbContext> createDbContext;
         private readonly ICache<TesTask> cache;
@@ -79,7 +80,7 @@ namespace Tes.Repository
                     })
                 .ExecuteAsync(async () =>
                 {
-                    var activeTasks = await GetItemsAsync(task => TesTask.ActiveStates.Contains(task.State));
+                    var activeTasks = await GetItemsAsync(task => TesTask.ActiveStates.Contains(task.State), CancellationToken.None);
                     var tasksAddedCount = 0;
 
                     foreach (var task in activeTasks.OrderBy(t => t.CreationTime))
@@ -93,15 +94,10 @@ namespace Tes.Repository
         }
 
 
-        /// <summary>
-        /// Get a TesTask by the TesTask.ID
-        /// </summary>
-        /// <param name="id">The TesTask's ID</param>
-        /// <param name="onSuccess">Delegate to be invoked on success</param>
-        /// <returns></returns>
-        public async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess = null)
+        /// <inheritdoc/>
+        public async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess, CancellationToken cancellationToken)
         {
-            if (cache?.TryGetValue(id, out TesTask task) == true)
+            if (cache?.TryGetValue(id, out var task) == true)
             {
                 onSuccess?.Invoke(task);
 
@@ -117,7 +113,7 @@ namespace Tes.Repository
             using var dbContext = createDbContext();
 
             // Search for Id within the JSON
-            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id);
+            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, cancellationToken);
 
             if (item is null)
             {
@@ -129,12 +125,8 @@ namespace Tes.Repository
             return true;
         }
 
-        /// <summary>
-        /// Get TesTask items
-        /// </summary>
-        /// <param name="predicate">Predicate to query the TesTasks</param>
-        /// <returns></returns>
-        public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate)
+        /// <inheritdoc/>
+        public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
         {
             using var dbContext = createDbContext();
 
@@ -143,20 +135,16 @@ namespace Tes.Repository
 
             //var sqlQuery = query.ToQueryString();
             //Debugger.Break();
-            return await query.ToListAsync();
+            return await query.ToListAsync(cancellationToken);
         }
 
-        /// <summary>
-        /// Encapsulates a TesTask as JSON
-        /// </summary>
-        /// <param name="item">TesTask to store as JSON in the database</param>
-        /// <returns></returns>
-        public async Task<TesTask> CreateItemAsync(TesTask item)
+        /// <inheritdoc/>
+        public async Task<TesTask> CreateItemAsync(TesTask item, CancellationToken cancellationToken)
         {
             using var dbContext = createDbContext();
             var dbItem = new TesTaskDatabaseItem { Json = item };
             dbContext.TesTasks.Add(dbItem);
-            await dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync(cancellationToken);
             cache?.TryAdd(item.Id, item);
             return item;
         }
@@ -165,8 +153,9 @@ namespace Tes.Repository
         /// Encapsulates TesTasks as JSON
         /// </summary>
         /// <param name="item">TesTask to store as JSON in the database</param>
+        /// <param name="cancellationToken">A<see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public async Task<List<TesTask>> CreateItemsAsync(List<TesTask> items)
+        public async Task<List<TesTask>> CreateItemsAsync(List<TesTask> items, CancellationToken cancellationToken)
         {
             using var dbContext = createDbContext();
 
@@ -176,22 +165,19 @@ namespace Tes.Repository
                 dbContext.TesTasks.Add(dbItem);
             }
 
-            await dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync(cancellationToken);
             return items;
         }
 
-        /// <summary>
-        /// Base class searches within model, this method searches within the JSON
-        /// </summary>
-        /// <param name="tesTask"></param>
-        /// <returns></returns>
-        public async Task<TesTask> UpdateItemAsync(TesTask tesTask)
+        /// <inheritdoc/>
+        /// <remarks>Base class searches within model, this method searches within the JSON</remarks>
+        public async Task<TesTask> UpdateItemAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
             using var dbContext = createDbContext();
 
             // Manually set entity state to avoid potential NPG PostgreSql bug
             dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
-            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == tesTask.Id);
+            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == tesTask.Id, cancellationToken);
 
             if (item is null)
             {
@@ -202,20 +188,17 @@ namespace Tes.Repository
 
             // Manually set entity state to avoid potential NPG PostgreSql bug
             dbContext.Entry(item).State = EntityState.Modified;
-            await dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync(cancellationToken);
             cache?.TryUpdate(tesTask.Id, tesTask);
             return item.Json;
         }
 
-        /// <summary>
-        /// Base class deletes by Item.Id, this method deletes by Item.Json.Id
-        /// </summary>
-        /// <param name="id">TesTask Id</param>
-        /// <returns></returns>
-        public async Task DeleteItemAsync(string id)
+        /// <inheritdoc/>
+        /// <remarks>Base class deletes by Item.Id, this method deletes by Item.Json.Id</remarks>
+        public async Task DeleteItemAsync(string id, CancellationToken cancellationToken)
         {
             using var dbContext = createDbContext();
-            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id);
+            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, cancellationToken);
 
             if (item is null)
             {
@@ -223,22 +206,17 @@ namespace Tes.Repository
             }
 
             dbContext.TesTasks.Remove(item);
-            await dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync(cancellationToken);
             cache?.TryRemove(id);
             
         }
 
-        /// <summary>
-        /// Identical to GetItemsAsync, paging is not supported. All items are returned
-        /// </summary>
-        /// <param name="predicate">Predicate to query the TesTasks</param>
-        /// <param name="pageSize">Ignored and has no effect</param>
-        /// <param name="continuationToken">Ignored and has no effect</param>
-        /// <returns></returns>
-        public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken)
+        /// <inheritdoc/>
+        /// <remarks>Identical to <see cref="GetItemsAsync(Expression{Func{TesTask, bool}})"/>, paging is not supported. All items are returned</remarks>
+        public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken)
         {
             // TODO paging support
-            var results = await GetItemsAsync(predicate);
+            var results = await GetItemsAsync(predicate, cancellationToken);
             return (null, results);
         }
 

@@ -105,7 +105,7 @@ namespace TesApi.Web
 
                 TesTask tesTask = null;
 
-                if (await repository.TryGetItemAsync(tesTaskId, item => tesTask = item))
+                if (await repository.TryGetItemAsync(tesTaskId, item => tesTask = item, cancellationToken))
                 {
                     if (tesTask.State == TesState.COMPLETEEnum ||
                         tesTask.State == TesState.EXECUTORERROREnum ||

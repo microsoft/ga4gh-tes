@@ -80,17 +80,18 @@ namespace Tes.Repository.Tests
         {
             var id = Guid.NewGuid().ToString();
             var createdItem = await repository.CreateItemAsync(new Models.TesTask
-            {
-                Id = id,
-                Description = Guid.NewGuid().ToString(),
-                CreationTime = DateTime.UtcNow,
-                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            });
+                {
+                    Id = id,
+                    Description = Guid.NewGuid().ToString(),
+                    CreationTime = DateTime.UtcNow,
+                    Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+                },
+                CancellationToken.None);
             Assert.IsNotNull(createdItem);
 
             Models.TesTask updatedAndRetrievedItem = null;
 
-            var isFound = await repository.TryGetItemAsync(id, tesTask => updatedAndRetrievedItem = tesTask);
+            var isFound = await repository.TryGetItemAsync(id, tesTask => updatedAndRetrievedItem = tesTask, CancellationToken.None);
 
             Assert.IsNotNull(updatedAndRetrievedItem);
             Assert.IsTrue(isFound);
@@ -99,7 +100,7 @@ namespace Tes.Repository.Tests
         [TestMethod]
         public async Task GetItemsAsyncTest()
         {
-            var items = await repository.GetItemsAsync(c => c.Id != null);
+            var items = await repository.GetItemsAsync(c => c.Id != null, CancellationToken.None);
 
             foreach (var item in items)
             {
@@ -134,19 +135,19 @@ namespace Tes.Repository.Tests
                     });
                 }
 
-                await repository.CreateItemsAsync(items);
+                await repository.CreateItemsAsync(items, CancellationToken.None);
                 Console.WriteLine($"Total seconds to insert {items.Count} items: {sw.Elapsed.TotalSeconds:n2}s");
                 sw.Restart();
             }
 
             sw.Restart();
-            var runningTasks = await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum);
+            var runningTasks = await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, CancellationToken.None);
 
             // Ensure performance is decent.  In manual testing on fast internet, this takes less than 5s typically
             Assert.IsTrue(sw.Elapsed.TotalSeconds < 10);
             Console.WriteLine($"Retrieved {runningTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
             sw.Restart();
-            var allOtherTasks = await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum);
+            var allOtherTasks = await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, CancellationToken.None);
             Console.WriteLine($"Retrieved {allOtherTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
             Console.WriteLine($"Total running tasks: {runningTasks.Count()}");
             Console.WriteLine($"Total other tasks: {allOtherTasks.Count()}");
@@ -164,12 +165,13 @@ namespace Tes.Repository.Tests
             var itemId = Guid.NewGuid().ToString();
 
             var task = await repository.CreateItemAsync(new Models.TesTask
-            {
-                Id = itemId,
-                Description = Guid.NewGuid().ToString(),
-                CreationTime = DateTime.UtcNow,
-                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            });
+                {
+                    Id = itemId,
+                    Description = Guid.NewGuid().ToString(),
+                    CreationTime = DateTime.UtcNow,
+                    Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+                },
+                CancellationToken.None);
 
             Assert.IsNotNull(task);
         }
@@ -181,23 +183,24 @@ namespace Tes.Repository.Tests
             var id = Guid.NewGuid().ToString();
 
             var createdItem = await repository.CreateItemAsync(new Models.TesTask
-            {
-                Id = id,
-                Description = Guid.NewGuid().ToString(),
-                CreationTime = DateTime.UtcNow,
-                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            });
+                {
+                    Id = id,
+                    Description = Guid.NewGuid().ToString(),
+                    CreationTime = DateTime.UtcNow,
+                    Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+                },
+                CancellationToken.None);
 
             Assert.IsTrue(createdItem.State != Models.TesState.COMPLETEEnum);
 
             createdItem.Description = description;
             createdItem.State = Models.TesState.COMPLETEEnum;
 
-            await repository.UpdateItemAsync(createdItem);
+            await repository.UpdateItemAsync(createdItem, CancellationToken.None);
 
             Models.TesTask updatedAndRetrievedItem = null;
 
-            var isFound = await repository.TryGetItemAsync(id, tesTask => updatedAndRetrievedItem = tesTask);
+            var isFound = await repository.TryGetItemAsync(id, tesTask => updatedAndRetrievedItem = tesTask, CancellationToken.None);
 
             Assert.IsTrue(isFound);
             Assert.IsTrue(updatedAndRetrievedItem.State == Models.TesState.COMPLETEEnum);
@@ -210,18 +213,19 @@ namespace Tes.Repository.Tests
             var id = Guid.NewGuid().ToString();
 
             var createdItem = await repository.CreateItemAsync(new Models.TesTask
-            {
-                Id = id,
-                Description = Guid.NewGuid().ToString(),
-                CreationTime = DateTime.UtcNow,
-                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            });
+                {
+                    Id = id,
+                    Description = Guid.NewGuid().ToString(),
+                    CreationTime = DateTime.UtcNow,
+                    Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+                },
+                CancellationToken.None);
             Assert.IsNotNull(createdItem);
-            await repository.DeleteItemAsync(id);
+            await repository.DeleteItemAsync(id, CancellationToken.None);
 
             Models.TesTask updatedAndRetrievedItem = null;
 
-            var isFound = await repository.TryGetItemAsync(id, tesTask => updatedAndRetrievedItem = tesTask);
+            var isFound = await repository.TryGetItemAsync(id, tesTask => updatedAndRetrievedItem = tesTask, CancellationToken.None);
             Assert.IsNull(updatedAndRetrievedItem);
             Assert.IsFalse(isFound);
         }

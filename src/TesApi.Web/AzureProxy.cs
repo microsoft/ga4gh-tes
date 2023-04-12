@@ -52,9 +52,9 @@ namespace TesApi.Web
 
         private readonly ILogger logger;
         private readonly BatchClient batchClient;
-        private readonly string subscriptionId;
+        //private readonly string subscriptionId;
         private readonly string location;
-        private readonly string batchResourceGroupName;
+        //private readonly string batchResourceGroupName;
         private readonly string batchAccountName;
         //TODO: This dependency should be injected at a higher level (e.g. scheduler), but that requires significant refactoring that should be done separately.
         private readonly IBatchPoolManager batchPoolManager;
@@ -110,15 +110,15 @@ namespace TesApi.Web
                 batchClient = BatchClient.Open(new BatchSharedKeyCredentials(batchAccountOptions.Value.BaseUrl,
                     batchAccountOptions.Value.AccountName, batchAccountOptions.Value.AppKey));
                 location = batchAccountOptions.Value.Region;
-                subscriptionId = batchAccountOptions.Value.SubscriptionId;
-                batchResourceGroupName = batchAccountOptions.Value.ResourceGroup;
+                //subscriptionId = batchAccountOptions.Value.SubscriptionId;
+                //batchResourceGroupName = batchAccountOptions.Value.ResourceGroup;
             }
             else
             {
                 batchAccountName = batchAccountOptions.Value.AccountName;
                 var (SubscriptionId, ResourceGroupName, Location, BatchAccountEndpoint) = FindBatchAccountAsync(batchAccountName, CancellationToken.None).Result;
-                batchResourceGroupName = ResourceGroupName;
-                subscriptionId = SubscriptionId;
+                //batchResourceGroupName = ResourceGroupName;
+                //subscriptionId = SubscriptionId;
                 location = Location;
                 batchClient = BatchClient.Open(new BatchTokenCredentials($"https://{BatchAccountEndpoint}", () => GetAzureAccessTokenAsync("https://batch.core.windows.net/")));
             }

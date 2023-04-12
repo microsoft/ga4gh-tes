@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Tes.Repository
@@ -17,46 +18,52 @@ namespace Tes.Repository
         /// <summary>
         /// Create a new item
         /// </summary>
-        /// <param name="item">The item to create</param>
+        /// <param name="item">The item to create.</param>
+        /// <param name="cancellationToken">A<see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The created item</returns>
-        Task<T> CreateItemAsync(T item);
+        Task<T> CreateItemAsync(T item, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Delete an existing item
         /// </summary>
-        /// <param name="id">The ID of the item to delete</param>
-        Task DeleteItemAsync(string id);
+        /// <param name="id">The ID of the item to delete.</param>
+        /// <param name="cancellationToken">A<see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        Task DeleteItemAsync(string id, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Get an item by ID
         /// </summary>
-        /// <param name="id">The ID of the item to retrieve</param>
-        /// <param name="onSuccess">The action to run when the item with the ID is found</param>
-        /// <returns>The item instance</returns>
-        Task<bool> TryGetItemAsync(string id, Action<T> onSuccess = null);
+        /// <param name="id">The ID of the item to retrieve.</param>
+        /// <param name="onSuccess">The action to run when the item with the ID is found.</param>
+        /// <param name="cancellationToken">A<see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>The item instance.</returns>
+        Task<bool> TryGetItemAsync(string id, Action<T> onSuccess = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Reads a collection of items from the repository
         /// </summary>
-        /// <param name="predicate">The 'where' clause</param>
-        /// <returns>The collection of retrieved items</returns>
-        Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate);
+        /// <param name="predicate">The 'where' clause.</param>
+        /// <param name="cancellationToken">A<see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>The collection of retrieved items.</returns>
+        Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Reads a collection of items from the repository
         /// </summary>
-        /// <param name="predicate">The 'where' clause</param>
-        /// <param name="pageSize">The max number of items to retrieve</param>
-        /// <param name="continuationToken">A token to continue retrieving items if the max is returned</param>
-        /// <returns>A continuation token string, and the collection of retrieved items</returns>
-        Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken);
+        /// <param name="predicate">The 'where' clause.</param>
+        /// <param name="pageSize">The max number of items to retrieve.</param>
+        /// <param name="continuationToken">A token to continue retrieving items if the max is returned.</param>
+        /// <param name="cancellationToken">A<see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>A continuation token string, and the collection of retrieved items.</returns>
+        Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Update the item in the repository
         /// </summary>
-        /// <param name="id">The ID of the item to update</param>
-        /// <param name="item">The item to persist</param>
-        /// <returns>The created document</returns>
-        Task<T> UpdateItemAsync(T item);
+        /// <param name="id">The ID of the item to update.</param>
+        /// <param name="item">The item to persist.</param>
+        /// <param name="cancellationToken">A<see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>The created document.</returns>
+        Task<T> UpdateItemAsync(T item, CancellationToken cancellationToken = default);
     }
 }
