@@ -119,7 +119,7 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
             throw new AzureBatchQuotaMaxedOutException($"Not enough core quota remaining to schedule task requiring {workflowCoresRequirement} {(isDedicated ? "dedicated" : "low priority")} cores. There are {batchUtilization.TotalCoresInUse} cores in use out of {batchVmFamilyBatchQuotas.TotalCoreQuota}.");
         }
 
-        if ((needCoresUtilizationQuotaCheck && isDedicatedAndPerVmFamilyCoreQuotaEnforced && batchUtilization.DedicatedCoresInUseInRequestedVmFamily + workflowCoresRequirement > batchVmFamilyBatchQuotas.VmFamilyQuota) || (!needCoresUtilizationQuotaCheck && batchVmFamilyBatchQuotas.VmFamilyQuota == 0))
+        if ((needCoresUtilizationQuotaCheck && isDedicatedAndPerVmFamilyCoreQuotaEnforced && batchUtilization.DedicatedCoresInUseInRequestedVmFamily + workflowCoresRequirement > batchVmFamilyBatchQuotas.VmFamilyQuota) || (!needCoresUtilizationQuotaCheck && isDedicatedAndPerVmFamilyCoreQuotaEnforced && batchVmFamilyBatchQuotas.VmFamilyQuota == 0))
         {
 
             throw new AzureBatchQuotaMaxedOutException($"Not enough core quota remaining to schedule task requiring {workflowCoresRequirement} dedicated {vmFamily} cores. There are {batchUtilization.DedicatedCoresInUseInRequestedVmFamily} cores in use out of {batchVmFamilyBatchQuotas.VmFamilyQuota}.");
