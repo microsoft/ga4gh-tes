@@ -135,7 +135,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="appInsightsApplicationId">Application Insights application id</param>
         /// <returns>Application Insights instrumentation key</returns>
-        public static async Task<string> GetAppInsightsInstrumentationKeyAsync(string appInsightsApplicationId)
+        public static async Task<string> GetAppInsightsConnectionStringAsync(string appInsightsApplicationId)
         {
             var azureClient = await GetAzureManagementClientAsync();
             var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
@@ -151,7 +151,7 @@ namespace TesApi.Web
 
                     if (app is not null)
                     {
-                        return app.InstrumentationKey;
+                        return app.ConnectionString;
                     }
                 }
                 catch
@@ -389,6 +389,8 @@ namespace TesApi.Web
                     ? n => (n.RecentTasks?.Select(t => t.JobId) ?? Enumerable.Empty<string>()).Contains(job.Id)
                     : n => (n.RecentTasks?.Select(t => t.TaskId) ?? Enumerable.Empty<string>()).Contains(batchTask?.Id);
 
+                var nodeId = string.Empty;
+
                 if (job.State == JobState.Active && poolId is not null)
                 {
                     var poolFilter = new ODATADetailLevel
@@ -415,6 +417,7 @@ namespace TesApi.Web
 
                         if (node is not null)
                         {
+                            nodeId = node.Id;
                             nodeState = node.State;
                             var nodeError = node.Errors?.FirstOrDefault(e => "DiskFull".Equals(e.Code, StringComparison.InvariantCultureIgnoreCase)) ?? node.Errors?.FirstOrDefault(); // Prioritize DiskFull errors
                             nodeErrorCode = nodeError?.Code;
@@ -454,7 +457,8 @@ namespace TesApi.Web
                     TaskExitCode = taskExecutionInformation?.ExitCode,
                     TaskFailureInformation = taskExecutionInformation?.FailureInformation,
                     TaskContainerState = taskExecutionInformation?.ContainerInformation?.State,
-                    TaskContainerError = taskExecutionInformation?.ContainerInformation?.Error
+                    TaskContainerError = taskExecutionInformation?.ContainerInformation?.Error,
+                    NodeId = !string.IsNullOrEmpty(nodeId) ? nodeId : null
                 };
             }
             catch (Exception ex)

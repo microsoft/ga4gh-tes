@@ -124,19 +124,17 @@ namespace TesApi.Web.Management.Batch
         {
             ArgumentException.ThrowIfNullOrEmpty(poolId);
 
-            //TODO: This is a temporary implementation. It must be changed once WSM supports deleting batch pools
             try
             {
-                var batchClient = CreateBatchClientFromOptions();
+                logger.LogInformation(
+                    $"Deleting pool with the ID/name: {poolId}");
+
+                var wsmResourceId = await GetWsmResourceIdFromBatchPoolMetadataAsync(poolId, cancellationToken);
+
+                await terraWsmApiClient.DeleteBatchPoolAsync(Guid.Parse(terraOptions.WorkspaceId), wsmResourceId);
 
                 logger.LogInformation(
-                    $"Deleting pool with the id/name:{poolId}");
-
-                await batchClient.PoolOperations.DeletePoolAsync(poolId, cancellationToken: cancellationToken);
-
-                logger.LogInformation(
-                    $"Successfully deleted pool with the id/name:{poolId}");
-
+                    $"Successfully deleted pool with the ID/name via WSM: {poolId}");
             }
             catch (Exception e)
             {
@@ -144,6 +142,28 @@ namespace TesApi.Web.Management.Batch
 
                 throw;
             }
+        }
+
+        private async Task<Guid> GetWsmResourceIdFromBatchPoolMetadataAsync(string poolId, CancellationToken cancellationToken)
+        {
+            var batchClient = CreateBatchClientFromOptions();
+
+            var pool = await batchClient.PoolOperations.GetPoolAsync(poolId, cancellationToken: cancellationToken);
+
+            if (pool is null)
+            {
+                throw new InvalidOperationException($"The Batch pool was not found. Pool ID: {poolId}");
+            }
+
+            var metadataItem = pool.Metadata.SingleOrDefault(m => m.Name.Equals(TerraResourceIdMetadataKey));
+
+            if (string.IsNullOrEmpty(metadataItem?.Value))
+            {
+                throw new InvalidOperationException("The WSM resource ID was not found in the pool's metadata.");
+            }
+
+            var wsmResourceId = Guid.Parse(metadataItem.Value);
+            return wsmResourceId;
         }
 
         private BatchClient CreateBatchClientFromOptions()
