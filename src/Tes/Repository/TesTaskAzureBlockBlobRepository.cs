@@ -1,84 +1,112 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
-using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Polly;
 using Tes.Models;
 
 namespace Tes.Repository
 {
-    internal class TesTaskAzureBlockBlobRepository : IRepository<TesTask>
+    public class TesTaskAzureBlockBlobRepository : IRepository<TesTask>
     {
-        private readonly BlockBlobDatabase db = new BlockBlobDatabase();
+        private readonly BlockBlobDatabase<TesTask> db;
+        private readonly ICache<TesTask> cache;
+        private readonly ILogger logger;
+
+        public TesTaskAzureBlockBlobRepository(IOptions<BlockBlobDatabaseOptions> options, ILogger<TesTaskAzureBlockBlobRepository> logger, ICache<TesTask> cache = null)
+        {
+            db = new BlockBlobDatabase<TesTask>(options.Value.StorageAccountName, options.Value.ContainerName, options.Value.ContainerSasToken);
+            this.cache = cache;
+            this.logger = logger;
+            WarmCacheAsync().Wait();
+        }
+
+        private async Task WarmCacheAsync()
+        {
+            if (cache == null)
+            {
+                logger.LogWarning("Cache is null for TesTaskAzureBlockBlobRepository; no caching will be used.");
+                return;
+            }
+
+            var sw = Stopwatch.StartNew();
+            logger.LogInformation("Warming cache...");
+
+            // Don't allow the state of the system to change until the cache and system are consistent;
+            // this is a fast PostgreSQL query even for 1 million items
+            await Policy
+                .Handle<Exception>()
+                .WaitAndRetryAsync(3,
+                    retryAttempt =>
+                    {
+                        logger.LogWarning($"Warming cache retry attempt #{retryAttempt}");
+                        return TimeSpan.FromSeconds(10);
+                    },
+                    (ex, ts) =>
+                    {
+                        logger.LogCritical(ex, "Couldn't warm cache, is the storage account available?");
+                    })
+                .ExecuteAsync(async () =>
+                {
+                    var activeTasks = (await GetActiveItemsAsync()).ToList();
+                    var tasksAddedCount = 0;
+
+                    foreach (var task in activeTasks.OrderBy(t => t.CreationTime))
+                    {
+                        cache?.TryAdd(task.Id, task);
+                        tasksAddedCount++;
+                    }
+
+                    logger.LogInformation($"Cache warmed successfully in {sw.Elapsed.TotalSeconds:n3} seconds. Added {tasksAddedCount:n0} items to the cache.");
+                });
+        }
 
         public async Task<TesTask> CreateItemAsync(TesTask item)
         {
-            await db.CreateItemAsync(item.Id, item, item.State.ToString());
+            await db.CreateOrUpdateItemAsync(item.Id, item, item.IsActiveState());
             return item;
         }
 
-        public Task DeleteItemAsync(string id)
+        public async Task DeleteItemAsync(string id)
         {
-            throw new NotImplementedException();
+            await db.DeleteItemAsync(id);
         }
 
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate)
         {
-            var items = new List<TesTask>();
-
-            return await db.GetItemsByStateAsync(GetTesState(predicate));
+            return await db.GetItemsAsync();
+        }
+        public async Task<IEnumerable<TesTask>> GetActiveItemsAsync()
+        {
+            return await db.GetItemsAsync(activeOnly: true);
         }
 
-        public static List<TesState> GetTesStates(Expression<Func<TesTask, bool>> predicate)
+        public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken)
         {
-            var states = new List<TesState>();
-
-            if (predicate.Body is BinaryExpression binaryExpression)
-            {
-                if (binaryExpression.Left is MemberExpression memberExpression &&
-                    memberExpression.Member.Name == "State" &&
-                    binaryExpression.Right is ConstantExpression constantExpression)
-                {
-                    if (constantExpression.Value is int stateValue)
-                    {
-                        if (Enum.IsDefined(typeof(TesState), stateValue))
-                        {
-                            states.Add((TesState)stateValue);
-                        }
-                    }
-                }
-                else if (binaryExpression.NodeType == ExpressionType.AndAlso)
-                {
-                    var leftStates = GetTesStates(binaryExpression.Left);
-                    var rightStates = GetTesStates(binaryExpression.Right);
-                    states.AddRange(leftStates);
-                    states.AddRange(rightStates);
-                }
-            }
-
-            return states;
-        }
-
-        public Task<(string, IEnumerable<TesTask>)> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken)
-        {
-            throw new NotImplementedException();
+            // TODO - add support for listing tasks by name
+            return await db.GetItemsWithPagingAsync(false, pageSize, continuationToken);
         }
 
         public async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess = null)
         {
-            throw new NotImplementedException();
+            var item = await db.GetItemAsync(id);
+            onSuccess?.Invoke(item);
+            return true;
         }
 
-        public Task<TesTask> UpdateItemAsync(TesTask item)
+        public async Task<TesTask> UpdateItemAsync(TesTask item)
         {
-            throw new NotImplementedException();
+            await db.CreateOrUpdateItemAsync(item.Id, item, item.IsActiveState());
+            return item;
         }
 
         public void Dispose()
         {
-            throw new NotImplementedException();
+
         }
     }
 }

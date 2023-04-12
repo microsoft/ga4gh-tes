@@ -1,146 +1,191 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
-using System.Reflection.Metadata;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Identity;
+using Azure.Storage.Blobs;
 using Polly;
-using Tes.Models;
 
 namespace Tes.Repository
 {
-    public class BlockBlobDatabase
+    public class BlockBlobDatabase<T> where T : class
     {
         private const int maxConcurrentItemDownloads = 64;
-        private const string WorkflowsContainerName = "workflows";
-        private readonly CloudStorageAccount account;
-        private readonly CloudBlobClient blobClient;
-        private readonly HashSet<string> createdContainers = new();
+        private readonly BlobServiceClient blobServiceClient;
+        private readonly BlobContainerClient container;
+        private const string activeStatePrefix = "a/";
+        private const string inactiveStatePrefix = "z/";
+        private string GetActiveBlobNameById(string id) => $"{activeStatePrefix}{id}.json";
+        private string GetInactiveBlobNameById(string id) => $"{inactiveStatePrefix}{id}.json";
+        public string StorageAccountName { get; set; }
+        public string ContainerName { get; set; } 
 
-        public Task CreateItemAsync<T>(string id, T item, string initialState)
+        public BlockBlobDatabase(string storageAccountName, string containerName, string containerSasToken = null)
         {
-            var containerReference = blobClient.GetContainerReference(container);
+            StorageAccountName = storageAccountName;
+            ContainerName = containerName;
 
-            if (!createdContainers.Contains(container.ToLowerInvariant()))
+            if (!string.IsNullOrWhiteSpace(containerSasToken))
             {
-                // Only attempt to create the container once per lifetime of the process
-                await containerReference.CreateIfNotExistsAsync();
-                createdContainers.Add(container.ToLowerInvariant());
+                blobServiceClient = new BlobServiceClient(new Uri($"https://{StorageAccountName}.blob.core.windows.net?{containerSasToken.TrimStart('?')}"));
+            }
+            else
+            {
+                blobServiceClient = new BlobServiceClient(new Uri($"https://{StorageAccountName}.blob.core.windows.net"), new DefaultAzureCredential());
             }
 
-            var blob = containerReference.GetBlockBlobReference($"{initialState}/{id}.json");
+            container = blobServiceClient.GetBlobContainerClient(ContainerName);
+            container.CreateIfNotExistsAsync().Wait();
+        }
+
+        public async Task CreateOrUpdateItemAsync(string id, T item, bool isActive)
+        {
             var json = System.Text.Json.JsonSerializer.Serialize(item);
-            await blob.UploadTextAsync(json);
-        }
 
-        public Task DeleteItemAsync(string id)
-        {
-            blobClient.GetContainerReference(container).GetBlockBlobReference(blobName).DeleteIfExistsAsync();
-        }
-
-        public async Task<List<T>> GetItemsByStateAsync<T>(T state) where T : Enum
-        {
-            var containerReference = blobClient.GetContainerReference(WorkflowsContainerName);
-            var lowercaseState = state.ToString().ToLowerInvariant();
-
-            // ListBlobs by prefix (fastest Azure Block Blob list)
-            var blobs = await Policy
-                .Handle<Exception>()
-                .WaitAndRetryAsync(3,
-                    retryAttempt =>
-                    {
-                        return TimeSpan.FromSeconds(1);
-                    },
-                    (ex, ts) =>
-                    {
-                        // todo log
-                    })
-                .ExecuteAsync<CloudBlockBlob>(GetBlobsWithPrefixAsync(containerReference, lowercaseState));
-
-            var readmeBlobName = $"{lowercaseState}/readme.txt";
-
-            // Force materialization
-            return await DownloadInParallelAsync(blobs);
-
-            static async Task<IEnumerable<T>> DownloadInParallelAsync(ConcurrentQueue<CloudBlockBlob> queue)
+            if (!isActive)
             {
-                var blobQueue = new ConcurrentQueue<CloudBlockBlob>(blobs
-                    .Where(blob => !blob.Name.Equals(lowercaseState, StringComparison.OrdinalIgnoreCase))
-                    .Where(blob => !blob.Name.Equals(readmeBlobName, StringComparison.OrdinalIgnoreCase))
-                    .Where(blob => blob.Properties.LastModified.HasValue)
-                    .Select(b => b));
+                // Delete active if it exists
+                var blobClient1 = container.GetBlobClient(GetActiveBlobNameById(id));
+                var task1 = blobClient1.DeleteIfExistsAsync();
 
-                var items = new ConcurrentBag<T>();
-                long taskCount = 0;
+                // Update/create active
+                var blobClient2 = container.GetBlobClient(GetInactiveBlobNameById(id));
+                var task2 = blobClient2.UploadAsync(BinaryData.FromString(json), overwrite: true);
 
-                while (queue.TryDequeue(out var blob))
+                // Retry to reduce likelihood of one blob succeeding and the other failing
+                await Policy
+                    .Handle<Exception>()
+                    .WaitAndRetryAsync(10, retryAttempt => TimeSpan.FromSeconds(1))
+                    .ExecuteAsync(async () => await Task.WhenAll(task1, task2));
+            }
+            else
+            {
+                // Assumption: a task can never go from inactive to active, so no need to delete anything here
+                var blobClient = container.GetBlobClient($"{id}.json");
+                var activeBlobTask = await blobClient.UploadAsync(BinaryData.FromString(json), overwrite: true);
+            }
+        }
+
+        public async Task DeleteItemAsync(string id)
+        {
+            var blobClient = container.GetBlobClient(GetActiveBlobNameById(id));
+            var blobClient2 = container.GetBlobClient(GetInactiveBlobNameById(id));
+            var task1 = blobClient.DeleteIfExistsAsync();
+            var task2 = blobClient2.DeleteIfExistsAsync();
+
+            // Retry to reduce likelihood of one blob succeeding and the other failing
+            await Policy
+                .Handle<Exception>()
+                .WaitAndRetryAsync(10, retryAttempt => TimeSpan.FromSeconds(1))
+                .ExecuteAsync(async () => await Task.WhenAll(task1, task2));
+        }
+
+        public async Task<T> GetItemAsync(string id)
+        {
+            // Check if inactive exists first, since inactive will never go to active state, to make more consistent results
+            var blobClient = container.GetBlobClient(GetInactiveBlobNameById(id));
+
+            if (await blobClient.ExistsAsync())
+            {
+                var inactiveBlobJson = (await blobClient.DownloadContentAsync()).Value.Content.ToString();
+                return System.Text.Json.JsonSerializer.Deserialize<T>(inactiveBlobJson);
+            }
+
+            blobClient = container.GetBlobClient(GetActiveBlobNameById(id));
+            var json = (await blobClient.DownloadContentAsync()).Value.Content.ToString();
+            return System.Text.Json.JsonSerializer.Deserialize<T>(json);
+        }
+
+        /// <summary>
+        /// Downloads all items in parallel
+        /// Specifically designed NOT to enumerate items to prevent caller stalling the download throughput
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        public async Task<IList<T>> GetItemsAsync(bool activeOnly = false)
+        {
+            var enumerator = container.GetBlobsAsync(prefix: activeOnly ? activeStatePrefix : null).GetAsyncEnumerator();
+            var blobNames = new List<string>();
+
+            while (await enumerator.MoveNextAsync())
+            {
+                // example: a/0fb0858a-3166-4a22-85b6-4337df2f53c5.json
+                // example: z/0fb0858a-3166-4a22-85b6-4337df2f53c5.json
+                var blobName = enumerator.Current.Name;
+                blobNames.Add(blobName);
+            }
+
+            return await DownloadBlobsAsync(blobNames);
+        }
+
+        public async Task<(string, IList<T>)> GetItemsWithPagingAsync(bool activeOnly = false, int pageSize = 5000, string continuationToken = null)
+        {
+            var blobNames = new List<string>();
+
+            while (true)
+            {
+                var pages = container.GetBlobsAsync(prefix: activeOnly ? activeStatePrefix : null).AsPages(continuationToken, pageSize);
+                var enumerator = pages.GetAsyncEnumerator();
+                var isMoreItems = await enumerator.MoveNextAsync();
+
+                if (!isMoreItems)
                 {
-                    while (Interlocked.Read(ref taskCount) >= maxConcurrentItemDownloads)
+                    return (null, new List<T>());
+                }
+
+                var page = enumerator.Current;
+
+                foreach (var blob in page.Values)
+                {
+                    blobNames.Add(blob.Name);
+                }
+                    
+                return (page.ContinuationToken, await DownloadBlobsAsync(blobNames));
+            }
+        }
+
+        private async Task<IList<T>> DownloadBlobsAsync(List<string> blobNames)
+        {
+            var items = new ConcurrentBag<T>();
+            long taskCount = 0;
+            var queue = new ConcurrentQueue<string>(blobNames);
+            while (queue.TryDequeue(out var blobName))
+            {
+                while (Interlocked.Read(ref taskCount) >= maxConcurrentItemDownloads)
+                {
+                    // Pause while maxed out
+                    await Task.Delay(50);
+                }
+
+                Interlocked.Increment(ref taskCount);
+
+                _ = Task.Run(async () =>
+                {
+                    try
                     {
-                        // Pause while maxed out
-                        await Task.Delay(20);
+                        var blobClient = container.GetBlobClient(blobName);
+                        var json = (await blobClient.DownloadContentAsync()).Value.Content.ToString();
+                        items.Add(System.Text.Json.JsonSerializer.Deserialize<T>(json));
+                    }
+                    catch (Exception exc)
+                    {
+                        // TODO log?
+                        queue.Enqueue(blobName);
                     }
 
-                    Interlocked.Increment(ref taskCount);
-
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            items.Add(await DownloadAndDeserializeItemAsync<T>(blob));
-                        }
-                        catch (Exception)
-                        {
-                            queue.Enqueue(blob);
-                        }
-
-                        Interlocked.Decrement(ref taskCount);
-                    });
-                }
-
-                while (Interlocked.Read(ref taskCount) > 0)
-                {
-                    // Wait for all downloads to complete
-                    await Task.Delay(20);
-                }
-
-                return items;
-
-                static async Task<T> DownloadAndDeserializeItemAsync<T>(CloudBlockBlob blob)
-                {
-                    var json = await blob.DownloadTextAsync();
-                    return System.Text.Json.JsonSerializer.Deserialize<T>(json);
-                }
+                    Interlocked.Decrement(ref taskCount);
+                });
             }
-        }
 
-        private static async Task<IEnumerable<CloudBlockBlob>> GetBlobsWithPrefixAsync(CloudBlobContainer blobContainer, string prefix)
-        {
-            var blobList = new List<CloudBlockBlob>();
-
-            BlobContinuationToken continuationToken = null;
-
-            do
+            while (Interlocked.Read(ref taskCount) > 0)
             {
-                var partialResult = await blobContainer.ListBlobsSegmentedAsync(
-                    prefix: prefix,
-                    useFlatBlobListing: true,
-                    currentToken: continuationToken,
-                    blobListingDetails: BlobListingDetails.None,
-                    maxResults: null,
-                    options: null,
-                    operationContext: null);
-
-                continuationToken = partialResult.ContinuationToken;
-
-                blobList.AddRange(partialResult.Results.OfType<CloudBlockBlob>());
+                // Wait for all downloads to complete
+                await Task.Delay(50);
             }
-            while (continuationToken is not null);
 
-            return blobList;
+            return items.ToList();
         }
     }
 }
