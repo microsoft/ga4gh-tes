@@ -10,6 +10,9 @@ jobs:
         with:
           creds: '${{ secrets.AZURE_CREDENTIALS }}'
           
+      - name: Check out code
+        uses: actions/checkout@v3.3.0
+
       - name: Setup .NET Core
         uses: actions/setup-dotnet@v3
         with:
@@ -17,9 +20,6 @@ jobs:
 
       - name: Install dotnet-format tool
         run: dotnet tool install -g dotnet-format
-
-      - name: Check out code
-        uses: actions/checkout@v3.3.0
 
       - name: Run dotnet format
         shell: bash
