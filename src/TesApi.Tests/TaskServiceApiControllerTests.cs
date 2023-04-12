@@ -242,7 +242,7 @@ namespace TesApi.Tests
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<Action<TesTask>>(), It.IsAny<CancellationToken>()))
-                .Callback<string, Action<TesTask>>((id, action) =>
+                .Callback<string, Action<TesTask>, CancellationToken>((id, action, cancellationToken) =>
                 {
                     action(null);
                 })
@@ -262,7 +262,7 @@ namespace TesApi.Tests
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<Action<TesTask>>(), It.IsAny<CancellationToken>()))
-                .Callback<string, Action<TesTask>>((id, action) =>
+                .Callback<string, Action<TesTask>, CancellationToken>((id, action, cancellationToken) =>
                 {
                     action(tesTask);
                 })
@@ -312,7 +312,7 @@ namespace TesApi.Tests
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<Action<TesTask>>(), It.IsAny<CancellationToken>()))
-                .Callback<string, Action<TesTask>>((id, action) =>
+                .Callback<string, Action<TesTask>, CancellationToken>((id, action, cancellationToken) =>
                 {
                     action(tesTask);
                 })
@@ -335,7 +335,7 @@ namespace TesApi.Tests
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<Action<TesTask>>(), It.IsAny<CancellationToken>()))
-                .Callback<string, Action<TesTask>>((id, action) =>
+                .Callback<string, Action<TesTask>, CancellationToken>((id, action, cancellationToken) =>
                 {
                     action(tesTask);
                 })
