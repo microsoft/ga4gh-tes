@@ -75,7 +75,7 @@ namespace TesDeployer
 
         private static readonly AsyncRetryPolicy longRetryPolicy = Policy
             .Handle<Exception>()
-            .WaitAndRetryAsync(15, retryAttempt => System.TimeSpan.FromSeconds(15));
+            .WaitAndRetryAsync(60, retryAttempt => System.TimeSpan.FromSeconds(15));
 
         public const string ConfigurationContainerName = "configuration";
         public const string ContainersToMountFileName = "containers-to-mount";
@@ -94,8 +94,10 @@ namespace TesDeployer
             "Microsoft.Authorization",
             "Microsoft.Batch",
             "Microsoft.Compute",
+            "Microsoft.ContainerService",
             "Microsoft.DocumentDB",
             "Microsoft.OperationalInsights",
+            "Microsoft.OperationsManagement",
             "Microsoft.insights",
             "Microsoft.Network",
             "Microsoft.Storage",
@@ -621,6 +623,15 @@ namespace TesDeployer
                         if (exc is HttpOperationException hExc)
                         {
                             ConsoleEx.WriteLine($"HTTP Response: {hExc.Response.Content}");
+                        }
+                        
+                        if (exc is HttpRequestException rExc)
+                        {
+                            ConsoleEx.WriteLine($"HTTP Request StatusCode: {rExc.StatusCode.ToString()}");
+                            if (rExc.InnerException is not null)
+                            {
+                                ConsoleEx.WriteLine($"InnerException: {rExc.InnerException.GetType().FullName}: {rExc.InnerException.Message}");
+                            }
                         }
                     }
                 }
@@ -1243,7 +1254,7 @@ namespace TesDeployer
         {
             var blobClient = await GetBlobClientAsync(storageAccount);
 
-            var defaultContainers = new List<string> { "executions", "workflows", InputsContainerName, "outputs", ConfigurationContainerName };
+            var defaultContainers = new List<string> { "executions", InputsContainerName, "outputs", ConfigurationContainerName };
             await Task.WhenAll(defaultContainers.Select(c => blobClient.GetBlobContainerClient(c).CreateIfNotExistsAsync(cancellationToken: cts.Token)));
         }
 
