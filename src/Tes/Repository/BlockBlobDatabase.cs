@@ -16,12 +16,12 @@ namespace Tes.Repository
     public class BlockBlobDatabase<T> where T : class
     {
         private const int maxConcurrentItemDownloads = 64;
-        private readonly BlobServiceClient blobServiceClient;
-        private readonly BlobContainerClient container;
         private const string activeStatePrefix = "a/";
         private const string inactiveStatePrefix = "z/";
-        private string GetActiveBlobNameById(string id) => $"{activeStatePrefix}{id}.json";
-        private string GetInactiveBlobNameById(string id) => $"{inactiveStatePrefix}{id}.json";
+
+        private readonly BlobServiceClient blobServiceClient;
+        private readonly BlobContainerClient container;
+
         public string StorageAccountName { get; set; }
         public string ContainerName { get; set; } 
 
@@ -36,6 +36,7 @@ namespace Tes.Repository
             }
             else
             {
+                // Use managed identity. Token lifetime and refreshing is handled automatically.
                 blobServiceClient = new BlobServiceClient(new Uri($"https://{StorageAccountName}.blob.core.windows.net"), new DefaultAzureCredential());
             }
 
@@ -148,6 +149,10 @@ namespace Tes.Repository
                 return (page.ContinuationToken, await DownloadBlobsAsync(blobNames));
             }
         }
+
+        private string GetActiveBlobNameById(string id) => $"{activeStatePrefix}{id}.json";
+
+        private string GetInactiveBlobNameById(string id) => $"{inactiveStatePrefix}{id}.json";
 
         private async Task<IList<T>> DownloadBlobsAsync(List<string> blobNames)
         {
