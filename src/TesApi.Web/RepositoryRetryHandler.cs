@@ -6,8 +6,10 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Options;
+using Polly;
+using Polly.Retry;
 using Tes.Repository;
-using TesApi.Web.Management;
 
 namespace TesApi.Web
 {
@@ -18,19 +20,23 @@ namespace TesApi.Web
     public sealed class RepositoryRetryHandler<T> : IRepository<T> where T : RepositoryItem<T>
     {
         private readonly IRepository<T> _repository;
-        private readonly CacheAndRetryHandler _cacheAndRetryHandler;
+        private readonly AsyncRetryPolicy _asyncRetryPolicy;
 
         /// <summary>
         /// Constructor for <see cref="RepositoryRetryHandler{T}"/>.
         /// </summary>
         /// <param name="repository">The <see cref="IRepository{T}"/> to wrap.</param>
-        /// <param name="cacheAndRetryHandler">The <see cref="CacheAndRetryHandler"/> to use to implement retries.</param>
-        public RepositoryRetryHandler(IRepository<T> repository, CacheAndRetryHandler cacheAndRetryHandler)
+        /// <param name="retryPolicyOptions">The <see cref="Management.Configuration.RetryPolicyOptions"/> to use. Note that we will quadruple the max retry count set in options.</param>
+        public RepositoryRetryHandler(IRepository<T> repository, IOptions<Management.Configuration.RetryPolicyOptions> retryPolicyOptions)
         {
             ArgumentNullException.ThrowIfNull(repository);
-            ArgumentNullException.ThrowIfNull(cacheAndRetryHandler);
+            ArgumentNullException.ThrowIfNull(retryPolicyOptions);
 
-            _cacheAndRetryHandler = cacheAndRetryHandler;
+            _asyncRetryPolicy= Policy
+                .Handle<Exception>()
+                .WaitAndRetryAsync(retryPolicyOptions.Value.MaxRetryCount * 4,
+                    (attempt) => TimeSpan.FromSeconds(Math.Pow(retryPolicyOptions.Value.ExponentialBackOffExponent,
+                        attempt)));
             _repository = repository;
         }
 
@@ -39,26 +45,26 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task<T> CreateItemAsync(T item, CancellationToken cancellationToken)
-            => _cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(ct => _repository.CreateItemAsync(item, ct), cancellationToken);
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.CreateItemAsync(item, ct), cancellationToken);
 
         /// <inheritdoc/>
         public Task DeleteItemAsync(string id, CancellationToken cancellationToken)
-            => _cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(ct => _repository.DeleteItemAsync(id, ct), cancellationToken);
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.DeleteItemAsync(id, ct), cancellationToken);
 
         /// <inheritdoc/>
         public Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken)
-            => _cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, ct), cancellationToken);
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, ct), cancellationToken);
 
         /// <inheritdoc/>
         public Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken)
-            => _cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, pageSize, continuationToken, ct), cancellationToken);
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, pageSize, continuationToken, ct), cancellationToken);
 
         /// <inheritdoc/>
         public Task<bool> TryGetItemAsync(string id, Action<T> onSuccess, CancellationToken cancellationToken)
-            => _cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(ct => _repository.TryGetItemAsync(id, onSuccess, ct), cancellationToken);
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.TryGetItemAsync(id, onSuccess, ct), cancellationToken);
 
         /// <inheritdoc/>
         public Task<T> UpdateItemAsync(T item, CancellationToken cancellationToken)
-            => _cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(ct => _repository.UpdateItemAsync(item, ct), cancellationToken);
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.UpdateItemAsync(item, ct), cancellationToken);
     }
 }
