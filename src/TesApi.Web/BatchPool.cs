@@ -332,7 +332,7 @@ namespace TesApi.Web
             if (!IsAvailable)
             {
                 var (_, _, _, lowPriorityNodes, _, dedicatedNodes) = await _azureProxy.GetFullAllocationStateAsync(Pool.PoolId, cancellationToken);
-                if (lowPriorityNodes < 1 && dedicatedNodes < 1 && !await GetTasksAsync(includeCompleted: true).AnyAsync(cancellationToken))
+                if (lowPriorityNodes.GetValueOrDefault(0) == 0 && dedicatedNodes.GetValueOrDefault(0) == 0 && !await GetTasksAsync(includeCompleted: true).AnyAsync(cancellationToken))
                 {
                     _ = _batchPools.RemovePoolFromList(this);
                     await _batchPools.DeletePoolAsync(this, cancellationToken);
