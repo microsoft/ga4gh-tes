@@ -398,7 +398,7 @@ namespace TesApi.Tests
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchJobAsync(It.IsAny<PoolInformation>(), It.IsAny<CancellationToken>()))
                     .Callback<PoolInformation, CancellationToken>((poolInfo, cancellationToken)
-                        => throw new AzureBatchPoolCreationException("No job for you.", new Exception("No job for you."))));
+                        => throw new Microsoft.Rest.Azure.CloudException("No job for you.") { Body = new() { Code = BatchErrorCodeStrings.OperationTimedOut } }));
 
             void Validator(TesTask _1, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
             {
@@ -418,7 +418,7 @@ namespace TesApi.Tests
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>()))
                     .Callback<Pool, bool>((poolInfo, isPreemptible)
-                        => throw new AzureBatchPoolCreationException("No pool for you.", new Exception("No pool for you."))));
+                        => throw new Microsoft.Rest.Azure.CloudException("No job for you.") { Body = new() { Code = BatchErrorCodeStrings.OperationTimedOut } }));
 
             void Validator(TesTask _1, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
             {
@@ -547,7 +547,7 @@ namespace TesApi.Tests
             {
                 var log = logs.LastOrDefault();
                 Assert.IsNotNull(log);
-                Assert.AreEqual(LogLevel.Information, log.logLevel);
+                Assert.AreEqual(LogLevel.Warning, log.logLevel);
                 Assert.IsNotNull(task.Logs?.Last().Warning);
             }
         }
@@ -569,7 +569,7 @@ namespace TesApi.Tests
             {
                 var log = logs.LastOrDefault();
                 Assert.IsNotNull(log);
-                Assert.AreEqual(LogLevel.Information, log.logLevel);
+                Assert.AreEqual(LogLevel.Warning, log.logLevel);
                 Assert.IsNotNull(task.Logs?.Last().Warning);
             }
         }
@@ -588,7 +588,7 @@ namespace TesApi.Tests
             {
                 var log = logs.LastOrDefault();
                 Assert.IsNotNull(log);
-                Assert.AreEqual(LogLevel.Information, log.logLevel);
+                Assert.AreEqual(LogLevel.Warning, log.logLevel);
                 Assert.IsNotNull(task.Logs?.Last().Warning);
             }
         }
