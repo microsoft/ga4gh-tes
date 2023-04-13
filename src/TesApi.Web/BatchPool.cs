@@ -429,7 +429,12 @@ namespace TesApi.Web
         public TaskFailureInformation PopNextStartTaskFailure()
             => StartTaskFailures.TryDequeue(out var failure) ? failure : default;
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Service methods dispatcher.
+        /// </summary>
+        /// <param name="serviceKind">The type of <see cref="ServiceKind"/> service call.</param>
+        /// <param name="poolAllocationState">Shared state to be passed to the implementing method.</param>
+        /// <param name="cancellationToken"></param>
         internal async ValueTask ServicePoolAsync(ServiceKind serviceKind, AzureBatchPoolAllocationState poolAllocationState = default, CancellationToken cancellationToken = default)
         {
             poolAllocationState ??= await _azureProxy.GetFullAllocationStateAsync(Pool.PoolId, cancellationToken);

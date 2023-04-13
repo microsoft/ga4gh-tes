@@ -205,7 +205,7 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            return batchClient.PoolOperations.ListPools(activePoolsFilter).Count();
+            return batchClient.PoolOperations.ListPools(activePoolsFilter).ToAsyncEnumerable().CountAsync(CancellationToken.None).AsTask().Result;
         }
 
         /// <inheritdoc/>
@@ -796,13 +796,12 @@ namespace TesApi.Web
             var resourceGroupRegex = GetResourceGroupRegex();
             var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken: cancellationToken));
             var azureClient = await GetAzureManagementClientAsync(cancellationToken);
-
             var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
 
             await foreach (var subId in subscriptionIds)
             {
                 var batchAccount = await (await new BatchManagementClient(tokenCredentials) { SubscriptionId = subId }.BatchAccount.ListAsync(cancellationToken))
-                    .ToAsyncEnumerable().FirstOrDefaultAsync(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
+                    .ToAsyncEnumerable().FirstOrDefaultAsync(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken: cancellationToken);
 
                 if (batchAccount is not null)
                 {

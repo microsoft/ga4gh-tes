@@ -331,7 +331,7 @@ namespace TesApi.Web
                 batchDeletionExceptions.Add(exc);
             }
 
-            if (this.enableBatchAutopool)
+            if (enableBatchAutopool)
             {
                 try
                 {
@@ -352,7 +352,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudPool> GetCloudPools()
-            => azureProxy.GetActivePoolsAsync(this.batchPrefix);
+            => azureProxy.GetActivePoolsAsync(batchPrefix);
 
         /// <inheritdoc/>
         public async Task LoadExistingPoolsAsync()
@@ -574,7 +574,7 @@ namespace TesApi.Web
         /// <returns></returns>
         private bool TryGetCromwellTmpFilePath(string fileUri, out string localPath)
         {
-            localPath = Uri.TryCreate(fileUri, UriKind.Absolute, out var uri) && uri.IsFile && uri.AbsolutePath.StartsWith("/cromwell-tmp/") && this.azureProxy.LocalFileExists(uri.AbsolutePath) ? uri.AbsolutePath : null;
+            localPath = Uri.TryCreate(fileUri, UriKind.Absolute, out var uri) && uri.IsFile && uri.AbsolutePath.StartsWith("/cromwell-tmp/") && azureProxy.LocalFileExists(uri.AbsolutePath) ? uri.AbsolutePath : null;
 
             return localPath is not null;
         }
@@ -835,7 +835,7 @@ namespace TesApi.Web
             // Because a ComputeTask is not assigned to the compute node while the StartTask is running, IAzureProxy.GetBatchJobAndTaskStateAsync() does not see start task failures. Deal with that here.
             if (azureBatchJobAndTaskState.NodeState is null && azureBatchJobAndTaskState.JobState == JobState.Active && azureBatchJobAndTaskState.TaskState == TaskState.Active && !string.IsNullOrWhiteSpace(azureBatchJobAndTaskState.Pool?.PoolId))
             {
-                if (this.enableBatchAutopool)
+                if (enableBatchAutopool)
                 {
                     _ = ProcessStartTaskFailure(batchAccountState.PoolsAndNodes.FirstOrDefault(p => p.Key.Id.Equals(azureBatchJobAndTaskState.Pool.PoolId, StringComparison.OrdinalIgnoreCase))
                         .Value.FirstOrDefault(n => ComputeNodeState.StartTaskFailed == n.State)?.StartTaskInformation?.FailureInformation);
@@ -1082,14 +1082,14 @@ namespace TesApi.Web
 
             var batchExecutionDirectoryPath = GetBatchExecutionDirectoryPath(task);
             var metricsPath = $"/{batchExecutionDirectoryPath}/metrics.txt";
-            var metricsUrl = new Uri(await this.storageAccessProvider.MapLocalPathToSasUrlAsync(metricsPath, cancellationToken, getContainerSas: true));
+            var metricsUrl = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync(metricsPath, cancellationToken, getContainerSas: true));
 
             var additionalInputFiles = new List<TesInput>();
             // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
             // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
             if (isCromwell)
             {
-                var executionDirectoryUri = new Uri(await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{cromwellExecutionDirectoryPath}", cancellationToken, getContainerSas: true));
+                var executionDirectoryUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{cromwellExecutionDirectoryPath}", cancellationToken, getContainerSas: true));
                 var blobsInExecutionDirectory = (await azureProxy.ListBlobsAsync(executionDirectoryUri)).Where(b => !b.EndsWith($"/{CromwellScriptFileName}")).Where(b => !b.Contains($"/{BatchExecutionDirectoryName}/"));
                 additionalInputFiles = blobsInExecutionDirectory.Select(b => $"{CromwellPathPrefix}/{b}").Select(b => new TesInput { Content = null, Path = b, Url = b, Name = Path.GetFileName(b), Type = TesFileType.FILEEnum }).ToList();
             }
@@ -1133,7 +1133,7 @@ namespace TesApi.Web
                 + $" && echo FileDownloadSizeInBytes=$total_bytes >> {metricsPath}";
 
             var downloadFilesScriptPath = $"{batchExecutionDirectoryPath}/{DownloadFilesScriptFileName}";
-            var downloadFilesScriptUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{downloadFilesScriptPath}", cancellationToken);
+            var downloadFilesScriptUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{downloadFilesScriptPath}", cancellationToken);
             await storageAccessProvider.UploadBlobAsync($"/{downloadFilesScriptPath}", downloadFilesScriptContent, cancellationToken);
             var filesToUpload = Array.Empty<TesOutput>();
 
@@ -1141,7 +1141,7 @@ namespace TesApi.Web
             {
                 filesToUpload = await Task.WhenAll(
                     task.Outputs?.Select(async f =>
-                        new TesOutput { Path = f.Path, Url = await this.storageAccessProvider.MapLocalPathToSasUrlAsync(f.Url, cancellationToken, getContainerSas: true), Name = f.Name, Type = f.Type }));
+                        new TesOutput { Path = f.Path, Url = await storageAccessProvider.MapLocalPathToSasUrlAsync(f.Url, cancellationToken, getContainerSas: true), Name = f.Name, Type = f.Type }));
             }
 
             // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
@@ -1241,8 +1241,8 @@ namespace TesApi.Web
             var batchScriptPath = $"{batchExecutionDirectoryPath}/{BatchScriptFileName}";
             await storageAccessProvider.UploadBlobAsync($"/{batchScriptPath}", sb.ToString(), cancellationToken);
 
-            var batchScriptSasUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchScriptPath}", cancellationToken);
-            var batchExecutionDirectorySasUrl = await this.storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchExecutionDirectoryPath}/", cancellationToken, getContainerSas: true);
+            var batchScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchScriptPath}", cancellationToken);
+            var batchExecutionDirectorySasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchExecutionDirectoryPath}/", cancellationToken, getContainerSas: true);
 
             var batchRunCommand = enableBatchAutopool
                 ? $"/bin/bash {batchScriptPath}"
@@ -1348,10 +1348,8 @@ namespace TesApi.Web
             if (inputFile.Content is not null || IsCromwellCommandScript(inputFile))
             {
                 inputFileUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(inputFile.Path, cancellationToken);
-
                 var content = inputFile.Content ?? await storageAccessProvider.DownloadBlobAsync(inputFile.Url, cancellationToken);
                 content = IsCromwellCommandScript(inputFile) ? RemoveQueryStringsFromLocalFilePaths(content, queryStringsToRemoveFromLocalFilePaths) : content;
-
                 await storageAccessProvider.UploadBlobAsync(inputFile.Path, content, cancellationToken);
             }
             else if (TryGetCromwellTmpFilePath(inputFile.Url, out var localPath))
@@ -1385,6 +1383,7 @@ namespace TesApi.Web
             if (!string.IsNullOrWhiteSpace(globalStartTaskPath))
             {
                 startTaskSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, cancellationToken);
+
                 if (!await azureProxy.BlobExistsAsync(new Uri(startTaskSasUrl)))
                 {
                     startTaskSasUrl = null;

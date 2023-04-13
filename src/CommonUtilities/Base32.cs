@@ -8,9 +8,9 @@ namespace CommonUtilities
     public static class Base32
     {
         private static readonly char[] Rfc4648Base32 = new[] { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '2', '3', '4', '5', '6', '7' };
-        const int GroupBitlength = 5;
-        const int BitsPerByte = 8;
-        const int LargestBitPosition = GroupBitlength - 1;
+        private const int GroupBitlength = 5;
+        private const int BitsPerByte = 8;
+        private const int LargestBitPosition = GroupBitlength - 1;
 
         /// <summary>
         /// Converts binary to Base32
@@ -53,10 +53,10 @@ namespace CommonUtilities
         /// <typeparam name="TResult">Type of the resultant items</typeparam>
         /// <param name="ts">The source enumerable of type <typeparamref name="TSource"/>.</param>
         /// <param name="itemsPerGroup">The size of each group to create out of the entire enumeration. The last group may be smaller.</param>
-        /// <param name="groupMemberFunc">The function that prepares each <typeparamref name="TSource"/> into the value expected by <paramref name="groupResultFunc"/>. Its parameters are <typeparamref name="TSource"/> and the index of that item (starting from zero) within each grouping.</param>
+        /// <param name="groupMemberFunc">The function that prepares each <typeparamref name="TSource"/> into the value expected by <paramref name="groupResultFunc"/>. Its parameters are an item of type <typeparamref name="TSource"/> and the index of that item (starting from zero) within each group.</param>
         /// <param name="groupResultFunc">The function that creates the <typeparamref name="TResult"/> from each group of <typeparamref name="TGroupItem"/>.</param>
         /// <returns>An enumeration of <typeparamref name="TResult"/> from all of the groups.</returns>
-        static IEnumerable<TResult> ConvertGroup<TSource, TGroupItem, TResult>(
+        private static IEnumerable<TResult> ConvertGroup<TSource, TGroupItem, TResult>(
             this IEnumerable<TSource> ts,
             int itemsPerGroup,
             Func<TSource, int, TGroupItem> groupMemberFunc,

@@ -48,7 +48,7 @@ namespace TesApi.Tests
             Assert.IsTrue(batchScheduler.RemovePoolFromList(pool));
             Assert.AreEqual(0, batchScheduler.GetPoolGroupKeys().Count());
 
-            pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, ct) => ValueTask.FromResult(new Pool(name: id)), CancellationToken.None);
+            pool = (BatchPool) await batchScheduler.GetOrAddPoolAsync(key, false, (id, ct) => ValueTask.FromResult(new Pool(name: id)), CancellationToken.None);
 
             Assert.IsNotNull(pool);
             Assert.AreEqual(1, batchScheduler.GetPoolGroupKeys().Count());
@@ -168,11 +168,11 @@ namespace TesApi.Tests
             var batchScheduler = serviceProvider.GetT() as BatchScheduler;
             var pool = await AddPool(batchScheduler);
             Assert.IsTrue(batchScheduler.IsPoolAvailable("key1"));
-            ((BatchPool)pool).TestSetAvailable(false);
+            pool.TestSetAvailable(false);
             Assert.IsFalse(batchScheduler.IsPoolAvailable("key1"));
             Assert.IsTrue(batchScheduler.GetPools().Any());
 
-            await ((BatchPool)pool).ServicePoolAsync(BatchPool.ServiceKind.RemovePoolIfEmpty);
+            await pool.ServicePoolAsync(BatchPool.ServiceKind.RemovePoolIfEmpty);
 
             Assert.AreEqual(pool.Pool.PoolId, poolId);
             Assert.IsFalse(batchScheduler.IsPoolAvailable("key1"));
@@ -1581,8 +1581,8 @@ namespace TesApi.Tests
                 batchSkuInformationProvider: GetMockSkuInfoProvider(azureProxyReturn));
         }
 
-        private static async Task<IBatchPool> AddPool(BatchScheduler batchScheduler)
-            => await batchScheduler.GetOrAddPoolAsync("key1", false, (id, ct) => ValueTask.FromResult<Pool>(new(name: id, displayName: "display1", vmSize: "vmSize1")), CancellationToken.None);
+        private static async Task<BatchPool> AddPool(BatchScheduler batchScheduler)
+            => (BatchPool) await batchScheduler.GetOrAddPoolAsync("key1", false, (id, ct) => ValueTask.FromResult<Pool>(new(name: id, displayName: "display1", vmSize: "vmSize1")), CancellationToken.None);
 
         private struct BatchJobAndTaskStates
         {
