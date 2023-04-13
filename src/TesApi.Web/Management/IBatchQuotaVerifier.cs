@@ -16,9 +16,11 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <param name="virtualMachineInformation"></param>
         /// <param name="needPoolOrJobQuotaCheck">Flag to enable checking pool and job quotas.</param>
+        /// <param name="needCoresUtilizationQuotaCheck">Flag to enable checking core quotas against current utilization. Zero quota checks are always performed.</param>
         /// <returns></returns>
+        /// <exception cref="AzureBatchLowQuotaException">Thrown when a task requires more cores than total quota available</exception>
         /// <exception cref="AzureBatchQuotaMaxedOutException">Thrown when a max quota condition was identified</exception>
-        Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck);
+        Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck, bool needCoresUtilizationQuotaCheck);
 
         /// <summary>
         /// Gets the instance of the batch quota provider.
