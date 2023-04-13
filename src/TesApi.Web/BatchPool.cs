@@ -495,6 +495,8 @@ namespace TesApi.Web
             catch (AggregateException ex)
             {
                 var exception = ex.Flatten();
+                // If there is only one contained exception, we don't need an AggregateException, and we have a simple path to success (following this if block)
+                // In the extremely unlikely event that there are no innerexceptions, we don't want to change the existing code flow nor do we want to complicate the (less than 2) path.
                 if (exception.InnerExceptions?.Count != 1)
                 {
                     throw new AggregateException(exception.Message, exception.InnerExceptions?.Select(HandleException) ?? Enumerable.Empty<Exception>());
