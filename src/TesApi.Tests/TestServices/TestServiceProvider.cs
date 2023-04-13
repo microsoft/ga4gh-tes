@@ -78,6 +78,7 @@ namespace TesApi.Tests.TestServices
                         .AddTransient<ILogger<ConfigurationUtils>>(_ => NullLogger<ConfigurationUtils>.Instance)
                         .AddTransient<ILogger<PriceApiBatchSkuInformationProvider>>(_ => NullLogger<PriceApiBatchSkuInformationProvider>.Instance)
                         .AddSingleton<TestRepositoryStorage>()
+                        .AddSingleton<CacheAndRetryHandler>()
                         .AddSingleton<PriceApiClient>()
                         .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                         .AddTransient<BatchPool>()
@@ -145,7 +146,14 @@ namespace TesApi.Tests.TestServices
             => ActivatorUtilities.GetServiceOrCreateInstance<TInstance>(provider);
 
         private static IConfiguration GetConfiguration(IEnumerable<(string Key, string Value)> configuration)
-            => new ConfigurationBuilder().AddInMemoryCollection(configuration?.Select(t => new KeyValuePair<string, string>(t.Key, t.Value)) ?? Enumerable.Empty<KeyValuePair<string, string>>()).Build();
+            => new ConfigurationBuilder()
+                .AddInMemoryCollection(new KeyValuePair<string, string/*?*/>[] // defaults
+                {
+                    new($"{RetryPolicyOptions.SectionName}:{nameof(RetryPolicyOptions.MaxRetryCount)}", "2"),
+                    new($"{RetryPolicyOptions.SectionName}:{nameof(RetryPolicyOptions.ExponentialBackOffExponent)}", "2")
+                })
+                .AddInMemoryCollection(configuration?.Select(t => new KeyValuePair<string, string>(t.Key, t.Value)) ?? Enumerable.Empty<KeyValuePair<string, string>>())
+                .Build();
 
         private Mock<IAzureProxy> GetAzureProxy(Action<Mock<IAzureProxy>> action)
         {
