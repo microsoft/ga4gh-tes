@@ -151,14 +151,6 @@ namespace TesDeployer
             var certImageWebhook = $"{certManagerRegistry}/jetstack/cert-manager-webhook";
             var certImageCainjector = $"{certManagerRegistry}/jetstack/cert-manager-cainjector";
 
-            await client.CoreV1.CreateNamespaceAsync(new V1Namespace()
-            {
-                Metadata = new V1ObjectMeta
-                {
-                    Name = configuration.AksCoANamespace
-                },
-            });
-
             V1Namespace coaNamespace = null;
             try
             {
@@ -235,6 +227,10 @@ namespace TesDeployer
                     $"--set cainjector.image.tag={CertManagerVersion}");
 
             await WaitForWorkloadAsync(client, "ingress-nginx-controller", configuration.AksCoANamespace, cts.Token);
+            await WaitForWorkloadAsync(client, "cert-manager", configuration.AksCoANamespace, cts.Token);
+
+            // Wait 10 secs before deploying TES for cert manager to finish starting. 
+            await Task.Delay(TimeSpan.FromSeconds(10));
 
             return client;
         }
@@ -544,12 +540,26 @@ namespace TesDeployer
 
         private async Task<string> ExecHelmProcessAsync(string command, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
         {
+            var outputStringBuilder = new StringBuilder();
+
+            void OutputHandler(object sendingProcess, DataReceivedEventArgs outLine)
+            {
+                if (configuration.DebugLogging)
+                {
+                    ConsoleEx.WriteLine($"HELM: {outLine.Data}");
+                }
+
+                outputStringBuilder.AppendLine(outLine.Data);
+            }
+
             var process = new Process();
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
             process.StartInfo.FileName = configuration.HelmBinaryPath;
             process.StartInfo.Arguments = command;
+            process.OutputDataReceived += new DataReceivedEventHandler(OutputHandler);
+            process.ErrorDataReceived += new DataReceivedEventHandler(OutputHandler);
 
             if (!string.IsNullOrWhiteSpace(workingDirectory))
             {
@@ -557,41 +567,8 @@ namespace TesDeployer
             }
 
             process.Start();
-
-            var outputStringBuilder = new StringBuilder();
-
-            _ = Task.Run(async () =>
-            {
-                var line = (await process.StandardOutput.ReadLineAsync())?.Trim();
-
-                while (line is not null)
-                {
-                    if (configuration.DebugLogging)
-                    {
-                        ConsoleEx.WriteLine($"HELM: {line}");
-                    }
-
-                    outputStringBuilder.AppendLine(line);
-                    line = await process.StandardOutput.ReadLineAsync().WaitAsync(cts.Token);
-                }
-            });
-
-            _ = Task.Run(async () =>
-            {
-                var line = (await process.StandardError.ReadLineAsync())?.Trim();
-
-                while (line is not null)
-                {
-                    if (configuration.DebugLogging)
-                    {
-                        ConsoleEx.WriteLine($"HELM: {line}");
-                    }
-
-                    outputStringBuilder.AppendLine(line);
-                    line = await process.StandardError.ReadLineAsync().WaitAsync(cts.Token);
-                }
-            });
-
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
             await process.WaitForExitAsync();
             var output = outputStringBuilder.ToString();
 
