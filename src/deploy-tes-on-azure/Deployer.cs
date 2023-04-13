@@ -710,7 +710,7 @@ namespace TesDeployer
                         {
                             response = JsonConvert.DeserializeObject<Dictionary<string, string>>(body);
                         }
-                        catch(JsonReaderException exception)
+                        catch (JsonReaderException exception)
                         {
                             exception.Data.Add("Body", body);
                             throw;
