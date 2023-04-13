@@ -157,7 +157,5 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
 
 
         return new BatchAccountUtilization(activeJobsCount, activePoolsCount, totalCoresInUse, dedicatedCoresInUseInRequestedVmFamily);
-
     }
-
 }
