@@ -62,7 +62,7 @@ namespace TesApi.Web.Management
                 return null;
             }
 
-            var containerRegistryInfo = CacheAndRetryHandler.AppCache.Get<ContainerRegistryInfo>(imageName);
+            var containerRegistryInfo = CacheAndRetryHandler.AppCache.Get<ContainerRegistryInfo>($"{nameof(ContainerRegistryProvider)}:{imageName}");
 
             if (containerRegistryInfo is not null)
             {
@@ -81,7 +81,7 @@ namespace TesApi.Web.Management
         {
             // mcr.microsoft.com = public
             // no domain specified = public
-            string host = imageName.Split('/', StringSplitOptions.RemoveEmptyEntries).First();
+            var host = imageName.Split('/', StringSplitOptions.RemoveEmptyEntries).First();
 
             if (host.Equals("mcr.microsoft.com", StringComparison.OrdinalIgnoreCase) || !host.Contains('.'))
             {
@@ -102,7 +102,7 @@ namespace TesApi.Web.Management
             {
                 Logger.LogInformation($"Requested repository: {imageName} was found.");
 
-                CacheAndRetryHandler.AppCache.Add<ContainerRegistryInfo>(imageName, requestedRepo,
+                CacheAndRetryHandler.AppCache.Add($"{nameof(ContainerRegistryProvider)}:{imageName}", requestedRepo,
                     //I find kind of odd the Add method of the cache does not exposes the expiration directly as param as the GetOrAdd method does.
                     new MemoryCacheEntryOptions()
                     {

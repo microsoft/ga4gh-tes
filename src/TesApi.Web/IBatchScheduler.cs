@@ -55,13 +55,6 @@ namespace TesApi.Web
         Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Provides a list of pools that can safely be disposed of.
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        ValueTask<IEnumerable<Task>> GetShutdownCandidatePools(CancellationToken cancellationToken);
-
-        /// <summary>
         /// Retrieves pools associated with this TES from the batch account.
         /// </summary>
         /// <returns></returns>

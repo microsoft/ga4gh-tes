@@ -19,14 +19,6 @@ namespace TesApi.Web.Storage
         public Task<string> DownloadBlobAsync(string blobRelativePath);
 
         /// <summary>
-        /// Tries to retrieves file content
-        /// </summary>
-        /// <param name="blobRelativePath">Path to the file in form of /storageaccountname/container/path</param>
-        /// <param name="action">Action to invoke if content is downloaded</param>
-        /// <returns>True if content was downloaded</returns>
-        public Task<bool> TryDownloadBlobAsync(string blobRelativePath, Action<string> action);
-
-        /// <summary>
         /// Updates the content of the file, creating the file if necessary
         /// </summary>
         /// <param name="blobRelativePath">Path to the file in form of /storageaccountname/container/path</param>
