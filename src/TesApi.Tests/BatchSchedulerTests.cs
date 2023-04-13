@@ -1705,7 +1705,7 @@ namespace TesApi.Tests
         {
             public TestBatchQuotaVerifierQuotaMaxedOut(IBatchQuotaProvider batchQuotaProvider) : base(batchQuotaProvider) { }
 
-            public override Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck)
+            public override Task CheckBatchAccountQuotasAsync(VirtualMachineInformation _1, bool _2, bool _3)
                 => throw new AzureBatchQuotaMaxedOutException("Test AzureBatchQuotaMaxedOutException");
         }
 
@@ -1713,7 +1713,7 @@ namespace TesApi.Tests
         {
             public TestBatchQuotaVerifierLowQuota(IBatchQuotaProvider batchQuotaProvider) : base(batchQuotaProvider) { }
 
-            public override Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck)
+            public override Task CheckBatchAccountQuotasAsync(VirtualMachineInformation _1, bool _2, bool _3)
                 => throw new AzureBatchLowQuotaException("Test AzureBatchLowQuotaException");
         }
 
@@ -1724,7 +1724,7 @@ namespace TesApi.Tests
             protected TestBatchQuotaVerifierBase(IBatchQuotaProvider batchQuotaProvider)
                 => this.batchQuotaProvider = batchQuotaProvider;
 
-            public abstract Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck);
+            public abstract Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck, bool needCoresUtilizationQuotaCheck);
 
             public IBatchQuotaProvider GetBatchQuotaProvider()
                 => batchQuotaProvider;

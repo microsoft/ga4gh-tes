@@ -477,7 +477,7 @@ namespace TesApi.Web
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask);
 
                 (poolKey, var displayName) = this.enableBatchAutopool ? default : await GetPoolKey(tesTask, virtualMachineInfo);
-                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, this.enableBatchAutopool || !IsPoolAvailable(poolKey));
+                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: this.enableBatchAutopool || !IsPoolAvailable(poolKey), needCoresUtilizationQuotaCheck: enableBatchAutopool);
 
                 var tesTaskLog = tesTask.AddTesTaskLog();
                 tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
