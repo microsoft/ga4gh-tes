@@ -46,10 +46,8 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
 
     /// <inheritdoc />
     public async Task<BatchVmFamilyQuotas> GetQuotaForRequirementAsync(string vmFamily, bool lowPriority,
-        int? coresRequirement)
-    {
-        return ToVmFamilyBatchAccountQuotas(await GetBatchAccountQuotasAsync(), vmFamily, lowPriority, coresRequirement);
-    }
+            int? coresRequirement)
+        => ToVmFamilyBatchAccountQuotas(await GetBatchAccountQuotasAsync(), vmFamily, lowPriority, coresRequirement);
 
     /// <inheritdoc />
     public async Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority)
@@ -80,9 +78,7 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     /// </summary>
     /// <returns></returns>
     public virtual async Task<AzureBatchAccountQuotas> GetBatchAccountQuotasAsync()
-    {
-        return await appCache.GetOrAddAsync(clientsFactory.BatchAccountInformation.ToString(), GetBatchAccountQuotasImplAsync);
-    }
+        => await appCache.GetOrAddAsync(clientsFactory.BatchAccountInformation.ToString(), GetBatchAccountQuotasImplAsync);
 
     private async Task<AzureBatchAccountQuotas> GetBatchAccountQuotasImplAsync()
     {

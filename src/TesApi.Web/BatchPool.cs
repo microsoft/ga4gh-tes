@@ -333,6 +333,32 @@ namespace TesApi.Web
     {
         private static readonly SemaphoreSlim lockObj = new(1, 1);
 
+        /// <summary>
+        /// Types of maintenance calls offered by the <see cref="ServicePoolAsync(ServiceKind, CancellationToken)"/> service method.
+        /// </summary>
+        internal enum ServiceKind
+        {
+            /// <summary>
+            /// Queues resize errors (if available).
+            /// </summary>
+            GetResizeErrors,
+
+            /// <summary>
+            /// Proactively removes errored nodes from pool and manages certain autopool error conditions.
+            /// </summary>
+            ManagePoolScaling,
+
+            /// <summary>
+            /// Removes <see cref="CloudPool"/> if it's retired and empty.
+            /// </summary>
+            RemovePoolIfEmpty,
+
+            /// <summary>
+            /// Stages rotating or retiring this <see cref="CloudPool"/> if needed.
+            /// </summary>
+            Rotate,
+        }
+
         /// <inheritdoc/>
         public bool IsAvailable { get; private set; } = true;
 
@@ -372,15 +398,19 @@ namespace TesApi.Web
         public TaskFailureInformation PopNextStartTaskFailure()
             => StartTaskFailures.TryDequeue(out var failure) ? failure : default;
 
-        /// <inheritdoc/>
-        public async ValueTask ServicePoolAsync(IBatchPool.ServiceKind serviceKind, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Service methods dispatcher.
+        /// </summary>
+        /// <param name="serviceKind">The type of <see cref="ServiceKind"/> service call.</param>
+        /// <param name="cancellationToken"></param>
+        internal async ValueTask ServicePoolAsync(ServiceKind serviceKind, CancellationToken cancellationToken = default)
         {
             Func<CancellationToken, ValueTask> func = serviceKind switch
             {
-                IBatchPool.ServiceKind.GetResizeErrors => ServicePoolGetResizeErrorsAsync,
-                IBatchPool.ServiceKind.ManagePoolScaling => ServicePoolManagePoolScalingAsync,
-                IBatchPool.ServiceKind.RemovePoolIfEmpty => ServicePoolRemovePoolIfEmptyAsync,
-                IBatchPool.ServiceKind.Rotate => ServicePoolRotateAsync,
+                ServiceKind.GetResizeErrors => ServicePoolGetResizeErrorsAsync,
+                ServiceKind.ManagePoolScaling => ServicePoolManagePoolScalingAsync,
+                ServiceKind.RemovePoolIfEmpty => ServicePoolRemovePoolIfEmptyAsync,
+                ServiceKind.Rotate => ServicePoolRotateAsync,
                 _ => throw new ArgumentOutOfRangeException(nameof(serviceKind)),
             };
 
@@ -401,10 +431,10 @@ namespace TesApi.Web
         {
             var exceptions = new List<Exception>();
 
-            _ = await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.GetResizeErrors, cancellationToken), cancellationToken) &&
-            await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.ManagePoolScaling, cancellationToken), cancellationToken) &&
-            await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.Rotate, cancellationToken), cancellationToken) &&
-            await PerformTask(ServicePoolAsync(IBatchPool.ServiceKind.RemovePoolIfEmpty, cancellationToken), cancellationToken);
+            _ = await PerformTask(ServicePoolAsync(ServiceKind.GetResizeErrors, cancellationToken), cancellationToken) &&
+            await PerformTask(ServicePoolAsync(ServiceKind.ManagePoolScaling, cancellationToken), cancellationToken) &&
+            await PerformTask(ServicePoolAsync(ServiceKind.Rotate, cancellationToken), cancellationToken) &&
+            await PerformTask(ServicePoolAsync(ServiceKind.RemovePoolIfEmpty, cancellationToken), cancellationToken);
 
             switch (exceptions.Count)
             {
@@ -493,7 +523,7 @@ namespace TesApi.Web
             catch (AggregateException ex)
             {
                 var exception = ex.Flatten();
-                if (exception.InnerExceptions.Count < 2)
+                if (exception.InnerExceptions?.Count != 1)
                 {
                     throw new AggregateException(exception.Message, exception.InnerExceptions?.Select(HandleException) ?? Enumerable.Empty<Exception>());
                 }
