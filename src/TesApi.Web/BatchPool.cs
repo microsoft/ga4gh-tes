@@ -294,7 +294,7 @@ namespace TesApi.Web
                         ResizeErrors.Clear();
                         _resizeErrorsRetrieved = true;
                         _logger.LogInformation(@"Switching pool {PoolId} back to autoscale.", Pool.PoolId);
-                        await _azureProxy.EnableBatchPoolAutoScaleAsync(Pool.PoolId, !IsDedicated, AutoScaleEvaluationInterval, AutoPoolFormula, cancellationToken);
+                        await _azureProxy.EnableBatchPoolAutoScaleAsync(Pool.PoolId, !IsDedicated, AutoScaleEvaluationInterval, (p, t) => AutoPoolFormula(p, GetTaskCount(t)), cancellationToken);
                         MarkAllocationStateDirty(poolAllocationState);
                         _autoScaleWaitTime = DateTime.UtcNow + (3 * AutoScaleEvaluationInterval) + BatchPoolService.RunInterval;
                         _scalingMode = _resetAutoScalingRequired ? ScalingMode.WaitingForAutoScale : ScalingMode.SettingAutoScale;
@@ -311,6 +311,18 @@ namespace TesApi.Web
                     case ScalingMode.SettingAutoScale:
                         _scalingMode = ScalingMode.AutoScaleEnabled;
                         break;
+                }
+
+                int GetTaskCount(int @default) // Used to make reenabling auto-scale more performant by attempting to gather the current number of "pending" tasks, falling back on the current target.
+                {
+                    try
+                    {
+                        return GetTasksAsync(includeCompleted: false).CountAsync(cancellationToken).AsTask().Result;
+                    }
+                    catch
+                    {
+                        return @default;
+                    }
                 }
             }
 
@@ -335,7 +347,7 @@ namespace TesApi.Web
         {
             if (!IsAvailable && IsAllocationStateSteady(poolAllocationState))
             {
-                if (poolAllocationState.CurrentLowPriority < 1 && poolAllocationState.CurrentDedicated < 1 && !await GetTasksAsync(includeCompleted: true).AnyAsync(cancellationToken))
+                if (poolAllocationState.CurrentLowPriority.GetValueOrDefault(0) == 0 && poolAllocationState.CurrentDedicated.GetValueOrDefault(0) == 0 && !await GetTasksAsync(includeCompleted: true).AnyAsync(cancellationToken))
                 {
                     await _batchPools.DeletePoolAsync(this, cancellationToken);
                     MarkAllocationStateDirty(poolAllocationState);
@@ -610,8 +622,13 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(pool);
 
             Pool = new() { PoolId = pool.Id };
-            Creation = pool.CreationTime ?? throw new InvalidOperationException($"Pool {pool.Id} has a null CreationTime. CreationTime is a required property for {nameof(BatchPool)}'s operations.");
             IsAvailable = DetermineIsAvailable(pool.CreationTime);
+
+            if (IsAvailable)
+            {
+                Creation = pool.CreationTime.Value;
+            }
+
             IsDedicated = bool.Parse(pool.Metadata.First(m => BatchScheduler.PoolIsDedicated.Equals(m.Name, StringComparison.Ordinal)).Value);
             _ = _batchPools.AddPool(this);
         }
