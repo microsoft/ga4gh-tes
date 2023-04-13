@@ -1348,8 +1348,10 @@ namespace TesApi.Web
             if (inputFile.Content is not null || IsCromwellCommandScript(inputFile))
             {
                 inputFileUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(inputFile.Path, cancellationToken);
+
                 var content = inputFile.Content ?? await storageAccessProvider.DownloadBlobAsync(inputFile.Url, cancellationToken);
                 content = IsCromwellCommandScript(inputFile) ? RemoveQueryStringsFromLocalFilePaths(content, queryStringsToRemoveFromLocalFilePaths) : content;
+
                 await storageAccessProvider.UploadBlobAsync(inputFile.Path, content, cancellationToken);
             }
             else if (TryGetCromwellTmpFilePath(inputFile.Url, out var localPath))

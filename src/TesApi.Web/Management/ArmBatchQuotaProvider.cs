@@ -79,7 +79,7 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     /// </summary>
     /// <returns></returns>
     public virtual async Task<AzureBatchAccountQuotas> GetBatchAccountQuotasAsync(CancellationToken cancellationToken)
-        => await appCache.GetOrAddAsync(clientsFactory.BatchAccountInformation.ToString(), async () => await GetBatchAccountQuotasImplAsync(cancellationToken));
+        => await appCache.GetOrAddAsync(clientsFactory.BatchAccountInformation.ToString(), async _1 => await GetBatchAccountQuotasImplAsync(cancellationToken));
 
     private async Task<AzureBatchAccountQuotas> GetBatchAccountQuotasImplAsync(CancellationToken cancellationToken)
     {

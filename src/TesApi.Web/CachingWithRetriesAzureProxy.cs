@@ -7,15 +7,17 @@ using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
+
 using LazyCache;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
-using Polly.Utilities;
+
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
+
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
 namespace TesApi.Web
@@ -216,14 +218,18 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken) => azureProxy.DeleteBatchPoolIfExistsAsync(poolId, cancellationToken);
+        public Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken)
+            => azureProxy.DeleteBatchPoolIfExistsAsync(poolId, cancellationToken);
 
         /// <inheritdoc/>
-        public Task<AzureBatchPoolAllocationState> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken) => cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(ct => azureProxy.GetFullAllocationStateAsync(poolId, ct), cancellationToken);
+        public Task<AzureBatchPoolAllocationState> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken)
+            => cacheAndRetryHandler.ExecuteWithRetryAndCachingAsync(
+                $"{nameof(CachingWithRetriesAzureProxy)}:{poolId}",
+                ct => azureProxy.GetFullAllocationStateAsync(poolId, ct),
+                DateTimeOffset.Now.Add(BatchPoolService.RunInterval).Subtract(TimeSpan.FromSeconds(1)), cancellationToken);
 
         /// <inheritdoc/>
         public IAsyncEnumerable<ComputeNode> ListComputeNodesAsync(string poolId, DetailLevel detailLevel) => cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() => azureProxy.ListComputeNodesAsync(poolId, detailLevel), cacheAndRetryHandler.RetryPolicy);
-
 
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudTask> ListTasksAsync(string jobId, DetailLevel detailLevel) => cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() => azureProxy.ListTasksAsync(jobId, detailLevel), cacheAndRetryHandler.RetryPolicy);

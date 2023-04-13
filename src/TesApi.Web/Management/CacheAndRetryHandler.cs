@@ -72,7 +72,6 @@ namespace TesApi.Web.Management
         protected CacheAndRetryHandler() { }
 
 
-
         /// <summary>
         /// Executes a delegate with the specified policy.
         /// </summary>
