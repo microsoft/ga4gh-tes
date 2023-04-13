@@ -149,7 +149,7 @@ namespace TesApi.Tests.TestServices
             => new ConfigurationBuilder()
                 .AddInMemoryCollection(new KeyValuePair<string, string/*?*/>[] // defaults
                 {
-                    new($"{RetryPolicyOptions.SectionName}:{nameof(RetryPolicyOptions.MaxRetryCount)}", "2"),
+                    new($"{RetryPolicyOptions.SectionName}:{nameof(RetryPolicyOptions.MaxRetryCount)}", "3"),
                     new($"{RetryPolicyOptions.SectionName}:{nameof(RetryPolicyOptions.ExponentialBackOffExponent)}", "2")
                 })
                 .AddInMemoryCollection(configuration?.Select(t => new KeyValuePair<string, string>(t.Key, t.Value)) ?? Enumerable.Empty<KeyValuePair<string, string>>())
