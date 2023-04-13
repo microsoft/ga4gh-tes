@@ -515,11 +515,6 @@ namespace TesDeployer
                                     _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
                                 }
                             });
-
-                        if (configuration.EnableIngress.GetValueOrDefault() && !configuration.SkipTestWorkflow)
-                        {
-                            await Task.Delay(System.TimeSpan.FromMinutes(3)); // Give Ingress a moment longer to complete its standup.
-                        }
                     }
                 }
                 finally
