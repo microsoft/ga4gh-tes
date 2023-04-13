@@ -165,5 +165,10 @@ namespace TesApi.Tests.TestServices
 
             throw new InvalidOperationException();
         }
+
+        Task<IEnumerable<T>> IRepository<T>.GetActiveItemsAsync()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

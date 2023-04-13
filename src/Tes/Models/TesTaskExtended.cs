@@ -90,7 +90,7 @@ namespace Tes.Models
 
         public bool IsActiveState()
         {
-            return ActiveStates.Contains(this.State);
+            return ActiveStates.Contains(this.State) || (this.State == TesState.CANCELEDEnum && this.IsCancelRequested);
         }
     }
 }

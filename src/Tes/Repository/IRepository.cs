@@ -40,6 +40,13 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="predicate">The 'where' clause</param>
         /// <returns>The collection of retrieved items</returns>
+        Task<IEnumerable<T>> GetActiveItemsAsync();
+
+        /// <summary>
+        /// Reads a collection of items from the repository
+        /// </summary>
+        /// <param name="predicate">The 'where' clause</param>
+        /// <returns>The collection of retrieved items</returns>
         Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate);
 
         /// <summary>

@@ -13,6 +13,7 @@ namespace Tes.Repository
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
     using Polly;
+    using Tes.Extensions;
     using Tes.Models;
     using Tes.Utilities;
 
@@ -240,6 +241,11 @@ namespace Tes.Repository
             // TODO paging support
             var results = await GetItemsAsync(predicate);
             return (null, results);
+        }
+
+        public async Task<IEnumerable<TesTask>> GetActiveItemsAsync()
+        {
+            return await GetItemsAsync(t => TesTask.ActiveStates.Contains(t.State) || (t.State == TesState.CANCELEDEnum && t.IsCancelRequested));
         }
 
         public void Dispose()

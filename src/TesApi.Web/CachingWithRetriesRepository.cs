@@ -136,6 +136,11 @@ namespace TesApi.Web
             }
         }
 
+        Task<IEnumerable<T>> IRepository<T>.GetActiveItemsAsync()
+        {
+            throw new NotImplementedException();
+        }
+
         /// <inheritdoc/>
         public void Dispose()
         {
