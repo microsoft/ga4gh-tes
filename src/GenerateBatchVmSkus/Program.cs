@@ -11,9 +11,17 @@ using Azure.ResourceManager.Batch;
 using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.Compute.Models;
 using Azure.ResourceManager.Resources.Models;
+using LazyCache;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Moq;
 using Newtonsoft.Json;
 using Tes.Models;
+using TesApi.Web.Management;
+using TesApi.Web.Management.Clients;
+using TesApi.Web.Management.Configuration;
+using TesApi.Web.Management.Models.Pricing;
 
 namespace TesUtils
 {
@@ -82,12 +90,25 @@ namespace TesUtils
             var validSet = vmPrices.Select(vm => vm.VmSize).ToHashSet();
 
             var client = new ArmClient(new DefaultAzureCredential());
+            var appCache = new CachingService();
+            var options = new Mock<IOptions<RetryPolicyOptions>>();
+            options.Setup(o => o.Value).Returns(new RetryPolicyOptions());
+            var cacheAndRetryHandler = new CacheAndRetryHandler(appCache, options.Object);
+            var priceApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
+
             static double ConvertMiBToGiB(int value) => Math.Round(value / 1024.0, 2);
             var subscription = client.GetSubscriptionResource(new ResourceIdentifier($"/subscriptions/{configuration.SubscriptionId}"));
 
             var regionsForVm = new Dictionary<string, HashSet<string>>();
             var sizeForVm = new Dictionary<string, VirtualMachineSize>();
             var skuForVm = new Dictionary<string, ComputeResourceSku>();
+            var priceForVm = new Dictionary<string, PricingItem>();
+
+            var pricesInWE = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(AzureLocation.WestEurope).ToListAsync();
+            foreach (var price in pricesInWE.Where(p => !p.meterName.Contains("Low Priority")))
+            {
+                priceForVm.Add(price.armSkuName, price);
+            }
 
             var regions = await subscription.GetLocationsAsync().Where(x => x.Metadata.RegionType == RegionType.Physical).ToListAsync();
 
@@ -166,6 +187,7 @@ namespace TesUtils
                 }
 
                 _ = int.TryParse(sku?.Capabilities.Where(x => x.Name.Equals("vCPUsAvailable")).SingleOrDefault()?.Value, out var vCpusAvailable);
+                _ = bool.TryParse(sku?.Capabilities.Where(x => x.Name.Equals("EncryptionAtHostSupported")).SingleOrDefault()?.Value, out var encryptionAtHostSupported);
 
                 return new VirtualMachineInformation()
                 {
@@ -176,7 +198,9 @@ namespace TesUtils
                     VmSize = sizeInfo.Name,
                     VmFamily = sku?.Family,
                     HyperVGenerations = generationList,
-                    RegionsAvailable = new List<string>(regionsForVm[s])
+                    RegionsAvailable = new List<string>(regionsForVm[s]),
+                    EncryptionAtHostSupported = encryptionAtHostSupported,
+                    PricePerHour = priceForVm.ContainsKey(s) ? (decimal?)priceForVm[s].retailPrice : null,
                 };
             }).Where(x => x is not null).OrderBy(x => x!.VmSize).ToList();
 
