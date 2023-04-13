@@ -405,7 +405,7 @@ namespace TesApi.Tests
                 var log = logs.LastOrDefault();
                 Assert.IsNotNull(log);
                 var (logLevel, exception) = log;
-                Assert.AreEqual(LogLevel.Information, logLevel);
+                Assert.AreEqual(LogLevel.Warning, logLevel);
                 Assert.IsInstanceOfType<AzureBatchPoolCreationException>(exception);
             }
         }
@@ -425,7 +425,7 @@ namespace TesApi.Tests
                 var log = logs.LastOrDefault();
                 Assert.IsNotNull(log);
                 var (logLevel, exception) = log;
-                Assert.AreEqual(LogLevel.Information, logLevel);
+                Assert.AreEqual(LogLevel.Warning, logLevel);
                 Assert.IsInstanceOfType<AzureBatchPoolCreationException>(exception);
             }
         }
@@ -547,7 +547,7 @@ namespace TesApi.Tests
             {
                 var log = logs.LastOrDefault();
                 Assert.IsNotNull(log);
-                Assert.AreEqual(LogLevel.Information, log.logLevel);
+                Assert.AreEqual(LogLevel.Warning, log.logLevel);
                 Assert.IsNotNull(task.Logs?.Last().Warning);
             }
         }
@@ -569,7 +569,7 @@ namespace TesApi.Tests
             {
                 var log = logs.LastOrDefault();
                 Assert.IsNotNull(log);
-                Assert.AreEqual(LogLevel.Information, log.logLevel);
+                Assert.AreEqual(LogLevel.Warning, log.logLevel);
                 Assert.IsNotNull(task.Logs?.Last().Warning);
             }
         }
@@ -588,7 +588,7 @@ namespace TesApi.Tests
             {
                 var log = logs.LastOrDefault();
                 Assert.IsNotNull(log);
-                Assert.AreEqual(LogLevel.Information, log.logLevel);
+                Assert.AreEqual(LogLevel.Warning, log.logLevel);
                 Assert.IsNotNull(task.Logs?.Last().Warning);
             }
         }

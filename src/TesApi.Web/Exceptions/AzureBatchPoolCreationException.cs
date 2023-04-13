@@ -2,9 +2,8 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Net;
 using System.Runtime.Serialization;
-using Azure;
+
 using Microsoft.Azure.Batch.Common;
 
 namespace TesApi.Web
@@ -68,7 +67,19 @@ namespace TesApi.Web
 
         protected AzureBatchPoolCreationException(SerializationInfo info, StreamingContext context)
             : base(info, context)
-        { }
+        {
+            IsJobQuota = info.GetBoolean(nameof(IsJobQuota));
+            IsPoolQuota = info.GetBoolean(nameof(IsPoolQuota));
+            IsTimeout = info.GetBoolean(nameof(IsTimeout));
+        }
+
+        public override void GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            base.GetObjectData(info, context);
+            info.AddValue(nameof(IsJobQuota), IsJobQuota);
+            info.AddValue(nameof(IsPoolQuota), IsPoolQuota);
+            info.AddValue(nameof(IsTimeout), IsTimeout);
+        }
 
         public bool IsJobQuota { get; }
 
