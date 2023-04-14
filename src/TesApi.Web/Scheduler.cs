@@ -26,7 +26,7 @@ namespace TesApi.Web
         private readonly IBatchScheduler batchScheduler;
         private readonly ILogger<Scheduler> logger;
         private readonly bool isDisabled;
-        private readonly TimeSpan runInterval = TimeSpan.FromSeconds(5);
+        private readonly TimeSpan runInterval = TimeSpan.FromSeconds(60);
 
         /// <summary>
         /// Default constructor

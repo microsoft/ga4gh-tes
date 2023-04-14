@@ -30,7 +30,7 @@ namespace TesApi.Web.Controllers
             {
                 _logger.LogInformation(context.Exception, "Request was cancelled");
                 context.ExceptionHandled = true;
-                context.Result = new StatusCodeResult(400);
+                context.Result = new StatusCodeResult(504);
             }
         }
     }
