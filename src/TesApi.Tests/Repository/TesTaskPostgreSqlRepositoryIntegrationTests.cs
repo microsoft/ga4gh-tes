@@ -71,6 +71,7 @@ namespace Tes.Repository.Tests
         public static async Task ClassCleanupAsync()
         {
             Console.WriteLine("Deleting Azure Resource Group...");
+            repository?.Dispose();
             await PostgreSqlTestUtility.DeleteResourceGroupAsync(subscriptionId, resourceGroupName);
             Console.WriteLine("Done");
         }
@@ -158,6 +159,18 @@ namespace Tes.Repository.Tests
             Assert.IsTrue(runningTasks.All(c => c.State == Models.TesState.RUNNINGEnum));
             Assert.IsTrue(allOtherTasks.All(c => c.State != Models.TesState.RUNNINGEnum));
         }
+        /*
+         * A quick note about internet speeds (comment and assertion regarding retrieval times above):
+         *
+         * With my "not fast" internet, these were my timings:
+         *     Total seconds to insert 1000000 items: 632.33s
+         *     Retrieved 111179 in 20.1s
+         *     Retrieved 888821 in 140.5s
+         *     Total running tasks: 111179
+         *     Total other tasks: 888821
+         *
+         * Adjust accordingly
+         */
 
         [TestMethod]
         public async Task CreateItemAsyncTest()

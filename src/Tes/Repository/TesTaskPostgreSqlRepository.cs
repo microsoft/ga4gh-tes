@@ -4,7 +4,9 @@
 namespace Tes.Repository
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
+    using System.ComponentModel;
     using System.Diagnostics;
     using System.Linq;
     using System.Linq.Expressions;
@@ -21,11 +23,16 @@ namespace Tes.Repository
     /// A TesTask specific repository for storing the TesTask as JSON within an Entity Framework Postgres table
     /// </summary>
     /// <typeparam name="TesTask"></typeparam>
+    /// <remarks>
+    /// This repository batches updates, as that is expected to be the most used "write"-type action.
+    /// </remarks>
     public sealed class TesTaskPostgreSqlRepository : IRepository<TesTask>
     {
         private readonly Func<TesDbContext> createDbContext;
         private readonly ICache<TesTask> cache;
         private readonly ILogger logger;
+        private readonly BackgroundWorker updaterWorker = new();
+        private readonly ConcurrentQueue<(TesTask TesTask, TaskCompletionSource<TesTask> TaskSource)> tasksToUpdate = new();
 
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
@@ -35,11 +42,14 @@ namespace Tes.Repository
         {
             this.cache = cache;
             this.logger = logger;
+            updaterWorker.WorkerSupportsCancellation = true;
+            updaterWorker.DoWork += UpdaterWorkerProc;
             var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
             createDbContext = () => { return new TesDbContext(connectionString); };
             using var dbContext = createDbContext();
             dbContext.Database.MigrateAsync().Wait();
             WarmCacheAsync().Wait();
+            updaterWorker.RunWorkerAsync();
         }
 
         /// <summary>
@@ -48,9 +58,12 @@ namespace Tes.Repository
         /// <param name="createDbContext">A delegate that creates a TesTaskPostgreSqlRepository context</param>
         public TesTaskPostgreSqlRepository(Func<TesDbContext> createDbContext)
         {
+            updaterWorker.WorkerSupportsCancellation = true;
+            updaterWorker.DoWork += UpdaterWorkerProc;
             this.createDbContext = createDbContext;
             using var dbContext = createDbContext();
             dbContext.Database.MigrateAsync().Wait();
+            updaterWorker.RunWorkerAsync();
         }
 
         private async Task WarmCacheAsync()
@@ -173,24 +186,72 @@ namespace Tes.Repository
         /// <remarks>Base class searches within model, this method searches within the JSON</remarks>
         public async Task<TesTask> UpdateItemAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
+            var result = await UpdateTesTaskAsync(tesTask);
+            cache?.TryUpdate(tesTask.Id, tesTask);
+            return result;
+        }
+
+        private async Task UpdateTesTasksAsync(IEnumerable<(TesTask TesTask, TaskCompletionSource<TesTask> TaskSource)> updateTesTasks)
+        {
+            List<TesTaskDatabaseItem> items;
+            List<(TesTaskDatabaseItem TesTaskDbItem, TaskCompletionSource<TesTask> TaskSource)> updates = new();
+
+            var list = updateTesTasks.ToList();
             using var dbContext = createDbContext();
 
             // Manually set entity state to avoid potential NPG PostgreSql bug
             dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
-            var item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == tesTask.Id, cancellationToken);
 
-            if (item is null)
+            try
             {
-                throw new Exception($"No TesTask with ID {tesTask.Id} found in the database.");
+                var ids = list.Select(e => e.TesTask.Id).ToList();
+                items = await dbContext.TesTasks.Where(t => ids.Contains(t.Json.Id)).ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                FailAll(ex, list.Select(e => e.TaskSource));
+                return;
             }
 
-            item.Json = tesTask;
+            foreach (var (tesTask, taskSource) in list)
+            {
+                try
+                {
+                    var item = items.FirstOrDefault(e => e.Json.Id == tesTask.Id) ?? throw new Exception($"No TesTask with ID {tesTask.Id} found in the database.");
+                    item.Json = tesTask;
 
-            // Manually set entity state to avoid potential NPG PostgreSql bug
-            dbContext.Entry(item).State = EntityState.Modified;
-            await dbContext.SaveChangesAsync(cancellationToken);
-            cache?.TryUpdate(tesTask.Id, tesTask);
-            return item.Json;
+                    // Manually set entity state to avoid potential NPG PostgreSql bug
+                    dbContext.Entry(item).State = EntityState.Modified;
+                    updates.Add((item, taskSource));
+                }
+                catch (Exception ex)
+                {
+                    // It's expected that if we are here, item is not in updates.
+                    taskSource.SetException(ex);
+                }
+            }
+
+            try
+            {
+                await dbContext.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                FailAll(ex, updates.Select(e => e.TaskSource));
+            }
+
+            foreach (var (item, source) in updates)
+            {
+                source.SetResult(item.Json);
+            }
+
+            static void FailAll(Exception ex, IEnumerable<TaskCompletionSource<TesTask>> sources)
+            {
+                foreach (var source in sources)
+                {
+                    source.SetException(ex);
+                }
+            }
         }
 
         /// <inheritdoc/>
@@ -208,11 +269,10 @@ namespace Tes.Repository
             dbContext.TesTasks.Remove(item);
             await dbContext.SaveChangesAsync(cancellationToken);
             cache?.TryRemove(id);
-            
         }
 
         /// <inheritdoc/>
-        /// <remarks>Identical to <see cref="GetItemsAsync(Expression{Func{TesTask, bool}})"/>, paging is not supported. All items are returned</remarks>
+        /// <remarks>Identical to <see cref="GetItemsAsync(Expression{Func{TesTask, bool}})"/>, paging is not supported. All items are returned, filtered by <paramref name="predicate"/></remarks>
         public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken)
         {
             // TODO paging support
@@ -220,9 +280,37 @@ namespace Tes.Repository
             return (null, results);
         }
 
+        private Task<TesTask> UpdateTesTaskAsync(TesTask tesTask)
+        {
+            var source = new TaskCompletionSource<TesTask>();
+            tasksToUpdate.Enqueue((tesTask, source));
+            return source.Task;
+        }
+
+        private void UpdaterWorkerProc(object sender, DoWorkEventArgs e)
+        {
+            while (!updaterWorker.CancellationPending)
+            {
+                var list = new List<(TesTask TesTask, TaskCompletionSource<TesTask> TaskSource)>();
+                while (tasksToUpdate.TryDequeue(out var updateTesTask))
+                {
+                    list.Add(updateTesTask);
+                }
+
+                if (list.Count != 0)
+                {
+                    UpdateTesTasksAsync(list).Wait();
+                }
+
+                Thread.Sleep(1000);
+            }
+        }
+
         public void Dispose()
         {
-
+            updaterWorker.CancelAsync();
+            while (updaterWorker.IsBusy) { }
+            updaterWorker.Dispose();
         }
     }
 }
