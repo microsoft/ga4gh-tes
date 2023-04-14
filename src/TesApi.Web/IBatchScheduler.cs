@@ -32,7 +32,7 @@ namespace TesApi.Web
         /// <param name="tesTasks">An enumeration of <see cref="TesTask"/> to schedule on the batch system</param>
         /// <param name="cancellationToken"></param>
         /// <returns>Whether each <see cref="TesTask"/> was modified.</returns>
-        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedResult)> ProcessTesTasksAsync(IEnumerable<TesTask> tesTasks, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsChangedTask)> ProcessTesTasksAsync(IEnumerable<TesTask> tesTasks, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Adds <see cref="IBatchPool"/> to the managed batch pools.

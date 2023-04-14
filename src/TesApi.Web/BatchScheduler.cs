@@ -375,7 +375,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedResult)> ProcessTesTasksAsync(IEnumerable<TesTask> tesTasks, [EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsChangedTask)> ProcessTesTasksAsync(IEnumerable<TesTask> tesTasks, [EnumeratorCancellation] CancellationToken cancellationToken)
         /*
          * This method's implementation consists of the following ordered steps:
          *  1. Returning early if, by some mistake, this method was called with either a null or an empty enumerated list of tasks.
@@ -384,15 +384,15 @@ namespace TesApi.Web
          *  4. Use WhenEach() to stream results back to the caller as they are individually available.
          */
         {
-            var (TesTasks, State) = await GetState(tesTasks?.ToList());
+            var (tesTaskList, batchState) = await GetState(tesTasks?.ToList());
 
-            if (!TesTasks.Any())
+            if (!tesTaskList.Any())
             {
                 yield break;
             }
 
             // WhenEach() allows us to have Scheduler's OrchestrateTesTasksOnBatch() method call it's local ProcessOrchestrationResult() as soon as ProcessTesTaskAsync() has returned that task and its result instead of batching all the database updates all at once at the end.
-            await foreach (var result in WhenEach(TesTasks.ToAsyncEnumerable().SelectAwait(async tesTask => await ProcessTesTaskAsync(tesTask, State, cancellationToken)).ToEnumerable(), cancellationToken, result => result.IsModifiedResult))
+            await foreach (var result in WhenEach(tesTaskList.ToAsyncEnumerable().SelectAwait(async tesTask => await ProcessTesTaskAsync(tesTask, batchState, cancellationToken)).ToEnumerable(), cancellationToken, result => result.IsChangedTask))
             {
                 yield return result;
             }
@@ -409,7 +409,7 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Streams items when their associated tasks complete.
+        /// Streams items as their associated tasks complete.
         /// </summary>
         /// <typeparam name="T">A type that is associated 1:1 with a <see cref="Task"/>.</typeparam>
         /// <param name="collection">Items to be streamed in the order of completion of their associated <see cref="Task"/>s.</param>
@@ -419,26 +419,21 @@ namespace TesApi.Web
         /// <exception cref="ArgumentNullException"></exception>
         /// <remarks>
         /// A task is sent to the return enumeration when it is "complete", which is when it either completes successfully, fails (queues an exception), or is cancelled.<br/>
-        /// No items in <paramref name="collection"/> should share <see cref="Task"/>s.
+        /// No items in <paramref name="collection"/> should share an identical <see cref="Task"/> instance.
         /// </remarks>
         private static async IAsyncEnumerable<T> WhenEach<T>(IEnumerable<T> collection, [EnumeratorCancellation] CancellationToken cancellationToken, Func<T, Task> getTask = default)
         {
             ArgumentNullException.ThrowIfNull(collection);
             ArgumentNullException.ThrowIfNull(cancellationToken);
 
-            if (getTask is null)
+            getTask ??= typeof(T).IsAssignableTo(typeof(Task)) ? new(i => (i as Task)!) : throw new ArgumentNullException(nameof(getTask));
+            var list = collection.ToList();
+
+            if (list.Where(e => e is not null).Select(getTask).ToHashSet().Count != list.Where(e => e is not null).Count())
             {
-                if (typeof(T).IsAssignableTo(typeof(Task)))
-                {
-                    getTask = new(i => i as Task);
-                }
-                else
-                {
-                    throw new ArgumentNullException(nameof(getTask));
-                }
+                throw new ArgumentException("Duplicate tasks found in collection.", nameof(collection));
             }
 
-            var list = collection.ToList();
             var channel = Channel.CreateBounded<T>(list.Count);
             var pendingCount = list.Count;
 
@@ -483,7 +478,7 @@ namespace TesApi.Web
         /// <param name="batchAccountState"></param>
         /// <param name="cancellationToken"></param>
         /// <returns>True if the TES task needs to be persisted.</returns>
-        private async Task<(TesTask TesTask, Task<bool> IsModifiedResult)> ProcessTesTaskAsync(TesTask tesTask, BatchAccountState batchAccountState, CancellationToken cancellationToken)
+        private async Task<(TesTask TesTask, Task<bool> IsChangedTask)> ProcessTesTaskAsync(TesTask tesTask, BatchAccountState batchAccountState, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var combinedBatchTaskInfo = await GetBatchTaskStateAsync(tesTask, batchAccountState, cancellationToken);
