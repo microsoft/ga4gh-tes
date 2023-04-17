@@ -129,7 +129,7 @@ namespace TesApi.Web
         /// </summary>
         /// <returns>Blob URL</returns>
         public string ToUriString()
-            => $"{BlobEndpoint}/{ContainerName}/{BlobName}{SasToken}".TrimEnd('/');
+            => $"{BlobEndpoint}/{ContainerName}/{BlobName}?{SasToken}".TrimEnd('/');
 
         /// <summary>
         /// Returns the Blob URI
