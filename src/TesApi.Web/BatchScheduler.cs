@@ -1858,16 +1858,10 @@ namespace TesApi.Web
 
         private class ExternalStorageContainerInfo
         {
-            private string sasToken;
-
             public string AccountName { get; set; }
             public string ContainerName { get; set; }
             public string BlobEndpoint { get; set; }
-            public string SasToken
-            {
-                get => sasToken;
-                set => sasToken = value?.TrimStart('?');
-            }
+            public string SasToken { get; set; }
         }
 
         private class CombinedBatchTaskInfo
