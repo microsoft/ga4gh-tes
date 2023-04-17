@@ -515,11 +515,6 @@ namespace TesDeployer
                                     _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
                                 }
                             });
-
-                        if (configuration.EnableIngress.GetValueOrDefault() && !configuration.SkipTestWorkflow)
-                        {
-                            await Task.Delay(System.TimeSpan.FromMinutes(3)); // Give Ingress a moment longer to complete its standup.
-                        }
                     }
                 }
                 finally
@@ -633,6 +628,19 @@ namespace TesDeployer
                                 ConsoleEx.WriteLine($"InnerException: {rExc.InnerException.GetType().FullName}: {rExc.InnerException.Message}");
                             }
                         }
+
+                        if (exc is JsonReaderException jExc)
+                        {
+                            if (!string.IsNullOrEmpty(jExc.Path))
+                            {
+                                ConsoleEx.WriteLine($"JSON Path: {jExc.Path}");
+                            }
+
+                            if (jExc.Data.Contains("Body"))
+                            {
+                                ConsoleEx.WriteLine($"HTTP Response: {jExc.Data["Body"]}");
+                            }
+                        }
                     }
                 }
 
@@ -698,7 +706,15 @@ namespace TesDeployer
                     {
                         var responseBody = await client.PostAsync(requestUri, content);
                         var body = await responseBody.Content.ReadAsStringAsync();
-                        response = JsonConvert.DeserializeObject<Dictionary<string, string>>(body);
+                        try
+                        {
+                            response = JsonConvert.DeserializeObject<Dictionary<string, string>>(body);
+                        }
+                        catch (JsonReaderException exception)
+                        {
+                            exception.Data.Add("Body", body);
+                            throw;
+                        }
                     });
 
             return await IsTaskSuccessfulAfterLongPollingAsync(client, $"{requestUri}/{response["id"]}") ? 0 : 1;

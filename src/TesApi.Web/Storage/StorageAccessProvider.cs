@@ -55,21 +55,6 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     }
 
     /// <inheritdoc />
-    public async Task<bool> TryDownloadBlobAsync(string blobRelativePath, Action<string> action)
-    {
-        try
-        {
-            var content = await this.AzureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath)));
-            action?.Invoke(content);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <inheritdoc />
     public async Task UploadBlobAsync(string blobRelativePath, string content)
         => await this.AzureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), content);
 

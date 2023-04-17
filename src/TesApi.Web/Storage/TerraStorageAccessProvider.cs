@@ -131,7 +131,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <summary>
-        /// Returns a Url with a SAS token for the given input. 
+        /// Returns a Url with a SAS token for the given input
         /// </summary>
         /// <param name="blobName"></param>
         /// <returns>SAS Token URL</returns>
