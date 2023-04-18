@@ -22,6 +22,8 @@ namespace TesApi.Web
         private static readonly Regex localPathRegex = GetLocalPathRegex();
         private static readonly Regex accountNameRegex = GetAccountNameRegex();
 
+        private string sasToken;
+
         /// <summary>
         /// Create from provided segments
         /// </summary>
@@ -61,7 +63,11 @@ namespace TesApi.Web
         /// <summary>
         /// The SAS token
         /// </summary>
-        public string SasToken { get; set; }
+        public string SasToken
+        {
+            get => sasToken;
+            set => sasToken = value?.TrimStart('?');
+        }
 
         /// <summary>
         /// Tries to parse the provided string. The following formats are supported:
@@ -123,7 +129,7 @@ namespace TesApi.Web
         /// </summary>
         /// <returns>Blob URL</returns>
         public string ToUriString()
-            => $"{BlobEndpoint}/{ContainerName}/{BlobName}{SasToken}".TrimEnd('/');
+            => $"{BlobEndpoint}/{ContainerName}/{BlobName}?{SasToken}".TrimEnd('/');
 
         /// <summary>
         /// Returns the Blob URI
