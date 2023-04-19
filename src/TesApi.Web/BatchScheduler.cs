@@ -505,7 +505,8 @@ namespace TesApi.Web
                         autoscaled: false,
                         preemptable: virtualMachineInfo.LowPriority,
                         nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                        containerConfiguration: containerConfiguration),
+                        containerConfiguration: containerConfiguration,
+                        encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported),
                     tesTaskId: tesTask.Id,
                     jobId: jobOrTaskId,
                     identityResourceIds: identities);
@@ -524,7 +525,8 @@ namespace TesApi.Web
                                 autoscaled: true,
                                 preemptable: virtualMachineInfo.LowPriority,
                                 nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                                containerConfiguration: containerConfiguration)))
+                                containerConfiguration: containerConfiguration,
+                                encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported)))
                         ).Pool;
                     jobOrTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
                 }
@@ -1391,7 +1393,7 @@ namespace TesApi.Web
         /// <param name="containerConfiguration"></param>
         /// <returns><see cref="PoolSpecification"/></returns>
         /// <remarks>We use the PoolSpecification for both the namespace of all the constituent parts and for the fact that it allows us to configure shared and autopools using the same code.</remarks>
-        private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, ContainerConfiguration containerConfiguration)
+        private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, ContainerConfiguration containerConfiguration, bool encryptionAtHostSupported)
         {
             // Any changes to any properties set in this method will require corresponding changes to ConvertPoolSpecificationToModelsPool()
 
@@ -1405,6 +1407,13 @@ namespace TesApi.Web
             {
                 ContainerConfiguration = containerConfiguration
             };
+
+            if (encryptionAtHostSupported)
+            {
+                vmConfig.DiskEncryptionConfiguration = new DiskEncryptionConfiguration(
+                    targets: new List<DiskEncryptionTarget> { DiskEncryptionTarget.OsDisk, DiskEncryptionTarget.TemporaryDisk }
+                );
+            }
 
             var poolSpecification = new PoolSpecification
             {
@@ -1500,7 +1509,7 @@ namespace TesApi.Web
                 };
 
             static BatchModels.VirtualMachineConfiguration ConvertVirtualMachineConfiguration(VirtualMachineConfiguration virtualMachineConfiguration)
-                => virtualMachineConfiguration is null ? default : new(ConvertImageReference(virtualMachineConfiguration.ImageReference), virtualMachineConfiguration.NodeAgentSkuId, containerConfiguration: ConvertContainerConfiguration(virtualMachineConfiguration.ContainerConfiguration));
+                => virtualMachineConfiguration is null ? default : new(ConvertImageReference(virtualMachineConfiguration.ImageReference), virtualMachineConfiguration.NodeAgentSkuId, containerConfiguration: ConvertContainerConfiguration(virtualMachineConfiguration.ContainerConfiguration), diskEncryptionConfiguration: ConvertDiskEncryptionConfiguration(virtualMachineConfiguration.DiskEncryptionConfiguration));
 
             static BatchModels.ContainerConfiguration ConvertContainerConfiguration(ContainerConfiguration containerConfiguration)
                 => containerConfiguration is null ? default : new(containerConfiguration.ContainerImageNames, containerConfiguration.ContainerRegistries?.Select(ConvertContainerRegistry).ToList());
@@ -1543,6 +1552,12 @@ namespace TesApi.Web
 
             static BatchModels.NodeCommunicationMode? ConvertNodeCommunicationMode(NodeCommunicationMode? nodeCommunicationMode)
                 => (BatchModels.NodeCommunicationMode?)nodeCommunicationMode;
+
+            static BatchModels.DiskEncryptionConfiguration? ConvertDiskEncryptionConfiguration(DiskEncryptionConfiguration? diskEncryptionConfiguration)
+                => diskEncryptionConfiguration is null ? default : new(diskEncryptionConfiguration.Targets.Select(x => ConvertDiskEncryptionTarget(x)).ToList());
+
+            static BatchModels.DiskEncryptionTarget ConvertDiskEncryptionTarget(DiskEncryptionTarget? diskEncryptionTarget)
+                => (BatchModels.DiskEncryptionTarget)diskEncryptionTarget;
         }
 
         /// <summary>
