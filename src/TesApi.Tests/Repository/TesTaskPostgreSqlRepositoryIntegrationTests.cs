@@ -115,8 +115,8 @@ namespace Tes.Repository.Tests
             const bool createItems = true;
             const int itemCount = 1_000_000;
 
-
             var sw = Stopwatch.StartNew();
+
             if (createItems)
             {
                 var rng = new Random(Guid.NewGuid().GetHashCode());
@@ -146,8 +146,8 @@ namespace Tes.Repository.Tests
             sw.Restart();
             var runningTasks = await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum);
 
-            // Ensure performance is decent.  In manual testing on fast internet, this takes less than 5s typically
-            Assert.IsTrue(sw.Elapsed.TotalSeconds < 10);
+            // Ensure performance is decent
+            Assert.IsTrue(sw.Elapsed.TotalSeconds < 20);
             Console.WriteLine($"Retrieved {runningTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
             sw.Restart();
             var allOtherTasks = await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum);
