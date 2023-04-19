@@ -113,6 +113,8 @@ namespace Tes.Repository.Tests
         public async Task Create1mAndQuery1mAsync()
         {
             const bool createItems = true;
+            const int itemCount = 1_000_000;
+
 
             var sw = Stopwatch.StartNew();
             if (createItems)
@@ -122,7 +124,7 @@ namespace Tes.Repository.Tests
 
                 var items = new List<Models.TesTask>();
 
-                for (int i = 0; i < 1_000_000; i++)
+                for (int i = 0; i < itemCount; i++)
                 {
                     var randomState = (Models.TesState)states.GetValue(rng.Next(states.Length));
                     items.Add(new Models.TesTask
@@ -133,6 +135,8 @@ namespace Tes.Repository.Tests
                         State = randomState
                     });
                 }
+
+                Assert.IsTrue(items.Select(i => i.Id).Distinct().Count() == itemCount);
 
                 await repository.CreateItemsAsync(items);
                 Console.WriteLine($"Total seconds to insert {items.Count} items: {sw.Elapsed.TotalSeconds:n2}s");
@@ -150,6 +154,12 @@ namespace Tes.Repository.Tests
             Console.WriteLine($"Retrieved {allOtherTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
             Console.WriteLine($"Total running tasks: {runningTasks.Count()}");
             Console.WriteLine($"Total other tasks: {allOtherTasks.Count()}");
+            var uniqueRunningTasksIds = runningTasks.Select(i => i.Id).Distinct().Count();
+            var distinctOtherTaskIds = allOtherTasks.Select(i => i.Id).Distinct().Count();
+            Console.WriteLine($"uniqueRunningTasksIds: {uniqueRunningTasksIds}");
+            Console.WriteLine($"distinctOtherTaskIds: {distinctOtherTaskIds}");
+
+            Assert.IsTrue(uniqueRunningTasksIds + distinctOtherTaskIds == itemCount);
 
             Assert.IsTrue(runningTasks.Count() > 0);
             Assert.IsTrue(allOtherTasks.Count() > 0);
