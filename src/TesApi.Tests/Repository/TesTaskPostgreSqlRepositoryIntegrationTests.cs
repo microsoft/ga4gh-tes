@@ -154,12 +154,12 @@ namespace Tes.Repository.Tests
             Console.WriteLine($"Retrieved {allOtherTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
             Console.WriteLine($"Total running tasks: {runningTasks.Count()}");
             Console.WriteLine($"Total other tasks: {allOtherTasks.Count()}");
-            var uniqueRunningTasksIds = runningTasks.Select(i => i.Id).Distinct().Count();
+            var distinctRunningTasksIds = runningTasks.Select(i => i.Id).Distinct().Count();
             var distinctOtherTaskIds = allOtherTasks.Select(i => i.Id).Distinct().Count();
-            Console.WriteLine($"uniqueRunningTasksIds: {uniqueRunningTasksIds}");
+            Console.WriteLine($"uniqueRunningTasksIds: {distinctRunningTasksIds}");
             Console.WriteLine($"distinctOtherTaskIds: {distinctOtherTaskIds}");
 
-            Assert.IsTrue(uniqueRunningTasksIds + distinctOtherTaskIds == itemCount);
+            Assert.IsTrue(distinctRunningTasksIds + distinctOtherTaskIds == itemCount);
 
             Assert.IsTrue(runningTasks.Count() > 0);
             Assert.IsTrue(allOtherTasks.Count() > 0);
