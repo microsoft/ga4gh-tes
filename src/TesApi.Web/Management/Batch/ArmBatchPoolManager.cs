@@ -8,6 +8,7 @@ using Microsoft.Azure.Batch;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.Batch.Models;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace TesApi.Web.Management.Batch
 {
@@ -47,6 +48,8 @@ namespace TesApi.Web.Management.Batch
                 var pool = await batchManagementClient.Pool.CreateAsync(azureClientsFactory.BatchAccountInformation.ResourceGroupName, azureClientsFactory.BatchAccountInformation.Name, poolInfo.Name, poolInfo);
 
                 logger.LogInformation("Successfully created manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolInfo.Name, poolInfo.VmSize, isPreemptable);
+                logger.LogInformation("Pool: " + JsonConvert.SerializeObject(pool));
+                logger.LogInformation("Pool: " + JsonConvert.SerializeObject(pool.Metadata));
 
                 return new PoolInformation() { PoolId = pool.Name };
             }
