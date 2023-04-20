@@ -129,7 +129,7 @@ namespace TesApi.Web
         /// </summary>
         /// <returns>Blob URL</returns>
         public string ToUriString()
-            => $"{BlobEndpoint}/{ContainerName}/{BlobName}?{SasToken}".TrimEnd('/');
+            => $"{BlobEndpoint}/{ContainerName}/{BlobName}{Query()}{SasToken}".TrimEnd('/');
 
         /// <summary>
         /// Returns the Blob URI
@@ -142,5 +142,7 @@ namespace TesApi.Web
         /// Returns true if the segments represent a container
         /// </summary>
         public bool IsContainer => !string.IsNullOrEmpty(ContainerName) && string.IsNullOrEmpty(BlobName);
+
+        private string Query() => !String.IsNullOrEmpty(SasToken) ? "?" : String.Empty;
     }
 }
