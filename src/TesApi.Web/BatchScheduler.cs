@@ -474,6 +474,7 @@ namespace TesApi.Web
             try
             {
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask);
+                logger.LogInformation("VM: " + JsonConvert.SerializeObject(virtualMachineInfo));
 
                 (poolKey, var displayName) = this.enableBatchAutopool ? default : await GetPoolKey(tesTask, virtualMachineInfo);
                 await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, this.enableBatchAutopool || !IsPoolAvailable(poolKey));
@@ -502,15 +503,15 @@ namespace TesApi.Web
                     jobOrTaskId = await azureProxy.GetNextBatchJobIdAsync(tesTask.Id);
                     poolInformation = await CreateAutoPoolModePoolInformation(
                         poolSpecification: await GetPoolSpecification(
-                        vmSize: virtualMachineInfo.VmSize,
-                        autoscaled: false,
-                        preemptable: virtualMachineInfo.LowPriority,
-                        nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                        containerConfiguration: containerConfiguration,
-                        encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported),
-                    tesTaskId: tesTask.Id,
-                    jobId: jobOrTaskId,
-                    identityResourceIds: identities);
+                            vmSize: virtualMachineInfo.VmSize,
+                            autoscaled: false,
+                            preemptable: virtualMachineInfo.LowPriority,
+                            nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
+                            containerConfiguration: containerConfiguration,
+                            encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported),
+                        tesTaskId: tesTask.Id,
+                        jobId: jobOrTaskId,
+                        identityResourceIds: identities);
                 }
                 else
                 {
@@ -532,6 +533,7 @@ namespace TesApi.Web
                     jobOrTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
                 }
 
+                logger.LogInformation("Pool: " + JsonConvert.SerializeObject(poolInformation));
                 tesTask.PoolId = poolInformation.PoolId;
                 var cloudTask = await ConvertTesTaskToBatchTaskAsync(enableBatchAutopool ? tesTask.Id : jobOrTaskId, tesTask, containerConfiguration is not null, virtualMachineInfo?.VCpusAvailable ?? 1);
                 logger.LogInformation($"Creating batch task for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
@@ -1447,6 +1449,7 @@ namespace TesApi.Web
                 };
             }
 
+            logger.LogInformation("Pool Spec:" + JsonConvert.SerializeObject(poolSpecification));
             return poolSpecification;
         }
 
