@@ -63,10 +63,10 @@ namespace TesApi.Web
         private readonly string dockerInDockerImageName;
         private readonly string blobxferImageName;
         private readonly string cromwellDrsLocalizerImageName;
+        private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
         private readonly IStorageAccessProvider storageAccessProvider;
-        private readonly IEnumerable<string> allowedVmSizes;
         private readonly IBatchQuotaVerifier quotaVerifier;
         private readonly IBatchSkuInformationProvider skuInformationProvider;
         private readonly List<TesTaskStateTransition> tesTaskStateTransitions;
@@ -89,6 +89,9 @@ namespace TesApi.Web
         private readonly string[] taskCleanupScriptContent;
 
         private HashSet<string> onlyLogBatchTaskStateOnce = new();
+
+        private static string GetStringValue(IConfiguration configuration, string key, string defaultValue = "") => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : configuration[key];
+        private IEnumerable<string> allowedVmSizes => GetStringValue(this.configuration, "AllowedVmSizes", null)?.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
 
         /// <summary>
         /// Orchestrates <see cref="Tes.Models.TesTask"/>s on Azure Batch
@@ -140,8 +143,8 @@ namespace TesApi.Web
             this.quotaVerifier = quotaVerifier;
             this.skuInformationProvider = skuInformationProvider;
             this.containerRegistryProvider = containerRegistryProvider;
+            this.configuration = configuration;
 
-            this.allowedVmSizes = GetStringValue(configuration, "AllowedVmSizes", null)?.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
             this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
             this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
             this.dockerInDockerImageName = batchImageNameOptions.Value.Docker;
@@ -187,8 +190,6 @@ namespace TesApi.Web
             };
 
             logger.LogInformation($"usePreemptibleVmsOnly: {usePreemptibleVmsOnly}");
-
-            static string GetStringValue(IConfiguration configuration, string key, string defaultValue = "") => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : configuration[key];
 
             static bool tesTaskIsQueuedInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum || tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
             static bool tesTaskIsInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
