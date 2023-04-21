@@ -112,7 +112,7 @@ namespace TesApi.Tests
         }
 
         private static async Task<BatchPool> AddPool(BatchScheduler batchPools, bool isPreemtable)
-            => (BatchPool) await batchPools.GetOrAddPoolAsync("key1", isPreemtable, id => ValueTask.FromResult(new Pool(name: id, displayName: "display1", vmSize: "vmSize1")));
+            => (BatchPool)await batchPools.GetOrAddPoolAsync("key1", isPreemtable, id => ValueTask.FromResult(new Pool(name: id, displayName: "display1", vmSize: "vmSize1")));
 
         private static void TimeShift(TimeSpan shift, BatchPool pool)
             => pool.TimeShift(shift);

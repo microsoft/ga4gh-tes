@@ -32,7 +32,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(repository);
             ArgumentNullException.ThrowIfNull(retryPolicyOptions);
 
-            _asyncRetryPolicy= Policy
+            _asyncRetryPolicy = Policy
                 .Handle<Exception>()
                 .WaitAndRetryAsync(retryPolicyOptions.Value.MaxRetryCount * 4,
                     (attempt) => TimeSpan.FromSeconds(Math.Pow(retryPolicyOptions.Value.ExponentialBackOffExponent,

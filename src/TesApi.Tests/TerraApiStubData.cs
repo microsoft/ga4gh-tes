@@ -17,7 +17,7 @@ public class TerraApiStubData
     public const string WorkspaceContainerName = "foocontainer";
     public const string SasToken = "SASTOKENSTUB=";
     public const string WsmGetSasResponseStorageUrl = $"https://bloburl.foo/{WorkspaceContainerName}";
-    
+
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
     public Guid WorkspaceId { get; } = Guid.NewGuid();
@@ -37,7 +37,7 @@ public class TerraApiStubData
         return JsonSerializer.Deserialize<QuotaApiResponse>(GetResourceQuotaApiResponseInJson());
     }
 
-    public WsmSasTokenApiResponse GetWsmSasTokenApiResponse(string blobName = null)  
+    public WsmSasTokenApiResponse GetWsmSasTokenApiResponse(string blobName = null)
     {
         return JsonSerializer.Deserialize<WsmSasTokenApiResponse>(GetWsmSasTokenApiResponseInJson(blobName));
     }
@@ -83,7 +83,7 @@ public class TerraApiStubData
         }
         """;
     }
-    
+
     public string GetResourceApiResponseInJson()
     {
         return $@"{{

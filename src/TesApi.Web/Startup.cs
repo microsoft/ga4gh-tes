@@ -138,9 +138,9 @@ namespace TesApi.Web
                     .AddHostedService<DeleteCompletedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedAutoPoolsHostedService>();
-                    //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
+                //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
 
-                    
+
             }
             catch (Exception exc)
             {

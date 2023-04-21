@@ -222,7 +222,7 @@ namespace TesApi.Web
                 }
                 else if (!string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem))
                 {
-                    tesTask.AddToSystemLog(new [] { batchInfo.AlternateSystemLogItem });
+                    tesTask.AddToSystemLog(new[] { batchInfo.AlternateSystemLogItem });
                 }
             }
 
@@ -380,7 +380,7 @@ namespace TesApi.Web
         public async ValueTask<bool> ProcessTesTaskAsync(TesTask tesTask)
         {
             var combinedBatchTaskInfo = await GetBatchTaskStateAsync(tesTask);
-	    const string template = "TES task: {TesTask} TES task state: {TesTaskState} BatchTaskState: {BatchTaskState}";
+            const string template = "TES task: {TesTask} TES task state: {TesTaskState} BatchTaskState: {BatchTaskState}";
             var msg = string.Format(ConvertTemplateToFormat(template), tesTask.Id, tesTask.State.ToString(), combinedBatchTaskInfo.BatchTaskState.ToString());
 
             if (onlyLogBatchTaskStateOnce.Add(msg))
@@ -594,12 +594,12 @@ namespace TesApi.Web
                         {
                             neededPools.Add(poolKey);
                             tesTask.SetWarning(azureBatchPoolCreationException.InnerException switch
-                                {
-                                    null => "Unknown reason",
-                                    Microsoft.Rest.Azure.CloudException cloudException => cloudException.Body.Message,
-                                    var e when e is BatchException batchException && batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException => batchErrorException.Body.Message.Value,
-                                    _ => "Unknown reason",
-                                },
+                            {
+                                null => "Unknown reason",
+                                Microsoft.Rest.Azure.CloudException cloudException => cloudException.Body.Message,
+                                var e when e is BatchException batchException && batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException => batchErrorException.Body.Message.Value,
+                                _ => "Unknown reason",
+                            },
                                 Array.Empty<string>());
                         }
 
@@ -996,7 +996,7 @@ namespace TesApi.Web
                 blobxferChunkSizeBytes = 104_857_600; // max file size = 100 MiB * 50k blocks = 5,242,880,000,000 bytes
             }
             else if (vmVCpusAvailable >= 2)
-            { 
+            {
                 blobxferChunkSizeBytes = 33_554_432; // max file size = 32 MiB * 50k blocks = 1,677,721,600,000 bytes
             }
 

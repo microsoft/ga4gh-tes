@@ -606,7 +606,7 @@ namespace TesApi.Web
             IsAvailable = DetermineIsAvailable(pool.CreationTime);
 
             if (IsAvailable)
-	    {
+            {
                 Creation = pool.CreationTime.Value;
             }
 
