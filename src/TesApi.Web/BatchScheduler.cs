@@ -429,32 +429,33 @@ namespace TesApi.Web
             getTask ??= typeof(T).IsAssignableTo(typeof(Task)) ? new(i => (i as Task)!) : throw new ArgumentNullException(nameof(getTask));
             var list = collection.ToList();
 
-            if (list.Where(e => e is not null).Select(getTask).ToHashSet().Count != list.Where(e => e is not null).Count())
+            if (list.Where(e => e is not null).Select(getTask).ToHashSet().Count != list.Count(e => e is not null))
             {
-                throw new ArgumentException("Duplicate tasks found in collection.", nameof(collection));
+                throw new ArgumentException("Duplicate System.Threading.Tasks found referenced in collection.", nameof(collection));
             }
 
-            var channel = Channel.CreateBounded<T>(list.Count);
             var pendingCount = list.Count;
+            var channel = Channel.CreateBounded<T>(pendingCount);
 
-            foreach (var entry in list)
+            _ = Parallel.ForEach(list, entry =>
             {
                 if (entry is null)
                 {
                     DecrementPendingCountAndCompleteWriter();
-                    continue;
                 }
-
-                // The continuation task returned by ContinueWith() is attached to the associated task and will be disposed with it. In the case of cancellation while any are still pending, we are expecting the entire process to go away, so there's no utility in any additional mangement of them.
-                _ = getTask(entry).ContinueWith(t =>
+                else
                 {
-                    _ = channel.Writer.TryWrite(entry);
-                    DecrementPendingCountAndCompleteWriter();
-                },
-                cancellationToken,
-                TaskContinuationOptions.DenyChildAttach,
-                TaskScheduler.Default);
-            }
+                    // The continuation task returned by ContinueWith() is attached to the associated task and will be disposed with it. In the case of cancellation while any are still pending, we are expecting the entire process to go away, so there's no utility in any additional mangement of them.
+                    _ = getTask(entry).ContinueWith(t =>
+                    {
+                        _ = channel.Writer.TryWrite(entry);
+                        DecrementPendingCountAndCompleteWriter();
+                    },
+                    cancellationToken,
+                    TaskContinuationOptions.DenyChildAttach,
+                    TaskScheduler.Default);
+                }
+            });
 
             await foreach(var entry in channel.Reader.ReadAllAsync(cancellationToken))
             {

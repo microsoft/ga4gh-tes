@@ -132,7 +132,7 @@ namespace TesApi.Tests.TestServices
         Task<IEnumerable<T>> IRepository<T>.GetItemsAsync(Expression<Func<T, bool>> predicate, CancellationToken _1)
             => ThrowIfDisposed<Task<IEnumerable<T>>>() ?? Task.FromResult(Items<T>().Values.Where(predicate.Compile().Invoke).Select(Clone));
 
-        Task<(string, IEnumerable<T>)> IRepository<T>.GetItemsAsync(Expression<Func<T, bool>> predicate, int size, string token, CancellationToken _1)
+        Task<(string, IEnumerable<T>)> IRepository<T>.GetItemsAsync(Expression<Func<T, bool>> predicate, string token, int size, CancellationToken _1)
         {
             ThrowIfDisposed();
             var count = Items<T>().Count;

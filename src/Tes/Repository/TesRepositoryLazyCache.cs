@@ -15,7 +15,7 @@ namespace Tes.Repository
         /// A TesTask can run for 7 days, and hypothetically there could be weeks of queued tasks, so set a long default
         /// </summary>
         /// 
-        private static System.TimeSpan defaultItemExpiration = System.TimeSpan.FromDays(30);
+        private static readonly System.TimeSpan defaultItemExpiration = System.TimeSpan.FromDays(30);
 
         private readonly IAppCache cache;
 
@@ -40,27 +40,27 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public bool TryAdd(string key, T task)
         {
-            cache.Add(key, task, defaultItemExpiration);
+            cache.Add($"{nameof(TesRepositoryLazyCache<T>)}:{key}", task, defaultItemExpiration);
             return true;
         }
 
         /// <inheritdoc/>
         public bool TryGetValue(string key, out T task)
         {
-            return cache.TryGetValue(key, out task);
+            return cache.TryGetValue($"{nameof(TesRepositoryLazyCache<T>)}:{key}", out task);
         }
 
         /// <inheritdoc/>
         public bool TryRemove(string key)
         {
-            cache.Remove(key);
+            cache.Remove($"{nameof(TesRepositoryLazyCache<T>)}:{key}");
             return true;
         }
 
         /// <inheritdoc/>
         public bool TryUpdate(string key, T task)
         {
-            return TryAdd(key, task);
+            return TryAdd($"{nameof(TesRepositoryLazyCache<T>)}:{key}", task);
         }
     }
 }

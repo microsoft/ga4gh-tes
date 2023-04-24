@@ -270,8 +270,8 @@ namespace TesApi.Controllers
 
             (var nextPageToken, var tasks) = await repository.GetItemsAsync(
                 t => string.IsNullOrWhiteSpace(namePrefix) || t.Name.StartsWith(namePrefix),
-                pageSize.HasValue ? (int)pageSize : 256,
                 decodedPageToken,
+                pageSize.HasValue ? (int)pageSize : 256,
                 cancellationToken);
 
             var encodedNextPageToken = nextPageToken is not null ? Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(nextPageToken)) : null;

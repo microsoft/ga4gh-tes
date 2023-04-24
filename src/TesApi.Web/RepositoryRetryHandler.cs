@@ -3,9 +3,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
+using LazyCache;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
@@ -32,7 +34,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(repository);
             ArgumentNullException.ThrowIfNull(retryPolicyOptions);
 
-            _asyncRetryPolicy= Policy
+            _asyncRetryPolicy = Policy
                 .Handle<Exception>()
                 .WaitAndRetryAsync(retryPolicyOptions.Value.MaxRetryCount * 4,
                     (attempt) => TimeSpan.FromSeconds(Math.Pow(retryPolicyOptions.Value.ExponentialBackOffExponent,
@@ -56,8 +58,8 @@ namespace TesApi.Web
             => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken)
-            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, pageSize, continuationToken, ct), cancellationToken);
+        public Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, string continuationToken, int pageSize, CancellationToken cancellationToken)
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, continuationToken, pageSize, ct), cancellationToken);
 
         /// <inheritdoc/>
         public Task<bool> TryGetItemAsync(string id, Action<T> onSuccess, CancellationToken cancellationToken)

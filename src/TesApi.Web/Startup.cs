@@ -75,7 +75,7 @@ namespace TesApi.Web
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
 
                     .AddSingleton<IAppCache, CachingService>()
-                    .AddSingleton<ICache<TesTask>, TesRepositoryLazyCache<TesTask>>()
+                    .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryLazyCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
                     .AddTransient<BatchPool>()

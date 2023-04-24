@@ -1,5 +1,6 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Tes.Models;
 
 namespace Tes.Repository
@@ -29,7 +30,11 @@ namespace Tes.Repository
             {
                 // use PostgreSQL
                 optionsBuilder
-                    .UseNpgsql(ConnectionString, options => options.MaxBatchSize(1000))
+                    .UseNpgsql(ConnectionString, options =>
+                    {
+                        options.EnableRetryOnFailure();
+                        options.MaxBatchSize(1000);
+                    })
                     .UseLowerCaseNamingConvention();
             }
         }

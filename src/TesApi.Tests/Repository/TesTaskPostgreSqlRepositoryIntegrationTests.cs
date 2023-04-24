@@ -8,6 +8,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonUtilities;
+using LazyCache;
+using Microsoft.Azure.Management.KeyVault.Fluent;
 using Microsoft.Azure.Management.PostgreSQL;
 using Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
@@ -17,8 +19,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.Rest;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
-using Tes.Models;
 using Tes.Utilities;
+using TesApi.Web;
 using FlexibleServer = Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 
 namespace Tes.Repository.Tests
@@ -32,27 +34,27 @@ namespace Tes.Repository.Tests
     /// 2.  Set "subscriptionId" to your subscriptionId
     /// 3.  Remove the "[Ignore]" attribute from this class
     /// </summary>
-    [Ignore]
+    //[Ignore]
     [TestClass]
     public class TesTaskPostgreSqlRepositoryIntegrationTests
     {
-        private static TesTaskPostgreSqlRepository repository;
-        private static readonly string subscriptionId = "";
+        private static IRepository<Models.TesTask> repository;
+        private static readonly string subscriptionId = "f483a450-5f19-4b20-9326-b5852bb89d83";
         private static readonly string regionName = "southcentralus";
-        private static readonly string resourceGroupName = $"tes-test-{Guid.NewGuid().ToString().Substring(0, 8)}";
-        private static readonly string postgreSqlServerName = $"tes{Guid.NewGuid().ToString().Substring(0, 8)}";
+        private static readonly string resourceGroupName = "bmurri-tes-test"; // $"tes-test-{Guid.NewGuid().ToString()[..8]}";
+        private static readonly string postgreSqlServerName = "tes22e1a726"; // $"tes{Guid.NewGuid().ToString()[..8]}"; // 
         private static readonly string postgreSqlDatabaseName = "tes_db";
-        private static readonly string adminLogin = $"tes{Guid.NewGuid().ToString().Substring(0, 8)}";
-        private static readonly string adminPw = PasswordGenerator.GeneratePassword();
+        private static readonly string adminLogin = "tes0a71642e"; // $"tes{Guid.NewGuid().ToString()[..8]}"; // 
+        private static readonly string adminPw = "30U8mK38XaFyVAMY"; // PasswordGenerator.GeneratePassword(); // 
 
         [ClassInitialize]
-        public async static Task ClassInitializeAsync(TestContext context)
+        public static async Task ClassInitializeAsync(TestContext context)
         {
             Console.WriteLine("Creating Azure Resource Group and PostgreSql Server...");
             await PostgreSqlTestUtility.CreateTestDbAsync(
                 subscriptionId, regionName, resourceGroupName, postgreSqlServerName, postgreSqlDatabaseName, adminLogin, adminPw);
 
-            var options = new PostgreSqlOptions
+            var options = new Models.PostgreSqlOptions
             {
                 ServerName = postgreSqlServerName,
                 DatabaseName = postgreSqlDatabaseName,
@@ -60,10 +62,10 @@ namespace Tes.Repository.Tests
                 DatabaseUserPassword = adminPw
             };
 
-            var optionsMock = new Mock<IOptions<PostgreSqlOptions>>();
+            var optionsMock = new Mock<IOptions<Models.PostgreSqlOptions>>();
             optionsMock.Setup(x => x.Value).Returns(options);
             var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(optionsMock.Object);
-            repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(connectionString));
+            repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(connectionString), new TesRepositoryLazyCache<Models.TesTaskDatabaseItem>(new LazyCache.CachingService()));
             Console.WriteLine("Creation complete.");
         }
 
@@ -72,7 +74,7 @@ namespace Tes.Repository.Tests
         {
             Console.WriteLine("Deleting Azure Resource Group...");
             repository?.Dispose();
-            await PostgreSqlTestUtility.DeleteResourceGroupAsync(subscriptionId, resourceGroupName);
+            //await PostgreSqlTestUtility.DeleteResourceGroupAsync(subscriptionId, resourceGroupName);
             Console.WriteLine("Done");
         }
 
@@ -94,70 +96,93 @@ namespace Tes.Repository.Tests
 
             var isFound = await repository.TryGetItemAsync(id, tesTask => updatedAndRetrievedItem = tesTask, CancellationToken.None);
 
-            Assert.IsNotNull(updatedAndRetrievedItem);
             Assert.IsTrue(isFound);
+            Assert.IsNotNull(updatedAndRetrievedItem);
         }
 
         [TestMethod]
         public async Task GetItemsAsyncTest()
         {
-            var items = await repository.GetItemsAsync(c => c.Id != null, CancellationToken.None);
+            var items = (await repository.GetItemsAsync(c => c.Id != null, CancellationToken.None)).ToList();
 
             foreach (var item in items)
             {
                 Assert.IsTrue(!string.IsNullOrWhiteSpace(item.Id));
             }
 
-            Assert.IsTrue(items.Count() > 0);
+            Assert.IsTrue(items.Any());
+            Console.WriteLine(items.Count);
+            Assert.AreEqual(items.Count, items.Select(t => t.Id).Distinct().Count());
         }
 
         [TestMethod]
         public async Task Create1mAndQuery1mAsync()
         {
-            const bool createItems = true;
+            const bool createItems = false;
 
             var sw = Stopwatch.StartNew();
             if (createItems)
             {
                 var rng = new Random(Guid.NewGuid().GetHashCode());
-                var states = Enum.GetValues(typeof(Models.TesState));
+                var states = Enum.GetValues(typeof(Models.TesState)).Cast<Models.TesState>().ToArray();
 
                 var items = new List<Models.TesTask>();
 
-                for (int i = 0; i < 1_000_000; i++)
+                for (var i = 0; i < 1_000_000; i++)
                 {
-                    var randomState = (Models.TesState)states.GetValue(rng.Next(states.Length));
                     items.Add(new Models.TesTask
                     {
                         Id = Guid.NewGuid().ToString(),
                         Description = Guid.NewGuid().ToString(),
                         CreationTime = DateTime.UtcNow,
-                        State = randomState
+                        State = states[rng.Next(states.Length)]
                     });
                 }
 
-                await repository.CreateItemsAsync(items, CancellationToken.None);
+                Assert.AreEqual(items.Count, items.Select(t => t.Id).Distinct().Count());
+                await ((TesTaskPostgreSqlRepository)repository).CreateItemsAsync(items, CancellationToken.None);
                 Console.WriteLine($"Total seconds to insert {items.Count} items: {sw.Elapsed.TotalSeconds:n2}s");
                 sw.Restart();
             }
 
             sw.Restart();
-            var runningTasks = await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, CancellationToken.None);
+            var runningTasks = (await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, CancellationToken.None)).ToList();
 
             // Ensure performance is decent.  In manual testing on fast internet, this takes less than 5s typically
-            Assert.IsTrue(sw.Elapsed.TotalSeconds < 10);
-            Console.WriteLine($"Retrieved {runningTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
+            var runningTasksRetrievalTime = sw.Elapsed.TotalSeconds;
+            Console.WriteLine($"Retrieved {runningTasks.Count} in {runningTasksRetrievalTime:n1}s");
+            Assert.AreEqual(runningTasks.Count, runningTasks.Select(t => t.Id).Distinct().Count());
             sw.Restart();
-            var allOtherTasks = await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, CancellationToken.None);
-            Console.WriteLine($"Retrieved {allOtherTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
-            Console.WriteLine($"Total running tasks: {runningTasks.Count()}");
-            Console.WriteLine($"Total other tasks: {allOtherTasks.Count()}");
+            var allOtherTasks = (await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, CancellationToken.None)).ToList();
+            Console.WriteLine($"Retrieved {allOtherTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
+            Console.WriteLine($"Total running tasks: {runningTasks.Count}");
+            Console.WriteLine($"Total other tasks: {allOtherTasks.Count}");
+            Assert.AreEqual(allOtherTasks.Count, allOtherTasks.Select(t => t.Id).Distinct().Count());
 
-            Assert.IsTrue(runningTasks.Count() > 0);
-            Assert.IsTrue(allOtherTasks.Count() > 0);
-            Assert.IsTrue(runningTasks.Count() != allOtherTasks.Count());
+            Assert.IsTrue(runningTasks.Any());
+            Assert.IsTrue(allOtherTasks.Any());
+            Assert.IsTrue(runningTasks.Count != allOtherTasks.Count);
             Assert.IsTrue(runningTasks.All(c => c.State == Models.TesState.RUNNINGEnum));
             Assert.IsTrue(allOtherTasks.All(c => c.State != Models.TesState.RUNNINGEnum));
+
+            var tasksToUpgrade = allOtherTasks.Where(t => t.State == Models.TesState.PAUSEDEnum).ToList();
+            var countOfTtasksToUpgrade = tasksToUpgrade.Count;
+            sw.Restart();
+            var upgradedTasks = await Task.WhenAll(tasksToUpgrade.Select(UpgradeTask));
+            Console.WriteLine($"Updated {upgradedTasks.Length} in {sw.Elapsed.TotalSeconds:n1}s");
+            Assert.IsTrue(upgradedTasks.All(c => c.State == Models.TesState.SYSTEMERROREnum));
+            Assert.AreEqual(countOfTtasksToUpgrade, upgradedTasks.Length);
+
+            sw.Restart();
+            await GetItemsAsyncTest();
+
+            Assert.IsTrue(runningTasksRetrievalTime < 10);
+
+            static Task<Models.TesTask> UpgradeTask(Models.TesTask task)
+            {
+                task.State = Models.TesState.SYSTEMERROREnum;
+                return repository.UpdateItemAsync(task, CancellationToken.None);
+            }
         }
         /*
          * A quick note about internet speeds (comment and assertion regarding retrieval times above):
@@ -171,6 +196,33 @@ namespace Tes.Repository.Tests
          *
          * Adjust accordingly
          */
+
+        [TestMethod]
+        public async Task GetItemsContinuationAsyncTest()
+        {
+            const int pageSize = 50_000; // 256;
+
+            var cachingRepository = new RepositoryRetryHandler<Models.TesTask>(repository, Options.Create(new TesApi.Web.Management.Configuration.RetryPolicyOptions()));
+
+            var (continuation, items) = await cachingRepository.GetItemsAsync(c => c.Id != null, null, pageSize, cancellationToken: CancellationToken.None);
+            var itemsList = items.ToList();
+            Assert.IsTrue(itemsList.Count <= pageSize);
+
+            while (!string.IsNullOrWhiteSpace(continuation))
+            {
+                (continuation, items) = await cachingRepository.GetItemsAsync(c => c.Id != null, continuation, pageSize, cancellationToken: CancellationToken.None);
+                itemsList.AddRange(items);
+            }
+
+            foreach (var item in itemsList)
+            {
+                Assert.IsTrue(!string.IsNullOrWhiteSpace(item.Id));
+            }
+
+            Assert.IsTrue(itemsList.Any());
+            Console.WriteLine(itemsList.Count);
+            Assert.AreEqual(itemsList.Count, itemsList.Select(t => t.Id).Distinct().Count());
+        }
 
         [TestMethod]
         public async Task CreateItemAsyncTest()
@@ -192,7 +244,7 @@ namespace Tes.Repository.Tests
         [TestMethod]
         public async Task UpdateItemAsyncTest()
         {
-            string description = $"created at {DateTime.UtcNow}";
+            var description = $"created at {DateTime.UtcNow}";
             var id = Guid.NewGuid().ToString();
 
             var createdItem = await repository.CreateItemAsync(new Models.TesTask
@@ -323,6 +375,5 @@ namespace Tes.Repository.Tests
                 .Configure()
                 .WithLogLevel(HttpLoggingDelegatingHandler.Level.Basic)
                 .Authenticate(azureCredentials);
-
     }
 }

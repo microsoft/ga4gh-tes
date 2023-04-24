@@ -51,10 +51,10 @@ namespace Tes.Repository
         /// Reads a collection of items from the repository
         /// </summary>
         /// <param name="predicate">The 'where' clause.</param>
-        /// <param name="pageSize">The max number of items to retrieve.</param>
         /// <param name="continuationToken">A token to continue retrieving items if the max is returned.</param>
+        /// <param name="pageSize">The max number of items to retrieve.</param>
         /// <returns>A continuation token string, and the collection of retrieved items.</returns>
-        Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken = default);
+        Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, string continuationToken, int pageSize = 256, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Update the item in the repository
