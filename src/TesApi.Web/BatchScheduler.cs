@@ -1151,7 +1151,8 @@ namespace TesApi.Web
                 // This also requires that the main task runs inside a container. So we run the "docker" container that in turn runs other containers.
                 // If the executor image is public, there is no need for pool ContainerConfiguration and task can run normally, without being wrapped in a docker container.
                 // Volume mapping for docker.sock below allows the docker client in the container to access host's docker daemon.
-                var containerRunOptions = $"--rm -v /var/run/docker.sock:/var/run/docker.sock -v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR ";
+                // Remark: Batch provides "-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR" for us.
+                var containerRunOptions = $"--rm -v /var/run/docker.sock:/var/run/docker.sock ";
                 cloudTask.ContainerSettings = new TaskContainerSettings(dockerInDockerImageName, containerRunOptions);
             }
 
