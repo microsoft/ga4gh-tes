@@ -3,6 +3,8 @@
 
 using System;
 using System.Threading.Tasks;
+using Microsoft.WindowsAzure.Storage.Blob;
+using Npgsql.PostgresTypes;
 
 namespace TesApi.Web.Storage
 {
@@ -51,7 +53,8 @@ namespace TesApi.Web.Storage
         /// </summary>
         /// <param name="path">The file path to convert. Two-part path is treated as container path. Paths with three or more parts are treated as blobs.</param>
         /// <param name="getContainerSas">Get the container SAS even if path is longer than two parts</param>
+        /// <param name="permissions">Permissions for the SAS token</param>
         /// <returns>An Azure Block Blob or Container URL with SAS token</returns>
-        public Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false);
+        public Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false, SharedAccessBlobPermissions permissions = SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.Write | SharedAccessBlobPermissions.List);
     }
 }

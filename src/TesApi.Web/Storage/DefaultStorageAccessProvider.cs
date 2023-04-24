@@ -85,7 +85,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false)
+        public override async Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false, SharedAccessBlobPermissions permissions = SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.Write | SharedAccessBlobPermissions.List)
         {
             // TODO: Optional: If path is /container/... where container matches the name of the container in the default storage account, prepend the account name to the path.
             // This would allow the user to omit the account name for files stored in the default storage account
@@ -125,8 +125,8 @@ namespace TesApi.Web.Storage
                     {
                         var policy = new SharedAccessBlobPolicy()
                         {
-                            Permissions = SharedAccessBlobPermissions.Add | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.List | SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.Write,
-                            SharedAccessExpiryTime = DateTime.Now.Add(SasTokenDuration)
+                            Permissions = permissions,
+                            SharedAccessExpiryTime = DateTimeOffset.UtcNow.Add(SasTokenDuration)
                         };
 
                         var containerUri = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName).ToUri();
@@ -134,7 +134,7 @@ namespace TesApi.Web.Storage
                     }
                     else
                     {
-                        var policy = new SharedAccessBlobPolicy() { Permissions = SharedAccessBlobPermissions.Read, SharedAccessExpiryTime = DateTime.Now.Add(SasTokenDuration) };
+                        var policy = new SharedAccessBlobPolicy() { Permissions = permissions, SharedAccessExpiryTime = DateTimeOffset.UtcNow.Add(SasTokenDuration) };
                         resultPathSegments.SasToken = new CloudBlob(resultPathSegments.ToUri(), new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, null, SharedAccessProtocol.HttpsOnly, null);
                     }
 

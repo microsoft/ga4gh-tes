@@ -14,6 +14,7 @@ using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
 using Tes.Extensions;
 using Tes.Models;
@@ -967,14 +968,14 @@ namespace TesApi.Web
 
             var batchExecutionDirectoryPath = GetBatchExecutionDirectoryPath(task);
             var metricsPath = $"/{batchExecutionDirectoryPath}/metrics.txt";
-            var metricsUrl = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync(metricsPath, getContainerSas: true));
+            var metricsUrl = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync(metricsPath, getContainerSas: false, SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.Write));
 
             var additionalInputFiles = new List<TesInput>();
             // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
             // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
             if (isCromwell)
             {
-                var executionDirectoryUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{cromwellExecutionDirectoryPath}", getContainerSas: true));
+                var executionDirectoryUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{cromwellExecutionDirectoryPath}", getContainerSas: true, SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.List));
                 var blobsInExecutionDirectory = (await azureProxy.ListBlobsAsync(executionDirectoryUri)).Where(b => !b.EndsWith($"/{CromwellScriptFileName}")).Where(b => !b.Contains($"/{BatchExecutionDirectoryName}/"));
                 additionalInputFiles = blobsInExecutionDirectory.Select(b => $"{CromwellPathPrefix}/{b}").Select(b => new TesInput { Content = null, Path = b, Url = b, Name = Path.GetFileName(b), Type = TesFileType.FILEEnum }).ToList();
             }
@@ -1018,7 +1019,7 @@ namespace TesApi.Web
                 + $" && echo FileDownloadSizeInBytes=$total_bytes >> {metricsPath}";
 
             var downloadFilesScriptPath = $"{batchExecutionDirectoryPath}/{DownloadFilesScriptFileName}";
-            var downloadFilesScriptUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{downloadFilesScriptPath}");
+            var downloadFilesScriptUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{downloadFilesScriptPath}", getContainerSas: false, SharedAccessBlobPermissions.Read);
             await storageAccessProvider.UploadBlobAsync($"/{downloadFilesScriptPath}", downloadFilesScriptContent);
             var filesToUpload = Array.Empty<TesOutput>();
 
@@ -1026,7 +1027,7 @@ namespace TesApi.Web
             {
                 filesToUpload = await Task.WhenAll(
                     task.Outputs?.Select(async f =>
-                        new TesOutput { Path = f.Path, Url = await storageAccessProvider.MapLocalPathToSasUrlAsync(f.Url, getContainerSas: true), Name = f.Name, Type = f.Type }));
+                        new TesOutput { Path = f.Path, Url = await storageAccessProvider.MapLocalPathToSasUrlAsync(f.Url, getContainerSas: true, SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.Write), Name = f.Name, Type = f.Type }));
             }
 
             // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
@@ -1044,7 +1045,7 @@ namespace TesApi.Web
                 + $" && echo FileUploadSizeInBytes=$total_bytes >> {metricsPath}";
 
             var uploadFilesScriptPath = $"{batchExecutionDirectoryPath}/{UploadFilesScriptFileName}";
-            var uploadFilesScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{uploadFilesScriptPath}");
+            var uploadFilesScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{uploadFilesScriptPath}", getContainerSas: false, SharedAccessBlobPermissions.Read);
             await storageAccessProvider.UploadBlobAsync($"/{uploadFilesScriptPath}", uploadFilesScriptContent);
 
             var executor = task.Executors.First();
@@ -1126,8 +1127,8 @@ namespace TesApi.Web
             var batchScriptPath = $"{batchExecutionDirectoryPath}/{BatchScriptFileName}";
             await storageAccessProvider.UploadBlobAsync($"/{batchScriptPath}", sb.ToString());
 
-            var batchScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchScriptPath}");
-            var batchExecutionDirectorySasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchExecutionDirectoryPath}/", getContainerSas: true);
+            var batchScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchScriptPath}", getContainerSas: false, SharedAccessBlobPermissions.Read);
+            var batchExecutionDirectorySasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchExecutionDirectoryPath}/", getContainerSas: true, SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.Write);
 
             var batchRunCommand = enableBatchAutopool
                 ? $"/bin/bash {batchScriptPath}"
@@ -1230,7 +1231,7 @@ namespace TesApi.Web
 
             if (inputFile.Content is not null || IsCromwellCommandScript(inputFile))
             {
-                inputFileUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(inputFile.Path);
+                inputFileUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(inputFile.Path, getContainerSas: false, SharedAccessBlobPermissions.Read);
 
                 var content = inputFile.Content ?? await storageAccessProvider.DownloadBlobAsync(inputFile.Url);
                 content = IsCromwellCommandScript(inputFile) ? RemoveQueryStringsFromLocalFilePaths(content, queryStringsToRemoveFromLocalFilePaths) : content;
@@ -1239,7 +1240,7 @@ namespace TesApi.Web
             }
             else if (TryGetCromwellTmpFilePath(inputFile.Url, out var localPath))
             {
-                inputFileUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(inputFile.Path);
+                inputFileUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(inputFile.Path, getContainerSas: false, SharedAccessBlobPermissions.Read);
                 await storageAccessProvider.UploadBlobFromFileAsync(inputFile.Path, localPath);
             }
             else if (await storageAccessProvider.IsPublicHttpUrlAsync(inputFile.Url))
@@ -1250,7 +1251,7 @@ namespace TesApi.Web
             {
                 // Convert file:///account/container/blob paths to /account/container/blob
                 var url = Uri.TryCreate(inputFile.Url, UriKind.Absolute, out var tempUrl) && tempUrl.IsFile ? tempUrl.AbsolutePath : inputFile.Url;
-                inputFileUrl = (await storageAccessProvider.MapLocalPathToSasUrlAsync(url)) ?? throw new TesException("InvalidInputFilePath", $"Unsupported input URL '{inputFile.Url}' for task Id {taskId}. Must start with 'http', '{CromwellPathPrefix}' or use '/accountName/containerName/blobName' pattern where TES service has Contributor access to the storage account.");
+                inputFileUrl = (await storageAccessProvider.MapLocalPathToSasUrlAsync(url, getContainerSas: false, SharedAccessBlobPermissions.Read)) ?? throw new TesException("InvalidInputFilePath", $"Unsupported input URL '{inputFile.Url}' for task Id {taskId}. Must start with 'http', '{CromwellPathPrefix}' or use '/accountName/containerName/blobName' pattern where TES service has Contributor access to the storage account.");
             }
 
             var path = RemoveQueryStringsFromLocalFilePaths(inputFile.Path, queryStringsToRemoveFromLocalFilePaths);
@@ -1267,7 +1268,7 @@ namespace TesApi.Web
 
             if (!string.IsNullOrWhiteSpace(globalStartTaskPath))
             {
-                startTaskSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath);
+                startTaskSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, getContainerSas: false, SharedAccessBlobPermissions.Read);
                 if (!await azureProxy.BlobExistsAsync(new Uri(startTaskSasUrl)))
                 {
                     startTaskSasUrl = null;
