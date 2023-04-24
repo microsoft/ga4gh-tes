@@ -39,7 +39,7 @@ namespace TesApi.Tests
                 ("sdjfksdklflksd.microsoft.com/klajsdfsd", false),
                 (Guid.NewGuid().ToString(), false),
             };
-            
+
             foreach (var imageTruthTableValue in imageTruthTableValues)
             {
                 var isImagePublic = await dockerClient.IsImagePublicAsync(imageTruthTableValue.Item1);

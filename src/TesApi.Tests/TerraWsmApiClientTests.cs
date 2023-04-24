@@ -131,7 +131,7 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(url);
             var expectedUrl = $"{TerraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/batchpool/{wsmResourceId}";
-            Assert.AreEqual(expectedUrl,url);
+            Assert.AreEqual(expectedUrl, url);
         }
 
     }

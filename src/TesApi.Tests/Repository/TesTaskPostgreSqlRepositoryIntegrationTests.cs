@@ -34,18 +34,18 @@ namespace Tes.Repository.Tests
     /// 2.  Set "subscriptionId" to your subscriptionId
     /// 3.  Remove the "[Ignore]" attribute from this class
     /// </summary>
-    //[Ignore]
+    [Ignore]
     [TestClass]
     public class TesTaskPostgreSqlRepositoryIntegrationTests
     {
         private static IRepository<Models.TesTask> repository;
         private static readonly string subscriptionId = "f483a450-5f19-4b20-9326-b5852bb89d83";
         private static readonly string regionName = "southcentralus";
-        private static readonly string resourceGroupName = "bmurri-tes-test"; // $"tes-test-{Guid.NewGuid().ToString()[..8]}";
-        private static readonly string postgreSqlServerName = "tes22e1a726"; // $"tes{Guid.NewGuid().ToString()[..8]}"; // 
+        private static readonly string resourceGroupName = $"tes-test-{Guid.NewGuid().ToString()[..8]}";
+        private static readonly string postgreSqlServerName = $"tes{Guid.NewGuid().ToString()[..8]}";
         private static readonly string postgreSqlDatabaseName = "tes_db";
-        private static readonly string adminLogin = "tes0a71642e"; // $"tes{Guid.NewGuid().ToString()[..8]}"; // 
-        private static readonly string adminPw = "30U8mK38XaFyVAMY"; // PasswordGenerator.GeneratePassword(); // 
+        private static readonly string adminLogin = $"tes{Guid.NewGuid().ToString()[..8]}";
+        private static readonly string adminPw = PasswordGenerator.GeneratePassword();
 
         [ClassInitialize]
         public static async Task ClassInitializeAsync(TestContext context)

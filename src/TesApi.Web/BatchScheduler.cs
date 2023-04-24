@@ -224,7 +224,7 @@ namespace TesApi.Web
                 }
                 else if (!string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem))
                 {
-                    tesTask.AddToSystemLog(new [] { batchInfo.AlternateSystemLogItem });
+                    tesTask.AddToSystemLog(new[] { batchInfo.AlternateSystemLogItem });
                 }
             }
 
@@ -701,12 +701,12 @@ namespace TesApi.Web
                         {
                             neededPools.Add(poolKey);
                             tesTask.SetWarning(azureBatchPoolCreationException.InnerException switch
-                                {
-                                    null => "Unknown reason",
-                                    Microsoft.Rest.Azure.CloudException cloudException => cloudException.Body.Message,
-                                    var e when e is BatchException batchException && batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException => batchErrorException.Body.Message.Value,
-                                    _ => "Unknown reason",
-                                },
+                            {
+                                null => "Unknown reason",
+                                Microsoft.Rest.Azure.CloudException cloudException => cloudException.Body.Message,
+                                var e when e is BatchException batchException && batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException => batchErrorException.Body.Message.Value,
+                                _ => "Unknown reason",
+                            },
                                 Array.Empty<string>());
                         }
 

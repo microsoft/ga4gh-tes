@@ -32,12 +32,12 @@ namespace TesApi.Web
             var identityResourceId = tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true ? tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) : default;
             var executorImage = tesTask.Executors.First().Image;
             string registryServer = null;
-            
+
             if (!containerRegistryProvider.IsImagePublic(executorImage))
             {
                 registryServer = (await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage, cancellationToken))?.RegistryServer;
             }
-            
+
             var label = string.IsNullOrWhiteSpace(batchPrefix) ? "<none>" : batchPrefix;
             var vmSize = virtualMachineInformation.VmSize ?? "<none>";
             var isPreemptable = virtualMachineInformation.LowPriority;
