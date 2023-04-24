@@ -118,7 +118,7 @@ namespace TesApi.Tests
                     terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>()))
                 .ReturnsAsync(terraApiStubData.GetWsmSasTokenApiResponse(responseBlobName));
 
-            var url = await terraStorageAccessProvider.GetMappedSasUrlFromWsmAsync("blobName");
+            var url = await terraStorageAccessProvider.GetMappedSasUrlFromWsmAsync("blobName", Microsoft.WindowsAzure.Storage.Blob.SharedAccessBlobPermissions.Read);
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
