@@ -126,9 +126,11 @@ namespace TesApi.Web
 
             var startTime = DateTime.UtcNow;
 
-            await Task.WhenAll(await batchScheduler.ProcessTesTasksAsync(tesTasks, stoppingToken)
-                .Select(e => ProcessOrchestrationResult(e.TesTask, e.IsChangedTask))
-                .ToArrayAsync(stoppingToken));
+            //await Task.WhenAll(await batchScheduler.ProcessTesTasksAsync(tesTasks, stoppingToken)
+            //    .Select(e => ProcessOrchestrationResult(e.TesTask, e.IsChangedAsync))
+            //    .ToArrayAsync(stoppingToken));
+            await Parallel.ForEachAsync(batchScheduler.ProcessTesTasksAsync(tesTasks, stoppingToken),
+                async (e, _) => await ProcessOrchestrationResult(e.TesTask, e.IsChangedAsync));
 
             if (batchScheduler.NeedPoolFlush)
             {
@@ -138,14 +140,14 @@ namespace TesApi.Web
             logger.LogDebug("OrchestrateTesTasksOnBatch for {TaskCount} tasks completed in {TotalSeconds} seconds.",
                 tesTasks.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
 
-            async Task ProcessOrchestrationResult(TesTask tesTask, Task<bool> isChangedTask)
+            async ValueTask ProcessOrchestrationResult(TesTask tesTask, Task<bool> isChangedAsync)
             {
                 try
                 {
                     var isModified = false;
                     try
                     {
-                        isModified = await isChangedTask;
+                        isModified = await isChangedAsync;
                     }
                     catch (Exception exc)
                     {

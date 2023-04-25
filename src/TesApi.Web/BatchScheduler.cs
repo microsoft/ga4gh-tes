@@ -375,13 +375,13 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsChangedTask)> ProcessTesTasksAsync(IEnumerable<TesTask> tesTasks, [EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsChangedAsync)> ProcessTesTasksAsync(IEnumerable<TesTask> tesTasks, [EnumeratorCancellation] CancellationToken cancellationToken)
         /*
          * This method's implementation consists of the following ordered steps:
          *  1. Returning early if, by some mistake, this method was called with either a null or an empty enumerated list of tasks.
          *  2. Calling IAzureProxy.GetBatchAccountStateAsync() once for the entire list. This will greatly reduce the total calls to the batch account compared with the "old" way of serially processing each and every task.
          *  3. Calling ProcessTesTaskAsync() with each task in parallel (to reduce the time it takes to process all tasks at scale). Note that calling that method this way doesn't await each call serially. The ".ToList()" call in WhenEach() will ensure that all the calls to ProcessTesTaskAsync() will be started.
-         *  4. Use WhenEach() to stream results back to the caller as they are individually available.
+         *  4. Using WhenEach() to stream results back to the caller as each result becomes available.
          */
         {
             var (tesTaskList, batchState) = await GetState(tesTasks?.ToList());
@@ -392,7 +392,7 @@ namespace TesApi.Web
             }
 
             // WhenEach() allows us to have Scheduler's OrchestrateTesTasksOnBatch() method call it's local ProcessOrchestrationResult() as soon as ProcessTesTaskAsync() has returned that task and its result instead of batching all the database updates all at once at the end.
-            await foreach (var result in WhenEach(tesTaskList.ToAsyncEnumerable().SelectAwait(async tesTask => await ProcessTesTaskAsync(tesTask, batchState, cancellationToken)).ToEnumerable(), cancellationToken, result => result.IsChangedTask))
+            await foreach (var result in WhenEach(tesTaskList.Select(tesTask => (TesTask: tesTask, IsChangedAsync: ProcessTesTaskAsync(tesTask, batchState, cancellationToken))), cancellationToken, result => result.IsChangedAsync))
             {
                 yield return result;
             }
@@ -479,7 +479,7 @@ namespace TesApi.Web
         /// <param name="batchAccountState"></param>
         /// <param name="cancellationToken"></param>
         /// <returns>True if the TES task needs to be persisted.</returns>
-        private async Task<(TesTask TesTask, Task<bool> IsChangedTask)> ProcessTesTaskAsync(TesTask tesTask, BatchAccountState batchAccountState, CancellationToken cancellationToken)
+        private async Task<bool> ProcessTesTaskAsync(TesTask tesTask, BatchAccountState batchAccountState, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var combinedBatchTaskInfo = await GetBatchTaskStateAsync(tesTask, batchAccountState, cancellationToken);
@@ -491,7 +491,7 @@ namespace TesApi.Web
                 logger.LogInformation(template, tesTask.Id, tesTask.State.ToString(), combinedBatchTaskInfo.BatchTaskState.ToString());
             }
 
-            return (tesTask, HandleTesTaskTransitionAsync(tesTask, combinedBatchTaskInfo, cancellationToken));
+            return await HandleTesTaskTransitionAsync(tesTask, combinedBatchTaskInfo, cancellationToken);
 
             static string ConvertTemplateToFormat(string template)
                 => string.Join(null, template.Split('{', '}').Select((s, i) => (s, i)).Select(t => t.i % 2 == 0 ? t.s : $"{{{t.i / 2}}}"));
