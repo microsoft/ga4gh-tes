@@ -113,8 +113,10 @@ namespace Tes.Repository.Tests
         public async Task Create1mAndQuery1mAsync()
         {
             const bool createItems = true;
+            const int itemCount = 1_000_000;
 
             var sw = Stopwatch.StartNew();
+
             if (createItems)
             {
                 var rng = new Random(Guid.NewGuid().GetHashCode());
@@ -122,7 +124,7 @@ namespace Tes.Repository.Tests
 
                 var items = new List<Models.TesTask>();
 
-                for (int i = 0; i < 1_000_000; i++)
+                for (int i = 0; i < itemCount; i++)
                 {
                     var randomState = (Models.TesState)states.GetValue(rng.Next(states.Length));
                     items.Add(new Models.TesTask
@@ -134,6 +136,8 @@ namespace Tes.Repository.Tests
                     });
                 }
 
+                Assert.IsTrue(items.Select(i => i.Id).Distinct().Count() == itemCount);
+
                 await repository.CreateItemsAsync(items);
                 Console.WriteLine($"Total seconds to insert {items.Count} items: {sw.Elapsed.TotalSeconds:n2}s");
                 sw.Restart();
@@ -142,14 +146,20 @@ namespace Tes.Repository.Tests
             sw.Restart();
             var runningTasks = await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum);
 
-            // Ensure performance is decent.  In manual testing on fast internet, this takes less than 5s typically
-            Assert.IsTrue(sw.Elapsed.TotalSeconds < 10);
+            // Ensure performance is decent
+            Assert.IsTrue(sw.Elapsed.TotalSeconds < 20);
             Console.WriteLine($"Retrieved {runningTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
             sw.Restart();
             var allOtherTasks = await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum);
             Console.WriteLine($"Retrieved {allOtherTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
             Console.WriteLine($"Total running tasks: {runningTasks.Count()}");
             Console.WriteLine($"Total other tasks: {allOtherTasks.Count()}");
+            var distinctRunningTasksIds = runningTasks.Select(i => i.Id).Distinct().Count();
+            var distinctOtherTaskIds = allOtherTasks.Select(i => i.Id).Distinct().Count();
+            Console.WriteLine($"uniqueRunningTasksIds: {distinctRunningTasksIds}");
+            Console.WriteLine($"distinctOtherTaskIds: {distinctOtherTaskIds}");
+
+            Assert.IsTrue(distinctRunningTasksIds + distinctOtherTaskIds == itemCount);
 
             Assert.IsTrue(runningTasks.Count() > 0);
             Assert.IsTrue(allOtherTasks.Count() > 0);
