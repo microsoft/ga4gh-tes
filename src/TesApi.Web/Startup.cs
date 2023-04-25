@@ -5,7 +5,6 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Threading;
-using System.Threading.Tasks;
 using Azure.Core;
 using Azure.Identity;
 using LazyCache;
@@ -140,7 +139,7 @@ namespace TesApi.Web
                     .AddHostedService<DeleteCompletedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedAutoPoolsHostedService>();
-                    //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
+                //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
             }
             catch (Exception exc)
             {

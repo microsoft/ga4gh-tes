@@ -8,7 +8,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonUtilities;
-using LazyCache;
 using Microsoft.Azure.Management.KeyVault.Fluent;
 using Microsoft.Azure.Management.PostgreSQL;
 using Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
@@ -83,12 +82,12 @@ namespace Tes.Repository.Tests
         {
             var id = Guid.NewGuid().ToString();
             var createdItem = await repository.CreateItemAsync(new Models.TesTask
-                {
-                    Id = id,
-                    Description = Guid.NewGuid().ToString(),
-                    CreationTime = DateTime.UtcNow,
-                    Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-                },
+            {
+                Id = id,
+                Description = Guid.NewGuid().ToString(),
+                CreationTime = DateTime.UtcNow,
+                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+            },
                 CancellationToken.None);
             Assert.IsNotNull(createdItem);
 
@@ -230,12 +229,12 @@ namespace Tes.Repository.Tests
             var itemId = Guid.NewGuid().ToString();
 
             var task = await repository.CreateItemAsync(new Models.TesTask
-                {
-                    Id = itemId,
-                    Description = Guid.NewGuid().ToString(),
-                    CreationTime = DateTime.UtcNow,
-                    Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-                },
+            {
+                Id = itemId,
+                Description = Guid.NewGuid().ToString(),
+                CreationTime = DateTime.UtcNow,
+                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+            },
                 CancellationToken.None);
 
             Assert.IsNotNull(task);
@@ -248,12 +247,12 @@ namespace Tes.Repository.Tests
             var id = Guid.NewGuid().ToString();
 
             var createdItem = await repository.CreateItemAsync(new Models.TesTask
-                {
-                    Id = id,
-                    Description = Guid.NewGuid().ToString(),
-                    CreationTime = DateTime.UtcNow,
-                    Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-                },
+            {
+                Id = id,
+                Description = Guid.NewGuid().ToString(),
+                CreationTime = DateTime.UtcNow,
+                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+            },
                 CancellationToken.None);
 
             Assert.IsTrue(createdItem.State != Models.TesState.COMPLETEEnum);
@@ -278,12 +277,12 @@ namespace Tes.Repository.Tests
             var id = Guid.NewGuid().ToString();
 
             var createdItem = await repository.CreateItemAsync(new Models.TesTask
-                {
-                    Id = id,
-                    Description = Guid.NewGuid().ToString(),
-                    CreationTime = DateTime.UtcNow,
-                    Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-                },
+            {
+                Id = id,
+                Description = Guid.NewGuid().ToString(),
+                CreationTime = DateTime.UtcNow,
+                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+            },
                 CancellationToken.None);
             Assert.IsNotNull(createdItem);
             await repository.DeleteItemAsync(id, CancellationToken.None);

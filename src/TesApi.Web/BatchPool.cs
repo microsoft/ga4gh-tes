@@ -616,7 +616,7 @@ namespace TesApi.Web
                     throw new InvalidOperationException($"Active Job not found for Pool {pool.Id}");
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 throw new InvalidOperationException($"Active Job not found for Pool {pool.Id}", ex);
             }

@@ -457,7 +457,7 @@ namespace TesApi.Web
                 }
             });
 
-            await foreach(var entry in channel.Reader.ReadAllAsync(cancellationToken))
+            await foreach (var entry in channel.Reader.ReadAllAsync(cancellationToken))
             {
                 yield return entry;
                 cancellationToken.ThrowIfCancellationRequested();

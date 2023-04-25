@@ -9,7 +9,6 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
-using Microsoft.Azure.Management.Sql.Fluent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TesApi.Web.Management.Configuration;

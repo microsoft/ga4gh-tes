@@ -1,6 +1,5 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using Tes.Models;
 
 namespace Tes.Repository

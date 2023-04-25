@@ -48,7 +48,7 @@ namespace TesApi.Tests
             Assert.IsTrue(batchScheduler.RemovePoolFromList(pool));
             Assert.AreEqual(0, batchScheduler.GetPoolGroupKeys().Count());
 
-            pool = (BatchPool) await batchScheduler.GetOrAddPoolAsync(key, false, (id, ct) => ValueTask.FromResult(new Pool(name: id)), CancellationToken.None);
+            pool = (BatchPool)await batchScheduler.GetOrAddPoolAsync(key, false, (id, ct) => ValueTask.FromResult(new Pool(name: id)), CancellationToken.None);
 
             Assert.IsNotNull(pool);
             Assert.AreEqual(1, batchScheduler.GetPoolGroupKeys().Count());
@@ -1582,7 +1582,7 @@ namespace TesApi.Tests
         }
 
         private static async Task<BatchPool> AddPool(BatchScheduler batchScheduler)
-            => (BatchPool) await batchScheduler.GetOrAddPoolAsync("key1", false, (id, ct) => ValueTask.FromResult<Pool>(new(name: id, displayName: "display1", vmSize: "vmSize1")), CancellationToken.None);
+            => (BatchPool)await batchScheduler.GetOrAddPoolAsync("key1", false, (id, ct) => ValueTask.FromResult<Pool>(new(name: id, displayName: "display1", vmSize: "vmSize1")), CancellationToken.None);
 
         private struct BatchJobAndTaskStates
         {

@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using Microsoft.Azure.Batch;
-using Swashbuckle.AspNetCore.SwaggerGen;
-using Tes.Models;
 
 namespace TesApi.Web
 {
@@ -34,7 +31,7 @@ namespace TesApi.Web
             {
                 var dictionary = new Dictionary<TKey, IReadOnlyList<TValue>>();
 
-                foreach(var key in keys.ToEnumerable())
+                foreach (var key in keys.ToEnumerable())
                 {
                     dictionary[key] = func(key).ToEnumerable().ToList().AsReadOnly();
                 }
