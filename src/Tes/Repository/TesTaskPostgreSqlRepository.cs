@@ -169,7 +169,7 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, string continuationToken, int pageSize, CancellationToken cancellationToken)
         {
-            var last = 0; // (DateTimeOffset.MinValue, string.Empty);
+            var last = (CreationTime: DateTimeOffset.MinValue, Id: string.Empty);
             if (continuationToken is not null)
             {
                 try
@@ -195,18 +195,30 @@ namespace Tes.Repository
                 }
             }
 
-            // This "uglyness" of wrapping/unwrapping Select() calls and calling EF functions directly should (hopefully) be fixed in EF8: https://github.com/dotnet/roslyn/issues/12897 reference https://github.com/dotnet/efcore/issues/26822
-            var results = (await InternalGetItemsAsync(predicate, q => q.Where(t => t.Id > last).Take(pageSize), cancellationToken)).Select(t => t.Json).ToList();
-            var lastItem = results.Count == pageSize ? results.LastOrDefault() : null;
-            return (lastItem is null ? null : Convert.ToBase64String(Encoding.UTF8.GetBytes(Newtonsoft.Json.JsonConvert.SerializeObject((await GetItemFromCacheOrDatabase(lastItem.Id, cancellationToken)).Id/*(lastItem.CreationTime, lastItem.Id)*/))), results);
+            // This "uglyness" should (hopefully) be fixed in EF8: https://github.com/dotnet/roslyn/issues/12897 reference https://github.com/dotnet/efcore/issues/26822 when we can compare last directly with a created per-item tuple
+            //var results = (await InternalGetItemsAsync(predicate, q => q.Where(t => t.Json.CreationTime > last.CreationTime || (t.Json.CreationTime == last.CreationTime && t.Json.Id.CompareTo(last.Id) > 0)).Take(pageSize), cancellationToken))
+            var results = (await InternalGetItemsAsync(predicate, q => q.Where(t => t.Json.Id.CompareTo(last.Id) > 0).Take(pageSize), cancellationToken))
+                .Select(t => t.Json).ToList();
+
+            return (GetContinuation(results.Count == pageSize ? results.LastOrDefault() : null), results);
+
+            static string GetContinuation(TesTask item)
+                => item is null ? null : Convert.ToBase64String(Encoding.UTF8.GetBytes(Newtonsoft.Json.JsonConvert.SerializeObject((item.CreationTime, item.Id))));
         }
 
         private async Task<IEnumerable<TesTaskDatabaseItem>> InternalGetItemsAsync(Expression<Func<TesTask, bool>> predicate, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination, CancellationToken cancellationToken)
         {
             using var dbContext = createDbContext();
-            return (await GetItemsAsync(dbContext.TesTasks, WhereTesTask(predicate), q => q.OrderBy(t => t.Id)/*q.OrderBy(t => t.Json.CreationTime).ThenBy(t => t.Json.Id)*/, pagination, cancellationToken)).Select(item => EnsureActiveTaskInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()));
+            // It turns out, PostgreSQL doesn't handle EF's interpretation of ORDER BY more then one "column" in any resonable way, so we have to order by the only thing we have that is expected to be unique.
+            //return (await GetItemsAsync(dbContext.TesTasks, WhereTesTask(predicate), q => q.OrderBy(t => t.Json.CreationTime).ThenBy(t => t.Json.Id), pagination, cancellationToken)).Select(item => EnsureActiveTaskInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()));
+            return (await GetItemsAsync(dbContext.TesTasks, WhereTesTask(predicate), q => q.OrderBy(t => t.Json.Id), pagination, cancellationToken)).Select(item => EnsureActiveTaskInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()));
         }
 
+        /// <summary>
+        /// Transforms <paramref name="predicate"/> into <see cref="Expression{Func{TesTaskDatabaseItem, bool}}"/>.
+        /// </summary>
+        /// <param name="predicate">A <see cref="Expression{Func{TesTask, bool}}"/> to be transformed.</param>
+        /// <returns>A <see cref="Expression{Func{TesTaskDatabaseItem, bool}}"/></returns>
         private static Expression<Func<TesTaskDatabaseItem, bool>> WhereTesTask(Expression<Func<TesTask, bool>> predicate)
         {
             return (Expression<Func<TesTaskDatabaseItem, bool>>)new ExpressionParameterSubstitute(predicate.Parameters[0], GetTask()).Visit(predicate);

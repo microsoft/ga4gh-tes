@@ -72,9 +72,14 @@ namespace Tes.Repository
         /// <remarks>Ensure that the <see cref="DbContext"/> from which <paramref name="dbSet"/> comes isn't disposed until the entire query completes.</remarks>
         protected async Task<IEnumerable<TDatabaseItem>> GetItemsAsync(DbSet<TDatabaseItem> dbSet, Expression<Func<TDatabaseItem, bool>> predicate, Func<IQueryable<TDatabaseItem>, IQueryable<TDatabaseItem>> orderBy, Func<IQueryable<TDatabaseItem>, IQueryable<TDatabaseItem>> pagination, CancellationToken cancellationToken)
         {
+            ArgumentNullException.ThrowIfNull(dbSet);
+            ArgumentNullException.ThrowIfNull(predicate);
+            ArgumentNullException.ThrowIfNull(orderBy);
+            ArgumentNullException.ThrowIfNull(pagination);
+
             // Search for items in the JSON
-            var query = orderBy(pagination(dbSet.Where(predicate)));
-            var sqlQuery = query.ToQueryString();
+            var query = pagination(orderBy(dbSet.Where(predicate)));
+            //var sqlQuery = query.ToQueryString();
             //System.Diagnostics.Debugger.Break();
 
             return await query.ToListAsync(cancellationToken);

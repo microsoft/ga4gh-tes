@@ -73,7 +73,7 @@ namespace Tes.Repository.Tests
         {
             Console.WriteLine("Deleting Azure Resource Group...");
             repository?.Dispose();
-            //await PostgreSqlTestUtility.DeleteResourceGroupAsync(subscriptionId, resourceGroupName);
+            await PostgreSqlTestUtility.DeleteResourceGroupAsync(subscriptionId, resourceGroupName);
             Console.WriteLine("Done");
         }
 
@@ -117,7 +117,7 @@ namespace Tes.Repository.Tests
         [TestMethod]
         public async Task Create1mAndQuery1mAsync()
         {
-            const bool createItems = false;
+            const bool createItems = true;
 
             var sw = Stopwatch.StartNew();
             if (createItems)
@@ -163,53 +163,21 @@ namespace Tes.Repository.Tests
             Assert.IsTrue(runningTasks.Count != allOtherTasks.Count);
             Assert.IsTrue(runningTasks.All(c => c.State == Models.TesState.RUNNINGEnum));
             Assert.IsTrue(allOtherTasks.All(c => c.State != Models.TesState.RUNNINGEnum));
-
-            var tasksToUpgrade = allOtherTasks.Where(t => t.State == Models.TesState.PAUSEDEnum).ToList();
-            var countOfTtasksToUpgrade = tasksToUpgrade.Count;
-            sw.Restart();
-            var upgradedTasks = await Task.WhenAll(tasksToUpgrade.Select(UpgradeTask));
-            Console.WriteLine($"Updated {upgradedTasks.Length} in {sw.Elapsed.TotalSeconds:n1}s");
-            Assert.IsTrue(upgradedTasks.All(c => c.State == Models.TesState.SYSTEMERROREnum));
-            Assert.AreEqual(countOfTtasksToUpgrade, upgradedTasks.Length);
-
-            sw.Restart();
-            await GetItemsAsyncTest();
-
             Assert.IsTrue(runningTasksRetrievalTime < 10);
-
-            static Task<Models.TesTask> UpgradeTask(Models.TesTask task)
-            {
-                task.State = Models.TesState.SYSTEMERROREnum;
-                return repository.UpdateItemAsync(task, CancellationToken.None);
-            }
         }
-        /*
-         * A quick note about internet speeds (comment and assertion regarding retrieval times above):
-         *
-         * With my "not fast" internet, these were my timings:
-         *     Total seconds to insert 1000000 items: 632.33s
-         *     Retrieved 111179 in 20.1s
-         *     Retrieved 888821 in 140.5s
-         *     Total running tasks: 111179
-         *     Total other tasks: 888821
-         *
-         * Adjust accordingly
-         */
 
         [TestMethod]
         public async Task GetItemsContinuationAsyncTest()
         {
-            const int pageSize = 50_000; // 256;
+            const int pageSize = 256;
 
-            var cachingRepository = new RepositoryRetryHandler<Models.TesTask>(repository, Options.Create(new TesApi.Web.Management.Configuration.RetryPolicyOptions()));
-
-            var (continuation, items) = await cachingRepository.GetItemsAsync(c => c.Id != null, null, pageSize, cancellationToken: CancellationToken.None);
+            var (continuation, items) = await repository.GetItemsAsync(c => c.Id != null, null, pageSize, cancellationToken: CancellationToken.None);
             var itemsList = items.ToList();
             Assert.IsTrue(itemsList.Count <= pageSize);
 
             while (!string.IsNullOrWhiteSpace(continuation))
             {
-                (continuation, items) = await cachingRepository.GetItemsAsync(c => c.Id != null, continuation, pageSize, cancellationToken: CancellationToken.None);
+                (continuation, items) = await repository.GetItemsAsync(c => c.Id != null, continuation, pageSize, cancellationToken: CancellationToken.None);
                 itemsList.AddRange(items);
             }
 
