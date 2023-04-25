@@ -42,6 +42,11 @@ public abstract class BlobPipeline
 
     protected abstract ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer);
 
+    /// <summary>
+    /// This method must return the length in bytes of the source provided. The source is either a URL or path to file.
+    /// </summary>
+    /// <param name="source">Source path or URL</param>
+    /// <returns>Size of the source</returns>
     protected abstract Task<long> GetSourceLength(string source);
 
     protected abstract Task OnCompletionAsync(long length, Uri? blobUrl, string fileName);
@@ -61,25 +66,26 @@ public abstract class BlobPipeline
 
     protected async Task<long> ExecutePipelineAsync(List<BlobOperationInfo> operations)
     {
-        var pipelineTasks = new List<Task>();
-
-        pipelineTasks.Add(StartPartsProducersAsync(operations).AsTask());
-        pipelineTasks.Add(StartReadPipelineAsync().AsTask());
-        pipelineTasks.Add(StartWritePipelineAsync().AsTask());
+        var pipelineTasks = new List<Task>
+        {
+            StartPartsProducersAsync(operations),
+            StartReadPipelineAsync(),
+            StartWritePipelineAsync()
+        };
 
         var totalBytesProcessed = StartProcessedPipelineAsync(operations.Count);
-
-        Logger.LogInformation(
-            @$"
-Started BlobOperation: 
-    Number of Operations: {operations.Count}
-    Number of Writers: {PipelineOptions.NumberOfWriters}
-    Number of Readers: {PipelineOptions.NumberOfReaders}
-    BlockSize: {PipelineOptions.BlockSize}
-            ");
-
-        await Task.WhenAll(pipelineTasks);
-
+        
+        try
+        {
+            //await Task.WhenAll(pipelineTasks);
+            await WhenAllOrThrowIfOneFailsAsync(pipelineTasks);
+        }
+        catch (Exception e)
+        {
+            Logger.LogError(e, "Pipeline processing failed.");
+            throw;
+        }
+        
         return await totalBytesProcessed;
     }
 
@@ -167,33 +173,38 @@ Started BlobOperation:
         }
     }
 
-    private async ValueTask StartPartsProducersAsync(List<BlobOperationInfo> blobOperations)
+    private async Task StartPartsProducersAsync(List<BlobOperationInfo> blobOperations)
     {
         var partsProducerTasks = new List<Task>();
         foreach (var operation in blobOperations)
         {
-            partsProducerTasks.Add(Task.Run(async () =>
-            {
-                var length = await GetSourceLength(operation.SourceLocationForLength);
-
-                return StartPartsProducer(operation.Url, operation.FileName, length, operation.ReadOnlyFileHandler).AsTask();
-            }));
+            partsProducerTasks.Add(StartPartsProducerAsync(operation));
         }
 
-        await Task.WhenAll(partsProducerTasks);
+        try
+        {
+            await Task.WhenAll(partsProducerTasks);
+        }
+        catch (Exception e)
+        {
+            Logger.LogError(e, "The parts producer failed.");
+            throw;
+        }
     }
 
-    private async ValueTask StartPartsProducer(Uri url, string fileName, long length, bool readOnlyFileHandle)
+    private async Task StartPartsProducerAsync(BlobOperationInfo operation)
     {
-        int numberOfParts = GetNumberOfParts(length);
+        var length = await GetSourceLength(operation.SourceLocationForLength);
+
+        var numberOfParts = GetNumberOfParts(length);
 
         PipelineBuffer? buffer;
 
-        var fileHandlerPool = await GetNewFileHandlerPoolAsync(fileName, readOnlyFileHandle);
+        var fileHandlerPool = await GetNewFileHandlerPoolAsync(operation.FileName, operation.ReadOnlyFileHandler);
 
         for (int i = 0; i < numberOfParts; i++)
         {
-            buffer = GetNewPipelinePartBuffer(url, fileName, fileHandlerPool, length, i, numberOfParts);
+            buffer = GetNewPipelinePartBuffer(operation.Url, operation.FileName, fileHandlerPool, length, i, numberOfParts);
 
             await ReadBufferChannel.Writer.WriteAsync(buffer);
         }
@@ -206,16 +217,24 @@ Started BlobOperation:
 
         for (int f = 0; f < PipelineOptions.BufferCapacity; f++)
         {
-            if (readOnly)
+            try
             {
-                await pool.Writer.WriteAsync(File.Open(fileName, FileMode.Open, FileAccess.Read, FileShare.Read));
-                continue;
-            }
-            var directory = Path.GetDirectoryName(fileName);
+                if (readOnly)
+                {
+                    await pool.Writer.WriteAsync(File.Open(fileName, FileMode.Open, FileAccess.Read, FileShare.Read));
+                    continue;
+                }
+                var directory = Path.GetDirectoryName(fileName);
 
-            if (!string.IsNullOrEmpty(directory))
+                if (!string.IsNullOrEmpty(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+            }
+            catch (Exception e)
             {
-                Directory.CreateDirectory(directory);
+                Logger.LogError(e,$"Failed to open the file or create directory. File name {fileName}");
+                throw;
             }
 
             await pool.Writer.WriteAsync(File.Open(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite));
@@ -224,7 +243,7 @@ Started BlobOperation:
         return pool;
     }
 
-    private async ValueTask StartWritePipelineAsync()
+    private async Task StartWritePipelineAsync()
     {
         List<Task> tasks = new List<Task>();
 
@@ -255,7 +274,6 @@ Started BlobOperation:
                             Logger.LogError(e, "Failed to execute write operation");
                             throw;
                         }
-
                     }
                 }
             }));
@@ -265,7 +283,7 @@ Started BlobOperation:
 
         ProcessedBufferChannel.Writer.Complete();
     }
-    private async ValueTask StartReadPipelineAsync()
+    private async Task StartReadPipelineAsync()
     {
         var tasks = new List<Task>();
 
@@ -308,45 +326,61 @@ Started BlobOperation:
 
         WriteBufferChannel.Writer.Complete();
     }
-    private async ValueTask StartAndWaitPipelineWorkersAsync(int numberOfWorkers, Channel<PipelineBuffer> pipelineChannel, Func<PipelineBuffer,ValueTask> onReadAsync, Action<Channel<PipelineBuffer>>? onDone)
-    {
-        var tasks = new List<Task>();
+    //private async Task StartAndWaitPipelineWorkersAsync(int numberOfWorkers, Channel<PipelineBuffer> pipelineChannel, Func<PipelineBuffer,ValueTask> onReadAsync, Action<Channel<PipelineBuffer>>? onDone)
+    //{
+    //    var tasks = new List<Task>();
 
-        for (var workers = 0; workers < numberOfWorkers; workers++)
-        {
-            tasks.Add(Task.Run(async () =>
-            {
-                PipelineBuffer? buffer;
+    //    for (var workers = 0; workers < numberOfWorkers; workers++)
+    //    {
+    //        tasks.Add(Task.Run(async () =>
+    //        {
+    //            PipelineBuffer? buffer;
 
-                while (await pipelineChannel.Reader.WaitToReadAsync())
-                {
-                    while (pipelineChannel.Reader.TryRead(out buffer))
-                    {
-                        try
-                        {
-                            await onReadAsync(buffer);
-                        }
-                        catch (Exception e)
-                        {
-                            Logger.LogError(e, "Failed to process pipeline buffer");
-                            throw;
-                        }
+    //            while (await pipelineChannel.Reader.WaitToReadAsync())
+    //            {
+    //                while (pipelineChannel.Reader.TryRead(out buffer))
+    //                {
+    //                    try
+    //                    {
+    //                        await onReadAsync(buffer);
+    //                    }
+    //                    catch (Exception e)
+    //                    {
+    //                        Logger.LogError(e, "Failed to process pipeline buffer");
+    //                        throw;
+    //                    }
 
-                    }
-                }
-            }));
-        }
+    //                }
+    //            }
+    //        }));
+    //    }
 
-        await Task.WhenAll(tasks);
+    //    await Task.WhenAll(tasks);
 
-        onDone?.Invoke(pipelineChannel);
-    }
+    //    onDone?.Invoke(pipelineChannel);
+    //}
 
     private void CloseFileHandler(FileStream? fileStream)
     {
         if (fileStream is not null && !fileStream.SafeFileHandle.IsClosed)
         {
             fileStream.Close();
+        }
+    }
+
+    private async Task WhenAllOrThrowIfOneFailsAsync(List<Task> tasks)
+    {
+        var tasksPending = tasks.ToList();
+        while (tasksPending.Any())
+        {
+            var completedTask = await Task.WhenAny(tasksPending);
+
+            tasksPending.Remove(completedTask);
+
+            if (completedTask.IsFaulted)
+            {
+                throw new Exception("At least one of the tasks has failed.", completedTask.Exception);
+            }
         }
     }
 }
