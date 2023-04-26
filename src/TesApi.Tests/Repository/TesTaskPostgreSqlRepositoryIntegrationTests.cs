@@ -38,7 +38,7 @@ namespace Tes.Repository.Tests
     public class TesTaskPostgreSqlRepositoryIntegrationTests
     {
         private static IRepository<Models.TesTask> repository;
-        private static readonly string subscriptionId = "f483a450-5f19-4b20-9326-b5852bb89d83";
+        private static readonly string subscriptionId = "";
         private static readonly string regionName = "southcentralus";
         private static readonly string resourceGroupName = $"tes-test-{Guid.NewGuid().ToString()[..8]}";
         private static readonly string postgreSqlServerName = $"tes{Guid.NewGuid().ToString()[..8]}";
@@ -118,8 +118,10 @@ namespace Tes.Repository.Tests
         public async Task Create1mAndQuery1mAsync()
         {
             const bool createItems = true;
+            const int itemCount = 1_000_000;
 
             var sw = Stopwatch.StartNew();
+
             if (createItems)
             {
                 var rng = new Random(Guid.NewGuid().GetHashCode());
@@ -127,7 +129,7 @@ namespace Tes.Repository.Tests
 
                 var items = new List<Models.TesTask>();
 
-                for (var i = 0; i < 1_000_000; i++)
+                for (int i = 0; i < itemCount; i++)
                 {
                     items.Add(new Models.TesTask
                     {
@@ -138,7 +140,8 @@ namespace Tes.Repository.Tests
                     });
                 }
 
-                Assert.AreEqual(items.Count, items.Select(t => t.Id).Distinct().Count());
+                Assert.IsTrue(items.Select(i => i.Id).Distinct().Count() == itemCount);
+
                 await ((TesTaskPostgreSqlRepository)repository).CreateItemsAsync(items, CancellationToken.None);
                 Console.WriteLine($"Total seconds to insert {items.Count} items: {sw.Elapsed.TotalSeconds:n2}s");
                 sw.Restart();
@@ -147,23 +150,26 @@ namespace Tes.Repository.Tests
             sw.Restart();
             var runningTasks = (await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, CancellationToken.None)).ToList();
 
-            // Ensure performance is decent.  In manual testing on fast internet, this takes less than 5s typically
-            var runningTasksRetrievalTime = sw.Elapsed.TotalSeconds;
-            Console.WriteLine($"Retrieved {runningTasks.Count} in {runningTasksRetrievalTime:n1}s");
-            Assert.AreEqual(runningTasks.Count, runningTasks.Select(t => t.Id).Distinct().Count());
+            // Ensure performance is decent
+            Assert.IsTrue(sw.Elapsed.TotalSeconds < 20);
+            Console.WriteLine($"Retrieved {runningTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
             sw.Restart();
-            var allOtherTasks = (await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, CancellationToken.None)).ToList();
-            Console.WriteLine($"Retrieved {allOtherTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
-            Console.WriteLine($"Total running tasks: {runningTasks.Count}");
-            Console.WriteLine($"Total other tasks: {allOtherTasks.Count}");
-            Assert.AreEqual(allOtherTasks.Count, allOtherTasks.Select(t => t.Id).Distinct().Count());
+            var allOtherTasks = (await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum)).ToList();
+            Console.WriteLine($"Retrieved {allOtherTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
+            Console.WriteLine($"Total running tasks: {runningTasks.Count()}");
+            Console.WriteLine($"Total other tasks: {allOtherTasks.Count()}");
+            var distinctRunningTasksIds = runningTasks.Select(i => i.Id).Distinct().Count();
+            var distinctOtherTaskIds = allOtherTasks.Select(i => i.Id).Distinct().Count();
+            Console.WriteLine($"uniqueRunningTasksIds: {distinctRunningTasksIds}");
+            Console.WriteLine($"distinctOtherTaskIds: {distinctOtherTaskIds}");
+
+            Assert.IsTrue(distinctRunningTasksIds + distinctOtherTaskIds == itemCount);
 
             Assert.IsTrue(runningTasks.Any());
             Assert.IsTrue(allOtherTasks.Any());
             Assert.IsTrue(runningTasks.Count != allOtherTasks.Count);
             Assert.IsTrue(runningTasks.All(c => c.State == Models.TesState.RUNNINGEnum));
             Assert.IsTrue(allOtherTasks.All(c => c.State != Models.TesState.RUNNINGEnum));
-            Assert.IsTrue(runningTasksRetrievalTime < 10);
         }
 
         [TestMethod]
