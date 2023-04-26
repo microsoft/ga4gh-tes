@@ -25,8 +25,8 @@ public class BlobDownloader : BlobPipeline
 
         return length;
     }
-    
-    protected override async ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
+
+    public override async ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
     {
         var fileStream = await buffer.FileHandlerPool.Reader.ReadAsync();
 
@@ -39,7 +39,7 @@ public class BlobDownloader : BlobPipeline
         return buffer.Length;
     }
 
-    protected override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer)
+    public override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, buffer.BlobUrl);
 
@@ -62,8 +62,8 @@ public class BlobDownloader : BlobPipeline
             response.Dispose();
         }
     }
-    
-    protected override async Task<long> GetSourceLength(string source)
+
+    public override async Task<long> GetSourceLengthAsync(string source)
     {
         var request = new HttpRequestMessage(HttpMethod.Head, new Uri(source));
 
@@ -74,10 +74,15 @@ public class BlobDownloader : BlobPipeline
         return response.Content.Headers.ContentLength ?? 0;
     }
 
-    protected override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName)
+    public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName)
     {
         Logger.LogInformation($"Completed download. Total:{length} Filename:{fileName}");
 
         return Task.CompletedTask;
+    }
+
+    public override void ConfigurePipelineBuffer(PipelineBuffer buffer)
+    {
+        //no config
     }
 }

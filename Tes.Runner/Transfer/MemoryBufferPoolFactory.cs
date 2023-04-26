@@ -7,26 +7,27 @@ namespace Tes.Runner.Transfer
 {
     public class MemoryBufferPoolFactory
     {
-        public static async ValueTask<Channel<byte[]>> CreateMemoryBufferPoolAsync(int capacity, int blockSize)
+        const int MaxBufferSize = 1024 * 1024 * 100; //100 MiB
+
+        public static async ValueTask<Channel<byte[]>> CreateMemoryBufferPoolAsync(int capacity, int bufferSize)
         {
             if (capacity <= 0)
             {
                 throw new ArgumentException("Invalid capacity. Value must be greater than 0", nameof(capacity));
             }
 
-            if (blockSize <= 0 || blockSize > 1024 * 1024 * 100)
+            if (bufferSize <= 0 || bufferSize > MaxBufferSize)
             {
-                throw new ArgumentException("Invalid blockSize. Value must be greater than 0 and less than 100 MiB", nameof(capacity));
+                throw new ArgumentException($"Invalid memory buffer size. Value must be greater than 0 and less than {MaxBufferSize/BlobSizeUtils.MiB} MiB", nameof(capacity));
             }
 
             var bufferPool = Channel.CreateBounded<byte[]>(capacity);
             for (var i = 0; i < capacity; i++)
             {
-                await bufferPool.Writer.WriteAsync(new byte[blockSize]);
+                await bufferPool.Writer.WriteAsync(new byte[bufferSize]);
             }
 
             return bufferPool;
         }
-
     }
 }

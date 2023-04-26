@@ -13,13 +13,13 @@ namespace Tes.Runner.Transfer
         {
         }
 
-        protected override void ConfigurePipelineBuffer(PipelineBuffer buffer)
+        public override void ConfigurePipelineBuffer(PipelineBuffer buffer)
         {
             buffer.BlobPartUrl =
                 new Uri($"{buffer.BlobUrl?.AbsoluteUri}&comp=block&blockid={ToBlockId(buffer.Ordinal)}");
         }
 
-        protected override async ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
+        public override async ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
         {
             var request = new HttpRequestMessage(HttpMethod.Put, buffer.BlobPartUrl)
             {
@@ -52,7 +52,7 @@ namespace Tes.Runner.Transfer
             request.Headers.Add("x-ms-date", DateTime.UtcNow.ToString("R"));
         }
 
-        protected override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer)
+        public override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer)
         {
             var fileHandler = await buffer.FileHandlerPool.Reader.ReadAsync();
 
@@ -65,12 +65,12 @@ namespace Tes.Runner.Transfer
             return dataRead;
         }
 
-        protected override Task<long> GetSourceLength(string lengthSource)
+        public override Task<long> GetSourceLengthAsync(string lengthSource)
         {
             return Task.FromResult((new FileInfo(lengthSource)).Length);
         }
 
-        protected override async Task OnCompletionAsync(long length, Uri? blobUrl, string fileName)
+        public override async Task OnCompletionAsync(long length, Uri? blobUrl, string fileName)
         {
             ArgumentNullException.ThrowIfNull(blobUrl);
 
@@ -101,7 +101,7 @@ namespace Tes.Runner.Transfer
 
             sb.Append("<?xml version='1.0' encoding='utf-8'?><BlockList>");
 
-            var parts = GetNumberOfParts(length);
+            var parts = BlobSizeUtils.GetNumberOfParts(length, PipelineOptions.BlockSize);
 
             for (var n = 0; n < parts; n++)
             {

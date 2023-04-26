@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer;
 
-public abstract class BlobPipeline
+public abstract class BlobPipeline : IBlobPipeline
 {
     protected readonly Channel<PipelineBuffer> ReadBufferChannel;
     protected readonly Channel<PipelineBuffer> WriteBufferChannel;
@@ -15,10 +15,10 @@ public abstract class BlobPipeline
     protected readonly HttpClient HttpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(300) };
     protected readonly BlobPipelineOptions PipelineOptions;
     protected readonly ILogger Logger = PipelineLoggerFactory.Create<BlobPipeline>();
+    private readonly PartsProducer partsProducer;
 
     public const int MiB = 1024 * 1024;
     public const int DefaultBlockSize = MiB * 100;
-    private const int MaxNumberBlobParts = 50000;
 
     protected BlobPipeline(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer)
     {
@@ -31,6 +31,7 @@ public abstract class BlobPipeline
         ProcessedBufferChannel = Channel.CreateUnbounded<ProcessedBuffer>();
 
         MemoryBufferChannel = memoryBuffer;
+        partsProducer = new PartsProducer(this,pipelineOptions);
     }
     protected virtual ProcessedBuffer ToProcessedBuffer(PipelineBuffer buffer)
     {
@@ -38,37 +39,24 @@ public abstract class BlobPipeline
             buffer.NumberOfParts, buffer.FileHandlerPool, buffer.BlobPartUrl, buffer.Length);
     }
 
-    protected abstract ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer);
+    public abstract ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer);
 
-    protected abstract ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer);
+    public abstract ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer);
 
     /// <summary>
     /// This method must return the length in bytes of the source provided. The source is either a URL or path to file.
     /// </summary>
     /// <param name="source">Source path or URL</param>
     /// <returns>Size of the source</returns>
-    protected abstract Task<long> GetSourceLength(string source);
+    public abstract Task<long> GetSourceLengthAsync(string source);
 
-    protected abstract Task OnCompletionAsync(long length, Uri? blobUrl, string fileName);
-
-    protected int GetNumberOfParts(long length)
-    {
-        int numberOfParts = (int)Math.Ceiling((double)(length) / PipelineOptions.BlockSize);
-
-        if (numberOfParts > BlobUploader.MaxNumberBlobParts)
-        {
-            throw new Exception(
-                $"The number of blocks exceeds the maximum allowed by the service of {BlobUploader.MaxNumberBlobParts}. Try increasing the block size. Current block size: {PipelineOptions.BlockSize}");
-        }
-
-        return numberOfParts;
-    }
+    public abstract Task OnCompletionAsync(long length, Uri? blobUrl, string fileName);
 
     protected async Task<long> ExecutePipelineAsync(List<BlobOperationInfo> operations)
     {
         var pipelineTasks = new List<Task>
         {
-            StartPartsProducersAsync(operations),
+            partsProducer.StartPartsProducersAsync(operations, ReadBufferChannel),
             StartReadPipelineAsync(),
             StartWritePipelineAsync()
         };
@@ -89,36 +77,8 @@ public abstract class BlobPipeline
         return await totalBytesProcessed;
     }
 
-    private PipelineBuffer GetNewPipelinePartBuffer(Uri blobUrl, string fileName, Channel<FileStream> fileHandlerPool,
-        long fileSize, int partOrdinal,
-        int numberOfParts)
-    {
-        var buffer = new PipelineBuffer()
-        {
-            BlobUrl = blobUrl,
-            Offset = (long)partOrdinal * PipelineOptions.BlockSize,
-            Length = PipelineOptions.BlockSize,
-            FileName = fileName,
-            Ordinal = partOrdinal,
-            NumberOfParts = numberOfParts,
-            FileHandlerPool = fileHandlerPool,
-            FileSize = fileSize,
-        };
 
-        if (partOrdinal == numberOfParts - 1)
-        {
-            buffer.Length = (int)(fileSize - buffer.Offset);
-        }
-
-        ConfigurePipelineBuffer(buffer);
-
-        return buffer;
-    }
-
-    protected virtual void ConfigurePipelineBuffer(PipelineBuffer buffer)
-    {
-        //no configuration..
-    }
+    public abstract void ConfigurePipelineBuffer(PipelineBuffer buffer);
 
     private async ValueTask<long> StartProcessedPipelineAsync(int numberOfFiles)
     {
@@ -171,76 +131,6 @@ public abstract class BlobPipeline
         {
             CloseFileHandler(fileStream);
         }
-    }
-
-    private async Task StartPartsProducersAsync(List<BlobOperationInfo> blobOperations)
-    {
-        var partsProducerTasks = new List<Task>();
-        foreach (var operation in blobOperations)
-        {
-            partsProducerTasks.Add(StartPartsProducerAsync(operation));
-        }
-
-        try
-        {
-            await Task.WhenAll(partsProducerTasks);
-        }
-        catch (Exception e)
-        {
-            Logger.LogError(e, "The parts producer failed.");
-            throw;
-        }
-    }
-
-    private async Task StartPartsProducerAsync(BlobOperationInfo operation)
-    {
-        var length = await GetSourceLength(operation.SourceLocationForLength);
-
-        var numberOfParts = GetNumberOfParts(length);
-
-        PipelineBuffer? buffer;
-
-        var fileHandlerPool = await GetNewFileHandlerPoolAsync(operation.FileName, operation.ReadOnlyFileHandler);
-
-        for (int i = 0; i < numberOfParts; i++)
-        {
-            buffer = GetNewPipelinePartBuffer(operation.Url, operation.FileName, fileHandlerPool, length, i, numberOfParts);
-
-            await ReadBufferChannel.Writer.WriteAsync(buffer);
-        }
-
-    }
-
-    private async ValueTask<Channel<FileStream>> GetNewFileHandlerPoolAsync(string fileName, bool readOnly)
-    {
-        var pool = Channel.CreateBounded<FileStream>(PipelineOptions.BufferCapacity);
-
-        for (int f = 0; f < PipelineOptions.BufferCapacity; f++)
-        {
-            try
-            {
-                if (readOnly)
-                {
-                    await pool.Writer.WriteAsync(File.Open(fileName, FileMode.Open, FileAccess.Read, FileShare.Read));
-                    continue;
-                }
-                var directory = Path.GetDirectoryName(fileName);
-
-                if (!string.IsNullOrEmpty(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-            }
-            catch (Exception e)
-            {
-                Logger.LogError(e,$"Failed to open the file or create directory. File name {fileName}");
-                throw;
-            }
-
-            await pool.Writer.WriteAsync(File.Open(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite));
-        }
-
-        return pool;
     }
 
     private async Task StartWritePipelineAsync()

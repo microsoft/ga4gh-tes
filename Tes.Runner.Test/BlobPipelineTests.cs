@@ -3,6 +3,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Tes.Runner.Transfer;
 
@@ -10,23 +11,24 @@ namespace Tes.Runner.Test
 {
     [TestClass]
     [TestCategory("unit")]
-    public class BlobPipelineTest
+    public class BlobPipelineTests
     {
         private BlobPipelineTestImpl pipeline;
         private BlobPipelineOptions options;
         private readonly int blockSize = BlobPipeline.MiB;
         private readonly long sourceSize = BlobPipeline.MiB * 10;
-        private string tempFile;
+        private string tempFile1;
+        private string tempFile2;
         private Channel<byte[]> memoryBuffer;
-        
+        private readonly RunnerTestUtils runnerTestUtils = new RunnerTestUtils();
+
         [TestInitialize]
         public async Task SetUp()
         {
-            tempFile = $"{Guid.NewGuid()}.tmp";
-            await using var fs = File.Create(tempFile);
-            fs.Close();
+            tempFile1 = await RunnerTestUtils.CreateTempFileAsync();
+            tempFile2 = await RunnerTestUtils.CreateTempFileAsync();
 
-             memoryBuffer = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(5, blockSize);
+            memoryBuffer = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(5, blockSize);
 
             options = new BlobPipelineOptions(blockSize, 10, 10, 10);
             pipeline = new BlobPipelineTestImpl(options, memoryBuffer, sourceSize);
@@ -36,24 +38,22 @@ namespace Tes.Runner.Test
         [TestCleanup]
         public void CleanUp()
         {
-            if (File.Exists(tempFile))
-            {
-                File.Delete(tempFile);
-            }
+            RunnerTestUtils.DeleteFileIfExists(tempFile1);
+            RunnerTestUtils.DeleteFileIfExists(tempFile2);
         }
 
 
         [TestMethod]
         public async Task ExecuteAsync_SingleOperation_CallsReaderWriterAndCompleteMethods_CorrectNumberOfTimes()
         {
-            var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), tempFile, tempFile, true);
+            var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), tempFile1, tempFile1, true);
 
             await pipeline.ExecuteAsync(new List<BlobOperationInfo>() {blobOp});
 
             //the number of calls should be size of the file divided by the number blocks
             var expectedNumberOfCalls = (sourceSize / blockSize);
 
-            AssertReaderWriterAndCompleteMethodsAreCalled(pipeline, expectedNumberOfCalls);
+            AssertReaderWriterAndCompleteMethodsAreCalled(pipeline, expectedNumberOfCalls, 1);
         }
 
         [TestMethod]
@@ -63,31 +63,31 @@ namespace Tes.Runner.Test
             
             var blobOps = new List<BlobOperationInfo>()
             {
-                new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), tempFile, tempFile, true),
-                new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), tempFile, tempFile, true)
+                new BlobOperationInfo(new Uri("https://foo.bar/con/blob1"), tempFile1, tempFile1, true),
+                new BlobOperationInfo(new Uri("https://foo.bar/con/blob2"), tempFile2, tempFile2, true)
             };
             await pipeline.ExecuteAsync(blobOps);
 
             //the number of calls should be size of the file divided by the number blocks, times the number of files
             var expectedNumberOfCalls = (sourceSize /blockSize) * blobOps.Count;
 
-            AssertReaderWriterAndCompleteMethodsAreCalled(pipeline, expectedNumberOfCalls);
+            AssertReaderWriterAndCompleteMethodsAreCalled(pipeline, expectedNumberOfCalls, 2);
         }
 
-        private void AssertReaderWriterAndCompleteMethodsAreCalled(BlobPipelineTestImpl pipeline, long numberOfTimes)
+        private void AssertReaderWriterAndCompleteMethodsAreCalled(BlobPipelineTestImpl pipeline, long numberOfWriterReaderCalls, int numberOfCompleteCalls)
         {
             List<MethodCall> executeWriteInfo = pipeline.MethodCalls["ExecuteWriteAsync"];
             Assert.IsNotNull(executeWriteInfo);
-            Assert.AreEqual(numberOfTimes, executeWriteInfo.Count);
+            Assert.AreEqual(numberOfWriterReaderCalls, executeWriteInfo.Count);
 
             var executeReadInfo = pipeline.MethodCalls["ExecuteReadAsync"];
             Assert.IsNotNull(executeReadInfo);
-            Assert.AreEqual(numberOfTimes, executeWriteInfo.Count);
+            Assert.AreEqual(numberOfWriterReaderCalls, executeWriteInfo.Count);
 
             var onCompletionInfo = pipeline.MethodCalls["OnCompletionAsync"];
             Assert.IsNotNull(onCompletionInfo);
             //complete must always be one
-            Assert.AreEqual(1, onCompletionInfo.Count);
+            Assert.AreEqual(numberOfCompleteCalls, onCompletionInfo.Count);
         }
     }
 
@@ -102,6 +102,7 @@ namespace Tes.Runner.Test
 
         private readonly long sourceLength;
             
+        private readonly SemaphoreSlim semaphore = new SemaphoreSlim(1);
 
         public BlobPipelineTestImpl(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer, long sourceLength) : base(pipelineOptions, memoryBuffer)
         {
@@ -110,45 +111,63 @@ namespace Tes.Runner.Test
 
         public ConcurrentDictionary<string, List<MethodCall>> MethodCalls => methodCalls;
 
-        protected override ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
+        public override ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
         {
             AddMethodCall(nameof(ExecuteWriteAsync), buffer);
             return ValueTask.FromResult(buffer.Length);
         }
 
-        protected override ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer)
+        public override ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer)
         {
             AddMethodCall(nameof(ExecuteReadAsync), buffer);
             return ValueTask.FromResult(buffer.Length);
         }
 
-        protected override Task<long> GetSourceLength(string source)
+        public override Task<long> GetSourceLengthAsync(string source)
         {
-            AddMethodCall(nameof(GetSourceLength), source);
+            AddMethodCall(nameof(GetSourceLengthAsync), source);
             return Task.FromResult(sourceLength);
         }
 
-        protected override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName)
+        public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName)
         {
             AddMethodCall(nameof(OnCompletionAsync), length, blobUrl, fileName);
             return Task.CompletedTask;
         }
 
+        public override void ConfigurePipelineBuffer(PipelineBuffer buffer)
+        {
+            AddMethodCall(nameof(ConfigurePipelineBuffer), buffer);
+        }
+
         public async Task<long> ExecuteAsync(List<BlobOperationInfo> blobOperations)
         {
-            return await ExecutePipelineAsync(blobOperations);
+           var data = await ExecutePipelineAsync(blobOperations);
+
+           return data;
         }
 
         private void AddMethodCall(string methodName, params Object[] args)
         {
-            methodCalls.AddOrUpdate(methodName,
-                (key) => new List<MethodCall>() { new MethodCall(key, 1, args.ToList()) },
-                (key, value) =>
-                {
-                    value.Add(new MethodCall(methodName, value.Count + 1,
-                        args.ToList()));
-                    return value;
-                });
+            //the add/update factories are not thread safe, hence the semaphore here...
+            semaphore.Wait();
+
+            try
+            {
+                methodCalls.AddOrUpdate(methodName,
+                    (key) => new List<MethodCall>() { new MethodCall(key, 1, args.ToList()) },
+                    (key, value) =>
+                    {
+                        value.Add(new MethodCall(methodName, value.Count + 1,
+                            args.ToList()));
+                        return value;
+                    });
+
+            }
+            finally
+            {
+                semaphore.Release();
+            }
         }
 
     }
