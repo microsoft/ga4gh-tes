@@ -1,0 +1,13 @@
+﻿ImageTag: latest
+ImageName: busybox
+CommandsToExecute:
+- echo
+- Hello Docker!
+Inputs:
+- FullFileName: <LOCAL_PATH> 
+  SourceUrl: <SOURCE_URL>
+  SasStrategy: None
+Outputs:
+- FullFileName: <LOCAL_PATH>
+  TargetUrl: <TARGET_URL>
+  SasStrategy: None
