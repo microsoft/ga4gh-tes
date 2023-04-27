@@ -1,4 +1,7 @@
-﻿using System.Threading.Channels;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer;
@@ -11,7 +14,7 @@ public class PartsProducer
     private readonly IBlobPipeline blobPipeline;
     private readonly ILogger logger = PipelineLoggerFactory.Create<PartsProducer>();
     private readonly BlobPipelineOptions blobPipelineOptions;
-    
+
 
     public PartsProducer(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions)
     {
@@ -41,6 +44,7 @@ public class PartsProducer
         try
         {
             await Task.WhenAll(partsProducerTasks);
+
         }
         catch (Exception e)
         {
@@ -73,28 +77,28 @@ public class PartsProducer
     private async Task StartPartsProducerAsync(BlobOperationInfo operation, Channel<PipelineBuffer> readBufferChannel)
     {
         var length = await blobPipeline.GetSourceLengthAsync(operation.SourceLocationForLength);
-        
+
         var numberOfParts = BlobSizeUtils.GetNumberOfParts(length, blobPipelineOptions.BlockSize);
 
         var fileHandlerPool = await GetNewFileHandlerPoolAsync(operation.FileName, operation.ReadOnlyHandlerForExistingFile);
 
         if (length == 0)
         {
-            await CreateAndWritePipelinePartBufferAsync(operation, readBufferChannel, fileHandlerPool, length, 1, 1);
+            await CreateAndWritePipelinePartBufferAsync(operation, readBufferChannel, fileHandlerPool, length, partOrdinal: 0, numberOfParts: 1);
             return;
         }
 
-        for (int i = 0; i < numberOfParts; i++)
+        for (var i = 0; i < numberOfParts; i++)
         {
-            await CreateAndWritePipelinePartBufferAsync(operation, readBufferChannel, fileHandlerPool, length, i, numberOfParts);
+            await CreateAndWritePipelinePartBufferAsync(operation, readBufferChannel, fileHandlerPool, length, partOrdinal: i, numberOfParts);
         }
     }
 
     private async Task CreateAndWritePipelinePartBufferAsync(BlobOperationInfo operation, Channel<PipelineBuffer> readBufferChannel,
-        Channel<FileStream> fileHandlerPool, long length, int i, int numberOfParts)
+        Channel<FileStream> fileHandlerPool, long length, int partOrdinal, int numberOfParts)
     {
         PipelineBuffer buffer;
-        buffer = GetNewPipelinePartBuffer(operation.Url, operation.FileName, fileHandlerPool, length, i, numberOfParts);
+        buffer = GetNewPipelinePartBuffer(operation.Url, operation.FileName, fileHandlerPool, length, partOrdinal, numberOfParts);
 
         await readBufferChannel.Writer.WriteAsync(buffer);
     }
@@ -150,7 +154,7 @@ public class PartsProducer
             }
             catch (Exception e)
             {
-                logger.LogError(e,$"Failed to open the file or create directory. File name {fileName}");
+                logger.LogError(e, $"Failed to open the file or create directory. File name {fileName}");
                 throw;
             }
         }

@@ -1,22 +1,18 @@
 ﻿using System.Collections.Concurrent;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
-using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
-using Moq;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Test
 {
     [TestClass]
-    [TestCategory("unit")]
+    [TestCategory("Unit")]
     public class BlobPipelineTests
     {
-        private BlobPipelineTestImpl pipeline;
+        private BlobOperationPipelineTestImpl operationPipeline;
         private BlobPipelineOptions options;
-        private readonly int blockSize = BlobPipeline.MiB;
-        private readonly long sourceSize = BlobPipeline.MiB * 10;
+        private readonly int blockSize = BlobSizeUtils.MiB;
+        private readonly long sourceSize = BlobSizeUtils.MiB * 10;
         private string tempFile1;
         private string tempFile2;
         private Channel<byte[]> memoryBuffer;
@@ -31,8 +27,7 @@ namespace Tes.Runner.Test
             memoryBuffer = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(5, blockSize);
 
             options = new BlobPipelineOptions(blockSize, 10, 10, 10);
-            pipeline = new BlobPipelineTestImpl(options, memoryBuffer, sourceSize);
-
+            operationPipeline = new BlobOperationPipelineTestImpl(options, memoryBuffer, sourceSize);
         }
 
         [TestCleanup]
@@ -48,19 +43,19 @@ namespace Tes.Runner.Test
         {
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), tempFile1, tempFile1, true);
 
-            await pipeline.ExecuteAsync(new List<BlobOperationInfo>() {blobOp});
+            await operationPipeline.ExecuteAsync(new List<BlobOperationInfo>() { blobOp });
 
             //the number of calls should be size of the file divided by the number blocks
             var expectedNumberOfCalls = (sourceSize / blockSize);
 
-            AssertReaderWriterAndCompleteMethodsAreCalled(pipeline, expectedNumberOfCalls, 1);
+            AssertReaderWriterAndCompleteMethodsAreCalled(operationPipeline, expectedNumberOfCalls, 1);
         }
 
         [TestMethod]
         public async Task ExecuteAsync_TwoOperations_CallsReaderWriterAndCompleteMethods_CorrectNumberOfTimes()
         {
-            var pipeline = new BlobPipelineTestImpl(options, memoryBuffer, sourceSize);
-            
+            var pipeline = new BlobOperationPipelineTestImpl(options, memoryBuffer, sourceSize);
+
             var blobOps = new List<BlobOperationInfo>()
             {
                 new BlobOperationInfo(new Uri("https://foo.bar/con/blob1"), tempFile1, tempFile1, true),
@@ -69,22 +64,22 @@ namespace Tes.Runner.Test
             await pipeline.ExecuteAsync(blobOps);
 
             //the number of calls should be size of the file divided by the number blocks, times the number of files
-            var expectedNumberOfCalls = (sourceSize /blockSize) * blobOps.Count;
+            var expectedNumberOfCalls = (sourceSize / blockSize) * blobOps.Count;
 
             AssertReaderWriterAndCompleteMethodsAreCalled(pipeline, expectedNumberOfCalls, 2);
         }
 
-        private void AssertReaderWriterAndCompleteMethodsAreCalled(BlobPipelineTestImpl pipeline, long numberOfWriterReaderCalls, int numberOfCompleteCalls)
+        private void AssertReaderWriterAndCompleteMethodsAreCalled(BlobOperationPipelineTestImpl operationPipeline, long numberOfWriterReaderCalls, int numberOfCompleteCalls)
         {
-            List<MethodCall> executeWriteInfo = pipeline.MethodCalls["ExecuteWriteAsync"];
+            List<MethodCall> executeWriteInfo = operationPipeline.MethodCalls["ExecuteWriteAsync"];
             Assert.IsNotNull(executeWriteInfo);
             Assert.AreEqual(numberOfWriterReaderCalls, executeWriteInfo.Count);
 
-            var executeReadInfo = pipeline.MethodCalls["ExecuteReadAsync"];
+            var executeReadInfo = operationPipeline.MethodCalls["ExecuteReadAsync"];
             Assert.IsNotNull(executeReadInfo);
             Assert.AreEqual(numberOfWriterReaderCalls, executeWriteInfo.Count);
 
-            var onCompletionInfo = pipeline.MethodCalls["OnCompletionAsync"];
+            var onCompletionInfo = operationPipeline.MethodCalls["OnCompletionAsync"];
             Assert.IsNotNull(onCompletionInfo);
             //complete must always be one
             Assert.AreEqual(numberOfCompleteCalls, onCompletionInfo.Count);
@@ -95,16 +90,16 @@ namespace Tes.Runner.Test
     /// This is a test implementation of BlobPipeline.
     /// Since there is no way to mock the base class, we have to create a test implementation and capture the execution of methods directly.
     /// </summary>
-    class BlobPipelineTestImpl : BlobPipeline
+    class BlobOperationPipelineTestImpl : BlobOperationPipeline
     {
         private readonly ConcurrentDictionary<string, List<MethodCall>> methodCalls =
             new ConcurrentDictionary<string, List<MethodCall>>();
 
         private readonly long sourceLength;
-            
+
         private readonly SemaphoreSlim semaphore = new SemaphoreSlim(1);
 
-        public BlobPipelineTestImpl(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer, long sourceLength) : base(pipelineOptions, memoryBuffer)
+        public BlobOperationPipelineTestImpl(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer, long sourceLength) : base(pipelineOptions, memoryBuffer)
         {
             this.sourceLength = sourceLength;
         }
@@ -142,9 +137,9 @@ namespace Tes.Runner.Test
 
         public async Task<long> ExecuteAsync(List<BlobOperationInfo> blobOperations)
         {
-           var data = await ExecutePipelineAsync(blobOperations);
+            var data = await ExecutePipelineAsync(blobOperations);
 
-           return data;
+            return data;
         }
 
         private void AddMethodCall(string methodName, params Object[] args)
@@ -154,6 +149,7 @@ namespace Tes.Runner.Test
 
             try
             {
+                Logger.LogInformation($"Adding method call {methodName} with args {args}");
                 methodCalls.AddOrUpdate(methodName,
                     (key) => new List<MethodCall>() { new MethodCall(key, 1, args.ToList()) },
                     (key, value) =>

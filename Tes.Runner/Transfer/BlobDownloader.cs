@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer;
 
-public class BlobDownloader : BlobPipeline
+public class BlobDownloader : BlobOperationPipeline
 {
     public BlobDownloader(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBufferPool) : base(pipelineOptions,
         memoryBufferPool)

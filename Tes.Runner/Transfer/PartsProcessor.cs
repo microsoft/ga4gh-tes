@@ -1,0 +1,39 @@
+﻿using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
+
+namespace Tes.Runner.Transfer;
+
+public abstract class PartsProcessor
+{
+    protected readonly IBlobPipeline BlobPipeline;
+    protected readonly Channel<byte[]> MemoryBufferChannel;
+    protected readonly BlobPipelineOptions BlobPipelineOptions;
+    private readonly ILogger logger = PipelineLoggerFactory.Create<PartsProcessor>();
+
+    protected PartsProcessor(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel)
+    {
+        ValidateArguments(blobPipeline, blobPipelineOptions, memoryBufferChannel);
+
+        BlobPipeline = blobPipeline;
+        BlobPipelineOptions = blobPipelineOptions;
+        MemoryBufferChannel = memoryBufferChannel;
+    }
+
+    private static void ValidateArguments(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions,
+        Channel<byte[]> memoryBufferChannel)
+    {
+        ArgumentNullException.ThrowIfNull(blobPipelineOptions);
+        ArgumentNullException.ThrowIfNull(blobPipeline);
+        ArgumentNullException.ThrowIfNull(memoryBufferChannel);
+
+        if (blobPipelineOptions.NumberOfWriters < 1)
+        {
+            throw new ArgumentException("The number of writers must be greater than 0.");
+        }
+
+        if (blobPipelineOptions.NumberOfReaders < 1)
+        {
+            throw new ArgumentException("The number of readers must be greater than 0.");
+        }
+    }
+}
