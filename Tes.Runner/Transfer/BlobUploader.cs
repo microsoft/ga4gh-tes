@@ -1,11 +1,13 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Text;
 using System.Threading.Channels;
 
 namespace Tes.Runner.Transfer
 {
+    /// <summary>
+    /// Blob operation pipeline for uploading blobs.
+    /// </summary>
     public class BlobUploader : BlobOperationPipeline
     {
         public BlobUploader(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBufferPool) : base(pipelineOptions, memoryBufferPool)
@@ -15,39 +17,16 @@ namespace Tes.Runner.Transfer
         public override void ConfigurePipelineBuffer(PipelineBuffer buffer)
         {
             buffer.BlobPartUrl =
-                new Uri($"{buffer.BlobUrl?.AbsoluteUri}&comp=block&blockid={ToBlockId(buffer.Ordinal)}");
+                BlobBlockApiHttpUtils.ParsePutBlockUrl(buffer.BlobPartUrl, buffer.Ordinal);
         }
 
         public override async ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
         {
-            var request = new HttpRequestMessage(HttpMethod.Put, buffer.BlobPartUrl)
-            {
-                Content = new ByteArrayContent(buffer.Data, 0, buffer.Length)
-            };
-
-            AddPutBlockHeaders(request);
+            var request = BlobBlockApiHttpUtils.CreatePutBlockRequestAsync(buffer, PipelineOptions.ApiVersion);
 
             await ExecuteHttpRequestAsync(request);
 
             return buffer.Length;
-        }
-
-        private static string ToBlockId(int ordinal)
-        {
-            return Convert.ToBase64String(Encoding.UTF8.GetBytes($"block{ordinal}"));
-        }
-
-        private static void AddPutBlockHeaders(HttpRequestMessage request)
-        {
-            request.Headers.Add("x-ms-blob-type", "BlockBlob");
-            AddBlockBlobServiceHeaders(request);
-        }
-
-        private static void AddBlockBlobServiceHeaders(HttpRequestMessage request)
-        {
-            //TODO: Move this version to the blob options.
-            request.Headers.Add("x-ms-version", "2020-10-02");
-            request.Headers.Add("x-ms-date", DateTime.UtcNow.ToString("R"));
         }
 
         public override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer)
@@ -72,24 +51,9 @@ namespace Tes.Runner.Transfer
         {
             ArgumentNullException.ThrowIfNull(blobUrl);
 
-            var request = CreateBlobBlockListRequest(length, blobUrl);
+            var request = BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSize);
 
             await ExecuteHttpRequestAsync(request);
-        }
-
-        private HttpRequestMessage CreateBlobBlockListRequest(long length, Uri blobUrl)
-        {
-            var content = CreateBlockListContent(length);
-
-            var putBlockUrl = new UriBuilder($"{blobUrl.AbsoluteUri}&comp=blocklist");
-
-            var request = new HttpRequestMessage(HttpMethod.Put, putBlockUrl.Uri)
-            {
-                Content = content
-            };
-
-            AddBlockBlobServiceHeaders(request);
-            return request;
         }
 
         private async ValueTask ExecuteHttpRequestAsync(HttpRequestMessage request)
@@ -99,33 +63,36 @@ namespace Tes.Runner.Transfer
             response.EnsureSuccessStatusCode();
         }
 
-        private StringContent CreateBlockListContent(long length)
+        public async Task<long> UploadAsync(List<UploadInfo> uploadList)
         {
-            var sb = new StringBuilder();
-
-            sb.Append("<?xml version='1.0' encoding='utf-8'?><BlockList>");
-
-            var parts = BlobSizeUtils.GetNumberOfParts(length, PipelineOptions.BlockSize);
-
-            for (var n = 0; n < parts; n++)
-            {
-                var blockId = ToBlockId(n);
-                sb.Append($"<Latest>{blockId}</Latest>");
-            }
-
-            sb.Append("</BlockList>");
-
-            var content = new StringContent(sb.ToString(), Encoding.UTF8, "text/plain");
-            return content;
-        }
-
-        public async Task<long> UploadAsync(List<UploadInfo>? uploadList)
-        {
-            ArgumentNullException.ThrowIfNull(uploadList);
+            ValidateUploadList(uploadList);
 
             var operationList = uploadList.Select(d => new BlobOperationInfo(d.TargetUri, d.FullFilePath, d.FullFilePath, true)).ToList();
 
             return await ExecutePipelineAsync(operationList);
+        }
+
+        private static void ValidateUploadList(List<UploadInfo> uploadList)
+        {
+            ArgumentNullException.ThrowIfNull(uploadList);
+
+            if (uploadList.Count == 0)
+            {
+                throw new ArgumentException("Upload list cannot be empty.", nameof(uploadList));
+            }
+
+            foreach (var uploadInfo in uploadList)
+            {
+                if (string.IsNullOrEmpty(uploadInfo?.FullFilePath))
+                {
+                    throw new ArgumentException("Full file path cannot be null or empty.", nameof(uploadInfo));
+                }
+
+                if (uploadInfo?.TargetUri == null)
+                {
+                    throw new ArgumentException("Target URI cannot be null.", nameof(uploadInfo));
+                }
+            }
         }
     }
 }

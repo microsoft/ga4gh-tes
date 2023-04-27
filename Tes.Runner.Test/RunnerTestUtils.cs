@@ -1,4 +1,5 @@
-﻿using Tes.Runner.Transfer;
+﻿using System.Threading.Channels;
+using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Test;
 
@@ -49,5 +50,32 @@ public class RunnerTestUtils
         fs.Close();
 
         return fs.Name;
+    }
+
+    public static async Task AddPipelineBuffersAndCompleteChannelAsync(Channel<PipelineBuffer> pipelineBuffers,
+        int numberOfParts, Uri blobUrl, int blockSize, long fileSize, string fileName)
+    {
+        for (int partOrdinal = 0; partOrdinal < numberOfParts; partOrdinal++)
+        {
+            var buffer = new PipelineBuffer()
+            {
+                BlobUrl = blobUrl,
+                Offset = (long)partOrdinal * blockSize,
+                Length = blockSize,
+                FileName = fileName,
+                Ordinal = partOrdinal,
+                NumberOfParts = numberOfParts,
+                FileSize = fileSize,
+            };
+
+            if (partOrdinal == numberOfParts - 1)
+            {
+                buffer.Length = (int)(fileSize - buffer.Offset);
+            }
+
+            await pipelineBuffers.Writer.WriteAsync(buffer);
+        }
+
+        pipelineBuffers.Writer.Complete();
     }
 }
