@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace Tes.Runner.Transfer;
 
 /// <summary>
-/// This class is responsible for creating parts in the pipeline.
+/// Creates parts in the pipeline from the provided operations.
 /// </summary>
 public class PartsProducer
 {
@@ -44,8 +44,7 @@ public class PartsProducer
         try
         {
             await Task.WhenAll(partsProducerTasks);
-            logger.LogInformation("All part producing operations are complete.");
-
+            logger.LogInformation("All parts for the provided operations are created.");
         }
         catch (Exception e)
         {

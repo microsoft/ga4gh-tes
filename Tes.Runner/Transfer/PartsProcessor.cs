@@ -1,8 +1,13 @@
-﻿using System.Threading.Channels;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer;
-
+/// <summary>
+/// Base class for the parts processor.
+/// </summary>
 public abstract class PartsProcessor
 {
     protected readonly IBlobPipeline BlobPipeline;

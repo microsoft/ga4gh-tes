@@ -6,6 +6,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer;
 
+/// <summary>
+/// Handles the creation of tasks that perform read operations on the pipeline. 
+/// </summary>
 public class PartsReader : PartsProcessor
 {
     private readonly ILogger logger = PipelineLoggerFactory.Create<PartsReader>();
@@ -15,6 +18,14 @@ public class PartsReader : PartsProcessor
     {
     }
 
+    /// <summary>
+    /// Starts tasks that perform read operations on the pipeline and writes the part to the write buffer channel.
+    /// Once all the parts are read, the write buffer channel is marked as complete.
+    /// The number of tasks is determined by the <see cref="BlobPipelineOptions.NumberOfReaders"/> option.
+    /// </summary>
+    /// <param name="readBufferChannel">Source channel from which the parts are read</param>
+    /// <param name="writeBufferChannel">Target channel where read parts are written</param>
+    /// <returns>A tasks that completes when all tasks complete</returns>
     public async Task StartPartsReaderAsync(Channel<PipelineBuffer> readBufferChannel, Channel<PipelineBuffer> writeBufferChannel)
     {
         var tasks = new List<Task>();
