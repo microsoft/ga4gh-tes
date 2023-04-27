@@ -33,7 +33,7 @@ namespace TesApi.Web.Storage
         public DefaultStorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IOptions<Options.StorageOptions> storageOptions, IAzureProxy azureProxy) : base(logger, azureProxy)
         {
             //TODO: refactor to use the options pattern.
-            defaultStorageAccountName = storageOptions.Value.DefaultAccountName;    // This account contains the cromwell-executions container
+            defaultStorageAccountName = storageOptions.Value.DefaultAccountName;    // This account contains the tes-internal container
             Logger.LogInformation($"DefaultStorageAccountName: {defaultStorageAccountName}");
 
             externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
@@ -90,7 +90,7 @@ namespace TesApi.Web.Storage
             // TODO: Optional: If path is /container/... where container matches the name of the container in the default storage account, prepend the account name to the path.
             // This would allow the user to omit the account name for files stored in the default storage account
 
-            // /cromwell-executions/... URLs become /defaultStorageAccountName/cromwell-executions/... to unify how URLs starting with /acct/container/... pattern are handled.
+            // /tes-internal/... URLs become /defaultStorageAccountName/tes-internal/... to unify how URLs starting with /acct/container/... pattern are handled.
             if (IsKnownExecutionFilePath(path))
             {
                 path = $"/{defaultStorageAccountName}{path}";

@@ -1270,7 +1270,7 @@ namespace TesDeployer
         {
             var blobClient = await GetBlobClientAsync(storageAccount);
 
-            var defaultContainers = new List<string> { "executions", InputsContainerName, "outputs", ConfigurationContainerName };
+            var defaultContainers = new List<string> { "tes-internal", InputsContainerName, "outputs", ConfigurationContainerName };
             await Task.WhenAll(defaultContainers.Select(c => blobClient.GetBlobContainerClient(c).CreateIfNotExistsAsync(cancellationToken: cts.Token)));
         }
 
