@@ -81,16 +81,8 @@ namespace Tes.Repository
                     })
                 .ExecuteAsync(async () =>
                 {
-                    var activeTasks = await InternalGetItemsAsync(task => TesTask.ActiveStates.Contains(task.State), q => q, CancellationToken.None);
-                    var tasksAddedCount = 0;
-
-                    foreach (var task in activeTasks.OrderBy(t => t.Json.CreationTime))
-                    {
-                        cache.TryAdd(task.Json.Id, task);
-                        tasksAddedCount++;
-                    }
-
-                    logger.LogInformation("Cache warmed successfully in {TotalSeconds} seconds. Added {TasksAddedCount} items to the cache.", $"{sw.Elapsed.TotalSeconds:n3}", $"{tasksAddedCount:n0}");
+                    var activeTasks = await InternalGetItemsAsync(task => TesTask.ActiveStates.Contains(task.State), CancellationToken.None, q => q.OrderBy(t => t.Json.CreationTime));
+                    logger.LogInformation("Cache warmed successfully in {TotalSeconds} seconds. Added {TasksAddedCount} items to the cache.", $"{sw.Elapsed.TotalSeconds:n3}", $"{activeTasks.Count():n0}");
                 });
         }
 
@@ -105,20 +97,20 @@ namespace Tes.Repository
             }
 
             onSuccess?.Invoke(item.Json);
-            _ = EnsureActiveTaskInCache(item, t => t.Json.Id, t => t.Json.IsActiveState());
+            _ = EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState());
             return true;
         }
 
         /// <inheritdoc/>
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
-            => (await InternalGetItemsAsync(predicate, q => q, cancellationToken)).Select(t => t.Json);
+            => (await InternalGetItemsAsync(predicate, cancellationToken));
 
         /// <inheritdoc/>
         public async Task<TesTask> CreateItemAsync(TesTask task, CancellationToken cancellationToken)
         {
             TesTaskDatabaseItem item = new() { Json = task };
             item = await AddUpdateOrRemoveTaskInDbAsync(item, WriteAction.Add);
-            return EnsureActiveTaskInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json;
+            return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json;
         }
 
         /// <summary>
@@ -155,7 +147,7 @@ namespace Tes.Repository
             var item = await GetItemFromCacheOrDatabase(tesTask.Id, cancellationToken);
             item.Json = tesTask;
             item = await AddUpdateOrRemoveTaskInDbAsync(item, WriteAction.Update);
-            return EnsureActiveTaskInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json;
+            return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json;
         }
 
         /// <inheritdoc/>
@@ -197,8 +189,7 @@ namespace Tes.Repository
 
             // This "uglyness" should (hopefully) be fixed in EF8: https://github.com/dotnet/roslyn/issues/12897 reference https://github.com/dotnet/efcore/issues/26822 when we can compare last directly with a created per-item tuple
             //var results = (await InternalGetItemsAsync(predicate, q => q.Where(t => t.Json.CreationTime > last.CreationTime || (t.Json.CreationTime == last.CreationTime && t.Json.Id.CompareTo(last.Id) > 0)).Take(pageSize), cancellationToken))
-            var results = (await InternalGetItemsAsync(predicate, q => q.Where(t => t.Json.Id.CompareTo(last.Id) > 0).Take(pageSize), cancellationToken))
-                .Select(t => t.Json).ToList();
+            var results = (await InternalGetItemsAsync(predicate, cancellationToken, pagination: q => q.Where(t => t.Json.Id.CompareTo(last.Id) > 0).Take(pageSize))).ToList();
 
             return (GetContinuation(results.Count == pageSize ? results.LastOrDefault() : null), results);
 
@@ -206,12 +197,22 @@ namespace Tes.Repository
                 => item is null ? null : Convert.ToBase64String(Encoding.UTF8.GetBytes(Newtonsoft.Json.JsonConvert.SerializeObject((item.CreationTime, item.Id))));
         }
 
-        private async Task<IEnumerable<TesTaskDatabaseItem>> InternalGetItemsAsync(Expression<Func<TesTask, bool>> predicate, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination, CancellationToken cancellationToken)
+        /// <summary>
+        /// Stands up TesTask query, ensures that active tasks queried are maintained in the cache. Entry point for all non-single task SELECT queries in the repository.
+        /// </summary>
+        /// <param name="predicate"></param>
+        /// <param name="cancellationToken"></param>
+        /// <param name="orderBy"></param>
+        /// <returns></returns>
+        /// <param name="pagination"></param>
+        private async Task<IEnumerable<TesTask>> InternalGetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default)
         {
-            using var dbContext = createDbContext();
             // It turns out, PostgreSQL doesn't handle EF's interpretation of ORDER BY more then one "column" in any resonable way, so we have to order by the only thing we have that is expected to be unique.
-            //return (await GetItemsAsync(dbContext.TesTasks, WhereTesTask(predicate), q => q.OrderBy(t => t.Json.CreationTime).ThenBy(t => t.Json.Id), pagination, cancellationToken)).Select(item => EnsureActiveTaskInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()));
-            return (await GetItemsAsync(dbContext.TesTasks, WhereTesTask(predicate), q => q.OrderBy(t => t.Json.Id), pagination, cancellationToken)).Select(item => EnsureActiveTaskInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()));
+            //orderBy = pagination is null ? orderBy : q => q.OrderBy(t => t.Json.CreationTime).ThenBy(t => t.Json.Id);
+            orderBy = pagination is null ? orderBy : q => q.OrderBy(t => t.Json.Id);
+
+            using var dbContext = createDbContext();
+            return (await GetItemsAsync(dbContext.TesTasks, WhereTesTask(predicate), cancellationToken, orderBy, pagination)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
         }
 
         /// <summary>

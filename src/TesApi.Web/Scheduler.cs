@@ -104,10 +104,11 @@ namespace TesApi.Web
         /// <summary>
         /// Retrieves all actionable TES tasks from the database, performs an action in the batch system, and updates the resultant state
         /// </summary>
+        /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
         /// <returns></returns>
         private async ValueTask OrchestrateTesTasksOnBatch(CancellationToken stoppingToken)
         {
-            var pools = new HashSet<string>();
+            var pools = new BatchScheduler.ConcurrentHashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             var tesTasks = (await repository.GetItemsAsync(
                     predicate: t => t.State == TesState.QUEUEDEnum
@@ -126,133 +127,155 @@ namespace TesApi.Web
 
             var startTime = DateTime.UtcNow;
 
-            //await Task.WhenAll(await batchScheduler.ProcessTesTasksAsync(tesTasks, stoppingToken)
-            //    .Select(e => ProcessOrchestrationResult(e.TesTask, e.IsChangedAsync))
-            //    .ToArrayAsync(stoppingToken));
             await Parallel.ForEachAsync(batchScheduler.ProcessTesTasksAsync(tesTasks, stoppingToken),
-                async (e, _) => await ProcessOrchestrationResult(e.TesTask, e.IsChangedAsync));
+                stoppingToken,
+                async (e, _) => await ProcessOrchestrationResult(e.TesTask, e.IsChangedAsync, pools, stoppingToken));
 
             if (batchScheduler.NeedPoolFlush)
             {
                 await batchScheduler.FlushPoolsAsync(pools, stoppingToken);
             }
 
-            logger.LogDebug("OrchestrateTesTasksOnBatch for {TaskCount} tasks completed in {TotalSeconds} seconds.",
+            logger.LogCritical("OrchestrateTesTasksOnBatch for {TaskCount} tasks completed in {TotalSeconds} seconds.",
                 tesTasks.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
+        }
 
-            async ValueTask ProcessOrchestrationResult(TesTask tesTask, Task<bool> isChangedAsync)
+        /// <summary>
+        /// Updates the state of the <paramref name="tesTask"/> in the repository.
+        /// </summary>
+        /// <param name="tesTask">The <see cref="TesTask"/> to update.</param>
+        /// <param name="isChangedAsync">The asynchronious flag indicating the need to update the repository.</param>
+        /// <param name="pools">The set of pools that are still in use.</param>
+        /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
+        /// <returns></returns>
+        /// <remarks>This method is expected to be called simultaneously from multiple threads.</remarks>
+        private async ValueTask ProcessOrchestrationResult(TesTask tesTask, Task<bool> isChangedAsync, ISet<string> pools, CancellationToken stoppingToken)
+        {
+            try
             {
+                var isModified = false;
                 try
                 {
-                    var isModified = false;
-                    try
-                    {
-                        isModified = await isChangedAsync;
-                    }
-                    catch (Exception exc)
-                    {
-                        if (++tesTask.ErrorCount > 3) // TODO: Should we increment this for exceptions here (current behaviour) or the attempted executions on the batch?
-                        {
-                            tesTask.State = TesState.SYSTEMERROREnum;
-                            tesTask.EndTime = DateTimeOffset.UtcNow;
-                            tesTask.SetFailureReason("UnknownError", exc.Message, exc.StackTrace);
-                        }
-
-                        if (exc is Microsoft.Azure.Batch.Common.BatchException batchException)
-                        {
-                            var requestInfo = batchException.RequestInformation;
-                            //var requestId = batchException.RequestInformation?.ServiceRequestId;
-                            var reason = (batchException.InnerException as Microsoft.Azure.Batch.Protocol.Models.BatchErrorException)?.Response?.ReasonPhrase;
-                            var logs = new List<string>();
-
-                            if (requestInfo?.ServiceRequestId is not null)
-                            {
-                                logs.Add($"Azure batch ServiceRequestId: {requestInfo.ServiceRequestId}");
-                            }
-
-                            if (requestInfo?.BatchError is not null)
-                            {
-                                logs.Add($"BatchErrorCode: {requestInfo.BatchError.Code}");
-                                logs.Add($"BatchErrorMessage: {requestInfo.BatchError.Message}");
-                                foreach (var detail in requestInfo.BatchError.Values?.Select(d => $"{d.Key}={d.Value}") ?? Enumerable.Empty<string>())
-                                {
-                                    logs.Add(detail);
-                                }
-                            }
-
-                            tesTask.AddToSystemLog(logs);
-                        }
-
-                        logger.LogError(exc, "TES task: {TesTask} threw an exception in OrchestrateTesTasksOnBatch().", tesTask.Id);
-                        await repository.UpdateItemAsync(tesTask, stoppingToken);
-                    }
-
-                    if (isModified)
-                    {
-                        var hasErrored = false;
-                        var hasEnded = false;
-
-                        switch (tesTask.State)
-                        {
-                            case TesState.CANCELEDEnum:
-                            case TesState.COMPLETEEnum:
-                                hasEnded = true;
-                                break;
-
-                            case TesState.EXECUTORERROREnum:
-                            case TesState.SYSTEMERROREnum:
-                                hasErrored = true;
-                                hasEnded = true;
-                                break;
-
-                            default:
-                                break;
-                        }
-
-                        if (hasEnded)
-                        {
-                            tesTask.EndTime = DateTimeOffset.UtcNow;
-                        }
-
-                        if (hasErrored)
-                        {
-                            logger.LogDebug("{TesTask} failed, state: {TesTaskState}, reason: {TesTaskFailureReason}", tesTask.Id, tesTask.State, tesTask.FailureReason);
-                        }
-
-                        await repository.UpdateItemAsync(tesTask, stoppingToken);
-                    }
+                    isModified = await isChangedAsync;
                 }
-                // TODO catch EF / postgres exception?
-                //catch (Microsoft.Azure.Cosmos.CosmosException exc)
-                //{
-                //    TesTask currentTesTask = default;
-                //    _ = await repository.TryGetItemAsync(tesTask.Id, t => currentTesTask = t);
-
-                //    if (exc.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
-                //    {
-                //        logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw an exception attempting to set state: {tesTask.State}. Another actor set state: {currentTesTask?.State}");
-                //        currentTesTask?.SetWarning("ConcurrencyWriteFailure", tesTask.State.ToString(), exc.Message, exc.StackTrace);
-                //    }
-                //    else
-                //    {
-                //        logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw {exc.GetType().FullName}: '{exc.Message}'. Stack trace: {exc.StackTrace}");
-                //        currentTesTask?.SetWarning("UnknownError", exc.Message, exc.StackTrace);
-                //    }
-
-                //    if (currentTesTask is not null)
-                //    {
-                //        await repository.UpdateItemAsync(currentTesTask);
-                //    }
-                //}
                 catch (Exception exc)
                 {
-                    logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
+                    if (exc is AggregateException aggregate)
+                    {
+                        foreach (var exception in aggregate.Flatten().InnerExceptions)
+                        {
+                            await TaskErrorFunc(exception);
+                        }
+                    }
+                    else
+                    {
+                        await TaskErrorFunc(exc);
+                    }
                 }
 
-                if (!string.IsNullOrWhiteSpace(tesTask.PoolId) && (TesState.QUEUEDEnum == tesTask.State || TesState.RUNNINGEnum == tesTask.State))
+                async ValueTask TaskErrorFunc(Exception exc)
                 {
-                    pools.Add(tesTask.PoolId);
+                    if (++tesTask.ErrorCount > 3) // TODO: Should we increment this for exceptions here (current behaviour) or the attempted executions on the batch?
+                    {
+                        tesTask.State = TesState.SYSTEMERROREnum;
+                        tesTask.EndTime = DateTimeOffset.UtcNow;
+                        tesTask.SetFailureReason("UnknownError", exc.Message, exc.StackTrace);
+                    }
+
+                    if (exc is Microsoft.Azure.Batch.Common.BatchException batchException)
+                    {
+                        var requestInfo = batchException.RequestInformation;
+                        //var requestId = batchException.RequestInformation?.ServiceRequestId;
+                        var reason = (batchException.InnerException as Microsoft.Azure.Batch.Protocol.Models.BatchErrorException)?.Response?.ReasonPhrase;
+                        var logs = new List<string>();
+
+                        if (requestInfo?.ServiceRequestId is not null)
+                        {
+                            logs.Add($"Azure batch ServiceRequestId: {requestInfo.ServiceRequestId}");
+                        }
+
+                        if (requestInfo?.BatchError is not null)
+                        {
+                            logs.Add($"BatchErrorCode: {requestInfo.BatchError.Code}");
+                            logs.Add($"BatchErrorMessage: {requestInfo.BatchError.Message}");
+                            foreach (var detail in requestInfo.BatchError.Values?.Select(d => $"{d.Key}={d.Value}") ?? Enumerable.Empty<string>())
+                            {
+                                logs.Add(detail);
+                            }
+                        }
+
+                        tesTask.AddToSystemLog(logs);
+                    }
+
+                    logger.LogError(exc, "TES task: {TesTask} threw an exception in OrchestrateTesTasksOnBatch().", tesTask.Id);
+                    await repository.UpdateItemAsync(tesTask, stoppingToken);
                 }
+
+                if (isModified)
+                {
+                    var hasErrored = false;
+                    var hasEnded = false;
+
+                    switch (tesTask.State)
+                    {
+                        case TesState.CANCELEDEnum:
+                        case TesState.COMPLETEEnum:
+                            hasEnded = true;
+                            break;
+
+                        case TesState.EXECUTORERROREnum:
+                        case TesState.SYSTEMERROREnum:
+                            hasErrored = true;
+                            hasEnded = true;
+                            break;
+
+                        default:
+                            break;
+                    }
+
+                    if (hasEnded)
+                    {
+                        tesTask.EndTime = DateTimeOffset.UtcNow;
+                    }
+
+                    if (hasErrored)
+                    {
+                        logger.LogDebug("{TesTask} failed, state: {TesTaskState}, reason: {TesTaskFailureReason}", tesTask.Id, tesTask.State, tesTask.FailureReason);
+                    }
+
+                    await repository.UpdateItemAsync(tesTask, stoppingToken);
+                }
+            }
+            // TODO catch EF / postgres exception?
+            //catch (Microsoft.Azure.Cosmos.CosmosException exc)
+            //{
+            //    TesTask currentTesTask = default;
+            //    _ = await repository.TryGetItemAsync(tesTask.Id, t => currentTesTask = t);
+
+            //    if (exc.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
+            //    {
+            //        logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw an exception attempting to set state: {tesTask.State}. Another actor set state: {currentTesTask?.State}");
+            //        currentTesTask?.SetWarning("ConcurrencyWriteFailure", tesTask.State.ToString(), exc.Message, exc.StackTrace);
+            //    }
+            //    else
+            //    {
+            //        logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw {exc.GetType().FullName}: '{exc.Message}'. Stack trace: {exc.StackTrace}");
+            //        currentTesTask?.SetWarning("UnknownError", exc.Message, exc.StackTrace);
+            //    }
+
+            //    if (currentTesTask is not null)
+            //    {
+            //        await repository.UpdateItemAsync(currentTesTask);
+            //    }
+            //}
+            catch (Exception exc)
+            {
+                logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
+            }
+
+            if (!string.IsNullOrWhiteSpace(tesTask.PoolId) && (TesState.QUEUEDEnum == tesTask.State || TesState.RUNNINGEnum == tesTask.State))
+            {
+                pools.Add(tesTask.PoolId);
             }
         }
     }

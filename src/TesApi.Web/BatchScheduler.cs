@@ -392,11 +392,12 @@ namespace TesApi.Web
             }
 
             // WhenEach() allows us to have Scheduler's OrchestrateTesTasksOnBatch() method call it's local ProcessOrchestrationResult() as soon as ProcessTesTaskAsync() has returned that task and its result instead of batching all the database updates all at once at the end.
-            await foreach (var result in WhenEach(tesTaskList.Select(tesTask => (TesTask: tesTask, IsChangedAsync: ProcessTesTaskAsync(tesTask, batchState, cancellationToken))), cancellationToken, result => result.IsChangedAsync))
+            await foreach (var result in WhenEach(tesTaskList.Select(ProcessTesTask), cancellationToken, result => result.IsChangedAsync))
             {
                 yield return result;
             }
 
+            // Gets all the state this method uses (list of all tasks and all batch account state)
             async Task<(List<TesTask> TesTasks, BatchAccountState State)> GetState(List<TesTask> listOfTasks)
                 => listOfTasks?.Any() ?? false
                     ? (listOfTasks, await azureProxy.GetBatchAccountStateAsync(
@@ -406,6 +407,21 @@ namespace TesApi.Web
                             : GetPools().Select(p => p.Pool.PoolId),
                         cancellationToken))
                     : default;
+
+            // Stands up the per-task pipeline
+            (TesTask TesTask, Task<bool> IsChangedAsync) ProcessTesTask(TesTask tesTask)
+                => (tesTask, GetAndLogBatchTaskStateAsync(tesTask, batchState, cancellationToken)
+                        .ContinueWith(TaskContinuationFunc(tesTask), cancellationToken, TaskContinuationOptions.RunContinuationsAsynchronously, TaskScheduler.Current).Unwrap());
+
+            // Passes any errors from the first stage of the pipeline to the end
+            Func<Task<CombinedBatchTaskInfo>, Task<bool>> TaskContinuationFunc(TesTask tesTask)
+                => task => task.Status switch
+                {
+                    TaskStatus.RanToCompletion => HandleTesTaskTransitionAsync(tesTask, task.Result, cancellationToken),
+                    TaskStatus.Faulted => Task.FromException<bool>(task.Exception!),
+                    TaskStatus.Canceled => Task.FromCanceled<bool>(cancellationToken),
+                    _ => throw new InvalidOperationException(nameof(TaskContinuationFunc)),
+                };
         }
 
         /// <summary>
@@ -427,34 +443,27 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(cancellationToken);
 
             getTask ??= typeof(T).IsAssignableTo(typeof(Task)) ? new(i => (i as Task)!) : throw new ArgumentNullException(nameof(getTask));
-            var list = collection.ToList();
+            var list = collection.Where(e => e is not null).ToList();
+            var pendingCount = list.Count;
 
-            if (list.Where(e => e is not null).Select(getTask).ToHashSet().Count != list.Count(e => e is not null))
+            if (list.Select(getTask).ToHashSet().Count != pendingCount)
             {
                 throw new ArgumentException("Duplicate System.Threading.Tasks found referenced in collection.", nameof(collection));
             }
 
-            var pendingCount = list.Count;
             var channel = Channel.CreateBounded<T>(pendingCount);
 
             _ = Parallel.ForEach(list, entry =>
             {
-                if (entry is null)
+                // The continuation task returned by ContinueWith() is attached to the associated task and will be disposed with it. In the case of cancellation while any are still pending, we are expecting the entire process to go away, so there's no utility in any additional mangement of them.
+                _ = getTask(entry).ContinueWith(t =>
                 {
+                    _ = channel.Writer.TryWrite(entry);
                     DecrementPendingCountAndCompleteWriter();
-                }
-                else
-                {
-                    // The continuation task returned by ContinueWith() is attached to the associated task and will be disposed with it. In the case of cancellation while any are still pending, we are expecting the entire process to go away, so there's no utility in any additional mangement of them.
-                    _ = getTask(entry).ContinueWith(t =>
-                    {
-                        _ = channel.Writer.TryWrite(entry);
-                        DecrementPendingCountAndCompleteWriter();
-                    },
-                    cancellationToken,
-                    TaskContinuationOptions.DenyChildAttach,
-                    TaskScheduler.Default);
-                }
+                },
+                cancellationToken,
+                TaskContinuationOptions.DenyChildAttach,
+                TaskScheduler.Default);
             });
 
             await foreach (var entry in channel.Reader.ReadAllAsync(cancellationToken))
@@ -473,25 +482,30 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Iteratively manages execution of a <see cref="TesTask"/> on Azure Batch until completion or failure
+        /// Gets and logs the current state of the associated batch task.
         /// </summary>
         /// <param name="tesTask">The <see cref="TesTask"/></param>
         /// <param name="batchAccountState"></param>
         /// <param name="cancellationToken"></param>
-        /// <returns>True if the TES task needs to be persisted.</returns>
-        private async Task<bool> ProcessTesTaskAsync(TesTask tesTask, BatchAccountState batchAccountState, CancellationToken cancellationToken)
+        /// <returns><see cref="CombinedBatchTaskInfo"/> for <paramref name="tesTask"/>.</returns>
+        private async Task<CombinedBatchTaskInfo> GetAndLogBatchTaskStateAsync(TesTask tesTask, BatchAccountState batchAccountState, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var combinedBatchTaskInfo = await GetBatchTaskStateAsync(tesTask, batchAccountState, cancellationToken);
-            const string template = "TES task: {TesTask} TES task state: {TesTaskState} BatchTaskState: {BatchTaskState}";
-            var msg = string.Format(ConvertTemplateToFormat(template), tesTask.Id, tesTask.State.ToString(), combinedBatchTaskInfo.BatchTaskState.ToString());
+            LogOnlyOnce("TES task: {TesTask} TES task state: {TesTaskState} BatchTaskState: {BatchTaskState}", tesTask.Id, tesTask.State.ToString(), combinedBatchTaskInfo.BatchTaskState.ToString());
+            return combinedBatchTaskInfo;
 
-            if (onlyLogBatchTaskStateOnce.Add(msg))
+            void LogOnlyOnce(string template, params object[] args)
             {
-                logger.LogInformation(template, tesTask.Id, tesTask.State.ToString(), combinedBatchTaskInfo.BatchTaskState.ToString());
-            }
+                var msg = string.Format(ConvertTemplateToFormat(template), args);
 
-            return await HandleTesTaskTransitionAsync(tesTask, combinedBatchTaskInfo, cancellationToken);
+                if (onlyLogBatchTaskStateOnce.Add(msg))
+                {
+#pragma warning disable CA2254 // Template should be a static expression
+                    logger.LogInformation(template, args);
+#pragma warning restore CA2254 // Template should be a static expression
+                }
+            }
 
             static string ConvertTemplateToFormat(string template)
                 => string.Join(null, template.Split('{', '}').Select((s, i) => (s, i)).Select(t => t.i % 2 == 0 ? t.s : $"{{{t.i / 2}}}"));

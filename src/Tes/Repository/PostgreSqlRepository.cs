@@ -38,7 +38,14 @@ namespace Tes.Repository
 
         protected enum WriteAction { Add, Update, Delete };
 
-        protected TDatabaseItem EnsureActiveTaskInCache(TDatabaseItem item, Func<TDatabaseItem, string> getKey, Predicate<TDatabaseItem> isActive)
+        /// <summary>
+        /// Adds item to cache if active and not already present, updates it if active and already present, removes it if present but not active.
+        /// </summary>
+        /// <param name="item"><see cref="TDatabaseItem"/> to add, update, or remove from cache.</param>
+        /// <param name="getKey">Function to provide cache key from <see cref="TDatabaseItem"/>.</param>
+        /// <param name="isActive">Predicate to determine if <see cref="TDatabaseItem"/> is active.</param>
+        /// <returns><paramref name="item"/> (for convenience in fluent/LINQ usage patterns).</returns>
+        protected TDatabaseItem EnsureActiveItemInCache(TDatabaseItem item, Func<TDatabaseItem, string> getKey, Predicate<TDatabaseItem> isActive)
         {
             if (cache.TryGetValue(getKey(item), out _))
             {
@@ -63,19 +70,19 @@ namespace Tes.Repository
         /// <summary>
         /// Retrieves items from the database in a consistent fashion.
         /// </summary>
-        /// <param name="dbSet"></param>
-        /// <param name="predicate"></param>
+        /// <param name="dbSet">The <see cref="DbSet{TEntity}"/> of <typeparamref name="TDatabaseItem"/> to query.</param>
+        /// <param name="predicate">The WHERE clause <see cref="Expression"/> for <typeparamref name="TDatabaseItem"/> selection in the query.</param>
+        /// <param name="cancellationToken"></param>
         /// <param name="orderBy"></param>
         /// <param name="pagination"></param>
-        /// <param name="cancellationToken"></param>
         /// <returns></returns>
         /// <remarks>Ensure that the <see cref="DbContext"/> from which <paramref name="dbSet"/> comes isn't disposed until the entire query completes.</remarks>
-        protected async Task<IEnumerable<TDatabaseItem>> GetItemsAsync(DbSet<TDatabaseItem> dbSet, Expression<Func<TDatabaseItem, bool>> predicate, Func<IQueryable<TDatabaseItem>, IQueryable<TDatabaseItem>> orderBy, Func<IQueryable<TDatabaseItem>, IQueryable<TDatabaseItem>> pagination, CancellationToken cancellationToken)
+        protected async Task<IEnumerable<TDatabaseItem>> GetItemsAsync(DbSet<TDatabaseItem> dbSet, Expression<Func<TDatabaseItem, bool>> predicate, CancellationToken cancellationToken, Func<IQueryable<TDatabaseItem>, IQueryable<TDatabaseItem>> orderBy = default, Func<IQueryable<TDatabaseItem>, IQueryable<TDatabaseItem>> pagination = default)
         {
             ArgumentNullException.ThrowIfNull(dbSet);
             ArgumentNullException.ThrowIfNull(predicate);
-            ArgumentNullException.ThrowIfNull(orderBy);
-            ArgumentNullException.ThrowIfNull(pagination);
+            orderBy ??= q => q;
+            pagination ??= q => q;
 
             // Search for items in the JSON
             var query = pagination(orderBy(dbSet.Where(predicate)));
@@ -85,6 +92,12 @@ namespace Tes.Repository
             return await query.ToListAsync(cancellationToken);
         }
 
+        /// <summary>
+        /// Adds entry into UpdaterWorker queue.
+        /// </summary>
+        /// <param name="tesTask"></param>
+        /// <param name="action"></param>
+        /// <returns></returns>
         protected Task<TDatabaseItem> AddUpdateOrRemoveTaskInDbAsync(TDatabaseItem tesTask, WriteAction action)
         {
             var source = new TaskCompletionSource<TDatabaseItem>();
@@ -179,7 +192,7 @@ namespace Tes.Repository
             if (disposing)
             {
                 updaterWorker.CancelAsync();
-                while (updaterWorker.IsBusy) { }
+                while (updaterWorker.IsBusy) { Thread.Sleep(10); } // Wait for worker thread to exit.
                 updaterWorker.Dispose();
             }
         }
