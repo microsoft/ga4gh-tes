@@ -18,7 +18,7 @@ namespace Tes.Runner.Transfer
 
             if (bufferSize <= 0 || bufferSize > MaxBufferSize)
             {
-                throw new ArgumentException($"Invalid memory buffer size. Value must be greater than 0 and less than {MaxBufferSize/BlobSizeUtils.MiB} MiB", nameof(capacity));
+                throw new ArgumentException($"Invalid memory buffer size. Value must be greater than 0 and less than {MaxBufferSize / BlobSizeUtils.MiB} MiB", nameof(capacity));
             }
 
             var bufferPool = Channel.CreateBounded<byte[]>(capacity);

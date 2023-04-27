@@ -35,11 +35,11 @@ namespace Tes.Runner.Models
 
     public class BlobTransferOptions
     {
-        public int? BlockSize {get; set;} = 1024 * 1024 * 10; //10MiB  
-        public int? NumberOfBuffers {get; set;} = 10;
-        public int? NumberOfWriters {get; set;} = 10;
-        public int? NumberOfReaders {get; set;} = 10;
-        public int? BufferCapacity {get; set;} = 10; 
-        public int? MemoryBufferCapacity {get; set;} = 10;
+        public int? BlockSize { get; set; } = 1024 * 1024 * 10; //10MiB  
+        public int? NumberOfBuffers { get; set; } = 10;
+        public int? NumberOfWriters { get; set; } = 10;
+        public int? NumberOfReaders { get; set; } = 10;
+        public int? BufferCapacity { get; set; } = 10;
+        public int? MemoryBufferCapacity { get; set; } = 10;
     }
 }

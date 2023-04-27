@@ -33,7 +33,6 @@ public class PartsReader : PartsProcessor
                             {
                                 buffer.Data = await MemoryBufferChannel.Reader.ReadAsync();
 
-                                logger.LogDebug("Executing read operation.");
                                 await BlobPipeline.ExecuteReadAsync(buffer);
 
                                 await writeBufferChannel.Writer.WriteAsync(buffer);
@@ -50,7 +49,9 @@ public class PartsReader : PartsProcessor
         }
 
         await Task.WhenAll(tasks);
-        logger.LogInformation("All part read operations are complete.");
+
         writeBufferChannel.Writer.Complete();
+
+        logger.LogInformation("All part read operations completed successfully.");
     }
 }

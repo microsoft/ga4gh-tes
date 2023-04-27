@@ -72,6 +72,13 @@ namespace Tes.Runner.Transfer
         {
             ArgumentNullException.ThrowIfNull(blobUrl);
 
+            var request = CreateBlobBlockListRequest(length, blobUrl);
+
+            await ExecuteHttpRequestAsync(request);
+        }
+
+        private HttpRequestMessage CreateBlobBlockListRequest(long length, Uri blobUrl)
+        {
             var content = CreateBlockListContent(length);
 
             var putBlockUrl = new UriBuilder($"{blobUrl.AbsoluteUri}&comp=blocklist");
@@ -82,8 +89,7 @@ namespace Tes.Runner.Transfer
             };
 
             AddBlockBlobServiceHeaders(request);
-
-            await ExecuteHttpRequestAsync(request);
+            return request;
         }
 
         private async ValueTask ExecuteHttpRequestAsync(HttpRequestMessage request)

@@ -59,8 +59,10 @@ public class PartsWriter : PartsProcessor
         }
 
         await Task.WhenAll(tasks);
-        logger.LogInformation("All part write operations are complete.");
+
         processedBufferChannel.Writer.Complete();
+
+        logger.LogInformation("All part write operations completed successfully.");
     }
     private ProcessedBuffer ToProcessedBuffer(PipelineBuffer buffer)
     {
