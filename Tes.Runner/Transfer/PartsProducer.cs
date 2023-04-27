@@ -44,6 +44,7 @@ public class PartsProducer
         try
         {
             await Task.WhenAll(partsProducerTasks);
+            logger.LogInformation("All part producing operations are complete.");
 
         }
         catch (Exception e)

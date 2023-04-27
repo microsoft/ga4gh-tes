@@ -38,16 +38,16 @@ public class RunnerTestUtils
         var file = Guid.NewGuid().ToString();
         await using var fs = File.Create($"{file}.tmp", Units.MiB);
 
-        var data = new byte[numberOfMiB];
+        var data = new byte[BlobSizeUtils.MiB];
         random.NextBytes(data);
 
         for (var blocks = 0; blocks < numberOfMiB; blocks++)
         {
-            await fs.WriteAsync(data, 0, Units.MiB);
+            await fs.WriteAsync(data, 0, BlobSizeUtils.MiB);
         }
 
         fs.Close();
 
-        return file;
+        return fs.Name;
     }
 }

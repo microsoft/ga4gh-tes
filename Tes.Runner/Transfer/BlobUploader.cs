@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Threading.Channels;
-using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer
 {
@@ -30,8 +29,6 @@ namespace Tes.Runner.Transfer
 
             await ExecuteHttpRequestAsync(request);
 
-            Logger.LogInformation($"Created block:{buffer.BlobPartUrl} ordinal:{buffer.Ordinal} offset:{buffer.Offset} length:{buffer.Length}");
-
             return buffer.Length;
         }
 
@@ -48,6 +45,7 @@ namespace Tes.Runner.Transfer
 
         private static void AddBlockBlobServiceHeaders(HttpRequestMessage request)
         {
+            //TODO: Move this version to the blob options.
             request.Headers.Add("x-ms-version", "2020-10-02");
             request.Headers.Add("x-ms-date", DateTime.UtcNow.ToString("R"));
         }

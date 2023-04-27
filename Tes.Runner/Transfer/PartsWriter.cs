@@ -41,6 +41,7 @@ public class PartsWriter : PartsProcessor
                     {
                         try
                         {
+                            logger.LogInformation("Executing write operation.");
                             await BlobPipeline.ExecuteWriteAsync(buffer);
 
                             await processedBufferChannel.Writer.WriteAsync(ToProcessedBuffer(buffer));
@@ -58,7 +59,7 @@ public class PartsWriter : PartsProcessor
         }
 
         await Task.WhenAll(tasks);
-
+        logger.LogInformation("All part write operations are complete.");
         processedBufferChannel.Writer.Complete();
     }
     private ProcessedBuffer ToProcessedBuffer(PipelineBuffer buffer)

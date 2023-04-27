@@ -19,9 +19,10 @@ namespace Tes.Runner.Test
         public async Task Init()
         {
             containerId = Guid.NewGuid();
-            var blobService = new BlobServiceClient("UseDevelopmentStorage=true");
-            var props = new BlobServiceProperties() { Cors = new List<BlobCorsRule>(), DefaultServiceVersion = "2021-10-04" };
-            blobService.SetProperties(props);
+            var options = new BlobClientOptions(BlobClientOptions.ServiceVersion.V2020_12_06);
+
+            var blobService = new BlobServiceClient("UseDevelopmentStorage=true", options);
+
             blobContainerClient = blobService.GetBlobContainerClient(containerId.ToString());
 
             blobContainerClient.Create(PublicAccessType.None);
@@ -42,18 +43,20 @@ namespace Tes.Runner.Test
             var blobClient = blobContainerClient.GetBlobClient(file);
 
             // Create a SAS token that's valid for one hour.
-            var sasBuilder = new BlobSasBuilder()
+            var sasBuilder = new BlobSasBuilder(BlobContainerSasPermissions.All, DateTimeOffset.UtcNow.AddHours(1))
             {
                 BlobContainerName = blobClient.GetParentBlobContainerClient().Name,
                 BlobName = blobClient.Name,
-                ExpiresOn = DateTimeOffset.UtcNow.AddHours(1),
                 Resource = "b"
             };
-
 
             var url = blobContainerClient.GetBlobClient(file).GenerateSasUri(sasBuilder);
 
             await blobUploader.UploadAsync(new List<UploadInfo>() { new UploadInfo(file, url) });
+
+            var blobProperties = await blobClient.GetPropertiesAsync();
+            Assert.IsNotNull(blobProperties);
+            Assert.AreEqual(10 * Units.MiB, blobProperties.Value.ContentLength);
         }
     }
 }

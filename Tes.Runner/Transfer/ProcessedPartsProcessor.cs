@@ -1,9 +1,12 @@
 ﻿using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer;
 
 public class ProcessedPartsProcessor
 {
+    private readonly ILogger logger = PipelineLoggerFactory.Create<ProcessedPartsProcessor>();
+
     private readonly IBlobPipeline blobPipeline;
 
     public ProcessedPartsProcessor(IBlobPipeline blobPipeline)
@@ -29,8 +32,7 @@ public class ProcessedPartsProcessor
 
                 if (!partsProcessed.ContainsKey(buffer.FileName))
                 {
-                    partsProcessed.Add(buffer.FileName, 1);
-                    continue;
+                    partsProcessed.Add(buffer.FileName, 0);
                 }
 
                 var total = ++partsProcessed[buffer.FileName];
@@ -51,6 +53,8 @@ public class ProcessedPartsProcessor
         await Task.WhenAll(tasks);
 
         readBufferChannel.Writer.Complete();
+
+        logger.LogInformation("All part processed operations are complete.");
 
         return totalBytes;
     }
