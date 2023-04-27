@@ -222,7 +222,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = new() { new() { Image = "ubuntu" } },
-                Inputs = new() { new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" } }
+                Inputs = new() { new() { Name = "commandScript", Path = $"/tes-internal/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" } }
             };
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
@@ -397,7 +397,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = new() { new() { Image = "ubuntu" } },
-                Inputs = new() { new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" } }
+                Inputs = new() { new() { Name = "commandScript", Path = $"/tes-internal/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" } }
             };
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
@@ -431,7 +431,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = new() { new() { Image = "ubuntu" } },
-                Inputs = new() { new() { Path = "/cromwell-executions/" } }
+                Inputs = new() { new() { Path = "/tes-internal/" } }
             };
 
             await controller.CreateTaskAsync(tesTask2);
@@ -442,7 +442,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = new() { new() { Image = "ubuntu" } },
-                Inputs = new() { new() { Path = "/cromwell-executions/" } }
+                Inputs = new() { new() { Path = "/tes-internal/" } }
             };
 
             await controller.CreateTaskAsync(tesTask3);
@@ -453,7 +453,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = new() { new() { Image = "ubuntu" } },
-                Inputs = new() { new() { Path = "/cromwell-executions/test/" } }
+                Inputs = new() { new() { Path = "/tes-internal/test/" } }
             };
 
             await controller.CreateTaskAsync(tesTask4);
@@ -591,7 +591,7 @@ namespace TesApi.Tests
             {
                 Name = "test.cwl",
                 Executors = new() { new() { Image = "ubuntu" } },
-                Inputs = new() { new() { Name = "commandScript", Path = "/cromwell-executions/test.cwl/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/execution/script" } },
+                Inputs = new() { new() { Name = "commandScript", Path = "/tes-internal/test.cwl/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/execution/script" } },
                 Resources = tesResourcesReceivedFromCromwell
             };
 

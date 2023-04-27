@@ -13,14 +13,9 @@ namespace TesApi.Web.Storage;
 public abstract class StorageAccessProvider : IStorageAccessProvider
 {
     /// <summary>
-    /// Cromwell path prefix
+    /// Tes executions path prefix
     /// </summary>
-    protected const string CromwellPathPrefix = "/cromwell-executions/";
-    /// <summary>
-    /// Executions path prefix
-    /// </summary>
-    protected const string BatchPathPrefix = "/executions/";
-
+    protected const string TesPathPrefix = "/tes-internal/";
     /// <summary>
     /// Logger instance. 
     /// </summary>
@@ -83,6 +78,5 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <param name="path"></param>
     /// <returns></returns>
     protected bool IsKnownExecutionFilePath(string path)
-        => path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase)
-               || path.StartsWith(BatchPathPrefix, StringComparison.OrdinalIgnoreCase);
+        => path.StartsWith(TesPathPrefix, StringComparison.OrdinalIgnoreCase);
 }

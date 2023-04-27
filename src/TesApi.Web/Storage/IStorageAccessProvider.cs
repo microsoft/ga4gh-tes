@@ -45,7 +45,7 @@ namespace TesApi.Web.Storage
         /// Returns an Azure Storage Blob or Container URL with SAS token given a path that uses one of the following formats: 
         /// - /accountName/containerName
         /// - /accountName/containerName/blobName
-        /// - /cromwell-executions/blobName
+        /// - /tes-internal/blobName
         /// - https://accountName.blob.core.windows.net/containerName
         /// - https://accountName.blob.core.windows.net/containerName/blobName
         /// </summary>
