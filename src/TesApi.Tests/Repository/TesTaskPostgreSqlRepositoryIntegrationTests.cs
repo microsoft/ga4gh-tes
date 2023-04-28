@@ -14,12 +14,12 @@ using Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Microsoft.Rest;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Utilities;
-using TesApi.Web;
 using FlexibleServer = Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 
 namespace Tes.Repository.Tests
@@ -64,7 +64,9 @@ namespace Tes.Repository.Tests
             var optionsMock = new Mock<IOptions<Models.PostgreSqlOptions>>();
             optionsMock.Setup(x => x.Value).Returns(options);
             var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(optionsMock.Object);
-            repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(connectionString), new TesRepositoryLazyCache<Models.TesTaskDatabaseItem>(new LazyCache.CachingService()));
+            repository = new TesTaskPostgreSqlRepository(() =>
+                new TesDbContext(connectionString),
+                new TesRepositoryCache<Models.TesTaskDatabaseItem>(new Microsoft.Extensions.Caching.Distributed.MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions() { SizeLimit = null }))));
             Console.WriteLine("Creation complete.");
         }
 

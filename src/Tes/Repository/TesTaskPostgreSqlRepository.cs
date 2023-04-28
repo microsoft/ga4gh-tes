@@ -89,7 +89,7 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess, CancellationToken cancellationToken)
         {
-            var item = await GetItemFromCacheOrDatabase(id, cancellationToken);
+            var item = await GetItemFromCacheOrDatabase(id, false, cancellationToken);
 
             if (item is null)
             {
@@ -122,7 +122,7 @@ namespace Tes.Repository
         public async Task<List<TesTask>> CreateItemsAsync(List<TesTask> items, CancellationToken cancellationToken)
             => (await Task.WhenAll(items.Select(item => CreateItemAsync(item, cancellationToken)))).ToList();
 
-        private async Task<TesTaskDatabaseItem> GetItemFromCacheOrDatabase(string id, CancellationToken cancellationToken)
+        private async Task<TesTaskDatabaseItem> GetItemFromCacheOrDatabase(string id, bool throwIfNotFound, CancellationToken cancellationToken)
         {
             if (!cache.TryGetValue(id, out var item))
             {
@@ -131,7 +131,7 @@ namespace Tes.Repository
                 // Search for Id within the JSON
                 item = await dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, cancellationToken);
 
-                if (item is null)
+                if (throwIfNotFound && item is null)
                 {
                     throw new KeyNotFoundException($"No TesTask with ID {id} found in the database.");
                 }
@@ -144,7 +144,7 @@ namespace Tes.Repository
         /// <remarks>Base class searches within model, this method searches within the JSON</remarks>
         public async Task<TesTask> UpdateItemAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
-            var item = await GetItemFromCacheOrDatabase(tesTask.Id, cancellationToken);
+            var item = await GetItemFromCacheOrDatabase(tesTask.Id, true, cancellationToken);
             item.Json = tesTask;
             item = await AddUpdateOrRemoveTaskInDbAsync(item, WriteAction.Update);
             return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json;
@@ -154,7 +154,7 @@ namespace Tes.Repository
         /// <remarks>Base class deletes by Item.Id, this method deletes by Item.Json.Id</remarks>
         public async Task DeleteItemAsync(string id, CancellationToken cancellationToken)
         {
-            _ = await AddUpdateOrRemoveTaskInDbAsync(await GetItemFromCacheOrDatabase(id, cancellationToken), WriteAction.Delete);
+            _ = await AddUpdateOrRemoveTaskInDbAsync(await GetItemFromCacheOrDatabase(id, true, cancellationToken), WriteAction.Delete);
             cache.TryRemove(id);
         }
 

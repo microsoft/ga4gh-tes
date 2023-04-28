@@ -73,8 +73,9 @@ namespace TesApi.Web
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
 
+                    .AddDistributedMemoryCache(options => options.SizeLimit = null)
                     .AddSingleton<IAppCache, CachingService>()
-                    .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryLazyCache<TesTaskDatabaseItem>>()
+                    .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
                     .AddTransient<BatchPool>()
