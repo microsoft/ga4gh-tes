@@ -60,7 +60,7 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public bool TryUpdate(string key, T task)
         {
-            return TryAdd($"{nameof(TesRepositoryLazyCache<T>)}:{key}", task);
+            return TryAdd(key, task);
         }
     }
 }
