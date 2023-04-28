@@ -391,8 +391,10 @@ namespace TesApi.Web
                 yield break;
             }
 
+            using var wrappedcancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
             // WhenEach() allows us to have Scheduler's OrchestrateTesTasksOnBatch() method call it's local ProcessOrchestrationResult() as soon as ProcessTesTaskAsync() has returned that task and its result instead of batching all the database updates all at once at the end.
-            await foreach (var result in WhenEach(tesTaskList.Select(ProcessTesTask), cancellationToken, result => result.IsChangedAsync))
+            await foreach (var result in WrapWhenEach(tesTaskList.Select(ProcessTesTask), result => result.IsChangedAsync))
             {
                 yield return result;
             }
@@ -422,6 +424,21 @@ namespace TesApi.Web
                     TaskStatus.Canceled => Task.FromCanceled<bool>(cancellationToken),
                     _ => throw new InvalidOperationException(nameof(TaskContinuationFunc)),
                 };
+
+            // Handle ArgumentExceptions thrown in WhenEach()
+            IAsyncEnumerable<(TesTask TesTask, Task<bool> IsChangedAsync)> WrapWhenEach(IEnumerable<(TesTask TesTask, Task<bool> IsChangedAsync)> collection, Func<(TesTask TesTask, Task<bool> IsChangedAsync), Task> getTask)
+            {
+                try
+                {
+                    return WhenEach(collection, wrappedcancellation.Token, getTask);
+                }
+                catch (ArgumentException exc)
+                {
+                    wrappedcancellation.Cancel();
+                    logger.LogError(exc, "Argument error returned by BatchScheduler.WhenEach: {ExceptionMessage}", exc.Message);
+                    return AsyncEnumerable.Empty<(TesTask TesTask, Task<bool> IsChangedAsync)>();
+                }
+            }
         }
 
         /// <summary>
@@ -437,47 +454,52 @@ namespace TesApi.Web
         /// A task is sent to the return enumeration when it is "complete", which is when it either completes successfully, fails (queues an exception), or is cancelled.<br/>
         /// No items in <paramref name="collection"/> should share an identical <see cref="Task"/> instance.
         /// </remarks>
-        private static async IAsyncEnumerable<T> WhenEach<T>(IEnumerable<T> collection, [EnumeratorCancellation] CancellationToken cancellationToken, Func<T, Task> getTask = default)
+        private static async IAsyncEnumerable<T> WhenEach<T>(IEnumerable<T> collection, [EnumeratorCancellation] CancellationToken cancellationToken, Func<T, Task> getTask = default) // TODO: Consider moving this to an extension or library-like class.
         {
             ArgumentNullException.ThrowIfNull(collection);
             ArgumentNullException.ThrowIfNull(cancellationToken);
 
-            getTask ??= typeof(T).IsAssignableTo(typeof(Task)) ? new(i => (i as Task)!) : throw new ArgumentNullException(nameof(getTask));
-            var list = collection.Where(e => e is not null).ToList();
+            getTask ??= typeof(T).IsAssignableTo(typeof(Task)) ? new(i => (i as Task)!) : throw new ArgumentNullException(nameof(getTask)); // Ensure we have a usable getTask
+            var list = collection.Where(e => e is not null).ToList(); // Extract everything from collection
             var pendingCount = list.Count;
 
-            if (list.Select(getTask).ToHashSet().Count != pendingCount)
+            if (list.Select(getTask).ToHashSet().Count != pendingCount) // Check for duplicate tasks
             {
                 throw new ArgumentException("Duplicate System.Threading.Tasks found referenced in collection.", nameof(collection));
             }
 
+            // Fast exit for simple case.
+            if (list.Count == 0)
+            {
+                yield break;
+            }
+
+            // There should be no more ArgumentExceptions after this point.
             var channel = Channel.CreateBounded<T>(pendingCount);
 
+            // Add continuations to every task. Those continuations will feed the foreach below.
             _ = Parallel.ForEach(list, entry =>
             {
-                // The continuation task returned by ContinueWith() is attached to the associated task and will be disposed with it. In the case of cancellation while any are still pending, we are expecting the entire process to go away, so there's no utility in any additional mangement of them.
+                // The continuation task returned by ContinueWith() is attached to the associated task and will be disposed with it. In the case of cancellations while any tasks are still pending, we are expecting the entire process to go away, so there's no utility in any additional mangement of these continuations.
                 _ = getTask(entry).ContinueWith(t =>
                 {
                     _ = channel.Writer.TryWrite(entry);
-                    DecrementPendingCountAndCompleteWriter();
+
+                    if (Interlocked.Decrement(ref pendingCount) == 0)
+                    {
+                        channel.Writer.Complete();
+                    }
                 },
                 cancellationToken,
                 TaskContinuationOptions.DenyChildAttach,
                 TaskScheduler.Default);
             });
 
+            // Return all completed tasks as they are completed, no matter if by failure, cancellation, or running to completion.
             await foreach (var entry in channel.Reader.ReadAllAsync(cancellationToken))
             {
                 yield return entry;
                 cancellationToken.ThrowIfCancellationRequested();
-            }
-
-            void DecrementPendingCountAndCompleteWriter()
-            {
-                if (Interlocked.Decrement(ref pendingCount) == 0)
-                {
-                    channel.Writer.Complete();
-                }
             }
         }
 
