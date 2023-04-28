@@ -14,32 +14,6 @@ namespace TesApi.Web
     public interface IBatchPool
     {
         /// <summary>
-        /// Types of maintenance calls offered by the <see cref="IBatchPool.ServicePoolAsync(ServiceKind, CancellationToken)"/> service method.
-        /// </summary>
-        enum ServiceKind
-        {
-            /// <summary>
-            /// Queues resize errors (if available).
-            /// </summary>
-            GetResizeErrors,
-
-            /// <summary>
-            /// Proactively removes errored nodes from pool and manages certain autopool error conditions.
-            /// </summary>
-            ManagePoolScaling,
-
-            /// <summary>
-            /// Removes <see cref="CloudPool"/> if it's retired and empty.
-            /// </summary>
-            RemovePoolIfEmpty,
-
-            /// <summary>
-            /// Stages rotating or retiring this <see cref="CloudPool"/> if needed.
-            /// </summary>
-            Rotate,
-        }
-
-        /// <summary>
         /// Indicates that the pool is available for new jobs/tasks.
         /// </summary>
         bool IsAvailable { get; }
@@ -89,13 +63,6 @@ namespace TesApi.Web
         /// <param name="cancellationToken"></param>
         /// <remarks>Calls each internal servicing method in order. Throws all exceptions gathered from all methods.</remarks>
         ValueTask ServicePoolAsync(CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Service methods dispatcher.
-        /// </summary>
-        /// <param name="serviceKind">The type of <see cref="ServiceKind"/> service call.</param>
-        /// <param name="cancellationToken"></param>
-        ValueTask ServicePoolAsync(ServiceKind serviceKind, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets the last time the pool's compute node list was changed.

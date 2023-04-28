@@ -20,7 +20,7 @@ namespace Tes.Repository
     /// A TesTask specific repository for storing the TesTask as JSON within an Entity Framework Postgres table
     /// </summary>
     /// <typeparam name="TesTask"></typeparam>
-    public class TesTaskPostgreSqlRepository : IRepository<TesTask>
+    public sealed class TesTaskPostgreSqlRepository : IRepository<TesTask>
     {
         private readonly Func<TesDbContext> createDbContext;
         private readonly ICache<TesTask> cache;
@@ -101,7 +101,7 @@ namespace Tes.Repository
         /// <returns></returns>
         public async Task<bool> TryGetItemAsync(string id, Action<TesTask> onSuccess = null)
         {
-            if (cache?.TryGetValue(id, out TesTask task) == true)
+            if (cache?.TryGetValue(id, out var task) == true)
             {
                 onSuccess?.Invoke(task);
                 return true;
@@ -218,7 +218,7 @@ namespace Tes.Repository
             dbContext.TesTasks.Remove(item);
             await dbContext.SaveChangesAsync();
             cache?.TryRemove(id);
-            
+
         }
 
         /// <summary>

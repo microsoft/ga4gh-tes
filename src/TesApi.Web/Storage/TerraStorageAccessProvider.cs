@@ -131,7 +131,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <summary>
-        /// Returns a Url with a SAS token for the given input. 
+        /// Returns a Url with a SAS token for the given input
         /// </summary>
         /// <param name="blobName"></param>
         /// <returns>SAS Token URL</returns>
@@ -149,7 +149,7 @@ namespace TesApi.Web.Storage
 
             if (normalizedBlobName != string.Empty)
             {
-                if (!uriBuilder.Path.Contains(normalizedBlobName,StringComparison.OrdinalIgnoreCase))
+                if (!uriBuilder.Path.Contains(normalizedBlobName, StringComparison.OrdinalIgnoreCase))
                 {
                     uriBuilder.Path += $"/{normalizedBlobName}";
                 }
