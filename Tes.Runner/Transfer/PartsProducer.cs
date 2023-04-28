@@ -131,9 +131,9 @@ public class PartsProducer
 
     private async ValueTask<Channel<FileStream>> GetNewFileHandlerPoolAsync(string fileName, bool readOnly)
     {
-        var pool = Channel.CreateBounded<FileStream>(blobPipelineOptions.BufferCapacity);
+        var pool = Channel.CreateBounded<FileStream>(blobPipelineOptions.FileHandlerPoolCapacity);
 
-        for (int f = 0; f < blobPipelineOptions.BufferCapacity; f++)
+        for (int f = 0; f < blobPipelineOptions.FileHandlerPoolCapacity; f++)
         {
             try
             {

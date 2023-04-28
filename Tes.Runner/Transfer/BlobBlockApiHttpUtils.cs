@@ -40,7 +40,7 @@ public class BlobBlockApiHttpUtils
         request.Headers.Add("x-ms-date", DateTime.UtcNow.ToString("R"));
     }
 
-    public static HttpRequestMessage CreateBlobBlockListRequest(long length, Uri blobUrl, int blockSize)
+    public static HttpRequestMessage CreateBlobBlockListRequest(long length, Uri blobUrl, int blockSize, string apiVersion)
     {
         var content = CreateBlockListContent(length, blockSize);
 
@@ -51,7 +51,7 @@ public class BlobBlockApiHttpUtils
             Content = content
         };
 
-        AddBlockBlobServiceHeaders(request);
+        AddBlockBlobServiceHeaders(request, apiVersion);
         return request;
     }
 

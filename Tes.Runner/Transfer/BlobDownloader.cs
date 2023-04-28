@@ -14,7 +14,7 @@ public class BlobDownloader : BlobOperationPipeline
     {
     }
 
-    public async ValueTask<long> DownloadAsync(List<DownloadInfo>? downloadList)
+    public async ValueTask<long> DownloadAsync(List<DownloadInfo> downloadList)
     {
         ArgumentNullException.ThrowIfNull(downloadList);
 

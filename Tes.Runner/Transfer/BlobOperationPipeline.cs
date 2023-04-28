@@ -5,7 +5,9 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer;
-
+/// <summary>
+/// Base class for all blob operation pipelines to transfer data from and to blob storage.
+/// </summary>
 public abstract class BlobOperationPipeline : IBlobPipeline
 {
     protected readonly Channel<PipelineBuffer> ReadBufferChannel;
@@ -26,8 +28,8 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
         PipelineOptions = pipelineOptions;
 
-        ReadBufferChannel = Channel.CreateBounded<PipelineBuffer>(pipelineOptions.NumberOfBuffers);
-        WriteBufferChannel = Channel.CreateBounded<PipelineBuffer>(pipelineOptions.NumberOfBuffers);
+        ReadBufferChannel = Channel.CreateBounded<PipelineBuffer>(pipelineOptions.ReadWriteBuffersCapacity);
+        WriteBufferChannel = Channel.CreateBounded<PipelineBuffer>(pipelineOptions.ReadWriteBuffersCapacity);
         ProcessedBufferChannel = Channel.CreateUnbounded<ProcessedBuffer>();
 
         MemoryBufferChannel = memoryBuffer;

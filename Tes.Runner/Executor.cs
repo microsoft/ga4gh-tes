@@ -14,29 +14,31 @@ namespace Tes.Runner
 {
     public class Executor
     {
-        private readonly DockerExecutor dockerExecutor;
-        private readonly ILogger logger;
+        private readonly ILogger logger = PipelineLoggerFactory.Create<Executor>();
+        private readonly NodeTask tesNodeTask;
+        private readonly BlobPipelineOptions blobPipelineOptions;
 
-        public Executor(DockerExecutor dockerExecutor)
+        public Executor(string tesNodeTaskFilePath, BlobPipelineOptions blobPipelineOptions)
         {
-            this.dockerExecutor = dockerExecutor;
-            logger = PipelineLoggerFactory.Create<Executor>();
+            ArgumentException.ThrowIfNullOrEmpty(tesNodeTaskFilePath);
+            ArgumentNullException.ThrowIfNull(blobPipelineOptions);
+
+            this.blobPipelineOptions = blobPipelineOptions;
+
+            var content = File.ReadAllText(tesNodeTaskFilePath);
         }
 
-        public async Task<NodeTaskResult> ExecuteNodeTaskAsync(string nodeTask, BlobPipelineOptions options)
+        public async Task<NodeTaskResult> ExecuteNodeTaskAsync(DockerExecutor dockerExecutor)
         {
-            ArgumentNullException.ThrowIfNull(options);
-            ArgumentException.ThrowIfNullOrEmpty(nodeTask);
+            ArgumentNullException.ThrowIfNull(blobPipelineOptions);
 
-            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(options.MemoryBufferCapacity, options.BlockSize);
+            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSize);
 
-            var tesTask = DeserializeNodeTask(nodeTask);
+            var inputLength = await DownloadInputsAsync(memoryBufferChannel);
 
-            var inputLength = await DownloadInputs(tesTask, options, memoryBufferChannel);
+            var result = await dockerExecutor.RunOnContainerAsync(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute);
 
-            var result = await dockerExecutor.RunOnContainerAsync(tesTask.ImageName, tesTask.ImageTag, tesTask.CommandsToExecute);
-
-            var outputLength = await UploadOutputs(tesTask, options, memoryBufferChannel);
+            var outputLength = await UploadOutputsAsync(memoryBufferChannel);
 
             return new NodeTaskResult(result, inputLength, outputLength);
         }
@@ -50,48 +52,67 @@ namespace Tes.Runner
             return tesTask;
         }
 
-        private async Task<long> UploadOutputs(NodeTask tesTask, BlobPipelineOptions options,
-            Channel<byte[]> memoryBufferChannel)
+        public async Task<long> UploadOutputsAsync()
         {
-            var uploader = new BlobUploader(options, memoryBufferChannel);
+            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSize);
 
-            var sw = new Stopwatch();
-            sw.Start();
-
-            var outputs = await ApplyResolutionPolicyAsync(tesTask.Outputs);
-
-            var outputLength = await uploader.UploadAsync(outputs);
-
-            sw.Stop();
-            logger.LogInformation($"Executed Upload. Time elapsed:{sw.Elapsed} Bandwidth:{ToBandwidth(outputLength, sw.Elapsed.TotalSeconds)} MiB/s");
-
-            return outputLength;
+            return await UploadOutputsAsync(memoryBufferChannel);
         }
 
-        private async Task<long> DownloadInputs(NodeTask tesTask, BlobPipelineOptions options,
-            Channel<byte[]> memoryBufferChannel)
+        private async Task<long> UploadOutputsAsync(Channel<byte[]> memoryBufferChannel)
         {
-            if (tesTask.Inputs is null || tesTask.Inputs.Count == 0)
+            var uploader = new BlobUploader(blobPipelineOptions, memoryBufferChannel);
+
+            var outputs = await ApplyResolutionPolicyAsync(tesNodeTask.Outputs);
+
+            if (outputs != null)
+            {
+                var sw = new Stopwatch();
+                sw.Start();
+                var outputLength = await uploader.UploadAsync(outputs);
+                sw.Stop();
+                logger.LogInformation($"Executed Upload. Time elapsed:{sw.Elapsed} Bandwidth:{ToBandwidth(outputLength, sw.Elapsed.TotalSeconds)} MiB/s");
+
+                return outputLength;
+            }
+
+            return 0;
+        }
+
+        public async Task<long> DownloadInputsAsync()
+        {
+            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSize);
+
+            return await DownloadInputsAsync(memoryBufferChannel);
+        }
+
+        private async Task<long> DownloadInputsAsync(Channel<byte[]> memoryBufferChannel)
+        {
+            if (tesNodeTask.Inputs is null || tesNodeTask.Inputs.Count == 0)
             {
                 logger.LogInformation("No inputs provided");
                 return 0;
             }
 
-            logger.LogInformation($"{tesTask.Inputs.Count} inputs to download.");
+            logger.LogInformation($"{tesNodeTask.Inputs.Count} inputs to download.");
 
-            var downloader = new BlobDownloader(options, memoryBufferChannel);
+            var downloader = new BlobDownloader(blobPipelineOptions, memoryBufferChannel);
 
-            var sw = new Stopwatch();
-            sw.Start();
+            var inputs = await ApplyResolutionPolicyAsync(tesNodeTask.Inputs);
 
-            var inputs = await ApplyResolutionPolicyAsync(tesTask.Inputs);
+            if (inputs != null)
+            {
+                var sw = new Stopwatch();
+                sw.Start();
+                var inputLength = await downloader.DownloadAsync(inputs);
+                sw.Stop();
 
-            var inputLength = await downloader.DownloadAsync(inputs);
-            sw.Stop();
+                logger.LogInformation($"Executed Download. Time elapsed:{sw.Elapsed} Bandwidth:{ToBandwidth(inputLength, sw.Elapsed.TotalSeconds)} MiB/s");
 
-            logger.LogInformation($"Executed Download. Time elapsed:{sw.Elapsed} Bandwidth:{ToBandwidth(inputLength, sw.Elapsed.TotalSeconds)} MiB/s");
+                return inputLength;
+            }
 
-            return inputLength;
+            return 0;
         }
 
         private static double ToBandwidth(long length, double seconds)
