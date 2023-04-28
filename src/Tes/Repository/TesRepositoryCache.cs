@@ -26,18 +26,13 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="appCache"></param>
         public TesRepositoryCache(IDistributedCache appCache)
-        {
-            cache = appCache;
-        }
+            => cache = appCache;
 
         /// <inheritdoc/>
         public int MaxCount { get => throw new System.NotSupportedException(); set => throw new System.NotSupportedException(); }
 
         /// <inheritdoc/>
-        public int Count()
-        {
-            throw new System.NotSupportedException();
-        }
+        public int Count() => throw new System.NotSupportedException();
 
         /// <inheritdoc/>
         public bool TryAdd(string key, T task)
@@ -64,6 +59,7 @@ namespace Tes.Repository
                 return false;
             }
 
+            cache.Remove(cacheKey);
             cache.Set(cacheKey, item, removedEntryOptions);
             return true;
         }
