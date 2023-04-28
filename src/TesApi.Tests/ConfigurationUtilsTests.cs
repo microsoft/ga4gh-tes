@@ -76,9 +76,9 @@ namespace TesApi.Tests
                 batchQuotaProvider: GetMockQuotaProvider());
             var configurationUtils = serviceProvider.GetT();
 
-            await configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync();
+            var result = await configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync();
 
-            Assert.AreEqual("VmSize1,VmSize2,VmFamily3", serviceProvider.Configuration["AllowedVmSizes"]);
+            Assert.AreEqual("VmSize1,VmSize2,VmFamily3", string.Join(",", result));
 
             var expectedAllowedVmSizesFileContent =
                 "VmSize1\n" +

@@ -132,7 +132,7 @@ namespace TesApi.Web
                     })
 
                     // Order is important for hosted services
-                    .AddHostedService<DoOnceAtStartUpService>()
+                    .AddHostedService<AllowedVmSizesService>()
                     .AddHostedService<BatchPoolService>()
                     .AddHostedService<Scheduler>()
                     .AddHostedService<DeleteCompletedBatchJobsHostedService>()

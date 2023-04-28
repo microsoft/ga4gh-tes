@@ -87,11 +87,10 @@ namespace TesApi.Web
         private readonly IBatchPoolFactory _batchPoolFactory;
         private readonly string[] taskRunScriptContent;
         private readonly string[] taskCleanupScriptContent;
+        private readonly AllowedVmSizesService allowedVmSizesService;
 
         private HashSet<string> onlyLogBatchTaskStateOnce = new();
 
-        private static string GetStringValue(IConfiguration configuration, string key, string defaultValue = "") => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : configuration[key];
-        private IEnumerable<string> allowedVmSizes => GetStringValue(this.configuration, "AllowedVmSizes", null)?.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
 
         /// <summary>
         /// Orchestrates <see cref="Tes.Models.TesTask"/>s on Azure Batch
@@ -111,6 +110,7 @@ namespace TesApi.Web
         /// <param name="skuInformationProvider">Sku information provider <see cref="IBatchSkuInformationProvider"/></param>
         /// <param name="containerRegistryProvider">Container registry information <see cref="ContainerRegistryProvider"/></param>
         /// <param name="poolFactory">Batch pool factory <see cref="IBatchPoolFactory"/></param>
+        /// <param name="allowedVmSizesService">Service to get allowed vm sizes.</param>
         public BatchScheduler(
             ILogger<BatchScheduler> logger,
             IOptions<Options.BatchImageGeneration1Options> batchGen1Options,
@@ -126,7 +126,8 @@ namespace TesApi.Web
             IBatchQuotaVerifier quotaVerifier,
             IBatchSkuInformationProvider skuInformationProvider,
             ContainerRegistryProvider containerRegistryProvider,
-            IBatchPoolFactory poolFactory)
+            IBatchPoolFactory poolFactory,
+            AllowedVmSizesService allowedVmSizesService)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(configuration);
@@ -161,6 +162,7 @@ namespace TesApi.Web
             this.marthaSecretName = marthaOptions.Value.SecretName;
             this.globalStartTaskPath = StandardizeStartTaskPath(batchNodesOptions.Value.GlobalStartTask, this.defaultStorageAccountName);
             this.globalManagedIdentity = batchNodesOptions.Value.GlobalManagedIdentity;
+            this.allowedVmSizesService = allowedVmSizesService;
 
             if (!this.enableBatchAutopool)
             {
@@ -1618,6 +1620,7 @@ namespace TesApi.Web
         /// <returns>The virtual machine info</returns>
         public async Task<VirtualMachineInformation> GetVmSizeAsync(TesTask tesTask, bool forcePreemptibleVmsOnly = false)
         {
+            var allowedVmSizes = await allowedVmSizesService.GetAllowedVmSizes();
             bool allowedVmSizesFilter(VirtualMachineInformation vm) => allowedVmSizes is null || !allowedVmSizes.Any() || allowedVmSizes.Contains(vm.VmSize, StringComparer.OrdinalIgnoreCase) || allowedVmSizes.Contains(vm.VmFamily, StringComparer.OrdinalIgnoreCase);
 
             var tesResources = tesTask.Resources;
