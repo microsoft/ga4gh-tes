@@ -90,7 +90,6 @@ namespace TesApi.Web
 
         private HashSet<string> onlyLogBatchTaskStateOnce = new();
 
-
         /// <summary>
         /// Orchestrates <see cref="Tes.Models.TesTask"/>s on Azure Batch
         /// </summary>
