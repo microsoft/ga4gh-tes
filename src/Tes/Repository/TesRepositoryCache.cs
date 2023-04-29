@@ -15,7 +15,7 @@ namespace Tes.Repository
         /// A TesTask can run for 7 days, and hypothetically there could be weeks of queued tasks, so set a long default
         /// </summary>
         private static readonly System.TimeSpan defaultItemExpiration = System.TimeSpan.FromDays(30);
-        private static readonly System.TimeSpan removedItemExpiration = System.TimeSpan.FromMinutes(60);
+        private static readonly System.TimeSpan removedItemExpiration = System.TimeSpan.FromDays(1);
 
         private readonly IDistributedCache cache;
         private readonly DistributedCacheEntryOptions entryOptions = new() { SlidingExpiration = defaultItemExpiration };
