@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
 using LazyCache;
 
 namespace Tes.Repository
@@ -58,9 +59,15 @@ namespace Tes.Repository
         }
 
         /// <inheritdoc/>
-        public bool TryUpdate(string key, T task)
+        public bool TryUpdate(string key, T task, TimeSpan expiration)
         {
-            return TryAdd(key, task);
+            if (expiration == default)
+            {
+                expiration = defaultItemExpiration;
+            }
+
+            cache.Add(key, task, expiration);
+            return true;
         }
     }
 }

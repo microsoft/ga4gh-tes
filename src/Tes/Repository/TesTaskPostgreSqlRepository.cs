@@ -196,7 +196,17 @@ namespace Tes.Repository
             // Manually set entity state to avoid potential NPG PostgreSql bug
             dbContext.Entry(item).State = EntityState.Modified;
             await dbContext.SaveChangesAsync();
-            cache?.TryUpdate(tesTask.Id, tesTask);
+
+            if (!tesTask.IsActiveState())
+            {
+                // Remove completed tasks from cache after 1 day
+                cache?.TryUpdate(tesTask.Id, tesTask, TimeSpan.FromDays(1));
+            }
+            else
+            {
+                cache?.TryUpdate(tesTask.Id, tesTask, default);
+            }
+
             return item.Json;
         }
 
