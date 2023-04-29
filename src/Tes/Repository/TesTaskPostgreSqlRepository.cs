@@ -22,6 +22,7 @@ namespace Tes.Repository
     /// <typeparam name="TesTask"></typeparam>
     public sealed class TesTaskPostgreSqlRepository : IRepository<TesTask>
     {
+        private static readonly TimeSpan defaultCompletedTaskCacheExpiration = TimeSpan.FromDays(1);
         private readonly Func<TesDbContext> createDbContext;
         private readonly ICache<TesTask> cache;
         private readonly ILogger logger;
@@ -199,8 +200,8 @@ namespace Tes.Repository
 
             if (!tesTask.IsActiveState())
             {
-                // Remove completed tasks from cache after 1 day
-                cache?.TryUpdate(tesTask.Id, tesTask, TimeSpan.FromDays(1));
+                // Remove completed tasks from cache after shorter interval
+                cache?.TryUpdate(tesTask.Id, tesTask, defaultCompletedTaskCacheExpiration);
             }
             else
             {
