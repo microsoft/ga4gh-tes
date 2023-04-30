@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Net.Http.Headers;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
@@ -41,33 +40,18 @@ public class BlobDownloader : BlobOperationPipeline
 
     public override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, buffer.BlobUrl);
+        var request = BlobBlockApiHttpUtils.CreateReadByRangeHttpRequest(buffer);
 
-        request.Headers.Range = new RangeHeaderValue(buffer.Offset, buffer.Offset + buffer.Length);
-
-        var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-
-        response.EnsureSuccessStatusCode();
-
-        try
-        {
-            var data = await response.Content.ReadAsStreamAsync();
-
-            await data.ReadExactlyAsync(buffer.Data, 0, buffer.Length);
-
-            return buffer.Length;
-        }
-        finally
-        {
-            response.Dispose();
-        }
+        return await BlobBlockApiHttpUtils.ExecuteHttpRequestAndReadBodyResponseAsync(buffer, request);
     }
 
     public override async Task<long> GetSourceLengthAsync(string source)
     {
         var request = new HttpRequestMessage(HttpMethod.Head, new Uri(source));
 
-        var response = await HttpClient.SendAsync(request);
+        var response = await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(request);
+
+        //var response = await HttpClient.SendAsync(request);
 
         response.EnsureSuccessStatusCode();
 

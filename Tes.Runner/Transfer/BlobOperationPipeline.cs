@@ -14,12 +14,13 @@ public abstract class BlobOperationPipeline : IBlobPipeline
     protected readonly Channel<PipelineBuffer> WriteBufferChannel;
     protected readonly Channel<ProcessedBuffer> ProcessedBufferChannel;
     protected readonly Channel<byte[]> MemoryBufferChannel;
-    protected readonly HttpClient HttpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(300) };
     protected readonly BlobPipelineOptions PipelineOptions;
     protected readonly ILogger Logger = PipelineLoggerFactory.Create<BlobOperationPipeline>();
+
     private readonly PartsProducer partsProducer;
     private readonly PartsWriter partsWriter;
     private readonly PartsReader partsReader;
+
     private readonly ProcessedPartsProcessor processedPartsProcessor;
 
     protected BlobOperationPipeline(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer)
@@ -61,6 +62,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
         try
         {
+            //TODO: need to investigate why this method hangs when there is an exception in one of the tasks and running the unit test session
             //await Task.WhenAll(pipelineTasks);
             await WhenAllOrThrowIfOneFailsAsync(pipelineTasks);
         }

@@ -20,18 +20,28 @@ namespace Tes.Runner.Transfer
         public override void ConfigurePipelineBuffer(PipelineBuffer buffer)
         {
             buffer.BlobPartUrl =
-                BlobBlockApiHttpUtils.ParsePutBlockUrl(buffer.BlobPartUrl, buffer.Ordinal);
+                BlobBlockApiHttpUtils.ParsePutBlockUrl(buffer.BlobUrl, buffer.Ordinal);
         }
         /// <summary>
         /// Writes the part as a block to the blob.
         /// </summary>
-        /// <param name="buffer">Pipeline buffer containg the block data</param>
+        /// <param name="buffer">Pipeline buffer containing the block data</param>
         /// <returns>Number of bytes written</returns>
         public override async ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
         {
+            if (buffer.Length == 0)
+            {
+                if (buffer.NumberOfParts == 1)
+                {// If there is only one part and it is empty, no need to write an empty block to the blob.
+                    return 0;
+                }
+
+                throw new Exception(
+                    "Invalid operation. The buffer is empty and the transfer contains more than one part");
+            }
             var request = BlobBlockApiHttpUtils.CreatePutBlockRequestAsync(buffer, PipelineOptions.ApiVersion);
 
-            await ExecuteHttpRequestAsync(request);
+            await BlobBlockApiHttpUtils.ExecuteHttpRequestAndReadBodyResponseAsync(buffer, request);
 
             return buffer.Length;
         }
@@ -76,15 +86,9 @@ namespace Tes.Runner.Transfer
 
             var request = BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSize, PipelineOptions.ApiVersion);
 
-            await ExecuteHttpRequestAsync(request);
+            await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(request);
         }
 
-        private async ValueTask ExecuteHttpRequestAsync(HttpRequestMessage request)
-        {
-            var response = await HttpClient.SendAsync(request);
-
-            response.EnsureSuccessStatusCode();
-        }
         /// <summary>
         /// Performs a batch upload of the files to the specified target URIs.
         /// The URIs are Azure Block Blob URIs with SAS tokens.
@@ -111,12 +115,12 @@ namespace Tes.Runner.Transfer
 
             foreach (var uploadInfo in uploadList)
             {
-                if (string.IsNullOrEmpty(uploadInfo?.FullFilePath))
+                if (string.IsNullOrEmpty(uploadInfo.FullFilePath))
                 {
                     throw new ArgumentException("Full file path cannot be null or empty.", nameof(uploadInfo));
                 }
 
-                if (uploadInfo?.TargetUri == null)
+                if (uploadInfo.TargetUri == null)
                 {
                     throw new ArgumentException("Target URI cannot be null.", nameof(uploadInfo));
                 }

@@ -1,11 +1,21 @@
-﻿using System.Text;
+﻿using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
+using Polly;
+using Polly.Retry;
 
 namespace Tes.Runner.Transfer;
 /// <summary>
-/// A class containing the logic to create the HTTP requests for the blob block API.
+/// A class containing the logic to create and make the HTTP requests for the blob block API.
 /// </summary>
 public class BlobBlockApiHttpUtils
 {
+    private const int MaxRetryCount = 10;
+    private static readonly HttpClient HttpClient = new HttpClient();
+    private static readonly AsyncRetryPolicy RetryPolicy = Policy
+        .Handle<RetriableException>()
+        .WaitAndRetryAsync(MaxRetryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+
     public static HttpRequestMessage CreatePutBlockRequestAsync(PipelineBuffer buffer, string apiVersion)
     {
         var request = new HttpRequestMessage(HttpMethod.Put, buffer.BlobPartUrl)
@@ -55,6 +65,82 @@ public class BlobBlockApiHttpUtils
         return request;
     }
 
+    public static async Task<HttpResponseMessage> ExecuteHttpRequestAsync(HttpRequestMessage request)
+    {
+        return await RetryPolicy.ExecuteAsync(() => ExecuteHttpRequestImplAsync(request));
+    }
+
+    private static async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(HttpRequestMessage request)
+    {
+        var response = await HttpClient.SendAsync(request);
+
+        try
+        {
+            response.EnsureSuccessStatusCode();
+        }
+        catch (HttpRequestException ex)
+        {
+            if (IsRetriableStatusCode(response.StatusCode))
+            {
+                throw new RetriableException(ex.Message, ex);
+            }
+            throw;
+        }
+        return response;
+    }
+
+    public static async Task<int> ExecuteHttpRequestAndReadBodyResponseAsync(PipelineBuffer buffer, HttpRequestMessage request)
+    {
+        return await RetryPolicy.ExecuteAsync(() => ExecuteHttpRequestAndReadBodyResponseImplAsync(buffer, request));
+    }
+
+    private static async Task<int> ExecuteHttpRequestAndReadBodyResponseImplAsync(PipelineBuffer buffer, HttpRequestMessage request)
+    {
+        var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+
+        try
+        {
+            response.EnsureSuccessStatusCode();
+
+            var data = await response.Content.ReadAsStreamAsync();
+
+            await data.ReadExactlyAsync(buffer.Data, 0, buffer.Length);
+
+            return buffer.Length;
+        }
+        catch (HttpRequestException ex)
+        {
+            if (IsRetriableStatusCode(response.StatusCode))
+            {
+                throw new RetriableException(ex.Message, ex);
+            }
+            throw;
+        }
+        catch (IOException ex)
+        {
+            throw new RetriableException(ex.Message, ex);
+        }
+        finally
+        {
+            response.Dispose();
+        }
+    }
+
+    private static bool IsRetriableStatusCode(HttpStatusCode responseStatusCode)
+    {
+        if (responseStatusCode is
+            HttpStatusCode.ServiceUnavailable or
+            HttpStatusCode.GatewayTimeout or
+            HttpStatusCode.TooManyRequests or
+            HttpStatusCode.InternalServerError or
+            HttpStatusCode.RequestTimeout)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     private static StringContent CreateBlockListContent(long length, int blockSize)
     {
         var sb = new StringBuilder();
@@ -73,5 +159,13 @@ public class BlobBlockApiHttpUtils
 
         var content = new StringContent(sb.ToString(), Encoding.UTF8, "text/plain");
         return content;
+    }
+
+    public static HttpRequestMessage CreateReadByRangeHttpRequest(PipelineBuffer buffer)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, buffer.BlobUrl);
+
+        request.Headers.Range = new RangeHeaderValue(buffer.Offset, buffer.Offset + buffer.Length);
+        return request;
     }
 }

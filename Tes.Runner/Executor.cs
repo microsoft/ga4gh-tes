@@ -26,6 +26,8 @@ namespace Tes.Runner
             this.blobPipelineOptions = blobPipelineOptions;
 
             var content = File.ReadAllText(tesNodeTaskFilePath);
+
+            tesNodeTask = DeserializeNodeTask(content);
         }
 
         public async Task<NodeTaskResult> ExecuteNodeTaskAsync(DockerExecutor dockerExecutor)

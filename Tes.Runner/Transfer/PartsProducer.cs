@@ -44,7 +44,7 @@ public class PartsProducer
         try
         {
             await Task.WhenAll(partsProducerTasks);
-            logger.LogInformation("All parts for the provided operations are created.");
+            logger.LogInformation("All parts from requested operations were created.");
         }
         catch (Exception e)
         {
