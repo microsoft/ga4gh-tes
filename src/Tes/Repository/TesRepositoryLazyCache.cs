@@ -16,7 +16,7 @@ namespace Tes.Repository
         /// A TesTask can run for 7 days, and hypothetically there could be weeks of queued tasks, so set a long default
         /// </summary>
         /// 
-        private static System.TimeSpan defaultItemExpiration = System.TimeSpan.FromDays(30);
+        private static TimeSpan defaultItemExpiration = TimeSpan.FromDays(30);
 
         private readonly IAppCache cache;
 
@@ -31,13 +31,10 @@ namespace Tes.Repository
         }
 
         /// <inheritdoc/>
-        public int MaxCount { get => throw new System.NotSupportedException(); set => throw new System.NotSupportedException(); }
+        public int MaxCount { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
 
         /// <inheritdoc/>
-        public int Count()
-        {
-            throw new System.NotSupportedException();
-        }
+        public int Count() => throw new NotSupportedException();
 
         /// <inheritdoc/>
         public bool TryAdd(string key, T task)
