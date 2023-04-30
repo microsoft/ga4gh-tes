@@ -205,7 +205,7 @@ namespace Tes.Repository
             }
             else
             {
-                cache?.TryUpdate(tesTask.Id, tesTask, default);
+                cache?.TryUpdate(tesTask.Id, tesTask);
             }
 
             return item.Json;

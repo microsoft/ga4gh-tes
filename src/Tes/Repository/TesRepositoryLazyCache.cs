@@ -26,6 +26,7 @@ namespace Tes.Repository
         /// <param name="appCache"></param>
         public TesRepositoryLazyCache(IAppCache appCache)
         {
+            ArgumentNullException.ThrowIfNull(appCache, nameof(appCache));
             cache = appCache;
         }
 
