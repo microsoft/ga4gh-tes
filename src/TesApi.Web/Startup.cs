@@ -104,6 +104,7 @@ namespace TesApi.Web
                     .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
                     .AddSingleton<AzureManagementClientsFactory>()
                     .AddSingleton<ConfigurationUtils>()
+                    .AddSingleton<AllowedVmSizesService>()
                     .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
 
                     .AddSwaggerGen(c =>
@@ -132,7 +133,7 @@ namespace TesApi.Web
                     })
 
                     // Order is important for hosted services
-                    .AddHostedService<AllowedVmSizesService>()
+                    .AddHostedService(sp => (AllowedVmSizesService)sp.GetRequiredService(typeof(AllowedVmSizesService)))
                     .AddHostedService<BatchPoolService>()
                     .AddHostedService<Scheduler>()
                     .AddHostedService<DeleteCompletedBatchJobsHostedService>()

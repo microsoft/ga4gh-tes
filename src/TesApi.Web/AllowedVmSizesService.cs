@@ -18,7 +18,7 @@ namespace TesApi.Web
         private readonly ILogger logger;
         private readonly ConfigurationUtils configUtils;
         private List<string> allowedVmSizes;
-        private Task startTask;
+        private Task firstTask;
 
         /// <summary>
         /// Hosted service that executes one-time set-up tasks at start up.
@@ -37,7 +37,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            startTask = Task.Run(async () =>
+            var getAllowedVms = async () =>
             {
                 using (logger.BeginScope("Executing Start Up tasks"))
                 {
@@ -52,8 +52,23 @@ namespace TesApi.Web
                         throw;
                     }
                 }
-            });
-            await startTask;
+            };
+            firstTask = Task.Run(getAllowedVms);
+            await firstTask;
+
+            using PeriodicTimer timer = new(TimeSpan.FromHours(24));
+
+            try
+            {
+                while (await timer.WaitForNextTickAsync(stoppingToken))
+                {
+                    await Task.Run(getAllowedVms);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                logger.LogInformation("AllowedVmSizes Service is stopping.");
+            }
         }
 
         /// <summary>
@@ -64,7 +79,11 @@ namespace TesApi.Web
         {
             if (allowedVmSizes == null)
             {
-                await startTask;
+                while (firstTask is null)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(10));
+                }
+                await firstTask;
             }
 
             return allowedVmSizes;
