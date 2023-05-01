@@ -71,5 +71,38 @@ namespace Tes.Runner.Test
                 Assert.AreEqual(expectedPartSize[i], parts[i].Length);
             }
         }
+
+        [DataTestMethod]
+        [DataRow(BlobSizeUtils.MiB * 10, (BlobSizeUtils.MiB * 100) + 1)]
+        public async Task StartPartsProducersAsync_PartsHaveExpectedLengths(int blockSize, long fileSize)
+        {
+            var options = new BlobPipelineOptions(BlockSize: blockSize);
+            partsProducer = new PartsProducer(pipeline.Object, options);
+            pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
+
+            var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
+
+            await partsProducer.StartPartsProducersAsync(new List<BlobOperationInfo>() { blobOp }, readBuffer);
+
+            readBuffer.Writer.Complete();
+
+            var parts = await RunnerTestUtils.ReadAllPipelineBuffersAsync(readBuffer.Reader.ReadAllAsync());
+
+            //Assert.AreEqual(expectedPartSize.Length, parts.Count);
+
+            var partsFilesSize = parts.Sum(p => p.Length);
+
+            var expectedOffset = 0;
+
+            for (int i = 0; i < parts.Count; i++)
+            {
+                var part = parts[i];
+                Assert.AreEqual(expectedOffset, part.Offset);
+
+                expectedOffset += part.Length;
+            }
+
+            Assert.AreEqual(fileSize, partsFilesSize);
+        }
     }
 }

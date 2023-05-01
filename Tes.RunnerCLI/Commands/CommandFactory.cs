@@ -14,7 +14,7 @@ namespace Tes.RunnerCLI.Commands
                 getDefaultValue: () => new Uri("unix:///var/run/docker.sock")
             );
 
-            var cmd = CreateCommand("exec", "Execute a TES Task on the Node", dockerUriOption);
+            var cmd = CreateCommand("exec", "Downloads input files, executes specified commands and uploads output files", dockerUriOption);
 
             cmd.SetHandler((file, blockSize, writers, readers, apiVersion, dockerUri) =>
                 CommandHandlers.ExecuteNodeTaskAsync(file,
@@ -55,7 +55,7 @@ namespace Tes.RunnerCLI.Commands
         internal static Command CreateDownloadCommand()
         {
 
-            var cmd = CreateCommand("download", "Downloads input files from blob storage");
+            var cmd = CreateCommand("download", "Downloads input files from a HTTP source");
 
             cmd.SetHandler((file, blockSize, writers, readers, apiVersion) =>
                     CommandHandlers.ExecuteDownloadTaskAsync(file,

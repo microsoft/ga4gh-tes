@@ -8,12 +8,12 @@ namespace Tes.Runner.Test
 {
     [TestClass]
     [TestCategory("Integration")]
-    public class BlobUploaderTest
+    public class BlobUploaderTests
     {
         private BlobContainerClient blobContainerClient;
         private Guid containerId;
         private BlobUploader blobUploader;
-        private int blockSize = 10 * Units.MiB;
+        private readonly BlobPipelineOptions blobPipelineOptions = new BlobPipelineOptions();
 
         [TestInitialize]
         public async Task Init()
@@ -27,8 +27,8 @@ namespace Tes.Runner.Test
 
             blobContainerClient.Create(PublicAccessType.None);
 
-            blobUploader = new BlobUploader(new BlobPipelineOptions(blockSize, 10, 10, 10),
-                await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(10, blockSize));
+            blobUploader = new BlobUploader(blobPipelineOptions,
+                await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(10, blobPipelineOptions.BlockSize));
         }
 
         [TestCleanup]
@@ -36,13 +36,31 @@ namespace Tes.Runner.Test
         {
             blobContainerClient.DeleteIfExists();
         }
-        [TestMethod]
-        public async Task UploadFile_10MiBFile_UploadsSuccessfully()
+        [DataTestMethod]
+        [DataRow(10, 0)]
+        [DataRow(10, 100)]
+        [DataRow(100, 0)]
+        [DataRow(99, 1)]
+        [DataRow(100, 1)]
+        [DataRow(0, 0)]
+        public async Task UploadFile_LocalFileUploadsAndMatchesSize(int numberOfMiB, int extraBytes)
         {
-            var file = await RunnerTestUtils.CreateTempFileWithContentAsync(10);
+            var file = await RunnerTestUtils.CreateTempFileWithContentAsync(numberOfMiB, extraBytes);
             var blobClient = blobContainerClient.GetBlobClient(file);
 
             // Create a SAS token that's valid for one hour.
+            var url = CreateSasUrl(blobClient, file);
+
+            await blobUploader.UploadAsync(new List<UploadInfo>() { new UploadInfo(file, url) });
+
+            var blobProperties = await blobClient.GetPropertiesAsync();
+            var fileSize = (numberOfMiB * BlobSizeUtils.MiB) + extraBytes;
+            Assert.IsNotNull(blobProperties);
+            Assert.AreEqual(fileSize, blobProperties.Value.ContentLength);
+        }
+
+        private Uri CreateSasUrl(BlobClient blobClient, string file)
+        {
             var sasBuilder = new BlobSasBuilder(BlobContainerSasPermissions.All, DateTimeOffset.UtcNow.AddHours(1))
             {
                 BlobContainerName = blobClient.GetParentBlobContainerClient().Name,
@@ -51,12 +69,7 @@ namespace Tes.Runner.Test
             };
 
             var url = blobContainerClient.GetBlobClient(file).GenerateSasUri(sasBuilder);
-
-            await blobUploader.UploadAsync(new List<UploadInfo>() { new UploadInfo(file, url) });
-
-            var blobProperties = await blobClient.GetPropertiesAsync();
-            Assert.IsNotNull(blobProperties);
-            Assert.AreEqual(10 * Units.MiB, blobProperties.Value.ContentLength);
+            return url;
         }
     }
 }

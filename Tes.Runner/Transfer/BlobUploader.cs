@@ -29,22 +29,35 @@ namespace Tes.Runner.Transfer
         /// <returns>Number of bytes written</returns>
         public override async ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
         {
+            if (IsFileEmptyScenario(buffer))
+            {
+                return 0;
+            }
+
+            await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreatePutBlockRequestAsync(buffer, PipelineOptions.ApiVersion));
+
+            return buffer.Length;
+        }
+
+        private static bool IsFileEmptyScenario(PipelineBuffer buffer)
+        {
             if (buffer.Length == 0)
             {
                 if (buffer.NumberOfParts == 1)
-                {// If there is only one part and it is empty, no need to write an empty block to the blob.
-                    return 0;
+                {
+                    // If there is only one part and it is empty, no need to write an empty block to the blob.
+                    {
+                        return true;
+                    }
                 }
 
                 throw new Exception(
                     "Invalid operation. The buffer is empty and the transfer contains more than one part");
             }
-            var request = BlobBlockApiHttpUtils.CreatePutBlockRequestAsync(buffer, PipelineOptions.ApiVersion);
 
-            await BlobBlockApiHttpUtils.ExecuteHttpRequestAndReadBodyResponseAsync(buffer, request);
-
-            return buffer.Length;
+            return false;
         }
+
         /// <summary>
         /// Reads part's data from the file
         /// </summary>
@@ -84,9 +97,7 @@ namespace Tes.Runner.Transfer
             ArgumentNullException.ThrowIfNull(blobUrl, nameof(blobUrl));
             ArgumentException.ThrowIfNullOrEmpty(fileName, nameof(fileName));
 
-            var request = BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSize, PipelineOptions.ApiVersion);
-
-            await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(request);
+            await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSize, PipelineOptions.ApiVersion));
         }
 
         /// <summary>
@@ -117,12 +128,12 @@ namespace Tes.Runner.Transfer
             {
                 if (string.IsNullOrEmpty(uploadInfo.FullFilePath))
                 {
-                    throw new ArgumentException("Full file path cannot be null or empty.", nameof(uploadInfo));
+                    throw new ArgumentException("Full file path cannot be null or empty.");
                 }
 
                 if (uploadInfo.TargetUri == null)
                 {
-                    throw new ArgumentException("Target URI cannot be null.", nameof(uploadInfo));
+                    throw new ArgumentException("Target URI cannot be null.");
                 }
             }
         }

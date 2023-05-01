@@ -1,8 +1,13 @@
-﻿using System.Threading.Channels;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer;
-
+/// <summary>
+/// Handles the processed parts.
+/// </summary>
 public class ProcessedPartsProcessor
 {
     private readonly ILogger logger = PipelineLoggerFactory.Create<ProcessedPartsProcessor>();
@@ -14,6 +19,14 @@ public class ProcessedPartsProcessor
         this.blobPipeline = blobPipeline;
     }
 
+    /// <summary>
+    /// Starts a single-threaded process that reads the processed buffers from the channel and keeps track of the number of parts processed.
+    /// When all the parts for a file are processed, the operation is marked as completed.
+    /// </summary>
+    /// <param name="expectedNumberOfFiles"></param>
+    /// <param name="processedBufferChannel"></param>
+    /// <param name="readBufferChannel"></param>
+    /// <returns></returns>
     public async ValueTask<long> StartProcessedPartsProcessorAsync(int expectedNumberOfFiles,
         Channel<ProcessedBuffer> processedBufferChannel, Channel<PipelineBuffer> readBufferChannel)
     {
@@ -54,7 +67,7 @@ public class ProcessedPartsProcessor
 
         readBufferChannel.Writer.Complete();
 
-        logger.LogInformation("All part processed operations are complete.");
+        logger.LogInformation("All parts were successfully processed.");
 
         return totalBytes;
     }

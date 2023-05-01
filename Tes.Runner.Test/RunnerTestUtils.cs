@@ -1,4 +1,5 @@
-﻿using System.Threading.Channels;
+﻿using System.Security.Cryptography;
+using System.Threading.Channels;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Test;
@@ -14,6 +15,13 @@ public class RunnerTestUtils
         return file;
     }
 
+    public static string CalculateMd5(string file)
+    {
+        using var md5 = MD5.Create();
+        using var stream = File.OpenRead(file);
+        var hash = md5.ComputeHash(stream);
+        return Convert.ToBase64String(hash);
+    }
     public static void DeleteFileIfExists(string file)
     {
         if (File.Exists(file))
@@ -22,9 +30,9 @@ public class RunnerTestUtils
         }
     }
 
-    public static async Task<List<PipelineBuffer>> ReadAllPipelineBuffersAsync(IAsyncEnumerable<PipelineBuffer> source)
+    public static async Task<List<T>> ReadAllPipelineBuffersAsync<T>(IAsyncEnumerable<T> source)
     {
-        var pipelineBuffers = new List<PipelineBuffer>();
+        var pipelineBuffers = new List<T>();
         await foreach (var item in source)
         {
             pipelineBuffers.Add(item);
@@ -34,7 +42,7 @@ public class RunnerTestUtils
 
     static Random random = new Random();
 
-    public static async Task<string> CreateTempFileWithContentAsync(int numberOfMiB)
+    public static async Task<string> CreateTempFileWithContentAsync(int numberOfMiB, int extraBytes = 0)
     {
         var file = Guid.NewGuid().ToString();
         await using var fs = File.Create($"{file}.tmp", Units.MiB);
@@ -45,6 +53,13 @@ public class RunnerTestUtils
         for (var blocks = 0; blocks < numberOfMiB; blocks++)
         {
             await fs.WriteAsync(data, 0, BlobSizeUtils.MiB);
+        }
+
+        if (extraBytes > 0)
+        {
+            var extraData = new byte[extraBytes];
+            random.NextBytes(extraData);
+            await fs.WriteAsync(extraData, 0, extraBytes);
         }
 
         fs.Close();
@@ -77,5 +92,15 @@ public class RunnerTestUtils
         }
 
         pipelineBuffers.Writer.Complete();
+    }
+
+    public static async Task AddProcessedBufferAsync(Channel<ProcessedBuffer> processedBuffer, string fileName, int numberOfParts, long fileSize)
+    {
+        for (int i = 0; i < numberOfParts; i++)
+        {
+            var processedPart = new ProcessedBuffer(fileName, null, fileSize, i, numberOfParts, Channel.CreateUnbounded<FileStream>(), null, 0);
+
+            await processedBuffer.Writer.WriteAsync(processedPart);
+        }
     }
 }

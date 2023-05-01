@@ -143,12 +143,8 @@ public class PartsProducer
                     await pool.Writer.WriteAsync(File.Open(fileName, FileMode.Open, FileAccess.Read, FileShare.Read));
                     continue;
                 }
-                var directory = Path.GetDirectoryName(fileName);
 
-                if (!string.IsNullOrEmpty(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
+                CreateDirectoryIfNotPresent(fileName);
 
                 await pool.Writer.WriteAsync(File.Open(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite));
             }
@@ -160,5 +156,15 @@ public class PartsProducer
         }
 
         return pool;
+    }
+
+    private static void CreateDirectoryIfNotPresent(string fileName)
+    {
+        var directory = Path.GetDirectoryName(fileName);
+
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
     }
 }

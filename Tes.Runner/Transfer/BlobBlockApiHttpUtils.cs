@@ -1,4 +1,7 @@
-﻿using System.Net;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using Polly;
@@ -10,7 +13,7 @@ namespace Tes.Runner.Transfer;
 /// </summary>
 public class BlobBlockApiHttpUtils
 {
-    private const int MaxRetryCount = 10;
+    private const int MaxRetryCount = 3;
     private static readonly HttpClient HttpClient = new HttpClient();
     private static readonly AsyncRetryPolicy RetryPolicy = Policy
         .Handle<RetriableException>()
@@ -34,7 +37,7 @@ public class BlobBlockApiHttpUtils
 
     public static string ToBlockId(int ordinal)
     {
-        return Convert.ToBase64String(Encoding.UTF8.GetBytes($"block{ordinal}"));
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes($"block{ordinal:00000}"));
     }
 
     private static void AddPutBlockHeaders(HttpRequestMessage request, string apiVersion)
@@ -45,7 +48,6 @@ public class BlobBlockApiHttpUtils
 
     private static void AddBlockBlobServiceHeaders(HttpRequestMessage request, string apiVersion)
     {
-        //TODO: Move this version to the blob options.
         request.Headers.Add("x-ms-version", apiVersion);
         request.Headers.Add("x-ms-date", DateTime.UtcNow.ToString("R"));
     }
@@ -65,14 +67,14 @@ public class BlobBlockApiHttpUtils
         return request;
     }
 
-    public static async Task<HttpResponseMessage> ExecuteHttpRequestAsync(HttpRequestMessage request)
+    public static async Task<HttpResponseMessage> ExecuteHttpRequestAsync(Func<HttpRequestMessage> requestFactory)
     {
-        return await RetryPolicy.ExecuteAsync(() => ExecuteHttpRequestImplAsync(request));
+        return await RetryPolicy.ExecuteAsync(() => ExecuteHttpRequestImplAsync(requestFactory));
     }
 
-    private static async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(HttpRequestMessage request)
+    private static async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request)
     {
-        var response = await HttpClient.SendAsync(request);
+        var response = await HttpClient.SendAsync(request());
 
         try
         {
@@ -89,14 +91,14 @@ public class BlobBlockApiHttpUtils
         return response;
     }
 
-    public static async Task<int> ExecuteHttpRequestAndReadBodyResponseAsync(PipelineBuffer buffer, HttpRequestMessage request)
+    public static async Task<int> ExecuteHttpRequestAndReadBodyResponseAsync(PipelineBuffer buffer, Func<HttpRequestMessage> requestFactory)
     {
-        return await RetryPolicy.ExecuteAsync(() => ExecuteHttpRequestAndReadBodyResponseImplAsync(buffer, request));
+        return await RetryPolicy.ExecuteAsync(() => ExecuteHttpRequestAndReadBodyResponseImplAsync(buffer, requestFactory));
     }
 
-    private static async Task<int> ExecuteHttpRequestAndReadBodyResponseImplAsync(PipelineBuffer buffer, HttpRequestMessage request)
+    private static async Task<int> ExecuteHttpRequestAndReadBodyResponseImplAsync(PipelineBuffer buffer, Func<HttpRequestMessage> requestFactory)
     {
-        var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        var response = await HttpClient.SendAsync(requestFactory(), HttpCompletionOption.ResponseHeadersRead);
 
         try
         {
