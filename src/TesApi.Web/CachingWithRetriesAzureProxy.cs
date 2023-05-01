@@ -157,9 +157,19 @@ namespace TesApi.Web
                  ct => azureProxy.GetStorageAccountKeyAsync(storageAccountInfo, ct), DateTimeOffset.Now.AddHours(1), cancellationToken);
 
         /// <inheritdoc/>
-        public Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken)
-            => cacheAndRetryHandler.ExecuteWithRetryAndCachingAsync($"{nameof(CachingWithRetriesAzureProxy)}:{storageAccountName}",
-                 ct => azureProxy.GetStorageAccountInfoAsync(storageAccountName, ct), DateTimeOffset.MaxValue, cancellationToken);
+        public async Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken)
+        {
+            var key = $"{nameof(CachingWithRetriesAzureProxy)}:{storageAccountName}";
+            var result = await cacheAndRetryHandler.ExecuteWithRetryAndCachingAsync(key,
+                         ct => azureProxy.GetStorageAccountInfoAsync(storageAccountName, ct), DateTimeOffset.MaxValue, cancellationToken);
+
+            if (result is null)
+            {
+                cacheAndRetryHandler.AppCache.Remove(key);
+            }
+
+            return result;
+        }
 
         /// <inheritdoc/>
         public Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri) => cacheAndRetryHandler.ExecuteWithRetryAsync(() => azureProxy.ListBlobsAsync(directoryUri));
