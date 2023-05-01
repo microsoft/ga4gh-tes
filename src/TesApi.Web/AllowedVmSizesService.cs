@@ -15,6 +15,7 @@ namespace TesApi.Web
     /// </summary>
     public class AllowedVmSizesService : BackgroundService, IAllowedVmSizesService
     {
+        private readonly TimeSpan refreshInterval = TimeSpan.FromHours(24);
         private readonly ILogger logger;
         private readonly ConfigurationUtils configUtils;
         private List<string> allowedVmSizes;
@@ -34,35 +35,36 @@ namespace TesApi.Web
             this.logger = logger;
         }
 
+        private async Task GetAllowedVmSizesImpl()
+        {
+            using (logger.BeginScope("Executing Start Up tasks"))
+            {
+                try
+                {
+                    logger.LogInformation("Executing Configuration Utils Setup");
+                    allowedVmSizes = await configUtils.ProcessAllowedVmSizesConfigurationFileAsync();
+                }
+                catch (Exception e)
+                {
+                    logger.LogError(e, "Failed to execute start up tasks");
+                    throw;
+                }
+            }
+        }
+
         /// <inheritdoc/>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var getAllowedVms = async () =>
-            {
-                using (logger.BeginScope("Executing Start Up tasks"))
-                {
-                    try
-                    {
-                        logger.LogInformation("Executing Configuration Utils Setup");
-                        allowedVmSizes = await configUtils.ProcessAllowedVmSizesConfigurationFileAsync();
-                    }
-                    catch (Exception e)
-                    {
-                        logger.LogError(e, "Failed to execute start up tasks");
-                        throw;
-                    }
-                }
-            };
-            firstTask = Task.Run(getAllowedVms);
+            firstTask = GetAllowedVmSizesImpl();
             await firstTask;
 
-            using PeriodicTimer timer = new(TimeSpan.FromHours(24));
+            using PeriodicTimer timer = new(refreshInterval);
 
             try
             {
                 while (await timer.WaitForNextTickAsync(stoppingToken))
                 {
-                    await Task.Run(getAllowedVms);
+                    await GetAllowedVmSizesImpl();
                 }
             }
             catch (OperationCanceledException)
@@ -81,7 +83,7 @@ namespace TesApi.Web
             {
                 while (firstTask is null)
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(10));
+                    await Task.Delay(TimeSpan.FromSeconds(1));
                 }
                 await firstTask;
             }
