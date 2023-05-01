@@ -13,7 +13,7 @@ namespace TesApi.Web
     /// <summary>
     /// Hosted service that executes one-time set up tasks at start up.
     /// </summary>
-    public class AllowedVmSizesService : BackgroundService
+    public class AllowedVmSizesService : BackgroundService, IAllowedVmSizesService
     {
         private readonly ILogger logger;
         private readonly ConfigurationUtils configUtils;

@@ -1389,6 +1389,12 @@ namespace TesApi.Tests
             return (jobId, cloudTask, poolInformation, batchPoolsModel);
         }
 
+        private static Action<Mock<IAllowedVmSizesService>> GetMockAllowedVms()
+            => new(proxy =>
+                proxy.Setup(p => p.GetAllowedVmSizes())
+                    .ReturnsAsync(new List<string>()));
+        
+
         private static Action<Mock<IBatchSkuInformationProvider>> GetMockSkuInfoProvider(AzureProxyReturnValues azureProxyReturnValues)
             => new(proxy =>
                 proxy.Setup(p => p.GetVmSizesAndPricesAsync(It.IsAny<string>()))
@@ -1578,7 +1584,8 @@ namespace TesApi.Tests
                 configuration: GetMockConfig(false)(),
                 azureProxy: GetMockAzureProxy(azureProxyReturn),
                 batchQuotaProvider: GetMockQuotaProvider(azureProxyReturn),
-                batchSkuInformationProvider: GetMockSkuInfoProvider(azureProxyReturn));
+                batchSkuInformationProvider: GetMockSkuInfoProvider(azureProxyReturn),
+                allowedVmSizesServiceSetup: GetMockAllowedVms());
         }
 
         private static async Task<BatchPool> AddPool(BatchScheduler batchScheduler)

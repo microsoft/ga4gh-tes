@@ -86,7 +86,7 @@ namespace TesApi.Web
         private readonly IBatchPoolFactory _batchPoolFactory;
         private readonly string[] taskRunScriptContent;
         private readonly string[] taskCleanupScriptContent;
-        private readonly AllowedVmSizesService allowedVmSizesService;
+        private readonly IAllowedVmSizesService allowedVmSizesService;
 
         private HashSet<string> onlyLogBatchTaskStateOnce = new();
 
@@ -124,7 +124,7 @@ namespace TesApi.Web
             IBatchSkuInformationProvider skuInformationProvider,
             ContainerRegistryProvider containerRegistryProvider,
             IBatchPoolFactory poolFactory,
-            AllowedVmSizesService allowedVmSizesService)
+            IAllowedVmSizesService allowedVmSizesService)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(azureProxy);

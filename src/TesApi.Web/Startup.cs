@@ -105,6 +105,7 @@ namespace TesApi.Web
                     .AddSingleton<AzureManagementClientsFactory>()
                     .AddSingleton<ConfigurationUtils>()
                     .AddSingleton<AllowedVmSizesService>()
+                    .AddSingleton<IAllowedVmSizesService>(sp => (AllowedVmSizesService)sp.GetRequiredService(typeof(AllowedVmSizesService)))
                     .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
 
                     .AddSwaggerGen(c =>
