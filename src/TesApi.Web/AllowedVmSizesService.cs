@@ -37,18 +37,15 @@ namespace TesApi.Web
 
         private async Task GetAllowedVmSizesImpl()
         {
-            using (logger.BeginScope("Executing Start Up tasks"))
+            try
             {
-                try
-                {
-                    logger.LogInformation("Executing Configuration Utils Setup");
-                    allowedVmSizes = await configUtils.ProcessAllowedVmSizesConfigurationFileAsync();
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e, "Failed to execute start up tasks");
-                    throw;
-                }
+                logger.LogInformation("Executing allowed vm sizes config setup");
+                allowedVmSizes = await configUtils.ProcessAllowedVmSizesConfigurationFileAsync();
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to execute allowed vm sizes config setup");
+                throw;
             }
         }
 
