@@ -1406,7 +1406,7 @@ namespace TesApi.Tests
                 proxy.Setup(p => p.GetAllowedVmSizes())
                     .ReturnsAsync(allowedVms);
             });
-        
+
 
         private static Action<Mock<IBatchSkuInformationProvider>> GetMockSkuInfoProvider(AzureProxyReturnValues azureProxyReturnValues)
             => new(proxy =>
