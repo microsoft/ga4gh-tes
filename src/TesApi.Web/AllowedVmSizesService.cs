@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace TesApi.Web
 {
     /// <summary>
-    /// Hosted service that executes one-time set up tasks at start up.
+    /// Service that periodically fetches the allowed vms list from storage, and updates the supported vms list.
     /// </summary>
     public class AllowedVmSizesService : BackgroundService, IAllowedVmSizesService
     {
@@ -22,7 +22,7 @@ namespace TesApi.Web
         private Task firstTask;
 
         /// <summary>
-        /// Hosted service that executes one-time set-up tasks at start up.
+        /// Service that periodically fetches the allowed vms list from storage, and updates the supported vms list.
         /// </summary>
         /// <param name="configUtils"></param>
         /// <param name="logger"></param>
@@ -73,7 +73,7 @@ namespace TesApi.Web
         /// <summary>
         /// Awaits start up and then return allowed vm sizes. 
         /// </summary>
-        /// <returns></returns>
+        /// <returns>List of allowed vms.</returns>
         public async Task<List<string>> GetAllowedVmSizes()
         {
             if (allowedVmSizes == null)
