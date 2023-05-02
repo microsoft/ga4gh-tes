@@ -11,15 +11,8 @@ namespace Tes.Repository
     /// <typeparam name="T"></typeparam>
     public class TesRepositoryCache<T> : ICache<T> where T : class
     {
-        /// <summary>
-        /// A TesTask can run for 7 days, and hypothetically there could be weeks of queued tasks, so set a long default
-        /// </summary>
-        private static readonly System.TimeSpan defaultItemExpiration = System.TimeSpan.FromDays(30);
-        private static readonly System.TimeSpan removedItemExpiration = System.TimeSpan.FromDays(1);
-
         private readonly IDistributedCache cache;
-        private readonly DistributedCacheEntryOptions entryOptions = new() { SlidingExpiration = defaultItemExpiration };
-        private readonly DistributedCacheEntryOptions removedEntryOptions = new() { SlidingExpiration = removedItemExpiration };
+        private readonly DistributedCacheEntryOptions entryOptions = new() { SlidingExpiration = System.TimeSpan.FromDays(1) };
 
         /// <summary>
         /// Default constructor expecting the singleton LazyCache.IAppCache
@@ -60,7 +53,6 @@ namespace Tes.Repository
             }
 
             cache.Remove(cacheKey);
-            cache.Set(cacheKey, item, removedEntryOptions);
             return true;
         }
 

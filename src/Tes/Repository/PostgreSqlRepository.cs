@@ -53,11 +53,11 @@ namespace Tes.Repository
                 {
                     cache.TryUpdate(getKey(item), item);
                 }
-                else
-                {
-                    // Cache optimization because we can assume that most of the time, the workflow engine will no longer "GET" after a terminal state
-                    cache.TryRemove(getKey(item));
-                }
+                //else
+                //{
+                //    // Cache optimization because we can assume that most of the time, the workflow engine will no longer "GET" after a terminal state
+                //    cache.TryRemove(getKey(item));
+                //}
             }
             else if (isActive(item))
             {
