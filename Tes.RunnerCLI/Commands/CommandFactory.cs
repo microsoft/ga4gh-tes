@@ -21,7 +21,7 @@ namespace Tes.RunnerCLI.Commands
         internal static Command CreateExecutorCommand()
         {
 
-            var dockerUriOption = CreateOption<Uri>(DockerUriOption, "local docker engine endpoint","-u",defaultValue:DefaultDockerUri);
+            var dockerUriOption = CreateOption<Uri>(DockerUriOption, "local docker engine endpoint", "-u", defaultValue: DefaultDockerUri);
 
             var cmd = CreateCommand(ExecCommandName, "Downloads input files, executes specified commands and uploads output files", dockerUriOption);
 
@@ -43,7 +43,7 @@ namespace Tes.RunnerCLI.Commands
         internal static Command CreateUploadCommand()
         {
             var cmd = CreateCommand(UploadCommandName, "Uploads output files to blob storage");
-            
+
             cmd.SetHandler(async (file, blockSize, writers, readers, bufferCapacity, apiVersion) =>
                 {
                     await CommandHandlers.ExecuteUploadTaskAsync(file,
@@ -53,7 +53,7 @@ namespace Tes.RunnerCLI.Commands
                             bufferCapacity,
                             apiVersion);
                 },
-                GetOptionByName<FileInfo>(cmd.Options,FileOption),
+                GetOptionByName<FileInfo>(cmd.Options, FileOption),
                 GetOptionByName<int>(cmd.Options, BlockSizeOption),
                 GetOptionByName<int>(cmd.Options, WritersOption),
                 GetOptionByName<int>(cmd.Options, ReadersOption),
@@ -90,7 +90,7 @@ namespace Tes.RunnerCLI.Commands
 
         internal static Command CreateCommand(string optName, string optDescription, params Option[] options)
         {
-            
+
             var cmd = new Command(optName, optDescription);
 
             var allOptions = CreateBaseOptionList();
@@ -105,10 +105,10 @@ namespace Tes.RunnerCLI.Commands
             return cmd;
         }
 
-        
+
         private static List<Option> CreateBaseOptionList()
         {
-            
+
             return new List<Option>()
             {
                 CreateOption<FileInfo>(FileOption, "The file with the task definition",  "-f", required: true),
@@ -122,15 +122,15 @@ namespace Tes.RunnerCLI.Commands
 
         private static Option<T> GetOptionByName<T>(IReadOnlyCollection<Option> commandOptions, string optionName)
         {
-           var option = commandOptions.SingleOrDefault(o => o.Name == optionName);
+            var option = commandOptions.SingleOrDefault(o => o.Name == optionName);
 
-           return (Option<T>)option;
+            return (Option<T>)option;
         }
 
-        private static Option<T> CreateOption<T>(string name, string description, string alias, bool required = false,  object? defaultValue = null)
+        private static Option<T> CreateOption<T>(string name, string description, string alias, bool required = false, object? defaultValue = null)
         {
             var option = new Option<T>(
-                                name: $"--{name}", 
+                                name: $"--{name}",
                                description: description);
 
             if (defaultValue != null)

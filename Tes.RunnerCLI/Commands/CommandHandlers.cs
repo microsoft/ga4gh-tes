@@ -42,8 +42,8 @@ namespace Tes.RunnerCLI.Commands
                 BlockSize: blockSize,
                 NumberOfWriters: writers,
                 NumberOfReaders: readers,
-                ReadWriteBuffersCapacity:bufferCapacity,
-                MemoryBufferCapacity:bufferCapacity,
+                ReadWriteBuffersCapacity: bufferCapacity,
+                MemoryBufferCapacity: bufferCapacity,
                 ApiVersion: apiVersion);
 
             var executor = new Executor(file.FullName, options);
