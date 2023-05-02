@@ -72,7 +72,7 @@ namespace TesApi.Web
         /// entries in the allowed-vm-sizes file with a warning. Sets the AllowedVmSizes configuration key.
         /// </summary>
         /// <returns></returns>
-        public async Task ProcessAllowedVmSizesConfigurationFileAsync()
+        public async Task<List<string>> ProcessAllowedVmSizesConfigurationFileAsync()
         {
             var supportedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/supported-vm-sizes";
             var allowedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/allowed-vm-sizes";
@@ -95,7 +95,7 @@ namespace TesApi.Web
             if (allowedVmSizesFileContent is null)
             {
                 logger.LogWarning($"Unable to read from {allowedVmSizesFilePath}. All supported VM sizes will be eligible for Azure Batch task scheduling.");
-                return;
+                return new List<string>();
             }
 
             // Read the allowed-vm-sizes configuration file and remove any previous warnings (those start with "<" following the VM size or family name)
@@ -141,10 +141,7 @@ namespace TesApi.Web
                 }
             }
 
-            if (allowedAndSupportedVmSizes.Any())
-            {
-                this.configuration["AllowedVmSizes"] = string.Join(',', allowedAndSupportedVmSizes);
-            }
+            return allowedAndSupportedVmSizes;
         }
 
         /// <summary>
