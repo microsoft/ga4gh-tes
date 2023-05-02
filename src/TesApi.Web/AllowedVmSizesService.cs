@@ -35,12 +35,12 @@ namespace TesApi.Web
             this.logger = logger;
         }
 
-        private async Task GetAllowedVmSizesImpl()
+        private async Task GetAllowedVmSizesImpl(CancellationToken stoppingToken)
         {
             try
             {
                 logger.LogInformation("Executing allowed vm sizes config setup");
-                allowedVmSizes = await configUtils.ProcessAllowedVmSizesConfigurationFileAsync();
+                allowedVmSizes = await configUtils.ProcessAllowedVmSizesConfigurationFileAsync(stoppingToken);
             }
             catch (Exception e)
             {
@@ -52,7 +52,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            firstTask = GetAllowedVmSizesImpl();
+            firstTask = GetAllowedVmSizesImpl(stoppingToken);
             await firstTask;
 
             using PeriodicTimer timer = new(refreshInterval);
@@ -61,7 +61,7 @@ namespace TesApi.Web
             {
                 while (await timer.WaitForNextTickAsync(stoppingToken))
                 {
-                    await GetAllowedVmSizesImpl();
+                    await GetAllowedVmSizesImpl(stoppingToken);
                 }
             }
             catch (OperationCanceledException)
