@@ -10,6 +10,7 @@ namespace Tes.RunnerCLI.Commands
             int blockSize,
             int writers,
             int readers,
+            int bufferCapacity,
             string apiVersion,
             Uri dockerUri)
         {
@@ -17,6 +18,8 @@ namespace Tes.RunnerCLI.Commands
                 BlockSize: blockSize,
                 NumberOfWriters: writers,
                 NumberOfReaders: readers,
+                ReadWriteBuffersCapacity: bufferCapacity,
+                MemoryBufferCapacity: bufferCapacity,
                 ApiVersion: apiVersion);
 
             var executor = new Executor(file.FullName, options);
@@ -32,12 +35,15 @@ namespace Tes.RunnerCLI.Commands
             int blockSize,
             int writers,
             int readers,
+            int bufferCapacity,
             string apiVersion)
         {
             var options = new BlobPipelineOptions(
                 BlockSize: blockSize,
                 NumberOfWriters: writers,
                 NumberOfReaders: readers,
+                ReadWriteBuffersCapacity:bufferCapacity,
+                MemoryBufferCapacity:bufferCapacity,
                 ApiVersion: apiVersion);
 
             var executor = new Executor(file.FullName, options);
@@ -51,12 +57,15 @@ namespace Tes.RunnerCLI.Commands
             int blockSize,
             int writers,
             int readers,
+            int bufferCapacity,
             string apiVersion)
         {
             var options = new BlobPipelineOptions(
                 BlockSize: blockSize,
                 NumberOfWriters: writers,
                 NumberOfReaders: readers,
+                ReadWriteBuffersCapacity: bufferCapacity,
+                MemoryBufferCapacity: bufferCapacity,
                 ApiVersion: apiVersion);
 
             var executor = new Executor(file.FullName, options);
