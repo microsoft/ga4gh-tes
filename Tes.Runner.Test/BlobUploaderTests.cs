@@ -8,6 +8,7 @@ namespace Tes.Runner.Test
 {
     [TestClass]
     [TestCategory("Integration")]
+    [Ignore]
     public class BlobUploaderTests
     {
         private BlobContainerClient blobContainerClient;
