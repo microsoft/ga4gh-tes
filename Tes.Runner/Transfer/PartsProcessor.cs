@@ -40,5 +40,15 @@ public abstract class PartsProcessor
         {
             throw new ArgumentException("The number of readers must be greater than 0.");
         }
+
+        if (blobPipelineOptions.ReadWriteBuffersCapacity < 1)
+        {
+            throw new ArgumentException("The buffer capacity must be greater than 0.");
+        }
+
+        if (blobPipelineOptions.MemoryBufferCapacity < 1)
+        {
+            throw new ArgumentException("The memory buffer capacity must be greater than 0.");
+        }
     }
 }
