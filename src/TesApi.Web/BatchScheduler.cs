@@ -53,7 +53,6 @@ namespace TesApi.Web
         private const int defaultBlobxferChunkSizeBytes = 16_777_216; // max file size = 16 MiB * 50k blocks = 838,860,800,000 bytes
         private const string TesExecutionsPathPrefix = "/tes-internal";
         private const string CromwellScriptFileName = "script";
-        private const string BatchExecutionDirectoryName = "__batch";
         private const string BatchScriptFileName = "batch_script";
         private const string UploadFilesScriptFileName = "upload_files_script";
         private const string DownloadFilesScriptFileName = "download_files_script";
@@ -409,15 +408,7 @@ namespace TesApi.Web
 
         private static string GetBatchExecutionDirectoryPath(TesTask task)
         {
-            var cromwellDir = GetCromwellExecutionDirectoryPath(task);
-            if (cromwellDir is not null)
-            {
-                return $"{cromwellDir}/{BatchExecutionDirectoryName}";
-            }
-            else
-            {
-                return $"{TesExecutionsPathPrefix.TrimStart('/')}";
-            }
+            return $"{TesExecutionsPathPrefix.TrimStart('/')}/{task.Id}";
         }
 
         /// <summary>
@@ -973,7 +964,7 @@ namespace TesApi.Web
             if (isCromwell)
             {
                 var executionDirectoryUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{cromwellExecutionDirectoryPath}", getContainerSas: true));
-                var blobsInExecutionDirectory = (await azureProxy.ListBlobsAsync(executionDirectoryUri)).Where(b => !b.EndsWith($"/{CromwellScriptFileName}")).Where(b => !b.Contains($"/{BatchExecutionDirectoryName}/"));
+                var blobsInExecutionDirectory = (await azureProxy.ListBlobsAsync(executionDirectoryUri)).Where(b => !b.EndsWith($"/{CromwellScriptFileName}"));
                 additionalInputFiles = blobsInExecutionDirectory.Select(b => $"{TesExecutionsPathPrefix}/{b}").Select(b => new TesInput { Content = null, Path = b, Url = b, Name = Path.GetFileName(b), Type = TesFileType.FILEEnum }).ToList();
             }
 

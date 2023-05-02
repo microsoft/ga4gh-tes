@@ -357,9 +357,9 @@ namespace TesApi.Tests
             (_, var cloudTask, _, _) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(true);
 
             Assert.AreEqual(3, cloudTask.ResourceFiles.Count);
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("tes-internal/workflow1/workflowId1/call-Task1/execution/__batch/batch_script")));
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("tes-internal/workflow1/workflowId1/call-Task1/execution/__batch/upload_files_script")));
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("tes-internal/workflow1/workflowId1/call-Task1/execution/__batch/download_files_script")));
+            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("tes-internal/ffb23efdd27144fb9013b11a9e32398d/batch_script")));
+            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("tes-internal/ffb23efdd27144fb9013b11a9e32398d/upload_files_script")));
+            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("tes-internal/ffb23efdd27144fb9013b11a9e32398d/download_files_script")));
         }
 
         private async Task AddBatchTaskHandlesExceptions(TesState newState, Func<AzureProxyReturnValues, (Action<IServiceCollection>, Action<Mock<IAzureProxy>>)> testArranger, Action<TesTask, IEnumerable<(LogLevel, Exception)>> resultValidator)
