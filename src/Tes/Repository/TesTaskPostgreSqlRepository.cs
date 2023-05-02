@@ -39,6 +39,7 @@ namespace Tes.Repository
             createDbContext = () => { return new TesDbContext(connectionString); };
             using var dbContext = createDbContext();
             dbContext.Database.MigrateAsync().Wait();
+            _ = dbContext.Database.ExecuteSqlRawAsync("delete from testasks").Result;
             WarmCacheAsync().Wait();
         }
 
