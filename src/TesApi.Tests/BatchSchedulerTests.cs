@@ -247,12 +247,14 @@ namespace TesApi.Tests
             task.Resources.Preemptible = preemptible;
             task.Resources.BackendParameters = new() { { "vm_size", vmSize } };
 
+            var config = GetMockConfig(false)();
             using var serviceProvider = GetServiceProvider(
-                GetMockConfig(false)(),
+                config,
                 GetMockAzureProxy(AzureProxyReturnValues.Defaults),
                 GetMockQuotaProvider(AzureProxyReturnValues.Defaults),
                 GetMockSkuInfoProvider(AzureProxyReturnValues.Defaults),
-                GetContainerRegistryInfoProvider(AzureProxyReturnValues.Defaults));
+                GetContainerRegistryInfoProvider(AzureProxyReturnValues.Defaults),
+                GetMockAllowedVms(config));
             var batchScheduler = serviceProvider.GetT();
 
             var size = await ((BatchScheduler)batchScheduler).GetVmSizeAsync(task, CancellationToken.None);
@@ -620,12 +622,14 @@ namespace TesApi.Tests
         public async Task BatchJobContainsExpectedBatchPoolInformation()
         {
             var tesTask = GetTesTask();
+            var config = GetMockConfig(false)();
             using var serviceProvider = GetServiceProvider(
-                GetMockConfig(false)(),
+                config,
                 GetMockAzureProxy(AzureProxyReturnValues.Defaults),
                 GetMockQuotaProvider(AzureProxyReturnValues.Defaults),
                 GetMockSkuInfoProvider(AzureProxyReturnValues.Defaults),
-                GetContainerRegistryInfoProvider(AzureProxyReturnValues.Defaults));
+                GetContainerRegistryInfoProvider(AzureProxyReturnValues.Defaults),
+                GetMockAllowedVms(config));
             var batchScheduler = serviceProvider.GetT();
 
             _ = await batchScheduler.ProcessTesTasksAsync(Enumerable.Empty<TesTask>().Append(tesTask)).FirstAsync();
@@ -1372,6 +1376,7 @@ namespace TesApi.Tests
                 GetMockQuotaProvider(azureProxyReturnValues),
                 GetMockSkuInfoProvider(azureProxyReturnValues),
                 GetContainerRegistryInfoProvider(azureProxyReturnValues),
+                GetMockAllowedVms(configuration),
                 additionalActions: additionalActions);
             var batchScheduler = serviceProvider.GetT();
 
@@ -1388,6 +1393,20 @@ namespace TesApi.Tests
 
             return (jobId, cloudTask, poolInformation, batchPoolsModel);
         }
+
+        private static Action<Mock<IAllowedVmSizesService>> GetMockAllowedVms(IEnumerable<(string Key, string Value)> configuration)
+            => new(proxy =>
+            {
+                var allowedVmsConfig = configuration.FirstOrDefault(x => x.Key == "AllowedVmSizes").Value;
+                var allowedVms = new List<string>();
+                if (!string.IsNullOrWhiteSpace(allowedVmsConfig))
+                {
+                    allowedVms = allowedVmsConfig.Split(",").ToList();
+                }
+                proxy.Setup(p => p.GetAllowedVmSizes())
+                    .ReturnsAsync(allowedVms);
+            });
+
 
         private static Action<Mock<IBatchSkuInformationProvider>> GetMockSkuInfoProvider(AzureProxyReturnValues azureProxyReturnValues)
             => new(proxy =>
@@ -1431,8 +1450,8 @@ namespace TesApi.Tests
                         new(batchQuotas.ActiveJobAndJobScheduleQuota, batchQuotas.PoolQuota, batchQuotas.DedicatedCoreQuota, batchQuotas.LowPriorityCoreQuota)));
             });
 
-        private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProvider(IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchQuotaProvider>> quotaProvider, Action<Mock<IBatchSkuInformationProvider>> skuInfoProvider, Action<Mock<ContainerRegistryProvider>> containerRegistryProviderSetup, Action<IServiceCollection> additionalActions = default)
-            => new(wrapAzureProxy: true, configuration: configuration, azureProxy: azureProxy, batchQuotaProvider: quotaProvider, batchSkuInformationProvider: skuInfoProvider, accountResourceInformation: GetNewBatchResourceInfo(), containerRegistryProviderSetup: containerRegistryProviderSetup, additionalActions: additionalActions);
+        private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProvider(IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchQuotaProvider>> quotaProvider, Action<Mock<IBatchSkuInformationProvider>> skuInfoProvider, Action<Mock<ContainerRegistryProvider>> containerRegistryProviderSetup, Action<Mock<IAllowedVmSizesService>> allowedVmSizesServiceSetup, Action<IServiceCollection> additionalActions = default)
+            => new(wrapAzureProxy: true, configuration: configuration, azureProxy: azureProxy, batchQuotaProvider: quotaProvider, batchSkuInformationProvider: skuInfoProvider, accountResourceInformation: GetNewBatchResourceInfo(), containerRegistryProviderSetup: containerRegistryProviderSetup, allowedVmSizesServiceSetup: allowedVmSizesServiceSetup, additionalActions: additionalActions);
 
         private static async Task<TesState> GetNewTesTaskStateAsync(TesTask tesTask, AzureProxyReturnValues azureProxyReturnValues)
         {
@@ -1572,13 +1591,15 @@ namespace TesApi.Tests
         private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProvider(AzureProxyReturnValues azureProxyReturn = default)
         {
             azureProxyReturn ??= AzureProxyReturnValues.Defaults;
+            var config = GetMockConfig(false)();
             return new(
                 wrapAzureProxy: true,
                 accountResourceInformation: new("defaultbatchaccount", "defaultresourcegroup", "defaultsubscription", "defaultregion"),
-                configuration: GetMockConfig(false)(),
+                configuration: config,
                 azureProxy: GetMockAzureProxy(azureProxyReturn),
                 batchQuotaProvider: GetMockQuotaProvider(azureProxyReturn),
-                batchSkuInformationProvider: GetMockSkuInfoProvider(azureProxyReturn));
+                batchSkuInformationProvider: GetMockSkuInfoProvider(azureProxyReturn),
+                allowedVmSizesServiceSetup: GetMockAllowedVms(config));
         }
 
         private static async Task<BatchPool> AddPool(BatchScheduler batchScheduler)

@@ -68,7 +68,6 @@ namespace TesApi.Web
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
         private readonly IStorageAccessProvider storageAccessProvider;
-        private readonly IReadOnlyList<string> allowedVmSizes;
         private readonly IBatchQuotaVerifier quotaVerifier;
         private readonly IBatchSkuInformationProvider skuInformationProvider;
         private readonly IList<TesTaskStateTransition> tesTaskStateTransitions;
@@ -89,6 +88,7 @@ namespace TesApi.Web
         private readonly IBatchPoolFactory _batchPoolFactory;
         private readonly string[] taskRunScriptContent;
         private readonly string[] taskCleanupScriptContent;
+        private readonly IAllowedVmSizesService allowedVmSizesService;
 
         private ConcurrentHashSet<string> onlyLogBatchTaskStateOnce = new();
 
@@ -110,6 +110,7 @@ namespace TesApi.Web
         /// <param name="skuInformationProvider">Sku information provider <see cref="IBatchSkuInformationProvider"/></param>
         /// <param name="containerRegistryProvider">Container registry information <see cref="ContainerRegistryProvider"/></param>
         /// <param name="poolFactory">Batch pool factory <see cref="IBatchPoolFactory"/></param>
+        /// <param name="allowedVmSizesService">Service to get allowed vm sizes.</param>
         public BatchScheduler(
             ILogger<BatchScheduler> logger,
             IOptions<Options.BatchImageGeneration1Options> batchGen1Options,
@@ -119,16 +120,15 @@ namespace TesApi.Web
             IOptions<Options.BatchImageNameOptions> batchImageNameOptions,
             IOptions<Options.BatchNodesOptions> batchNodesOptions,
             IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions,
-            IConfiguration configuration,
             IAzureProxy azureProxy,
             IStorageAccessProvider storageAccessProvider,
             IBatchQuotaVerifier quotaVerifier,
             IBatchSkuInformationProvider skuInformationProvider,
             ContainerRegistryProvider containerRegistryProvider,
-            IBatchPoolFactory poolFactory)
+            IBatchPoolFactory poolFactory,
+            IAllowedVmSizesService allowedVmSizesService)
         {
             ArgumentNullException.ThrowIfNull(logger);
-            ArgumentNullException.ThrowIfNull(configuration);
             ArgumentNullException.ThrowIfNull(azureProxy);
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(quotaVerifier);
@@ -143,7 +143,6 @@ namespace TesApi.Web
             this.skuInformationProvider = skuInformationProvider;
             this.containerRegistryProvider = containerRegistryProvider;
 
-            this.allowedVmSizes = GetStringValue(configuration, "AllowedVmSizes", null)?.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList().AsReadOnly();
             this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
             this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
             this.dockerInDockerImageName = batchImageNameOptions.Value.Docker;
@@ -160,6 +159,7 @@ namespace TesApi.Web
             this.marthaSecretName = marthaOptions.Value.SecretName;
             this.globalStartTaskPath = StandardizeStartTaskPath(batchNodesOptions.Value.GlobalStartTask, this.defaultStorageAccountName);
             this.globalManagedIdentity = batchNodesOptions.Value.GlobalManagedIdentity;
+            this.allowedVmSizesService = allowedVmSizesService;
 
             if (!this.enableBatchAutopool)
             {
@@ -189,8 +189,6 @@ namespace TesApi.Web
             };
 
             logger.LogInformation($"usePreemptibleVmsOnly: {usePreemptibleVmsOnly}");
-
-            static string GetStringValue(IConfiguration configuration, string key, string defaultValue = "") => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : configuration[key];
 
             static bool tesTaskIsQueuedInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum || tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
             static bool tesTaskIsInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
@@ -1772,6 +1770,7 @@ namespace TesApi.Web
         /// <returns>The virtual machine info</returns>
         internal async Task<VirtualMachineInformation> GetVmSizeAsync(TesTask tesTask, CancellationToken cancellationToken, bool forcePreemptibleVmsOnly = false)
         {
+            var allowedVmSizes = await allowedVmSizesService.GetAllowedVmSizes();
             bool allowedVmSizesFilter(VirtualMachineInformation vm) => allowedVmSizes is null || !allowedVmSizes.Any() || allowedVmSizes.Contains(vm.VmSize, StringComparer.OrdinalIgnoreCase) || allowedVmSizes.Contains(vm.VmFamily, StringComparer.OrdinalIgnoreCase);
 
             var tesResources = tesTask.Resources;
