@@ -65,6 +65,7 @@ public class PartsWriter : PartsProcessor
 
         logger.LogInformation("All part write operations completed successfully.");
     }
+
     private ProcessedBuffer ToProcessedBuffer(PipelineBuffer buffer)
     {
         return new ProcessedBuffer(buffer.FileName, buffer.BlobUrl, buffer.FileSize, buffer.Ordinal,
