@@ -27,6 +27,7 @@ namespace Tes.Runner.Models
         public string? SourceUrl { get; set; }
         public SasResolutionStrategy SasStrategy { get; set; }
     }
+
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum SasResolutionStrategy
     {

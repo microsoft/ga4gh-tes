@@ -28,9 +28,10 @@ namespace Tes.RunnerCLI.Commands
 
             var logs = await result.ContainerResult.Logs.ReadOutputToEndAsync(CancellationToken.None);
 
-            Console.WriteLine($"Execution Result: {logs}");
-            Console.WriteLine($"Total Bytes Downloaded: {result.InputsLength} Total Bytes Uploaded: {result.OutputsLength}");
+            Console.WriteLine($"Execution result: {logs}");
+            Console.WriteLine($"Total bytes downloaded: {result.InputsLength:n0} Total bytes uploaded: {result.OutputsLength:n0}");
         }
+
         internal static async Task ExecuteUploadTaskAsync(FileInfo file,
             int blockSize,
             int writers,
@@ -50,7 +51,7 @@ namespace Tes.RunnerCLI.Commands
 
             var result = await executor.UploadOutputsAsync();
 
-            Console.WriteLine($"Total Bytes Uploaded: {result}");
+            Console.WriteLine($"Total bytes uploaded: {result:n0}");
         }
 
         internal static async Task ExecuteDownloadTaskAsync(FileInfo file,
@@ -72,7 +73,7 @@ namespace Tes.RunnerCLI.Commands
 
             var result = await executor.DownloadInputsAsync();
 
-            Console.WriteLine($"Total Bytes Downloaded: {result}");
+            Console.WriteLine($"Total bytes downloaded: {result:n0}");
         }
     }
 }

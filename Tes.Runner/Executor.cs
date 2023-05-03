@@ -86,10 +86,9 @@ namespace Tes.Runner
 
             if (outputs != null)
             {
-
                 var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs));
 
-                logger.LogInformation($"Executed Upload. Time elapsed:{executionResult.Elapsed} Bandwidth:{BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
+                logger.LogInformation($"Executed Upload. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 
                 return executionResult.Result;
             }
@@ -122,7 +121,7 @@ namespace Tes.Runner
             {
                 var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs));
 
-                logger.LogInformation($"Executed Download. Time elapsed:{executionResult.Elapsed} Bandwidth:{BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
+                logger.LogInformation($"Executed Download. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 
                 return executionResult.Result;
             }

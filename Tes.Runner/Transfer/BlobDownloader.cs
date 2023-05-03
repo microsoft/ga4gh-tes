@@ -82,7 +82,7 @@ public class BlobDownloader : BlobOperationPipeline
     /// <returns></returns>
     public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName)
     {
-        Logger.LogInformation($"Completed download. Total:{length} Filename:{fileName}");
+        Logger.LogInformation($"Completed download. Total bytes: {length:n0} Filename: {fileName}");
 
         return Task.CompletedTask;
     }
@@ -116,6 +116,5 @@ public class BlobDownloader : BlobOperationPipeline
                 throw new ArgumentException("Source URL is empty for one of the items in the list");
             }
         }
-
     }
 }

@@ -37,29 +37,28 @@ public class ProcessedPartsProcessor
         var allFilesProcessed = false;
         var processedFiles = 0;
         long totalBytes = 0;
+
         while (!allFilesProcessed && await processedBufferChannel.Reader.WaitToReadAsync())
+        while (processedBufferChannel.Reader.TryRead(out buffer))
         {
-            while (processedBufferChannel.Reader.TryRead(out buffer))
+            totalBytes += buffer.Length;
+
+            if (!partsProcessed.ContainsKey(buffer.FileName))
             {
-                totalBytes += buffer.Length;
+                partsProcessed.Add(buffer.FileName, 0);
+            }
 
-                if (!partsProcessed.ContainsKey(buffer.FileName))
-                {
-                    partsProcessed.Add(buffer.FileName, 0);
-                }
+            var total = ++partsProcessed[buffer.FileName];
 
-                var total = ++partsProcessed[buffer.FileName];
+            if (total == buffer.NumberOfParts)
+            {
+                tasks.Add(blobPipeline.OnCompletionAsync(buffer.FileSize, buffer.BlobUrl, buffer.FileName));
 
-                if (total == buffer.NumberOfParts)
-                {
-                    tasks.Add(blobPipeline.OnCompletionAsync(buffer.FileSize, buffer.BlobUrl, buffer.FileName));
+                processedFiles++;
 
-                    processedFiles++;
+                await CloseFileHandlerPoolAsync(buffer.FileHandlerPool);
 
-                    await CloseFileHandlerPoolAsync(buffer.FileHandlerPool);
-
-                    allFilesProcessed = processedFiles == expectedNumberOfFiles;
-                }
+                allFilesProcessed = processedFiles == expectedNumberOfFiles;
             }
         }
 
@@ -89,5 +88,4 @@ public class ProcessedPartsProcessor
             fileStream.Close();
         }
     }
-
 }

@@ -53,6 +53,7 @@ public class ResolutionPolicyHandler
 
         return list;
     }
+
     private async Task<DownloadInfo> CreateDownloadInfoWithStrategyAsync(FileInput input)
     {
         var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy);
@@ -64,6 +65,7 @@ public class ResolutionPolicyHandler
 
         return new DownloadInfo(input.FullFileName, uri);
     }
+
     private async Task<UploadInfo> CreateUploadInfoWithStrategyAsync(FileOutput output)
     {
         var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy);

@@ -15,7 +15,7 @@ namespace Tes.Runner.Test
         private PartsWriter partsWriter;
         private Mock<IBlobPipeline> pipeline;
         private Channel<byte[]> memoryBufferChannel;
-        private readonly int blockSize = BlobSizeUtils.DefaultBlockSize;
+        private readonly int blockSize = BlobSizeUtils.DefaultBlockSizeBytes;
         private BlobPipelineOptions options;
         private Channel<ProcessedBuffer> processedBufferChannel;
         private Channel<PipelineBuffer> writeBufferChannel;
