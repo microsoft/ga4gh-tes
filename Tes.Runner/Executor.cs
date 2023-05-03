@@ -52,7 +52,7 @@ namespace Tes.Runner
         {
             try
             {
-                return JsonSerializer.Deserialize<NodeTask>(nodeTask, new JsonSerializerOptions(){PropertyNameCaseInsensitive = true}) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
+                return JsonSerializer.Deserialize<NodeTask>(nodeTask, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true }) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
             }
             catch (Exception e)
             {
@@ -119,7 +119,7 @@ namespace Tes.Runner
             if (inputs != null)
             {
                 var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs));
-                
+
                 logger.LogInformation($"Executed Download. Time elapsed:{executionResult.Elapsed} Bandwidth:{BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 
                 return executionResult.Result;
