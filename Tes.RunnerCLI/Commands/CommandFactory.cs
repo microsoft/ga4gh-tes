@@ -65,12 +65,12 @@ namespace Tes.RunnerCLI.Commands
                             bufferCapacity,
                             apiVersion);
                 },
-                GetOptionByName<FileInfo>(rootCommand.Options, FileOption),
-                GetOptionByName<int>(rootCommand.Options, BlockSizeOption),
-                GetOptionByName<int>(rootCommand.Options, WritersOption),
-                GetOptionByName<int>(rootCommand.Options, ReadersOption),
-                GetOptionByName<int>(rootCommand.Options, BufferCapacityOption),
-                GetOptionByName<string>(rootCommand.Options, ApiVersionOption));
+                GetOptionByName<FileInfo>(cmd.Options, FileOption),
+                GetOptionByName<int>(cmd.Options, BlockSizeOption),
+                GetOptionByName<int>(cmd.Options, WritersOption),
+                GetOptionByName<int>(cmd.Options, ReadersOption),
+                GetOptionByName<int>(cmd.Options, BufferCapacityOption),
+                GetOptionByName<string>(cmd.Options, ApiVersionOption));
 
             return cmd;
         }
@@ -92,12 +92,12 @@ namespace Tes.RunnerCLI.Commands
                         apiVersion);
 
                 },
-                GetOptionByName<FileInfo>(rootCommand.Options, FileOption),
-                GetOptionByName<int>(rootCommand.Options, BlockSizeOption),
-                GetOptionByName<int>(rootCommand.Options, WritersOption),
-                GetOptionByName<int>(rootCommand.Options, ReadersOption),
-                GetOptionByName<int>(rootCommand.Options, BufferCapacityOption),
-                GetOptionByName<string>(rootCommand.Options, ApiVersionOption));
+                GetOptionByName<FileInfo>(cmd.Options, FileOption),
+                GetOptionByName<int>(cmd.Options, BlockSizeOption),
+                GetOptionByName<int>(cmd.Options, WritersOption),
+                GetOptionByName<int>(cmd.Options, ReadersOption),
+                GetOptionByName<int>(cmd.Options, BufferCapacityOption),
+                GetOptionByName<string>(cmd.Options, ApiVersionOption));
 
             return cmd;
         }

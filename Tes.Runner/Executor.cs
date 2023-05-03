@@ -76,6 +76,8 @@ namespace Tes.Runner
                 return 0;
             }
 
+            LogStartConfig();
+
             logger.LogInformation($"{tesNodeTask.Outputs.Count} inputs to upload.");
 
             var uploader = new BlobUploader(blobPipelineOptions, memoryBufferChannel);
@@ -110,8 +112,8 @@ namespace Tes.Runner
                 return 0;
             }
 
+            LogStartConfig();
             logger.LogInformation($"{tesNodeTask.Inputs.Count} inputs to download.");
-
             var downloader = new BlobDownloader(blobPipelineOptions, memoryBufferChannel);
 
             var inputs = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Inputs);
@@ -126,6 +128,14 @@ namespace Tes.Runner
             }
 
             return 0;
+        }
+
+        private void LogStartConfig()
+        {
+            logger.LogInformation($"Writers:{blobPipelineOptions.NumberOfWriters}");
+            logger.LogInformation($"Readers:{blobPipelineOptions.NumberOfReaders}");
+            logger.LogInformation($"Capacity:{blobPipelineOptions.ReadWriteBuffersCapacity}");
+            logger.LogInformation($"BlockSize:{blobPipelineOptions.BlockSize}");
         }
 
         private static async Task<TimeExecutionResult<T>> TimedExecutionAsync<T>(Func<Task<T>> execution)
