@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Text.Json.Serialization;
+
 namespace Tes.Runner.Models
 {
     public class NodeTask
@@ -25,21 +27,11 @@ namespace Tes.Runner.Models
         public string? SourceUrl { get; set; }
         public SasResolutionStrategy SasStrategy { get; set; }
     }
-
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum SasResolutionStrategy
     {
         None,
         StorageAccountNameAndKey,
         TerraWsm
-    }
-
-    public class BlobTransferOptions
-    {
-        public int? BlockSize { get; set; } = 1024 * 1024 * 10; //10MiB  
-        public int? NumberOfBuffers { get; set; } = 10;
-        public int? NumberOfWriters { get; set; } = 10;
-        public int? NumberOfReaders { get; set; } = 10;
-        public int? BufferCapacity { get; set; } = 10;
-        public int? MemoryBufferCapacity { get; set; } = 10;
     }
 }

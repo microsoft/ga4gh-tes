@@ -1,4 +1,7 @@
-﻿using System.Threading.Channels;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System.Threading.Channels;
 using Moq;
 using Tes.Runner.Transfer;
 

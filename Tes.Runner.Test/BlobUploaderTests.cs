@@ -1,4 +1,7 @@
-﻿using Azure.Storage.Blobs;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
 using Azure.Storage.Sas;
@@ -11,10 +14,12 @@ namespace Tes.Runner.Test
     [Ignore]
     public class BlobUploaderTests
     {
+#pragma warning disable CS8618
         private BlobContainerClient blobContainerClient;
         private Guid containerId;
         private BlobUploader blobUploader;
         private readonly BlobPipelineOptions blobPipelineOptions = new BlobPipelineOptions();
+#pragma warning restore CS8618
 
         [TestInitialize]
         public async Task Init()

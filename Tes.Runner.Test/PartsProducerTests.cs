@@ -1,4 +1,7 @@
-﻿using System.Threading.Channels;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System.Threading.Channels;
 using Moq;
 using Tes.Runner.Transfer;
 
@@ -8,9 +11,11 @@ namespace Tes.Runner.Test
     [TestCategory("Unit")]
     public class PartsProducerTests
     {
+#pragma warning disable CS8618
         private Mock<IBlobPipeline> pipeline;
         private PartsProducer partsProducer;
         private Channel<PipelineBuffer> readBuffer;
+#pragma warning restore CS8618
 
         [TestInitialize]
         public void SetUp()

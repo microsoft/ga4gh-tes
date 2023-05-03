@@ -24,5 +24,10 @@
 
             return numberOfParts;
         }
+
+        public static double ToBandwidth(long length, double seconds)
+        {
+            return Math.Round(length / (1024d * 1024d) / seconds, 2);
+        }
     }
 }

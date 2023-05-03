@@ -2,13 +2,13 @@
 // Licensed under the MIT License.
 
 using System.Diagnostics;
+using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Docker;
 using Tes.Runner.Models;
 using Tes.Runner.Storage;
 using Tes.Runner.Transfer;
-using YamlDotNet.Serialization;
 
 namespace Tes.Runner
 {
@@ -17,6 +17,7 @@ namespace Tes.Runner
         private readonly ILogger logger = PipelineLoggerFactory.Create<Executor>();
         private readonly NodeTask tesNodeTask;
         private readonly BlobPipelineOptions blobPipelineOptions;
+        private readonly ResolutionPolicyHandler resolutionPolicyHandler;
 
         public Executor(string tesNodeTaskFilePath, BlobPipelineOptions blobPipelineOptions)
         {
@@ -28,6 +29,8 @@ namespace Tes.Runner
             var content = File.ReadAllText(tesNodeTaskFilePath);
 
             tesNodeTask = DeserializeNodeTask(content);
+
+            resolutionPolicyHandler = new ResolutionPolicyHandler();
         }
 
         public async Task<NodeTaskResult> ExecuteNodeTaskAsync(DockerExecutor dockerExecutor)
@@ -45,13 +48,17 @@ namespace Tes.Runner
             return new NodeTaskResult(result, inputLength, outputLength);
         }
 
-        private static NodeTask DeserializeNodeTask(string nodeTask)
+        private NodeTask DeserializeNodeTask(string nodeTask)
         {
-            var deserializer = new DeserializerBuilder().Build();
-
-            var tesTask = deserializer.Deserialize<NodeTask>(nodeTask);
-
-            return tesTask;
+            try
+            {
+                return JsonSerializer.Deserialize<NodeTask>(nodeTask, new JsonSerializerOptions(){PropertyNameCaseInsensitive = true}) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to deserialize task JSON file.");
+                throw;
+            }
         }
 
         public async Task<long> UploadOutputsAsync()
@@ -63,19 +70,26 @@ namespace Tes.Runner
 
         private async Task<long> UploadOutputsAsync(Channel<byte[]> memoryBufferChannel)
         {
+            if (tesNodeTask.Outputs is null || tesNodeTask.Outputs.Count == 0)
+            {
+                logger.LogInformation("No outputs provided");
+                return 0;
+            }
+
+            logger.LogInformation($"{tesNodeTask.Outputs.Count} inputs to upload.");
+
             var uploader = new BlobUploader(blobPipelineOptions, memoryBufferChannel);
 
-            var outputs = await ApplyResolutionPolicyAsync(tesNodeTask.Outputs);
+            var outputs = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Outputs);
 
             if (outputs != null)
             {
-                var sw = new Stopwatch();
-                sw.Start();
-                var outputLength = await uploader.UploadAsync(outputs);
-                sw.Stop();
-                logger.LogInformation($"Executed Upload. Time elapsed:{sw.Elapsed} Bandwidth:{ToBandwidth(outputLength, sw.Elapsed.TotalSeconds)} MiB/s");
 
-                return outputLength;
+                var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs));
+
+                logger.LogInformation($"Executed Upload. Time elapsed:{executionResult.Elapsed} Bandwidth:{BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
+
+                return executionResult.Result;
             }
 
             return 0;
@@ -100,85 +114,30 @@ namespace Tes.Runner
 
             var downloader = new BlobDownloader(blobPipelineOptions, memoryBufferChannel);
 
-            var inputs = await ApplyResolutionPolicyAsync(tesNodeTask.Inputs);
+            var inputs = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Inputs);
 
             if (inputs != null)
             {
-                var sw = new Stopwatch();
-                sw.Start();
-                var inputLength = await downloader.DownloadAsync(inputs);
-                sw.Stop();
+                var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs));
+                
+                logger.LogInformation($"Executed Download. Time elapsed:{executionResult.Elapsed} Bandwidth:{BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 
-                logger.LogInformation($"Executed Download. Time elapsed:{sw.Elapsed} Bandwidth:{ToBandwidth(inputLength, sw.Elapsed.TotalSeconds)} MiB/s");
-
-                return inputLength;
+                return executionResult.Result;
             }
 
             return 0;
         }
 
-        private static double ToBandwidth(long length, double seconds)
+        private static async Task<TimeExecutionResult<T>> TimedExecutionAsync<T>(Func<Task<T>> execution)
         {
-            return Math.Round(length / (1024d * 1024d) / seconds, 2);
+            var sw = new Stopwatch();
+            sw.Start();
+            var result = await execution();
+            sw.Stop();
+
+            return new TimeExecutionResult<T>(sw.Elapsed, result);
         }
 
-        private async Task<List<DownloadInfo>?> ApplyResolutionPolicyAsync(List<FileInput>? tesTaskInputs)
-        {
-            if (tesTaskInputs is null)
-            {
-                return null;
-            }
-
-            var list = new List<DownloadInfo>();
-
-            foreach (var input in tesTaskInputs)
-            {
-                var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy);
-
-                if (string.IsNullOrEmpty(input.FullFileName))
-                {
-                    throw new ArgumentException("A task input is missing the full filename. Please check the task definition.");
-                }
-
-                list.Add(new DownloadInfo(input.FullFileName, uri));
-            }
-
-            return list;
-        }
-        private async Task<List<UploadInfo>?> ApplyResolutionPolicyAsync(List<FileOutput>? testTaskOutputs)
-        {
-            if (testTaskOutputs is null)
-            {
-                return null;
-            }
-
-            var list = new List<UploadInfo>();
-
-            foreach (var output in testTaskOutputs)
-            {
-                var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy);
-
-                if (string.IsNullOrEmpty(output.FullFileName))
-                {
-                    throw new ArgumentException("A task output is missing the full filename. Please check the task definition.");
-                }
-
-                list.Add(new UploadInfo(output.FullFileName, uri));
-            }
-
-            return list;
-        }
-
-        private async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, SasResolutionStrategy strategy)
-        {
-            ArgumentException.ThrowIfNullOrEmpty(sourceUrl);
-
-            var strategyImpl =
-                SasResolutionStrategyFactory.CreateSasResolutionStrategy(strategy);
-
-            return await strategyImpl.CreateSasTokenWithStrategyAsync(sourceUrl);
-        }
+        private record TimeExecutionResult<T>(TimeSpan Elapsed, T Result);
     }
-
-    public record NodeTaskResult(ContainerExecutionResult ContainerResult, long InputsLength, long OutputsLength);
 }

@@ -44,7 +44,6 @@ namespace Tes.Runner.Docker
 
         private async Task<MultiplexedStream> StreamStdOutAndErrorAsync(string containerId)
         {
-
             return await dockerClient.Containers.AttachContainerAsync(
                 containerId,
                 false,

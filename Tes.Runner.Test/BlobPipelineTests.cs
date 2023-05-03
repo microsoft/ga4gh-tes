@@ -1,4 +1,8 @@
-﻿using System.Collections.Concurrent;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Transfer;
@@ -9,6 +13,7 @@ namespace Tes.Runner.Test
     [TestCategory("Unit")]
     public class BlobPipelineTests
     {
+#pragma warning disable CS8618
         private BlobOperationPipelineTestImpl operationPipeline;
         private BlobPipelineOptions options;
         private readonly int blockSize = BlobSizeUtils.MiB;
@@ -17,6 +22,7 @@ namespace Tes.Runner.Test
         private string tempFile2;
         private Channel<byte[]> memoryBuffer;
         private readonly RunnerTestUtils runnerTestUtils = new RunnerTestUtils();
+#pragma warning restore CS8618
 
         [TestInitialize]
         public async Task SetUp()
@@ -126,6 +132,7 @@ namespace Tes.Runner.Test
 
         public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName)
         {
+            Debug.Assert(blobUrl != null, nameof(blobUrl) + " != null");
             AddMethodCall(nameof(OnCompletionAsync), length, blobUrl, fileName);
             return Task.CompletedTask;
         }
