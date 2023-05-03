@@ -32,6 +32,7 @@ namespace Tes.Runner.Models
     {
         None,
         StorageAccountNameAndKey,
-        TerraWsm
+        TerraWsm,
+        SchemeConverter,
     }
 }

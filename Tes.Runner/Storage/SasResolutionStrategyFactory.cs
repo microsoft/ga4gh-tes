@@ -13,6 +13,8 @@ namespace Tes.Runner.Storage
             {
                 case SasResolutionStrategy.None:
                     return new PassThroughSasResolutionStrategy();
+                case SasResolutionStrategy.SchemeConverter:
+                    return new CloudProviderSchemeConverter();
             }
 
             throw new NotImplementedException();
