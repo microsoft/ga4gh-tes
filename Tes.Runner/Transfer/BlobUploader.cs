@@ -99,7 +99,7 @@ namespace Tes.Runner.Transfer
             ArgumentNullException.ThrowIfNull(blobUrl, nameof(blobUrl));
             ArgumentException.ThrowIfNullOrEmpty(fileName, nameof(fileName));
 
-            await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSize, PipelineOptions.ApiVersion));
+            await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSizeBytes, PipelineOptions.ApiVersion));
         }
 
         /// <summary>

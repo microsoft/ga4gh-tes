@@ -30,10 +30,10 @@ namespace Tes.Runner.Test
         [DataRow(BlobSizeUtils.MiB, (2 * BlobSizeUtils.MiB) + 1, 3)]
         [DataRow(BlobSizeUtils.MiB, (2 * BlobSizeUtils.MiB) - 1, 2)]
         [DataRow(BlobSizeUtils.MiB, 0, 1)]
-        public async Task StartPartsProducersAsync_ProducesTheExpectedNumberOfParts(int blockSize, long fileSize,
+        public async Task StartPartsProducersAsync_ProducesTheExpectedNumberOfParts(int blockSizeBytes, long fileSize,
             int expectedParts)
         {
-            var options = new BlobPipelineOptions(BlockSizeBytes: blockSize);
+            var options = new BlobPipelineOptions(BlockSizeBytes: blockSizeBytes);
             partsProducer = new PartsProducer(pipeline.Object, options);
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
 

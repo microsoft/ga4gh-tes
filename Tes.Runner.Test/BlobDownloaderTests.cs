@@ -32,7 +32,7 @@ namespace Tes.Runner.Test
             blobContainerClient.Create(PublicAccessType.None);
 
             blobDownloader = new BlobDownloader(blobPipelineOptions,
-                await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(10, blobPipelineOptions.BlockSize));
+                await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(10, blobPipelineOptions.BlockSizeBytes));
         }
 
         [TestCleanup]
