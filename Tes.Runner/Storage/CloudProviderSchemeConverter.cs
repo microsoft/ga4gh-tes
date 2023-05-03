@@ -13,7 +13,7 @@ namespace Tes.Runner.Storage
         public Task<Uri> CreateSasTokenWithStrategyAsync(string sourceUrl)
         {
             var sourceUri = new Uri(sourceUrl);
-            
+
             if (sourceUri.Scheme.Equals("gs", StringComparison.OrdinalIgnoreCase))
             {
                 return Task.FromResult(ToGcpHttpUri(sourceUri));
@@ -31,7 +31,7 @@ namespace Tes.Runner.Storage
         {
             var builder = new UriBuilder();
             builder.Scheme = "https";
-            
+
             builder.Host = GcpHost;
             builder.Path = $"{sourceUri.Host}{sourceUri.AbsolutePath}";
             builder.Query = sourceUri.Query;
