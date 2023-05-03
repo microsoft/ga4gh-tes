@@ -37,7 +37,7 @@ namespace Tes.Runner
         {
             ArgumentNullException.ThrowIfNull(blobPipelineOptions);
 
-            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSize);
+            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
 
             var inputLength = await DownloadInputsAsync(memoryBufferChannel);
 
@@ -63,7 +63,7 @@ namespace Tes.Runner
 
         public async Task<long> UploadOutputsAsync()
         {
-            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSize);
+            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
 
             return await UploadOutputsAsync(memoryBufferChannel);
         }
@@ -98,7 +98,7 @@ namespace Tes.Runner
 
         public async Task<long> DownloadInputsAsync()
         {
-            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSize);
+            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
 
             return await DownloadInputsAsync(memoryBufferChannel);
         }
@@ -134,7 +134,7 @@ namespace Tes.Runner
             logger.LogInformation($"Writers:{blobPipelineOptions.NumberOfWriters}");
             logger.LogInformation($"Readers:{blobPipelineOptions.NumberOfReaders}");
             logger.LogInformation($"Capacity:{blobPipelineOptions.ReadWriteBuffersCapacity}");
-            logger.LogInformation($"BlockSize:{blobPipelineOptions.BlockSize}");
+            logger.LogInformation($"BlockSize:{blobPipelineOptions.BlockSizeBytes}");
         }
 
         private static async Task<TimeExecutionResult<T>> TimedExecutionAsync<T>(Func<Task<T>> execution)

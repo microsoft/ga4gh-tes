@@ -52,9 +52,9 @@ public class BlobBlockApiHttpUtils
         request.Headers.Add("x-ms-date", DateTime.UtcNow.ToString("R"));
     }
 
-    public static HttpRequestMessage CreateBlobBlockListRequest(long length, Uri blobUrl, int blockSize, string apiVersion)
+    public static HttpRequestMessage CreateBlobBlockListRequest(long length, Uri blobUrl, int blockSizeBytes, string apiVersion)
     {
-        var content = CreateBlockListContent(length, blockSize);
+        var content = CreateBlockListContent(length, blockSizeBytes);
 
         var putBlockUrl = new UriBuilder($"{blobUrl.AbsoluteUri}&comp=blocklist");
 
@@ -143,13 +143,13 @@ public class BlobBlockApiHttpUtils
         return false;
     }
 
-    private static StringContent CreateBlockListContent(long length, int blockSize)
+    private static StringContent CreateBlockListContent(long length, int blockSizeBytes)
     {
         var sb = new StringBuilder();
 
         sb.Append("<?xml version='1.0' encoding='utf-8'?><BlockList>");
 
-        var parts = BlobSizeUtils.GetNumberOfParts(length, blockSize);
+        var parts = BlobSizeUtils.GetNumberOfParts(length, blockSizeBytes);
 
         for (var n = 0; n < parts; n++)
         {
