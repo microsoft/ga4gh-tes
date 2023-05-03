@@ -15,7 +15,7 @@ namespace Tes.Runner.Test
         private PartsReader partsReader;
         private Mock<IBlobPipeline> pipeline;
         private Channel<byte[]> memoryBufferChannel;
-        private readonly int blockSize = BlobSizeUtils.DefaultBlockSizeBytes;
+        private readonly int blockSizeBytes = BlobSizeUtils.DefaultBlockSizeBytes;
         private BlobPipelineOptions options;
         private Channel<PipelineBuffer> readBufferChannel;
         private Channel<PipelineBuffer> writeBufferChannel;
@@ -25,7 +25,7 @@ namespace Tes.Runner.Test
         [TestInitialize]
         public async Task SetUp()
         {
-            memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(MemBuffersCapacity, blockSize);
+            memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(MemBuffersCapacity, blockSizeBytes);
             options = new BlobPipelineOptions();
             pipeline = new Mock<IBlobPipeline>();
             partsReader = new PartsReader(pipeline.Object, options, memoryBufferChannel);
@@ -58,9 +58,9 @@ namespace Tes.Runner.Test
         private async Task<int> PrepareReaderChannelAsync()
         {
             var buffer = new PipelineBuffer();
-            var numberOfParts = (int)(fileSize / blockSize);
+            var numberOfParts = (int)(fileSize / blockSizeBytes);
             await RunnerTestUtils.AddPipelineBuffersAndCompleteChannelAsync(readBufferChannel, numberOfParts,
-                new Uri("https://foo.bar/cont/blob"), blockSize, fileSize, fileName);
+                new Uri("https://foo.bar/cont/blob"), blockSizeBytes, fileSize, fileName);
             return numberOfParts;
         }
     }

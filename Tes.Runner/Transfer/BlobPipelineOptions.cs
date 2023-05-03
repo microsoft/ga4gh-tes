@@ -3,7 +3,7 @@
 
 namespace Tes.Runner.Transfer
 {
-    public record BlobPipelineOptions(int BlockSize = BlobSizeUtils.DefaultBlockSizeBytes, int ReadWriteBuffersCapacity = BlobPipelineOptions.DefaultReadWriteBuffersCapacity, int NumberOfWriters = BlobPipelineOptions.DefaultNumberOfWriters, int NumberOfReaders = BlobPipelineOptions.DefaultNumberOfReaders,
+    public record BlobPipelineOptions(int BlockSizeBytes = BlobSizeUtils.DefaultBlockSizeBytes, int ReadWriteBuffersCapacity = BlobPipelineOptions.DefaultReadWriteBuffersCapacity, int NumberOfWriters = BlobPipelineOptions.DefaultNumberOfWriters, int NumberOfReaders = BlobPipelineOptions.DefaultNumberOfReaders,
         int FileHandlerPoolCapacity = BlobPipelineOptions.DefaultFileHandlerPoolCapacity, int MemoryBufferCapacity = BlobPipelineOptions.DefaultMemoryBufferCapacity, string ApiVersion = BlobPipelineOptions.DefaultApiVersion)
     {
         public const int DefaultNumberOfWriters = 10;

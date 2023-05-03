@@ -33,7 +33,7 @@ namespace Tes.Runner.Test
         public async Task StartPartsProducersAsync_ProducesTheExpectedNumberOfParts(int blockSize, long fileSize,
             int expectedParts)
         {
-            var options = new BlobPipelineOptions(BlockSize: blockSize);
+            var options = new BlobPipelineOptions(BlockSizeBytes: blockSize);
             partsProducer = new PartsProducer(pipeline.Object, options);
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
 
@@ -57,7 +57,7 @@ namespace Tes.Runner.Test
         public async Task StartPartsProducersAsync_PartsAreProperSize(int blockSize, long fileSize,
             params int[] expectedPartSize)
         {
-            var options = new BlobPipelineOptions(BlockSize: blockSize);
+            var options = new BlobPipelineOptions(BlockSizeBytes: blockSize);
             partsProducer = new PartsProducer(pipeline.Object, options);
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
 
@@ -81,7 +81,7 @@ namespace Tes.Runner.Test
         [DataRow(BlobSizeUtils.MiB * 10, (BlobSizeUtils.MiB * 100) + 1)]
         public async Task StartPartsProducersAsync_PartsHaveExpectedLengths(int blockSize, long fileSize)
         {
-            var options = new BlobPipelineOptions(BlockSize: blockSize);
+            var options = new BlobPipelineOptions(BlockSizeBytes: blockSize);
             partsProducer = new PartsProducer(pipeline.Object, options);
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
 

@@ -15,7 +15,7 @@ namespace Tes.RunnerCLI.Commands
             Uri dockerUri)
         {
             var options = new BlobPipelineOptions(
-                BlockSize: blockSize,
+                BlockSizeBytes: blockSize,
                 NumberOfWriters: writers,
                 NumberOfReaders: readers,
                 ReadWriteBuffersCapacity: bufferCapacity,
@@ -40,7 +40,7 @@ namespace Tes.RunnerCLI.Commands
             string apiVersion)
         {
             var options = new BlobPipelineOptions(
-                BlockSize: blockSize,
+                BlockSizeBytes: blockSize,
                 NumberOfWriters: writers,
                 NumberOfReaders: readers,
                 ReadWriteBuffersCapacity: bufferCapacity,
@@ -62,7 +62,7 @@ namespace Tes.RunnerCLI.Commands
             string apiVersion)
         {
             var options = new BlobPipelineOptions(
-                BlockSize: blockSize,
+                BlockSizeBytes: blockSize,
                 NumberOfWriters: writers,
                 NumberOfReaders: readers,
                 ReadWriteBuffersCapacity: bufferCapacity,
