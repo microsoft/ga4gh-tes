@@ -13,6 +13,7 @@ namespace Tes.Runner.Transfer
         public BlobUploader(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBufferPool) : base(pipelineOptions, memoryBufferPool)
         {
         }
+
         /// <summary>
         /// Configures each part with the put block URL.
         /// </summary>
@@ -22,6 +23,7 @@ namespace Tes.Runner.Transfer
             buffer.BlobPartUrl =
                 BlobBlockApiHttpUtils.ParsePutBlockUrl(buffer.BlobUrl, buffer.Ordinal);
         }
+
         /// <summary>
         /// Writes the part as a block to the blob.
         /// </summary>
@@ -97,7 +99,7 @@ namespace Tes.Runner.Transfer
             ArgumentNullException.ThrowIfNull(blobUrl, nameof(blobUrl));
             ArgumentException.ThrowIfNullOrEmpty(fileName, nameof(fileName));
 
-            await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSize, PipelineOptions.ApiVersion));
+            await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSizeBytes, PipelineOptions.ApiVersion));
         }
 
         /// <summary>

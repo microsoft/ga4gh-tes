@@ -2,9 +2,9 @@
 {
     public static class BlobSizeUtils
     {
-        public const int MaxNumberBlobParts = 50000;
+        public const int MaxBlobPartsCount = 50000;
         public const int MiB = 1024 * 1024;
-        public const int DefaultBlockSize = MiB * 10; //10 MiB;
+        public const int DefaultBlockSizeBytes = MiB * 10; //10 MiB;
 
         public static int GetNumberOfParts(long length, int blockSize)
         {
@@ -14,12 +14,12 @@
                     $"Invalid block size. The value must be greater than 0. Provided value: {blockSize}");
             }
 
-            var numberOfParts = (int)Math.Ceiling((double)(length) / blockSize);
+            var numberOfParts = Convert.ToInt32(Math.Ceiling((double)(length) / blockSize));
 
-            if (numberOfParts > MaxNumberBlobParts)
+            if (numberOfParts > MaxBlobPartsCount)
             {
                 throw new Exception(
-                    $"The number of blocks exceeds the maximum allowed by the service of {MaxNumberBlobParts}. Try increasing the block size. Current block size: {blockSize}");
+                    $"The number of blocks exceeds the maximum allowed by the service of {MaxBlobPartsCount}. Try increasing the block size. Current block size: {blockSize}");
             }
 
             return numberOfParts;

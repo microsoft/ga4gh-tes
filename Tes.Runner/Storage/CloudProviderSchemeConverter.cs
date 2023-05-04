@@ -8,7 +8,9 @@ namespace Tes.Runner.Storage
 {
     public class CloudProviderSchemeConverter : ISasResolutionStrategy
     {
-        const string GcpHost = "storage.googleapis.com";
+        private const string GcpHost = "storage.googleapis.com";
+        private const string AwsSuffix = ".s3.amazonaws.com";
+
         //https://broad-references.s3.amazonaws.com/hg38/v0/Homo_sapiens_assembly38.dict
         public Task<Uri> CreateSasTokenWithStrategyAsync(string sourceUrl)
         {
@@ -38,13 +40,14 @@ namespace Tes.Runner.Storage
 
             return builder.Uri;
         }
+
         private Uri ToAwsS3HttpUri(Uri sourceUri)
         {
             var builder = new UriBuilder();
             builder.Scheme = "https";
 
-            //we are assuming the host is the S3 bucket...
-            builder.Host = $"{sourceUri.Host}.s3.amazonaws.com";
+            // Assume the host is the S3 bucket name
+            builder.Host = $"{sourceUri.Host}{AwsSuffix}";
             builder.Path = sourceUri.AbsolutePath;
             builder.Query = sourceUri.Query;
 

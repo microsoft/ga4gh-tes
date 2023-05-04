@@ -37,22 +37,20 @@ public class PartsReader : PartsProcessor
                     PipelineBuffer? buffer;
 
                     while (await readBufferChannel.Reader.WaitToReadAsync())
+                    while (readBufferChannel.Reader.TryRead(out buffer))
                     {
-                        while (readBufferChannel.Reader.TryRead(out buffer))
+                        try
                         {
-                            try
-                            {
-                                buffer.Data = await MemoryBufferChannel.Reader.ReadAsync();
+                            buffer.Data = await MemoryBufferChannel.Reader.ReadAsync();
 
-                                await BlobPipeline.ExecuteReadAsync(buffer);
+                            await BlobPipeline.ExecuteReadAsync(buffer);
 
-                                await writeBufferChannel.Writer.WriteAsync(buffer);
-                            }
-                            catch (Exception e)
-                            {
-                                logger.LogError(e, "Failed to execute read operation.");
-                                throw;
-                            }
+                            await writeBufferChannel.Writer.WriteAsync(buffer);
+                        }
+                        catch (Exception e)
+                        {
+                            logger.LogError(e, "Failed to execute read operation.");
+                            throw;
                         }
                     }
                 }

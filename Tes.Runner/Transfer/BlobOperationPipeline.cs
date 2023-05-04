@@ -39,6 +39,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
         partsReader = new PartsReader(this, pipelineOptions, memoryBuffer);
         processedPartsProcessor = new ProcessedPartsProcessor(this);
     }
+
     public abstract ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer);
 
     public abstract ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer);
@@ -74,7 +75,6 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
         return await processedPartsProcessorTask;
     }
-
 
     private async Task WhenAllOrThrowIfOneFailsAsync(List<Task> tasks)
     {

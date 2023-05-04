@@ -8,8 +8,6 @@ await StartUpAsync(args);
 
 static async Task StartUpAsync(string[] args)
 {
-
-
     var rootCommand = CommandFactory.CreateExecutorCommand();
     CommandFactory.CreateUploadCommand(rootCommand);
     CommandFactory.CreateDownloadCommand(rootCommand);

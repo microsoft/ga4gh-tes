@@ -22,11 +22,9 @@ namespace Tes.RunnerCLI.Commands
 
         internal static RootCommand CreateExecutorCommand()
         {
-
             var dockerUriOption = CreateOption<Uri>(DockerUriOption, "local docker engine endpoint", "-u", defaultValue: DefaultDockerUri);
 
             var rootCommand = new RootCommand("Executes the specified TES Task");
-
 
             foreach (var option in CreateGlobalOptionList())
             {
@@ -77,7 +75,6 @@ namespace Tes.RunnerCLI.Commands
 
         internal static Command CreateDownloadCommand(RootCommand rootCommand)
         {
-
             var cmd = CreateCommand(DownloadCommandName, "Downloads input files from a HTTP source");
 
             rootCommand.Add(cmd);
@@ -104,7 +101,6 @@ namespace Tes.RunnerCLI.Commands
 
         internal static Command CreateCommand(string optName, string optDescription, params Option[] options)
         {
-
             var cmd = new Command(optName, optDescription);
 
             var allOptions = CreateGlobalOptionList();
@@ -119,14 +115,12 @@ namespace Tes.RunnerCLI.Commands
             return cmd;
         }
 
-
         private static List<Option> CreateGlobalOptionList()
         {
-
             return new List<Option>()
             {
                 CreateOption<FileInfo>(FileOption, "The file with the task definition",  "-f", required: true, defaultValue: GetDefaultTaskDefinitionFile()),
-                CreateOption<int>(BlockSizeOption, "Blob block size in bytes", "-b", defaultValue: BlobSizeUtils.DefaultBlockSize),
+                CreateOption<int>(BlockSizeOption, "Blob block size in bytes", "-b", defaultValue: BlobSizeUtils.DefaultBlockSizeBytes),
                 CreateOption<int>(WritersOption, "Number of concurrent writers", "-w", defaultValue: BlobPipelineOptions.DefaultNumberOfWriters),
                 CreateOption<int>(ReadersOption, "Number of concurrent readers", "-r", defaultValue: BlobPipelineOptions.DefaultNumberOfReaders),
                 CreateOption<int>(BufferCapacityOption, "Pipeline buffer capacity", "-c", defaultValue: BlobPipelineOptions.DefaultReadWriteBuffersCapacity),
@@ -139,8 +133,6 @@ namespace Tes.RunnerCLI.Commands
             return new FileInfo(DefaultTaskDefinitionFile);
         }
 
-
-
         private static Option<T> GetOptionByName<T>(IReadOnlyCollection<Option> commandOptions, string optionName)
         {
             var option = commandOptions.SingleOrDefault(o => o.Name == optionName);
@@ -149,6 +141,7 @@ namespace Tes.RunnerCLI.Commands
             {
                 return (Option<T>)option;
             }
+
             throw new InvalidOperationException("Invalid option");
         }
 

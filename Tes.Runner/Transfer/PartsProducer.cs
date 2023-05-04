@@ -78,7 +78,7 @@ public class PartsProducer
     {
         var length = await blobPipeline.GetSourceLengthAsync(operation.SourceLocationForLength);
 
-        var numberOfParts = BlobSizeUtils.GetNumberOfParts(length, blobPipelineOptions.BlockSize);
+        var numberOfParts = BlobSizeUtils.GetNumberOfParts(length, blobPipelineOptions.BlockSizeBytes);
 
         var fileHandlerPool = await GetNewFileHandlerPoolAsync(operation.FileName, operation.ReadOnlyHandlerForExistingFile);
 
@@ -110,8 +110,8 @@ public class PartsProducer
         var buffer = new PipelineBuffer()
         {
             BlobUrl = blobUrl,
-            Offset = (long)partOrdinal * blobPipelineOptions.BlockSize,
-            Length = blobPipelineOptions.BlockSize,
+            Offset = (long)partOrdinal * blobPipelineOptions.BlockSizeBytes,
+            Length = blobPipelineOptions.BlockSizeBytes,
             FileName = fileName,
             Ordinal = partOrdinal,
             NumberOfParts = numberOfParts,

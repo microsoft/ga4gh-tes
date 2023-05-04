@@ -37,7 +37,7 @@ namespace Tes.Runner
         {
             ArgumentNullException.ThrowIfNull(blobPipelineOptions);
 
-            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSize);
+            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
 
             var inputLength = await DownloadInputsAsync(memoryBufferChannel);
 
@@ -63,7 +63,7 @@ namespace Tes.Runner
 
         public async Task<long> UploadOutputsAsync()
         {
-            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSize);
+            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
 
             return await UploadOutputsAsync(memoryBufferChannel);
         }
@@ -86,10 +86,9 @@ namespace Tes.Runner
 
             if (outputs != null)
             {
-
                 var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs));
 
-                logger.LogInformation($"Executed Upload. Time elapsed:{executionResult.Elapsed} Bandwidth:{BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
+                logger.LogInformation($"Executed Upload. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 
                 return executionResult.Result;
             }
@@ -99,7 +98,7 @@ namespace Tes.Runner
 
         public async Task<long> DownloadInputsAsync()
         {
-            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSize);
+            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
 
             return await DownloadInputsAsync(memoryBufferChannel);
         }
@@ -122,7 +121,7 @@ namespace Tes.Runner
             {
                 var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs));
 
-                logger.LogInformation($"Executed Download. Time elapsed:{executionResult.Elapsed} Bandwidth:{BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
+                logger.LogInformation($"Executed Download. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 
                 return executionResult.Result;
             }
@@ -135,7 +134,7 @@ namespace Tes.Runner
             logger.LogInformation($"Writers:{blobPipelineOptions.NumberOfWriters}");
             logger.LogInformation($"Readers:{blobPipelineOptions.NumberOfReaders}");
             logger.LogInformation($"Capacity:{blobPipelineOptions.ReadWriteBuffersCapacity}");
-            logger.LogInformation($"BlockSize:{blobPipelineOptions.BlockSize}");
+            logger.LogInformation($"BlockSize:{blobPipelineOptions.BlockSizeBytes}");
         }
 
         private static async Task<TimeExecutionResult<T>> TimedExecutionAsync<T>(Func<Task<T>> execution)
