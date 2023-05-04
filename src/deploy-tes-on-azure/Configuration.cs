@@ -54,7 +54,6 @@ namespace TesDeployer
         public bool Silent { get; set; }
         public bool DeleteResourceGroupOnFailure { get; set; }
         public string TesImageName { get; set; }
-        public string CustomTesImagePath { get; set; }
         public bool SkipTestWorkflow { get; set; } = false;
         public bool Update { get; set; } = false;
         public string VnetResourceGroupName { get; set; }
@@ -69,7 +68,7 @@ namespace TesDeployer
         public string BlobxferImageName { get; set; } = null;
         public bool? DisableBatchNodesPublicIpAddress { get; set; } = null;
         public bool DebugLogging { get; set; } = false;
-        public bool? ProvisionPostgreSqlOnAzure { get; set; } = true;
+        public bool? ProvisionPostgreSqlOnAzure { get; set; } = null;
         public string PostgreSqlServerName { get; set; }
         public string PostgreSqlServerNameSuffix { get; set; } = ".postgres.database.azure.com";
         public int PostgreSqlServerPort { get; set; } = 5432;

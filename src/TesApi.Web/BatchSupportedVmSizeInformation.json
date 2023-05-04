@@ -3824,7 +3824,8 @@
     "ResourceDiskSizeInGiB": 200,
     "MaxDataDiskCount": 16,
     "HyperVGenerations": [
-      "V1"
+      "V1",
+      "V2"
     ],
     "RegionsAvailable": [
       "eastus",
@@ -9597,6 +9598,7 @@
       "westus3",
       "uksouth",
       "westeurope",
+      "centralindia",
       "japaneast",
       "centraluseuap"
     ]
@@ -9647,6 +9649,7 @@
       "westus3",
       "uksouth",
       "westeurope",
+      "centralindia",
       "japaneast",
       "centraluseuap"
     ]
@@ -9697,6 +9700,7 @@
       "westus3",
       "uksouth",
       "westeurope",
+      "centralindia",
       "japaneast",
       "centraluseuap"
     ]
@@ -9747,6 +9751,7 @@
       "westus3",
       "uksouth",
       "westeurope",
+      "centralindia",
       "japaneast",
       "centraluseuap"
     ]
@@ -9797,6 +9802,7 @@
       "westus3",
       "uksouth",
       "westeurope",
+      "centralindia",
       "japaneast",
       "centraluseuap"
     ]

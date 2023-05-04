@@ -27,9 +27,9 @@ namespace TesApi.Tests
         {
             var services = GetServiceProvider();
             var pool = await AddPool(services.GetT(), false);
-            ((BatchPool)pool).TestSetAvailable(false);
+            pool.TestSetAvailable(false);
 
-            await pool.ServicePoolAsync(IBatchPool.ServiceKind.Rotate);
+            await pool.ServicePoolAsync(BatchPool.ServiceKind.Rotate);
 
             Assert.IsFalse(pool.IsAvailable);
         }
@@ -43,9 +43,9 @@ namespace TesApi.Tests
             azureProxy.AzureProxyListComputeNodesAsync = (i, d) => AsyncEnumerable.Empty<ComputeNode>();
             var services = GetServiceProvider(azureProxy);
             var pool = await AddPool(services.GetT(), false);
-            TimeShift(((BatchPool)pool).TestRotatePoolTime, pool);
+            TimeShift(pool.TestRotatePoolTime, pool);
 
-            await pool.ServicePoolAsync(IBatchPool.ServiceKind.Rotate);
+            await pool.ServicePoolAsync(BatchPool.ServiceKind.Rotate);
 
             Assert.IsFalse(pool.IsAvailable);
             Assert.AreNotEqual(0, ((BatchPool)pool).TestTargetDedicated + ((BatchPool)pool).TestTargetLowPriority);
@@ -59,35 +59,35 @@ namespace TesApi.Tests
             var services = GetServiceProvider(azureProxy);
             var pool = await AddPool(services.GetT(), false);
 
-            await pool.ServicePoolAsync(IBatchPool.ServiceKind.RemovePoolIfEmpty);
+            await pool.ServicePoolAsync(BatchPool.ServiceKind.RemovePoolIfEmpty);
         }
 
         [TestMethod]
         public async Task RemovePoolIfEmptyDoesNotDeletePoolIfPoolHasComputeNodes()
         {
-            IBatchPool pool = default;
+            BatchPool pool = default;
             var azureProxy = AzureProxyReturnValues.Get();
             azureProxy.AzureProxyGetComputeNodeAllocationState = id => (Microsoft.Azure.Batch.Common.AllocationState.Steady, true, 0, 0, 1, 1);
             azureProxy.AzureProxyDeleteBatchPool = (poolId, cancellationToken) => Assert.Fail();
             var services = GetServiceProvider(azureProxy);
             pool = await AddPool(services.GetT(), false);
-            ((BatchPool)pool).TestSetAvailable(false);
+            pool.TestSetAvailable(false);
 
-            await pool.ServicePoolAsync(IBatchPool.ServiceKind.RemovePoolIfEmpty);
+            await pool.ServicePoolAsync(BatchPool.ServiceKind.RemovePoolIfEmpty);
         }
 
         [TestMethod]
         public async Task RemovePoolIfEmptyDeletesPoolIfPoolIsNotAvailableAndHasNoComputeNodes()
         {
-            IBatchPool pool = default;
+            BatchPool pool = default;
             var azureProxy = AzureProxyReturnValues.Get();
             azureProxy.AzureProxyDeleteBatchPool = DeletePool;
             var services = GetServiceProvider(azureProxy);
             pool = await AddPool(services.GetT(), false);
-            ((BatchPool)pool).TestSetAvailable(false);
+            pool.TestSetAvailable(false);
             var isDeleted = false;
 
-            await pool.ServicePoolAsync(IBatchPool.ServiceKind.RemovePoolIfEmpty);
+            await pool.ServicePoolAsync(BatchPool.ServiceKind.RemovePoolIfEmpty);
 
             Assert.IsTrue(isDeleted);
 
@@ -111,11 +111,11 @@ namespace TesApi.Tests
                 accountResourceInformation: new("defaultbatchaccount", "defaultresourcegroup", "defaultsubscription", "defaultregion"));
         }
 
-        private static async Task<IBatchPool> AddPool(BatchScheduler batchPools, bool isPreemtable)
-            => await batchPools.GetOrAddPoolAsync("key1", isPreemtable, id => ValueTask.FromResult(new Pool(name: id, displayName: "display1", vmSize: "vmSize1")));
+        private static async Task<BatchPool> AddPool(BatchScheduler batchPools, bool isPreemtable)
+            => (BatchPool)await batchPools.GetOrAddPoolAsync("key1", isPreemtable, id => ValueTask.FromResult(new Pool(name: id, displayName: "display1", vmSize: "vmSize1")));
 
-        private static void TimeShift(TimeSpan shift, IBatchPool pool)
-            => ((BatchPool)pool).TimeShift(shift);
+        private static void TimeShift(TimeSpan shift, BatchPool pool)
+            => pool.TimeShift(shift);
 
         private class AzureProxyReturnValues
         {

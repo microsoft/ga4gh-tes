@@ -74,7 +74,7 @@ namespace TesApi.Web
 
                     .AddSingleton<IAppCache, CachingService>()
                     .AddSingleton<ICache<TesTask>, TesRepositoryLazyCache<TesTask>>()
-                    .AddSingleton<IRepository<TesTask>, TesTaskPostgreSqlRepository>()
+                    .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
@@ -91,6 +91,7 @@ namespace TesApi.Web
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
                     .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
+                    .AddSingleton<IRepository<TesTask>>(sp => ActivatorUtilities.CreateInstance<RepositoryRetryHandler<TesTask>>(sp, (IRepository<TesTask>)sp.GetRequiredService(typeof(TesTaskPostgreSqlRepository))))
 
                     .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
                     .AddSingleton<ContainerRegistryProvider>()
@@ -103,13 +104,14 @@ namespace TesApi.Web
                     .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
                     .AddSingleton<AzureManagementClientsFactory>()
                     .AddSingleton<ConfigurationUtils>()
+                    .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
                     .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
 
                     .AddSwaggerGen(c =>
                     {
-                        c.SwaggerDoc("4.2.0", new()
+                        c.SwaggerDoc("4.3.0", new()
                         {
-                            Version = "4.2.0",
+                            Version = "4.3.0",
                             Title = "GA4GH Task Execution Service",
                             Description = "Task Execution Service (ASP.NET Core 7.0)",
                             Contact = new()
@@ -131,15 +133,15 @@ namespace TesApi.Web
                     })
 
                     // Order is important for hosted services
-                    .AddHostedService<DoOnceAtStartUpService>()
+                    .AddHostedService(sp => (AllowedVmSizesService)sp.GetRequiredService(typeof(IAllowedVmSizesService)))
                     .AddHostedService<BatchPoolService>()
                     .AddHostedService<Scheduler>()
                     .AddHostedService<DeleteCompletedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedAutoPoolsHostedService>();
-                    //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
+                //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
 
-                    
+
             }
             catch (Exception exc)
             {
@@ -269,7 +271,7 @@ namespace TesApi.Web
                 })
                 .UseSwaggerUI(c =>
                 {
-                    c.SwaggerEndpoint("/swagger/4.2.0/openapi.json", "Task Execution Service");
+                    c.SwaggerEndpoint("/swagger/4.3.0/openapi.json", "Task Execution Service");
                 })
 
                 .IfThenElse(hostingEnvironment.IsDevelopment(),

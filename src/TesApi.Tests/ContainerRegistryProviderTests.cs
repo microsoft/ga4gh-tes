@@ -62,7 +62,7 @@ namespace TesApi.Tests
             Assert.IsNotNull(container);
             Assert.AreEqual(server, container.RegistryServer);
             appCacheMock.Verify(
-                c => c.Add(It.Is<string>(v => v.Equals(image)), It.IsAny<ContainerRegistryInfo>(),
+                c => c.Add(It.Is<string>(v => v.Equals($"{nameof(ContainerRegistryProvider)}:{image}")), It.IsAny<ContainerRegistryInfo>(),
                     It.IsAny<MemoryCacheEntryOptions>()), Times.Once());
         }
 
@@ -71,14 +71,14 @@ namespace TesApi.Tests
         {
             var server = "registry";
             var image = $"{server}/image";
-            appCacheMock.Setup(c => c.Get<ContainerRegistryInfo>(It.Is<string>(v => v.Equals(image))))
+            appCacheMock.Setup(c => c.Get<ContainerRegistryInfo>(It.Is<string>(v => v.Equals($"{nameof(ContainerRegistryProvider)}:{image}"))))
                 .Returns(new ContainerRegistryInfo() { RegistryServer = server });
 
             var container = await containerRegistryProvider.GetContainerRegistryInfoAsync(image);
 
             Assert.IsNotNull(container);
             Assert.AreEqual(server, container.RegistryServer);
-            appCacheMock.Verify(c => c.Get<ContainerRegistryInfo>(It.Is<string>(v => v.Equals(image))), Times.Once());
+            appCacheMock.Verify(c => c.Get<ContainerRegistryInfo>(It.Is<string>(v => v.Equals($"{nameof(ContainerRegistryProvider)}:{image}"))), Times.Once());
             retryHandlerMock.Verify(r =>
                 r.ExecuteWithRetryAsync(It.IsAny<Func<Task<IEnumerable<ContainerRegistryInfo>>>>()), Times.Never);
 
@@ -111,7 +111,7 @@ namespace TesApi.Tests
 
             Assert.IsNull(container);
             appCacheMock.Verify(
-                c => c.Add(It.Is<string>(v => v.Equals(image)), It.IsAny<ContainerRegistryInfo>(),
+                c => c.Add(It.Is<string>(v => v.Equals($"{nameof(ContainerRegistryProvider)}:{image}")), It.IsAny<ContainerRegistryInfo>(),
                     It.IsAny<MemoryCacheEntryOptions>()), Times.Never);
         }
     }
