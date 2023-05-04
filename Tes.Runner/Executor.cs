@@ -139,8 +139,7 @@ namespace Tes.Runner
 
         private static async Task<TimeExecutionResult<T>> TimedExecutionAsync<T>(Func<Task<T>> execution)
         {
-            var sw = new Stopwatch();
-            sw.Start();
+            var sw = Stopwatch.StartNew();
             var result = await execution();
             sw.Stop();
 

@@ -39,28 +39,28 @@ public class ProcessedPartsProcessor
         long totalBytes = 0;
 
         while (!allFilesProcessed && await processedBufferChannel.Reader.WaitToReadAsync())
-        while (processedBufferChannel.Reader.TryRead(out buffer))
-        {
-            totalBytes += buffer.Length;
-
-            if (!partsProcessed.ContainsKey(buffer.FileName))
+            while (processedBufferChannel.Reader.TryRead(out buffer))
             {
-                partsProcessed.Add(buffer.FileName, 0);
+                totalBytes += buffer.Length;
+
+                if (!partsProcessed.ContainsKey(buffer.FileName))
+                {
+                    partsProcessed.Add(buffer.FileName, 0);
+                }
+
+                var total = ++partsProcessed[buffer.FileName];
+
+                if (total == buffer.NumberOfParts)
+                {
+                    tasks.Add(blobPipeline.OnCompletionAsync(buffer.FileSize, buffer.BlobUrl, buffer.FileName));
+
+                    processedFiles++;
+
+                    await CloseFileHandlerPoolAsync(buffer.FileHandlerPool);
+
+                    allFilesProcessed = processedFiles == expectedNumberOfFiles;
+                }
             }
-
-            var total = ++partsProcessed[buffer.FileName];
-
-            if (total == buffer.NumberOfParts)
-            {
-                tasks.Add(blobPipeline.OnCompletionAsync(buffer.FileSize, buffer.BlobUrl, buffer.FileName));
-
-                processedFiles++;
-
-                await CloseFileHandlerPoolAsync(buffer.FileHandlerPool);
-
-                allFilesProcessed = processedFiles == expectedNumberOfFiles;
-            }
-        }
 
         await Task.WhenAll(tasks);
 

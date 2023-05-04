@@ -40,22 +40,22 @@ public class PartsWriter : PartsProcessor
                 PipelineBuffer? buffer;
 
                 while (await writeBufferChannel.Reader.WaitToReadAsync())
-                while (writeBufferChannel.Reader.TryRead(out buffer))
-                {
-                    try
+                    while (writeBufferChannel.Reader.TryRead(out buffer))
                     {
-                        await BlobPipeline.ExecuteWriteAsync(buffer);
+                        try
+                        {
+                            await BlobPipeline.ExecuteWriteAsync(buffer);
 
-                        await processedBufferChannel.Writer.WriteAsync(ToProcessedBuffer(buffer));
+                            await processedBufferChannel.Writer.WriteAsync(ToProcessedBuffer(buffer));
 
-                        await MemoryBufferChannel.Writer.WriteAsync(buffer.Data);
+                            await MemoryBufferChannel.Writer.WriteAsync(buffer.Data);
+                        }
+                        catch (Exception e)
+                        {
+                            logger.LogError(e, "Failed to execute write operation");
+                            throw;
+                        }
                     }
-                    catch (Exception e)
-                    {
-                        logger.LogError(e, "Failed to execute write operation");
-                        throw;
-                    }
-                }
             }));
         }
 
