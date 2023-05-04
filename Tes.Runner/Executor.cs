@@ -137,15 +137,15 @@ namespace Tes.Runner
             logger.LogInformation($"BlockSize:{blobPipelineOptions.BlockSizeBytes}");
         }
 
-        private static async Task<TimeExecutionResult<T>> TimedExecutionAsync<T>(Func<Task<T>> execution)
+        private static async Task<TimedExecutionResult<T>> TimedExecutionAsync<T>(Func<Task<T>> execution)
         {
             var sw = Stopwatch.StartNew();
             var result = await execution();
             sw.Stop();
 
-            return new TimeExecutionResult<T>(sw.Elapsed, result);
+            return new TimedExecutionResult<T>(sw.Elapsed, result);
         }
 
-        private record TimeExecutionResult<T>(TimeSpan Elapsed, T Result);
+        private record TimedExecutionResult<T>(TimeSpan Elapsed, T Result);
     }
 }
