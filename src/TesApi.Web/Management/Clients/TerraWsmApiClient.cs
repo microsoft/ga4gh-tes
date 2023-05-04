@@ -95,7 +95,6 @@ namespace TesApi.Web.Management.Clients
             }
         }
 
-
         /// <summary>
         /// Deletes a batch pool using the WSM API
         /// </summary>

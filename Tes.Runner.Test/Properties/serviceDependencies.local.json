@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "secrets1": {
+      "type": "secrets.user"
+    },
+    "storage1": {
+      "secretStore": "LocalSecretsFile",
+      "resourceId": null,
+      "type": "storage.emulator",
+      "connectionId": "runner_storage_test_connstring"
+    }
+  }
+}
