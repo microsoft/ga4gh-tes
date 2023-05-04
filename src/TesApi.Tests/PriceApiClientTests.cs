@@ -37,7 +37,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetPricingInformationPageAsync_ReturnsSinglePageWithItemsWithMaxPageSize()
         {
-            var page = await pricingApiClient.GetPricingInformationPageAsync(0, "westus2");
+            var page = await pricingApiClient.GetPricingInformationPageAsync(0, "westus2", System.Threading.CancellationToken.None);
 
             Assert.IsNotNull(page);
             Assert.IsTrue(page.Items.Length == 100);
@@ -46,8 +46,8 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetPricingInformationPageAsync_ReturnsSinglePageAndCaches()
         {
-            var page = await pricingApiClient.GetPricingInformationPageAsync(0, "westus2", cacheResults: true);
-            var cacheKey = await pricingApiClient.ToCacheKeyAsync(new Uri(page.RequestLink), false);
+            var page = await pricingApiClient.GetPricingInformationPageAsync(0, "westus2", System.Threading.CancellationToken.None, cacheResults: true);
+            var cacheKey = await pricingApiClient.ToCacheKeyAsync(new Uri(page.RequestLink), false, System.Threading.CancellationToken.None);
             var cachedPage = JsonSerializer.Deserialize<RetailPricingData>(appCache.Get<string>(cacheKey));
             Assert.IsNotNull(page);
             Assert.IsTrue(page.Items.Length == 100);
@@ -58,7 +58,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetPricingInformationAsync_ReturnsMoreThan100Items()
         {
-            var pages = await pricingApiClient.GetAllPricingInformationAsync("westus2").ToListAsync();
+            var pages = await pricingApiClient.GetAllPricingInformationAsync("westus2", System.Threading.CancellationToken.None).ToListAsync();
 
             Assert.IsNotNull(pages);
             Assert.IsTrue(pages.Count > 100);
@@ -67,7 +67,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync_ReturnsOnlyNonWindowsAndNonSpotInstances()
         {
-            var pages = await pricingApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync("westus2").ToListAsync();
+            var pages = await pricingApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync("westus2", System.Threading.CancellationToken.None).ToListAsync();
 
             Assert.IsTrue(pages.Count > 0);
             Assert.IsFalse(pages.Any(r => r.productName.Contains(" Windows")));

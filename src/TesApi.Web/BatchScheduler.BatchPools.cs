@@ -22,9 +22,9 @@ namespace TesApi.Web
         [GeneratedRegex("^[a-zA-Z0-9_-]+$")]
         private static partial Regex PoolNameRegex();
 
-        internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId);
+        internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
-        private async Task<(string PoolKey, string DisplayName)> GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation)
+        private async Task<(string PoolKey, string DisplayName)> GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, CancellationToken cancellationToken)
         {
             var identityResourceId = tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true ? tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) : default;
             var executorImage = tesTask.Executors.First().Image;
@@ -32,7 +32,7 @@ namespace TesApi.Web
 
             if (!containerRegistryProvider.IsImagePublic(executorImage))
             {
-                registryServer = (await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage))?.RegistryServer;
+                registryServer = (await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage, cancellationToken))?.RegistryServer;
             }
 
             var label = string.IsNullOrWhiteSpace(batchPrefix) ? "<none>" : batchPrefix;
@@ -109,7 +109,7 @@ namespace TesApi.Web
         internal bool IsPoolAvailable(string key)
             => batchPools.TryGetValue(key, out var pools) && pools.Any(p => p.IsAvailable);
 
-        internal async Task<IBatchPool> GetOrAddPoolAsync(string key, bool isPreemptable, ModelPoolFactory modelPoolFactory)
+        internal async Task<IBatchPool> GetOrAddPoolAsync(string key, bool isPreemptable, ModelPoolFactory modelPoolFactory, CancellationToken cancellationToken)
         {
             if (enableBatchAutopool)
             {
@@ -132,7 +132,7 @@ namespace TesApi.Web
 
             if (pool is null)
             {
-                var quota = (await quotaVerifier.GetBatchQuotaProvider().GetVmCoreQuotaAsync(isPreemptable)).AccountQuota;
+                var quota = (await quotaVerifier.GetBatchQuotaProvider().GetVmCoreQuotaAsync(isPreemptable, cancellationToken)).AccountQuota;
                 var poolQuota = quota?.PoolQuota;
                 var jobQuota = quota?.ActiveJobAndJobScheduleQuota;
                 var activePoolsCount = azureProxy.GetBatchActivePoolCount();
@@ -151,12 +151,12 @@ namespace TesApi.Web
                 var uniquifier = new byte[5]; // This always becomes 8 chars when converted to base32
                 RandomNumberGenerator.Fill(uniquifier);
                 var poolId = $"{key}-{CommonUtilities.Base32.ConvertToBase32(uniquifier).TrimEnd('=').ToLowerInvariant()}"; // embedded '-' is required by GetKeyFromPoolId()
-                var modelPool = await modelPoolFactory(poolId);
+                var modelPool = await modelPoolFactory(poolId, cancellationToken);
                 modelPool.Metadata ??= new List<BatchModels.MetadataItem>();
                 modelPool.Metadata.Add(new(PoolHostName, this.batchPrefix));
                 modelPool.Metadata.Add(new(PoolIsDedicated, (!isPreemptable).ToString()));
                 var batchPool = _batchPoolFactory.CreateNew();
-                await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, CancellationToken.None);
+                await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, cancellationToken);
                 pool = batchPool;
             }
 
@@ -175,10 +175,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async ValueTask<IEnumerable<Task>> GetShutdownCandidatePools(CancellationToken cancellationToken)
             => (await GetEmptyPools(cancellationToken))
-                .Select(DeletePoolAsyncWrapper);
-
-        private Task DeletePoolAsyncWrapper(IBatchPool pool)
-            => DeletePoolAsync(pool, CancellationToken.None);
+                .Select(pool => DeletePoolAsync(pool, cancellationToken));
 
         /// <inheritdoc/>
         public IEnumerable<IBatchPool> GetPools()

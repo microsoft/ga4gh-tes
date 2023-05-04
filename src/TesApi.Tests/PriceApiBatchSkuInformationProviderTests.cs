@@ -40,7 +40,7 @@ namespace TesApi.Tests
         {
             //using var serviceProvider = new TestServices.TestServiceProvider<PriceApiBatchSkuInformationProvider>();
             //var provider = serviceProvider.GetT();
-            var results = await provider.GetVmSizesAndPricesAsync("eastus");
+            var results = await provider.GetVmSizesAndPricesAsync("eastus", System.Threading.CancellationToken.None);
 
             Assert.IsTrue(results.Any(r => r.PricePerHour is not null && r.PricePerHour > 0));
         }
@@ -50,7 +50,7 @@ namespace TesApi.Tests
         {
             ///using var serviceProvider = new TestServices.TestServiceProvider<PriceApiBatchSkuInformationProvider>();
             //provider = serviceProvider.GetT();
-            var results = await provider.GetVmSizesAndPricesAsync("eastus");
+            var results = await provider.GetVmSizesAndPricesAsync("eastus", System.Threading.CancellationToken.None);
 
             Assert.IsTrue(results.Any(r => r.LowPriority && r.PricePerHour is not null && r.PricePerHour > 0));
             Assert.IsTrue(results.Any(r => !r.LowPriority && r.PricePerHour is not null && r.PricePerHour > 0));

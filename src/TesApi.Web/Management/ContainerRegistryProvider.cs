@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Management.ContainerRegistry.Fluent;
 using Microsoft.Extensions.Caching.Memory;
@@ -54,8 +55,9 @@ namespace TesApi.Web.Management
         /// Looks for the container registry information from the image name.
         /// </summary>
         /// <param name="imageName">Container image name</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>Container registry information, or null if auto-discovery is disabled or the repository was not found</returns>
-        public virtual async Task<ContainerRegistryInfo> GetContainerRegistryInfoAsync(string imageName)
+        public virtual async Task<ContainerRegistryInfo> GetContainerRegistryInfoAsync(string imageName, CancellationToken cancellationToken)
         {
             if (!options.AutoDiscoveryEnabled || IsKnownOrDefaultContainerRegistry(imageName))
             {
@@ -69,7 +71,7 @@ namespace TesApi.Web.Management
                 return containerRegistryInfo;
             }
 
-            return await LookUpAndAddToCacheContainerRegistryInfoAsync(imageName);
+            return await LookUpAndAddToCacheContainerRegistryInfoAsync(imageName, cancellationToken);
         }
 
         /// <summary>
@@ -91,9 +93,9 @@ namespace TesApi.Web.Management
             return false;
         }
 
-        private async Task<ContainerRegistryInfo> LookUpAndAddToCacheContainerRegistryInfoAsync(string imageName)
+        private async Task<ContainerRegistryInfo> LookUpAndAddToCacheContainerRegistryInfoAsync(string imageName, CancellationToken cancellationToken)
         {
-            var repositories = await CacheAndRetryHandler.ExecuteWithRetryAsync(GetAccessibleContainerRegistriesAsync);
+            var repositories = await CacheAndRetryHandler.ExecuteWithRetryAsync(GetAccessibleContainerRegistriesAsync, cancellationToken: cancellationToken);
 
             var requestedRepo = repositories?.FirstOrDefault(reg =>
                 reg.RegistryServer.Equals(imageName.Split('/').FirstOrDefault(), StringComparison.OrdinalIgnoreCase));
@@ -134,16 +136,16 @@ namespace TesApi.Web.Management
         /// Gets the list of container registries the TES service has access to
         /// </summary>
         /// <returns>List of container registries. null if the TES service does not have access if auto-discovery is enabled </returns>
-        private async Task<IEnumerable<ContainerRegistryInfo>> GetAccessibleContainerRegistriesAsync()
+        private async Task<IEnumerable<ContainerRegistryInfo>> GetAccessibleContainerRegistriesAsync(CancellationToken cancellationToken)
         {
             if (!options.AutoDiscoveryEnabled)
             {
                 return null;
             }
 
-            var azureClient = await ManagementClientsFactory.CreateAzureManagementClientAsync();
+            var azureClient = await ManagementClientsFactory.CreateAzureManagementClientAsync(cancellationToken);
 
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
+            var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).Select(s => s.SubscriptionId);
 
             var infos = new List<ContainerRegistryInfo>();
 
@@ -153,7 +155,7 @@ namespace TesApi.Web.Management
             {
                 try
                 {
-                    var registries = (await azureClient.WithSubscription(subId).ContainerRegistries.ListAsync()).ToList();
+                    var registries = (await azureClient.WithSubscription(subId).ContainerRegistries.ListAsync(cancellationToken: cancellationToken)).ToList();
 
                     Logger.LogInformation(@$"Searching {subId} for container registries.");
 
@@ -163,7 +165,7 @@ namespace TesApi.Web.Management
 
                         try
                         {
-                            var server = await r.GetCredentialsAsync();
+                            var server = await r.GetCredentialsAsync(cancellationToken);
 
                             var info = new ContainerRegistryInfo { RegistryServer = r.LoginServerUrl, Username = server.Username, Password = server.AccessKeys[AccessKeyType.Primary] };
 

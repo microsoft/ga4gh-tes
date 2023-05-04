@@ -89,8 +89,8 @@ namespace TesApi.Tests
             {
                 foreach (var item in tasks)
                 {
-                    mockRepo.Setup(repo => repo.TryGetItemAsync(item.Id, It.IsAny<Action<TesTask>>()))
-                        .Callback<string, Action<TesTask>>((id, action) =>
+                    mockRepo.Setup(repo => repo.TryGetItemAsync(item.Id, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
+                        .Callback<string, System.Threading.CancellationToken, Action<TesTask>>((id, _1, action) =>
                         {
                             action(item);
                         })

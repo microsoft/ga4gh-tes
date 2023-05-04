@@ -3,10 +3,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Security.AccessControl;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
+using Microsoft.Rest.Azure;
 using Polly.Retry;
 
 // TODO: move this to Common.csproj?
@@ -36,6 +39,18 @@ namespace TesApi.Web
         /// <exception cref="ArgumentNullException"></exception>
         public static IAsyncEnumerable<T> ToAsyncEnumerable<T>(this IPagedCollection<T> source)
             => new AsyncEnumerable<T>(source);
+
+
+        /// <summary>
+        /// Creates an <see cref="IAsyncEnumerable{T}"/> from an <see cref="Microsoft.Rest.Azure.IPage{T}"/>
+        /// </summary>
+        /// <typeparam name="T">The type of objects to enumerate.</typeparam>
+        /// <param name="source">The <see cref="IPage{T}"/> to enumerate.</param>
+        /// <param name="nextPageFunc">The function taking the nextPageLink and returning a new <see cref="IPage{T}"/>.</param>
+        /// <returns>An <see cref="IAsyncEnumerable{T}"/></returns>
+        /// <exception cref="ArgumentNullException"></exception>
+        public static IAsyncEnumerable<T> ToAsyncEnumerable<T>(this IPage<T> source, Func<string, CancellationToken, Task<IPage<T>>> nextPageFunc)
+            => new AsyncEnumerable<T>(source, nextPageFunc);
 
         /// <summary>
         /// Adapts calls returning <see cref="IAsyncEnumerable{T}"/> to <see cref="AsyncRetryPolicy"/>.
@@ -71,6 +86,13 @@ namespace TesApi.Web
                 ArgumentNullException.ThrowIfNull(source);
 
                 _getEnumerator = c => new PagedCollectionEnumerator<T>(source, c);
+            }
+
+            public AsyncEnumerable(IPage<T> source, Func<string, CancellationToken, Task<IPage<T>>> nextPageFunc)
+            {
+                ArgumentNullException.ThrowIfNull(source);
+
+                _getEnumerator = c => new PageEnumerator<T>(source, nextPageFunc, c);
             }
 
             public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default)
@@ -121,30 +143,38 @@ namespace TesApi.Web
                 => new(_retryPolicy.ExecuteAsync(ct => _source.MoveNextAsync(ct).AsTask(), _cancellationToken));
         }
 
-        private sealed class PagedCollectionEnumerator<T> : IAsyncEnumerator<T>
+        private sealed class PageEnumerator<T> : EnumeratorEnumerator<T, IPage<T>>
         {
-            private IPagedCollection<T> _source;
-            private readonly CancellationToken _cancellationToken;
-            private IEnumerator<T> _enumerator;
+            public PageEnumerator(IPage<T> source, Func<string, CancellationToken, Task<IPage<T>>> nextPageFunc, CancellationToken cancellationToken)
+                : base(source, s => s.GetEnumerator(), (s, ct) => nextPageFunc(s.NextPageLink, ct), cancellationToken)
+            { }
+        }
 
+        private sealed class PagedCollectionEnumerator<T> : EnumeratorEnumerator<T, IPagedCollection<T>>
+        {
             public PagedCollectionEnumerator(IPagedCollection<T> source, CancellationToken cancellationToken)
-            {
-                ArgumentNullException.ThrowIfNull(source);
+                : base(source, s => s.GetEnumerator(), (s, ct) => s.GetNextPageAsync(ct), cancellationToken)
+            { }
+        }
 
-                _source = source;
-                _cancellationToken = cancellationToken;
-                _enumerator = source.GetEnumerator();
+        private abstract class EnumeratorEnumerator<TItem, TSource> : Enumerator<TItem, IEnumerator<TItem>>
+        {
+            protected TSource _source;
+
+            private readonly Func<TSource, IEnumerator<TItem>> _getEnumerator;
+            private readonly Func<TSource, CancellationToken, Task<TSource>> _getNext;
+
+            public EnumeratorEnumerator(TSource source, Func<TSource, IEnumerator<TItem>> getEnumerator, Func<TSource, CancellationToken, Task<TSource>> getNext, CancellationToken cancellationToken)
+                : base(source is null ? default : getEnumerator?.Invoke(source), e => e.Current, cancellationToken)
+            {
+                ArgumentNullException.ThrowIfNull(getEnumerator);
+                ArgumentNullException.ThrowIfNull(getNext);
+
+                _getEnumerator = getEnumerator;
+                _getNext = getNext;
             }
 
-            public T Current => _enumerator.Current;
-
-            public ValueTask DisposeAsync()
-            {
-                _enumerator?.Dispose();
-                return ValueTask.CompletedTask;
-            }
-
-            public ValueTask<bool> MoveNextAsync()
+            public override ValueTask<bool> MoveNextAsync()
             {
                 _cancellationToken.ThrowIfCancellationRequested();
                 return _enumerator.MoveNext()
@@ -157,44 +187,59 @@ namespace TesApi.Web
                     {
                         _enumerator?.Dispose();
                         _enumerator = null;
-                        _source = await _source.GetNextPageAsync(_cancellationToken);
+                        _source = await _getNext(_source, _cancellationToken);
+
                         if (_source is null)
                         {
                             return false;
                         }
-                        _enumerator = _source.GetEnumerator();
+
+                        _enumerator = _getEnumerator(_source);
                     } while (!(_enumerator?.MoveNext() ?? false));
                     return true;
                 }
             }
         }
 
-        private sealed class PagedEnumerableEnumerator<T> : IAsyncEnumerator<T>
+        private sealed class PagedEnumerableEnumerator<T> : Enumerator<T, IPagedEnumerator<T>>
         {
-            private readonly IPagedEnumerator<T> _enumerator;
-            private readonly CancellationToken _cancellationToken;
-
             public PagedEnumerableEnumerator(IPagedEnumerable<T> source, CancellationToken cancellationToken)
-            {
-                ArgumentNullException.ThrowIfNull(source);
+                : base(source?.GetPagedEnumerator(), e => e.Current, cancellationToken)
+            { }
 
-                _enumerator = source.GetPagedEnumerator();
-                _cancellationToken = cancellationToken;
-            }
-
-            public T Current => _enumerator.Current;
-
-            public ValueTask DisposeAsync()
-            {
-                _enumerator.Dispose();
-                return ValueTask.CompletedTask;
-            }
-
-            public async ValueTask<bool> MoveNextAsync()
+            public override async ValueTask<bool> MoveNextAsync()
             {
                 _cancellationToken.ThrowIfCancellationRequested();
                 return await _enumerator.MoveNextAsync(_cancellationToken);
             }
+        }
+
+        private abstract class Enumerator<TItem, TEnumerator> : IAsyncEnumerator<TItem> where TEnumerator : IDisposable
+        {
+            protected readonly CancellationToken _cancellationToken;
+            protected TEnumerator _enumerator;
+
+            private readonly Func<TEnumerator, TItem> _getCurrent;
+
+            protected Enumerator(TEnumerator enumerator, Func<TEnumerator, TItem> getCurrent, CancellationToken cancellationToken)
+            {
+                ArgumentNullException.ThrowIfNull(enumerator);
+                ArgumentNullException.ThrowIfNull(getCurrent);
+
+                _getCurrent = getCurrent;
+                _enumerator = enumerator;
+                _cancellationToken = cancellationToken;
+            }
+
+            public TItem Current => _getCurrent(_enumerator);
+
+            public ValueTask DisposeAsync()
+            {
+                _enumerator?.Dispose();
+                return ValueTask.CompletedTask;
+            }
+
+            public abstract ValueTask<bool> MoveNextAsync();
         }
         #endregion
     }

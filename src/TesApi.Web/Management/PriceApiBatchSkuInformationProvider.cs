@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using LazyCache;
 using Microsoft.Extensions.Logging;
@@ -52,25 +53,24 @@ namespace TesApi.Web.Management
         }
 
         /// <inheritdoc />
-        public async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync(string region)
+        public async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync(string region, CancellationToken cancellationToken)
         {
             if (appCache is null)
             {
-                return await GetVmSizesAndPricesAsyncImpl(region);
+                return await GetVmSizesAndPricesAsyncImpl(region, cancellationToken);
             }
 
             logger.LogInformation($"Trying to get pricing information from the cache for region: {region}.");
 
-            return await appCache.GetOrAddAsync(region, async () => await GetVmSizesAndPricesAsyncImpl(region));
+            return await appCache.GetOrAddAsync(region, async () => await GetVmSizesAndPricesAsyncImpl(region, cancellationToken));
         }
 
-        private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsyncImpl(string region)
+        private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsyncImpl(string region, CancellationToken cancellationToken)
         {
             logger.LogInformation($"Getting VM sizes and price information for region:{region}");
 
-            var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync()).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase));
-            var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region)
-                .ToListAsync();
+            var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync(cancellationToken)).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase));
+            var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region, cancellationToken).ToListAsync(cancellationToken);
 
             logger.LogInformation($"Received {pricingItems.Count} pricing items");
 
@@ -121,11 +121,11 @@ namespace TesApi.Web.Management
                 HyperVGenerations = vmReference.HyperVGenerations
             };
 
-        private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync()
+        private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync(CancellationToken cancellationToken)
         {
             return JsonConvert.DeserializeObject<List<VirtualMachineInformation>>(
                 await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,
-                    "BatchSupportedVmSizeInformation.json")));
+                    "BatchSupportedVmSizeInformation.json"), cancellationToken));
         }
     }
 }

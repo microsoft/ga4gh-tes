@@ -51,13 +51,13 @@ namespace TesApi.Tests
             var server = "registry.com";
             var image = $"{server}/image";
             retryHandlerMock.Setup(r =>
-                    r.ExecuteWithRetryAsync(It.IsAny<Func<Task<IEnumerable<ContainerRegistryInfo>>>>()))
+                    r.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(new List<ContainerRegistryInfo>()
                 {
                     new ContainerRegistryInfo() { RegistryServer = server }
                 });
 
-            var container = await containerRegistryProvider.GetContainerRegistryInfoAsync(image);
+            var container = await containerRegistryProvider.GetContainerRegistryInfoAsync(image, System.Threading.CancellationToken.None);
 
             Assert.IsNotNull(container);
             Assert.AreEqual(server, container.RegistryServer);
@@ -74,7 +74,7 @@ namespace TesApi.Tests
             appCacheMock.Setup(c => c.Get<ContainerRegistryInfo>(It.Is<string>(v => v.Equals($"{nameof(ContainerRegistryProvider)}:{image}"))))
                 .Returns(new ContainerRegistryInfo() { RegistryServer = server });
 
-            var container = await containerRegistryProvider.GetContainerRegistryInfoAsync(image);
+            var container = await containerRegistryProvider.GetContainerRegistryInfoAsync(image, System.Threading.CancellationToken.None);
 
             Assert.IsNotNull(container);
             Assert.AreEqual(server, container.RegistryServer);
@@ -90,7 +90,7 @@ namespace TesApi.Tests
         [DataRow("docker")]
         public async Task GetContainerRegistryInfoAsync_DoesNotLogWarningWhenKnownImage(string imageName)
         {
-            await containerRegistryProvider.GetContainerRegistryInfoAsync(imageName);
+            await containerRegistryProvider.GetContainerRegistryInfoAsync(imageName, System.Threading.CancellationToken.None);
 
             loggerMock.Verify(logger => logger.Log(LogLevel.Warning, It.IsAny<EventId>(), It.IsAny<object>(), It.IsAny<Exception>(), (Func<object, Exception, string>)It.IsAny<object>()), Times.Never);
         }
@@ -107,7 +107,7 @@ namespace TesApi.Tests
                     new ContainerRegistryInfo() { RegistryServer = server }
                 });
 
-            var container = await containerRegistryProvider.GetContainerRegistryInfoAsync(image);
+            var container = await containerRegistryProvider.GetContainerRegistryInfoAsync(image, System.Threading.CancellationToken.None);
 
             Assert.IsNull(container);
             appCacheMock.Verify(

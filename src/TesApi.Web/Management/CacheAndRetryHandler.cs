@@ -125,7 +125,7 @@ namespace TesApi.Web.Management
         /// Executes a delegate with the specified async policy.
         /// </summary>
         /// <param name="action">Action to execute</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <typeparam name="TResult">Result type</typeparam>
         /// <returns>Result instance</returns>
         public virtual Task<TResult> ExecuteWithRetryAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken)
@@ -139,7 +139,7 @@ namespace TesApi.Web.Management
         /// Executes a delegate with the specified async policy.
         /// </summary>
         /// <param name="action">Action to execute</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>Result instance</returns>
         public async Task ExecuteWithRetryAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken)
         {
@@ -164,7 +164,7 @@ namespace TesApi.Web.Management
         /// Executes a delegate with the specified async retry policy and persisting the result in a cache. 
         /// </summary>
         /// <param name="cacheKey"></param>
-        /// <param name="action"></param>
+        /// <param name="action">Action to execute</param>
         /// <returns></returns>
         public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<Task<TResult>> action)
         {
@@ -177,8 +177,8 @@ namespace TesApi.Web.Management
         /// Executes a delegate with the specified async retry policy and persisting the result in a cache.
         /// </summary>
         /// <param name="cacheKey"></param>
-        /// <param name="action"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="action">Action to execute</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken)
         {
@@ -191,7 +191,7 @@ namespace TesApi.Web.Management
         ///  Executes a delegate with the specified async retry policy and persisting the result in a cache.
         /// </summary>
         /// <param name="cacheKey"></param>
-        /// <param name="action"></param>
+        /// <param name="action">Action to execute</param>
         /// <param name="cachesExpires"></param>
         /// <typeparam name="TResult"></typeparam>
         /// <returns></returns>
@@ -206,9 +206,9 @@ namespace TesApi.Web.Management
         ///  Executes a delegate with the specified async retry policy and persisting the result in a cache.
         /// </summary>
         /// <param name="cacheKey"></param>
-        /// <param name="action"></param>
+        /// <param name="action">Action to execute</param>
         /// <param name="cachesExpires"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <typeparam name="TResult"></typeparam>
         /// <returns></returns>
         public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, DateTimeOffset cachesExpires, CancellationToken cancellationToken)

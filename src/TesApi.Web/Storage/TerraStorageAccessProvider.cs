@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using Microsoft.Extensions.Logging;
@@ -41,7 +42,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override Task<bool> IsPublicHttpUrlAsync(string uriString)
+        public override Task<bool> IsPublicHttpUrlAsync(string uriString, CancellationToken _1)
         {
             var isHttpUrl = TryParseHttpUrlFromInput(uriString, out var uri);
 
@@ -67,7 +68,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false)
+        public override async Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, bool getContainerSas = false)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
 
@@ -80,12 +81,12 @@ namespace TesApi.Web.Storage
 
             if (getContainerSas)
             {
-                return await MapAndGetSasContainerUrlFromWsmAsync(normalizedPath);
+                return await MapAndGetSasContainerUrlFromWsmAsync(normalizedPath, cancellationToken);
             }
 
             if (IsKnownExecutionFilePath(normalizedPath))
             {
-                return await GetMappedSasUrlFromWsmAsync(normalizedPath);
+                return await GetMappedSasUrlFromWsmAsync(normalizedPath, cancellationToken);
             }
 
             if (!StorageAccountUrlSegments.TryCreate(normalizedPath, out var segments))
@@ -96,14 +97,14 @@ namespace TesApi.Web.Storage
 
             CheckIfAccountAndContainerAreWorkspaceStorage(segments.AccountName, segments.ContainerName);
 
-            return await GetMappedSasUrlFromWsmAsync(segments.BlobName);
+            return await GetMappedSasUrlFromWsmAsync(segments.BlobName, cancellationToken);
         }
 
-        private async Task<string> MapAndGetSasContainerUrlFromWsmAsync(string inputPath)
+        private async Task<string> MapAndGetSasContainerUrlFromWsmAsync(string inputPath, CancellationToken cancellationToken)
         {
             if (IsKnownExecutionFilePath(inputPath))
             {
-                return await GetMappedSasContainerUrlFromWsmAsync(inputPath);
+                return await GetMappedSasContainerUrlFromWsmAsync(inputPath, cancellationToken);
             }
 
             if (!StorageAccountUrlSegments.TryCreate(inputPath, out var withContainerSegments))
@@ -112,13 +113,13 @@ namespace TesApi.Web.Storage
                     "Invalid path provided. The path must be a valid blob storage url or a path with the following format: /accountName/container");
             }
 
-            return await GetMappedSasContainerUrlFromWsmAsync(withContainerSegments.BlobName);
+            return await GetMappedSasContainerUrlFromWsmAsync(withContainerSegments.BlobName, cancellationToken);
         }
 
-        private async Task<string> GetMappedSasContainerUrlFromWsmAsync(string pathToAppend)
+        private async Task<string> GetMappedSasContainerUrlFromWsmAsync(string pathToAppend, CancellationToken cancellationToken)
         {
             //an empty blob name gets a container Sas token
-            var tokenInfo = await GetSasTokenFromWsmAsync(CreateTokenParamsFromOptions(blobName: string.Empty, SasContainerPermissions));
+            var tokenInfo = await GetSasTokenFromWsmAsync(CreateTokenParamsFromOptions(blobName: string.Empty, SasContainerPermissions), cancellationToken);
 
             var urlBuilder = new UriBuilder(tokenInfo.Url);
 
@@ -134,14 +135,15 @@ namespace TesApi.Web.Storage
         /// Returns a Url with a SAS token for the given input
         /// </summary>
         /// <param name="blobName"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>SAS Token URL</returns>
-        public async Task<string> GetMappedSasUrlFromWsmAsync(string blobName)
+        public async Task<string> GetMappedSasUrlFromWsmAsync(string blobName, CancellationToken cancellationToken)
         {
             var normalizedBlobName = blobName.TrimStart('/');
 
             var tokenParams = CreateTokenParamsFromOptions(normalizedBlobName, SasBlobPermissions);
 
-            var tokenInfo = await GetSasTokenFromWsmAsync(tokenParams);
+            var tokenInfo = await GetSasTokenFromWsmAsync(tokenParams, cancellationToken);
 
             Logger.LogInformation($"Successfully obtained the Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
 
@@ -164,14 +166,14 @@ namespace TesApi.Web.Storage
                 terraOptions.SasTokenExpirationInSeconds,
                 sasPermissions, blobName);
 
-        private async Task<WsmSasTokenApiResponse> GetSasTokenFromWsmAsync(SasTokenApiParameters tokenParams)
+        private async Task<WsmSasTokenApiResponse> GetSasTokenFromWsmAsync(SasTokenApiParameters tokenParams, CancellationToken cancellationToken)
         {
             Logger.LogInformation(
                 $"Getting Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
             return await terraWsmApiClient.GetSasTokenAsync(
                 Guid.Parse(terraOptions.WorkspaceId),
                 Guid.Parse(terraOptions.WorkspaceStorageContainerResourceId),
-                tokenParams);
+                tokenParams, cancellationToken);
         }
 
         private void CheckIfAccountAndContainerAreWorkspaceStorage(string accountName, string containerName)
