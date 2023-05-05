@@ -1002,7 +1002,7 @@ namespace TesApi.Web
 
                     return $" && echo $(date +%T) && {setVariables} && {downloadSingleFile} && {exitIfDownloadedFileIsNotFound} && {incrementTotalBytesTransferred}";
                 }))
-                + $" && echo FileDownloadSizeInBytes=$total_bytes >> {metricsPath}";
+                + $" && echo FileDownloadSizeInBytes=$total_bytes >> metrics.txt";
 
             var downloadFilesScriptPath = $"{batchExecutionDirectoryPath}/{DownloadFilesScriptFileName}";
             var downloadFilesScriptUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{downloadFilesScriptPath}");
@@ -1028,7 +1028,7 @@ namespace TesApi.Web
 
                     return $" && {{ {setVariables} && [ ! -e \"$path\" ] && : || {{ {blobxferCommand} && {incrementTotalBytesTransferred}; }} }}";
                 }))
-                + $" && echo FileUploadSizeInBytes=$total_bytes >> {metricsPath}";
+                + $" && echo FileUploadSizeInBytes=$total_bytes >> metrics.txt";
 
             var uploadFilesScriptPath = $"{batchExecutionDirectoryPath}/{UploadFilesScriptFileName}";
             var uploadFilesScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{uploadFilesScriptPath}");
@@ -1036,7 +1036,7 @@ namespace TesApi.Web
 
             var executor = task.Executors.First();
 
-            var volumeMountsOption = $"-v $AZ_BATCH_TASK_WORKING_DIR{TesExecutionsPathPrefix}:{TesExecutionsPathPrefix}";
+            var volumeMountsOption = $"-v $AZ_BATCH_TASK_WORKING_DIR/wd:/wd";
 
             var executorImageIsPublic = containerRegistryProvider.IsImagePublic(executor.Image);
             var dockerInDockerImageIsPublic = containerRegistryProvider.IsImagePublic(dockerInDockerImageName);
@@ -1044,9 +1044,9 @@ namespace TesApi.Web
 
             var sb = new StringBuilder();
 
-            sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath}; }} && \\");  // Function that appends key=value pair to metrics.txt file
+            sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt; }} && \\");  // Function that appends key=value pair to metrics.txt file
             sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
-            sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/{batchExecutionDirectoryPath} && \\");
+            //sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
 
             if (dockerInDockerImageIsPublic)
             {
@@ -1096,7 +1096,7 @@ namespace TesApi.Web
             }
 
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
-            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} /{downloadFilesScriptPath} && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} $AZ_BATCH_TASK_WORKING_DIR/{DownloadFilesScriptFileName} && \\");
             sb.AppendLinuxLine($"write_ts DownloadEnd && \\");
             sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR{TesExecutionsPathPrefix} && \\");
             sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR{TesExecutionsPathPrefix} && \\");
@@ -1104,11 +1104,11 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= --workdir / {executor.Image} {executor.Command[0]}  \"{string.Join(" && ", executor.Command.Skip(1))}\" && \\");
             sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
             sb.AppendLinuxLine($"write_ts UploadStart && \\");
-            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} /{uploadFilesScriptPath} && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} $AZ_BATCH_TASK_WORKING_DIR/{UploadFilesScriptFileName} && \\");
             sb.AppendLinuxLine($"write_ts UploadEnd && \\");
-            sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath} && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR{metricsPath}' && \\");
+            sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
-            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {blobxferImageName} upload --storage-url \"{metricsUrl}\" --local-path \"{metricsPath}\" --rename --no-recursive");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {blobxferImageName} upload --storage-url \"{metricsUrl}\" --local-path \"$AZ_BATCH_TASK_WORKING_DIR/metrics.txt\" --rename --no-recursive");
 
             var batchScriptPath = $"{batchExecutionDirectoryPath}/{BatchScriptFileName}";
             await storageAccessProvider.UploadBlobAsync($"/{batchScriptPath}", sb.ToString());
@@ -1117,13 +1117,13 @@ namespace TesApi.Web
             var batchExecutionDirectorySasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchExecutionDirectoryPath}/", getContainerSas: true);
 
             var batchRunCommand = enableBatchAutopool
-                ? $"/bin/bash {batchScriptPath}"
+                ? $"/bin/bash $AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
                 : $"/bin/bash -c \"{MungeBatchScript()}\"";
 
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
                 UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
-                ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(batchScriptSasUrl, batchScriptPath), ResourceFile.FromUrl(downloadFilesScriptUrl, downloadFilesScriptPath), ResourceFile.FromUrl(uploadFilesScriptSasUrl, uploadFilesScriptPath) },
+                ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(batchScriptSasUrl, BatchScriptFileName), ResourceFile.FromUrl(downloadFilesScriptUrl, DownloadFilesScriptFileName), ResourceFile.FromUrl(uploadFilesScriptSasUrl, UploadFilesScriptFileName) },
                 OutputFiles = new List<OutputFile> {
                     new OutputFile(
                         "../std*.txt",
@@ -1164,7 +1164,7 @@ namespace TesApi.Web
             string MungeBatchScript()
                 => string.Join("\n", taskRunScriptContent)
                     .Replace(@"{CleanupScriptLines}", string.Join("\n", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
-                    .Replace(@"{BatchScriptPath}", batchScriptPath)
+                    .Replace(@"{BatchScriptPath}", $"$AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}")
                     .Replace(@"{TaskExecutor}", executor.Image)
                     .Replace(@"{ExecutionPathPrefix}", TesExecutionsPathPrefix.TrimStart('/'))
                     .Replace("\"", "\\\"");
