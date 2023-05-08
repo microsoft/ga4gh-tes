@@ -33,7 +33,7 @@ namespace TesApi.Web.Storage
         public DefaultStorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IOptions<Options.StorageOptions> storageOptions, IAzureProxy azureProxy) : base(logger, azureProxy)
         {
             //TODO: refactor to use the options pattern.
-            defaultStorageAccountName = storageOptions.Value.DefaultAccountName;    // This account contains the cromwell-executions and tes-internal containers
+            defaultStorageAccountName = storageOptions.Value.DefaultAccountName;    // This account contains the cromwell-executions containers
             Logger.LogInformation($"DefaultStorageAccountName: {defaultStorageAccountName}");
 
             externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
