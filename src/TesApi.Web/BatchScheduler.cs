@@ -51,6 +51,7 @@ namespace TesApi.Web
         private const int DefaultDiskGb = 10;
         private const int defaultBlobxferOneShotBytes = 4_194_304;
         private const int defaultBlobxferChunkSizeBytes = 16_777_216; // max file size = 16 MiB * 50k blocks = 838,860,800,000 bytes
+        private const string CromwellPathPrefix = "/cromwell-executions";
         private const string TesExecutionsPathPrefix = "/tes-internal";
         private const string CromwellScriptFileName = "script";
         private const string BatchScriptFileName = "batch_script";
@@ -406,9 +407,9 @@ namespace TesApi.Web
         private static string GetCromwellExecutionDirectoryPath(TesTask task)
             => GetParentPath(task.Inputs?.FirstOrDefault(IsCromwellCommandScript)?.Path.TrimStart('/'));
 
-        private static string GetBatchExecutionDirectoryPath(TesTask task)
+        private static string GetStorageUploadPath(TesTask task, string storageAccountName)
         {
-            return $"{TesExecutionsPathPrefix.TrimStart('/')}/{task.Id}";
+            return $"{storageAccountName}/{TesExecutionsPathPrefix.TrimStart('/')}/{task.Id}";
         }
 
         /// <summary>
@@ -954,8 +955,8 @@ namespace TesApi.Web
             //    }
             //}
 
-            var batchExecutionDirectoryPath = GetBatchExecutionDirectoryPath(task);
-            var metricsPath = $"/{batchExecutionDirectoryPath}/metrics.txt";
+            var storageUploadPath = GetStorageUploadPath(task, defaultStorageAccountName);
+            var metricsPath = $"/{storageUploadPath}/metrics.txt";
             var metricsUrl = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync(metricsPath, getContainerSas: true));
 
             var additionalInputFiles = new List<TesInput>();
@@ -1006,7 +1007,7 @@ namespace TesApi.Web
                 }))
                 + $" && echo FileDownloadSizeInBytes=$total_bytes >> metrics.txt";
 
-            var downloadFilesScriptPath = $"{batchExecutionDirectoryPath}/{DownloadFilesScriptFileName}";
+            var downloadFilesScriptPath = $"/{storageUploadPath}/{DownloadFilesScriptFileName}";
             var downloadFilesScriptUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{downloadFilesScriptPath}");
             await storageAccessProvider.UploadBlobAsync($"/{downloadFilesScriptPath}", downloadFilesScriptContent);
             var filesToUpload = Array.Empty<TesOutput>();
@@ -1032,7 +1033,7 @@ namespace TesApi.Web
                 }))
                 + $" && echo FileUploadSizeInBytes=$total_bytes >> metrics.txt";
 
-            var uploadFilesScriptPath = $"{batchExecutionDirectoryPath}/{UploadFilesScriptFileName}";
+            var uploadFilesScriptPath = $"/{storageUploadPath}/{UploadFilesScriptFileName}";
             var uploadFilesScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{uploadFilesScriptPath}");
             await storageAccessProvider.UploadBlobAsync($"/{uploadFilesScriptPath}", uploadFilesScriptContent);
 
@@ -1101,8 +1102,8 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {blobXferVolumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} $AZ_BATCH_TASK_WORKING_DIR/{DownloadFilesScriptFileName} && \\");
             sb.AppendLinuxLine($"write_ts DownloadEnd && \\");
-            sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR{TesExecutionsPathPrefix} && \\");
-            sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR{TesExecutionsPathPrefix} && \\");
+            sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR{CromwellPathPrefix} && \\");
+            sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR{CromwellPathPrefix} && \\");
             sb.AppendLinuxLine($"write_ts ExecutorStart && \\");
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= --workdir / {executor.Image} {executor.Command[0]}  \"{string.Join(" && ", executor.Command.Skip(1))}\" && \\");
             sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
@@ -1113,11 +1114,11 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {blobXferVolumeMountsOption} {blobxferImageName} upload --storage-url \"{metricsUrl}\" --local-path \"$AZ_BATCH_TASK_WORKING_DIR/metrics.txt\" --rename --no-recursive");
 
-            var batchScriptPath = $"{batchExecutionDirectoryPath}/{BatchScriptFileName}";
+            var batchScriptPath = $"/{storageUploadPath}/{BatchScriptFileName}";
             await storageAccessProvider.UploadBlobAsync($"/{batchScriptPath}", sb.ToString());
 
             var batchScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchScriptPath}");
-            var batchExecutionDirectorySasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchExecutionDirectoryPath}/", getContainerSas: true);
+            var tesInternalDirectorySasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{storageUploadPath}/", getContainerSas: true);
 
             var batchRunCommand = enableBatchAutopool
                 ? $"/bin/bash $AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
@@ -1130,7 +1131,7 @@ namespace TesApi.Web
                 OutputFiles = new List<OutputFile> {
                     new OutputFile(
                         "../std*.txt",
-                        new OutputFileDestination(new(batchExecutionDirectorySasUrl)),
+                        new OutputFileDestination(new(tesInternalDirectorySasUrl)),
                         new OutputFileUploadOptions(OutputFileUploadCondition.TaskFailure))
                 }
             };
@@ -1169,7 +1170,7 @@ namespace TesApi.Web
                     .Replace(@"{CleanupScriptLines}", string.Join("\n", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
                     .Replace(@"{BatchScriptPath}", $"$AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}")
                     .Replace(@"{TaskExecutor}", executor.Image)
-                    .Replace(@"{ExecutionPathPrefix}", TesExecutionsPathPrefix.TrimStart('/'))
+                    .Replace(@"{ExecutionPathPrefix}", CromwellPathPrefix.TrimStart('/'))
                     .Replace("\"", "\\\"");
 
             static IEnumerable<string> MungeCleanupScript(IEnumerable<string> content)
@@ -1196,9 +1197,9 @@ namespace TesApi.Web
         private async Task<TesInput> GetTesInputFileUrl(TesInput inputFile, string taskId, List<string> queryStringsToRemoveFromLocalFilePaths)
         {
             if (inputFile.Path is not null
-                && !inputFile.Path.StartsWith($"{TesExecutionsPathPrefix}/", StringComparison.OrdinalIgnoreCase))
+                && !inputFile.Path.StartsWith($"{CromwellPathPrefix}/", StringComparison.OrdinalIgnoreCase))
             {
-                throw new TesException("InvalidInputFilePath", $"Unsupported input path '{inputFile.Path}' for task Id {taskId}. Must start with '{TesExecutionsPathPrefix}'.");
+                throw new TesException("InvalidInputFilePath", $"Unsupported input path '{inputFile.Path}' for task Id {taskId}. Must start with '{CromwellPathPrefix}'.");
             }
 
             if (inputFile.Url is not null && inputFile.Content is not null)
@@ -1240,7 +1241,7 @@ namespace TesApi.Web
             {
                 // Convert file:///account/container/blob paths to /account/container/blob
                 var url = Uri.TryCreate(inputFile.Url, UriKind.Absolute, out var tempUrl) && tempUrl.IsFile ? tempUrl.AbsolutePath : inputFile.Url;
-                inputFileUrl = (await storageAccessProvider.MapLocalPathToSasUrlAsync(url)) ?? throw new TesException("InvalidInputFilePath", $"Unsupported input URL '{inputFile.Url}' for task Id {taskId}. Must start with 'http', '{TesExecutionsPathPrefix}' or use '/accountName/containerName/blobName' pattern where TES service has Contributor access to the storage account.");
+                inputFileUrl = (await storageAccessProvider.MapLocalPathToSasUrlAsync(url)) ?? throw new TesException("InvalidInputFilePath", $"Unsupported input URL '{inputFile.Url}' for task Id {taskId}. Must start with 'http', '{CromwellPathPrefix}' or use '/accountName/containerName/blobName' pattern where TES service has Contributor access to the storage account.");
             }
 
             var path = RemoveQueryStringsFromLocalFilePaths(inputFile.Path, queryStringsToRemoveFromLocalFilePaths);
@@ -1760,7 +1761,7 @@ namespace TesApi.Web
                     cromwellRcCode = temp;
                 }
 
-                var metricsContent = await storageAccessProvider.DownloadBlobAsync($"/{GetBatchExecutionDirectoryPath(tesTask)}/metrics.txt");
+                var metricsContent = await storageAccessProvider.DownloadBlobAsync($"/{GetStorageUploadPath(tesTask, defaultStorageAccountName)}/metrics.txt");
 
                 if (metricsContent is not null)
                 {

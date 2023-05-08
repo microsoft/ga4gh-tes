@@ -357,9 +357,9 @@ namespace TesApi.Tests
             (_, var cloudTask, _, _) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(true);
 
             Assert.AreEqual(3, cloudTask.ResourceFiles.Count);
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("tes-internal/ffb23efdd27144fb9013b11a9e32398d/batch_script")));
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("tes-internal/ffb23efdd27144fb9013b11a9e32398d/upload_files_script")));
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("tes-internal/ffb23efdd27144fb9013b11a9e32398d/download_files_script")));
+            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("batch_script")));
+            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("upload_files_script")));
+            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("download_files_script")));
         }
 
         private async Task AddBatchTaskHandlesExceptions(TesState newState, Func<AzureProxyReturnValues, (Action<IServiceCollection>, Action<Mock<IAzureProxy>>)> testArranger, Action<TesTask, IEnumerable<(LogLevel, Exception)>> resultValidator)
@@ -983,7 +983,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        public async Task TesInputFilePathMustStartWithTesExecutions()
+        public async Task TesInputFilePathMustStartWithCromwellExecutions()
         {
             var tesTask = GetTesTask();
 
@@ -997,7 +997,7 @@ namespace TesApi.Tests
             Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
             Assert.AreEqual($"InvalidInputFilePath", failureReason);
             Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
-            Assert.AreEqual($"Unsupported input path 'xyz/path' for task Id {tesTask.Id}. Must start with '/tes-internal'.", systemLog[1]);
+            Assert.AreEqual($"Unsupported input path 'xyz/path' for task Id {tesTask.Id}. Must start with '/cromwell-executions'.", systemLog[1]);
         }
 
         [TestMethod]
@@ -1062,12 +1062,12 @@ namespace TesApi.Tests
         {
             var tesTask = GetTesTask();
 
-            var originalCommandScript = "cat /tes-internal/workflowpath/inputs/host/path?param=2";
+            var originalCommandScript = "cat /cromwell-executions/workflowpath/inputs/host/path?param=2";
 
             tesTask.Inputs = new()
             {
-                new() { Url = "/tes-internal/workflowpath/execution/script", Path = "/tes-internal/workflowpath/execution/script", Type = TesFileType.FILEEnum, Name = "commandScript", Content = null },
-                new() { Url = "http://host/path?param=1", Path = "/tes-internal/workflowpath/inputs/host/path?param=2", Type = TesFileType.FILEEnum, Name = "file1", Content = null }
+                new() { Url = "/cromwell-executions/workflowpath/execution/script", Path = "/cromwell-executions/workflowpath/execution/script", Type = TesFileType.FILEEnum, Name = "commandScript", Content = null },
+                new() { Url = "http://host/path?param=1", Path = "/cromwell-executions/workflowpath/inputs/host/path?param=2", Type = TesFileType.FILEEnum, Name = "file1", Content = null }
             };
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
@@ -1095,12 +1095,12 @@ namespace TesApi.Tests
         {
             var tesTask = GetTesTask();
 
-            var originalCommandScript = "cat /tes-internal/workflowpath/inputs/host/path?param=2";
+            var originalCommandScript = "cat /cromwell-executions/workflowpath/inputs/host/path?param=2";
 
             tesTask.Inputs = new()
             {
-                new() { Url = null, Path = "/tes-internal/workflowpath/execution/script", Type = TesFileType.FILEEnum, Name = "commandScript", Content = originalCommandScript },
-                new() { Url = "http://host/path?param=1", Path = "/tes-internal/workflowpath/inputs/host/path?param=2", Type = TesFileType.FILEEnum, Name = "file1", Content = null }
+                new() { Url = null, Path = "/cromwell-executions/workflowpath/execution/script", Type = TesFileType.FILEEnum, Name = "commandScript", Content = originalCommandScript },
+                new() { Url = "http://host/path?param=1", Path = "/cromwell-executions/workflowpath/inputs/host/path?param=2", Type = TesFileType.FILEEnum, Name = "file1", Content = null }
             };
 
             Mock<IAzureProxy> azureProxy = default;
@@ -1132,10 +1132,10 @@ namespace TesApi.Tests
 
             tesTask.Inputs = new()
             {
-                new() { Url = null, Path = "/tes-internal/workflowpath/execution/script", Type = TesFileType.FILEEnum, Name = "commandScript", Content = "echo hello" },
-                new() { Url = "https://storageaccount1.blob.core.windows.net/container1/blob1?sig=sassignature", Path = "/tes-internal/workflowpath/inputs/blob1", Type = TesFileType.FILEEnum, Name = "blob1", Content = null },
-                new() { Url = "https://externalaccount1.blob.core.windows.net/container1/blob2?sig=sassignature", Path = "/tes-internal/workflowpath/inputs/blob2", Type = TesFileType.FILEEnum, Name = "blob2", Content = null },
-                new() { Url = "https://publicaccount1.blob.core.windows.net/container1/blob3", Path = "/tes-internal/workflowpath/inputs/blob3", Type = TesFileType.FILEEnum, Name = "blob3", Content = null }
+                new() { Url = null, Path = "/cromwell-executions/workflowpath/execution/script", Type = TesFileType.FILEEnum, Name = "commandScript", Content = "echo hello" },
+                new() { Url = "https://storageaccount1.blob.core.windows.net/container1/blob1?sig=sassignature", Path = "/cromwell-executions/workflowpath/inputs/blob1", Type = TesFileType.FILEEnum, Name = "blob1", Content = null },
+                new() { Url = "https://externalaccount1.blob.core.windows.net/container1/blob2?sig=sassignature", Path = "/cromwell-executions/workflowpath/inputs/blob2", Type = TesFileType.FILEEnum, Name = "blob2", Content = null },
+                new() { Url = "https://publicaccount1.blob.core.windows.net/container1/blob3", Path = "/cromwell-executions/workflowpath/inputs/blob3", Type = TesFileType.FILEEnum, Name = "blob3", Content = null }
             };
 
             Mock<IAzureProxy> azureProxy = default;
@@ -1166,28 +1166,28 @@ namespace TesApi.Tests
             tesTask.Inputs = new()
             {
                 // defaultstorageaccount and storageaccount1 are accessible to TES identity
-                new() { Url = null, Path = "/tes-internal/workflowpath/execution/script", Type = TesFileType.FILEEnum, Name = "commandScript", Content = "echo hello" },
+                new() { Url = null, Path = "/cromwell-executions/workflowpath/execution/script", Type = TesFileType.FILEEnum, Name = "commandScript", Content = "echo hello" },
 
-                new() { Url = "/defaultstorageaccount/container1/blob1", Path = "/tes-internal/workflowpath/inputs/blob1", Type = TesFileType.FILEEnum, Name = "blob1", Content = null },
-                new() { Url = "/storageaccount1/container1/blob2", Path = "/tes-internal/workflowpath/inputs/blob2", Type = TesFileType.FILEEnum, Name = "blob2", Content = null },
-                new() { Url = "/externalaccount1/container1/blob3", Path = "/tes-internal/workflowpath/inputs/blob3", Type = TesFileType.FILEEnum, Name = "blob3", Content = null },
-                new() { Url = "/externalaccount2/container2/blob4", Path = "/tes-internal/workflowpath/inputs/blob4", Type = TesFileType.FILEEnum, Name = "blob4", Content = null },
+                new() { Url = "/defaultstorageaccount/container1/blob1", Path = "/cromwell-executions/workflowpath/inputs/blob1", Type = TesFileType.FILEEnum, Name = "blob1", Content = null },
+                new() { Url = "/storageaccount1/container1/blob2", Path = "/cromwell-executions/workflowpath/inputs/blob2", Type = TesFileType.FILEEnum, Name = "blob2", Content = null },
+                new() { Url = "/externalaccount1/container1/blob3", Path = "/cromwell-executions/workflowpath/inputs/blob3", Type = TesFileType.FILEEnum, Name = "blob3", Content = null },
+                new() { Url = "/externalaccount2/container2/blob4", Path = "/cromwell-executions/workflowpath/inputs/blob4", Type = TesFileType.FILEEnum, Name = "blob4", Content = null },
 
-                new() { Url = "file:///defaultstorageaccount/container1/blob5", Path = "/tes-internal/workflowpath/inputs/blob5", Type = TesFileType.FILEEnum, Name = "blob5", Content = null },
-                new() { Url = "file:///storageaccount1/container1/blob6", Path = "/tes-internal/workflowpath/inputs/blob6", Type = TesFileType.FILEEnum, Name = "blob6", Content = null },
-                new() { Url = "file:///externalaccount1/container1/blob7", Path = "/tes-internal/workflowpath/inputs/blob7", Type = TesFileType.FILEEnum, Name = "blob7", Content = null },
-                new() { Url = "file:///externalaccount2/container2/blob8", Path = "/tes-internal/workflowpath/inputs/blob8", Type = TesFileType.FILEEnum, Name = "blob8", Content = null },
+                new() { Url = "file:///defaultstorageaccount/container1/blob5", Path = "/cromwell-executions/workflowpath/inputs/blob5", Type = TesFileType.FILEEnum, Name = "blob5", Content = null },
+                new() { Url = "file:///storageaccount1/container1/blob6", Path = "/cromwell-executions/workflowpath/inputs/blob6", Type = TesFileType.FILEEnum, Name = "blob6", Content = null },
+                new() { Url = "file:///externalaccount1/container1/blob7", Path = "/cromwell-executions/workflowpath/inputs/blob7", Type = TesFileType.FILEEnum, Name = "blob7", Content = null },
+                new() { Url = "file:///externalaccount2/container2/blob8", Path = "/cromwell-executions/workflowpath/inputs/blob8", Type = TesFileType.FILEEnum, Name = "blob8", Content = null },
 
-                new() { Url = "https://defaultstorageaccount.blob.core.windows.net/container1/blob9", Path = "/tes-internal/workflowpath/inputs/blob9", Type = TesFileType.FILEEnum, Name = "blob9", Content = null },
-                new() { Url = "https://storageaccount1.blob.core.windows.net/container1/blob10", Path = "/tes-internal/workflowpath/inputs/blob10", Type = TesFileType.FILEEnum, Name = "blob10", Content = null },
-                new() { Url = "https://externalaccount1.blob.core.windows.net/container1/blob11", Path = "/tes-internal/workflowpath/inputs/blob11", Type = TesFileType.FILEEnum, Name = "blob11", Content = null },
-                new() { Url = "https://externalaccount2.blob.core.windows.net/container2/blob12", Path = "/tes-internal/workflowpath/inputs/blob12", Type = TesFileType.FILEEnum, Name = "blob12", Content = null },
+                new() { Url = "https://defaultstorageaccount.blob.core.windows.net/container1/blob9", Path = "/cromwell-executions/workflowpath/inputs/blob9", Type = TesFileType.FILEEnum, Name = "blob9", Content = null },
+                new() { Url = "https://storageaccount1.blob.core.windows.net/container1/blob10", Path = "/cromwell-executions/workflowpath/inputs/blob10", Type = TesFileType.FILEEnum, Name = "blob10", Content = null },
+                new() { Url = "https://externalaccount1.blob.core.windows.net/container1/blob11", Path = "/cromwell-executions/workflowpath/inputs/blob11", Type = TesFileType.FILEEnum, Name = "blob11", Content = null },
+                new() { Url = "https://externalaccount2.blob.core.windows.net/container2/blob12", Path = "/cromwell-executions/workflowpath/inputs/blob12", Type = TesFileType.FILEEnum, Name = "blob12", Content = null },
 
                 // ExternalStorageContainers entry exists for externalaccount2/container2 and for externalaccount2 (account level SAS), so this uses account SAS:
-                new() { Url = "https://externalaccount2.blob.core.windows.net/container3/blob13", Path = "/tes-internal/workflowpath/inputs/blob12", Type = TesFileType.FILEEnum, Name = "blob12", Content = null },
+                new() { Url = "https://externalaccount2.blob.core.windows.net/container3/blob13", Path = "/cromwell-executions/workflowpath/inputs/blob12", Type = TesFileType.FILEEnum, Name = "blob12", Content = null },
 
                 // ExternalStorageContainers entry exists for externalaccount1/container1, but not for externalaccount1/publiccontainer, so this is treated as public URL:
-                new() { Url = "https://externalaccount1.blob.core.windows.net/publiccontainer/blob14", Path = "/tes-internal/workflowpath/inputs/blob14", Type = TesFileType.FILEEnum, Name = "blob14", Content = null }
+                new() { Url = "https://externalaccount1.blob.core.windows.net/publiccontainer/blob14", Path = "/cromwell-executions/workflowpath/inputs/blob14", Type = TesFileType.FILEEnum, Name = "blob14", Content = null }
             };
 
             Mock<IAzureProxy> azureProxy = default;
@@ -1292,8 +1292,8 @@ namespace TesApi.Tests
 
             tesTask.Inputs = new()
             {
-                new() { Url = null, Path = "/tes-internal/workflowpath/execution/script", Type = TesFileType.FILEEnum, Name = "commandScript", Content = "echo hello" },
-                new() { Url = "file:///cromwell-tmp/tmp12345/blob1", Path = "/tes-internal/workflowpath/inputs/blob1", Type = TesFileType.FILEEnum, Name = "blob1", Content = null },
+                new() { Url = null, Path = "/cromwell-executions/workflowpath/execution/script", Type = TesFileType.FILEEnum, Name = "commandScript", Content = "echo hello" },
+                new() { Url = "file:///cromwell-tmp/tmp12345/blob1", Path = "/cromwell-executions/workflowpath/inputs/blob1", Type = TesFileType.FILEEnum, Name = "blob1", Content = null },
             };
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
@@ -1310,10 +1310,10 @@ namespace TesApi.Tests
             var filesToDownload = GetFilesToDownload(azureProxy);
 
             Assert.AreEqual(2, filesToDownload.Count());
-            var inputFileUrl = filesToDownload.SingleOrDefault(f => f.StorageUrl.StartsWith("https://defaultstorageaccount.blob.core.windows.net/tes-internal/workflowpath/inputs/blob1?sv=")).StorageUrl;
+            var inputFileUrl = filesToDownload.SingleOrDefault(f => f.StorageUrl.StartsWith("https://defaultstorageaccount.blob.core.windows.net/cromwell-executions/workflowpath/inputs/blob1?sv=")).StorageUrl;
             Assert.IsNotNull(inputFileUrl);
             azureProxy.Verify(i => i.LocalFileExists("/cromwell-tmp/tmp12345/blob1"));
-            azureProxy.Verify(i => i.UploadBlobFromFileAsync(It.Is<Uri>(uri => uri.AbsoluteUri.StartsWith("https://defaultstorageaccount.blob.core.windows.net/tes-internal/workflowpath/inputs/blob1?sv=")), "/cromwell-tmp/tmp12345/blob1"));
+            azureProxy.Verify(i => i.UploadBlobFromFileAsync(It.Is<Uri>(uri => uri.AbsoluteUri.StartsWith("https://defaultstorageaccount.blob.core.windows.net/cromwell-executions/workflowpath/inputs/blob1?sv=")), "/cromwell-tmp/tmp12345/blob1"));
         }
 
         [TestMethod]

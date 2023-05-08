@@ -13,9 +13,9 @@ namespace TesApi.Web.Storage;
 public abstract class StorageAccessProvider : IStorageAccessProvider
 {
     /// <summary>
-    /// Tes executions path prefix
+    /// Cromwell path prefix
     /// </summary>
-    protected const string TesPathPrefix = "/tes-internal/";
+    protected const string CromwellPathPrefix = "/cromwell-executions/";
     /// <summary>
     /// Logger instance. 
     /// </summary>
@@ -73,10 +73,10 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
         => Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// True if the path is the cromwell or executions folder
+    /// True if the path is the cromwell executions folder
     /// </summary>
     /// <param name="path"></param>
     /// <returns></returns>
     protected bool IsKnownExecutionFilePath(string path)
-        => path.StartsWith(TesPathPrefix, StringComparison.OrdinalIgnoreCase);
+        => path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase);
 }
