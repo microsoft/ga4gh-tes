@@ -959,12 +959,12 @@ namespace TesApi.Web
             var additionalInputFiles = new List<TesInput>();
             // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
             // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
-            if (isCromwell)
-            {
-                var executionDirectoryUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{cromwellExecutionDirectoryPath}", getContainerSas: true));
-                var blobsInExecutionDirectory = (await azureProxy.ListBlobsAsync(executionDirectoryUri)).Where(b => !b.EndsWith($"/{CromwellScriptFileName}"));
-                additionalInputFiles = blobsInExecutionDirectory.Select(b => $"{TesExecutionsPathPrefix}/{b}").Select(b => new TesInput { Content = null, Path = b, Url = b, Name = Path.GetFileName(b), Type = TesFileType.FILEEnum }).ToList();
-            }
+            //if (isCromwell)
+            //{
+            //    var executionDirectoryUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{cromwellExecutionDirectoryPath}", getContainerSas: true));
+            //    var blobsInExecutionDirectory = (await azureProxy.ListBlobsAsync(executionDirectoryUri)).Where(b => !b.EndsWith($"/{CromwellScriptFileName}"));
+            //    additionalInputFiles = blobsInExecutionDirectory.Select(b => $"{TesExecutionsPathPrefix}/{b}").Select(b => new TesInput { Content = null, Path = b, Url = b, Name = Path.GetFileName(b), Type = TesFileType.FILEEnum }).ToList();
+            //}
 
             var filesToDownload = await Task.WhenAll(
                 inputFiles
@@ -1037,6 +1037,7 @@ namespace TesApi.Web
             var executor = task.Executors.First();
 
             var volumeMountsOption = $"-v $AZ_BATCH_TASK_WORKING_DIR/wd:/wd";
+            var blobXferVolumeMountsOption = $"-v $AZ_BATCH_TASK_WORKING_DIR/:$AZ_BATCH_TASK_WORKING_DIR/";
 
             var executorImageIsPublic = containerRegistryProvider.IsImagePublic(executor.Image);
             var dockerInDockerImageIsPublic = containerRegistryProvider.IsImagePublic(dockerInDockerImageName);
@@ -1096,7 +1097,7 @@ namespace TesApi.Web
             }
 
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
-            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} $AZ_BATCH_TASK_WORKING_DIR/{DownloadFilesScriptFileName} && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {blobXferVolumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} $AZ_BATCH_TASK_WORKING_DIR/{DownloadFilesScriptFileName} && \\");
             sb.AppendLinuxLine($"write_ts DownloadEnd && \\");
             sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR{TesExecutionsPathPrefix} && \\");
             sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR{TesExecutionsPathPrefix} && \\");
@@ -1104,11 +1105,11 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= --workdir / {executor.Image} {executor.Command[0]}  \"{string.Join(" && ", executor.Command.Skip(1))}\" && \\");
             sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
             sb.AppendLinuxLine($"write_ts UploadStart && \\");
-            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} $AZ_BATCH_TASK_WORKING_DIR/{UploadFilesScriptFileName} && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {blobXferVolumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} $AZ_BATCH_TASK_WORKING_DIR/{UploadFilesScriptFileName} && \\");
             sb.AppendLinuxLine($"write_ts UploadEnd && \\");
             sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
-            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {blobxferImageName} upload --storage-url \"{metricsUrl}\" --local-path \"$AZ_BATCH_TASK_WORKING_DIR/metrics.txt\" --rename --no-recursive");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {blobXferVolumeMountsOption} {blobxferImageName} upload --storage-url \"{metricsUrl}\" --local-path \"$AZ_BATCH_TASK_WORKING_DIR/metrics.txt\" --rename --no-recursive");
 
             var batchScriptPath = $"{batchExecutionDirectoryPath}/{BatchScriptFileName}";
             await storageAccessProvider.UploadBlobAsync($"/{batchScriptPath}", sb.ToString());
