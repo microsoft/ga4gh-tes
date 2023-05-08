@@ -23,7 +23,7 @@
 # Required containers, don't delete these lines:
 
 /{DefaultStorageAccountName}/configuration
-/{DefaultStorageAccountName}/tes-internal
+/{DefaultStorageAccountName}/cromwell-executions
 /{DefaultStorageAccountName}/cromwell-workflow-logs
 
 # Optional containers, should list all containers where your input files are located:

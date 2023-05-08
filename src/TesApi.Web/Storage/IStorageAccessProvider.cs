@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Threading.Tasks;
 
 namespace TesApi.Web.Storage
@@ -45,7 +44,7 @@ namespace TesApi.Web.Storage
         /// Returns an Azure Storage Blob or Container URL with SAS token given a path that uses one of the following formats: 
         /// - /accountName/containerName
         /// - /accountName/containerName/blobName
-        /// - /tes-internal/blobName
+        /// - /cromwell-executions/blobName
         /// - https://accountName.blob.core.windows.net/containerName
         /// - https://accountName.blob.core.windows.net/containerName/blobName
         /// </summary>

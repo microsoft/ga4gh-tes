@@ -34,7 +34,7 @@ namespace TesApi.Controllers
     /// </summary>
     public class TaskServiceApiController : ControllerBase
     {
-        //private const string rootExecutionPath = "/tes-internal";
+        //private const string rootExecutionPath = "/cromwell-executions";
         private readonly IRepository<TesTask> repository;
         private readonly ILogger<TaskServiceApiController> logger;
         private readonly IAzureProxy azureProxy;
@@ -123,7 +123,7 @@ namespace TesApi.Controllers
             tesTask.State = TesState.QUEUEDEnum;
             tesTask.CreationTime = DateTimeOffset.UtcNow;
 
-            // example: /tes-internal/test/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/execution/script
+            // example: /cromwell-executions/test/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/execution/script
             tesTask.WorkflowId = tesTask
                 ?.Inputs
                 ?.FirstOrDefault(i => i?.Name?.Equals("commandScript", StringComparison.OrdinalIgnoreCase) == true)
