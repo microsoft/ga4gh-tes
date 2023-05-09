@@ -1,9 +1,13 @@
-﻿namespace Tes.Runner.Transfer
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+namespace Tes.Runner.Transfer
 {
     public static class BlobSizeUtils
     {
         public const int MaxBlobPartsCount = 50000;
         public const int MiB = 1024 * 1024;
+        public const long GiB = MiB * 1024;
         public const int DefaultBlockSizeBytes = MiB * 10; //10 MiB;
 
         public static int GetNumberOfParts(long length, int blockSize)

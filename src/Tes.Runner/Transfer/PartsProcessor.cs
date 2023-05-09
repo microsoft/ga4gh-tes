@@ -51,4 +51,20 @@ public abstract class PartsProcessor
             throw new ArgumentException("The memory buffer capacity must be greater than 0.");
         }
     }
+
+    public static async Task WhenAllOrThrowIfOneFailsAsync(List<Task> tasks)
+    {
+        var tasksPending = tasks.ToList();
+        while (tasksPending.Any())
+        {
+            var completedTask = await Task.WhenAny(tasksPending);
+
+            tasksPending.Remove(completedTask);
+
+            if (completedTask.IsFaulted)
+            {
+                throw new InvalidOperationException("At least one of the tasks has failed.", completedTask.Exception);
+            }
+        }
+    }
 }

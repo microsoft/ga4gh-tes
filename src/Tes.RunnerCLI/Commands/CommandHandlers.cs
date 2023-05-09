@@ -14,13 +14,7 @@ namespace Tes.RunnerCLI.Commands
             string apiVersion,
             Uri dockerUri)
         {
-            var options = new BlobPipelineOptions(
-                BlockSizeBytes: blockSize,
-                NumberOfWriters: writers,
-                NumberOfReaders: readers,
-                ReadWriteBuffersCapacity: bufferCapacity,
-                MemoryBufferCapacity: bufferCapacity,
-                ApiVersion: apiVersion);
+            var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
             var executor = new Executor(file.FullName, options);
 
@@ -32,12 +26,8 @@ namespace Tes.RunnerCLI.Commands
             Console.WriteLine($"Total bytes downloaded: {result.InputsLength:n0} Total bytes uploaded: {result.OutputsLength:n0}");
         }
 
-        internal static async Task ExecuteUploadTaskAsync(FileInfo file,
-            int blockSize,
-            int writers,
-            int readers,
-            int bufferCapacity,
-            string apiVersion)
+        private static BlobPipelineOptions CreateBlobPipelineOptions(int blockSize, int writers, int readers,
+            int bufferCapacity, string apiVersion)
         {
             var options = new BlobPipelineOptions(
                 BlockSizeBytes: blockSize,
@@ -46,6 +36,20 @@ namespace Tes.RunnerCLI.Commands
                 ReadWriteBuffersCapacity: bufferCapacity,
                 MemoryBufferCapacity: bufferCapacity,
                 ApiVersion: apiVersion);
+
+            options = PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(options);
+
+            return options;
+        }
+
+        internal static async Task ExecuteUploadTaskAsync(FileInfo file,
+            int blockSize,
+            int writers,
+            int readers,
+            int bufferCapacity,
+            string apiVersion)
+        {
+            var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
             var executor = new Executor(file.FullName, options);
 
@@ -61,13 +65,7 @@ namespace Tes.RunnerCLI.Commands
             int bufferCapacity,
             string apiVersion)
         {
-            var options = new BlobPipelineOptions(
-                BlockSizeBytes: blockSize,
-                NumberOfWriters: writers,
-                NumberOfReaders: readers,
-                ReadWriteBuffersCapacity: bufferCapacity,
-                MemoryBufferCapacity: bufferCapacity,
-                ApiVersion: apiVersion);
+            var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
             var executor = new Executor(file.FullName, options);
 

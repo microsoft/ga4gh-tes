@@ -86,9 +86,24 @@ public class BlobBlockApiHttpUtils
             {
                 throw new RetriableException(ex.Message, ex);
             }
+
+            if (IsInnerExceptionRetriable(ex))
+            {
+                throw new RetriableException(ex.Message, ex);
+            }
             throw;
         }
         return response;
+    }
+
+    private static bool IsInnerExceptionRetriable(HttpRequestException httpRequestException)
+    {
+        if (httpRequestException.InnerException is System.IO.IOException)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     public static async Task<int> ExecuteHttpRequestAndReadBodyResponseAsync(PipelineBuffer buffer, Func<HttpRequestMessage> requestFactory)

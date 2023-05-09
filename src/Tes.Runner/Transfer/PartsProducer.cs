@@ -43,7 +43,7 @@ public class PartsProducer
 
         try
         {
-            await Task.WhenAll(partsProducerTasks);
+            await PartsProcessor.WhenAllOrThrowIfOneFailsAsync(partsProducerTasks);
             logger.LogInformation("All parts from requested operations were created.");
         }
         catch (Exception e)

@@ -48,7 +48,7 @@ public class RunnerTestUtils
     public static async Task<string> CreateTempFileWithContentAsync(int numberOfMiB, int extraBytes = 0)
     {
         var file = Guid.NewGuid().ToString();
-        await using var fs = File.Create($"{file}.tmp", Units.MiB);
+        await using var fs = File.Create($"{file}.tmp", BlobSizeUtils.MiB);
 
         var data = new byte[BlobSizeUtils.MiB];
         random.NextBytes(data);
