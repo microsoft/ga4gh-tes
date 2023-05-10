@@ -960,14 +960,6 @@ namespace TesApi.Web
             var metricsUrl = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync(metricsPath, getContainerSas: true));
 
             var additionalInputFiles = new List<TesInput>();
-            // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
-            // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
-            //if (isCromwell)
-            //{
-            //    var executionDirectoryUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{cromwellExecutionDirectoryPath}", getContainerSas: true));
-            //    var blobsInExecutionDirectory = (await azureProxy.ListBlobsAsync(executionDirectoryUri)).Where(b => !b.EndsWith($"/{CromwellScriptFileName}"));
-            //    additionalInputFiles = blobsInExecutionDirectory.Select(b => $"{CromwellPathPrefix}/{b}").Select(b => new TesInput { Content = null, Path = b, Url = b, Name = Path.GetFileName(b), Type = TesFileType.FILEEnum }).ToList();
-            //}
 
             var filesToDownload = await Task.WhenAll(
                 inputFiles
@@ -1039,7 +1031,12 @@ namespace TesApi.Web
 
             var executor = task.Executors.First();
 
-            var volumeMountsOption = $"-v $AZ_BATCH_TASK_WORKING_DIR/wd:/";
+            var volumeMountsOption = String.Join(" ", inputFiles
+                .Union(additionalInputFiles)
+                .Select(f => f.Path)
+                .Select(p => p.Split("/", StringSplitOptions.RemoveEmptyEntries)[0])
+                .Distinct(StringComparer.Ordinal)
+                .Select(s => $"-v $AZ_BATCH_TASK_WORKING_DIR/{s}:/{s}"));
             var blobXferVolumeMountsOption = $"-v $AZ_BATCH_TASK_WORKING_DIR/:$AZ_BATCH_TASK_WORKING_DIR/";
 
             var executorImageIsPublic = containerRegistryProvider.IsImagePublic(executor.Image);
@@ -1050,7 +1047,6 @@ namespace TesApi.Web
 
             sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt; }} && \\");  // Function that appends key=value pair to metrics.txt file
             sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
-            //sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd{CromwellPathPrefix} && \\");
             sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd/{cromwellExecutionDirectoryPath} && \\");
 
             if (dockerInDockerImageIsPublic)
