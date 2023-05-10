@@ -11,7 +11,7 @@ namespace Tes.Runner.Transfer
         private readonly ISystemInfoProvider systemInfoProvider;
         private const double MemoryBufferCapacityFactor = 0.4; // 40% of total memory
         private const long MaxMemoryBufferSizeInBytes = BlobSizeUtils.GiB * 2; // 2 GiB of total memory
-        private const int MaxNumberOfWorkingOfThreads = 90;
+        private const int MaxWorkingThreadsCount = 90;
 
         public PipelineOptionsOptimizer(ISystemInfoProvider systemInfoProvider)
         {
@@ -96,9 +96,9 @@ namespace Tes.Runner.Transfer
 
         private int GetOptimizedWorkers(int bufferCapacity)
         {
-            if (bufferCapacity > MaxNumberOfWorkingOfThreads)
+            if (bufferCapacity > MaxWorkingThreadsCount)
             {
-                return MaxNumberOfWorkingOfThreads;
+                return MaxWorkingThreadsCount;
             }
 
             return bufferCapacity;
@@ -110,13 +110,13 @@ namespace Tes.Runner.Transfer
 
             if (memoryBuffer > MaxMemoryBufferSizeInBytes)
             {
-                return ToTens((int)(MaxMemoryBufferSizeInBytes / blockSize));
+                return RoundDownToNearestTen((int)(MaxMemoryBufferSizeInBytes / blockSize));
             }
 
-            return ToTens((int)(Convert.ToInt64(memoryBuffer) / blockSize));
+            return RoundDownToNearestTen((int)(Convert.ToInt64(memoryBuffer) / blockSize));
         }
 
-        private int ToTens(int value)
+        private int RoundDownToNearestTen(int value)
         {
             return (int)Math.Floor((double)value / 10) * 10;
         }

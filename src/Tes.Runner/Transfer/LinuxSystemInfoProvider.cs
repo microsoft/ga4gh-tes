@@ -23,20 +23,8 @@ namespace Tes.Runner.Transfer
             return RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
         }
 
-        public int ProcessorCount
-        {
-            get
-            {
-                return File.ReadLines(ProcCpuInfo).Count(line => line.StartsWith("processor"));
-            }
-        }
+        public int ProcessorCount { get; } = File.ReadLines(ProcCpuInfo).Count(line => line.StartsWith("processor"));
 
-        public long TotalMemory
-        {
-            get
-            {
-                return (long)(Convert.ToUInt64(File.ReadLines(ProcMemInfo).First(line => line.StartsWith("MemTotal")).Split(' ', StringSplitOptions.RemoveEmptyEntries)[1]) * 1024);
-            }
-        }
+        public long TotalMemory { get; } = Convert.ToInt64(File.ReadLines(ProcMemInfo).First(line => line.StartsWith("MemTotal")).Split(' ', StringSplitOptions.RemoveEmptyEntries)[1]) * 1024;
     }
 }
