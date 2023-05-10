@@ -964,7 +964,7 @@ namespace TesApi.Web
             //{
             //    var executionDirectoryUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{cromwellExecutionDirectoryPath}", getContainerSas: true));
             //    var blobsInExecutionDirectory = (await azureProxy.ListBlobsAsync(executionDirectoryUri)).Where(b => !b.EndsWith($"/{CromwellScriptFileName}"));
-            //    additionalInputFiles = blobsInExecutionDirectory.Select(b => $"{TesExecutionsPathPrefix}/{b}").Select(b => new TesInput { Content = null, Path = b, Url = b, Name = Path.GetFileName(b), Type = TesFileType.FILEEnum }).ToList();
+            //    additionalInputFiles = blobsInExecutionDirectory.Select(b => $"{CromwellPathPrefix}/{b}").Select(b => new TesInput { Content = null, Path = b, Url = b, Name = Path.GetFileName(b), Type = TesFileType.FILEEnum }).ToList();
             //}
 
             var filesToDownload = await Task.WhenAll(
@@ -1037,7 +1037,7 @@ namespace TesApi.Web
 
             var executor = task.Executors.First();
 
-            var volumeMountsOption = $"-v $AZ_BATCH_TASK_WORKING_DIR/wd:/wd";
+            var volumeMountsOption = $"-v $AZ_BATCH_TASK_WORKING_DIR/wd:/";
             var blobXferVolumeMountsOption = $"-v $AZ_BATCH_TASK_WORKING_DIR/:$AZ_BATCH_TASK_WORKING_DIR/";
 
             var executorImageIsPublic = containerRegistryProvider.IsImagePublic(executor.Image);
@@ -1048,7 +1048,8 @@ namespace TesApi.Web
 
             sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt; }} && \\");  // Function that appends key=value pair to metrics.txt file
             sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
-            //sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
+            //sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd{CromwellPathPrefix} && \\");
+            sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd/{cromwellExecutionDirectoryPath} && \\");
 
             if (dockerInDockerImageIsPublic)
             {
@@ -1100,8 +1101,8 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {blobXferVolumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} $AZ_BATCH_TASK_WORKING_DIR/{DownloadFilesScriptFileName} && \\");
             sb.AppendLinuxLine($"write_ts DownloadEnd && \\");
-            sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR{CromwellPathPrefix} && \\");
-            sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR{CromwellPathPrefix} && \\");
+            sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR/wd{CromwellPathPrefix} && \\");
+            sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR/wd{CromwellPathPrefix} && \\");
             sb.AppendLinuxLine($"write_ts ExecutorStart && \\");
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= --workdir / {executor.Image} {executor.Command[0]}  \"{string.Join(" && ", executor.Command.Skip(1))}\" && \\");
             sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
