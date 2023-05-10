@@ -18,7 +18,7 @@ namespace Tes.Models
     [DataContract]
     public partial class TesOrganization : IEquatable<TesOrganization>
     {
-        public TesOrganization
+        public TesOrganization()
             => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         /// <summary>
