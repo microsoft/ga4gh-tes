@@ -1,0 +1,22 @@
+﻿{
+    "imageTag": "latest",
+    "imageName": "busybox",
+    "commandsToExecute": [
+        "echo",
+        "Hello Docker!"
+    ],
+    "inputs": [
+        {
+            "fullFileName": "<LOCAL_PATH>",
+            "sourceUrl": "<SOURCE_URL>",
+            "sasStrategy": "None"
+        }
+    ],
+    "outputs": [
+        {
+            "fullFileName": "<LOCAL_PATH>",
+            "targetUrl": "<TARGET_URL>",
+            "sasStrategy": "None"
+        }
+    ]
+}
