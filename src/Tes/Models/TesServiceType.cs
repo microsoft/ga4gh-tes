@@ -17,7 +17,7 @@ namespace Tes.Models
     [DataContract]
     public partial class TesServiceType : IEquatable<TesServiceType>
     {
-        public TesServiceType:()
+        public TesServiceType
             => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         /// <summary>
