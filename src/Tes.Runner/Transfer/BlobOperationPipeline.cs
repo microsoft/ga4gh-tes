@@ -63,9 +63,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
         try
         {
-            //TODO: need to investigate why this method hangs when there is an exception in one of the tasks and running the unit test session
-            //await Task.WhenAll(pipelineTasks);
-            await WhenAllOrThrowIfOneFailsAsync(pipelineTasks);
+            await PartsProcessor.WhenAllOrThrowIfOneFailsAsync(pipelineTasks);
         }
         catch (Exception e)
         {
@@ -74,21 +72,5 @@ public abstract class BlobOperationPipeline : IBlobPipeline
         }
 
         return await processedPartsProcessorTask;
-    }
-
-    private async Task WhenAllOrThrowIfOneFailsAsync(List<Task> tasks)
-    {
-        var tasksPending = tasks.ToList();
-        while (tasksPending.Any())
-        {
-            var completedTask = await Task.WhenAny(tasksPending);
-
-            tasksPending.Remove(completedTask);
-
-            if (completedTask.IsFaulted)
-            {
-                throw new Exception("At least one of the tasks has failed.", completedTask.Exception);
-            }
-        }
     }
 }

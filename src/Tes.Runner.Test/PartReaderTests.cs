@@ -43,6 +43,29 @@ namespace Tes.Runner.Test
             pipeline.Verify(p => p.ExecuteReadAsync(It.IsAny<PipelineBuffer>()), Times.Exactly(numberOfParts));
             Assert.AreEqual(numberOfParts, writeBufferChannel.Reader.Count);
         }
+
+        [TestMethod]
+        public async Task StartPartsReaderAsync_ThrowsWhenOneCallFailsFromTheList()
+        {
+            await PrepareReaderChannelAsync();
+            var calls = 0;
+            pipeline.Setup(p => p.ExecuteReadAsync(It.IsAny<PipelineBuffer>()))
+                .Callback(() =>
+                {
+                    calls++;
+                    if (calls == 1)
+                    {
+                        Thread.Sleep(10000);
+                    }
+                    else if (calls == 2)
+                    {
+                        throw new InvalidOperationException();
+                    }
+                });
+
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => partsReader.StartPartsReaderAsync(readBufferChannel, writeBufferChannel));
+        }
+
         [TestMethod]
         public async Task StartPartsReaderAsync_MemoryBuffersAreUsed()
         {

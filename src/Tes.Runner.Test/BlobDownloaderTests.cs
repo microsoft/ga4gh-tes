@@ -14,11 +14,12 @@ namespace Tes.Runner.Test
     [Ignore]
     public class BlobDownloaderTest
     {
+#pragma warning disable CS8618
         private BlobContainerClient blobContainerClient;
         private Guid containerId;
         private BlobDownloader blobDownloader;
         private readonly BlobPipelineOptions blobPipelineOptions = new BlobPipelineOptions();
-
+#pragma warning restore CS8618
         [TestInitialize]
         public async Task Init()
         {

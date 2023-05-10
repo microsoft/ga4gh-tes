@@ -62,7 +62,7 @@ public class ProcessedPartsProcessor
                 }
             }
 
-        await Task.WhenAll(tasks);
+        await PartsProcessor.WhenAllOrThrowIfOneFailsAsync(tasks);
 
         readBufferChannel.Writer.Complete();
 

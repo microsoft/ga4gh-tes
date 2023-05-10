@@ -48,6 +48,7 @@ namespace Tes.Runner
             return new NodeTaskResult(result, inputLength, outputLength);
         }
 
+
         private NodeTask DeserializeNodeTask(string nodeTask)
         {
             try
