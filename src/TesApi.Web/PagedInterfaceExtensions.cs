@@ -3,8 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Security.AccessControl;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
@@ -164,12 +162,15 @@ namespace TesApi.Web
             private readonly Func<TSource, IEnumerator<TItem>> _getEnumerator;
             private readonly Func<TSource, CancellationToken, Task<TSource>> _getNext;
 
-            public EnumeratorEnumerator(TSource source, Func<TSource, IEnumerator<TItem>> getEnumerator, Func<TSource, CancellationToken, Task<TSource>> getNext, CancellationToken cancellationToken)
-                : base(source is null ? default : getEnumerator?.Invoke(source), e => e.Current, cancellationToken)
+            protected EnumeratorEnumerator(TSource source, Func<TSource, IEnumerator<TItem>> getEnumerator, Func<TSource, CancellationToken, Task<TSource>> getNext, CancellationToken cancellationToken)
+                : base(e => e.Current, cancellationToken)
             {
+                ArgumentNullException.ThrowIfNull(source);
                 ArgumentNullException.ThrowIfNull(getEnumerator);
                 ArgumentNullException.ThrowIfNull(getNext);
 
+                _source = source;
+                _enumerator = getEnumerator(source);
                 _getEnumerator = getEnumerator;
                 _getNext = getNext;
             }
@@ -195,7 +196,9 @@ namespace TesApi.Web
                         }
 
                         _enumerator = _getEnumerator(_source);
-                    } while (!(_enumerator?.MoveNext() ?? false));
+                    }
+                    while (!(_enumerator?.MoveNext() ?? false));
+
                     return true;
                 }
             }
@@ -220,6 +223,14 @@ namespace TesApi.Web
             protected TEnumerator _enumerator;
 
             private readonly Func<TEnumerator, TItem> _getCurrent;
+
+            protected Enumerator(Func<TEnumerator, TItem> getCurrent, CancellationToken cancellationToken)
+            {
+                ArgumentNullException.ThrowIfNull(getCurrent);
+
+                _getCurrent = getCurrent;
+                _cancellationToken = cancellationToken;
+            }
 
             protected Enumerator(TEnumerator enumerator, Func<TEnumerator, TItem> getCurrent, CancellationToken cancellationToken)
             {
