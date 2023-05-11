@@ -1054,9 +1054,10 @@ namespace TesApi.Web
             var volumeMountsOption = String.Join(" ", inputFiles
                 .Union(additionalInputFiles)
                 .Select(f => f.Path)
+                .Concat(filesToUpload.Select(f => f.Path))
                 .Select(p => p.Split("/", StringSplitOptions.RemoveEmptyEntries)[0])
                 .Distinct(StringComparer.Ordinal)
-                .Select(s => $"-v $AZ_BATCH_TASK_WORKING_DIR/{s}:/{s}"));
+                .Select(s => $"-v $AZ_BATCH_TASK_WORKING_DIR/wd/{s}:/{s}"));
 
             var executorImageIsPublic = containerRegistryProvider.IsImagePublic(executor.Image);
             var dockerInDockerImageIsPublic = containerRegistryProvider.IsImagePublic(dockerInDockerImageName);
