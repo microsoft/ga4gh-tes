@@ -73,12 +73,13 @@ namespace TesApi.Web
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
 
                     .AddSingleton<IAppCache, CachingService>()
-                    .AddSingleton<ICache<TesTask>, TesRepositoryLazyCache<TesTask>>()
+                    .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                     .AddTransient<TerraWsmApiClient>()
+                    .AddSingleton(CreateDistributedCache)
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
                     .AddControllers()
@@ -151,6 +152,13 @@ namespace TesApi.Web
             }
 
             logger?.LogInformation("TES successfully configured dependent services in ConfigureServices(IServiceCollection services)");
+
+            Microsoft.Extensions.Caching.Distributed.IDistributedCache CreateDistributedCache(IServiceProvider services)
+            {
+                // TODO: add actual distributed cache and look for its configurations.
+
+                return new Microsoft.Extensions.Caching.Distributed.MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new Microsoft.Extensions.Caching.Memory.MemoryDistributedCacheOptions { SizeLimit = null }));
+            }
 
             IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
             {
