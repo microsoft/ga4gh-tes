@@ -1117,7 +1117,7 @@ namespace TesApi.Web
             }
 
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
-            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} $AZ_BATCH_TASK_WORKING_DIR/{DownloadFilesScriptFileName} && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {MountBlobxferScriptAndMetrics(DownloadFilesScriptFileName)} --entrypoint=/bin/sh {blobxferImageName} /{DownloadFilesScriptFileName} && \\");
             sb.AppendLinuxLine($"write_ts DownloadEnd && \\");
             sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
             sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR/wd && \\");
@@ -1125,7 +1125,7 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= --workdir / {executor.Image} {executor.Command[0]}  \"{string.Join(" && ", executor.Command.Skip(1))}\" && \\");
             sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
             sb.AppendLinuxLine($"write_ts UploadStart && \\");
-            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint=/bin/sh {blobxferImageName} $AZ_BATCH_TASK_WORKING_DIR/{UploadFilesScriptFileName} && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} {MountBlobxferScriptAndMetrics(UploadFilesScriptFileName)} --entrypoint=/bin/sh {blobxferImageName} /{UploadFilesScriptFileName} && \\");
             sb.AppendLinuxLine($"write_ts UploadEnd && \\");
             sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
@@ -1165,6 +1165,9 @@ namespace TesApi.Web
             }
 
             return cloudTask;
+
+            string MountBlobxferScriptAndMetrics(string scriptFileName)
+                => $"-v $AZ_BATCH_TASK_WORKING_DIR/metrics.txt:/metrics.txt -v $AZ_BATCH_TASK_WORKING_DIR/{scriptFileName}:/{scriptFileName}";
 
             static bool UrlContainsSas(string url)
             {
