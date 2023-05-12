@@ -236,7 +236,13 @@ namespace TesApi.Controllers
             TesTask tesTask = null;
             var itemFound = await repository.TryGetItemAsync(id, item => tesTask = item);
 
-            return itemFound ? TesJsonResult(tesTask, view) : NotFound($"The task with id {id} does not exist.");
+            if (!itemFound)
+            {
+                return NotFound($"The task with id {id} does not exist.");
+            }
+
+            await TryRemoveItemFromCacheAsync(tesTask, view);
+            return TesJsonResult(tesTask, view);
         }
 
         /// <summary>
@@ -272,6 +278,31 @@ namespace TesApi.Controllers
             var response = new TesListTasksResponse { Tasks = tasks.ToList(), NextPageToken = encodedNextPageToken };
 
             return TesJsonResult(response, view);
+        }
+
+        private async ValueTask<bool> TryRemoveItemFromCacheAsync(TesTask tesTask, string view)
+        {
+            try
+            {
+                if (tesTask.State == TesState.COMPLETEEnum
+                   || tesTask.State == TesState.CANCELEDEnum
+                   || ((tesTask.State == TesState.SYSTEMERROREnum || tesTask.State == TesState.EXECUTORERROREnum)
+                        && Enum.TryParse<TesView>(view, true, out var tesView)
+                        && tesView == TesView.FULL))
+                {
+                    // Cache optimization:
+                    // If a task completed/canceled with no errors, Cromwell will not call again
+                    // OR if the task failed with an error, Cromwell will call a second time requesting FULL view, at which point can remove from cache
+                    return await repository.TryRemoveItemFromCacheAsync(tesTask);
+                }
+            }
+            catch (Exception exc)
+            {
+                // Do not re-throw, since a cache issue should not fail the GET request
+                logger.LogWarning(exc, $"An exception occurred while trying to remove TesTask with ID {tesTask.Id} with view {view} from the cache");
+            }
+
+            return false;
         }
 
         private IActionResult TesJsonResult(object value, string view)

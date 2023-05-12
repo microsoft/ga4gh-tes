@@ -66,5 +66,9 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public Task<T> UpdateItemAsync(T item)
             => _asyncRetryPolicy.ExecuteAsync(() => _repository.UpdateItemAsync(item));
+
+        /// <inheritdoc/>
+        public ValueTask<bool> TryRemoveItemFromCacheAsync(T item)
+            => _repository.TryRemoveItemFromCacheAsync(item);
     }
 }
