@@ -259,5 +259,10 @@ namespace Tes.Repository
 
             static Expression<Func<TesTaskDatabaseItem, TesTask>> GetTask() => item => item.Json;
         }
+
+        public ValueTask<bool> TryRemoveItemFromCacheAsync(TesTask item)
+        {
+            return ValueTask.FromResult(_cache?.TryRemove(item.Id) ?? false);
+        }
     }
 }

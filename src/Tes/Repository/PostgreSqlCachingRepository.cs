@@ -21,6 +21,7 @@ namespace Tes.Repository
     {
         private readonly TimeSpan _writerWaitTime = TimeSpan.FromSeconds(1);
         private readonly int _batchSize = 1000;
+        private static readonly TimeSpan defaultCompletedTaskCacheExpiration = TimeSpan.FromDays(1);
 
         protected readonly AsyncPolicy _asyncPolicy = Policy
             .Handle<Npgsql.NpgsqlException>(e => e.IsTransient)
@@ -61,7 +62,7 @@ namespace Tes.Repository
             {
                 if (_cache.TryGetValue(getKey(item), out _))
                 {
-                    _ = _cache.TryUpdate(getKey(item), item);
+                    _ = _cache.TryUpdate(getKey(item), item, isActive(item) ? default : defaultCompletedTaskCacheExpiration);
                 }
                 else if (isActive(item))
                 {

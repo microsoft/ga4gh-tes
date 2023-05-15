@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
 using Microsoft.Extensions.Caching.Distributed;
 
 namespace Tes.Repository
@@ -65,10 +66,12 @@ namespace Tes.Repository
         }
 
         /// <inheritdoc/>
-        public bool TryUpdate(string key, T task)
+        public bool TryUpdate(string key, T task, TimeSpan expiration)
         {
-            cache.Remove(Key(key));
-            return TryAdd(key, task);
+            var cacheKey = Key(key);
+            cache.Remove(cacheKey);
+            cache.Set(cacheKey, Convert(task), expiration == default ? defaultItemOptions : new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = expiration });
+            return true;
         }
 
         private static byte[] Convert(T value)
