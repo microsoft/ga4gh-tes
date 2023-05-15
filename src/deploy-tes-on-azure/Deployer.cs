@@ -309,6 +309,12 @@ namespace TesDeployer
                         //{
                         //}
 
+                        if (installedVersion is null || installedVersion < new Version(4, 4))
+                        {
+                            // Ensure all storage containers are created.
+                            await CreateDefaultStorageContainersAsync(storageAccount);
+                        }
+
                         await kubernetesManager.UpgradeValuesYamlAsync(storageAccount, settings);
                         await PerformHelmDeploymentAsync(resourceGroup);
                     }
