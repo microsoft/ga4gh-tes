@@ -62,8 +62,6 @@ spec:
               value: {{ .Values.config.batchNodes.globalStartTask }}
             - name: BatchNodes__GlobalManagedIdentity
               value: {{ .Values.config.batchNodes.globalManagedIdentity }}
-            - name: BatchScheduling__Disable
-              value: {{ .Values.config.batchScheduling.disable | quote }}
             - name: BatchScheduling__UsePreemptibleVmsOnly
               value: {{ .Values.config.batchScheduling.usePreemptibleVmsOnly | quote}}
             - name: BatchScheduling__UseLegacyAutopools

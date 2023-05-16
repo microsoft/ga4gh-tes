@@ -417,7 +417,6 @@ namespace TesDeployer
             batchNodes["subnetId"] = GetValueOrDefault(settings, "BatchNodesSubnetId");
             values.Config["coaNamespace"] = GetValueOrDefault(settings, "AksCoANamespace");
             batchNodes["disablePublicIpAddress"] = GetValueOrDefault(settings, "DisableBatchNodesPublicIpAddress");
-            batchScheduling["disable"] = GetValueOrDefault(settings, "DisableBatchScheduling");
             batchScheduling["usePreemptibleVmsOnly"] = GetValueOrDefault(settings, "UsePreemptibleVmsOnly");
             nodeImages["blobxfer"] = GetValueOrDefault(settings, "BlobxferImageName");
             nodeImages["docker"] = GetValueOrDefault(settings, "DockerInDockerImageName");
@@ -484,7 +483,6 @@ namespace TesDeployer
                 ["BatchNodesSubnetId"] = GetValueOrDefault(batchNodes, "subnetId"),
                 ["AksCoANamespace"] = GetValueOrDefault(values.Config, "coaNamespace") as string,
                 ["DisableBatchNodesPublicIpAddress"] = GetValueOrDefault(batchNodes, "disablePublicIpAddress"),
-                ["DisableBatchScheduling"] = GetValueOrDefault(batchScheduling, "disable"),
                 ["UsePreemptibleVmsOnly"] = GetValueOrDefault(batchScheduling, "usePreemptibleVmsOnly"),
                 ["BlobxferImageName"] = GetValueOrDefault(nodeImages, "blobxfer"),
                 ["DockerInDockerImageName"] = GetValueOrDefault(nodeImages, "docker"),

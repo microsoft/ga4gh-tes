@@ -25,36 +25,19 @@ namespace TesApi.Web
         private readonly IRepository<TesTask> repository;
         private readonly IBatchScheduler batchScheduler;
         private readonly ILogger<Scheduler> logger;
-        private readonly bool isDisabled;
         private readonly TimeSpan runInterval = TimeSpan.FromSeconds(5);
 
         /// <summary>
         /// Default constructor
         /// </summary>
-        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/></param>
         /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler">The batch scheduler implementation</param>
         /// <param name="logger">The logger instance</param>
-        public Scheduler(IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
+        public Scheduler(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
         {
             this.repository = repository;
             this.batchScheduler = batchScheduler;
             this.logger = logger;
-            isDisabled = batchSchedulingOptions.Value.Disable;
-        }
-
-        /// <summary>
-        /// Start the service
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        public override Task StartAsync(CancellationToken cancellationToken)
-        {
-            if (isDisabled)
-            {
-                return Task.CompletedTask;
-            }
-
-            return base.StartAsync(cancellationToken);
         }
 
         /// <inheritdoc />
@@ -206,6 +189,10 @@ namespace TesApi.Web
 
                         await repository.UpdateItemAsync(tesTask);
                     }
+                }
+                catch (RepositoryCollisionException exc)
+                {
+                    // TODO
                 }
                 // TODO catch EF / postgres exception?
                 //catch (Microsoft.Azure.Cosmos.CosmosException exc)

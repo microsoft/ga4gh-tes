@@ -28,6 +28,7 @@ namespace Tes.Repository
             .WaitAndRetryAsync(10, i => TimeSpan.FromSeconds(Math.Pow(2, i)));
 
         private readonly ConcurrentQueue<(T, WriteAction, TaskCompletionSource<T>)> _itemsToWrite = new();
+        private readonly ConcurrentDictionary<T, object> _updatingItems = new();
         private readonly BackgroundWorker _writerWorker = new();
 
         protected enum WriteAction { Add, Update, Delete }
@@ -107,8 +108,33 @@ namespace Tes.Repository
         protected Task<T> AddUpdateOrRemoveItemInDbAsync(T item, WriteAction action)
         {
             var source = new TaskCompletionSource<T>();
+            var result = source.Task;
+
+            if (action == WriteAction.Update)
+            {
+                if (_updatingItems.TryAdd(item, null))
+                {
+                    result = source.Task.ContinueWith(RemoveUpdatingItem).Unwrap();
+                }
+                else
+                {
+                    throw new RepositoryCollisionException();
+                }
+            }
+
             _itemsToWrite.Enqueue((item, action, source));
-            return source.Task;
+            return result;
+
+            Task<T> RemoveUpdatingItem(Task<T> task)
+            {
+                _ = _updatingItems.Remove(item, out _);
+                return task.Status switch
+                {
+                    TaskStatus.RanToCompletion => Task.FromResult(task.Result),
+                    TaskStatus.Faulted => Task.FromException<T>(task.Exception),
+                    _ => Task.FromCanceled<T>(CancellationToken.None) // TODO: use passed in cancellation token, because the task doesn't appear to propogate its own.
+                };
+            }
         }
 
         private void WriterWorkerCompleted(object _1, RunWorkerCompletedEventArgs e)

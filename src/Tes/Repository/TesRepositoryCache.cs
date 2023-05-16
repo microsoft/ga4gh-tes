@@ -1,8 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using Microsoft.Extensions.Caching.Distributed;
+using LazyCache;
 
 namespace Tes.Repository
 {
@@ -12,8 +11,9 @@ namespace Tes.Repository
     /// <typeparam name="T"></typeparam>
     public class TesRepositoryCache<T> : ICache<T> where T : class
     {
-        private readonly DistributedCacheEntryOptions defaultItemOptions = new() { SlidingExpiration = System.TimeSpan.FromDays(1) };
-        private readonly IDistributedCache cache;
+        private readonly Microsoft.Extensions.Caching.Memory.MemoryCacheEntryOptions defaultItemOptions = new() { SlidingExpiration = System.TimeSpan.FromDays(1) };
+        private readonly IAppCache cache;
+        private object _lock = new();
 
         static TesRepositoryCache() => Utilities.NewtonsoftJsonSafeInit.SetDefaultSettings();
 
@@ -21,7 +21,7 @@ namespace Tes.Repository
         /// Default constructor expecting the singleton IDistributedCache
         /// </summary>
         /// <param name="appCache"></param>
-        public TesRepositoryCache(IDistributedCache appCache)
+        public TesRepositoryCache(IAppCache appCache)
         {
             cache = appCache;
         }
@@ -40,15 +40,20 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public bool TryAdd(string key, T task)
         {
-            cache.Set(Key(key), Convert(task), defaultItemOptions);
-            return true;
+            lock (_lock)
+            {
+                cache.Add(Key(key), task, defaultItemOptions);
+                return true;
+            }
         }
 
         /// <inheritdoc/>
         public bool TryGetValue(string key, out T task)
         {
-            task = Convert(cache.Get(Key(key)));
-            return task is not null;
+            lock (_lock)
+            {
+                return cache.TryGetValue(Key(key), out task);
+            }
         }
 
         /// <inheritdoc/>
@@ -56,36 +61,28 @@ namespace Tes.Repository
         {
             var cacheKey = Key(key);
 
-            if (cache.Get(cacheKey) is null)
+            lock (_lock)
             {
-                return false;
-            }
+                if (cache.Get<T>(cacheKey) is null)
+                {
+                    return false;
+                }
 
-            cache.Remove(cacheKey);
-            return true;
+                cache.Remove(cacheKey);
+                return true;
+            }
         }
 
         /// <inheritdoc/>
-        public bool TryUpdate(string key, T task, TimeSpan expiration)
+        public bool TryUpdate(string key, T task, System.TimeSpan expiration)
         {
             var cacheKey = Key(key);
-            cache.Remove(cacheKey);
-            cache.Set(cacheKey, Convert(task), expiration == default ? defaultItemOptions : new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = expiration });
-            return true;
-        }
-
-        private static byte[] Convert(T value)
-        {
-            return value is null
-                ? null
-                : System.Text.Encoding.UTF8.GetBytes(Newtonsoft.Json.JsonConvert.SerializeObject(value));
-        }
-
-        private static T Convert(byte[] value)
-        {
-            return value is null
-                ? null
-                : Newtonsoft.Json.JsonConvert.DeserializeObject<T>(System.Text.Encoding.UTF8.GetString(value));
+            lock (_lock)
+            {
+                cache.Remove(cacheKey);
+                cache.Add(cacheKey, task, expiration == default ? defaultItemOptions : LazyCacheEntryOptions.WithImmediateAbsoluteExpiration(expiration));
+                return true;
+            }
         }
     }
 }
