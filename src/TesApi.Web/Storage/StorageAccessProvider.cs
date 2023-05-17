@@ -18,11 +18,6 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// </summary>
     protected const string CromwellPathPrefix = "/cromwell-executions/";
     /// <summary>
-    /// Executions path prefix
-    /// </summary>
-    protected const string BatchPathPrefix = "/executions/";
-
-    /// <summary>
     /// Logger instance. 
     /// </summary>
     protected readonly ILogger Logger;
@@ -79,11 +74,10 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
         => Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// True if the path is the cromwell or executions folder
+    /// True if the path is the cromwell executions folder
     /// </summary>
     /// <param name="path"></param>
     /// <returns></returns>
     protected bool IsKnownExecutionFilePath(string path)
-        => path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase)
-               || path.StartsWith(BatchPathPrefix, StringComparison.OrdinalIgnoreCase);
+        => path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase);
 }

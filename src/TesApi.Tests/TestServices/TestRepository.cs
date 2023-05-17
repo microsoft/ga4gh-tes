@@ -166,5 +166,10 @@ namespace TesApi.Tests.TestServices
 
             throw new InvalidOperationException();
         }
+
+        public ValueTask<bool> TryRemoveItemFromCacheAsync(T item, CancellationToken _1)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

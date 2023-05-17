@@ -23,6 +23,7 @@ namespace Tes.Repository
     /// <typeparam name="TesTask"></typeparam>
     public sealed class TesTaskPostgreSqlRepository : IRepository<TesTask>
     {
+        private static readonly TimeSpan defaultCompletedTaskCacheExpiration = TimeSpan.FromDays(1);
         private readonly Func<TesDbContext> createDbContext;
         private readonly ICache<TesTask> cache;
         private readonly ILogger logger;
@@ -106,13 +107,6 @@ namespace Tes.Repository
             if (cache?.TryGetValue(id, out var task) == true)
             {
                 onSuccess?.Invoke(task);
-
-                if (!task.IsActiveState())
-                {
-                    // Cache optimization because we can assume that most of the time, the workflow engine will no longer "GET" after a terminal state
-                    cache?.TryRemove(task.Id);
-                }
-
                 return true;
             }
 
@@ -209,7 +203,17 @@ namespace Tes.Repository
             // Manually set entity state to avoid potential NPG PostgreSql bug
             dbContext.Entry(item).State = EntityState.Modified;
             await dbContext.SaveChangesAsync(cancellationToken);
-            cache?.TryUpdate(tesTask.Id, tesTask);
+
+            if (!tesTask.IsActiveState())
+            {
+                // Remove completed tasks from cache after shorter interval
+                cache?.TryUpdate(tesTask.Id, tesTask, defaultCompletedTaskCacheExpiration);
+            }
+            else
+            {
+                cache?.TryUpdate(tesTask.Id, tesTask);
+            }
+
             return item.Json;
         }
 
@@ -247,6 +251,12 @@ namespace Tes.Repository
             // TODO paging support
             var results = await GetItemsAsync(predicate, cancellationToken);
             return (null, results);
+        }
+
+        /// <inheritdoc/>
+        public ValueTask<bool> TryRemoveItemFromCacheAsync(TesTask item, CancellationToken _1)
+        {
+            return ValueTask.FromResult(cache?.TryRemove(item.Id) ?? false);
         }
 
         public void Dispose()

@@ -65,5 +65,12 @@ namespace Tes.Repository
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The created document</returns>
         Task<T> UpdateItemAsync(T item, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Removes an item from the cache if it exists.  This method exists for cache optimizations
+        /// </summary>
+        /// <param name="Item">The item to remove</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        ValueTask<bool> TryRemoveItemFromCacheAsync(T item, CancellationToken cancellationToken);
     }
 }
