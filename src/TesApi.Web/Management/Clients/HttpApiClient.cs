@@ -78,22 +78,21 @@ namespace TesApi.Web.Management.Clients
         /// </summary>
         /// <param name="httpRequestFactory">Factory that creates new http requests, in the event of retry the factory is called again
         /// and must be idempotent</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
         /// <returns></returns>
         protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(
-            Func<HttpRequestMessage> httpRequestFactory, bool setAuthorizationHeader = false)
-        {
-            return await cacheAndRetryHandler.ExecuteWithRetryAsync(async () =>
+            Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
+            => await cacheAndRetryHandler.ExecuteWithRetryAsync(async ct =>
             {
                 var request = httpRequestFactory();
                 if (setAuthorizationHeader)
                 {
-                    await AddAuthorizationHeaderToRequestAsync(request);
+                    await AddAuthorizationHeaderToRequestAsync(request, ct);
                 }
 
-                return await HttpClient.SendAsync(request);
-            });
-        }
+                return await HttpClient.SendAsync(request, ct);
+            }, cancellationToken);
 
         /// <summary>
         /// Sends a Http Get request to the URL and returns body response as string 
@@ -101,15 +100,16 @@ namespace TesApi.Web.Management.Clients
         /// <param name="requestUrl"></param>
         /// <param name="setAuthorizationHeader"></param>
         /// <param name="cacheResults"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        protected async Task<string> HttpGetRequestAsync(Uri requestUrl, bool setAuthorizationHeader, bool cacheResults)
+        protected async Task<string> HttpGetRequestAsync(Uri requestUrl, bool setAuthorizationHeader, bool cacheResults, CancellationToken cancellationToken)
         {
             if (cacheResults)
             {
-                return await HttpGetRequestWithCachingAndRetryPolicyAsync(requestUrl, setAuthorizationHeader);
+                return await HttpGetRequestWithCachingAndRetryPolicyAsync(requestUrl, cancellationToken, setAuthorizationHeader);
             }
 
-            return await HttpGetRequestWithRetryPolicyAsync(requestUrl, setAuthorizationHeader);
+            return await HttpGetRequestWithRetryPolicyAsync(requestUrl, cancellationToken, setAuthorizationHeader);
         }
 
         /// <summary>
@@ -118,12 +118,13 @@ namespace TesApi.Web.Management.Clients
         /// <param name="requestUrl"></param>
         /// <param name="setAuthorizationHeader"></param>
         /// <param name="cacheResults"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <typeparam name="TResponse"></typeparam>
         /// <returns></returns>
         protected async Task<TResponse> HttpGetRequestAsync<TResponse>(Uri requestUrl, bool setAuthorizationHeader,
-            bool cacheResults)
+            bool cacheResults, CancellationToken cancellationToken)
         {
-            var content = await HttpGetRequestAsync(requestUrl, setAuthorizationHeader, cacheResults);
+            var content = await HttpGetRequestAsync(requestUrl, setAuthorizationHeader, cacheResults, cancellationToken);
 
             return JsonSerializer.Deserialize<TResponse>(content);
         }
@@ -132,38 +133,38 @@ namespace TesApi.Web.Management.Clients
         /// Checks the cache and if the request was not found, sends the GET request with a retry policy
         /// </summary>
         /// <param name="requestUrl"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="setAuthorizationHeader"></param>
         /// <returns></returns>
         protected async Task<string> HttpGetRequestWithCachingAndRetryPolicyAsync(Uri requestUrl,
-            bool setAuthorizationHeader = false)
+            CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
-            var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader);
+            var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader, cancellationToken);
 
-            return await cacheAndRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, async () =>
+            return await cacheAndRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, async ct =>
             {
-                var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader);
+                var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
 
-                return await ExecuteRequestAndReadResponseBodyAsync(httpRequest);
-            });
+                return await ExecuteRequestAndReadResponseBodyAsync(httpRequest, ct);
+            }, cancellationToken);
         }
 
         /// <summary>
         /// Get request with retry policy
         /// </summary>
         /// <param name="requestUrl"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="setAuthorizationHeader"></param>
         /// <returns></returns>
         protected async Task<string> HttpGetRequestWithRetryPolicyAsync(Uri requestUrl,
-            bool setAuthorizationHeader = false)
-        {
-            return await cacheAndRetryHandler.ExecuteWithRetryAsync(async () =>
+            CancellationToken cancellationToken, bool setAuthorizationHeader = false)
+            => await cacheAndRetryHandler.ExecuteWithRetryAsync(async ct =>
             {
                 //request must be recreated in every retry.
-                var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader);
+                var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
 
-                return await ExecuteRequestAndReadResponseBodyAsync(httpRequest);
-            });
-        }
+                return await ExecuteRequestAndReadResponseBodyAsync(httpRequest, ct);
+            }, cancellationToken);
 
         /// <summary>
         /// Returns an query string key-value, with the value escaped. If the value is null or empty returns an empty string
@@ -210,28 +211,28 @@ namespace TesApi.Web.Management.Clients
             return queryString;
         }
 
-        private async Task<HttpRequestMessage> CreateGetHttpRequest(Uri requestUrl, bool setAuthorizationHeader)
+        private async Task<HttpRequestMessage> CreateGetHttpRequest(Uri requestUrl, bool setAuthorizationHeader, CancellationToken cancellationToken)
         {
             var httpRequest = new HttpRequestMessage(HttpMethod.Get, requestUrl);
 
             if (setAuthorizationHeader)
             {
-                await AddAuthorizationHeaderToRequestAsync(httpRequest);
+                await AddAuthorizationHeaderToRequestAsync(httpRequest, cancellationToken);
             }
 
             return httpRequest;
         }
 
-        private static async Task<string> ExecuteRequestAndReadResponseBodyAsync(HttpRequestMessage request)
+        private static async Task<string> ExecuteRequestAndReadResponseBodyAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var response = await HttpClient.SendAsync(request);
+            var response = await HttpClient.SendAsync(request, cancellationToken);
 
             response.EnsureSuccessStatusCode();
 
-            return await response.Content.ReadAsStringAsync();
+            return await response.Content.ReadAsStringAsync(cancellationToken);
         }
 
-        private async Task AddAuthorizationHeaderToRequestAsync(HttpRequestMessage requestMessage)
+        private async Task AddAuthorizationHeaderToRequestAsync(HttpRequestMessage requestMessage, CancellationToken cancellationToken)
         {
             if (string.IsNullOrEmpty(tokenScope))
             {
@@ -243,7 +244,7 @@ namespace TesApi.Web.Management.Clients
 
             try
             {
-                var token = await GetOrRefreshAccessTokenAsync();
+                var token = await GetOrRefreshAccessTokenAsync(cancellationToken);
 
                 requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             }
@@ -255,11 +256,11 @@ namespace TesApi.Web.Management.Clients
             }
         }
 
-        private async Task<string> GetOrRefreshAccessTokenAsync()
+        private async Task<string> GetOrRefreshAccessTokenAsync(CancellationToken cancellationToken)
         {
             try
             {
-                await semaphore.WaitAsync();
+                await semaphore.WaitAsync(cancellationToken);
 
                 if (DateTimeOffset.UtcNow < accessToken.ExpiresOn)
                 {
@@ -270,7 +271,7 @@ namespace TesApi.Web.Management.Clients
 
                 var newAccessToken = await tokenCredential.GetTokenAsync(
                     new TokenRequestContext(new[] { tokenScope }),
-                    CancellationToken.None);
+                    cancellationToken);
 
                 Logger.LogTrace($"Returning a new token with an expiration date of: {newAccessToken.ExpiresOn}");
                 accessToken = newAccessToken;
@@ -287,15 +288,16 @@ namespace TesApi.Web.Management.Clients
         /// </summary>
         /// <param name="requestUrl">Request url</param>
         /// <param name="perUser">if true, caching data will be per user</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public async Task<string> ToCacheKeyAsync(Uri requestUrl, bool perUser)
+        public async Task<string> ToCacheKeyAsync(Uri requestUrl, bool perUser, CancellationToken cancellationToken)
         {
             var cacheKey = requestUrl.ToString();
 
             if (perUser)
             {
                 //append the token to create a string that is unique to the user and the URL
-                var token = await GetOrRefreshAccessTokenAsync();
+                var token = await GetOrRefreshAccessTokenAsync(cancellationToken);
                 cacheKey += token;
             }
 
@@ -313,13 +315,14 @@ namespace TesApi.Web.Management.Clients
         /// Returns the response content, the response is successful 
         /// </summary>
         /// <param name="response">Response</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <typeparam name="T">Response's content deserialization type</typeparam>
         /// <returns></returns>
-        protected static async Task<T> GetApiResponseContentAsync<T>(HttpResponseMessage response)
+        protected static async Task<T> GetApiResponseContentAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
         {
             response.EnsureSuccessStatusCode();
 
-            return JsonSerializer.Deserialize<T>(await response.Content.ReadAsStringAsync());
+            return JsonSerializer.Deserialize<T>(await response.Content.ReadAsStringAsync(cancellationToken));
         }
     }
 }

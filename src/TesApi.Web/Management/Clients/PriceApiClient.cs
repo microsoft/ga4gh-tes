@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using TesApi.Web.Management.Models.Pricing;
@@ -30,15 +32,16 @@ namespace TesApi.Web.Management.Clients
         /// Get pricing information in a region. 
         /// </summary>
         /// <param name="region">arm region</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="cacheResults">If true results will be cached. Default is false.</param>
         /// <returns>pricing items</returns>
-        public async IAsyncEnumerable<PricingItem> GetAllPricingInformationAsync(string region, bool cacheResults = false)
+        public async IAsyncEnumerable<PricingItem> GetAllPricingInformationAsync(string region, [EnumeratorCancellation] CancellationToken cancellationToken, bool cacheResults = false)
         {
             var skip = 0;
 
             while (true)
             {
-                var page = await GetPricingInformationPageAsync(skip, region, cacheResults);
+                var page = await GetPricingInformationPageAsync(skip, region, cancellationToken, cacheResults);
 
                 if (page is null || page.Items is null || page.Items.Length == 0)
                 {
@@ -55,14 +58,14 @@ namespace TesApi.Web.Management.Clients
         }
 
         /// <summary>
-        /// Returns pricing information for non Windows and non spot VM.
-        /// Returns pricing information for non Windows and non spot VM . 
+        /// Returns pricing information for non Windows and non spot VM..
         /// </summary>
         /// <param name="region">arm region.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="cacheResults">If true results will be cached. Default is false.</param>
         /// <returns></returns>
-        public IAsyncEnumerable<PricingItem> GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(string region, bool cacheResults = false)
-            => GetAllPricingInformationAsync(region, cacheResults)
+        public IAsyncEnumerable<PricingItem> GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(string region, CancellationToken cancellationToken, bool cacheResults = false)
+            => GetAllPricingInformationAsync(region, cancellationToken, cacheResults)
                 .WhereAwait(p => ValueTask.FromResult(!p.productName.Contains(" Windows") && !p.meterName.Contains(" Spot")));
 
         /// <summary>
@@ -70,13 +73,14 @@ namespace TesApi.Web.Management.Clients
         /// </summary>
         /// <param name="skip">starting position.</param>
         /// <param name="region">arm region.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="cacheResults">If true results will be cached for the specific request. Default is false.</param>
         /// <returns></returns>
-        public async Task<RetailPricingData> GetPricingInformationPageAsync(int skip, string region, bool cacheResults = false)
+        public async Task<RetailPricingData> GetPricingInformationPageAsync(int skip, string region, CancellationToken cancellationToken, bool cacheResults = false)
         {
             var builder = new UriBuilder(ApiEndpoint) { Query = BuildRequestQueryString(skip, region) };
 
-            var result = await HttpGetRequestAsync<RetailPricingData>(builder.Uri, setAuthorizationHeader: false, cacheResults);
+            var result = await HttpGetRequestAsync<RetailPricingData>(builder.Uri, setAuthorizationHeader: false, cacheResults: cacheResults, cancellationToken: cancellationToken);
 
             if (result is not null)
             {
