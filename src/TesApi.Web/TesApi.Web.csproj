@@ -20,13 +20,13 @@
     <PackageReference Include="Azure.ResourceManager" Version="1.4.0" />
     <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.4.0" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.15.0" />
-    <PackageReference Include="LazyCache.AspNetCore" Version="2.4.0" />
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.21.0" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="7.0.3" />
     <PackageReference Include="Microsoft.Azure.Management.ApplicationInsights" Version="0.3.0-preview" />
     <PackageReference Include="Microsoft.Azure.Management.Batch" Version="15.0.0" />
     <PackageReference Include="Microsoft.Azure.Management.Compute" Version="60.0.0" />
     <PackageReference Include="Microsoft.Azure.Management.Fluent" Version="1.38.1" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="7.0.0" />
     <PackageReference Include="Microsoft.Azure.Batch" Version="15.4.0" />
     <PackageReference Include="Microsoft.Azure.Services.AppAuthentication" Version="1.6.2" />

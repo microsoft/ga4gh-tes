@@ -8,7 +8,7 @@ using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-using LazyCache;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Options;
@@ -163,7 +163,7 @@ namespace TesApi.Web
 
                 if (storageAccountInfo is not null)
                 {
-                    cacheAndRetryHandler.AppCache.Add($"{nameof(CachingWithRetriesAzureProxy)}:{storageAccountName}", storageAccountInfo, DateTimeOffset.MaxValue);
+                    cacheAndRetryHandler.AppCache.Set($"{nameof(CachingWithRetriesAzureProxy)}:{storageAccountName}", storageAccountInfo, DateTimeOffset.MaxValue);
                 }
             }
 
