@@ -9,7 +9,6 @@ namespace Tes.RunnerCLI.Commands
 
         private static readonly Uri DefaultDockerUri = new Uri("unix:///var/run/docker.sock");
 
-        const string ExecCommandName = "exec";
         internal const string UploadCommandName = "upload";
         internal const string DownloadCommandName = "download";
         internal const string DockerUriOption = "docker-url";
@@ -122,7 +121,7 @@ namespace Tes.RunnerCLI.Commands
             };
         }
 
-        private static object? GetDefaultTaskDefinitionFile()
+        private static FileInfo GetDefaultTaskDefinitionFile()
         {
             return new FileInfo(DefaultTaskDefinitionFile);
         }

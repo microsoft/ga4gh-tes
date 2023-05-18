@@ -2,16 +2,16 @@
 
 namespace Tes.RunnerCLI.Commands
 {
-    internal class BlobPipelineOptionsConverter
+    public class BlobPipelineOptionsConverter
     {
-        internal const string FileOption = "file";
-        internal const string BlockSizeOption = "blockSize";
-        internal const string WritersOption = "writers";
-        internal const string ReadersOption = "readers";
-        internal const string BufferCapacityOption = "bufferCapacity";
-        internal const string ApiVersionOption = "apiVersion";
+        public const string FileOption = "file";
+        public const string BlockSizeOption = "blockSize";
+        public const string WritersOption = "writers";
+        public const string ReadersOption = "readers";
+        public const string BufferCapacityOption = "bufferCapacity";
+        public const string ApiVersionOption = "apiVersion";
 
-        internal static string[] ToCommandArgs(string command, string fileOption, BlobPipelineOptions blobPipelineOptions)
+        public static string[] ToCommandArgs(string command, string fileOption, BlobPipelineOptions blobPipelineOptions)
         {
             ArgumentException.ThrowIfNullOrEmpty(command, nameof(command));
             ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
@@ -28,13 +28,13 @@ namespace Tes.RunnerCLI.Commands
 
             if (!string.IsNullOrEmpty(fileOption))
             {
-                args.Add($"--{fileOption} {fileOption}");
+                args.Add($"--{FileOption} {fileOption}");
             }
 
             return args.ToArray();
         }
 
-        internal static BlobPipelineOptions ToBlobPipelineOptions(int blockSize, int writers, int readers,
+        public static BlobPipelineOptions ToBlobPipelineOptions(int blockSize, int writers, int readers,
             int bufferCapacity, string apiVersion)
         {
             var options = new BlobPipelineOptions(
