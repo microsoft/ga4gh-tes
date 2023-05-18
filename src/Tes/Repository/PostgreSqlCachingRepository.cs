@@ -103,7 +103,7 @@ namespace Tes.Repository
         /// <param name="item"></param>
         /// <param name="action"></param>
         /// <returns></returns>
-        protected Task<T> AddUpdateOrRemoveItemInDbAsync(T item, WriteAction action)
+        protected Task<T> AddUpdateOrRemoveItemInDbAsync(T item, WriteAction action, CancellationToken cancellationToken)
         {
             var source = new TaskCompletionSource<T>();
             var result = source.Task;
@@ -130,7 +130,7 @@ namespace Tes.Repository
                 {
                     TaskStatus.RanToCompletion => Task.FromResult(task.Result),
                     TaskStatus.Faulted => Task.FromException<T>(task.Exception),
-                    _ => Task.FromCanceled<T>(CancellationToken.None) // TODO: use passed in cancellation token, because the task doesn't appear to propogate its own.
+                    _ => Task.FromCanceled<T>(cancellationToken)
                 };
             }
         }

@@ -96,7 +96,7 @@ namespace TesApi.Web
 
         private async Task DeleteOldBatchJobs(CancellationToken cancellationToken)
         {
-            var jobsToDelete = await azureProxy.ListOldJobsToDeleteAsync(oldestJobAge);
+            var jobsToDelete = await azureProxy.ListOldJobsToDeleteAsync(oldestJobAge, cancellationToken);
 
             foreach (var jobId in jobsToDelete)
             {
@@ -105,7 +105,7 @@ namespace TesApi.Web
 
                 TesTask tesTask = null;
 
-                if (await repository.TryGetItemAsync(tesTaskId, item => tesTask = item))
+                if (await repository.TryGetItemAsync(tesTaskId, cancellationToken, item => tesTask = item))
                 {
                     if (tesTask.State == TesState.COMPLETEEnum ||
                         tesTask.State == TesState.EXECUTORERROREnum ||

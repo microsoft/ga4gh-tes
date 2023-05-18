@@ -19,7 +19,8 @@ namespace TesApi.Web.Management.Batch
         /// <param name="poolInfo">Contains information about the pool. <see cref="BatchModels.ProxyResource.Name"/> becomes the <see cref="CloudPool.Id"/></param>
         /// <param name="isPreemptable">True if nodes in this pool will all be preemptable. False if nodes will all be dedicated.</param>
         /// <returns><see cref="PoolInformation"/> that identifies the created pool.</returns>
-        Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable);
+        /// <param name="cancellationToken"></param>
+        Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken);
 
         /// <summary>
         /// Deletes the specified pool

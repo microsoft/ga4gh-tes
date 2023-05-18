@@ -1,88 +1,75 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using LazyCache;
+using System;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Tes.Repository
 {
     /// <summary>
-    /// A wrapper for LazyCache.IAppCache
+    /// A wrapper for IMemoryCache
     /// </summary>
     /// <typeparam name="T"></typeparam>
     public class TesRepositoryCache<T> : ICache<T> where T : class
     {
-        private readonly Microsoft.Extensions.Caching.Memory.MemoryCacheEntryOptions defaultItemOptions = new() { SlidingExpiration = System.TimeSpan.FromDays(1) };
-        private readonly IAppCache cache;
-        private object _lock = new();
+        /// <summary>
+        /// A TesTask can run for 7 days, and hypothetically there could be weeks of queued tasks, so set a long default
+        /// </summary>
+        private static readonly TimeSpan defaultItemExpiration = TimeSpan.FromDays(30);
 
-        static TesRepositoryCache() => Utilities.NewtonsoftJsonSafeInit.SetDefaultSettings();
+        private readonly IMemoryCache cache;
+
+        private static object Key(string key)
+        {
+            return $"{nameof(TesRepositoryCache<T>)}:{key}";
+        }
 
         /// <summary>
-        /// Default constructor expecting the singleton IDistributedCache
+        /// Default constructor expecting the singleton LazyCache.IAppCache
         /// </summary>
         /// <param name="appCache"></param>
-        public TesRepositoryCache(IAppCache appCache)
+        public TesRepositoryCache(IMemoryCache appCache)
         {
+            ArgumentNullException.ThrowIfNull(appCache);
             cache = appCache;
         }
 
-        private string Key(string key) => $"{nameof(TesRepositoryCache<T>)}:{key}";
+        /// <inheritdoc/>
+        public int MaxCount { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
 
         /// <inheritdoc/>
-        public int MaxCount { get => throw new System.NotSupportedException(); set => throw new System.NotSupportedException(); }
-
-        /// <inheritdoc/>
-        public int Count()
-        {
-            throw new System.NotSupportedException();
-        }
+        public int Count() => throw new NotSupportedException();
 
         /// <inheritdoc/>
         public bool TryAdd(string key, T task)
         {
-            lock (_lock)
-            {
-                cache.Add(Key(key), task, defaultItemOptions);
-                return true;
-            }
+            cache.Set(Key(key), task, defaultItemExpiration);
+            return true;
         }
 
         /// <inheritdoc/>
         public bool TryGetValue(string key, out T task)
         {
-            lock (_lock)
-            {
-                return cache.TryGetValue(Key(key), out task);
-            }
+            return cache.TryGetValue(Key(key), out task);
         }
 
         /// <inheritdoc/>
         public bool TryRemove(string key)
         {
-            var cacheKey = Key(key);
-
-            lock (_lock)
-            {
-                if (cache.Get<T>(cacheKey) is null)
-                {
-                    return false;
-                }
-
-                cache.Remove(cacheKey);
-                return true;
-            }
+            cache.Remove(Key(key));
+            return true;
         }
 
         /// <inheritdoc/>
         public bool TryUpdate(string key, T task, System.TimeSpan expiration)
         {
-            var cacheKey = Key(key);
-            lock (_lock)
+            if (expiration == default)
             {
-                cache.Remove(cacheKey);
-                cache.Add(cacheKey, task, expiration == default ? defaultItemOptions : LazyCacheEntryOptions.WithImmediateAbsoluteExpiration(expiration));
-                return true;
+                expiration = defaultItemExpiration;
             }
+
+            cache.Set(Key(key), task, expiration);
+            return true;
         }
     }
 }

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using LazyCache;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TesApi.Web;
 
@@ -13,12 +13,12 @@ namespace TesApi.Tests
     [TestClass]
     public class TesDockerClientTests
     {
-        private readonly IAppCache appCache;
+        private readonly IMemoryCache appCache;
         private readonly ITesDockerClient dockerClient;
 
         public TesDockerClientTests()
         {
-            this.appCache = new CachingService();
+            this.appCache = new MemoryCache(new MemoryCacheOptions());
             this.dockerClient = new TesDockerClient(appCache);
         }
 
@@ -30,7 +30,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task TestIfImagesArePublicAsync()
         {
-            List<(string, bool)> imageTruthTableValues = new List<(string, bool)> {
+            var imageTruthTableValues = new List<(string, bool)> {
                 ("mcr.microsoft.com/ga4gh/tes", true),
                 ("ubuntu", true),
                 ("docker", true),
@@ -44,7 +44,7 @@ namespace TesApi.Tests
             {
                 var isImagePublic = await dockerClient.IsImagePublicAsync(imageTruthTableValue.Item1);
                 Assert.AreEqual(isImagePublic, imageTruthTableValue.Item2);
-                string cacheKey = $"{nameof(TesDockerClient)}-{imageTruthTableValue.Item1}";
+                var cacheKey = $"{nameof(TesDockerClient)}-{imageTruthTableValue.Item1}";
                 Assert.IsTrue(appCache.TryGetValue(cacheKey, out bool isImagePublicCacheValue));
                 Assert.AreEqual(isImagePublic, isImagePublicCacheValue);
             }

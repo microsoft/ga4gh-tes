@@ -6,7 +6,6 @@ using System.IO;
 using System.Reflection;
 using Azure.Core;
 using Azure.Identity;
-using LazyCache;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Caching.Memory;
@@ -73,8 +72,7 @@ namespace TesApi.Web
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
 
-                    .AddSingleton<IOptions<MemoryCacheOptions>>(new MemoryCacheOptions { ExpirationScanFrequency = TimeSpan.FromDays(0.5) })
-                    .AddSingleton<IAppCache, CachingService>()
+                    .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
@@ -83,7 +81,7 @@ namespace TesApi.Web
                     .AddTransient<TerraWsmApiClient>()
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
-                    .AddControllers()
+                    .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
                     .AddNewtonsoftJson(opts =>
                     {
                         opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
@@ -236,7 +234,7 @@ namespace TesApi.Web
                 if (string.IsNullOrWhiteSpace(options.Value.AppKey))
                 {
                     //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
-                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName);
+                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName, System.Threading.CancellationToken.None);
                     task.Wait();
 
                     if (task.Result is null)

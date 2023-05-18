@@ -5,8 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using LazyCache;
-using LazyCache.Providers;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,7 +63,7 @@ namespace TesApi.Tests.TestServices
                         .AddSingleton(s => wrapAzureProxy ? ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(s, GetAzureProxy(azureProxy).Object) : GetAzureProxy(azureProxy).Object)
                         .AddSingleton(_ => GetTesTaskRepository(tesTaskRepository).Object)
                         .AddSingleton(s => mockStorageAccessProvider ? GetStorageAccessProvider(storageAccessProvider).Object : ActivatorUtilities.CreateInstance<DefaultStorageAccessProvider>(s))
-                        .AddSingleton<IAppCache>(_ => new CachingService(new MemoryCacheProvider(new MemoryCache(new MemoryCacheOptions()))))
+                        .AddMemoryCache()
                         .IfThenElse(accountResourceInformation is null, s => s, s => s.AddSingleton(accountResourceInformation))
                         .AddTransient<ILogger<T>>(_ => NullLogger<T>.Instance)
                         .IfThenElse(mockStorageAccessProvider, s => s, s => s.AddTransient<ILogger<DefaultStorageAccessProvider>>(_ => NullLogger<DefaultStorageAccessProvider>.Instance))

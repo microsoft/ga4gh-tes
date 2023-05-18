@@ -92,7 +92,7 @@ namespace TesApi.Web
 
                 TesTask tesTask = null;
 
-                if (await repository.TryGetItemAsync(tesTaskId, item => tesTask = item)) // TODO: Add CancellationToken to IRepository and add unit tests
+                if (await repository.TryGetItemAsync(tesTaskId, cancellationToken, item => tesTask = item)) // TODO: Add CancellationToken to IRepository and add unit tests
                 {
                     if (tesTask.State == TesState.COMPLETEEnum ||
                         tesTask.State == TesState.EXECUTORERROREnum ||
@@ -103,7 +103,7 @@ namespace TesApi.Web
                         await azureProxy.DeleteBatchJobAsync(tesTaskId, cancellationToken);
                         logger.LogInformation($"Deleted orphaned Batch Job '{jobId}'");
 
-                        await azureProxy.DeleteBatchPoolIfExistsAsync(tesTask.Id);
+                        await azureProxy.DeleteBatchPoolIfExistsAsync(tesTask.Id, cancellationToken);
                     }
                     else
                     {

@@ -64,7 +64,7 @@ namespace TesApi.Web
                         return applicationInsightsOptions;
                     }
 
-                    var connectionString = AzureProxy.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName).Result;
+                    var connectionString = AzureProxy.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, System.Threading.CancellationToken.None).Result;
                     if (!string.IsNullOrWhiteSpace(connectionString))
                     {
                         applicationInsightsOptions.ConnectionString = connectionString;

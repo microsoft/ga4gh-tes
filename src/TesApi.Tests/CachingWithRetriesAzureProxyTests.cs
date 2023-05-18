@@ -22,14 +22,14 @@ namespace TesApi.Tests
             using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
             {
                 PrepareAzureProxy(a);
-                a.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>())).Returns(Task.FromResult(storageAccountKey));
+                a.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(storageAccountKey));
             });
             var cachingAzureProxy = serviceProvider.GetT();
 
-            var key1 = await cachingAzureProxy.GetStorageAccountKeyAsync(storageAccountInfo);
-            var key2 = await cachingAzureProxy.GetStorageAccountKeyAsync(storageAccountInfo);
+            var key1 = await cachingAzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, System.Threading.CancellationToken.None);
+            var key2 = await cachingAzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, System.Threading.CancellationToken.None);
 
-            serviceProvider.AzureProxy.Verify(mock => mock.GetStorageAccountKeyAsync(storageAccountInfo), Times.Once());
+            serviceProvider.AzureProxy.Verify(mock => mock.GetStorageAccountKeyAsync(storageAccountInfo, It.IsAny<System.Threading.CancellationToken>()), Times.Once());
             Assert.AreEqual(storageAccountKey, key1);
             Assert.AreEqual(key1, key2);
         }
@@ -41,14 +41,14 @@ namespace TesApi.Tests
             using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
             {
                 PrepareAzureProxy(a);
-                a.Setup(a => a.GetStorageAccountInfoAsync(It.IsAny<string>())).Returns(Task.FromResult(storageAccountInfo));
+                a.Setup(a => a.GetStorageAccountInfoAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(storageAccountInfo));
             });
             var cachingAzureProxy = serviceProvider.GetT();
 
-            var info1 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount");
-            var info2 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount");
+            var info1 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount", System.Threading.CancellationToken.None);
+            var info2 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount", System.Threading.CancellationToken.None);
 
-            serviceProvider.AzureProxy.Verify(mock => mock.GetStorageAccountInfoAsync("defaultstorageaccount"), Times.Once());
+            serviceProvider.AzureProxy.Verify(mock => mock.GetStorageAccountInfoAsync("defaultstorageaccount", It.IsAny<System.Threading.CancellationToken>()), Times.Once());
             Assert.AreEqual(storageAccountInfo, info1);
             Assert.AreEqual(info1, info2);
         }
@@ -59,16 +59,16 @@ namespace TesApi.Tests
             using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
             {
                 PrepareAzureProxy(a);
-                a.Setup(a => a.GetStorageAccountInfoAsync(It.IsAny<string>())).Returns(Task.FromResult((StorageAccountInfo)null));
+                a.Setup(a => a.GetStorageAccountInfoAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult((StorageAccountInfo)null));
             });
             var cachingAzureProxy = serviceProvider.GetT();
-            var info1 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount");
+            var info1 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount", System.Threading.CancellationToken.None);
 
             var storageAccountInfo = new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount/", SubscriptionId = "SubId" };
-            serviceProvider.AzureProxy.Setup(a => a.GetStorageAccountInfoAsync(It.IsAny<string>())).Returns(Task.FromResult(storageAccountInfo));
-            var info2 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount");
+            serviceProvider.AzureProxy.Setup(a => a.GetStorageAccountInfoAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(storageAccountInfo));
+            var info2 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount", System.Threading.CancellationToken.None);
 
-            serviceProvider.AzureProxy.Verify(mock => mock.GetStorageAccountInfoAsync("defaultstorageaccount"), Times.Exactly(2));
+            serviceProvider.AzureProxy.Verify(mock => mock.GetStorageAccountInfoAsync("defaultstorageaccount", It.IsAny<System.Threading.CancellationToken>()), Times.Exactly(2));
             Assert.IsNull(info1);
             Assert.AreEqual(storageAccountInfo, info2);
         }
