@@ -7,17 +7,14 @@ using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
-
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
-
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
-
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
 namespace TesApi.Web
