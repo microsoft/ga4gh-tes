@@ -5,4 +5,4 @@ using Tes.Runner.Docker;
 
 namespace Tes.Runner;
 
-public record NodeTaskResult(ContainerExecutionResult ContainerResult, long InputsLength, long OutputsLength);
+public record NodeTaskResult(ContainerExecutionResult ContainerResult);

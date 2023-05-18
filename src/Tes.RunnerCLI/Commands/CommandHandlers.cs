@@ -14,16 +14,32 @@ namespace Tes.RunnerCLI.Commands
             string apiVersion,
             Uri dockerUri)
         {
-            var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
+            var options = BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
+            var downloadLogs = ExecuteDownloadTaskAsSubProcess(file, options);
+
+            Console.WriteLine($"Download result: {downloadLogs.StandardOutput}");
+
+            var result = await ExecuteNodeContainerTaskAsync(file, dockerUri, options);
+
+            Console.WriteLine($"Execution result: {result.ContainerResult.StatusCode} Error: {result.ContainerResult.Error}");
+
+            var uploadLogs = ExecuteUploadTaskAsSubProcess(file, options);
+
+            Console.WriteLine($"Download result: {uploadLogs.StandardOutput}");
+
+        }
+
+        private static async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(FileInfo file, Uri dockerUri, BlobPipelineOptions options)
+        {
             var executor = new Executor(file.FullName, options);
 
-            var result = await executor.ExecuteNodeTaskAsync(new DockerExecutor(dockerUri));
+            var result = await executor.ExecuteNodeContainerTaskAsync(new DockerExecutor(dockerUri));
 
             var logs = await result.ContainerResult.Logs.ReadOutputToEndAsync(CancellationToken.None);
 
             Console.WriteLine($"Execution result: {logs}");
-            Console.WriteLine($"Total bytes downloaded: {result.InputsLength:n0} Total bytes uploaded: {result.OutputsLength:n0}");
+            return result;
         }
 
         private static BlobPipelineOptions CreateBlobPipelineOptions(int blockSize, int writers, int readers,
@@ -56,6 +72,20 @@ namespace Tes.RunnerCLI.Commands
             var result = await executor.UploadOutputsAsync();
 
             Console.WriteLine($"Total bytes uploaded: {result:n0}");
+        }
+
+        internal static ProcessExecutionResult ExecuteDownloadTaskAsSubProcess(FileInfo file, BlobPipelineOptions options)
+        {
+            var processLauncher = new ProcessLauncher();
+
+            return processLauncher.LaunchProcess(BlobPipelineOptionsConverter.ToCommandArgs(CommandFactory.DownloadCommandName, file.FullName, options));
+        }
+
+        internal static ProcessExecutionResult ExecuteUploadTaskAsSubProcess(FileInfo file, BlobPipelineOptions options)
+        {
+            var processLauncher = new ProcessLauncher();
+
+            return processLauncher.LaunchProcess(BlobPipelineOptionsConverter.ToCommandArgs(CommandFactory.UploadCommandName, file.FullName, options));
         }
 
         internal static async Task ExecuteDownloadTaskAsync(FileInfo file,
