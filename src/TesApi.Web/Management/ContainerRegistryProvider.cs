@@ -103,20 +103,14 @@ namespace TesApi.Web.Management
             if (requestedRepo is not null)
             {
                 Logger.LogInformation($"Requested repository: {imageName} was found.");
-
-                CacheAndRetryHandler.AppCache.Add($"{nameof(ContainerRegistryProvider)}:{imageName}", requestedRepo,
-                    //I find kind of odd the Add method of the cache does not exposes the expiration directly as param as the GetOrAdd method does.
-                    new MemoryCacheEntryOptions()
-                    {
-                        AbsoluteExpiration = DateTimeOffset.UtcNow.AddHours(options.RegistryInfoCacheExpirationInHours)
-                    });
-
-                return requestedRepo;
+                CacheAndRetryHandler.AppCache.Set($"{nameof(ContainerRegistryProvider)}:{imageName}", requestedRepo, DateTimeOffset.UtcNow.AddHours(options.RegistryInfoCacheExpirationInHours));
+            }
+            else
+            {
+                Logger.LogWarning($"The TES service did not find the requested repository: {imageName}");
             }
 
-            Logger.LogWarning($"The TES service did not find the requested repository: {imageName}");
-
-            return null;
+            return requestedRepo;
         }
 
         private bool IsKnownOrDefaultContainerRegistry(string imageName)

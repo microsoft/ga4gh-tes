@@ -5,9 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using LazyCache;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+//using Microsoft.Extensions.Caching.Memory;
+//using Microsoft.Extensions.DependencyInjection;
+//using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
@@ -49,11 +49,11 @@ namespace TesApi.Tests
         private static BatchAccountResourceInformation GetResourceInformation()
             => new("batchAccount", "mrg", "sub-id", "eastus");
 
-        private static System.Linq.Expressions.Expression<Func<ArmBatchQuotaProvider>> GetMockQuotaProviderExpression(IServiceProvider provider)
-            => () => new ArmBatchQuotaProvider(
-                provider.GetRequiredService<IAppCache>(),
-                new AzureManagementClientsFactory(GetResourceInformation()),
-                provider.GetRequiredService<ILogger<ArmBatchQuotaProvider>>());
+        //private static System.Linq.Expressions.Expression<Func<ArmBatchQuotaProvider>> GetMockQuotaProviderExpression(IServiceProvider provider)
+        //    => () => new ArmBatchQuotaProvider(
+        //        provider.GetRequiredService<IMemoryCache>(),
+        //        new AzureManagementClientsFactory(GetResourceInformation()),
+        //        provider.GetRequiredService<ILogger<ArmBatchQuotaProvider>>());
 
         private static Action<Mock<IBatchQuotaProvider>> GetMockQuotaProvider()
             => new(mockArmQuotaProvider =>

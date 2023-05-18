@@ -6,7 +6,6 @@ using System.IO;
 using System.Reflection;
 using Azure.Core;
 using Azure.Identity;
-using LazyCache;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -72,8 +71,8 @@ namespace TesApi.Web
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
 
-                    .AddSingleton<IAppCache, CachingService>()
-                    .AddSingleton<ICache<TesTask>, TesRepositoryLazyCache<TesTask>>()
+                    .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
+                    .AddSingleton<ICache<TesTask>, TesRepositoryCache<TesTask>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
                     .AddTransient<BatchPool>()

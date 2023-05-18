@@ -2,15 +2,15 @@
 // Licensed under the MIT License.
 
 using System;
-using LazyCache;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Tes.Repository
 {
     /// <summary>
-    /// A wrapper for LazyCache.IAppCache
+    /// A wrapper for IMemoryCache
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class TesRepositoryLazyCache<T> : ICache<T> where T : class
+    public class TesRepositoryCache<T> : ICache<T> where T : class
     {
         /// <summary>
         /// A TesTask can run for 7 days, and hypothetically there could be weeks of queued tasks, so set a long default
@@ -18,15 +18,20 @@ namespace Tes.Repository
         /// 
         private static TimeSpan defaultItemExpiration = TimeSpan.FromDays(30);
 
-        private readonly IAppCache cache;
+        private readonly IMemoryCache cache;
+
+        private static object Key(string key)
+        {
+            return $"{nameof(TesRepositoryCache<T>)}:{key}";
+        }
 
         /// <summary>
         /// Default constructor expecting the singleton LazyCache.IAppCache
         /// </summary>
         /// <param name="appCache"></param>
-        public TesRepositoryLazyCache(IAppCache appCache)
+        public TesRepositoryCache(IMemoryCache appCache)
         {
-            ArgumentNullException.ThrowIfNull(appCache, nameof(appCache));
+            ArgumentNullException.ThrowIfNull(appCache);
             cache = appCache;
         }
 
@@ -39,20 +44,20 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public bool TryAdd(string key, T task)
         {
-            cache.Add(key, task, defaultItemExpiration);
+            cache.Set(Key(key), task, defaultItemExpiration);
             return true;
         }
 
         /// <inheritdoc/>
         public bool TryGetValue(string key, out T task)
         {
-            return cache.TryGetValue(key, out task);
+            return cache.TryGetValue(Key(key), out task);
         }
 
         /// <inheritdoc/>
         public bool TryRemove(string key)
         {
-            cache.Remove(key);
+            cache.Remove(Key(key));
             return true;
         }
 
@@ -64,7 +69,7 @@ namespace Tes.Repository
                 expiration = defaultItemExpiration;
             }
 
-            cache.Add(key, task, expiration);
+            cache.Set(Key(key), task, expiration);
             return true;
         }
     }

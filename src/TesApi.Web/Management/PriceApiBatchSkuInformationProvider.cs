@@ -7,7 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using LazyCache;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Tes.Models;
@@ -21,7 +21,7 @@ namespace TesApi.Web.Management
     public class PriceApiBatchSkuInformationProvider : IBatchSkuInformationProvider
     {
         private readonly PriceApiClient priceApiClient;
-        private readonly IAppCache appCache;
+        private readonly IMemoryCache appCache;
         private readonly ILogger logger;
 
         /// <summary>
@@ -30,7 +30,7 @@ namespace TesApi.Web.Management
         /// <param name="appCache">Cache instance. If null, calls to the retail pricing API won't be cached.</param>
         /// <param name="priceApiClient">Retail pricing API client.</param>
         /// <param name="logger">Logger instance. </param>
-        public PriceApiBatchSkuInformationProvider(IAppCache appCache, PriceApiClient priceApiClient,
+        public PriceApiBatchSkuInformationProvider(IMemoryCache appCache, PriceApiClient priceApiClient,
             ILogger<PriceApiBatchSkuInformationProvider> logger)
         {
             ArgumentNullException.ThrowIfNull(priceApiClient);
@@ -62,7 +62,7 @@ namespace TesApi.Web.Management
 
             logger.LogInformation($"Trying to get pricing information from the cache for region: {region}.");
 
-            return await appCache.GetOrAddAsync(region, async () => await GetVmSizesAndPricesAsyncImpl(region, cancellationToken));
+            return await appCache.GetOrCreateAsync(region, async _1 => await GetVmSizesAndPricesAsyncImpl(region, cancellationToken));
         }
 
         private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsyncImpl(string region, CancellationToken cancellationToken)

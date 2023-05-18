@@ -5,7 +5,7 @@ using System;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using LazyCache;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -22,16 +22,22 @@ namespace TesApi.Tests
     {
         private PriceApiClient pricingApiClient;
         private CacheAndRetryHandler cacheAndRetryHandler;
-        private IAppCache appCache;
+        private IMemoryCache appCache;
 
         [TestInitialize]
         public void Initialize()
         {
-            appCache = new CachingService();
+            appCache = new MemoryCache(new MemoryCacheOptions());
             var options = new Mock<IOptions<RetryPolicyOptions>>();
             options.Setup(o => o.Value).Returns(new RetryPolicyOptions());
             cacheAndRetryHandler = new CacheAndRetryHandler(appCache, options.Object);
             pricingApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
+        }
+
+        [TestCleanup]
+        public void Cleanup()
+        {
+            appCache?.Dispose();
         }
 
         [TestMethod]
