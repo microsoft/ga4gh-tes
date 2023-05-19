@@ -17,7 +17,7 @@ namespace Tes.RunnerCLI.Commands
             process.Start();
             await process.WaitForExitAsync();
 
-            return ToProcessExecutionResult(process);
+            return await ToProcessExecutionResultAsync(process);
         }
 
         private static string? GetExecutableFullPath()
@@ -39,11 +39,11 @@ namespace Tes.RunnerCLI.Commands
             return string.Join(" ", argList.ToArray());
         }
 
-        private ProcessExecutionResult ToProcessExecutionResult(Process process)
+        private async Task<ProcessExecutionResult> ToProcessExecutionResultAsync(Process process)
         {
             return new ProcessExecutionResult(
-                process.StandardOutput.ReadToEnd(),
-                process.StandardError.ReadToEnd(),
+                await process.StandardOutput.ReadToEndAsync(),
+                await process.StandardError.ReadToEndAsync(),
                 process.ExitCode);
         }
     }
