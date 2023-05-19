@@ -33,19 +33,13 @@ namespace Tes.Runner
             resolutionPolicyHandler = new ResolutionPolicyHandler();
         }
 
-        public async Task<NodeTaskResult> ExecuteNodeTaskAsync(DockerExecutor dockerExecutor)
+        public async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(DockerExecutor dockerExecutor)
         {
             ArgumentNullException.ThrowIfNull(blobPipelineOptions);
 
-            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
-
-            var inputLength = await DownloadInputsAsync(memoryBufferChannel);
-
             var result = await dockerExecutor.RunOnContainerAsync(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute);
 
-            var outputLength = await UploadOutputsAsync(memoryBufferChannel);
-
-            return new NodeTaskResult(result, inputLength, outputLength);
+            return new NodeTaskResult(result);
         }
 
 
@@ -79,7 +73,7 @@ namespace Tes.Runner
 
             LogStartConfig();
 
-            logger.LogInformation($"{tesNodeTask.Outputs.Count} inputs to upload.");
+            logger.LogInformation($"{tesNodeTask.Outputs.Count} outputs to upload.");
 
             var uploader = new BlobUploader(blobPipelineOptions, memoryBufferChannel);
 

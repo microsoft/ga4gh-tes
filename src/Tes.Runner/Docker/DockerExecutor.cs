@@ -3,12 +3,15 @@
 
 using Docker.DotNet;
 using Docker.DotNet.Models;
+using Microsoft.Extensions.Logging;
+using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Docker
 {
     public class DockerExecutor
     {
         private readonly IDockerClient dockerClient;
+        private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
 
         public DockerExecutor(Uri dockerHost)
         {
@@ -78,7 +81,7 @@ namespace Tes.Runner.Docker
                     Tag = tag
                 },
                 authConfig,
-                new Progress<JSONMessage>(message => Console.WriteLine(message)));
+                new Progress<JSONMessage>(message => logger.LogInformation(message.Status)));
         }
     }
 }

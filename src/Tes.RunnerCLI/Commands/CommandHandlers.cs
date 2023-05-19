@@ -1,4 +1,5 @@
-﻿using Tes.Runner;
+﻿using Microsoft.Extensions.Logging;
+using Tes.Runner;
 using Tes.Runner.Docker;
 using Tes.Runner.Transfer;
 
@@ -6,7 +7,11 @@ namespace Tes.RunnerCLI.Commands
 {
     internal class CommandHandlers
     {
-        internal static async Task ExecuteNodeTaskAsync(FileInfo file,
+        private static readonly ILogger Logger = PipelineLoggerFactory.Create<CommandHandlers>();
+        private const int SuccessExitCode = 0;
+        private const int ErrorExitCode = 1;
+
+        internal static async Task<int> ExecuteNodeTaskAsync(FileInfo file,
             int blockSize,
             int writers,
             int readers,
@@ -14,16 +19,51 @@ namespace Tes.RunnerCLI.Commands
             string apiVersion,
             Uri dockerUri)
         {
-            var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
+            try
+            {
+                var options = BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-            var executor = new Executor(file.FullName, options);
+                await ExecuteTransferAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options);
 
-            var result = await executor.ExecuteNodeTaskAsync(new DockerExecutor(dockerUri));
+                await ExecuteNodeContainerTaskAsync(file, dockerUri, options);
 
-            var logs = await result.ContainerResult.Logs.ReadOutputToEndAsync(CancellationToken.None);
+                await ExecuteTransferAsSubProcessAsync(CommandFactory.UploadCommandName, file, options);
 
-            Console.WriteLine($"Execution result: {logs}");
-            Console.WriteLine($"Total bytes downloaded: {result.InputsLength:n0} Total bytes uploaded: {result.OutputsLength:n0}");
+                return SuccessExitCode;
+
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Failed to execute the task. Error: {e.Message}");
+                Logger.LogError(e, "Failed to execute the task");
+                return ErrorExitCode;
+            }
+        }
+
+        private static async Task ExecuteNodeContainerTaskAsync(FileInfo file, Uri dockerUri, BlobPipelineOptions options)
+        {
+            try
+            {
+                var executor = new Executor(file.FullName, options);
+
+                var result = await executor.ExecuteNodeContainerTaskAsync(new DockerExecutor(dockerUri));
+
+                if (result is null)
+                {
+                    throw new InvalidOperationException("The container task failed to return results");
+                }
+
+                var logs = await result.ContainerResult.Logs.ReadOutputToEndAsync(CancellationToken.None);
+
+                Console.WriteLine($"Execution Status Code: {result.ContainerResult.StatusCode}. Error: {result.ContainerResult.Error}");
+                Console.WriteLine($"StdOutput: {logs.stdout}");
+                Console.WriteLine($"StdError: {logs.stderr}");
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e, "Failed to execute the task.");
+                throw;
+            }
         }
 
         private static BlobPipelineOptions CreateBlobPipelineOptions(int blockSize, int writers, int readers,
@@ -42,7 +82,7 @@ namespace Tes.RunnerCLI.Commands
             return options;
         }
 
-        internal static async Task ExecuteUploadTaskAsync(FileInfo file,
+        internal static async Task<int> ExecuteUploadTaskAsync(FileInfo file,
             int blockSize,
             int writers,
             int readers,
@@ -51,14 +91,32 @@ namespace Tes.RunnerCLI.Commands
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-            var executor = new Executor(file.FullName, options);
+            Console.WriteLine("Starting upload operation.");
 
-            var result = await executor.UploadOutputsAsync();
-
-            Console.WriteLine($"Total bytes uploaded: {result:n0}");
+            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.UploadOutputsAsync());
         }
 
-        internal static async Task ExecuteDownloadTaskAsync(FileInfo file,
+        private static void HandleResult(ProcessExecutionResult results, string command)
+        {
+            if (results.ExitCode != 0)
+            {
+                throw new Exception(
+                    $"Task operation failed. Command: {command}. Exit Code: {results.ExitCode}{Environment.NewLine}Error: {results.StandardError}{Environment.NewLine}Output: {results.StandardOutput}");
+            }
+
+            Console.WriteLine($"Result: {results.StandardOutput}");
+        }
+
+        private static async Task ExecuteTransferAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
+        {
+            var processLauncher = new ProcessLauncher();
+
+            var results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
+
+            HandleResult(results, command);
+        }
+
+        internal static async Task<int> ExecuteDownloadTaskAsync(FileInfo file,
             int blockSize,
             int writers,
             int readers,
@@ -67,11 +125,30 @@ namespace Tes.RunnerCLI.Commands
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-            var executor = new Executor(file.FullName, options);
+            Console.WriteLine("Starting download operation.");
 
-            var result = await executor.DownloadInputsAsync();
+            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.DownloadInputsAsync());
+        }
 
-            Console.WriteLine($"Total bytes downloaded: {result:n0}");
+        private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, BlobPipelineOptions options, Func<Executor, Task<long>> transferOperation)
+        {
+
+            try
+            {
+                var executor = new Executor(taskDefinitionFile.FullName, options);
+
+                var result = await transferOperation(executor);
+
+                Console.WriteLine($"Total bytes transfer: {result:n0}");
+
+                return SuccessExitCode;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Failed to perform transfer. Error: {e.Message} Operation: {transferOperation.Method.Name}");
+                Logger.LogError(e, $"Failed to perform transfer. Operation: {transferOperation}");
+                return ErrorExitCode;
+            }
         }
     }
 }

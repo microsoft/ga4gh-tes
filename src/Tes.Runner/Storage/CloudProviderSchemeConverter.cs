@@ -11,7 +11,6 @@ namespace Tes.Runner.Storage
         private const string GcpHost = "storage.googleapis.com";
         private const string AwsSuffix = ".s3.amazonaws.com";
 
-        //https://broad-references.s3.amazonaws.com/hg38/v0/Homo_sapiens_assembly38.dict
         public Task<Uri> CreateSasTokenWithStrategyAsync(string sourceUrl)
         {
             var sourceUri = new Uri(sourceUrl);

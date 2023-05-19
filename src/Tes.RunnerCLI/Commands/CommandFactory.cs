@@ -5,24 +5,17 @@ namespace Tes.RunnerCLI.Commands
 {
     internal class CommandFactory
     {
-        const string FileOption = "file";
-        const string BlockSizeOption = "blockSize";
-        const string WritersOption = "writers";
-        const string ReadersOption = "readers";
-        const string BufferCapacityOption = "bufferCapacity";
-        const string ApiVersionOption = "apiVersion";
-        const string DockerUriOption = "docker-url";
         const string DefaultTaskDefinitionFile = "TesTask.json";
 
         private static readonly Uri DefaultDockerUri = new Uri("unix:///var/run/docker.sock");
 
-        const string ExecCommandName = "exec";
-        private const string UploadCommandName = "upload";
-        private const string DownloadCommandName = "download";
+        internal const string UploadCommandName = "upload";
+        internal const string DownloadCommandName = "download";
+        internal const string DockerUriOption = "docker-url";
 
         internal static RootCommand CreateExecutorCommand()
         {
-            var dockerUriOption = CreateOption<Uri>(DockerUriOption, "local docker engine endpoint", "-u", defaultValue: DefaultDockerUri);
+            var dockerUriOption = CreateOption<Uri>(CommandFactory.DockerUriOption, "local docker engine endpoint", "-u", defaultValue: DefaultDockerUri);
 
             var rootCommand = new RootCommand("Executes the specified TES Task");
 
@@ -33,16 +26,13 @@ namespace Tes.RunnerCLI.Commands
 
             rootCommand.AddOption(dockerUriOption);
 
-            rootCommand.SetHandler(async (file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri) =>
-                {
-                    await CommandHandlers.ExecuteNodeTaskAsync(file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
-                },
-                GetOptionByName<FileInfo>(rootCommand.Options, FileOption),
-                GetOptionByName<int>(rootCommand.Options, BlockSizeOption),
-                GetOptionByName<int>(rootCommand.Options, WritersOption),
-                GetOptionByName<int>(rootCommand.Options, ReadersOption),
-                GetOptionByName<int>(rootCommand.Options, BufferCapacityOption),
-                GetOptionByName<string>(rootCommand.Options, ApiVersionOption),
+            rootCommand.SetHandler(CommandHandlers.ExecuteNodeTaskAsync,
+                GetOptionByName<FileInfo>(rootCommand.Options, BlobPipelineOptionsConverter.FileOption),
+                GetOptionByName<int>(rootCommand.Options, BlobPipelineOptionsConverter.BlockSizeOption),
+                GetOptionByName<int>(rootCommand.Options, BlobPipelineOptionsConverter.WritersOption),
+                GetOptionByName<int>(rootCommand.Options, BlobPipelineOptionsConverter.ReadersOption),
+                GetOptionByName<int>(rootCommand.Options, BlobPipelineOptionsConverter.BufferCapacityOption),
+                GetOptionByName<string>(rootCommand.Options, BlobPipelineOptionsConverter.ApiVersionOption),
                 dockerUriOption);
 
             return rootCommand;
@@ -54,21 +44,13 @@ namespace Tes.RunnerCLI.Commands
 
             rootCommand.Add(cmd);
 
-            cmd.SetHandler(async (file, blockSize, writers, readers, bufferCapacity, apiVersion) =>
-                {
-                    await CommandHandlers.ExecuteUploadTaskAsync(file,
-                            blockSize,
-                            writers,
-                            readers,
-                            bufferCapacity,
-                            apiVersion);
-                },
-                GetOptionByName<FileInfo>(cmd.Options, FileOption),
-                GetOptionByName<int>(cmd.Options, BlockSizeOption),
-                GetOptionByName<int>(cmd.Options, WritersOption),
-                GetOptionByName<int>(cmd.Options, ReadersOption),
-                GetOptionByName<int>(cmd.Options, BufferCapacityOption),
-                GetOptionByName<string>(cmd.Options, ApiVersionOption));
+            cmd.SetHandler(CommandHandlers.ExecuteUploadTaskAsync,
+                GetOptionByName<FileInfo>(cmd.Options, BlobPipelineOptionsConverter.FileOption),
+                GetOptionByName<int>(cmd.Options, BlobPipelineOptionsConverter.BlockSizeOption),
+                GetOptionByName<int>(cmd.Options, BlobPipelineOptionsConverter.WritersOption),
+                GetOptionByName<int>(cmd.Options, BlobPipelineOptionsConverter.ReadersOption),
+                GetOptionByName<int>(cmd.Options, BlobPipelineOptionsConverter.BufferCapacityOption),
+                GetOptionByName<string>(cmd.Options, BlobPipelineOptionsConverter.ApiVersionOption));
 
             return cmd;
         }
@@ -79,22 +61,13 @@ namespace Tes.RunnerCLI.Commands
 
             rootCommand.Add(cmd);
 
-            cmd.SetHandler(async (file, blockSize, writers, readers, bufferCapacity, apiVersion) =>
-                {
-                    await CommandHandlers.ExecuteDownloadTaskAsync(file,
-                        blockSize,
-                        writers,
-                        readers,
-                        bufferCapacity,
-                        apiVersion);
-
-                },
-                GetOptionByName<FileInfo>(cmd.Options, FileOption),
-                GetOptionByName<int>(cmd.Options, BlockSizeOption),
-                GetOptionByName<int>(cmd.Options, WritersOption),
-                GetOptionByName<int>(cmd.Options, ReadersOption),
-                GetOptionByName<int>(cmd.Options, BufferCapacityOption),
-                GetOptionByName<string>(cmd.Options, ApiVersionOption));
+            cmd.SetHandler(CommandHandlers.ExecuteDownloadTaskAsync,
+                GetOptionByName<FileInfo>(cmd.Options, BlobPipelineOptionsConverter.FileOption),
+                GetOptionByName<int>(cmd.Options, BlobPipelineOptionsConverter.BlockSizeOption),
+                GetOptionByName<int>(cmd.Options, BlobPipelineOptionsConverter.WritersOption),
+                GetOptionByName<int>(cmd.Options, BlobPipelineOptionsConverter.ReadersOption),
+                GetOptionByName<int>(cmd.Options, BlobPipelineOptionsConverter.BufferCapacityOption),
+                GetOptionByName<string>(cmd.Options, BlobPipelineOptionsConverter.ApiVersionOption));
 
             return cmd;
         }
@@ -119,16 +92,16 @@ namespace Tes.RunnerCLI.Commands
         {
             return new List<Option>()
             {
-                CreateOption<FileInfo>(FileOption, "The file with the task definition",  "-f", required: true, defaultValue: GetDefaultTaskDefinitionFile()),
-                CreateOption<int>(BlockSizeOption, "Blob block size in bytes", "-b", defaultValue: BlobSizeUtils.DefaultBlockSizeBytes),
-                CreateOption<int>(WritersOption, "Number of concurrent writers", "-w", defaultValue: BlobPipelineOptions.DefaultNumberOfWriters),
-                CreateOption<int>(ReadersOption, "Number of concurrent readers", "-r", defaultValue: BlobPipelineOptions.DefaultNumberOfReaders),
-                CreateOption<int>(BufferCapacityOption, "Pipeline buffer capacity", "-c", defaultValue: BlobPipelineOptions.DefaultReadWriteBuffersCapacity),
-                CreateOption<string>(ApiVersionOption, "Azure Storage API version", "-v", defaultValue: BlobPipelineOptions.DefaultApiVersion),
+                CreateOption<FileInfo>(BlobPipelineOptionsConverter.FileOption, "The file with the task definition",  "-f", required: true, defaultValue: GetDefaultTaskDefinitionFile()),
+                CreateOption<int>(BlobPipelineOptionsConverter.BlockSizeOption, "Blob block size in bytes", "-b", defaultValue: BlobSizeUtils.DefaultBlockSizeBytes),
+                CreateOption<int>(BlobPipelineOptionsConverter.WritersOption, "Number of concurrent writers", "-w", defaultValue: BlobPipelineOptions.DefaultNumberOfWriters),
+                CreateOption<int>(BlobPipelineOptionsConverter.ReadersOption, "Number of concurrent readers", "-r", defaultValue: BlobPipelineOptions.DefaultNumberOfReaders),
+                CreateOption<int>(BlobPipelineOptionsConverter.BufferCapacityOption, "Pipeline buffer capacity", "-c", defaultValue: BlobPipelineOptions.DefaultReadWriteBuffersCapacity),
+                CreateOption<string>(BlobPipelineOptionsConverter.ApiVersionOption, "Azure Storage API version", "-v", defaultValue: BlobPipelineOptions.DefaultApiVersion),
             };
         }
 
-        private static object? GetDefaultTaskDefinitionFile()
+        private static FileInfo GetDefaultTaskDefinitionFile()
         {
             return new FileInfo(DefaultTaskDefinitionFile);
         }
