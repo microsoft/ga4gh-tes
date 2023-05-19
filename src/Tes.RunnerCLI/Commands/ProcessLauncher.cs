@@ -47,8 +47,4 @@ namespace Tes.RunnerCLI.Commands
                 process.ExitCode);
         }
     }
-
-    public record ProcessExecutionResult(string StandardOutput, string StandardError, int ExitCode)
-    {
-    }
 }
