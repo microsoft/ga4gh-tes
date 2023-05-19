@@ -6,7 +6,7 @@ namespace Tes.RunnerCLI.Commands
     public class ProcessLauncher
     {
 
-        public ProcessExecutionResult LaunchProcessAndWait(string[] options)
+        public async Task<ProcessExecutionResult> LaunchProcessAndWaitAsync(string[] options)
         {
             var process = new Process();
             process.StartInfo.FileName = GetExecutableFullPath();
@@ -15,7 +15,7 @@ namespace Tes.RunnerCLI.Commands
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
             process.Start();
-            process.WaitForExit();
+            await process.WaitForExitAsync();
 
             return ToProcessExecutionResult(process);
         }

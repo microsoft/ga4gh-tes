@@ -23,11 +23,11 @@ namespace Tes.RunnerCLI.Commands
             {
                 var options = BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-                ExecuteTransferAsSubProcess(CommandFactory.DownloadCommandName, file, options);
+                await ExecuteTransferAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options);
 
                 await ExecuteNodeContainerTaskAsync(file, dockerUri, options);
 
-                ExecuteTransferAsSubProcess(CommandFactory.UploadCommandName, file, options);
+                await ExecuteTransferAsSubProcessAsync(CommandFactory.UploadCommandName, file, options);
 
                 return SuccessExitCode;
 
@@ -107,11 +107,11 @@ namespace Tes.RunnerCLI.Commands
             Console.WriteLine($"Result: {results.StandardOutput}");
         }
 
-        private static void ExecuteTransferAsSubProcess(string command, FileInfo file, BlobPipelineOptions options)
+        private static async Task ExecuteTransferAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
         {
             var processLauncher = new ProcessLauncher();
 
-            var results = processLauncher.LaunchProcessAndWait(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
+            var results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
 
             HandleResult(results, command);
         }
