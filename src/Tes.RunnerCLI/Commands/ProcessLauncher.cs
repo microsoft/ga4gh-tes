@@ -9,7 +9,7 @@ namespace Tes.RunnerCLI.Commands
         public ProcessExecutionResult LaunchProcessAndWait(string[] options)
         {
             var process = new Process();
-            process.StartInfo.FileName = Process.GetCurrentProcess().MainModule?.FileName;
+            process.StartInfo.FileName = GetExecutableFullPath();
             process.StartInfo.Arguments = ParseArguments(options);
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
@@ -20,17 +20,22 @@ namespace Tes.RunnerCLI.Commands
             return ToProcessExecutionResult(process);
         }
 
+        private static string? GetExecutableFullPath()
+        {
+            return Process.GetCurrentProcess().MainModule?.FileName;
+        }
+
         private string ParseArguments(string[] options)
         {
             var argList = new List<string>(options);
             var assemblyName = Assembly.GetExecutingAssembly().Location;
 
-            if (assemblyName is null)
+            if (!string.IsNullOrEmpty(assemblyName))
             {
-                throw new InvalidOperationException("Invalid execution context. The assembly name was not found.");
+                //the application is not running as a single file executable
+                argList.Insert(0, assemblyName);
             }
 
-            argList.Insert(0, assemblyName);
             return string.Join(" ", argList.ToArray());
         }
 

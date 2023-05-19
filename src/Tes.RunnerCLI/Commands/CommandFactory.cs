@@ -26,10 +26,7 @@ namespace Tes.RunnerCLI.Commands
 
             rootCommand.AddOption(dockerUriOption);
 
-            rootCommand.SetHandler(async (file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri) =>
-                {
-                    await CommandHandlers.ExecuteNodeTaskAsync(file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
-                },
+            rootCommand.SetHandler(CommandHandlers.ExecuteNodeTaskAsync,
                 GetOptionByName<FileInfo>(rootCommand.Options, BlobPipelineOptionsConverter.FileOption),
                 GetOptionByName<int>(rootCommand.Options, BlobPipelineOptionsConverter.BlockSizeOption),
                 GetOptionByName<int>(rootCommand.Options, BlobPipelineOptionsConverter.WritersOption),
@@ -47,15 +44,7 @@ namespace Tes.RunnerCLI.Commands
 
             rootCommand.Add(cmd);
 
-            cmd.SetHandler(async (file, blockSize, writers, readers, bufferCapacity, apiVersion) =>
-                {
-                    await CommandHandlers.ExecuteUploadTaskAsync(file,
-                            blockSize,
-                            writers,
-                            readers,
-                            bufferCapacity,
-                            apiVersion);
-                },
+            cmd.SetHandler(CommandHandlers.ExecuteUploadTaskAsync,
                 GetOptionByName<FileInfo>(cmd.Options, BlobPipelineOptionsConverter.FileOption),
                 GetOptionByName<int>(cmd.Options, BlobPipelineOptionsConverter.BlockSizeOption),
                 GetOptionByName<int>(cmd.Options, BlobPipelineOptionsConverter.WritersOption),
@@ -72,16 +61,7 @@ namespace Tes.RunnerCLI.Commands
 
             rootCommand.Add(cmd);
 
-            cmd.SetHandler(async (file, blockSize, writers, readers, bufferCapacity, apiVersion) =>
-                {
-                    await CommandHandlers.ExecuteDownloadTaskAsync(file,
-                        blockSize,
-                        writers,
-                        readers,
-                        bufferCapacity,
-                        apiVersion);
-
-                },
+            cmd.SetHandler(CommandHandlers.ExecuteDownloadTaskAsync,
                 GetOptionByName<FileInfo>(cmd.Options, BlobPipelineOptionsConverter.FileOption),
                 GetOptionByName<int>(cmd.Options, BlobPipelineOptionsConverter.BlockSizeOption),
                 GetOptionByName<int>(cmd.Options, BlobPipelineOptionsConverter.WritersOption),

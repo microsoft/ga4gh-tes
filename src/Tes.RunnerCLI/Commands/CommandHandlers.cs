@@ -8,8 +8,10 @@ namespace Tes.RunnerCLI.Commands
     internal class CommandHandlers
     {
         private static readonly ILogger Logger = PipelineLoggerFactory.Create<CommandHandlers>();
+        private const int SuccessExitCode = 0;
+        private const int ErrorExitCode = 1;
 
-        internal static async Task ExecuteNodeTaskAsync(FileInfo file,
+        internal static async Task<int> ExecuteNodeTaskAsync(FileInfo file,
             int blockSize,
             int writers,
             int readers,
@@ -21,16 +23,20 @@ namespace Tes.RunnerCLI.Commands
             {
                 var options = BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-                ExecuteDownloadTaskAsSubProcess(file, options);
+                ExecuteTransferAsSubProcess(CommandFactory.DownloadCommandName, file, options);
 
                 await ExecuteNodeContainerTaskAsync(file, dockerUri, options);
 
-                ExecuteUploadTaskAsSubProcess(file, options);
+                ExecuteTransferAsSubProcess(CommandFactory.UploadCommandName, file, options);
+
+                return SuccessExitCode;
 
             }
             catch (Exception e)
             {
                 Console.WriteLine($"Failed to execute the task. Error: {e.Message}");
+                Logger.LogError(e, "Failed to execute the task");
+                return ErrorExitCode;
             }
         }
 
@@ -76,7 +82,7 @@ namespace Tes.RunnerCLI.Commands
             return options;
         }
 
-        internal static async Task ExecuteUploadTaskAsync(FileInfo file,
+        internal static async Task<int> ExecuteUploadTaskAsync(FileInfo file,
             int blockSize,
             int writers,
             int readers,
@@ -85,43 +91,32 @@ namespace Tes.RunnerCLI.Commands
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-            var executor = new Executor(file.FullName, options);
+            Console.WriteLine("Starting upload operation.");
 
-            var result = await executor.UploadOutputsAsync();
-
-            Console.WriteLine($"Total bytes uploaded: {result:n0}");
+            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.UploadOutputsAsync());
         }
 
-        internal static void ExecuteDownloadTaskAsSubProcess(FileInfo file, BlobPipelineOptions options)
-        {
-            var processLauncher = new ProcessLauncher();
-
-            var results = processLauncher.LaunchProcessAndWait(BlobPipelineOptionsConverter.ToCommandArgs(CommandFactory.DownloadCommandName, file.FullName, options));
-
-            HandleResult(results);
-        }
-
-        private static void HandleResult(ProcessExecutionResult results)
+        private static void HandleResult(ProcessExecutionResult results, string command)
         {
             if (results.ExitCode != 0)
             {
                 throw new Exception(
-                    $"Command failed. Exit Code: {results.ExitCode} Error: {results.StandardError}");
+                    $"Task operation failed. Command: {command}. Exit Code: {results.ExitCode}{Environment.NewLine}Error: {results.StandardError}{Environment.NewLine}Output: {results.StandardOutput}");
             }
 
             Console.WriteLine($"Result: {results.StandardOutput}");
         }
 
-        internal static void ExecuteUploadTaskAsSubProcess(FileInfo file, BlobPipelineOptions options)
+        private static void ExecuteTransferAsSubProcess(string command, FileInfo file, BlobPipelineOptions options)
         {
             var processLauncher = new ProcessLauncher();
 
-            var results = processLauncher.LaunchProcessAndWait(BlobPipelineOptionsConverter.ToCommandArgs(CommandFactory.UploadCommandName, file.FullName, options));
+            var results = processLauncher.LaunchProcessAndWait(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
 
-            HandleResult(results);
+            HandleResult(results, command);
         }
 
-        internal static async Task ExecuteDownloadTaskAsync(FileInfo file,
+        internal static async Task<int> ExecuteDownloadTaskAsync(FileInfo file,
             int blockSize,
             int writers,
             int readers,
@@ -130,11 +125,30 @@ namespace Tes.RunnerCLI.Commands
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-            var executor = new Executor(file.FullName, options);
+            Console.WriteLine("Starting download operation.");
 
-            var result = await executor.DownloadInputsAsync();
+            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.DownloadInputsAsync());
+        }
 
-            Console.WriteLine($"Total bytes downloaded: {result:n0}");
+        private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, BlobPipelineOptions options, Func<Executor, Task<long>> transferOperation)
+        {
+
+            try
+            {
+                var executor = new Executor(taskDefinitionFile.FullName, options);
+
+                var result = await transferOperation(executor);
+
+                Console.WriteLine($"Total bytes transfer: {result:n0}");
+
+                return SuccessExitCode;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Failed to perform transfer. Error: {e.Message} Operation: {transferOperation.Method.Name}");
+                Logger.LogError(e, $"Failed to perform transfer. Operation: {transferOperation}");
+                return ErrorExitCode;
+            }
         }
     }
 }

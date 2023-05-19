@@ -73,7 +73,7 @@ namespace Tes.Runner
 
             LogStartConfig();
 
-            logger.LogInformation($"{tesNodeTask.Outputs.Count} inputs to upload.");
+            logger.LogInformation($"{tesNodeTask.Outputs.Count} outputs to upload.");
 
             var uploader = new BlobUploader(blobPipelineOptions, memoryBufferChannel);
 
