@@ -35,8 +35,9 @@ public interface IBlobPipeline
     /// <param name="length">Blob length in bytes</param>
     /// <param name="blobUrl">Url to the blob in azure storage</param>
     /// <param name="fileName">Path to the file</param>
+    /// <param name="bufferMd5Processor"></param>
     /// <returns></returns>
-    Task OnCompletionAsync(long length, Uri? blobUrl, string fileName);
+    Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, Md5Processor? bufferMd5Processor);
 
     /// <summary>
     /// Called when a buffer is created. This is used to configure the buffer with additional information.

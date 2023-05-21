@@ -46,7 +46,8 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
     public abstract Task<long> GetSourceLengthAsync(string source);
 
-    public abstract Task OnCompletionAsync(long length, Uri? blobUrl, string fileName);
+    public abstract Task OnCompletionAsync(long length, Uri? blobUrl, string fileName,
+        Md5Processor? bufferBufferMd5Processor);
 
     public abstract void ConfigurePipelineBuffer(PipelineBuffer buffer);
 

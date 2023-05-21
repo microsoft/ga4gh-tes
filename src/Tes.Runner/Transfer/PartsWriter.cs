@@ -48,6 +48,12 @@ public class PartsWriter : PartsProcessor
 
                             await processedBufferChannel.Writer.WriteAsync(ToProcessedBuffer(buffer));
 
+                            if (buffer.Md5Processor != null)
+                            {
+                                await buffer.Md5Processor.TryProcessPartAsync(buffer, MemoryBufferChannel);
+                                continue;
+                            }
+
                             await MemoryBufferChannel.Writer.WriteAsync(buffer.Data);
                         }
                         catch (Exception e)
@@ -69,6 +75,6 @@ public class PartsWriter : PartsProcessor
     private ProcessedBuffer ToProcessedBuffer(PipelineBuffer buffer)
     {
         return new ProcessedBuffer(buffer.FileName, buffer.BlobUrl, buffer.FileSize, buffer.Ordinal,
-            buffer.NumberOfParts, buffer.FileHandlerPool, buffer.BlobPartUrl, buffer.Length);
+            buffer.NumberOfParts, buffer.FileHandlerPool, buffer.BlobPartUrl, buffer.Length, buffer.Md5Processor);
     }
 }

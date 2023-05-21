@@ -43,7 +43,7 @@ namespace Tes.Runner.Test
 
             processedBuffer.Writer.Complete();
 
-            pipeline.Verify(p => p.OnCompletionAsync(It.IsAny<long>(), It.IsAny<Uri?>(), It.IsAny<string>()), Times.Exactly(expectedNumberOfFiles));
+            pipeline.Verify(p => p.OnCompletionAsync(It.IsAny<long>(), It.IsAny<Uri?>(), It.IsAny<string>(), It.IsAny<Md5Processor?>()), Times.Exactly(expectedNumberOfFiles));
 
             var parts = await RunnerTestUtils.ReadAllPipelineBuffersAsync(processedBuffer.Reader.ReadAllAsync());
 

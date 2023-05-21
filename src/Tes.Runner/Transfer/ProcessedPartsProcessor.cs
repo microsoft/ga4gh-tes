@@ -52,7 +52,7 @@ public class ProcessedPartsProcessor
 
                 if (total == buffer.NumberOfParts)
                 {
-                    tasks.Add(blobPipeline.OnCompletionAsync(buffer.FileSize, buffer.BlobUrl, buffer.FileName));
+                    tasks.Add(blobPipeline.OnCompletionAsync(buffer.FileSize, buffer.BlobUrl, buffer.FileName, buffer.BufferMd5Processor));
 
                     processedFiles++;
 

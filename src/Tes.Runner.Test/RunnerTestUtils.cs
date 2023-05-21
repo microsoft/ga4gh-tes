@@ -101,7 +101,7 @@ public class RunnerTestUtils
     {
         for (int i = 0; i < numberOfParts; i++)
         {
-            var processedPart = new ProcessedBuffer(fileName, null, fileSize, i, numberOfParts, Channel.CreateUnbounded<FileStream>(), null, 0);
+            var processedPart = new ProcessedBuffer(fileName, null, fileSize, i, numberOfParts, Channel.CreateUnbounded<FileStream>(), null, 0, null);
 
             await processedBuffer.Writer.WriteAsync(processedPart);
         }

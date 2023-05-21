@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer
 {
@@ -93,11 +94,19 @@ namespace Tes.Runner.Transfer
         /// <param name="length">Blob size</param>
         /// <param name="blobUrl">Target Blob URL</param>
         /// <param name="fileName">Source file name</param>
+        /// <param name="bufferMd5Processor"></param>
         /// <returns></returns>
-        public override async Task OnCompletionAsync(long length, Uri? blobUrl, string fileName)
+        public override async Task OnCompletionAsync(long length, Uri? blobUrl, string fileName,
+            Md5Processor? bufferMd5Processor)
         {
             ArgumentNullException.ThrowIfNull(blobUrl, nameof(blobUrl));
             ArgumentException.ThrowIfNullOrEmpty(fileName, nameof(fileName));
+
+            if (bufferMd5Processor is not null)
+            {
+                var hash = await bufferMd5Processor.GetHashAsync();
+                Logger.LogInformation($"MD5: {hash}");
+            }
 
             await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSizeBytes, PipelineOptions.ApiVersion));
         }

@@ -11,7 +11,7 @@ namespace Tes.Runner.Test
 {
     [TestClass]
     [TestCategory("Integration")]
-    [Ignore]
+    //[Ignore]
     public class BlobUploaderTests
     {
 #pragma warning disable CS8618
@@ -31,7 +31,7 @@ namespace Tes.Runner.Test
 
             blobContainerClient = blobService.GetBlobContainerClient(containerId.ToString());
 
-            blobContainerClient.Create(PublicAccessType.None);
+            await blobContainerClient.CreateAsync(PublicAccessType.None);
 
             blobUploader = new BlobUploader(blobPipelineOptions,
                 await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(10, blobPipelineOptions.BlockSizeBytes));

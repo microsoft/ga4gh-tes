@@ -130,7 +130,8 @@ namespace Tes.Runner.Test
             return Task.FromResult(sourceLength);
         }
 
-        public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName)
+        public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName,
+            Md5Processor? bufferBufferMd5Processor)
         {
             Debug.Assert(blobUrl != null, nameof(blobUrl) + " != null");
             AddMethodCall(nameof(OnCompletionAsync), length, blobUrl, fileName);
