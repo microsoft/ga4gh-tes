@@ -48,6 +48,12 @@ public class PartsWriter : PartsProcessor
 
                             await processedBufferChannel.Writer.WriteAsync(ToProcessedBuffer(buffer));
 
+                            if (buffer.Md5Processor != null)
+                            {
+                                await buffer.Md5Processor.TryProcessPartAsync(buffer, MemoryBufferChannel);
+                                continue;
+                            }
+
                             await MemoryBufferChannel.Writer.WriteAsync(buffer.Data);
                         }
                         catch (Exception e)
