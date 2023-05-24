@@ -58,6 +58,8 @@ namespace TesApi.Web
         private const string UploadFilesScriptFileName = "upload_files_script";
         private const string DownloadFilesScriptFileName = "download_files_script";
         private const string StartTaskScriptFilename = "start-task.sh";
+        private const string NodeTaskRunnerFilename = "tRunner";
+        private const string NodeTaskRunnerMD5HashFilename = "TRunnerMD5Hash.txt";
         private static readonly Regex queryStringRegex = GetQueryStringRegex();
         private readonly string dockerInDockerImageName;
         private readonly string blobxferImageName;
@@ -365,6 +367,17 @@ namespace TesApi.Web
                         logger.LogError(exc, "When retrieving previously created batch pools and jobs, there were one or more failures when trying to access batch pool {PoolId} or its associated job.", cloudPool.Id);
                     }
                 }
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken)
+        {
+            var blobUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync(new($"/{defaultStorageAccountName}/{TesExecutionsPathPrefix}/{NodeTaskRunnerFilename}"), cancellationToken));
+            var blobProperties = await azureProxy.GetBlobPropertiesAsync(blobUri, cancellationToken);
+            if (blobProperties?.ContentMD5 != (await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, $"scripts/{NodeTaskRunnerMD5HashFilename}"), cancellationToken)).Trim())
+            {
+                await azureProxy.UploadBlobFromFileAsync(blobUri, $"scripts/{NodeTaskRunnerFilename}", cancellationToken);
             }
         }
 

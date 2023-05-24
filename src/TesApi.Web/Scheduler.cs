@@ -72,6 +72,7 @@ namespace TesApi.Web
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             logger.LogInformation("Scheduler started.");
+            batchScheduler.UploadTaskRunnerIfNeeded(stoppingToken).Wait(stoppingToken); // Delay starting Scheduler until this completes to finish initializing BatchScheduler.
 
             while (!stoppingToken.IsCancellationRequested)
             {

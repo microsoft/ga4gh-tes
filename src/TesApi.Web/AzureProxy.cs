@@ -654,7 +654,7 @@ namespace TesApi.Web
                 var azureClient = await GetAzureManagementClientAsync(cancellationToken);
                 var storageAccount = await azureClient.WithSubscription(storageAccountInfo.SubscriptionId).StorageAccounts.GetByIdAsync(storageAccountInfo.Id);
 
-                return (await storageAccount.GetKeysAsync())[0].Value;
+                return (await storageAccount.GetKeysAsync(cancellationToken))[0].Value;
             }
             catch (Exception ex)
             {
@@ -665,19 +665,33 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task UploadBlobAsync(Uri blobAbsoluteUri, string content, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).UploadTextAsync(content);
+            => new CloudBlockBlob(blobAbsoluteUri).UploadTextAsync(content, null, null, null, null, cancellationToken);
 
         /// <inheritdoc/>
         public Task UploadBlobFromFileAsync(Uri blobAbsoluteUri, string filePath, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).UploadFromFileAsync(filePath);
+            => new CloudBlockBlob(blobAbsoluteUri).UploadFromFileAsync(filePath, null, null, null, cancellationToken);
 
         /// <inheritdoc/>
         public Task<string> DownloadBlobAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).DownloadTextAsync();
+            => new CloudBlockBlob(blobAbsoluteUri).DownloadTextAsync(null, null, null, null, cancellationToken);
 
         /// <inheritdoc/>
         public Task<bool> BlobExistsAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).ExistsAsync();
+            => new CloudBlockBlob(blobAbsoluteUri).ExistsAsync(null, null, cancellationToken);
+
+        /// <inheritdoc/>
+        public async Task<Microsoft.WindowsAzure.Storage.Blob.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
+        {
+            var blob = new CloudBlockBlob(blobAbsoluteUri);
+
+            if (await blob.ExistsAsync(null, null, cancellationToken))
+            {
+                await blob.FetchAttributesAsync(null, null, null, cancellationToken);
+                return blob.Properties;
+            }
+
+            return default;
+        }
 
         /// <inheritdoc/>
         public async Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
