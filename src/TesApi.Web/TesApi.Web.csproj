@@ -95,7 +95,7 @@
   <!-- Adds non-referenced published binary outputs as content in the specified folder -->
   <Target Name="__AddPublishedBinary" AfterTargets="ResolveProjectReferences;AssignTargetPaths;__AdjustCopyToOutputDirectoryItemsOptimization">
     <ItemGroup>
-      <ContentWithTargetPath KeepDuplicates=" '$(_GCTODIKeepDuplicates)' != 'false' " KeepMetadata="$(_GCTODIKeepMetadata)" Include="@(PublishedBinary->'%(FullPath)')">
+      <ContentWithTargetPath KeepDuplicates=" '$(_GCTODIKeepDuplicates)' != 'false' " KeepMetadata="$(_GCTODIKeepMetadata)" RemoveMetadata="MSBuildSourceProjectFile" Include="@(PublishedBinary->'%(FullPath)')">
         <TargetPath>scripts\%(TargetPath)</TargetPath>
       </ContentWithTargetPath>
     </ItemGroup>
