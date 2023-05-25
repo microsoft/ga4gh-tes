@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
@@ -24,6 +25,31 @@ public class PartsProducer
         this.blobPipeline = blobPipeline;
         this.blobPipelineOptions = blobPipelineOptions;
     }
+
+    /// <summary>
+    /// Checks for skippable sources.
+    /// </summary>
+    /// <param name="blobOperations">A list of <see cref="BlobOperationInfo"/>></param>
+    /// <returns></returns>
+    public async Task<List<BlobOperationInfo>> InitializePartsProducersAsync(List<BlobOperationInfo> blobOperations)
+    {
+        ArgumentNullException.ThrowIfNull(blobOperations);
+
+        var runnableOperations = new ConcurrentBag<BlobOperationInfo>();
+
+        await Parallel.ForEachAsync(blobOperations/*, cancellationToken*/, async (operation, ct) =>
+        {
+            var length = await StartPartsProducerAsync(operation);
+
+            if (length is not null)
+            {
+                runnableOperations.Add(operation);
+            }
+        });
+
+        return runnableOperations.ToList();
+    }
+
     /// <summary>
     /// Starts Tasks that produce parts for each blob operation.
     /// This operation completes when all parts are written to the pipeline buffer channel.
@@ -33,17 +59,34 @@ public class PartsProducer
     /// <returns></returns>
     public async Task StartPartsProducersAsync(List<BlobOperationInfo> blobOperations, Channel<PipelineBuffer> readBufferChannel)
     {
-        ValidateOperations(blobOperations, readBufferChannel);
+        ArgumentNullException.ThrowIfNull(readBufferChannel);
+        ValidateOperations(blobOperations);
 
-        var partsProducerTasks = new List<Task>();
-        foreach (var operation in blobOperations)
+        var partsProducerTasks = new ConcurrentBag<Task>();
+        var skippedOperations = new ConcurrentBag<BlobOperationInfo>();
+
+        await Parallel.ForEachAsync(blobOperations/*, cancellationToken*/, async (operation, ct) =>
         {
-            partsProducerTasks.Add(StartPartsProducerAsync(operation, readBufferChannel));
+            var length = await StartPartsProducerAsync(operation);
+
+            if (length is null)
+            {
+                skippedOperations.Add(operation);
+            }
+            else
+            {
+                partsProducerTasks.Add(StartPartsProducerAsync(operation, readBufferChannel, length ?? 0));
+            }
+        });
+
+        foreach (var operation in  skippedOperations)
+        {
+            blobOperations.Remove(operation);
         }
 
         try
         {
-            await PartsProcessor.WhenAllOrThrowIfOneFailsAsync(partsProducerTasks);
+            await PartsProcessor.WhenAllOrThrowIfOneFailsAsync(partsProducerTasks.ToList());
             logger.LogInformation("All parts from requested operations were created.");
         }
         catch (Exception e)
@@ -53,14 +96,13 @@ public class PartsProducer
         }
     }
 
-    private static void ValidateOperations(List<BlobOperationInfo> blobOperations, Channel<PipelineBuffer> readBufferChannel)
+    private static void ValidateOperations(List<BlobOperationInfo> blobOperations)
     {
         ArgumentNullException.ThrowIfNull(blobOperations);
-        ArgumentNullException.ThrowIfNull(readBufferChannel);
 
         if (blobOperations.Count == 0)
         {
-            throw new ArgumentException("No blob operations were provided.");
+            throw new ArgumentException("No blob operations were provided.", nameof(blobOperations));
         }
 
         var duplicateEntries = blobOperations
@@ -70,14 +112,17 @@ public class PartsProducer
         if (duplicateEntries)
         {
             throw new ArgumentException(
-                "Duplicate entries found in the list of blob operations. The filename must be unique.");
+                "Duplicate entries found in the list of blob operations. The filename must be unique.", nameof(blobOperations));
         }
     }
 
-    private async Task StartPartsProducerAsync(BlobOperationInfo operation, Channel<PipelineBuffer> readBufferChannel)
+    private async Task<long?> StartPartsProducerAsync(BlobOperationInfo operation)
     {
-        var length = await blobPipeline.GetSourceLengthAsync(operation.SourceLocationForLength);
+        return await blobPipeline.GetSourceLengthAsync(operation.SourceLocationForLength);
+    }
 
+    private async Task StartPartsProducerAsync(BlobOperationInfo operation, Channel<PipelineBuffer> readBufferChannel, long length)
+    {
         var numberOfParts = BlobSizeUtils.GetNumberOfParts(length, blobPipelineOptions.BlockSizeBytes);
 
         var fileHandlerPool = await GetNewFileHandlerPoolAsync(operation.FileName, operation.ReadOnlyHandlerForExistingFile);

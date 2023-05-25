@@ -98,14 +98,13 @@ namespace Tes.Runner.Test
     /// </summary>
     class BlobOperationPipelineTestImpl : BlobOperationPipeline
     {
-        private readonly ConcurrentDictionary<string, List<MethodCall>> methodCalls =
-            new ConcurrentDictionary<string, List<MethodCall>>();
+        private readonly ConcurrentDictionary<string, List<MethodCall>> methodCalls = new();
 
-        private readonly long sourceLength;
+        private readonly long? sourceLength;
 
-        private readonly SemaphoreSlim semaphore = new SemaphoreSlim(1);
+        private readonly SemaphoreSlim semaphore = new(1);
 
-        public BlobOperationPipelineTestImpl(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer, long sourceLength) : base(pipelineOptions, memoryBuffer)
+        public BlobOperationPipelineTestImpl(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer, long? sourceLength) : base(pipelineOptions, memoryBuffer)
         {
             this.sourceLength = sourceLength;
         }
@@ -124,7 +123,7 @@ namespace Tes.Runner.Test
             return ValueTask.FromResult(buffer.Length);
         }
 
-        public override Task<long> GetSourceLengthAsync(string source)
+        public override Task<long?> GetSourceLengthAsync(string source)
         {
             AddMethodCall(nameof(GetSourceLengthAsync), source);
             return Task.FromResult(sourceLength);

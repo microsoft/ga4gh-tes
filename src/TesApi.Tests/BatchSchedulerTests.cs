@@ -358,7 +358,7 @@ namespace TesApi.Tests
         {
             (_, var cloudTask, _, _) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(true);
 
-            Assert.AreEqual(3, cloudTask.ResourceFiles.Count);
+            Assert.AreEqual(5, cloudTask.ResourceFiles.Count);
             Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("batch_script")));
             Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("upload_files_script")));
             Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("download_files_script")));

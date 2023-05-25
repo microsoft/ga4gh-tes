@@ -11,7 +11,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
@@ -59,6 +58,7 @@ namespace TesApi.Web
         private const string DownloadFilesScriptFileName = "download_files_script";
         private const string StartTaskScriptFilename = "start-task.sh";
         private const string NodeTaskRunnerFilename = "tRunner";
+        private const string NodeRunnerTaskInfoFilename = "TesTask.json";
         private const string NodeTaskRunnerMD5HashFilename = "TRunnerMD5Hash.txt";
         private static readonly Regex queryStringRegex = GetQueryStringRegex();
         private readonly string dockerInDockerImageName;
@@ -373,7 +373,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken)
         {
-            var blobUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync(new($"/{defaultStorageAccountName}/{TesExecutionsPathPrefix}/{NodeTaskRunnerFilename}"), cancellationToken));
+            var blobUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{defaultStorageAccountName}/{TesExecutionsPathPrefix}/{NodeTaskRunnerFilename}", cancellationToken));
             var blobProperties = await azureProxy.GetBlobPropertiesAsync(blobUri, cancellationToken);
             if (blobProperties?.ContentMD5 != (await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, $"scripts/{NodeTaskRunnerMD5HashFilename}"), cancellationToken)).Trim())
             {
@@ -996,7 +996,7 @@ namespace TesApi.Web
 
             var filesToDownload = await Task.WhenAll(
                 inputFiles
-                .Where(f => f?.Url?.StartsWith("drs://", StringComparison.OrdinalIgnoreCase) != true) // do not attempt to download DRS input files since the cromwell-drs-localizer will
+                .Except(drsInputFiles) // do not attempt to download DRS input files since the cromwell-drs-localizer will
                 .Union(additionalInputFiles)
                 .Select(async f => await GetTesInputFileUrlAsync(f, task, queryStringsToRemoveFromLocalFilePaths, cancellationToken)));
 
@@ -1033,8 +1033,7 @@ namespace TesApi.Web
                 + $" && echo FileDownloadSizeInBytes=$total_bytes >> metrics.txt";
 
             var downloadFilesScriptPath = $"/{storageUploadPath}/{DownloadFilesScriptFileName}";
-            var downloadFilesScriptUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{downloadFilesScriptPath}", cancellationToken);
-            await storageAccessProvider.UploadBlobAsync($"/{downloadFilesScriptPath}", downloadFilesScriptContent, cancellationToken);
+            await storageAccessProvider.UploadBlobAsync(downloadFilesScriptPath, downloadFilesScriptContent, cancellationToken);
             var filesToUpload = Array.Empty<TesOutput>();
 
             if (task.Outputs?.Count > 0)
@@ -1065,8 +1064,7 @@ namespace TesApi.Web
                 + $" && echo FileUploadSizeInBytes=$total_bytes >> metrics.txt";
 
             var uploadFilesScriptPath = $"/{storageUploadPath}/{UploadFilesScriptFileName}";
-            var uploadFilesScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{uploadFilesScriptPath}", cancellationToken);
-            await storageAccessProvider.UploadBlobAsync($"/{uploadFilesScriptPath}", uploadFilesScriptContent, cancellationToken);
+            await storageAccessProvider.UploadBlobAsync(uploadFilesScriptPath, uploadFilesScriptContent, cancellationToken);
 
             var executor = task.Executors.First();
 
@@ -1151,20 +1149,35 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"docker run --rm -v $AZ_BATCH_TASK_WORKING_DIR/:$AZ_BATCH_TASK_WORKING_DIR/ {blobxferImageName} upload --storage-url \"{metricsUrl}\" --local-path \"$AZ_BATCH_TASK_WORKING_DIR/metrics.txt\" --rename --no-recursive");
 
             var batchScriptPath = $"/{storageUploadPath}/{BatchScriptFileName}";
-            await storageAccessProvider.UploadBlobAsync($"/{batchScriptPath}", sb.ToString(), cancellationToken);
+            await storageAccessProvider.UploadBlobAsync(batchScriptPath, sb.ToString(), cancellationToken);
 
-            var batchScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{batchScriptPath}", cancellationToken);
-            var tesInternalDirectorySasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{storageUploadPath}/", cancellationToken, getContainerSas: true);
+            var nodeTaskInfoPath = $"/{storageUploadPath}/{NodeRunnerTaskInfoFilename}";
+            await storageAccessProvider.UploadBlobAsync(nodeTaskInfoPath, "", cancellationToken);
+
+            var nodeTaskRunnerSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{storageUploadPath}/{NodeTaskRunnerFilename}", cancellationToken);
+            var batchScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(batchScriptPath, cancellationToken);
+            var downloadFilesScriptUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(downloadFilesScriptPath, cancellationToken);
+            var uploadFilesScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(uploadFilesScriptPath, cancellationToken);
+            var nodeTaskInfoSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(nodeTaskInfoPath, cancellationToken);
+            var tesInternalDirectorySasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(storageUploadPath, cancellationToken, getContainerSas: true);
 
             var batchRunCommand = enableBatchAutopool
-                ? $"/bin/bash $AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
+                ? $"/bin/bash -c chmod u+x ./{NodeTaskRunnerFilename} && /bin/bash $AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
                 : $"/bin/bash -c \"{MungeBatchScript()}\"";
 
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
                 UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
-                ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(batchScriptSasUrl, BatchScriptFileName), ResourceFile.FromUrl(downloadFilesScriptUrl, DownloadFilesScriptFileName), ResourceFile.FromUrl(uploadFilesScriptSasUrl, UploadFilesScriptFileName) },
-                OutputFiles = new List<OutputFile> {
+                ResourceFiles = new List<ResourceFile>
+                {
+                    ResourceFile.FromUrl(nodeTaskRunnerSasUrl, NodeTaskRunnerFilename),
+                    ResourceFile.FromUrl(batchScriptSasUrl, BatchScriptFileName),
+                    ResourceFile.FromUrl(downloadFilesScriptUrl, DownloadFilesScriptFileName),
+                    ResourceFile.FromUrl(uploadFilesScriptSasUrl, UploadFilesScriptFileName),
+                    ResourceFile.FromUrl(nodeTaskInfoSasUrl, NodeRunnerTaskInfoFilename),
+                },
+                OutputFiles = new List<OutputFile>
+                {
                     new OutputFile(
                         "../std*.txt",
                         new OutputFileDestination(new(tesInternalDirectorySasUrl)),

@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Linq;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
@@ -26,7 +27,7 @@ public class BlobDownloader : BlobOperationPipeline
         ValidateDownloadList(downloadList);
 
         var operationList = downloadList
-            .Select(d => new BlobOperationInfo(d.SourceUrl, d.FullFilePath, d.SourceUrl.ToString(), false)).ToList();
+            .Select(d => new BlobOperationInfo(d.SourceUrl, d.FullFilePath, d.SourceUrl.ToString(), false, PipelineOptions.SkipMissingSources)).ToList();
 
         var length = await ExecutePipelineAsync(operationList);
 
@@ -66,11 +67,11 @@ public class BlobDownloader : BlobOperationPipeline
     /// </summary>
     /// <param name="source">URL to the file</param>
     /// <returns>File's size</returns>
-    public override async Task<long> GetSourceLengthAsync(string source)
+    public override async Task<long?> GetSourceLengthAsync(string source)
     {
         var response = await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => new HttpRequestMessage(HttpMethod.Head, new Uri(source)));
 
-        return response.Content.Headers.ContentLength ?? 0;
+        return response.IsSuccessStatusCode ? response.Content.Headers.ContentLength ?? 0 : null;
     }
 
     /// <summary>

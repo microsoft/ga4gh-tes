@@ -3,5 +3,5 @@
 
 namespace Tes.Runner.Transfer
 {
-    public record BlobOperationInfo(Uri Url, String FileName, String SourceLocationForLength, bool ReadOnlyHandlerForExistingFile);
+    public record BlobOperationInfo(Uri Url, String FileName, String SourceLocationForLength, bool ReadOnlyHandlerForExistingFile, bool SkipIfSourceMissing = false);
 }

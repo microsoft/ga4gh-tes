@@ -15,13 +15,14 @@ namespace Tes.RunnerCLI.Commands
             int blockSize,
             int writers,
             int readers,
+            bool skipMissingSources,
             int bufferCapacity,
             string apiVersion,
             Uri dockerUri)
         {
             try
             {
-                var options = BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
+                var options = BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, skipMissingSources, bufferCapacity, apiVersion);
 
                 await ExecuteTransferAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options);
 
@@ -67,12 +68,13 @@ namespace Tes.RunnerCLI.Commands
         }
 
         private static BlobPipelineOptions CreateBlobPipelineOptions(int blockSize, int writers, int readers,
-            int bufferCapacity, string apiVersion)
+            bool skipMissingSources, int bufferCapacity, string apiVersion)
         {
             var options = new BlobPipelineOptions(
                 BlockSizeBytes: blockSize,
                 NumberOfWriters: writers,
                 NumberOfReaders: readers,
+                SkipMissingSources: skipMissingSources,
                 ReadWriteBuffersCapacity: bufferCapacity,
                 MemoryBufferCapacity: bufferCapacity,
                 ApiVersion: apiVersion);
@@ -86,10 +88,11 @@ namespace Tes.RunnerCLI.Commands
             int blockSize,
             int writers,
             int readers,
+            bool skipMissingSources,
             int bufferCapacity,
             string apiVersion)
         {
-            var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
+            var options = CreateBlobPipelineOptions(blockSize, writers, readers, skipMissingSources, bufferCapacity, apiVersion);
 
             Console.WriteLine("Starting upload operation.");
 
@@ -120,10 +123,11 @@ namespace Tes.RunnerCLI.Commands
             int blockSize,
             int writers,
             int readers,
+            bool skipMissingSources,
             int bufferCapacity,
             string apiVersion)
         {
-            var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
+            var options = CreateBlobPipelineOptions(blockSize, writers, readers, skipMissingSources, bufferCapacity, apiVersion);
 
             Console.WriteLine("Starting download operation.");
 

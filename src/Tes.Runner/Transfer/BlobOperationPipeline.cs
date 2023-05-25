@@ -44,7 +44,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
     public abstract ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer);
 
-    public abstract Task<long> GetSourceLengthAsync(string source);
+    public abstract Task<long?> GetSourceLengthAsync(string source);
 
     public abstract Task OnCompletionAsync(long length, Uri? blobUrl, string fileName);
 
@@ -52,6 +52,8 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
     protected async Task<long> ExecutePipelineAsync(List<BlobOperationInfo> operations)
     {
+        operations = await partsProducer.InitializePartsProducersAsync(operations);
+
         var pipelineTasks = new List<Task>
         {
             partsProducer.StartPartsProducersAsync(operations, ReadBufferChannel),

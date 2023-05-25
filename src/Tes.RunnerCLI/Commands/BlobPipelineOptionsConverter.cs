@@ -8,6 +8,7 @@ namespace Tes.RunnerCLI.Commands
         public const string BlockSizeOption = "blockSize";
         public const string WritersOption = "writers";
         public const string ReadersOption = "readers";
+        public const string SkipMissingSources = "skipMissingSources";
         public const string BufferCapacityOption = "bufferCapacity";
         public const string ApiVersionOption = "apiVersion";
 
@@ -22,6 +23,7 @@ namespace Tes.RunnerCLI.Commands
                 $"--{BlockSizeOption} {blobPipelineOptions.BlockSizeBytes}",
                 $"--{WritersOption} {blobPipelineOptions.NumberOfWriters}",
                 $"--{ReadersOption} {blobPipelineOptions.NumberOfReaders}",
+                $"--{SkipMissingSources} {blobPipelineOptions.SkipMissingSources}",
                 $"--{BufferCapacityOption} {blobPipelineOptions.ReadWriteBuffersCapacity}",
                 $"--{ApiVersionOption} {blobPipelineOptions.ApiVersion}"
             };
@@ -35,12 +37,13 @@ namespace Tes.RunnerCLI.Commands
         }
 
         public static BlobPipelineOptions ToBlobPipelineOptions(int blockSize, int writers, int readers,
-            int bufferCapacity, string apiVersion)
+            bool skipMissingSources, int bufferCapacity, string apiVersion)
         {
             var options = new BlobPipelineOptions(
                 BlockSizeBytes: blockSize,
                 NumberOfWriters: writers,
                 NumberOfReaders: readers,
+                SkipMissingSources: skipMissingSources,
                 ReadWriteBuffersCapacity: bufferCapacity,
                 MemoryBufferCapacity: bufferCapacity,
                 ApiVersion: apiVersion);

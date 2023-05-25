@@ -16,20 +16,23 @@ namespace Tes.RunnerCLI.Commands.Tests
             Assert.AreEqual($"--blockSize {BlobSizeUtils.DefaultBlockSizeBytes}", args[1]);
             Assert.AreEqual($"--writers {BlobPipelineOptions.DefaultNumberOfWriters}", args[2]);
             Assert.AreEqual($"--readers {BlobPipelineOptions.DefaultNumberOfReaders}", args[3]);
-            Assert.AreEqual($"--bufferCapacity {BlobPipelineOptions.DefaultReadWriteBuffersCapacity}", args[4]);
-            Assert.AreEqual($"--apiVersion {BlobPipelineOptions.DefaultApiVersion}", args[5]);
-            Assert.AreEqual("--file file", args[6]);
+            Assert.AreEqual($"--skipMissingSources {BlobPipelineOptions.DefaultSkipMissingSources}", args[4]);
+            Assert.AreEqual($"--bufferCapacity {BlobPipelineOptions.DefaultReadWriteBuffersCapacity}", args[5]);
+            Assert.AreEqual($"--apiVersion {BlobPipelineOptions.DefaultApiVersion}", args[6]);
+            Assert.AreEqual("--file file", args[7]);
+            Assert.AreEqual(8, args.Length);
         }
 
         [TestMethod]
         public void ToBlobPipelineOptions_CreatesBlobPipelinesOptions()
         {
 
-            var options = BlobPipelineOptionsConverter.ToBlobPipelineOptions(1, 2, 3, 4, "2010-01-01");
+            var options = BlobPipelineOptionsConverter.ToBlobPipelineOptions(1, 2, 3, true, 4, "2010-01-01");
             Assert.IsNotNull(options);
             Assert.AreEqual(1, options.BlockSizeBytes);
             Assert.AreEqual(2, options.NumberOfWriters);
             Assert.AreEqual(3, options.NumberOfReaders);
+            Assert.AreEqual(true, options.SkipMissingSources);
             Assert.AreEqual(4, options.ReadWriteBuffersCapacity);
             Assert.AreEqual(4, options.MemoryBufferCapacity);
             Assert.AreEqual("2010-01-01", options.ApiVersion);

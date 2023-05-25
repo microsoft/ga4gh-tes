@@ -69,7 +69,7 @@
   <ItemGroup>
     <ProjectReference Include="..\CommonUtilities\CommonUtilities.csproj" />
 
-    <ProjectReference Include="..\Tes.RunnerCLI\Tes.RunnerCLI.csproj" Targets="Publish;PublishItemsOutputGroup" AdditionalProperties="PublishProfile=FolderProfile">
+    <ProjectReference Include="..\Tes.RunnerCLI\Tes.RunnerCLI.csproj" Targets="Publish;PublishItemsOutputGroup" AdditionalProperties="PublishProfile=FolderProfile" Condition="! $([MSBuild]::IsRunningFromVisualStudio())">
       <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
       <OutputItemType>PublishedBinary</OutputItemType>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

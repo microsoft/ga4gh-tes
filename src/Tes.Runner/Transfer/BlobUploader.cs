@@ -82,9 +82,10 @@ namespace Tes.Runner.Transfer
         /// </summary>
         /// <param name="lengthSource">File path</param>
         /// <returns>File size in number of bytes</returns>
-        public override Task<long> GetSourceLengthAsync(string lengthSource)
+        public override Task<long?> GetSourceLengthAsync(string lengthSource)
         {
-            return Task.FromResult((new FileInfo(lengthSource)).Length);
+            var file = new FileInfo(lengthSource);
+            return Task.FromResult<long?>(file.Exists ? file.Length : null);
         }
 
         /// <summary>
@@ -112,7 +113,7 @@ namespace Tes.Runner.Transfer
         {
             ValidateUploadList(uploadList);
 
-            var operationList = uploadList.Select(d => new BlobOperationInfo(d.TargetUri, d.FullFilePath, d.FullFilePath, true)).ToList();
+            var operationList = uploadList.Select(d => new BlobOperationInfo(d.TargetUri, d.FullFilePath, d.FullFilePath, true, PipelineOptions.SkipMissingSources)).ToList();
 
             return await ExecutePipelineAsync(operationList);
         }
