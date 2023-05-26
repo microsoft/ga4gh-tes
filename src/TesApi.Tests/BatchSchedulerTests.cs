@@ -29,13 +29,6 @@ namespace TesApi.Tests
     [TestClass]
     public partial class BatchSchedulerTests
     {
-
-        [GeneratedRegex("path='([^']*)' && url='([^']*)' && blobxfer download")]
-        private static partial Regex DownloadFilesBlobxferRegex();
-
-        [GeneratedRegex("path='([^']*)' && url='([^']*)' && mkdir .* wget")]
-        private static partial Regex DownloadFilesWgetRegex();
-
         [TestCategory("Batch Pools")]
         [TestMethod]
         public async Task LocalPoolCacheAccessesNewPoolsAfterAllPoolsRemovedWithSameKey()
@@ -178,10 +171,6 @@ namespace TesApi.Tests
             Assert.IsFalse(batchScheduler.IsPoolAvailable("key1"));
             Assert.IsFalse(batchScheduler.GetPools().Any());
         }
-
-        private static readonly Regex downloadFilesBlobxferRegex = DownloadFilesBlobxferRegex();
-        private static readonly Regex downloadFilesWgetRegex = DownloadFilesWgetRegex();
-
 
         [TestCategory("TES 1.1")]
         [TestMethod]
@@ -362,6 +351,8 @@ namespace TesApi.Tests
             Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("batch_script")));
             Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("upload_files_script")));
             Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("download_files_script")));
+            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("upload_metrics_script")));
+            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("tRunner")));
         }
 
         private async Task AddBatchTaskHandlesExceptions(TesState newState, Func<AzureProxyReturnValues, (Action<IServiceCollection>, Action<Mock<IAzureProxy>>)> testArranger, Action<TesTask, IEnumerable<(LogLevel, Exception)>> resultValidator)
@@ -1317,7 +1308,7 @@ namespace TesApi.Tests
             var filesToDownload = GetFilesToDownload(azureProxy);
 
             Assert.AreEqual(2, filesToDownload.Count());
-            var inputFileUrl = filesToDownload.SingleOrDefault(f => f.StorageUrl.StartsWith("https://defaultstorageaccount.blob.core.windows.net/tes-internal/") && f.StorageUrl.Contains("?sv=") && f.LocalPath.Equals("/cromwell-executions/workflowpath/inputs/blob1")).StorageUrl;
+            var inputFileUrl = filesToDownload.SingleOrDefault(f => f.StorageUrl.StartsWith("https://defaultstorageaccount.blob.core.windows.net/tes-internal/") && f.StorageUrl.Contains("?sv=") && f.LocalPath.Equals("%AZ_BATCH_TASK_WORKING_DIR%/wd/cromwell-executions/workflowpath/inputs/blob1"))?.StorageUrl;
             Assert.IsNotNull(inputFileUrl);
             azureProxy.Verify(i => i.LocalFileExists("/cromwell-tmp/tmp12345/blob1"));
             azureProxy.Verify(i => i.UploadBlobFromFileAsync(It.Is<Uri>(uri => uri.AbsoluteUri.StartsWith($"{new Uri(inputFileUrl).GetLeftPart(UriPartial.Path)}?sv=")), "/cromwell-tmp/tmp12345/blob1", It.IsAny<System.Threading.CancellationToken>()));
@@ -1580,15 +1571,10 @@ namespace TesApi.Tests
                 return new List<FileToDownload>();
             }
 
-            var blobxferFilesToDownload = downloadFilesBlobxferRegex.Matches(downloadFilesScriptContent)
-                .Cast<System.Text.RegularExpressions.Match>()
-                .Select(m => new FileToDownload { LocalPath = m.Groups[1].Value, StorageUrl = m.Groups[2].Value });
+            var fileInputs = JsonConvert.DeserializeObject<Tes.Runner.Models.NodeTask>(downloadFilesScriptContent)?.Inputs ?? Enumerable.Empty<Tes.Runner.Models.FileInput>().ToList();
 
-            var wgetFilesToDownload = downloadFilesWgetRegex.Matches(downloadFilesScriptContent)
-                .Cast<System.Text.RegularExpressions.Match>()
-                .Select(m => new FileToDownload { LocalPath = m.Groups[1].Value, StorageUrl = m.Groups[2].Value });
-
-            return blobxferFilesToDownload.Union(wgetFilesToDownload);
+            return fileInputs
+                .Select(f => new FileToDownload { LocalPath = f.FullFileName, StorageUrl = f.SourceUrl });
         }
 
         private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProvider(AzureProxyReturnValues azureProxyReturn = default)

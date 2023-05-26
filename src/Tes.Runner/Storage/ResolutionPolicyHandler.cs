@@ -56,26 +56,31 @@ public class ResolutionPolicyHandler
 
     private async Task<DownloadInfo> CreateDownloadInfoWithStrategyAsync(FileInput input)
     {
-        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy);
-
         if (string.IsNullOrEmpty(input.FullFileName))
         {
             throw new ArgumentException("A task input is missing the full filename. Please check the task definition.");
         }
 
-        return new DownloadInfo(input.FullFileName, uri);
+        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy);
+
+        return new DownloadInfo(ExpandEnvironmentVariables(input.FullFileName), uri);
     }
 
     private async Task<UploadInfo> CreateUploadInfoWithStrategyAsync(FileOutput output)
     {
-        var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy);
-
         if (string.IsNullOrEmpty(output.FullFileName))
         {
             throw new ArgumentException("A task output is missing the full filename. Please check the task definition.");
         }
 
-        return new UploadInfo(output.FullFileName, uri);
+        var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy);
+
+        return new UploadInfo(ExpandEnvironmentVariables(output.FullFileName), uri);
+    }
+
+    private static string ExpandEnvironmentVariables(string fullFileName)
+    {
+        return Environment.ExpandEnvironmentVariables(fullFileName);
     }
 
     private async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, SasResolutionStrategy strategy)
