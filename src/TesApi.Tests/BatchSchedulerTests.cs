@@ -7,7 +7,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-//using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
@@ -27,7 +26,7 @@ using TesApi.Web.Storage;
 namespace TesApi.Tests
 {
     [TestClass]
-    public partial class BatchSchedulerTests
+    public class BatchSchedulerTests
     {
         [TestCategory("Batch Pools")]
         [TestMethod]

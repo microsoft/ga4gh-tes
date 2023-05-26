@@ -79,7 +79,7 @@ public class PartsProducer
             }
         });
 
-        foreach (var operation in  skippedOperations)
+        foreach (var operation in skippedOperations)
         {
             blobOperations.Remove(operation);
         }

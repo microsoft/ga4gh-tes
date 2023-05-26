@@ -1137,7 +1137,7 @@ namespace TesApi.Web
             var batchScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(batchScriptPath, cancellationToken);
             var downloadFilesScriptUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(downloadFilesScriptPath, cancellationToken);
             var uploadFilesScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(uploadFilesScriptPath, cancellationToken);
-            var uploadMetricsScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(uploadMetricsScriptPath , cancellationToken);
+            var uploadMetricsScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(uploadMetricsScriptPath, cancellationToken);
             var tesInternalDirectorySasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(storageUploadPath, cancellationToken, getContainerSas: true);
 
             var batchRunCommand = enableBatchAutopool
