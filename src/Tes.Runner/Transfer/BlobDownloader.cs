@@ -21,13 +21,14 @@ public class BlobDownloader : BlobOperationPipeline
     /// Downloads a list of files from an HTTP source.
     /// </summary>
     /// <param name="downloadList">A list of <see cref="DownloadInfo"/></param>
+    /// <param name="skipMissingSources">True to skip missing source files without error, false otherwise</param>
     /// <returns>Total bytes downloaded</returns>
-    public async ValueTask<long> DownloadAsync(List<DownloadInfo> downloadList)
+    public async ValueTask<long> DownloadAsync(List<DownloadInfo> downloadList, bool skipMissingSources)
     {
         ValidateDownloadList(downloadList);
 
         var operationList = downloadList
-            .Select(d => new BlobOperationInfo(d.SourceUrl, d.FullFilePath, d.SourceUrl.ToString(), false, PipelineOptions.SkipMissingSources)).ToList();
+            .Select(d => new BlobOperationInfo(d.SourceUrl, d.FullFilePath, d.SourceUrl.ToString(), false, skipMissingSources)).ToList();
 
         var length = await ExecutePipelineAsync(operationList);
 

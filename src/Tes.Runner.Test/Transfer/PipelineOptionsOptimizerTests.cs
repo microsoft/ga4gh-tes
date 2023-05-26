@@ -1,4 +1,7 @@
-﻿using Moq;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using Moq;
 
 namespace Tes.Runner.Transfer.Tests
 {

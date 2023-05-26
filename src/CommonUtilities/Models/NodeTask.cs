@@ -12,6 +12,9 @@ namespace Tes.Runner.Models
         public List<string>? CommandsToExecute { get; set; }
         public List<FileInput>? Inputs { get; set; }
         public List<FileOutput>? Outputs { get; set; }
+        public string? MetricsFilename { get; set; }
+        public string? InputsMetricsFormat { get; set; }
+        public string? OutputsMetricsFormat { get; set; }
     }
 
     public class FileOutput

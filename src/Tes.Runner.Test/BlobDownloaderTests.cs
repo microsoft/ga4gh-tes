@@ -62,7 +62,7 @@ namespace Tes.Runner.Test
 
             var downloadFilename = sourceFilename + "_down";
 
-            await blobDownloader.DownloadAsync(new List<DownloadInfo>() { new DownloadInfo(downloadFilename, url) });
+            await blobDownloader.DownloadAsync(new List<DownloadInfo>() { new DownloadInfo(downloadFilename, url) }, false);
 
             Assert.AreEqual(RunnerTestUtils.CalculateMd5(sourceFilename),
                 RunnerTestUtils.CalculateMd5(downloadFilename));

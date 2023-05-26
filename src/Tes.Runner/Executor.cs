@@ -56,14 +56,28 @@ namespace Tes.Runner
             }
         }
 
-        public async Task<long> UploadOutputsAsync()
+        private async Task<long> TransferIOCommonAsync(bool skipMissingSources, string? metricsFormat, TransferIOAsyncDelegate asyncDelegate)
         {
             var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
 
-            return await UploadOutputsAsync(memoryBufferChannel);
+            var bytesTransfered = await asyncDelegate(memoryBufferChannel, skipMissingSources);
+
+            if (!string.IsNullOrWhiteSpace(tesNodeTask.MetricsFilename) && !string.IsNullOrWhiteSpace(metricsFormat))
+            {
+                await new MetricsFormatter(tesNodeTask.MetricsFilename, metricsFormat).Write(bytesTransfered);
+            }
+
+            return bytesTransfered;
         }
 
-        private async Task<long> UploadOutputsAsync(Channel<byte[]> memoryBufferChannel)
+        private delegate ValueTask<long> TransferIOAsyncDelegate(Channel<byte[]> memoryBufferChannel, bool skipMissingSources);
+
+        public Task<long> UploadOutputsAsync(bool skipMissingSources)
+        {
+            return TransferIOCommonAsync(skipMissingSources, tesNodeTask.OutputsMetricsFormat, UploadOutputsAsync);
+        }
+
+        private async ValueTask<long> UploadOutputsAsync(Channel<byte[]> memoryBufferChannel, bool skipMissingSources)
         {
             if (tesNodeTask.Outputs is null || tesNodeTask.Outputs.Count == 0)
             {
@@ -81,7 +95,7 @@ namespace Tes.Runner
 
             if (outputs != null)
             {
-                var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs));
+                var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs, skipMissingSources));
 
                 logger.LogInformation($"Executed Upload. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 
@@ -91,14 +105,12 @@ namespace Tes.Runner
             return 0;
         }
 
-        public async Task<long> DownloadInputsAsync()
+        public Task<long> DownloadInputsAsync(bool skipMissingSources)
         {
-            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
-
-            return await DownloadInputsAsync(memoryBufferChannel);
+            return TransferIOCommonAsync(skipMissingSources, tesNodeTask.InputsMetricsFormat, DownloadInputsAsync);
         }
 
-        private async Task<long> DownloadInputsAsync(Channel<byte[]> memoryBufferChannel)
+        private async ValueTask<long> DownloadInputsAsync(Channel<byte[]> memoryBufferChannel, bool skipMissingSources)
         {
             if (tesNodeTask.Inputs is null || tesNodeTask.Inputs.Count == 0)
             {
@@ -114,7 +126,7 @@ namespace Tes.Runner
 
             if (inputs != null)
             {
-                var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs));
+                var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs, skipMissingSources));
 
                 logger.LogInformation($"Executed Download. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 

@@ -1,6 +1,8 @@
-﻿using System.CommandLine;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System.CommandLine;
 using Tes.Runner.Transfer;
-using Tes.RunnerCLI.Services;
 
 namespace Tes.RunnerCLI.Commands
 {
@@ -13,6 +15,7 @@ namespace Tes.RunnerCLI.Commands
         internal const string UploadCommandName = "upload";
         internal const string DownloadCommandName = "download";
         internal const string DockerUriOption = "docker-url";
+        internal const string SkipMissingSources = "skipMissingSources";
 
         private static readonly IReadOnlyCollection<Option> GlobalOptions = new List<Option>()
         {
@@ -20,21 +23,17 @@ namespace Tes.RunnerCLI.Commands
             CreateOption<int>(BlobPipelineOptionsConverter.BlockSizeOption, "Blob block size in bytes", "-b", defaultValue: BlobSizeUtils.DefaultBlockSizeBytes),
             CreateOption<int>(BlobPipelineOptionsConverter.WritersOption, "Number of concurrent writers", "-w", defaultValue: BlobPipelineOptions.DefaultNumberOfWriters),
             CreateOption<int>(BlobPipelineOptionsConverter.ReadersOption, "Number of concurrent readers", "-r", defaultValue: BlobPipelineOptions.DefaultNumberOfReaders),
-            CreateOption<bool>(BlobPipelineOptionsConverter.SkipMissingSources, "Skip missing sources for file transfers", "-s", defaultValue: BlobPipelineOptions.DefaultSkipMissingSources), // TODO: remove this options when we remove the node task script from BatchScheduler
             CreateOption<int>(BlobPipelineOptionsConverter.BufferCapacityOption, "Pipeline buffer capacity", "-c", defaultValue: BlobPipelineOptions.DefaultReadWriteBuffersCapacity),
             CreateOption<string>(BlobPipelineOptionsConverter.ApiVersionOption, "Azure Storage API version", "-v", defaultValue: BlobPipelineOptions.DefaultApiVersion)
         }.AsReadOnly();
 
-        private static readonly Option downloaderFormatter = CreateOption(BlobPipelineOptionsConverter.DownloaderFormatterOption, MetricsFormatterOptions.Description, "-d", parse: MetricsFormatterOptions.ParseDownloader, configureOption: MetricsFormatterOptions.Configure);
-        private static readonly Option uploaderFormatter = CreateOption(BlobPipelineOptionsConverter.UploaderFormatterOption, MetricsFormatterOptions.Description, "-u", parse: MetricsFormatterOptions.ParseUploader, configureOption: MetricsFormatterOptions.Configure);
+        private static readonly Option SkipMissingSourcesOption = CreateOption<bool>(CommandFactory.SkipMissingSources, "Skip missing sources for file transfers", "-s", defaultValue: false); // TODO: remove this option when we incorporate the batch node script logic into this executable
 
         internal static RootCommand CreateExecutorCommand()
         {
             var rootCommand = new RootCommand("Executes the specified TES Task");
 
-            rootCommand.AddOption(CreateOption<Uri>(CommandFactory.DockerUriOption, "local docker engine endpoint", "-e", defaultValue: DefaultDockerUri));
-            rootCommand.AddOption(downloaderFormatter);
-            rootCommand.AddOption(uploaderFormatter);
+            rootCommand.AddOption(CreateOption<Uri>(CommandFactory.DockerUriOption, "local docker engine endpoint", "-u", defaultValue: DefaultDockerUri));
 
             foreach (var option in GlobalOptions)
             {
@@ -49,10 +48,7 @@ namespace Tes.RunnerCLI.Commands
                 GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.BlockSizeOption),
                 GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.WritersOption),
                 GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.ReadersOption),
-                GetOptionByName<bool>(rootCommand, BlobPipelineOptionsConverter.SkipMissingSources),
                 GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.BufferCapacityOption),
-                GetOptionByName<MetricsFormatterOptions>(rootCommand, BlobPipelineOptionsConverter.DownloaderFormatterOption),
-                GetOptionByName<MetricsFormatterOptions>(rootCommand, BlobPipelineOptionsConverter.UploaderFormatterOption),
                 GetOptionByName<string>(rootCommand, BlobPipelineOptionsConverter.ApiVersionOption),
                 GetOptionByName<Uri>(rootCommand, CommandFactory.DockerUriOption));
 
@@ -61,7 +57,7 @@ namespace Tes.RunnerCLI.Commands
 
         internal static Command CreateUploadCommand(RootCommand rootCommand)
         {
-            var cmd = CreateCommand(UploadCommandName, "Uploads output files to blob storage", uploaderFormatter);
+            var cmd = CreateCommand(UploadCommandName, "Uploads output files to blob storage", SkipMissingSourcesOption);
             rootCommand.Add(cmd);
 
             cmd.SetHandler(CommandHandlers.ExecuteUploadTaskAsync,
@@ -69,9 +65,8 @@ namespace Tes.RunnerCLI.Commands
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BlockSizeOption),
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.WritersOption),
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.ReadersOption),
-                GetOptionByName<bool>(cmd, BlobPipelineOptionsConverter.SkipMissingSources),
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BufferCapacityOption),
-                GetOptionByName<MetricsFormatterOptions>(cmd, BlobPipelineOptionsConverter.UploaderFormatterOption),
+                GetOptionByName<bool>(cmd, CommandFactory.SkipMissingSources),
                 GetOptionByName<string>(cmd, BlobPipelineOptionsConverter.ApiVersionOption));
 
             return cmd;
@@ -79,7 +74,7 @@ namespace Tes.RunnerCLI.Commands
 
         internal static Command CreateDownloadCommand(RootCommand rootCommand)
         {
-            var cmd = CreateCommand(DownloadCommandName, "Downloads input files from a HTTP source", downloaderFormatter);
+            var cmd = CreateCommand(DownloadCommandName, "Downloads input files from a HTTP source", SkipMissingSourcesOption);
             rootCommand.Add(cmd);
 
             cmd.SetHandler(CommandHandlers.ExecuteDownloadTaskAsync,
@@ -87,9 +82,8 @@ namespace Tes.RunnerCLI.Commands
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BlockSizeOption),
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.WritersOption),
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.ReadersOption),
-                GetOptionByName<bool>(cmd, BlobPipelineOptionsConverter.SkipMissingSources),
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BufferCapacityOption),
-                GetOptionByName<MetricsFormatterOptions>(cmd, BlobPipelineOptionsConverter.DownloaderFormatterOption),
+                GetOptionByName<bool>(cmd, CommandFactory.SkipMissingSources),
                 GetOptionByName<string>(cmd, BlobPipelineOptionsConverter.ApiVersionOption));
 
             return cmd;
@@ -135,7 +129,7 @@ namespace Tes.RunnerCLI.Commands
 
             throw new InvalidOperationException("Invalid option (name not found)");
 
-            // TODO: Future versions of System.CommandLine are expected to make the flag public, but it appears that it will also be renamed. So we can get rid of the reflection.
+            // TODO: Future versions of System.CommandLine are expected to make the flag public, but it appears that it will also be renamed. So we can then get rid of the reflection.
             static bool IsOptionGlobal(Option option)
                 => (bool)option.GetType().GetProperty("IsGlobal", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(option)!;
         }

@@ -108,12 +108,13 @@ namespace Tes.Runner.Transfer
         /// The URIs are Azure Block Blob URIs with SAS tokens.
         /// </summary>
         /// <param name="uploadList">File upload list.</param>
+        /// <param name="skipMissingSources">True to skip missing source files without error, false otherwise</param>
         /// <returns></returns>
-        public async Task<long> UploadAsync(List<UploadInfo> uploadList)
+        public async Task<long> UploadAsync(List<UploadInfo> uploadList, bool skipMissingSources)
         {
             ValidateUploadList(uploadList);
 
-            var operationList = uploadList.Select(d => new BlobOperationInfo(d.TargetUri, d.FullFilePath, d.FullFilePath, true, PipelineOptions.SkipMissingSources)).ToList();
+            var operationList = uploadList.Select(d => new BlobOperationInfo(d.TargetUri, d.FullFilePath, d.FullFilePath, true, skipMissingSources)).ToList();
 
             return await ExecutePipelineAsync(operationList);
         }

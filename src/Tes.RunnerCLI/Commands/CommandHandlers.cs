@@ -1,8 +1,10 @@
-﻿using Microsoft.Extensions.Logging;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using Microsoft.Extensions.Logging;
 using Tes.Runner;
 using Tes.Runner.Docker;
 using Tes.Runner.Transfer;
-using Tes.RunnerCLI.Services;
 
 namespace Tes.RunnerCLI.Commands
 {
@@ -16,22 +18,19 @@ namespace Tes.RunnerCLI.Commands
             int blockSize,
             int writers,
             int readers,
-            bool skipMissingSources,
             int bufferCapacity,
-            MetricsFormatterOptions? downloadFormatter,
-            MetricsFormatterOptions? uploadFormatter,
             string apiVersion,
             Uri dockerUri)
         {
             try
             {
-                var options = BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, skipMissingSources, bufferCapacity, apiVersion);
+                var options = BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-                await ExecuteTransferAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options, BlobPipelineOptionsConverter.DownloaderFormatterOption, downloadFormatter);
+                await ExecuteTransferAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options, false);
 
                 await ExecuteNodeContainerTaskAsync(file, dockerUri, options);
 
-                await ExecuteTransferAsSubProcessAsync(CommandFactory.UploadCommandName, file, options, BlobPipelineOptionsConverter.UploaderFormatterOption, uploadFormatter);
+                await ExecuteTransferAsSubProcessAsync(CommandFactory.UploadCommandName, file, options, true);
 
                 return SuccessExitCode;
             }
@@ -70,13 +69,12 @@ namespace Tes.RunnerCLI.Commands
         }
 
         private static BlobPipelineOptions CreateBlobPipelineOptions(int blockSize, int writers, int readers,
-            bool skipMissingSources, int bufferCapacity, string apiVersion)
+            int bufferCapacity, string apiVersion)
         {
             var options = new BlobPipelineOptions(
                 BlockSizeBytes: blockSize,
                 NumberOfWriters: writers,
                 NumberOfReaders: readers,
-                SkipMissingSources: skipMissingSources,
                 ReadWriteBuffersCapacity: bufferCapacity,
                 MemoryBufferCapacity: bufferCapacity,
                 ApiVersion: apiVersion);
@@ -90,16 +88,15 @@ namespace Tes.RunnerCLI.Commands
             int blockSize,
             int writers,
             int readers,
-            bool skipMissingSources,
             int bufferCapacity,
-            MetricsFormatterOptions? formatterOptions,
+            bool skipMissingSources,
             string apiVersion)
         {
-            var options = CreateBlobPipelineOptions(blockSize, writers, readers, skipMissingSources, bufferCapacity, apiVersion);
+            var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
             Console.WriteLine("Starting upload operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.UploadOutputsAsync(), formatterOptions);
+            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.UploadOutputsAsync(skipMissingSources));
         }
 
         private static void HandleResult(ProcessExecutionResult results, string command)
@@ -113,11 +110,11 @@ namespace Tes.RunnerCLI.Commands
             Console.WriteLine($"Result: {results.StandardOutput}");
         }
 
-        private static async Task ExecuteTransferAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options, string formatterCommand, MetricsFormatterOptions? formatterOptions)
+        private static async Task ExecuteTransferAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options, bool skipMissingSources)
         {
             var processLauncher = new ProcessLauncher();
 
-            var results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options, formatterCommand, formatterOptions));
+            var results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options, skipMissingSources));
 
             HandleResult(results, command);
         }
@@ -126,19 +123,18 @@ namespace Tes.RunnerCLI.Commands
             int blockSize,
             int writers,
             int readers,
-            bool skipMissingSources,
             int bufferCapacity,
-            MetricsFormatterOptions? formatterOptions,
+            bool skipMissingSources,
             string apiVersion)
         {
-            var options = CreateBlobPipelineOptions(blockSize, writers, readers, skipMissingSources, bufferCapacity, apiVersion);
+            var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
             Console.WriteLine("Starting download operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.DownloadInputsAsync(), formatterOptions);
+            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.DownloadInputsAsync(skipMissingSources));
         }
 
-        private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, BlobPipelineOptions options, Func<Executor, Task<long>> transferOperation, MetricsFormatterOptions? formatterOptions)
+        private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, BlobPipelineOptions options, Func<Executor, Task<long>> transferOperation)
         {
             try
             {
@@ -147,11 +143,6 @@ namespace Tes.RunnerCLI.Commands
                 var result = await transferOperation(executor);
 
                 Console.WriteLine($"Total bytes transfer: {result:n0}");
-
-                if (formatterOptions is not null)
-                {
-                    await new MetricsFormatter(formatterOptions).Write(result);
-                }
 
                 return SuccessExitCode;
             }

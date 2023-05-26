@@ -79,7 +79,6 @@ namespace Tes.Runner.Transfer
                 ReadWriteBuffersCapacity: readerWriteCapacity,
                 NumberOfWriters: writers,
                 NumberOfReaders: readers,
-                SkipMissingSources: options.SkipMissingSources,
                 FileHandlerPoolCapacity: options.FileHandlerPoolCapacity,
                 ApiVersion: options.ApiVersion,
                 MemoryBufferCapacity: memoryBufferCapacity);

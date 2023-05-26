@@ -1153,7 +1153,7 @@ namespace TesApi.Web
             await storageAccessProvider.UploadBlobAsync(batchScriptPath, sb.ToString(), cancellationToken);
 
             var nodeTaskInfoPath = $"/{storageUploadPath}/{NodeRunnerTaskInfoFilename}";
-            await storageAccessProvider.UploadBlobAsync(nodeTaskInfoPath, JsonConvert.SerializeObject(new NodeTask { }, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore }), cancellationToken);
+            await storageAccessProvider.UploadBlobAsync(nodeTaskInfoPath, SerializeNodeTask(new()), cancellationToken);
 
             var nodeTaskRunnerSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{storageUploadPath}/{NodeTaskRunnerFilename}", cancellationToken);
             var batchScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(batchScriptPath, cancellationToken);
@@ -1217,6 +1217,9 @@ namespace TesApi.Web
                         _ => false,
                     };
             }
+
+            static string SerializeNodeTask(NodeTask task)
+                => JsonConvert.SerializeObject(task, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore });
 
             string MungeBatchScript()
                 => string.Join("\n", taskRunScriptContent)
