@@ -2,6 +2,7 @@
 using Tes.Runner;
 using Tes.Runner.Docker;
 using Tes.Runner.Transfer;
+using Tes.RunnerCLI.Services;
 
 namespace Tes.RunnerCLI.Commands
 {
@@ -17,6 +18,8 @@ namespace Tes.RunnerCLI.Commands
             int readers,
             bool skipMissingSources,
             int bufferCapacity,
+            MetricsFormatterOptions? downloadFormatter,
+            MetricsFormatterOptions? uploadFormatter,
             string apiVersion,
             Uri dockerUri)
         {
@@ -24,14 +27,13 @@ namespace Tes.RunnerCLI.Commands
             {
                 var options = BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, skipMissingSources, bufferCapacity, apiVersion);
 
-                await ExecuteTransferAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options);
+                await ExecuteTransferAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options, BlobPipelineOptionsConverter.DownloaderFormatterOption, downloadFormatter);
 
                 await ExecuteNodeContainerTaskAsync(file, dockerUri, options);
 
-                await ExecuteTransferAsSubProcessAsync(CommandFactory.UploadCommandName, file, options);
+                await ExecuteTransferAsSubProcessAsync(CommandFactory.UploadCommandName, file, options, BlobPipelineOptionsConverter.UploaderFormatterOption, uploadFormatter);
 
                 return SuccessExitCode;
-
             }
             catch (Exception e)
             {
@@ -90,13 +92,14 @@ namespace Tes.RunnerCLI.Commands
             int readers,
             bool skipMissingSources,
             int bufferCapacity,
+            MetricsFormatterOptions? formatterOptions,
             string apiVersion)
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, skipMissingSources, bufferCapacity, apiVersion);
 
             Console.WriteLine("Starting upload operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.UploadOutputsAsync());
+            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.UploadOutputsAsync(), formatterOptions);
         }
 
         private static void HandleResult(ProcessExecutionResult results, string command)
@@ -110,11 +113,11 @@ namespace Tes.RunnerCLI.Commands
             Console.WriteLine($"Result: {results.StandardOutput}");
         }
 
-        private static async Task ExecuteTransferAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
+        private static async Task ExecuteTransferAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options, string formatterCommand, MetricsFormatterOptions? formatterOptions)
         {
             var processLauncher = new ProcessLauncher();
 
-            var results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
+            var results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options, formatterCommand, formatterOptions));
 
             HandleResult(results, command);
         }
@@ -125,18 +128,18 @@ namespace Tes.RunnerCLI.Commands
             int readers,
             bool skipMissingSources,
             int bufferCapacity,
+            MetricsFormatterOptions? formatterOptions,
             string apiVersion)
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, skipMissingSources, bufferCapacity, apiVersion);
 
             Console.WriteLine("Starting download operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.DownloadInputsAsync());
+            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.DownloadInputsAsync(), formatterOptions);
         }
 
-        private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, BlobPipelineOptions options, Func<Executor, Task<long>> transferOperation)
+        private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, BlobPipelineOptions options, Func<Executor, Task<long>> transferOperation, MetricsFormatterOptions? formatterOptions)
         {
-
             try
             {
                 var executor = new Executor(taskDefinitionFile.FullName, options);
@@ -144,6 +147,11 @@ namespace Tes.RunnerCLI.Commands
                 var result = await transferOperation(executor);
 
                 Console.WriteLine($"Total bytes transfer: {result:n0}");
+
+                if (formatterOptions is not null)
+                {
+                    await new MetricsFormatter(formatterOptions).Write(result);
+                }
 
                 return SuccessExitCode;
             }

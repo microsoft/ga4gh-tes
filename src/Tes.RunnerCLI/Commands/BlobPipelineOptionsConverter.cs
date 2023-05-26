@@ -1,4 +1,5 @@
 ﻿using Tes.Runner.Transfer;
+using Tes.RunnerCLI.Services;
 
 namespace Tes.RunnerCLI.Commands
 {
@@ -10,12 +11,24 @@ namespace Tes.RunnerCLI.Commands
         public const string ReadersOption = "readers";
         public const string SkipMissingSources = "skipMissingSources";
         public const string BufferCapacityOption = "bufferCapacity";
+        public const string DownloaderFormatterOption = "downloaderFormatter";
+        public const string UploaderFormatterOption = "uploaderFormatter";
         public const string ApiVersionOption = "apiVersion";
 
-        public static string[] ToCommandArgs(string command, string fileOption, BlobPipelineOptions blobPipelineOptions)
+        public static string[] ToCommandArgs(string command, string fileOption, BlobPipelineOptions blobPipelineOptions, string formatterCommand, MetricsFormatterOptions? formatterOptions)
         {
-            ArgumentException.ThrowIfNullOrEmpty(command, nameof(command));
-            ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
+            ArgumentException.ThrowIfNullOrEmpty(command);
+            ArgumentNullException.ThrowIfNull(blobPipelineOptions);
+
+            if (!string.IsNullOrEmpty(formatterCommand))
+            {
+                ArgumentNullException.ThrowIfNull(formatterOptions);
+            }
+
+            if (formatterOptions is not null)
+            {
+                ArgumentException.ThrowIfNullOrEmpty(formatterCommand);
+            }
 
             var args = new List<string>()
             {
@@ -27,6 +40,11 @@ namespace Tes.RunnerCLI.Commands
                 $"--{BufferCapacityOption} {blobPipelineOptions.ReadWriteBuffersCapacity}",
                 $"--{ApiVersionOption} {blobPipelineOptions.ApiVersion}"
             };
+
+            if (!string.IsNullOrEmpty(formatterCommand) && formatterOptions is not null)
+            {
+                args.Add($"--{formatterCommand} \"{formatterOptions.MetricsFile}\" \'{formatterOptions.FileLogFormat}\'");
+            }
 
             if (!string.IsNullOrEmpty(fileOption))
             {

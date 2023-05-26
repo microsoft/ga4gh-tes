@@ -16,6 +16,7 @@ using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Tes.Extensions;
 using Tes.Models;
+using Tes.Runner.Models;
 using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
@@ -1152,7 +1153,7 @@ namespace TesApi.Web
             await storageAccessProvider.UploadBlobAsync(batchScriptPath, sb.ToString(), cancellationToken);
 
             var nodeTaskInfoPath = $"/{storageUploadPath}/{NodeRunnerTaskInfoFilename}";
-            await storageAccessProvider.UploadBlobAsync(nodeTaskInfoPath, "", cancellationToken);
+            await storageAccessProvider.UploadBlobAsync(nodeTaskInfoPath, JsonConvert.SerializeObject(new NodeTask { }, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore }), cancellationToken);
 
             var nodeTaskRunnerSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{storageUploadPath}/{NodeTaskRunnerFilename}", cancellationToken);
             var batchScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(batchScriptPath, cancellationToken);

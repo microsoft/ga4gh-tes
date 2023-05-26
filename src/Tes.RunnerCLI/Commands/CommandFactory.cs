@@ -1,5 +1,6 @@
 ﻿using System.CommandLine;
 using Tes.Runner.Transfer;
+using Tes.RunnerCLI.Services;
 
 namespace Tes.RunnerCLI.Commands
 {
@@ -21,70 +22,75 @@ namespace Tes.RunnerCLI.Commands
             CreateOption<int>(BlobPipelineOptionsConverter.ReadersOption, "Number of concurrent readers", "-r", defaultValue: BlobPipelineOptions.DefaultNumberOfReaders),
             CreateOption<bool>(BlobPipelineOptionsConverter.SkipMissingSources, "Skip missing sources for file transfers", "-s", defaultValue: BlobPipelineOptions.DefaultSkipMissingSources), // TODO: remove this options when we remove the node task script from BatchScheduler
             CreateOption<int>(BlobPipelineOptionsConverter.BufferCapacityOption, "Pipeline buffer capacity", "-c", defaultValue: BlobPipelineOptions.DefaultReadWriteBuffersCapacity),
-            CreateOption<string>(BlobPipelineOptionsConverter.ApiVersionOption, "Azure Storage API version", "-v", defaultValue: BlobPipelineOptions.DefaultApiVersion),
+            CreateOption<string>(BlobPipelineOptionsConverter.ApiVersionOption, "Azure Storage API version", "-v", defaultValue: BlobPipelineOptions.DefaultApiVersion)
         }.AsReadOnly();
+
+        private static readonly Option downloaderFormatter = CreateOption(BlobPipelineOptionsConverter.DownloaderFormatterOption, MetricsFormatterOptions.Description, "-d", parse: MetricsFormatterOptions.ParseDownloader, configureOption: MetricsFormatterOptions.Configure);
+        private static readonly Option uploaderFormatter = CreateOption(BlobPipelineOptionsConverter.UploaderFormatterOption, MetricsFormatterOptions.Description, "-u", parse: MetricsFormatterOptions.ParseUploader, configureOption: MetricsFormatterOptions.Configure);
 
         internal static RootCommand CreateExecutorCommand()
         {
-            var dockerUriOption = CreateOption<Uri>(CommandFactory.DockerUriOption, "local docker engine endpoint", "-u", defaultValue: DefaultDockerUri);
-
             var rootCommand = new RootCommand("Executes the specified TES Task");
+
+            rootCommand.AddOption(CreateOption<Uri>(CommandFactory.DockerUriOption, "local docker engine endpoint", "-e", defaultValue: DefaultDockerUri));
+            rootCommand.AddOption(downloaderFormatter);
+            rootCommand.AddOption(uploaderFormatter);
 
             foreach (var option in GlobalOptions)
             {
                 rootCommand.AddGlobalOption(option);
             }
 
-            rootCommand.AddOption(dockerUriOption);
-
             // GetOptionByName() expects that the "globalOptions" parameter contain only inherited global options. Thus, we don't pass any since we're the root.
             var fakedGlobalList = Enumerable.Empty<Option>().ToList();
 
             rootCommand.SetHandler(CommandHandlers.ExecuteNodeTaskAsync,
-                GetOptionByName<FileInfo>(rootCommand.Options, fakedGlobalList, BlobPipelineOptionsConverter.FileOption),
-                GetOptionByName<int>(rootCommand.Options, fakedGlobalList, BlobPipelineOptionsConverter.BlockSizeOption),
-                GetOptionByName<int>(rootCommand.Options, fakedGlobalList, BlobPipelineOptionsConverter.WritersOption),
-                GetOptionByName<int>(rootCommand.Options, fakedGlobalList, BlobPipelineOptionsConverter.ReadersOption),
-                GetOptionByName<bool>(rootCommand.Options, fakedGlobalList, BlobPipelineOptionsConverter.SkipMissingSources),
-                GetOptionByName<int>(rootCommand.Options, fakedGlobalList, BlobPipelineOptionsConverter.BufferCapacityOption),
-                GetOptionByName<string>(rootCommand.Options, fakedGlobalList, BlobPipelineOptionsConverter.ApiVersionOption),
-                GetOptionByName<Uri>(rootCommand.Options, fakedGlobalList, CommandFactory.DockerUriOption));
+                GetOptionByName<FileInfo>(rootCommand, BlobPipelineOptionsConverter.FileOption),
+                GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.BlockSizeOption),
+                GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.WritersOption),
+                GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.ReadersOption),
+                GetOptionByName<bool>(rootCommand, BlobPipelineOptionsConverter.SkipMissingSources),
+                GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.BufferCapacityOption),
+                GetOptionByName<MetricsFormatterOptions>(rootCommand, BlobPipelineOptionsConverter.DownloaderFormatterOption),
+                GetOptionByName<MetricsFormatterOptions>(rootCommand, BlobPipelineOptionsConverter.UploaderFormatterOption),
+                GetOptionByName<string>(rootCommand, BlobPipelineOptionsConverter.ApiVersionOption),
+                GetOptionByName<Uri>(rootCommand, CommandFactory.DockerUriOption));
 
             return rootCommand;
         }
 
         internal static Command CreateUploadCommand(RootCommand rootCommand)
         {
-            var cmd = CreateCommand(UploadCommandName, "Uploads output files to blob storage");
-
+            var cmd = CreateCommand(UploadCommandName, "Uploads output files to blob storage", uploaderFormatter);
             rootCommand.Add(cmd);
 
             cmd.SetHandler(CommandHandlers.ExecuteUploadTaskAsync,
-                GetOptionByName<FileInfo>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.FileOption),
-                GetOptionByName<int>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.BlockSizeOption),
-                GetOptionByName<int>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.WritersOption),
-                GetOptionByName<int>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.ReadersOption),
-                GetOptionByName<bool>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.SkipMissingSources),
-                GetOptionByName<int>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.BufferCapacityOption),
-                GetOptionByName<string>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.ApiVersionOption));
+                GetOptionByName<FileInfo>(cmd, BlobPipelineOptionsConverter.FileOption),
+                GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BlockSizeOption),
+                GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.WritersOption),
+                GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.ReadersOption),
+                GetOptionByName<bool>(cmd, BlobPipelineOptionsConverter.SkipMissingSources),
+                GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BufferCapacityOption),
+                GetOptionByName<MetricsFormatterOptions>(cmd, BlobPipelineOptionsConverter.UploaderFormatterOption),
+                GetOptionByName<string>(cmd, BlobPipelineOptionsConverter.ApiVersionOption));
 
             return cmd;
         }
 
         internal static Command CreateDownloadCommand(RootCommand rootCommand)
         {
-            var cmd = CreateCommand(DownloadCommandName, "Downloads input files from a HTTP source");
-
+            var cmd = CreateCommand(DownloadCommandName, "Downloads input files from a HTTP source", downloaderFormatter);
             rootCommand.Add(cmd);
 
             cmd.SetHandler(CommandHandlers.ExecuteDownloadTaskAsync,
-                GetOptionByName<FileInfo>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.FileOption),
-                GetOptionByName<int>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.BlockSizeOption),
-                GetOptionByName<int>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.WritersOption),
-                GetOptionByName<int>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.ReadersOption),
-                GetOptionByName<bool>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.SkipMissingSources),
-                GetOptionByName<int>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.BufferCapacityOption),
-                GetOptionByName<string>(cmd.Options, GlobalOptions, BlobPipelineOptionsConverter.ApiVersionOption));
+                GetOptionByName<FileInfo>(cmd, BlobPipelineOptionsConverter.FileOption),
+                GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BlockSizeOption),
+                GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.WritersOption),
+                GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.ReadersOption),
+                GetOptionByName<bool>(cmd, BlobPipelineOptionsConverter.SkipMissingSources),
+                GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BufferCapacityOption),
+                GetOptionByName<MetricsFormatterOptions>(cmd, BlobPipelineOptionsConverter.DownloaderFormatterOption),
+                GetOptionByName<string>(cmd, BlobPipelineOptionsConverter.ApiVersionOption));
 
             return cmd;
         }
@@ -106,23 +112,42 @@ namespace Tes.RunnerCLI.Commands
             return new FileInfo(DefaultTaskDefinitionFile);
         }
 
-        private static Option<T> GetOptionByName<T>(IReadOnlyCollection<Option> commandOptions, IReadOnlyCollection<Option> globalOptions, string optionName)
+        private static Option<T> GetOptionByName<T>(Command command, string optionName)
         {
-            var option = commandOptions.Concat(globalOptions).SingleOrDefault(o => o.Name == optionName);
+            var options = Enumerable.Empty<Option>().Concat(command.Options);
+
+            var option = options.SingleOrDefault(o => o.Name == optionName) as Option<T>;
 
             if (option is not null)
             {
-                return (Option<T>)option;
+                return option;
             }
 
-            throw new InvalidOperationException("Invalid option");
+            foreach (var cmd in command.Parents.OfType<Command>())
+            {
+                option = cmd.Options.Where(IsOptionGlobal).SingleOrDefault(o => o.Name == optionName) as Option<T>;
+
+                if (option is not null)
+                {
+                    return option;
+                }
+            }
+
+            throw new InvalidOperationException("Invalid option (name not found)");
+
+            // TODO: Future versions of System.CommandLine are expected to make the flag public, but it appears that it will also be renamed. So we can get rid of the reflection.
+            static bool IsOptionGlobal(Option option)
+                => (bool)option.GetType().GetProperty("IsGlobal", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(option)!;
         }
 
-        private static Option<T> CreateOption<T>(string name, string description, string alias, bool required = false, object? defaultValue = null)
+        private static Option<T> CreateOption<T>(string name, string description, string alias, bool required = false, object? defaultValue = null, System.CommandLine.Parsing.ParseArgument<T>? parse = null, Action<Option<T>>? configureOption = null)
         {
-            var option = new Option<T>(
-                                name: $"--{name}",
-                               description: description);
+            var option = parse is null
+                ? new Option<T>(name: $"--{name}",
+                               description: description)
+                : new Option<T>(name: $"--{name}",
+                               description: description,
+                               parseArgument: parse);
 
             if (defaultValue != null)
             {
@@ -131,6 +156,8 @@ namespace Tes.RunnerCLI.Commands
 
             option.AddAlias(alias);
             option.IsRequired = required;
+
+            configureOption?.Invoke(option!);
 
             return option;
         }

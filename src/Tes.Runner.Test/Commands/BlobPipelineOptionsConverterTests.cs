@@ -9,7 +9,7 @@ namespace Tes.RunnerCLI.Commands.Tests
         [TestMethod]
         public void ToCommandArgs_SetsAllOptionsAsCliOptions()
         {
-            var args = BlobPipelineOptionsConverter.ToCommandArgs("upload", "file", new BlobPipelineOptions());
+            var args = BlobPipelineOptionsConverter.ToCommandArgs("upload", "file", new BlobPipelineOptions(), string.Empty, null);
 
             Assert.IsNotNull(args);
             Assert.AreEqual("upload", args[0]);
