@@ -372,7 +372,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken)
         {
-            var blobUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{defaultStorageAccountName}/{TesExecutionsPathPrefix}/{NodeTaskRunnerFilename}", cancellationToken));
+            var blobUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{defaultStorageAccountName}{TesExecutionsPathPrefix}/{NodeTaskRunnerFilename}", cancellationToken));
             var blobProperties = await azureProxy.GetBlobPropertiesAsync(blobUri, cancellationToken);
             if (blobProperties?.ContentMD5 != (await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, $"scripts/{NodeTaskRunnerMD5HashFilename}"), cancellationToken)).Trim())
             {
