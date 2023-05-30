@@ -81,9 +81,12 @@ namespace TesApi.Web.Management
         /// <returns>True if the image is expected to be publically available, otherwise false</returns>
         public bool IsImagePublic(string imageName)
         {
+            var lastColon = imageName.LastIndexOf(':');
+            var probableImageNameWithoutTag = lastColon == -1 ? imageName : imageName[0..lastColon];
+
             // mcr.microsoft.com = public
             // no domain specified = public
-            var host = imageName.Split('/', StringSplitOptions.RemoveEmptyEntries).First();
+            var host = probableImageNameWithoutTag.Split('/', StringSplitOptions.RemoveEmptyEntries).First();
 
             if (host.Equals("mcr.microsoft.com", StringComparison.OrdinalIgnoreCase) || !host.Contains('.'))
             {
