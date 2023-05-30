@@ -18,7 +18,7 @@ namespace Tes.Runner.Test
         private BlobContainerClient blobContainerClient;
         private Guid containerId;
         private BlobUploader blobUploader;
-        private readonly BlobPipelineOptions blobPipelineOptions = new BlobPipelineOptions();
+        private readonly BlobPipelineOptions blobPipelineOptions = new();
 #pragma warning restore CS8618
 
         [TestInitialize]
@@ -57,7 +57,7 @@ namespace Tes.Runner.Test
             // Create a SAS token that's valid for one hour.
             var url = CreateSasUrl(blobClient, file);
 
-            await blobUploader.UploadAsync(new List<UploadInfo>() { new UploadInfo(file, url) }, false);
+            await blobUploader.UploadAsync(new List<UploadInfo>() { new UploadInfo(file, url) });
 
             var blobProperties = await blobClient.GetPropertiesAsync();
             var fileSize = (numberOfMiB * BlobSizeUtils.MiB) + extraBytes;

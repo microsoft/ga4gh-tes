@@ -18,7 +18,7 @@ namespace Tes.Runner.Test
         private BlobContainerClient blobContainerClient;
         private Guid containerId;
         private BlobDownloader blobDownloader;
-        private readonly BlobPipelineOptions blobPipelineOptions = new BlobPipelineOptions();
+        private readonly BlobPipelineOptions blobPipelineOptions = new();
 #pragma warning restore CS8618
         [TestInitialize]
         public async Task Init()
@@ -62,7 +62,7 @@ namespace Tes.Runner.Test
 
             var downloadFilename = sourceFilename + "_down";
 
-            await blobDownloader.DownloadAsync(new List<DownloadInfo>() { new DownloadInfo(downloadFilename, url) }, false);
+            await blobDownloader.DownloadAsync(new List<DownloadInfo>() { new DownloadInfo(downloadFilename, url) });
 
             Assert.AreEqual(RunnerTestUtils.CalculateMd5(sourceFilename),
                 RunnerTestUtils.CalculateMd5(downloadFilename));

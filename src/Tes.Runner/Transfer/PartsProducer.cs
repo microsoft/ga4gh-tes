@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
@@ -27,30 +26,6 @@ public class PartsProducer
     }
 
     /// <summary>
-    /// Checks for skippable sources.
-    /// </summary>
-    /// <param name="blobOperations">A list of <see cref="BlobOperationInfo"/>></param>
-    /// <returns></returns>
-    public async Task<List<BlobOperationInfo>> InitializePartsProducersAsync(List<BlobOperationInfo> blobOperations)
-    {
-        ArgumentNullException.ThrowIfNull(blobOperations);
-
-        var runnableOperations = new ConcurrentBag<BlobOperationInfo>();
-
-        await Parallel.ForEachAsync(blobOperations/*, cancellationToken*/, async (operation, ct) =>
-        {
-            var length = await StartPartsProducerAsync(operation);
-
-            if (length is not null)
-            {
-                runnableOperations.Add(operation);
-            }
-        });
-
-        return runnableOperations.ToList();
-    }
-
-    /// <summary>
     /// Starts Tasks that produce parts for each blob operation.
     /// This operation completes when all parts are written to the pipeline buffer channel.
     /// </summary>
@@ -59,34 +34,18 @@ public class PartsProducer
     /// <returns></returns>
     public async Task StartPartsProducersAsync(List<BlobOperationInfo> blobOperations, Channel<PipelineBuffer> readBufferChannel)
     {
-        ArgumentNullException.ThrowIfNull(readBufferChannel);
-        ValidateOperations(blobOperations);
+        ValidateOperations(blobOperations, readBufferChannel);
 
-        var partsProducerTasks = new ConcurrentBag<Task>();
-        var skippedOperations = new ConcurrentBag<BlobOperationInfo>();
+        var partsProducerTasks = new List<Task>();
 
-        await Parallel.ForEachAsync(blobOperations/*, cancellationToken*/, async (operation, ct) =>
+        foreach (var operation in blobOperations)
         {
-            var length = await StartPartsProducerAsync(operation);
-
-            if (length is null)
-            {
-                skippedOperations.Add(operation);
-            }
-            else
-            {
-                partsProducerTasks.Add(StartPartsProducerAsync(operation, readBufferChannel, length ?? 0));
-            }
-        });
-
-        foreach (var operation in skippedOperations)
-        {
-            blobOperations.Remove(operation);
+            partsProducerTasks.Add(StartPartsProducerAsync(operation, readBufferChannel));
         }
 
         try
         {
-            await PartsProcessor.WhenAllOrThrowIfOneFailsAsync(partsProducerTasks.ToList());
+            await PartsProcessor.WhenAllOrThrowIfOneFailsAsync(partsProducerTasks);
             logger.LogInformation("All parts from requested operations were created.");
         }
         catch (Exception e)
@@ -96,9 +55,10 @@ public class PartsProducer
         }
     }
 
-    private static void ValidateOperations(List<BlobOperationInfo> blobOperations)
+    private static void ValidateOperations(List<BlobOperationInfo> blobOperations, Channel<PipelineBuffer> readBufferChannel)
     {
         ArgumentNullException.ThrowIfNull(blobOperations);
+        ArgumentNullException.ThrowIfNull(readBufferChannel);
 
         if (blobOperations.Count == 0)
         {
@@ -116,13 +76,10 @@ public class PartsProducer
         }
     }
 
-    private async Task<long?> StartPartsProducerAsync(BlobOperationInfo operation)
+    private async Task StartPartsProducerAsync(BlobOperationInfo operation, Channel<PipelineBuffer> readBufferChannel)
     {
-        return await blobPipeline.GetSourceLengthAsync(operation.SourceLocationForLength);
-    }
+        var length = await blobPipeline.GetSourceLengthAsync(operation.SourceLocationForLength);
 
-    private async Task StartPartsProducerAsync(BlobOperationInfo operation, Channel<PipelineBuffer> readBufferChannel, long length)
-    {
         var numberOfParts = BlobSizeUtils.GetNumberOfParts(length, blobPipelineOptions.BlockSizeBytes);
 
         var fileHandlerPool = await GetNewFileHandlerPoolAsync(operation.FileName, operation.ReadOnlyHandlerForExistingFile);
@@ -178,7 +135,7 @@ public class PartsProducer
     {
         var pool = Channel.CreateBounded<FileStream>(blobPipelineOptions.FileHandlerPoolCapacity);
 
-        for (int f = 0; f < blobPipelineOptions.FileHandlerPoolCapacity; f++)
+        for (var f = 0; f < blobPipelineOptions.FileHandlerPoolCapacity; f++)
         {
             try
             {

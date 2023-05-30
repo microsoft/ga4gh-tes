@@ -21,14 +21,15 @@ namespace Tes.Runner.Models
     {
         public string? FullFileName { get; set; }
         public string? TargetUrl { get; set; }
-        public SasResolutionStrategy SasStrategy { get; set; }
+        public SasResolutionStrategy? SasStrategy { get; set; }
+        public bool? Required { get; set; }
     }
 
     public class FileInput
     {
         public string? FullFileName { get; set; }
         public string? SourceUrl { get; set; }
-        public SasResolutionStrategy SasStrategy { get; set; }
+        public SasResolutionStrategy? SasStrategy { get; set; }
     }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]

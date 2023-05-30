@@ -43,7 +43,7 @@ public class RunnerTestUtils
         return pipelineBuffers;
     }
 
-    static Random random = new Random();
+    static readonly Random random = new();
 
     public static async Task<string> CreateTempFileWithContentAsync(int numberOfMiB, int extraBytes = 0)
     {
@@ -73,7 +73,7 @@ public class RunnerTestUtils
     public static async Task AddPipelineBuffersAndCompleteChannelAsync(Channel<PipelineBuffer> pipelineBuffers,
         int numberOfParts, Uri blobUrl, int blockSize, long fileSize, string fileName)
     {
-        for (int partOrdinal = 0; partOrdinal < numberOfParts; partOrdinal++)
+        for (var partOrdinal = 0; partOrdinal < numberOfParts; partOrdinal++)
         {
             var buffer = new PipelineBuffer()
             {
@@ -99,7 +99,7 @@ public class RunnerTestUtils
 
     public static async Task AddProcessedBufferAsync(Channel<ProcessedBuffer> processedBuffer, string fileName, int numberOfParts, long fileSize)
     {
-        for (int i = 0; i < numberOfParts; i++)
+        for (var i = 0; i < numberOfParts; i++)
         {
             var processedPart = new ProcessedBuffer(fileName, null, fileSize, i, numberOfParts, Channel.CreateUnbounded<FileStream>(), null, 0);
 

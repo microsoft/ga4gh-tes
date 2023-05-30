@@ -82,10 +82,9 @@ namespace Tes.Runner.Transfer
         /// </summary>
         /// <param name="lengthSource">File path</param>
         /// <returns>File size in number of bytes</returns>
-        public override Task<long?> GetSourceLengthAsync(string lengthSource)
+        public override Task<long> GetSourceLengthAsync(string lengthSource)
         {
-            var file = new FileInfo(lengthSource);
-            return Task.FromResult<long?>(file.Exists ? file.Length : null);
+            return Task.FromResult(new FileInfo(lengthSource).Length);
         }
 
         /// <summary>
@@ -108,13 +107,12 @@ namespace Tes.Runner.Transfer
         /// The URIs are Azure Block Blob URIs with SAS tokens.
         /// </summary>
         /// <param name="uploadList">File upload list.</param>
-        /// <param name="skipMissingSources">True to skip missing source files without error, false otherwise</param>
         /// <returns></returns>
-        public async Task<long> UploadAsync(List<UploadInfo> uploadList, bool skipMissingSources)
+        public async Task<long> UploadAsync(List<UploadInfo> uploadList)
         {
             ValidateUploadList(uploadList);
 
-            var operationList = uploadList.Select(d => new BlobOperationInfo(d.TargetUri, d.FullFilePath, d.FullFilePath, true, skipMissingSources)).ToList();
+            var operationList = uploadList.Select(d => new BlobOperationInfo(d.TargetUri, d.FullFilePath, d.FullFilePath, true)).ToList();
 
             return await ExecutePipelineAsync(operationList);
         }

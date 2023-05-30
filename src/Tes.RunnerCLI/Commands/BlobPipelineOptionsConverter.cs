@@ -14,7 +14,7 @@ namespace Tes.RunnerCLI.Commands
         public const string BufferCapacityOption = "bufferCapacity";
         public const string ApiVersionOption = "apiVersion";
 
-        public static string[] ToCommandArgs(string command, string fileOption, BlobPipelineOptions blobPipelineOptions, bool skipMissingSources)
+        public static string[] ToCommandArgs(string command, string fileOption, BlobPipelineOptions blobPipelineOptions)
         {
             ArgumentException.ThrowIfNullOrEmpty(command);
             ArgumentNullException.ThrowIfNull(blobPipelineOptions);
@@ -22,7 +22,6 @@ namespace Tes.RunnerCLI.Commands
             var args = new List<string>()
             {
                 command,
-                $"--{CommandFactory.SkipMissingSources} {skipMissingSources}",
                 $"--{BlockSizeOption} {blobPipelineOptions.BlockSizeBytes}",
                 $"--{WritersOption} {blobPipelineOptions.NumberOfWriters}",
                 $"--{ReadersOption} {blobPipelineOptions.NumberOfReaders}",

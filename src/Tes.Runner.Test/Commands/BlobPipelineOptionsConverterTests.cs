@@ -12,18 +12,17 @@ namespace Tes.RunnerCLI.Commands.Tests
         [TestMethod]
         public void ToCommandArgs_SetsAllOptionsAsCliOptions()
         {
-            var args = BlobPipelineOptionsConverter.ToCommandArgs("upload", "file", new BlobPipelineOptions(), false);
+            var args = BlobPipelineOptionsConverter.ToCommandArgs("upload", "file", new BlobPipelineOptions());
 
             Assert.IsNotNull(args);
             Assert.AreEqual("upload", args[0]);
-            Assert.AreEqual("--skipMissingSources False", args[1]);
-            Assert.AreEqual($"--blockSize {BlobSizeUtils.DefaultBlockSizeBytes}", args[2]);
-            Assert.AreEqual($"--writers {BlobPipelineOptions.DefaultNumberOfWriters}", args[3]);
-            Assert.AreEqual($"--readers {BlobPipelineOptions.DefaultNumberOfReaders}", args[4]);
-            Assert.AreEqual($"--bufferCapacity {BlobPipelineOptions.DefaultReadWriteBuffersCapacity}", args[5]);
-            Assert.AreEqual($"--apiVersion {BlobPipelineOptions.DefaultApiVersion}", args[6]);
-            Assert.AreEqual("--file file", args[7]);
-            Assert.AreEqual(8, args.Length);
+            Assert.AreEqual($"--blockSize {BlobSizeUtils.DefaultBlockSizeBytes}", args[1]);
+            Assert.AreEqual($"--writers {BlobPipelineOptions.DefaultNumberOfWriters}", args[2]);
+            Assert.AreEqual($"--readers {BlobPipelineOptions.DefaultNumberOfReaders}", args[3]);
+            Assert.AreEqual($"--bufferCapacity {BlobPipelineOptions.DefaultReadWriteBuffersCapacity}", args[4]);
+            Assert.AreEqual($"--apiVersion {BlobPipelineOptions.DefaultApiVersion}", args[5]);
+            Assert.AreEqual("--file file", args[6]);
+            Assert.AreEqual(7, args.Length);
         }
 
         [TestMethod]

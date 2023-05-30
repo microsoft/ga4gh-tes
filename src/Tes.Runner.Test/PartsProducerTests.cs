@@ -40,7 +40,6 @@ namespace Tes.Runner.Test
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
             var opsList = new List<BlobOperationInfo>() { blobOp };
 
-            opsList = await partsProducer.InitializePartsProducersAsync(opsList);
             await partsProducer.StartPartsProducersAsync(opsList, readBuffer);
 
             readBuffer.Writer.Complete();
@@ -66,7 +65,6 @@ namespace Tes.Runner.Test
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
             var opsList = new List<BlobOperationInfo>() { blobOp };
 
-            opsList = await partsProducer.InitializePartsProducersAsync(opsList);
             await partsProducer.StartPartsProducersAsync(opsList, readBuffer);
 
             readBuffer.Writer.Complete();
@@ -92,7 +90,6 @@ namespace Tes.Runner.Test
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
             var opsList = new List<BlobOperationInfo>() { blobOp };
 
-            opsList = await partsProducer.InitializePartsProducersAsync(opsList);
             await partsProducer.StartPartsProducersAsync(opsList, readBuffer);
 
             readBuffer.Writer.Complete();

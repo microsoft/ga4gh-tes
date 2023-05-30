@@ -26,10 +26,23 @@ public class ResolutionPolicyHandler
 
         foreach (var output in testTaskOutputs)
         {
-            list.Add(await CreateUploadInfoWithStrategyAsync(output));
+            if (IncludeOutput(output))
+            {
+                list.Add(await CreateUploadInfoWithStrategyAsync(output));
+            }
         }
 
         return list;
+    }
+
+    private static bool IncludeOutput(FileOutput output)
+    {
+        if (string.IsNullOrEmpty(output.FullFileName))
+        {
+            throw new ArgumentException("A task output is missing the full filename. Please check the task definition.");
+        }
+
+        return output.Required == true || File.Exists(ExpandEnvironmentVariables(output.FullFileName));
     }
 
     /// <summary>
@@ -61,21 +74,16 @@ public class ResolutionPolicyHandler
             throw new ArgumentException("A task input is missing the full filename. Please check the task definition.");
         }
 
-        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy);
+        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy ?? SasResolutionStrategy.None);
 
         return new DownloadInfo(ExpandEnvironmentVariables(input.FullFileName), uri);
     }
 
-    private async Task<UploadInfo> CreateUploadInfoWithStrategyAsync(FileOutput output)
+    private static async Task<UploadInfo> CreateUploadInfoWithStrategyAsync(FileOutput output)
     {
-        if (string.IsNullOrEmpty(output.FullFileName))
-        {
-            throw new ArgumentException("A task output is missing the full filename. Please check the task definition.");
-        }
+        var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy ?? SasResolutionStrategy.None);
 
-        var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy);
-
-        return new UploadInfo(ExpandEnvironmentVariables(output.FullFileName), uri);
+        return new UploadInfo(ExpandEnvironmentVariables(output.FullFileName!), uri);
     }
 
     private static string ExpandEnvironmentVariables(string fullFileName)
@@ -83,7 +91,7 @@ public class ResolutionPolicyHandler
         return Environment.ExpandEnvironmentVariables(fullFileName);
     }
 
-    private async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, SasResolutionStrategy strategy)
+    private static async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, SasResolutionStrategy strategy)
     {
         ArgumentException.ThrowIfNullOrEmpty(sourceUrl);
 

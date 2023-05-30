@@ -56,28 +56,26 @@ namespace Tes.Runner
             }
         }
 
-        private async Task<long> TransferIOCommonAsync(bool skipMissingSources, string? metricsFormat, TransferIOAsyncDelegate asyncDelegate)
+        private async ValueTask AppendMetrics(string? metricsFormat, long bytesTransfered)
         {
-            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
-
-            var bytesTransfered = await asyncDelegate(memoryBufferChannel, skipMissingSources);
-
             if (!string.IsNullOrWhiteSpace(tesNodeTask.MetricsFilename) && !string.IsNullOrWhiteSpace(metricsFormat))
             {
                 await new MetricsFormatter(tesNodeTask.MetricsFilename, metricsFormat).Write(bytesTransfered);
             }
+        }
+
+        public async Task<long> UploadOutputsAsync()
+        {
+            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
+
+            var bytesTransfered = await UploadOutputsAsync(memoryBufferChannel);
+
+            await AppendMetrics(tesNodeTask.OutputsMetricsFormat, bytesTransfered);
 
             return bytesTransfered;
         }
 
-        private delegate ValueTask<long> TransferIOAsyncDelegate(Channel<byte[]> memoryBufferChannel, bool skipMissingSources);
-
-        public Task<long> UploadOutputsAsync(bool skipMissingSources)
-        {
-            return TransferIOCommonAsync(skipMissingSources, tesNodeTask.OutputsMetricsFormat, UploadOutputsAsync);
-        }
-
-        private async ValueTask<long> UploadOutputsAsync(Channel<byte[]> memoryBufferChannel, bool skipMissingSources)
+        private async ValueTask<long> UploadOutputsAsync(Channel<byte[]> memoryBufferChannel)
         {
             if (tesNodeTask.Outputs is null || tesNodeTask.Outputs.Count == 0)
             {
@@ -93,9 +91,9 @@ namespace Tes.Runner
 
             var outputs = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Outputs);
 
-            if (outputs != null)
+            if ((outputs?.Count ?? 0) > 0)
             {
-                var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs, skipMissingSources));
+                var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs!));
 
                 logger.LogInformation($"Executed Upload. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 
@@ -105,12 +103,18 @@ namespace Tes.Runner
             return 0;
         }
 
-        public Task<long> DownloadInputsAsync(bool skipMissingSources)
+        public async Task<long> DownloadInputsAsync()
         {
-            return TransferIOCommonAsync(skipMissingSources, tesNodeTask.InputsMetricsFormat, DownloadInputsAsync);
+            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
+
+            var bytesTransfered = await DownloadInputsAsync(memoryBufferChannel);
+
+            await AppendMetrics(tesNodeTask.InputsMetricsFormat, bytesTransfered);
+
+            return bytesTransfered;
         }
 
-        private async ValueTask<long> DownloadInputsAsync(Channel<byte[]> memoryBufferChannel, bool skipMissingSources)
+        private async ValueTask<long> DownloadInputsAsync(Channel<byte[]> memoryBufferChannel)
         {
             if (tesNodeTask.Inputs is null || tesNodeTask.Inputs.Count == 0)
             {
@@ -124,9 +128,9 @@ namespace Tes.Runner
 
             var inputs = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Inputs);
 
-            if (inputs != null)
+            if ((inputs?.Count ?? 0) > 0)
             {
-                var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs, skipMissingSources));
+                var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs!));
 
                 logger.LogInformation($"Executed Download. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 

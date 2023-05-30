@@ -1038,6 +1038,9 @@ namespace TesApi.Web
             }
 
             var uploadFilesScriptPath = $"/{storageUploadPath}/{UploadFilesScriptFileName}";
+            // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
+            // Ignore any other missing files and directories. WDL tasks can have optional output files.
+            // Implementation: do not set Required to True (it defaults to False)
             var uploadFilesScriptContent = new NodeTask
             {
                 MetricsFilename = metricsName,
@@ -1108,7 +1111,7 @@ namespace TesApi.Web
             var uploadMetricsScriptPath = $"/{storageUploadPath}/{UploadMetricsScriptFileName}";
             var uploadMetricsScriptContent = new NodeTask
             {
-                Outputs = new List<FileOutput>() { new FileOutput { FullFileName = metricsName, TargetUrl = metricsUrl.ToString(), SasStrategy = SasResolutionStrategy.None } }
+                Outputs = new List<FileOutput>() { new FileOutput { FullFileName = metricsName, TargetUrl = metricsUrl.ToString(), SasStrategy = SasResolutionStrategy.None, Required = true } }
             };
 
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
@@ -1119,10 +1122,8 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"write_ts ExecutorStart && \\");
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= --workdir / {executor.Image} {executor.Command[0]}  \"{string.Join(" && ", executor.Command.Skip(1))}\" && \\");
             sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
-            // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
-            // Ignore any other missing files and directories. WDL tasks can have optional output files.
             sb.AppendLinuxLine($"write_ts UploadStart && \\");
-            sb.AppendLinuxLine($"tRunner upload --file {UploadFilesScriptFileName} --blockSize {blobxferChunkSizeBytes:D} --bufferCapacity {blobxferOneShotBytes:D} --skipMissingSources True && \\");
+            sb.AppendLinuxLine($"tRunner upload --file {UploadFilesScriptFileName} --blockSize {blobxferChunkSizeBytes:D} --bufferCapacity {blobxferOneShotBytes:D} && \\");
             sb.AppendLinuxLine($"write_ts UploadEnd && \\");
             sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
@@ -1133,7 +1134,7 @@ namespace TesApi.Web
             await storageAccessProvider.UploadBlobAsync(uploadMetricsScriptPath, SerializeNodeTask(uploadMetricsScriptContent), cancellationToken);
             await storageAccessProvider.UploadBlobAsync(batchScriptPath, sb.ToString(), cancellationToken);
 
-            var nodeTaskRunnerSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{storageUploadPath}/{NodeTaskRunnerFilename}", cancellationToken);
+            var nodeTaskRunnerSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{defaultStorageAccountName}{TesExecutionsPathPrefix}/{NodeTaskRunnerFilename}", cancellationToken);
             var batchScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(batchScriptPath, cancellationToken);
             var downloadFilesScriptUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(downloadFilesScriptPath, cancellationToken);
             var uploadFilesScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(uploadFilesScriptPath, cancellationToken);

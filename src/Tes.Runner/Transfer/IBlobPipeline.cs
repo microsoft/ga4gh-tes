@@ -27,7 +27,7 @@ public interface IBlobPipeline
     /// </summary>
     /// <param name="source">Source path or URL</param>
     /// <returns>Size of the source</returns>
-    Task<long?> GetSourceLengthAsync(string source);
+    Task<long> GetSourceLengthAsync(string source);
 
     /// <summary>
     /// Called when the pipeline has completed the processing of a file or blob.

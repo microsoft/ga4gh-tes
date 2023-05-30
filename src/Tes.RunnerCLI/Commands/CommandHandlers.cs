@@ -26,11 +26,11 @@ namespace Tes.RunnerCLI.Commands
             {
                 var options = BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-                await ExecuteTransferAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options, false);
+                await ExecuteTransferAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options);
 
                 await ExecuteNodeContainerTaskAsync(file, dockerUri, options);
 
-                await ExecuteTransferAsSubProcessAsync(CommandFactory.UploadCommandName, file, options, true);
+                await ExecuteTransferAsSubProcessAsync(CommandFactory.UploadCommandName, file, options);
 
                 return SuccessExitCode;
             }
@@ -55,11 +55,11 @@ namespace Tes.RunnerCLI.Commands
                     throw new InvalidOperationException("The container task failed to return results");
                 }
 
-                var logs = await result.ContainerResult.Logs.ReadOutputToEndAsync(CancellationToken.None);
+                var (stdout, stderr) = await result.ContainerResult.Logs.ReadOutputToEndAsync(CancellationToken.None);
 
                 Console.WriteLine($"Execution Status Code: {result.ContainerResult.StatusCode}. Error: {result.ContainerResult.Error}");
-                Console.WriteLine($"StdOutput: {logs.stdout}");
-                Console.WriteLine($"StdError: {logs.stderr}");
+                Console.WriteLine($"StdOutput: {stdout}");
+                Console.WriteLine($"StdError: {stderr}");
             }
             catch (Exception e)
             {
@@ -89,14 +89,13 @@ namespace Tes.RunnerCLI.Commands
             int writers,
             int readers,
             int bufferCapacity,
-            bool skipMissingSources,
             string apiVersion)
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
             Console.WriteLine("Starting upload operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.UploadOutputsAsync(skipMissingSources));
+            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.UploadOutputsAsync());
         }
 
         private static void HandleResult(ProcessExecutionResult results, string command)
@@ -110,11 +109,11 @@ namespace Tes.RunnerCLI.Commands
             Console.WriteLine($"Result: {results.StandardOutput}");
         }
 
-        private static async Task ExecuteTransferAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options, bool skipMissingSources)
+        private static async Task ExecuteTransferAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
         {
             var processLauncher = new ProcessLauncher();
 
-            var results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options, skipMissingSources));
+            var results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
 
             HandleResult(results, command);
         }
@@ -124,14 +123,13 @@ namespace Tes.RunnerCLI.Commands
             int writers,
             int readers,
             int bufferCapacity,
-            bool skipMissingSources,
             string apiVersion)
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
             Console.WriteLine("Starting download operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.DownloadInputsAsync(skipMissingSources));
+            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.DownloadInputsAsync());
         }
 
         private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, BlobPipelineOptions options, Func<Executor, Task<long>> transferOperation)
