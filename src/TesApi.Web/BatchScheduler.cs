@@ -58,6 +58,7 @@ namespace TesApi.Web
         private const string UploadFilesScriptFileName = "upload_files_script";
         private const string DownloadFilesScriptFileName = "download_files_script";
         private const string StartTaskScriptFilename = "start-task.sh";
+        private const string DockerImageContainer = "dockerimages";
         private static readonly Regex queryStringRegex = GetQueryStringRegex();
         private readonly string dockerInDockerImageName;
         private readonly string blobxferImageName;
@@ -1099,7 +1100,19 @@ namespace TesApi.Web
             if (executorImageIsPublic)
             {
                 // Private executor images are pulled via pool ContainerConfiguration
-                sb.AppendLinuxLine($"write_ts ExecutorPullStart && docker pull --quiet {executor.Image} && write_ts ExecutorPullEnd && \\");
+                //sb.AppendLinuxLine($"write_ts ExecutorPullStart && docker pull --quiet {executor.Image} && write_ts ExecutorPullEnd && \\");
+                sb.AppendLinuxLine($"curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash && \\");
+                sb.AppendLinuxLine($"sudo apt update -qq && sudo apt install -qq -y jq && \\");
+                sb.AppendLinuxLine($"az login --identity && \\");
+                sb.AppendLinuxLine($"date=$(date --iso-8601) && \\");
+                sb.AppendLinuxLine($"manifest=$(docker manifest inspect {executor.Image} -v) && \\");
+                sb.AppendLinuxLine($"hash=$(echo $manifest | jq -r '.Descriptor.digest' | cut -d \":\" -f 2) && \\");
+                sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest| jq -c '.[] | select( .Descriptor.platform.architecture == \"amd64\")' | jq -r '.Descriptor.digest'); fi && \\");
+                sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest | jq -r '.config.digest' | cut -d \":\" -f 2); fi && \\");
+                sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest| jq -c '.[] | select( .config.platform.architecture == \"amd64\")' | jq -r '.config.digest'); fi && \\");
+                sb.AppendLinuxLine($"if docker image ls --digests | grep $hash; then echo \"{executor.Image} already exists locally, skipping pull.\"; \\");
+                sb.AppendLinuxLine($"else if az storage blob download --container-name {DockerImageContainer} --account-name {defaultStorageAccountName} --name $hash.tar --file $hash.tar; then docker load < $hash.tar; az storage blob metadata update --container-name {DockerImageContainer} --account-name {defaultStorageAccountName} --name $hash.tar --metadata lastused=$date; \\");
+                sb.AppendLinuxLine($"else docker pull --quiet {executor.Image}; docker image save {executor.Image} > $hash.tar; az storage blob upload --container-name {DockerImageContainer} --account-name {defaultStorageAccountName} --name $hash.tar --file $hash.tar --metadata lastused=$date; fi; fi && \\");
             }
 
             // The remainder of the script downloads the inputs, runs the main executor container, and uploads the outputs, including the metrics.txt file

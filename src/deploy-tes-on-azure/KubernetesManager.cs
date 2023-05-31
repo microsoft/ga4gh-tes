@@ -254,7 +254,7 @@ namespace TesDeployer
         public async Task UpdateHelmValuesAsync(IStorageAccount storageAccount, string keyVaultUrl, string resourceGroupName, Dictionary<string, string> settings, IIdentity managedId)
         {
             var values = await GetHelmValuesAsync(valuesTemplatePath);
-            UpdateValuesFromSettings(values, settings);
+            UpdateValuesFromSettings(values, settings, managedId.Id);
             values.Config["resourceGroup"] = resourceGroupName;
             values.Identity["name"] = managedId.Name;
             values.Identity["resourceId"] = managedId.Id;
@@ -400,7 +400,7 @@ namespace TesDeployer
             }
         }
 
-        private static void UpdateValuesFromSettings(HelmValues values, Dictionary<string, string> settings)
+        private static void UpdateValuesFromSettings(HelmValues values, Dictionary<string, string> settings, string managedId = null)
         {
             var batchAccount = GetObjectFromConfig(values, "batchAccount") ?? new Dictionary<string, string>();
             var batchNodes = GetObjectFromConfig(values, "batchNodes") ?? new Dictionary<string, string>();
@@ -417,6 +417,7 @@ namespace TesDeployer
             batchNodes["subnetId"] = GetValueOrDefault(settings, "BatchNodesSubnetId");
             values.Config["coaNamespace"] = GetValueOrDefault(settings, "AksCoANamespace");
             batchNodes["disablePublicIpAddress"] = GetValueOrDefault(settings, "DisableBatchNodesPublicIpAddress");
+            batchNodes["globalManagedIdentity"] = managedId;
             batchScheduling["disable"] = GetValueOrDefault(settings, "DisableBatchScheduling");
             batchScheduling["usePreemptibleVmsOnly"] = GetValueOrDefault(settings, "UsePreemptibleVmsOnly");
             nodeImages["blobxfer"] = GetValueOrDefault(settings, "BlobxferImageName");
