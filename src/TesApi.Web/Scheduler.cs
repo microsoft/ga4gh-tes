@@ -71,8 +71,16 @@ namespace TesApi.Web
         /// <returns>A System.Threading.Tasks.Task that represents the long running operations.</returns>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            // Delay "starting" Scheduler until this completes to finish initializing BatchScheduler.
-            await batchScheduler.UploadTaskRunnerIfNeeded(stoppingToken);
+            try
+            {
+                // Delay "starting" Scheduler until this completes to finish initializing BatchScheduler.
+                await batchScheduler.UploadTaskRunnerIfNeeded(stoppingToken);
+            }
+            catch (Exception exc)
+            {
+                logger.LogError(exc, @"Checking/storing the node task runner binary failed with {Message}", exc.Message);
+                throw;
+            }
 
             logger.LogInformation("Scheduler started.");
 

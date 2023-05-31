@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -680,7 +679,7 @@ namespace TesApi.Web
             => new CloudBlockBlob(blobAbsoluteUri).ExistsAsync(null, null, cancellationToken);
 
         /// <inheritdoc/>
-        public async Task<Microsoft.WindowsAzure.Storage.Blob.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
+        public async Task<BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
         {
             var blob = new CloudBlockBlob(blobAbsoluteUri);
 
