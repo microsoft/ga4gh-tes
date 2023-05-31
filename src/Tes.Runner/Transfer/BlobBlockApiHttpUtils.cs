@@ -3,6 +3,7 @@
 
 using System.Net;
 using System.Net.Http.Headers;
+using System.Runtime.Serialization;
 using System.Text;
 using Polly;
 using Polly.Retry;
@@ -13,11 +14,13 @@ namespace Tes.Runner.Transfer;
 /// </summary>
 public class BlobBlockApiHttpUtils
 {
+    private const string BlobType = "BlockBlob";
     private const int MaxRetryCount = 3;
     private static readonly HttpClient HttpClient = new HttpClient();
     private static readonly AsyncRetryPolicy RetryPolicy = Policy
         .Handle<RetriableException>()
         .WaitAndRetryAsync(MaxRetryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+    private const string TesRootHashMetadataName = "root_hash_md5_hashlist_100mib";
 
     public static HttpRequestMessage CreatePutBlockRequestAsync(PipelineBuffer buffer, string apiVersion)
     {
@@ -26,7 +29,7 @@ public class BlobBlockApiHttpUtils
             Content = new ByteArrayContent(buffer.Data, 0, buffer.Length)
         };
 
-        AddPutBlockHeaders(request, apiVersion);
+        AddPutBlockHeaders(request, apiVersion, buffer.BlockHash);
         return request;
     }
 
@@ -40,10 +43,31 @@ public class BlobBlockApiHttpUtils
         return Convert.ToBase64String(Encoding.UTF8.GetBytes($"block{ordinal:00000}"));
     }
 
-    private static void AddPutBlockHeaders(HttpRequestMessage request, string apiVersion)
+    private static void AddPutBlockHeaders(HttpRequestMessage request, string apiVersion, string blockMd5)
     {
-        request.Headers.Add("x-ms-blob-type", "BlockBlob");
+        request.Headers.Add("x-ms-blob-type", BlobType);
+
+        AddBlockMd5ContentHeaderIfSet(request, blockMd5);
         AddBlockBlobServiceHeaders(request, apiVersion);
+    }
+
+    private static void AddBlockMd5ContentHeaderIfSet(HttpRequestMessage request, string blockMd5)
+    {
+        if (!string.IsNullOrEmpty(blockMd5))
+        {
+            var value = Convert.ToBase64String(Encoding.UTF8.GetBytes(blockMd5));
+            Console.WriteLine($"Block MD5: {value}");
+            request.Content?.Headers.Add("Content-MD5", value);
+        }
+    }
+
+    private static void AddMetadataHeader(HttpRequestMessage request, string name, string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return;
+        }
+        request.Headers.Add($"x-ms-meta-{name}", value);
     }
 
     private static void AddBlockBlobServiceHeaders(HttpRequestMessage request, string apiVersion)
@@ -52,7 +76,7 @@ public class BlobBlockApiHttpUtils
         request.Headers.Add("x-ms-date", DateTime.UtcNow.ToString("R"));
     }
 
-    public static HttpRequestMessage CreateBlobBlockListRequest(long length, Uri blobUrl, int blockSizeBytes, string apiVersion)
+    public static HttpRequestMessage CreateBlobBlockListRequest(long length, Uri blobUrl, int blockSizeBytes, string apiVersion, string rootHash)
     {
         var content = CreateBlockListContent(length, blockSizeBytes);
 
@@ -63,6 +87,7 @@ public class BlobBlockApiHttpUtils
             Content = content
         };
 
+        AddMetadataHeader(request, TesRootHashMetadataName, rootHash);
         AddBlockBlobServiceHeaders(request, apiVersion);
         return request;
     }

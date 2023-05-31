@@ -18,6 +18,7 @@ public class PipelineBuffer
     public int NumberOfParts { get; set; }
     public long FileSize { get; set; }
     public Channel<FileStream> FileHandlerPool { get; set; } = null!;
-    public Md5Processor? Md5Processor { get; set; }
+    public string BlockHash { get; set; } = String.Empty;
+    public IHashListProvider? HashListProvider { get; set; }
 }
 
