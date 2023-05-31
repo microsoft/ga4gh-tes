@@ -83,32 +83,30 @@ public class PartsProducer
 
         var fileHandlerPool = await GetNewFileHandlerPoolAsync(operation.FileName, operation.ReadOnlyHandlerForExistingFile);
 
-        var md5Processor = new Md5Processor(MD5.Create(), new SemaphoreSlim(initialCount: 1));
-
         if (length == 0)
         {
-            await CreateAndWritePipelinePartBufferAsync(operation, readBufferChannel, fileHandlerPool, length, partOrdinal: 0, numberOfParts: 1, md5Processor);
+            await CreateAndWritePipelinePartBufferAsync(operation, readBufferChannel, fileHandlerPool, length, partOrdinal: 0, numberOfParts: 1);
             return;
         }
 
         for (var i = 0; i < numberOfParts; i++)
         {
-            await CreateAndWritePipelinePartBufferAsync(operation, readBufferChannel, fileHandlerPool, length, partOrdinal: i, numberOfParts, md5Processor);
+            await CreateAndWritePipelinePartBufferAsync(operation, readBufferChannel, fileHandlerPool, length, partOrdinal: i, numberOfParts);
         }
     }
 
     private async Task CreateAndWritePipelinePartBufferAsync(BlobOperationInfo operation, Channel<PipelineBuffer> readBufferChannel,
-        Channel<FileStream> fileHandlerPool, long length, int partOrdinal, int numberOfParts, Md5Processor md5Processor)
+        Channel<FileStream> fileHandlerPool, long length, int partOrdinal, int numberOfParts)
     {
         PipelineBuffer buffer;
-        buffer = GetNewPipelinePartBuffer(operation.Url, operation.FileName, fileHandlerPool, length, partOrdinal, numberOfParts, md5Processor);
+        buffer = GetNewPipelinePartBuffer(operation.Url, operation.FileName, fileHandlerPool, length, partOrdinal, numberOfParts);
 
         await readBufferChannel.Writer.WriteAsync(buffer);
     }
 
     private PipelineBuffer GetNewPipelinePartBuffer(Uri blobUrl, string fileName, Channel<FileStream> fileHandlerPool,
         long fileSize, int partOrdinal,
-        int numberOfParts, Md5Processor md5Processor)
+        int numberOfParts)
     {
         var buffer = new PipelineBuffer()
         {
