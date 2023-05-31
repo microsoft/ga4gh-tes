@@ -1,5 +1,4 @@
-﻿<Project>
-  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk.Web"/>
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <Description>TES API</Description>
@@ -9,11 +8,6 @@
     <AssemblyName>tesapi</AssemblyName>
     <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
   </PropertyGroup>
-
-  <ItemGroup>
-    <None Remove="scripts\clean-executor.sh" />
-    <None Remove="scripts\task-run.sh" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="AutoMapper" Version="12.0.1" />
@@ -58,22 +52,23 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="scripts\clean-executor.sh">
+    <None Include="scripts\clean-executor.sh">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="scripts\task-run.sh">
+    </None>
+    <None Include="scripts\task-run.sh">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\CommonUtilities\CommonUtilities.csproj" />
 
-    <ProjectReference Include="..\Tes.RunnerCLI\Tes.RunnerCLI.csproj" Targets="Publish;PublishItemsOutputGroup" AdditionalProperties="PublishProfile=FolderProfile" Condition="'$(CODEQL_ACTION_VERSION)' == '' And !$([MSBuild]::IsRunningFromVisualStudio())">
+    <ProjectReference Include="..\Tes.RunnerCLI\Tes.RunnerCLI.csproj"
+		      Targets="Publish"
+		      AdditionalProperties="PublishProfile=FolderProfile">
       <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
-      <OutputItemType>PublishedBinary</OutputItemType>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <GlobalPropertiesToRemove>SelfContained</GlobalPropertiesToRemove>
+      <OutputItemType>None</OutputItemType>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </ProjectReference>
 
     <ProjectReference Include="..\Tes\Tes.csproj" />
@@ -107,20 +102,28 @@
     </Task>
   </UsingTask>
 
-  <!-- Preserves metadata needed to prevent copying unwanted files from referenced project. -->
-  <Target Name="__AdjustCopyToOutputDirectoryItemsOptimization" AfterTargets="_PopulateCommonStateForGetCopyToOutputDirectoryItems">
-    <PropertyGroup Condition=" '$(MSBuildDisableGetCopyToOutputDirectoryItemsOptimization)' == '' ">
-      <_GCTODIKeepMetadata>$(_GCTODIKeepMetadata);MSBuildSourceProjectFile</_GCTODIKeepMetadata>
-    </PropertyGroup>
+  <Target Name="__AssignPublishProperties" BeforeTargets="ResolveProjectReferences" AfterTargets="PrepareProjectReferences">
+    <ConvertToAbsolutePath Paths="$(OutputPath)scripts\">
+      <Output TaskParameter="AbsolutePaths" PropertyName="__TesRunnerPublishDir"/>
+    </ConvertToAbsolutePath>
+
+    <ItemGroup>
+      <__ProjectNotReferenced Include="@(_MSBuildProjectReferenceExistent)" Condition=" '%(Filename)' == 'Tes.RunnerCLI' "/>
+      <_MSBuildProjectReferenceExistent Remove="@(__ProjectNotReferenced)"/>
+      <_MSBuildProjectReferenceExistent Include="@(__ProjectNotReferenced)">
+        <Properties>%(__ProjectNotReferenced.AdditionalProperties);PublishDir=$(__TesRunnerPublishDir);%(__ProjectNotReferenced.SetConfiguration);%(__ProjectNotReferenced.SetPlatform);%(__ProjectNotReferenced.SetTargetFramework)</Properties>
+        <AdditionalProperties></AdditionalProperties>
+        <GlobalPropertiesToRemove>%(__ProjectNotReferenced.GlobalPropertiesToRemove);PublishSingleFile;PublishTrimmed;SelfContained</GlobalPropertiesToRemove>
+      </_MSBuildProjectReferenceExistent>
+    </ItemGroup>
   </Target>
 
-  <!-- Adds non-referenced published binary outputs as content in the specified folder -->
-  <Target Name="__AddPublishedBinary" AfterTargets="ResolveProjectReferences;AssignTargetPaths;__AdjustCopyToOutputDirectoryItemsOptimization">
+  <Target Name="__GetPublishedProjectMD5Hash" AfterTargets="ResolveProjectReferences;AssignTargetPaths;__AdjustCopyToOutputDirectoryItemsOptimization">
     <ItemGroup>
       <__TRunnerMD5Hash Include="$(IntermediateOutputPath)TRunnerMD5Hash.txt" />
     </ItemGroup>
 
-    <GenerateMD5 InputFile="@(PublishedBinary)" Condition=" '%(Filename)%(Extension)' == 'tRunner' ">
+    <GenerateMD5 InputFile="$(__TesRunnerPublishDir)tRunner">
       <Output TaskParameter="MD5Hash" PropertyName="__TRunnerMD5Hash" />
     </GenerateMD5>
 
@@ -132,128 +135,7 @@
         <TargetPath>scripts\TRunnerMD5Hash.txt</TargetPath>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </ContentWithTargetPath>
-      <ContentWithTargetPath KeepDuplicates=" '$(_GCTODIKeepDuplicates)' != 'false' " KeepMetadata="$(_GCTODIKeepMetadata)" RemoveMetadata="MSBuildSourceProjectFile" Include="@(PublishedBinary->'%(FullPath)')">
-        <TargetPath>scripts\%(TargetPath)</TargetPath>
-      </ContentWithTargetPath>
     </ItemGroup>
   </Target>
 
-
-  <!-- Prevents copying unwanted files from referenced project. -->
-  <Target Name="__FixPublishedBinary" AfterTargets="GetCopyToOutputDirectoryItems">
-    <ItemGroup>
-      <_SourceItemsToCopyToOutputDirectoryAlways Remove="@(_SourceItemsToCopyToOutputDirectoryAlways)" Condition=" '$([System.IO.Path]::GetFileName(&quot;%(_SourceItemsToCopyToOutputDirectoryAlways.MSBuildSourceProjectFile)&quot;))' == 'Tes.RunnerCLI.csproj' " />
-      <_SourceItemsToCopyToOutputDirectoryAlways Remove="@(_SourceItemsToCopyToOutputDirectoryAlways)" Condition=" '$([System.IO.Path]::GetFileName(&quot;%(_SourceItemsToCopyToOutputDirectoryAlways.MSBuildSourceProjectFile)&quot;))' == 'Tes.Runner.csproj' " />
-      <_SourceItemsToCopyToOutputDirectory Remove="@(_SourceItemsToCopyToOutputDirectory)" Condition=" '$([System.IO.Path]::GetFileName(&quot;%(_SourceItemsToCopyToOutputDirectory.MSBuildSourceProjectFile)&quot;))' == 'Tes.RunnerCLI.csproj' " />
-      <_SourceItemsToCopyToOutputDirectory Remove="@(_SourceItemsToCopyToOutputDirectory)" Condition=" '$([System.IO.Path]::GetFileName(&quot;%(_SourceItemsToCopyToOutputDirectory.MSBuildSourceProjectFile)&quot;))' == 'Tes.Runner.csproj' " />
-    </ItemGroup>
-  </Target>
-
-  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk.Web"/>
-
-  <!-- Modified from Microsoft.NET.Publish.targets -->
-  <Target Name="GetCopyToPublishDirectoryItems"
-          Returns="@(AllPublishItemsFullPathWithTargetPath)"
-          KeepDuplicateOutputs=" '$(MSBuildDisableGetCopyToPublishDirectoryItemsOptimization)' == '' "
-          DependsOnTargets="AssignTargetPaths;
-                            DefaultCopyToPublishDirectoryMetadata;
-                            _SplitProjectReferencesByFileExistence;
-                            _GetProjectReferenceTargetFrameworkProperties">
-
-
-    <!-- In the general case, clients need very little of the metadata which is generated by invoking this target on this project and its children.  For those
-         cases, we can immediately discard the unwanted metadata, reducing memory usage, particularly in very large and interconnected systems of projects.
-         However, if some client does require the original functionality, it is sufficient to set MSBuildDisableGetCopyToPublishDirectoryItemsOptimization to
-         a non-empty value and the original behavior will be restored. -->
-    <PropertyGroup Condition=" '$(MSBuildDisableGetCopyToPublishDirectoryItemsOptimization)' == '' ">
-      <_GCTPDIKeepDuplicates>false</_GCTPDIKeepDuplicates>
-      <_GCTPDIKeepMetadata>CopyToPublishDirectory;ExcludeFromSingleFile;TargetPath;MSBuildSourceProjectFile</_GCTPDIKeepMetadata>
-    </PropertyGroup>
-
-    <!-- Get items from child projects first. -->
-    <MSBuild Projects="@(_MSBuildProjectReferenceExistent)"
-             Targets="GetCopyToPublishDirectoryItems"
-             BuildInParallel="$(BuildInParallel)"
-             Properties="%(_MSBuildProjectReferenceExistent.SetConfiguration); %(_MSBuildProjectReferenceExistent.SetPlatform); %(_MSBuildProjectReferenceExistent.SetTargetFramework)"
-             Condition="'@(_MSBuildProjectReferenceExistent)' != '' and '$(_GetChildProjectCopyToPublishDirectoryItems)' == 'true' and '%(_MSBuildProjectReferenceExistent.Private)' != 'false'"
-             ContinueOnError="$(ContinueOnError)"
-             RemoveProperties="%(_MSBuildProjectReferenceExistent.GlobalPropertiesToRemove)$(_GlobalPropertiesToRemoveFromProjectReferences)">
-
-      <Output TaskParameter="TargetOutputs" ItemName="_AllChildProjectPublishItemsWithTargetPath"/>
-
-    </MSBuild>
-
-    <ItemGroup>
-      <!-- Remove unwanted files from referenced project. -->
-      <_AllChildProjectPublishItemsWithTargetPath Remove="@(_AllChildProjectPublishItemsWithTargetPath)" Condition=" '$([System.IO.Path]::GetFileName(&quot;%(_AllChildProjectPublishItemsWithTargetPath.MSBuildSourceProjectFile)&quot;))' == 'Tes.RunnerCLI.csproj' "/>
-      <_AllChildProjectPublishItemsWithTargetPath Remove="@(_AllChildProjectPublishItemsWithTargetPath)" Condition=" '$([System.IO.Path]::GetFileName(&quot;%(_AllChildProjectPublishItemsWithTargetPath.MSBuildSourceProjectFile)&quot;))' == 'Tes.Runner.csproj' "/>
-
-      <!-- Target outputs must be full paths because they will be consumed by a different project. -->
-      <_SourceItemsToCopyToPublishDirectoryAlways KeepDuplicates=" '$(_GCTPDIKeepDuplicates)' != 'false' "
-                                                  KeepMetadata="$(_GCTPDIKeepMetadata)"
-                                                  Include="@(_AllChildProjectPublishItemsWithTargetPath->'%(FullPath)')"
-                                                  Condition="'%(_AllChildProjectPublishItemsWithTargetPath.CopyToPublishDirectory)'=='Always'"/>
-
-      <_SourceItemsToCopyToPublishDirectory KeepDuplicates=" '$(_GCTPDIKeepDuplicates)' != 'false' "
-                                            KeepMetadata="$(_GCTPDIKeepMetadata)"
-                                            Include="@(_AllChildProjectPublishItemsWithTargetPath->'%(FullPath)')"
-                                            Condition="'%(_AllChildProjectPublishItemsWithTargetPath.CopyToPublishDirectory)'=='PreserveNewest'"/>
-    </ItemGroup>
-
-    <!-- Remove items which we will never again use - they just sit around taking up memory otherwise -->
-    <ItemGroup>
-      <_AllChildProjectPublishItemsWithTargetPath Remove="@(_AllChildProjectPublishItemsWithTargetPath)"/>
-    </ItemGroup>
-
-    <!-- Get items from this project last so that they will be copied last. -->
-    <ItemGroup>
-      <_SourceItemsToCopyToPublishDirectoryAlways KeepMetadata="$(_GCTPDIKeepMetadata)"
-                                                  Include="@(ContentWithTargetPath->'%(FullPath)')"
-                                                  Condition="'%(ContentWithTargetPath.CopyToPublishDirectory)'=='Always'"/>
-      <_SourceItemsToCopyToPublishDirectory KeepMetadata="$(_GCTPDIKeepMetadata)"
-                                            Include="@(ContentWithTargetPath->'%(FullPath)')"
-                                            Condition="'%(ContentWithTargetPath.CopyToPublishDirectory)'=='PreserveNewest'"/>
-    </ItemGroup>
-
-    <ItemGroup>
-      <_SourceItemsToCopyToPublishDirectoryAlways KeepMetadata="$(_GCTPDIKeepMetadata)"
-                                                  Include="@(EmbeddedResource->'%(FullPath)')"
-                                                  Condition="'%(EmbeddedResource.CopyToPublishDirectory)'=='Always'"/>
-      <_SourceItemsToCopyToPublishDirectory KeepMetadata="$(_GCTPDIKeepMetadata)"
-                                            Include="@(EmbeddedResource->'%(FullPath)')"
-                                            Condition="'%(EmbeddedResource.CopyToPublishDirectory)'=='PreserveNewest'"/>
-    </ItemGroup>
-
-    <ItemGroup>
-      <_CompileItemsToPublish Include="@(Compile->'%(FullPath)')"
-                              Condition="'%(Compile.CopyToPublishDirectory)'=='Always' or '%(Compile.CopyToPublishDirectory)'=='PreserveNewest'"/>
-    </ItemGroup>
-
-    <AssignTargetPath Files="@(_CompileItemsToPublish)" RootFolder="$(MSBuildProjectDirectory)">
-      <Output TaskParameter="AssignedFiles" ItemName="_CompileItemsToPublishWithTargetPath" />
-    </AssignTargetPath>
-
-    <ItemGroup>
-      <_SourceItemsToCopyToPublishDirectoryAlways KeepMetadata="$(_GCTPDIKeepMetadata)"
-                                                  Include="@(_CompileItemsToPublishWithTargetPath)"
-                                                  Condition="'%(_CompileItemsToPublishWithTargetPath.CopyToPublishDirectory)'=='Always'"/>
-      <_SourceItemsToCopyToPublishDirectory KeepMetadata="$(_GCTPDIKeepMetadata)"
-                                           Include="@(_CompileItemsToPublishWithTargetPath)"
-                                           Condition="'%(_CompileItemsToPublishWithTargetPath.CopyToPublishDirectory)'=='PreserveNewest'"/>
-    </ItemGroup>
-
-    <ItemGroup>
-      <_SourceItemsToCopyToPublishDirectoryAlways KeepMetadata="$(_GCTPDIKeepMetadata)"
-                                                  Include="@(_NoneWithTargetPath->'%(FullPath)')"
-                                                  Condition="'%(_NoneWithTargetPath.CopyToPublishDirectory)'=='Always'"/>
-      <_SourceItemsToCopyToPublishDirectory KeepMetadata="$(_GCTPDIKeepMetadata)"
-                                            Include="@(_NoneWithTargetPath->'%(FullPath)')"
-                                            Condition="'%(_NoneWithTargetPath.CopyToPublishDirectory)'=='PreserveNewest'"/>
-    </ItemGroup>
-
-    <ItemGroup>
-      <AllPublishItemsFullPathWithTargetPath Include="@(_SourceItemsToCopyToPublishDirectoryAlways->'%(FullPath)');@(_SourceItemsToCopyToPublishDirectory->'%(FullPath)')"/>
-    </ItemGroup>
-
-  </Target>
 </Project>

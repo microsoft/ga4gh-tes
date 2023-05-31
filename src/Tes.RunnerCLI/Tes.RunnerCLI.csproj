@@ -24,10 +24,4 @@
     </None>
   </ItemGroup>
 
-  <Target Name="FixPublishDir" BeforeTargets="PrepareForPublish">
-    <ConvertToAbsolutePath Paths="$(PublishDir)">
-      <Output TaskParameter="AbsolutePaths" PropertyName="PublishDir"/>
-    </ConvertToAbsolutePath>
-  </Target>
-
 </Project>
