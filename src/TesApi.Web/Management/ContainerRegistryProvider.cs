@@ -83,7 +83,8 @@ namespace TesApi.Web.Management
         {
             // mcr.microsoft.com = public
             // no domain specified = public
-            var host = imageName.Split('/', StringSplitOptions.RemoveEmptyEntries).First();
+            var imageNameWithoutVersion = imageName.Split(':', StringSplitOptions.RemoveEmptyEntries).First();
+            var host = imageNameWithoutVersion.Split('/', StringSplitOptions.RemoveEmptyEntries).First();
 
             if (host.Equals("mcr.microsoft.com", StringComparison.OrdinalIgnoreCase) || !host.Contains('.'))
             {
