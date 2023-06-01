@@ -1,8 +1,12 @@
 {
   "profiles": {
-    "Tes.RunnerCLI": {
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
+    },
+    "WSL 2": {
       "commandName": "Project",
-      "commandLineArgs": "upload --file TesTask.yml"
+      "commandLineArgs": "upload"
     }
   }
 }
