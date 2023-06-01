@@ -11,7 +11,7 @@ namespace Tes.Runner.Test
 {
     [TestClass]
     [TestCategory("Integration")]
-    //[Ignore]
+    [Ignore]
     public class BlobUploaderTests
     {
 #pragma warning disable CS8618
