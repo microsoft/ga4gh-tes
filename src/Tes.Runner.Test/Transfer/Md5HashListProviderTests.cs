@@ -2,12 +2,6 @@
 // Licensed under the MIT License.
 
 using Tes.Runner.Transfer;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Tes.Runner.Test;
 
 namespace Tes.Runner.Test.Transfer
 {
