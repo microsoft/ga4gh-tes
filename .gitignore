@@ -4,4 +4,3 @@ obj/
 .vscode/
 /CromwellTriggerService/out
 /Microsoft.GA4GH.TES.sln.DotSettings.user
-/src/Tes.Runner/Transfer/Md5Processor.cs
