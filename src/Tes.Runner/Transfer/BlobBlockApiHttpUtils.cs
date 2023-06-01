@@ -3,7 +3,6 @@
 
 using System.Net;
 using System.Net.Http.Headers;
-using System.Runtime.Serialization;
 using System.Text;
 using Polly;
 using Polly.Retry;
@@ -29,7 +28,7 @@ public class BlobBlockApiHttpUtils
             Content = new ByteArrayContent(buffer.Data, 0, buffer.Length)
         };
 
-        AddPutBlockHeaders(request, apiVersion, buffer.BlockHash);
+        AddPutBlockHeaders(request, apiVersion);
         return request;
     }
 
@@ -43,7 +42,7 @@ public class BlobBlockApiHttpUtils
         return Convert.ToBase64String(Encoding.UTF8.GetBytes($"block{ordinal:00000}"));
     }
 
-    private static void AddPutBlockHeaders(HttpRequestMessage request, string apiVersion, string blockMd5)
+    private static void AddPutBlockHeaders(HttpRequestMessage request, string apiVersion)
     {
         request.Headers.Add("x-ms-blob-type", BlobType);
 
