@@ -25,9 +25,7 @@ namespace Tes.Runner.Transfer
         /// <param name="buffer">Pipeline buffer to configure</param>
         public override void ConfigurePipelineBuffer(PipelineBuffer buffer)
         {
-            var url = BlobBlockApiHttpUtils.ParsePutBlockUrl(buffer.BlobUrl, buffer.Ordinal);
-
-            buffer.BlobPartUrl = url;
+            buffer.BlobPartUrl = BlobBlockApiHttpUtils.ParsePutBlockUrl(buffer.BlobUrl, buffer.Ordinal);
 
             buffer.HashListProvider = hashListProviders.GetOrAdd(buffer.FileName, new Md5HashListProvider());
         }
