@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Tes.RunnerCLI": {
+      "commandName": "Project",
+      "commandLineArgs": "upload --file TesTask.yml"
+    }
+  }
+}
