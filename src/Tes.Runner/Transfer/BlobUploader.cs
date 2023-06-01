@@ -131,24 +131,9 @@ namespace Tes.Runner.Transfer
         {
             ValidateUploadList(uploadList);
 
-            //var fileMd5ProcessorTasks = GetFileBlakeProcessorTasks(uploadList);
-
             var operationList = uploadList.Select(d => new BlobOperationInfo(d.TargetUri, d.FullFilePath, d.FullFilePath, true)).ToList();
 
-            var result = await ExecutePipelineAsync(operationList);
-
-            //Task.WaitAll(fileMd5ProcessorTasks.ToArray());
-
-            return result;
-        }
-
-        private List<Task<string>> GetFileMd5ProcessorTasks(List<UploadInfo> uploadList)
-        {
-            return uploadList.Select(upload => FileHashProcessor.StartNewMd5Processor(upload.FullFilePath).GetFileMd5HashAsync()).ToList();
-        }
-        private List<Task<string>> GetFileBlakeProcessorTasks(List<UploadInfo> uploadList)
-        {
-            return uploadList.Select(upload => FileHashProcessor.StartNewBlake5Processor(upload.FullFilePath).GetFileMd5HashAsync()).ToList();
+            return await ExecutePipelineAsync(operationList);
         }
 
         private static void ValidateUploadList(List<UploadInfo> uploadList)
