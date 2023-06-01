@@ -134,7 +134,7 @@ namespace Tes.Runner.Transfer
 
             return await ExecutePipelineAsync(operationList);
         }
-        
+
         private static void ValidateUploadList(List<UploadInfo> uploadList)
         {
             ArgumentNullException.ThrowIfNull(uploadList, nameof(uploadList));

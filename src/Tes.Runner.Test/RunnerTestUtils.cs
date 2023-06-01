@@ -63,6 +63,23 @@ public class RunnerTestUtils
         return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
     }
 
+    public static string AddRandomDataAndReturnMd5(byte[] data)
+    {
+        Random.NextBytes(data);
+        using var md5 = MD5.Create();
+        var hash = md5.ComputeHash(data);
+        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+    }
+
+    public static string GetRootHashFromSortedHashList(List<String> hashList)
+    {
+        var hashListContent = string.Join("", hashList);
+        using var md5 = MD5.Create();
+        var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(hashListContent));
+
+        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+    }
+
     public static async Task<string> CreateTempFileWithContentAsync(int numberOfMiB, int extraBytes = 0)
     {
         var file = Guid.NewGuid().ToString();
