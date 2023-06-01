@@ -2,9 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Collections.Concurrent;
-using System.Security.Cryptography;
 using System.Threading.Channels;
-using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer
@@ -14,8 +12,7 @@ namespace Tes.Runner.Transfer
     /// </summary>
     public class BlobUploader : BlobOperationPipeline
     {
-        private readonly ConcurrentDictionary<string, Md5HashListProvider> hashListProviders =
-            new ConcurrentDictionary<string, Md5HashListProvider>();
+        private readonly ConcurrentDictionary<string, Md5HashListProvider> hashListProviders = new();
 
         public BlobUploader(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBufferPool) : base(pipelineOptions, memoryBufferPool)
         {
@@ -81,7 +78,6 @@ namespace Tes.Runner.Transfer
 
             var dataRead = await fileHandler.ReadAsync(buffer.Data, 0, buffer.Length);
 
-            //buffer.BlockHash = buffer.HashListProvider?.AddBlockHash(buffer) ?? string.Empty;
             buffer.HashListProvider?.AddBlockHash(buffer);
 
             await buffer.FileHandlerPool.Writer.WriteAsync(fileHandler);
@@ -106,8 +102,9 @@ namespace Tes.Runner.Transfer
         /// <param name="length">Blob size</param>
         /// <param name="blobUrl">Target Blob URL</param>
         /// <param name="fileName">Source file name</param>
+        /// <param name="rootHash">Root hash of the file</param>
         /// <returns></returns>
-        public override async Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string rootHash)
+        public override async Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash)
         {
             ArgumentNullException.ThrowIfNull(blobUrl, nameof(blobUrl));
             ArgumentException.ThrowIfNullOrEmpty(fileName, nameof(fileName));
@@ -133,29 +130,14 @@ namespace Tes.Runner.Transfer
         {
             ValidateUploadList(uploadList);
 
-            //var fileMd5ProcessorTasks = GetFileBlakeProcessorTasks(uploadList);
-
             var operationList = uploadList.Select(d => new BlobOperationInfo(d.TargetUri, d.FullFilePath, d.FullFilePath, true)).ToList();
 
-            var result = await ExecutePipelineAsync(operationList);
-
-            //Task.WaitAll(fileMd5ProcessorTasks.ToArray());
-
-            return result;
+            return await ExecutePipelineAsync(operationList);
         }
-
-        private List<Task<string>> GetFileMd5ProcessorTasks(List<UploadInfo> uploadList)
-        {
-            return uploadList.Select(upload => FileHashProcessor.StartNewMd5Processor(upload.FullFilePath).GetFileMd5HashAsync()).ToList();
-        }
-        private List<Task<string>> GetFileBlakeProcessorTasks(List<UploadInfo> uploadList)
-        {
-            return uploadList.Select(upload => FileHashProcessor.StartNewBlake5Processor(upload.FullFilePath).GetFileMd5HashAsync()).ToList();
-        }
-
+        
         private static void ValidateUploadList(List<UploadInfo> uploadList)
         {
-            ArgumentNullException.ThrowIfNull(uploadList);
+            ArgumentNullException.ThrowIfNull(uploadList, nameof(uploadList));
 
             if (uploadList.Count == 0)
             {

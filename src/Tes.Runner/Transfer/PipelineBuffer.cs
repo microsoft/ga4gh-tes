@@ -18,7 +18,6 @@ public class PipelineBuffer
     public int NumberOfParts { get; set; }
     public long FileSize { get; set; }
     public Channel<FileStream> FileHandlerPool { get; set; } = null!;
-    public string BlockHash { get; set; } = String.Empty;
     public IHashListProvider? HashListProvider { get; set; }
 }
 

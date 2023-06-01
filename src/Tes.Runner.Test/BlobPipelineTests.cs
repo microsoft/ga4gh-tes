@@ -130,7 +130,7 @@ namespace Tes.Runner.Test
             return Task.FromResult(sourceLength);
         }
 
-        public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string rootHash)
+        public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash)
         {
             Debug.Assert(blobUrl != null, nameof(blobUrl) + " != null");
             AddMethodCall(nameof(OnCompletionAsync), length, blobUrl, fileName);

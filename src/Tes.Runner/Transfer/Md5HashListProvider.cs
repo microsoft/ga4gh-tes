@@ -13,6 +13,8 @@ namespace Tes.Runner.Transfer
         private readonly ILogger logger = PipelineLoggerFactory.Create<Md5HashListProvider>();
         private readonly ConcurrentDictionary<int, string> hashesDictionary = new();
 
+        public ConcurrentDictionary<int, string> HashList => hashesDictionary;
+
         public string AddBlockHash(PipelineBuffer pipelineBuffer)
         {
             var hash = CreateBlockMd5CheckSumValue(pipelineBuffer.Data, pipelineBuffer.Length);
@@ -45,7 +47,7 @@ namespace Tes.Runner.Transfer
             return rootHash;
         }
 
-        private string CreateBlockMd5CheckSumValue(byte[] buffer, int length)
+        private static string CreateBlockMd5CheckSumValue(byte[] buffer, int length)
         {
             using var md5Provider = MD5.Create();
             return BitConverter.ToString(md5Provider.ComputeHash(buffer, 0, length)).Replace("-", "").ToLowerInvariant();
