@@ -1,4 +1,7 @@
-﻿using Tes.Runner.Transfer;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands.Tests
 {
