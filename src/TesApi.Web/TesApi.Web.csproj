@@ -69,6 +69,7 @@
       <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
       <OutputItemType>None</OutputItemType>
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <Private>False</Private>
     </ProjectReference>
 
     <ProjectReference Include="..\Tes\Tes.csproj" />
@@ -135,6 +136,15 @@
         <TargetPath>scripts\TRunnerMD5Hash.txt</TargetPath>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </ContentWithTargetPath>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CopyNodeRunnerToPublishDir" BeforeTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(__TesRunnerPublishDir)tRunner">
+        <RelativePath>scripts\tRunner</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
     </ItemGroup>
   </Target>
 
