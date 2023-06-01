@@ -67,21 +67,21 @@ public class ResolutionPolicyHandler
         return list;
     }
 
-    private async Task<DownloadInfo> CreateDownloadInfoWithStrategyAsync(FileInput input)
+    private static async Task<DownloadInfo> CreateDownloadInfoWithStrategyAsync(FileInput input)
     {
         if (string.IsNullOrEmpty(input.FullFileName))
         {
             throw new ArgumentException("A task input is missing the full filename. Please check the task definition.");
         }
 
-        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy ?? SasResolutionStrategy.None);
+        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy);
 
         return new DownloadInfo(ExpandEnvironmentVariables(input.FullFileName), uri);
     }
 
     private static async Task<UploadInfo> CreateUploadInfoWithStrategyAsync(FileOutput output)
     {
-        var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy ?? SasResolutionStrategy.None);
+        var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy);
 
         return new UploadInfo(ExpandEnvironmentVariables(output.FullFileName!), uri);
     }
@@ -91,12 +91,13 @@ public class ResolutionPolicyHandler
         return Environment.ExpandEnvironmentVariables(fullFileName);
     }
 
-    private static async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, SasResolutionStrategy strategy)
+    private static async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, SasResolutionStrategy? strategy)
     {
+        ArgumentNullException.ThrowIfNull(strategy);
         ArgumentException.ThrowIfNullOrEmpty(sourceUrl);
 
         var strategyImpl =
-            SasResolutionStrategyFactory.CreateSasResolutionStrategy(strategy);
+            SasResolutionStrategyFactory.CreateSasResolutionStrategy(strategy.Value);
 
         return await strategyImpl.CreateSasTokenWithStrategyAsync(sourceUrl);
     }

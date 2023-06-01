@@ -49,8 +49,6 @@ namespace TesApi.Web
         private const int DefaultCoreCount = 1;
         private const int DefaultMemoryGb = 2;
         private const int DefaultDiskGb = 10;
-        private const int defaultBlobxferOneShotBytes = 4_194_304;
-        private const int defaultBlobxferChunkSizeBytes = 16_777_216; // max file size = 16 MiB * 50k blocks = 838,860,800,000 bytes
         private const string CromwellPathPrefix = "/cromwell-executions";
         private const string TesExecutionsPathPrefix = "/tes-internal";
         private const string CromwellScriptFileName = "script";
@@ -549,7 +547,7 @@ namespace TesApi.Web
                 }
 
                 tesTask.PoolId = poolInformation.PoolId;
-                var cloudTask = await ConvertTesTaskToBatchTaskAsync(enableBatchAutopool ? tesTask.Id : jobOrTaskId, tesTask, containerConfiguration is not null, cancellationToken, virtualMachineInfo?.VCpusAvailable ?? 1);
+                var cloudTask = await ConvertTesTaskToBatchTaskAsync(enableBatchAutopool ? tesTask.Id : jobOrTaskId, tesTask, containerConfiguration is not null, cancellationToken);
                 logger.LogInformation($"Creating batch task for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
 
                 if (enableBatchAutopool)
@@ -945,9 +943,8 @@ namespace TesApi.Web
         /// <param name="task">The <see cref="TesTask"/></param>
         /// <param name="poolHasContainerConfig">Indicates that <see cref="CloudTask.ContainerSettings"/> must be set.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="vmVCpusAvailable">The number of VCPUs available in the VM</param>
         /// <returns>Job preparation and main Batch tasks</returns>
-        private async Task<CloudTask> ConvertTesTaskToBatchTaskAsync(string taskId, TesTask task, bool poolHasContainerConfig, CancellationToken cancellationToken, int vmVCpusAvailable = 1)
+        private async Task<CloudTask> ConvertTesTaskToBatchTaskAsync(string taskId, TesTask task, bool poolHasContainerConfig, CancellationToken cancellationToken)
         {
             var cromwellExecutionDirectoryPath = GetCromwellExecutionDirectoryPath(task);
             var isCromwell = cromwellExecutionDirectoryPath is not null;
@@ -999,20 +996,6 @@ namespace TesApi.Web
                 .Except(drsInputFiles) // do not attempt to download DRS input files since the cromwell-drs-localizer will
                 .Union(additionalInputFiles)
                 .Select(async f => await GetTesInputFileUrlAsync(f, task, queryStringsToRemoveFromLocalFilePaths, cancellationToken)));
-
-            var blobxferOneShotBytes = defaultBlobxferOneShotBytes;
-            var blobxferChunkSizeBytes = defaultBlobxferChunkSizeBytes;
-
-            if (vmVCpusAvailable >= 4)
-            {
-                blobxferChunkSizeBytes = 104_857_600; // max file size = 100 MiB * 50k blocks = 5,242,880,000,000 bytes
-            }
-            else if (vmVCpusAvailable >= 2)
-            {
-                blobxferChunkSizeBytes = 33_554_432; // max file size = 32 MiB * 50k blocks = 1,677,721,600,000 bytes
-            }
-
-            logger.LogInformation($"Configuring blobxfer with {vmVCpusAvailable} vCPUS to use blobxferChunkSizeBytes={blobxferChunkSizeBytes:D} blobxferOneShotBytes={blobxferOneShotBytes:D}");
 
             var downloadFilesScriptPath = $"/{storageUploadPath}/{DownloadFilesScriptFileName}";
             var downloadFilesScriptContent = new NodeTask
@@ -1114,7 +1097,6 @@ namespace TesApi.Web
                 Outputs = new List<FileOutput>() { new FileOutput { FullFileName = metricsName, TargetUrl = metricsUrl.ToString(), SasStrategy = SasResolutionStrategy.None, Required = true } }
             };
 
-            //TODO: units? --blockSize {blobxferChunkSizeBytes:D} --bufferCapacity {blobxferOneShotBytes:D}
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
             sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} download --file {DownloadFilesScriptFileName} && \\");
             sb.AppendLinuxLine($"write_ts DownloadEnd && \\");
