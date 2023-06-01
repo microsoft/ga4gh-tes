@@ -27,8 +27,6 @@ namespace Tes.Runner.Transfer
         {
             var url = BlobBlockApiHttpUtils.ParsePutBlockUrl(buffer.BlobUrl, buffer.Ordinal);
 
-            Logger.LogInformation($"{url}");
-
             buffer.BlobPartUrl = url;
 
             buffer.HashListProvider = hashListProviders.GetOrAdd(buffer.FileName, new Md5HashListProvider());
