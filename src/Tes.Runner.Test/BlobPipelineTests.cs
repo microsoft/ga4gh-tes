@@ -21,7 +21,6 @@ namespace Tes.Runner.Test
         private string tempFile1;
         private string tempFile2;
         private Channel<byte[]> memoryBuffer;
-        private readonly RunnerTestUtils runnerTestUtils = new RunnerTestUtils();
 #pragma warning restore CS8618
 
         [TestInitialize]

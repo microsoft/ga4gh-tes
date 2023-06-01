@@ -15,7 +15,7 @@ namespace Tes.Runner.Transfer
 
         public ConcurrentDictionary<int, string> HashList => hashesDictionary;
 
-        public string AddBlockHash(PipelineBuffer pipelineBuffer)
+        public string CalculateAndAddBlockHash(PipelineBuffer pipelineBuffer)
         {
             var hash = CreateBlockMd5CheckSumValue(pipelineBuffer.Data, pipelineBuffer.Length);
 

@@ -19,7 +19,7 @@ public class BlobBlockApiHttpUtils
     private static readonly AsyncRetryPolicy RetryPolicy = Policy
         .Handle<RetriableException>()
         .WaitAndRetryAsync(MaxRetryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
-    private const string TesRootHashMetadataName = "root_hash_md5_hashlist";
+    public const string RootHashMetadataName = "md5_hashlist_root_hash";
 
     public static HttpRequestMessage CreatePutBlockRequestAsync(PipelineBuffer buffer, string apiVersion)
     {
@@ -48,7 +48,7 @@ public class BlobBlockApiHttpUtils
 
         AddBlockBlobServiceHeaders(request, apiVersion);
     }
-    
+
     private static void AddMetadataHeaderIfValueIsSet(HttpRequestMessage request, string name, string? value)
     {
         if (string.IsNullOrEmpty(value))
@@ -75,7 +75,7 @@ public class BlobBlockApiHttpUtils
             Content = content
         };
 
-        AddMetadataHeaderIfValueIsSet(request, TesRootHashMetadataName, rootHash);
+        AddMetadataHeaderIfValueIsSet(request, RootHashMetadataName, rootHash);
         AddBlockBlobServiceHeaders(request, apiVersion);
         return request;
     }

@@ -24,8 +24,12 @@ namespace Tes.Runner.Transfer
         /// <param name="buffer">Pipeline buffer to configure</param>
         public override void ConfigurePipelineBuffer(PipelineBuffer buffer)
         {
-            buffer.BlobPartUrl =
-                BlobBlockApiHttpUtils.ParsePutBlockUrl(buffer.BlobUrl, buffer.Ordinal);
+            var url = BlobBlockApiHttpUtils.ParsePutBlockUrl(buffer.BlobUrl, buffer.Ordinal);
+            
+            Logger.LogInformation($"{url}");
+
+            buffer.BlobPartUrl = url;
+                
             buffer.HashListProvider = hashListProviders.GetOrAdd(buffer.FileName, new Md5HashListProvider());
         }
 
@@ -78,7 +82,7 @@ namespace Tes.Runner.Transfer
 
             var dataRead = await fileHandler.ReadAsync(buffer.Data, 0, buffer.Length);
 
-            buffer.HashListProvider?.AddBlockHash(buffer);
+            buffer.HashListProvider?.CalculateAndAddBlockHash(buffer);
 
             await buffer.FileHandlerPool.Writer.WriteAsync(fileHandler);
 
@@ -134,7 +138,7 @@ namespace Tes.Runner.Transfer
 
             return await ExecutePipelineAsync(operationList);
         }
-        
+
         private static void ValidateUploadList(List<UploadInfo> uploadList)
         {
             ArgumentNullException.ThrowIfNull(uploadList, nameof(uploadList));

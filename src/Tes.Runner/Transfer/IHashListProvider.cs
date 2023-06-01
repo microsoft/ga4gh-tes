@@ -5,6 +5,6 @@ namespace Tes.Runner.Transfer;
 
 public interface IHashListProvider
 {
-    string AddBlockHash(PipelineBuffer pipelineBuffer);
+    string CalculateAndAddBlockHash(PipelineBuffer pipelineBuffer);
     string GetRootHash();
 }
