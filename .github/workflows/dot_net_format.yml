@@ -21,7 +21,12 @@ jobs:
       - name: Setup .NET Core
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '7.0.105'
+          dotnet-version: '7.0.203'
+          
+      - name: Display dotnet version   
+        shell: bash
+        run: |
+            dotnet format --version
 
       - name: Run dotnet format
         shell: bash
