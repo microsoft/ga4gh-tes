@@ -23,6 +23,8 @@ jobs:
         with:
           dotnet-version: '7.0.203'
           
+      - run: dotnet format --verify-no-changes --verbosity detailed
+          
       - name: Display dotnet format version   
         shell: bash
         run: |
@@ -32,8 +34,3 @@ jobs:
         shell: bash
         run: |  
             dotnet --info
-
-      - name: Run dotnet format
-        shell: bash
-        run: |
-            dotnet format --verify-no-changes --verbosity detailed
