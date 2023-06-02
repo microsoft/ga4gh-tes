@@ -37,7 +37,7 @@ public interface IBlobPipeline
     /// <param name="fileName">Path to the file</param>
     /// <param name="rootHash"></param>
     /// <returns></returns>
-    Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string rootHash);
+    Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash);
 
     /// <summary>
     /// Called when a buffer is created. This is used to configure the buffer with additional information.

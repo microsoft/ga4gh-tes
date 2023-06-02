@@ -132,7 +132,7 @@ namespace Tes.Runner.Test
         public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash)
         {
             Debug.Assert(blobUrl != null, nameof(blobUrl) + " != null");
-            AddMethodCall(nameof(OnCompletionAsync), length, blobUrl, fileName);
+            AddMethodCall(nameof(OnCompletionAsync), length, blobUrl, fileName, rootHash!);
             return Task.CompletedTask;
         }
 
