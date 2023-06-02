@@ -23,10 +23,15 @@ jobs:
         with:
           dotnet-version: '7.0.203'
           
-      - name: Display dotnet version   
+      - name: Display dotnet format version   
         shell: bash
         run: |
             dotnet format --version
+            
+      - name: Display dotnet version   
+        shell: bash
+        run: |  
+            dotnet --info
 
       - name: Run dotnet format
         shell: bash
