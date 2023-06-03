@@ -22,6 +22,7 @@ namespace Tes.Runner.Models
         public string? FullFileName { get; set; }
         public string? TargetUrl { get; set; }
         public SasResolutionStrategy? SasStrategy { get; set; }
+        public FileType? FileType { get; set; }
         public bool? Required { get; set; }
     }
 
@@ -39,5 +40,12 @@ namespace Tes.Runner.Models
         StorageAccountNameAndKey,
         TerraWsm,
         SchemeConverter,
+    }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum FileType
+    {
+        File,
+        Directory,
     }
 }

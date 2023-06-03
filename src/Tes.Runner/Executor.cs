@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System.Diagnostics;
-using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Docker;
@@ -19,16 +18,14 @@ namespace Tes.Runner
         private readonly BlobPipelineOptions blobPipelineOptions;
         private readonly ResolutionPolicyHandler resolutionPolicyHandler;
 
-        public Executor(string tesNodeTaskFilePath, BlobPipelineOptions blobPipelineOptions)
+        public Executor(NodeTask tesNodeTask, BlobPipelineOptions blobPipelineOptions)
         {
-            ArgumentException.ThrowIfNullOrEmpty(tesNodeTaskFilePath);
+            ArgumentNullException.ThrowIfNull(tesNodeTask);
             ArgumentNullException.ThrowIfNull(blobPipelineOptions);
 
             this.blobPipelineOptions = blobPipelineOptions;
 
-            var content = File.ReadAllText(tesNodeTaskFilePath);
-
-            tesNodeTask = DeserializeNodeTask(content);
+            this.tesNodeTask = tesNodeTask;
 
             resolutionPolicyHandler = new ResolutionPolicyHandler();
         }
@@ -40,20 +37,6 @@ namespace Tes.Runner
             var result = await dockerExecutor.RunOnContainerAsync(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute);
 
             return new NodeTaskResult(result);
-        }
-
-
-        private NodeTask DeserializeNodeTask(string nodeTask)
-        {
-            try
-            {
-                return JsonSerializer.Deserialize<NodeTask>(nodeTask, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true }) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "Failed to deserialize task JSON file.");
-                throw;
-            }
         }
 
         private async ValueTask AppendMetrics(string? metricsFormat, long bytesTransfered)

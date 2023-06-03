@@ -1,9 +1,11 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Tes.Runner;
 using Tes.Runner.Docker;
+using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
@@ -46,7 +48,9 @@ namespace Tes.RunnerCLI.Commands
         {
             try
             {
-                var executor = new Executor(file.FullName, options);
+                var nodeTask = DeserializeNodeTask(file.FullName);
+
+                var executor = new Executor(nodeTask, options);
 
                 var result = await executor.ExecuteNodeContainerTaskAsync(new DockerExecutor(dockerUri));
 
@@ -95,7 +99,7 @@ namespace Tes.RunnerCLI.Commands
 
             Console.WriteLine("Starting upload operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.UploadOutputsAsync());
+            return await ExecuteTransferTaskAsync(file, options, exec => exec.UploadOutputsAsync(), ExpandOutputs);
         }
 
         private static void HandleResult(ProcessExecutionResult results, string command)
@@ -129,14 +133,18 @@ namespace Tes.RunnerCLI.Commands
 
             Console.WriteLine("Starting download operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.DownloadInputsAsync());
+            return await ExecuteTransferTaskAsync(file, options, exec => exec.DownloadInputsAsync(), ExpandInputs);
         }
 
-        private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, BlobPipelineOptions options, Func<Executor, Task<long>> transferOperation)
+        private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, BlobPipelineOptions options, Func<Executor, Task<long>> transferOperation, Action<NodeTask> expandFileSpecs)
         {
             try
             {
-                var executor = new Executor(taskDefinitionFile.FullName, options);
+                var nodeTask = DeserializeNodeTask(taskDefinitionFile.FullName);
+
+                expandFileSpecs(nodeTask);
+
+                var executor = new Executor(nodeTask, options);
 
                 var result = await transferOperation(executor);
 
@@ -149,6 +157,125 @@ namespace Tes.RunnerCLI.Commands
                 Console.WriteLine($"Failed to perform transfer. Error: {e.Message} Operation: {transferOperation.Method.Name}");
                 Logger.LogError(e, $"Failed to perform transfer. Operation: {transferOperation}");
                 return ErrorExitCode;
+            }
+        }
+
+        private static void ExpandInputs(NodeTask nodeTask)
+        {
+            var inputs = new List<FileInput>();
+
+            foreach (var input in nodeTask.Inputs ?? Enumerable.Empty<FileInput>())
+            {
+                inputs.Add(new FileInput
+                {
+                    SasStrategy = input.SasStrategy,
+                    SourceUrl = input.SourceUrl,
+                    FullFileName = ExpandEnvironmentVariables(input.FullFileName!)
+                });
+            }
+
+            nodeTask.Inputs = inputs;
+        }
+
+        private static void ExpandOutputs(NodeTask nodeTask)
+        {
+            var outputs = new List<FileOutput>();
+
+            foreach (var output in nodeTask.Outputs ?? Enumerable.Empty<FileOutput>())
+            {
+                outputs.AddRange(ExpandOutput(output));
+            }
+
+            nodeTask.Outputs = outputs;
+        }
+
+        private static IEnumerable<FileOutput> ExpandOutput(FileOutput output)
+        {
+            ArgumentNullException.ThrowIfNull(output);
+
+            switch (output.FileType)
+            {
+                case FileType.File:
+                    return Enumerable.Empty<FileOutput>().Append(new()
+                    {
+                        Required = output.Required,
+                        SasStrategy = output.SasStrategy,
+                        TargetUrl = output.TargetUrl,
+                        FullFileName = ExpandEnvironmentVariables(output.FullFileName!),
+                    });
+
+                case FileType.Directory:
+                    {
+                        var dir = new DirectoryInfo(ExpandEnvironmentVariables(output.FullFileName!));
+
+                        if (dir.Exists)
+                        {
+                            return ExpandDirectoryContents(dir).Select(GetFileOutput);
+                        }
+                        else if (output.Required.GetValueOrDefault())
+                        {
+                            throw new DirectoryNotFoundException($"Directory '{output.FullFileName}' was not found");
+                        }
+
+                        return Enumerable.Empty<FileOutput>();
+
+                        FileOutput GetFileOutput(FileInfo file)
+                        {
+                            return new FileOutput { Required = output.Required, SasStrategy = output.SasStrategy, FullFileName = file.FullName, TargetUrl = ExpandUrl(output.TargetUrl!, dir!.FullName, file.FullName) };
+                        }
+                    }
+
+                default:
+                    throw new ArgumentException("Invalid FileType for output file.", nameof(output));
+            }
+
+        }
+
+        private static IEnumerable<FileInfo> ExpandDirectoryContents(DirectoryInfo dir)
+        {
+            var result = Enumerable.Empty<FileInfo>();
+
+            foreach (var entry in dir.EnumerateFileSystemInfos())
+            {
+                switch (entry)
+                {
+                    case FileInfo file:
+                        result = result.Append(file);
+                        break;
+
+                    case DirectoryInfo directory:
+                        result = result.Concat(ExpandDirectoryContents(directory));
+                        break;
+                }
+            }
+
+            return result;
+        }
+
+        private static string ExpandUrl(string url, string dir, string path)
+        {
+            var uri = new Uri(url);
+            var relativePath = Path.GetRelativePath(dir, path);
+            return new Uri(uri, $"{uri.AbsolutePath}/{relativePath}{uri.Query}").ToString();
+        }
+
+        private static string ExpandEnvironmentVariables(string fullFileName)
+        {
+            return Environment.ExpandEnvironmentVariables(fullFileName);
+        }
+
+        private static NodeTask DeserializeNodeTask(string tesNodeTaskFilePath)
+        {
+            try
+            {
+                var nodeTask = File.ReadAllText(tesNodeTaskFilePath);
+
+                return JsonSerializer.Deserialize<NodeTask>(nodeTask, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true }) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e, "Failed to deserialize task JSON file.");
+                throw;
             }
         }
     }

@@ -42,7 +42,7 @@ public class ResolutionPolicyHandler
             throw new ArgumentException("A task output is missing the full filename. Please check the task definition.");
         }
 
-        return output.Required == true || File.Exists(ExpandEnvironmentVariables(output.FullFileName));
+        return output.Required.GetValueOrDefault() || File.Exists(output.FullFileName);
     }
 
     /// <summary>
@@ -76,19 +76,14 @@ public class ResolutionPolicyHandler
 
         var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy);
 
-        return new DownloadInfo(ExpandEnvironmentVariables(input.FullFileName), uri);
+        return new DownloadInfo(input.FullFileName, uri);
     }
 
     private static async Task<UploadInfo> CreateUploadInfoWithStrategyAsync(FileOutput output)
     {
         var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy);
 
-        return new UploadInfo(ExpandEnvironmentVariables(output.FullFileName!), uri);
-    }
-
-    private static string ExpandEnvironmentVariables(string fullFileName)
-    {
-        return Environment.ExpandEnvironmentVariables(fullFileName);
+        return new UploadInfo(output.FullFileName!, uri);
     }
 
     private static async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, SasResolutionStrategy? strategy)

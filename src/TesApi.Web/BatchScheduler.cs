@@ -1028,7 +1028,7 @@ namespace TesApi.Web
             {
                 MetricsFilename = metricsName,
                 OutputsMetricsFormat = "FileUploadSizeInBytes={Size}",
-                Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, FullFileName = LocalizeLocalPath(f.Path), SasStrategy = SasResolutionStrategy.None }).ToList()
+                Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, FullFileName = LocalizeLocalPath(f.Path), FileType = ConvertFileType(f.Type), SasStrategy = SasResolutionStrategy.None }).ToList()
             };
 
             var executor = task.Executors.First();
@@ -1094,7 +1094,7 @@ namespace TesApi.Web
             var uploadMetricsScriptPath = $"/{storageUploadPath}/{UploadMetricsScriptFileName}";
             var uploadMetricsScriptContent = new NodeTask
             {
-                Outputs = new List<FileOutput>() { new FileOutput { FullFileName = metricsName, TargetUrl = metricsUrl.ToString(), SasStrategy = SasResolutionStrategy.None, Required = true } }
+                Outputs = new List<FileOutput>() { new FileOutput { Required = true, FullFileName = metricsName, TargetUrl = metricsUrl.ToString(), FileType = FileType.File, SasStrategy = SasResolutionStrategy.None } }
             };
 
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
@@ -1160,6 +1160,16 @@ namespace TesApi.Web
             }
 
             return cloudTask;
+
+            static FileType ConvertFileType(TesFileType tesFileType)
+            {
+                return tesFileType switch
+                {
+                    TesFileType.FILEEnum => FileType.File,
+                    TesFileType.DIRECTORYEnum => FileType.Directory,
+                    _ => throw new ArgumentOutOfRangeException(nameof(tesFileType)),
+                }; ;
+            }
 
             // Yes, this looks "Windowsy", while all our executors run on Linux. Environment.ExpandEnvironmentVariables requires environment variables to be delimited by '%' no matter the platform.
             static string LocalizeLocalPath(string path)
