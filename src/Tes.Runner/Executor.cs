@@ -41,7 +41,7 @@ namespace Tes.Runner
             }
         }
 
-        public async Task<long> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions)
+        public async Task<long> UploadOutputsAsync()
         {
             ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
 
@@ -124,6 +124,11 @@ namespace Tes.Runner
 
             return bytesTransferred;
         }
+            LogStartConfig(blobPipelineOptions);
+            
+            logger.LogInformation($"{tesNodeTask.Inputs.Count} inputs to download.");
+
+            var downloader = new BlobDownloader(blobPipelineOptions, memoryBufferChannel);
 
         private async Task<long> DownloadInputsAsync(BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel)
         {
