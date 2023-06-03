@@ -56,7 +56,7 @@ public class ProcessedPartsProcessor
 
                     if (buffer.HashListProvider is not null)
                     {
-                        rootHash = GetRootHashIfProviderIsSet(buffer.HashListProvider);
+                        rootHash = GetRootHash(buffer.HashListProvider);
                     }
 
                     tasks.Add(blobPipeline.OnCompletionAsync(buffer.FileSize, buffer.BlobUrl, buffer.FileName, rootHash));
@@ -83,7 +83,7 @@ public class ProcessedPartsProcessor
         return totalBytes;
     }
 
-    private string GetRootHashIfProviderIsSet(IHashListProvider hashListProvider)
+    private string GetRootHash(IHashListProvider hashListProvider)
     {
         return hashListProvider.GetRootHash();
     }
