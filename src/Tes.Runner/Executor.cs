@@ -15,7 +15,7 @@ namespace Tes.Runner
     {
         private readonly ILogger logger = PipelineLoggerFactory.Create<Executor>();
         private readonly NodeTask tesNodeTask;
-        private readonly BlobPipelineOptions blobPipelineOptions;
+        //private readonly BlobPipelineOptions blobPipelineOptions;
         private readonly ResolutionPolicyHandler resolutionPolicyHandler;
 
         public Executor(NodeTask tesNodeTask, BlobPipelineOptions blobPipelineOptions)
@@ -32,8 +32,6 @@ namespace Tes.Runner
 
         public async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(DockerExecutor dockerExecutor)
         {
-            ArgumentNullException.ThrowIfNull(blobPipelineOptions);
-
             var result = await dockerExecutor.RunOnContainerAsync(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute);
 
             return new NodeTaskResult(result);
@@ -47,8 +45,10 @@ namespace Tes.Runner
             }
         }
 
-        public async Task<long> UploadOutputsAsync()
+        public async Task<long> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions)
         {
+            ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
+
             var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
 
             var bytesTransfered = await UploadOutputsAsync(memoryBufferChannel);
@@ -66,7 +66,7 @@ namespace Tes.Runner
                 return 0;
             }
 
-            LogStartConfig();
+            LogStartConfig(blobPipelineOptions);
 
             logger.LogInformation($"{tesNodeTask.Outputs.Count} outputs to upload.");
 
@@ -86,7 +86,7 @@ namespace Tes.Runner
             return 0;
         }
 
-        public async Task<long> DownloadInputsAsync()
+        public async Task<long> DownloadInputsAsync(BlobPipelineOptions blobPipelineOptions)
         {
             var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
 
@@ -105,8 +105,10 @@ namespace Tes.Runner
                 return 0;
             }
 
-            LogStartConfig();
+            LogStartConfig(blobPipelineOptions);
+            
             logger.LogInformation($"{tesNodeTask.Inputs.Count} inputs to download.");
+
             var downloader = new BlobDownloader(blobPipelineOptions, memoryBufferChannel);
 
             var inputs = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Inputs);
@@ -123,7 +125,7 @@ namespace Tes.Runner
             return 0;
         }
 
-        private void LogStartConfig()
+        private void LogStartConfig(BlobPipelineOptions blobPipelineOptions)
         {
             logger.LogInformation($"Writers:{blobPipelineOptions.NumberOfWriters}");
             logger.LogInformation($"Readers:{blobPipelineOptions.NumberOfReaders}");
