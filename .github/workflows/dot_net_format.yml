@@ -18,6 +18,10 @@ jobs:
         with:
           path: nuget.config
           
+      - name: Move global.sjon config to repo root
+        run: |  
+            mv format/global.json global.json
+          
       - name: Setup .NET Core
         uses: actions/setup-dotnet@v3
         with:
