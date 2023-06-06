@@ -69,6 +69,7 @@ persistence:
   blobPvcSize: 32Gi
   cromwellTmpSize: 32Gi
   storageAccount: RUNTIME_PARAMETER
+  tesInternalPathPrefix: RUNTIME_PARAMETER
 
 identity:
   name: RUNTIME_PARAMETER
