@@ -74,9 +74,9 @@ namespace Tes.Runner.Test
             AssertReaderWriterAndCompleteMethodsAreCalled(pipeline, expectedNumberOfCalls, 2);
         }
 
-        private void AssertReaderWriterAndCompleteMethodsAreCalled(BlobOperationPipelineTestImpl operationPipeline, long numberOfWriterReaderCalls, int numberOfCompleteCalls)
+        private static void AssertReaderWriterAndCompleteMethodsAreCalled(BlobOperationPipelineTestImpl operationPipeline, long numberOfWriterReaderCalls, int numberOfCompleteCalls)
         {
-            List<MethodCall> executeWriteInfo = operationPipeline.MethodCalls["ExecuteWriteAsync"];
+            var executeWriteInfo = operationPipeline.MethodCalls["ExecuteWriteAsync"];
             Assert.IsNotNull(executeWriteInfo);
             Assert.AreEqual(numberOfWriterReaderCalls, executeWriteInfo.Count);
 
@@ -97,12 +97,11 @@ namespace Tes.Runner.Test
     /// </summary>
     class BlobOperationPipelineTestImpl : BlobOperationPipeline
     {
-        private readonly ConcurrentDictionary<string, List<MethodCall>> methodCalls =
-            new ConcurrentDictionary<string, List<MethodCall>>();
+        private readonly ConcurrentDictionary<string, List<MethodCall>> methodCalls = new();
 
         private readonly long sourceLength;
 
-        private readonly SemaphoreSlim semaphore = new SemaphoreSlim(1);
+        private readonly SemaphoreSlim semaphore = new(1);
 
         public BlobOperationPipelineTestImpl(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer, long sourceLength) : base(pipelineOptions, memoryBuffer)
         {

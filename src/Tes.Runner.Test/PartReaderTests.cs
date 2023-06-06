@@ -12,13 +12,13 @@ namespace Tes.Runner.Test
     public class PartReaderTests
     {
         private const int MemBuffersCapacity = 10;
-        private PartsReader partsReader;
-        private Mock<IBlobPipeline> pipeline;
-        private Channel<byte[]> memoryBufferChannel;
+        private PartsReader? partsReader;
+        private Mock<IBlobPipeline>? pipeline;
+        private Channel<byte[]>? memoryBufferChannel;
         private readonly int blockSizeBytes = BlobSizeUtils.DefaultBlockSizeBytes;
-        private BlobPipelineOptions options;
-        private Channel<PipelineBuffer> readBufferChannel;
-        private Channel<PipelineBuffer> writeBufferChannel;
+        private BlobPipelineOptions? options;
+        private Channel<PipelineBuffer>? readBufferChannel;
+        private Channel<PipelineBuffer>? writeBufferChannel;
         private readonly long fileSize = BlobSizeUtils.MiB * 100;
         private readonly string fileName = "tempFile";
 
@@ -38,10 +38,10 @@ namespace Tes.Runner.Test
         {
             var numberOfParts = await PrepareReaderChannelAsync();
 
-            await partsReader.StartPartsReaderAsync(readBufferChannel, writeBufferChannel);
+            await partsReader!.StartPartsReaderAsync(readBufferChannel!, writeBufferChannel!);
 
-            pipeline.Verify(p => p.ExecuteReadAsync(It.IsAny<PipelineBuffer>()), Times.Exactly(numberOfParts));
-            Assert.AreEqual(numberOfParts, writeBufferChannel.Reader.Count);
+            pipeline!.Verify(p => p.ExecuteReadAsync(It.IsAny<PipelineBuffer>()), Times.Exactly(numberOfParts));
+            Assert.AreEqual(numberOfParts, writeBufferChannel!.Reader.Count);
         }
 
         [TestMethod]
@@ -49,7 +49,7 @@ namespace Tes.Runner.Test
         {
             await PrepareReaderChannelAsync();
             var calls = 0;
-            pipeline.Setup(p => p.ExecuteReadAsync(It.IsAny<PipelineBuffer>()))
+            pipeline!.Setup(p => p.ExecuteReadAsync(It.IsAny<PipelineBuffer>()))
                 .Callback(() =>
                 {
                     calls++;
@@ -63,7 +63,7 @@ namespace Tes.Runner.Test
                     }
                 });
 
-            await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => partsReader.StartPartsReaderAsync(readBufferChannel, writeBufferChannel));
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => partsReader!.StartPartsReaderAsync(readBufferChannel!, writeBufferChannel!));
         }
 
         [TestMethod]
@@ -71,18 +71,18 @@ namespace Tes.Runner.Test
         {
             var numberOfParts = await PrepareReaderChannelAsync();
 
-            await partsReader.StartPartsReaderAsync(readBufferChannel, writeBufferChannel);
+            await partsReader!.StartPartsReaderAsync(readBufferChannel!, writeBufferChannel!);
 
             //The reader reads from the memory buffer to create parts, the number of items in the memory
             //buffer must be the available must be the difference between the number of memory buffers and the number of parts to create
-            Assert.AreEqual(MemBuffersCapacity - numberOfParts, memoryBufferChannel.Reader.Count);
+            Assert.AreEqual(MemBuffersCapacity - numberOfParts, memoryBufferChannel!.Reader.Count);
         }
 
         private async Task<int> PrepareReaderChannelAsync()
         {
             var buffer = new PipelineBuffer();
             var numberOfParts = (int)(fileSize / blockSizeBytes);
-            await RunnerTestUtils.AddPipelineBuffersAndCompleteChannelAsync(readBufferChannel, numberOfParts,
+            await RunnerTestUtils.AddPipelineBuffersAndCompleteChannelAsync(readBufferChannel!, numberOfParts,
                 new Uri("https://foo.bar/cont/blob"), blockSizeBytes, fileSize, fileName);
             return numberOfParts;
         }

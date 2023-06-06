@@ -24,6 +24,7 @@ public class PartsProducer
         this.blobPipeline = blobPipeline;
         this.blobPipelineOptions = blobPipelineOptions;
     }
+
     /// <summary>
     /// Starts Tasks that produce parts for each blob operation.
     /// This operation completes when all parts are written to the pipeline buffer channel.
@@ -36,6 +37,7 @@ public class PartsProducer
         ValidateOperations(blobOperations, readBufferChannel);
 
         var partsProducerTasks = new List<Task>();
+
         foreach (var operation in blobOperations)
         {
             partsProducerTasks.Add(StartPartsProducerAsync(operation, readBufferChannel));
@@ -60,7 +62,7 @@ public class PartsProducer
 
         if (blobOperations.Count == 0)
         {
-            throw new ArgumentException("No blob operations were provided.");
+            throw new ArgumentException("No blob operations were provided.", nameof(blobOperations));
         }
 
         var duplicateEntries = blobOperations
@@ -70,7 +72,7 @@ public class PartsProducer
         if (duplicateEntries)
         {
             throw new ArgumentException(
-                "Duplicate entries found in the list of blob operations. The filename must be unique.");
+                "Duplicate entries found in the list of blob operations. The filename must be unique.", nameof(blobOperations));
         }
     }
 
@@ -133,7 +135,7 @@ public class PartsProducer
     {
         var pool = Channel.CreateBounded<FileStream>(blobPipelineOptions.FileHandlerPoolCapacity);
 
-        for (int f = 0; f < blobPipelineOptions.FileHandlerPoolCapacity; f++)
+        for (var f = 0; f < blobPipelineOptions.FileHandlerPoolCapacity; f++)
         {
             try
             {

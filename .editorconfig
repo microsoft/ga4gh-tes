@@ -68,8 +68,8 @@ dotnet_style_prefer_conditional_expression_over_assignment = true:silent
 dotnet_style_prefer_conditional_expression_over_return = true:silent
 
 # Enforce license header
-dotnet_diagnostic.IDE0073.severity = warning 
-file_header_template = Copyright (c) Microsoft Corporation.\nLicensed under the MIT License. 
+dotnet_diagnostic.IDE0073.severity = warning
+file_header_template = Copyright (c) Microsoft Corporation.\nLicensed under the MIT License.
 
 
 ###############################

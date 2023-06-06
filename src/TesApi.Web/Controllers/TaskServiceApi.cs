@@ -123,6 +123,22 @@ namespace TesApi.Controllers
                 return BadRequest("Docker container image name is required.");
             }
 
+            foreach (var input in tesTask.Inputs ?? Enumerable.Empty<TesInput>())
+            {
+                if (!input.Path.StartsWith('/'))
+                {
+                    return BadRequest("Input paths in the container must be absolute paths.");
+                }
+            }
+
+            foreach (var output in tesTask.Outputs ?? Enumerable.Empty<TesOutput>())
+            {
+                if (!output.Path.StartsWith('/'))
+                {
+                    return BadRequest("Output paths in the container must be absolute paths.");
+                }
+            }
+
             tesTask.State = TesState.QUEUEDEnum;
             tesTask.CreationTime = DateTimeOffset.UtcNow;
 

@@ -74,8 +74,6 @@ spec:
               value: {{ .Values.config.batchScheduling.poolRotationForcedDays | quote }}
             - name: BatchScheduling__Prefix
               value: {{ .Values.config.batchScheduling.prefix | quote }}
-            - name: NodeImages__Blobxfer
-              value: {{ .Values.config.nodeImages.blobxfer }}
             - name: NodeImages__Docker
               value: {{ .Values.config.nodeImages.docker }}
             - name: BatchImageGen2__Offer

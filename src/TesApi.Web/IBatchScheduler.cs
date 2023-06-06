@@ -28,6 +28,14 @@ namespace TesApi.Web
         Task LoadExistingPoolsAsync(CancellationToken cancellationToken);
 
         /// <summary>
+        /// Stores the compute node task runner in the default storage account
+        /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        /// <remarks>This should be called only once after the <see cref="BatchScheduler"/> is created before any other methods are called.</remarks>
+        Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken);
+
+        /// <summary>
         /// Iteratively schedule a <see cref="TesTask"/> on a batch system until completion or failure
         /// </summary>
         /// <param name="tesTask"><see cref="TesTask"/> to schedule on the batch system</param>

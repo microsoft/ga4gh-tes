@@ -27,6 +27,7 @@ public class RunnerTestUtils
         var hash = md5.ComputeHash(stream);
         return Convert.ToBase64String(hash);
     }
+
     public static void DeleteFileIfExists(string file)
     {
         if (File.Exists(file))
@@ -44,7 +45,6 @@ public class RunnerTestUtils
         }
         return pipelineBuffers;
     }
-
 
     public static string AddRandomDataAndReturnMd5(byte[] data)
     {
@@ -130,7 +130,7 @@ public class RunnerTestUtils
 
     public static async Task AddProcessedBufferAsync(Channel<ProcessedBuffer> processedBuffer, string fileName, int numberOfParts, long fileSize)
     {
-        for (int i = 0; i < numberOfParts; i++)
+        for (var i = 0; i < numberOfParts; i++)
         {
             var processedPart = new ProcessedBuffer(fileName, null, fileSize, i, numberOfParts, Channel.CreateUnbounded<FileStream>(), null, 0, null);
 
