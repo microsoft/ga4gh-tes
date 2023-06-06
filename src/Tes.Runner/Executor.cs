@@ -15,7 +15,6 @@ namespace Tes.Runner
     {
         private readonly ILogger logger = PipelineLoggerFactory.Create<Executor>();
         private readonly NodeTask tesNodeTask;
-        //private readonly BlobPipelineOptions blobPipelineOptions;
         private readonly ResolutionPolicyHandler resolutionPolicyHandler;
 
         public Executor(NodeTask tesNodeTask, BlobPipelineOptions blobPipelineOptions)
@@ -49,8 +48,17 @@ namespace Tes.Runner
         {
             ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
 
-            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
+            if (tesNodeTask.Outputs is null || tesNodeTask.Outputs.Count == 0)
+            {
+                logger.LogInformation("No outputs provided");
+                return 0;
+            }
 
+            var optimizedOptions = OptimizeBlobPipelineOptionsForUpload(blobPipelineOptions);
+
+            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(optimizedOptions.MemoryBufferCapacity, optimizedOptions.BlockSizeBytes);
+
+            return await UploadOutputsAsync(optimizedOptions, memoryBufferChannel);
             var bytesTransfered = await UploadOutputsAsync(memoryBufferChannel);
 
             await AppendMetrics(tesNodeTask.OutputsMetricsFormat, bytesTransfered);
@@ -59,17 +67,30 @@ namespace Tes.Runner
         }
 
         private async ValueTask<long> UploadOutputsAsync(Channel<byte[]> memoryBufferChannel)
+        private BlobPipelineOptions OptimizeBlobPipelineOptionsForUpload(BlobPipelineOptions blobPipelineOptions)
         {
-            if (tesNodeTask.Outputs is null || tesNodeTask.Outputs.Count == 0)
-            {
-                logger.LogInformation("No outputs provided");
-                return 0;
-            }
+            var optimizedOptions =
+                PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(blobPipelineOptions, tesNodeTask.Outputs);
 
-            LogStartConfig(blobPipelineOptions);
+            LogStartConfig(optimizedOptions);
 
-            logger.LogInformation($"{tesNodeTask.Outputs.Count} outputs to upload.");
+            logger.LogInformation($"{tesNodeTask.Outputs?.Count} outputs to upload.");
+            return optimizedOptions;
+        }
 
+        private BlobPipelineOptions OptimizeBlobPipelineOptionsForDownload(BlobPipelineOptions blobPipelineOptions)
+        {
+            var optimizedOptions =
+                PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(blobPipelineOptions, default);
+
+            LogStartConfig(optimizedOptions);
+
+            logger.LogInformation($"{tesNodeTask.Inputs?.Count} inputs to download.");
+            return optimizedOptions;
+        }
+
+        private async Task<long> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel)
+        {
             var uploader = new BlobUploader(blobPipelineOptions, memoryBufferChannel);
 
             var outputs = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Outputs);
@@ -88,6 +109,7 @@ namespace Tes.Runner
 
         public async Task<long> DownloadInputsAsync(BlobPipelineOptions blobPipelineOptions)
         {
+            ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
             var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
 
             var bytesTransfered = await DownloadInputsAsync(memoryBufferChannel);
@@ -105,10 +127,15 @@ namespace Tes.Runner
                 return 0;
             }
 
-            LogStartConfig(blobPipelineOptions);
-            
-            logger.LogInformation($"{tesNodeTask.Inputs.Count} inputs to download.");
+            var optimizedOptions = OptimizeBlobPipelineOptionsForDownload(blobPipelineOptions);
 
+            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(optimizedOptions.MemoryBufferCapacity, optimizedOptions.BlockSizeBytes);
+
+            return await DownloadInputsAsync(optimizedOptions, memoryBufferChannel);
+        }
+
+        private async Task<long> DownloadInputsAsync(BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel)
+        {
             var downloader = new BlobDownloader(blobPipelineOptions, memoryBufferChannel);
 
             var inputs = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Inputs);

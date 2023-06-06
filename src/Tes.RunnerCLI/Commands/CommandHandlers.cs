@@ -83,8 +83,6 @@ namespace Tes.RunnerCLI.Commands
                 MemoryBufferCapacity: bufferCapacity,
                 ApiVersion: apiVersion);
 
-            options = PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(options);
-
             return options;
         }
 
