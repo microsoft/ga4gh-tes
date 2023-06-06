@@ -12,6 +12,5 @@ static async Task<int> StartUpAsync(string[] args)
     CommandFactory.CreateUploadCommand(rootCommand);
     CommandFactory.CreateDownloadCommand(rootCommand);
 
-
     return await rootCommand.InvokeAsync(args);
 }

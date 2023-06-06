@@ -50,7 +50,7 @@ namespace Tes.Runner.Transfer
             return optimizer.Optimize(blobPipelineOptions);
         }
 
-        private bool IsDefaultCapacityAndWorkerTransferOptions(BlobPipelineOptions options)
+        private static bool IsDefaultCapacityAndWorkerTransferOptions(BlobPipelineOptions options)
         {
             return options is
             {
@@ -84,7 +84,7 @@ namespace Tes.Runner.Transfer
                 MemoryBufferCapacity: memoryBufferCapacity);
         }
 
-        private int GetBlockSize(int optionsBlockSizeBytes)
+        private static int GetBlockSize(int optionsBlockSizeBytes)
         {
             if (optionsBlockSizeBytes <= 0)
             {
@@ -94,7 +94,7 @@ namespace Tes.Runner.Transfer
             return optionsBlockSizeBytes;
         }
 
-        private int GetOptimizedWorkers(int bufferCapacity)
+        private static int GetOptimizedWorkers(int bufferCapacity)
         {
             if (bufferCapacity > MaxWorkingThreadsCount)
             {
@@ -116,7 +116,7 @@ namespace Tes.Runner.Transfer
             return RoundDownToNearestTen((int)(Convert.ToInt64(memoryBuffer) / blockSize));
         }
 
-        private int RoundDownToNearestTen(int value)
+        private static int RoundDownToNearestTen(int value)
         {
             return (int)Math.Floor((double)value / 10) * 10;
         }

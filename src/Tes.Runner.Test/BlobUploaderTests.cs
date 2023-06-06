@@ -18,7 +18,7 @@ namespace Tes.Runner.Test
         private BlobContainerClient blobContainerClient;
         private Guid containerId;
         private BlobUploader blobUploader;
-        private readonly BlobPipelineOptions blobPipelineOptions = new BlobPipelineOptions();
+        private readonly BlobPipelineOptions blobPipelineOptions = new();
 #pragma warning restore CS8618
 
         [TestInitialize]

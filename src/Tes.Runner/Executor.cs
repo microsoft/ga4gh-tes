@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System.Diagnostics;
-using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Docker;
@@ -19,16 +18,14 @@ namespace Tes.Runner
         private readonly BlobPipelineOptions blobPipelineOptions;
         private readonly ResolutionPolicyHandler resolutionPolicyHandler;
 
-        public Executor(string tesNodeTaskFilePath, BlobPipelineOptions blobPipelineOptions)
+        public Executor(NodeTask tesNodeTask, BlobPipelineOptions blobPipelineOptions)
         {
-            ArgumentException.ThrowIfNullOrEmpty(tesNodeTaskFilePath);
+            ArgumentNullException.ThrowIfNull(tesNodeTask);
             ArgumentNullException.ThrowIfNull(blobPipelineOptions);
 
             this.blobPipelineOptions = blobPipelineOptions;
 
-            var content = File.ReadAllText(tesNodeTaskFilePath);
-
-            tesNodeTask = DeserializeNodeTask(content);
+            this.tesNodeTask = tesNodeTask;
 
             resolutionPolicyHandler = new ResolutionPolicyHandler();
         }
@@ -42,17 +39,11 @@ namespace Tes.Runner
             return new NodeTaskResult(result);
         }
 
-
-        private NodeTask DeserializeNodeTask(string nodeTask)
+        private async ValueTask AppendMetrics(string? metricsFormat, long bytesTransfered)
         {
-            try
+            if (!string.IsNullOrWhiteSpace(tesNodeTask.MetricsFilename) && !string.IsNullOrWhiteSpace(metricsFormat))
             {
-                return JsonSerializer.Deserialize<NodeTask>(nodeTask, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true }) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "Failed to deserialize task JSON file.");
-                throw;
+                await new MetricsFormatter(tesNodeTask.MetricsFilename, metricsFormat).Write(bytesTransfered);
             }
         }
 
@@ -60,10 +51,14 @@ namespace Tes.Runner
         {
             var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
 
-            return await UploadOutputsAsync(memoryBufferChannel);
+            var bytesTransfered = await UploadOutputsAsync(memoryBufferChannel);
+
+            await AppendMetrics(tesNodeTask.OutputsMetricsFormat, bytesTransfered);
+
+            return bytesTransfered;
         }
 
-        private async Task<long> UploadOutputsAsync(Channel<byte[]> memoryBufferChannel)
+        private async ValueTask<long> UploadOutputsAsync(Channel<byte[]> memoryBufferChannel)
         {
             if (tesNodeTask.Outputs is null || tesNodeTask.Outputs.Count == 0)
             {
@@ -79,9 +74,9 @@ namespace Tes.Runner
 
             var outputs = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Outputs);
 
-            if (outputs != null)
+            if ((outputs?.Count ?? 0) > 0)
             {
-                var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs));
+                var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs!));
 
                 logger.LogInformation($"Executed Upload. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 
@@ -95,10 +90,14 @@ namespace Tes.Runner
         {
             var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
 
-            return await DownloadInputsAsync(memoryBufferChannel);
+            var bytesTransfered = await DownloadInputsAsync(memoryBufferChannel);
+
+            await AppendMetrics(tesNodeTask.InputsMetricsFormat, bytesTransfered);
+
+            return bytesTransfered;
         }
 
-        private async Task<long> DownloadInputsAsync(Channel<byte[]> memoryBufferChannel)
+        private async ValueTask<long> DownloadInputsAsync(Channel<byte[]> memoryBufferChannel)
         {
             if (tesNodeTask.Inputs is null || tesNodeTask.Inputs.Count == 0)
             {
@@ -112,9 +111,9 @@ namespace Tes.Runner
 
             var inputs = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Inputs);
 
-            if (inputs != null)
+            if ((inputs?.Count ?? 0) > 0)
             {
-                var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs));
+                var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs!));
 
                 logger.LogInformation($"Executed Download. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 

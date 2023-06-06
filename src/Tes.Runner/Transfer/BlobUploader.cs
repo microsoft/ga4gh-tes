@@ -94,7 +94,7 @@ namespace Tes.Runner.Transfer
         /// <returns>File size in number of bytes</returns>
         public override Task<long> GetSourceLengthAsync(string lengthSource)
         {
-            return Task.FromResult((new FileInfo(lengthSource)).Length);
+            return Task.FromResult(new FileInfo(lengthSource).Length);
         }
 
         /// <summary>

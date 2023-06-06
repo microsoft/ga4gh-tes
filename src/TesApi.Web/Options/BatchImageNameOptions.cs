@@ -17,19 +17,10 @@ namespace TesApi.Web.Options
         public const string SectionName = "NodeImages";
 
         /// <summary>
-        /// Default value for <see cref="Blobxfer"/>
-        /// </summary>
-        public const string DefaultBlobxfer = "mcr.microsoft.com/blobxfer";
-
-        /// <summary>
         /// Default value for <see cref="Docker"/>
         /// </summary>
         public const string DefaultDocker = "docker";
 
-        /// <summary>
-        /// Name of the blobxfer image
-        /// </summary>
-        public string Blobxfer { get; set; } = DefaultBlobxfer;
         /// <summary>
         /// Name of the docker image
         /// </summary>
