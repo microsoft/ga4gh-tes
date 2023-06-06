@@ -11,7 +11,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
@@ -150,13 +149,13 @@ namespace TesApi.Web
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
             this.enableBatchAutopool = batchSchedulingOptions.Value.UseLegacyAutopools;
             this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
-            this.tesExecutionsPathPrefix = string.IsNullOrWhiteSpace(storageOptions.Value.TesExecutionsPathPrefix)
+            this.tesExecutionsPathPrefix = string.IsNullOrWhiteSpace(storageOptions.Value.TesInternalPathPrefix)
                 ? $"/{defaultStorageAccountName}/tes-internal"
-                : storageOptions.Value.TesExecutionsPathPrefix;
+                : storageOptions.Value.TesInternalPathPrefix;
 
             if (this.tesExecutionsPathPrefix[0] != '/') // TODO: move this into the validation of StorageOptions
             {
-                throw new ArgumentException("TesExecutionsPathPrefix must be an absolute path.", nameof(storageOptions));
+                throw new ArgumentException($"{nameof(Options.StorageOptions.TesInternalPathPrefix)} must be an absolute path.", nameof(storageOptions));
             }
 
             this.marthaUrl = marthaOptions.Value.Url;
