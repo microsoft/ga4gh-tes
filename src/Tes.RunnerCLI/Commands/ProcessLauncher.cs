@@ -28,6 +28,7 @@ namespace Tes.RunnerCLI.Commands
             return Process.GetCurrentProcess().MainModule?.FileName;
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("SingleFile", "IL3000:Avoid accessing Assembly file path when publishing as a single file", Justification = "<Pending>")]
         private string ParseArguments(string[] options)
         {
             var argList = new List<string>(options);

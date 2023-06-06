@@ -13,11 +13,13 @@ namespace Tes.Runner.Transfer;
 /// </summary>
 public class BlobBlockApiHttpUtils
 {
+    private const string BlobType = "BlockBlob";
     private const int MaxRetryCount = 3;
     private static readonly HttpClient HttpClient = new HttpClient();
     private static readonly AsyncRetryPolicy RetryPolicy = Policy
         .Handle<RetriableException>()
         .WaitAndRetryAsync(MaxRetryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+    public const string RootHashMetadataName = "md5_hashlist_root_hash";
 
     public static HttpRequestMessage CreatePutBlockRequestAsync(PipelineBuffer buffer, string apiVersion)
     {
@@ -42,8 +44,18 @@ public class BlobBlockApiHttpUtils
 
     private static void AddPutBlockHeaders(HttpRequestMessage request, string apiVersion)
     {
-        request.Headers.Add("x-ms-blob-type", "BlockBlob");
+        request.Headers.Add("x-ms-blob-type", BlobType);
+
         AddBlockBlobServiceHeaders(request, apiVersion);
+    }
+
+    private static void AddMetadataHeaderIfValueIsSet(HttpRequestMessage request, string name, string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return;
+        }
+        request.Headers.Add($"x-ms-meta-{name}", value);
     }
 
     private static void AddBlockBlobServiceHeaders(HttpRequestMessage request, string apiVersion)
@@ -52,7 +64,7 @@ public class BlobBlockApiHttpUtils
         request.Headers.Add("x-ms-date", DateTime.UtcNow.ToString("R"));
     }
 
-    public static HttpRequestMessage CreateBlobBlockListRequest(long length, Uri blobUrl, int blockSizeBytes, string apiVersion)
+    public static HttpRequestMessage CreateBlobBlockListRequest(long length, Uri blobUrl, int blockSizeBytes, string apiVersion, string? rootHash)
     {
         var content = CreateBlockListContent(length, blockSizeBytes);
 
@@ -63,6 +75,7 @@ public class BlobBlockApiHttpUtils
             Content = content
         };
 
+        AddMetadataHeaderIfValueIsSet(request, RootHashMetadataName, rootHash);
         AddBlockBlobServiceHeaders(request, apiVersion);
         return request;
     }
@@ -98,7 +111,7 @@ public class BlobBlockApiHttpUtils
 
     private static bool IsInnerExceptionRetriable(HttpRequestException httpRequestException)
     {
-        if (httpRequestException.InnerException is System.IO.IOException)
+        if (httpRequestException.InnerException is IOException)
         {
             return true;
         }

@@ -22,6 +22,7 @@ namespace Tes.RunnerCLI.Commands.Tests
             Assert.AreEqual($"--bufferCapacity {BlobPipelineOptions.DefaultReadWriteBuffersCapacity}", args[4]);
             Assert.AreEqual($"--apiVersion {BlobPipelineOptions.DefaultApiVersion}", args[5]);
             Assert.AreEqual("--file file", args[6]);
+            Assert.AreEqual(7, args.Length);
         }
 
         [TestMethod]

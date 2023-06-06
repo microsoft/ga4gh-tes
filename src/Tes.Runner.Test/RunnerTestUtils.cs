@@ -2,13 +2,15 @@
 // Licensed under the MIT License.
 
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Channels;
 using Tes.Runner.Transfer;
-
 namespace Tes.Runner.Test;
 
 public class RunnerTestUtils
 {
+    static readonly Random Random = new();
+
     public static async Task<string> CreateTempFileAsync()
     {
         var file = $"{Guid.NewGuid()}.tmp";
@@ -25,6 +27,7 @@ public class RunnerTestUtils
         var hash = md5.ComputeHash(stream);
         return Convert.ToBase64String(hash);
     }
+
     public static void DeleteFileIfExists(string file)
     {
         if (File.Exists(file))
@@ -43,7 +46,22 @@ public class RunnerTestUtils
         return pipelineBuffers;
     }
 
-    static Random random = new Random();
+    public static string AddRandomDataAndReturnMd5(byte[] data)
+    {
+        Random.NextBytes(data);
+        using var md5 = MD5.Create();
+        var hash = md5.ComputeHash(data);
+        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+    }
+
+    public static string GetRootHashFromSortedHashList(List<String> hashList)
+    {
+        var hashListContent = string.Join("", hashList);
+        using var md5 = MD5.Create();
+        var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(hashListContent));
+
+        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+    }
 
     public static async Task<string> CreateTempFileWithContentAsync(int numberOfMiB, int extraBytes = 0)
     {
@@ -51,7 +69,7 @@ public class RunnerTestUtils
         await using var fs = File.Create($"{file}.tmp", BlobSizeUtils.MiB);
 
         var data = new byte[BlobSizeUtils.MiB];
-        random.NextBytes(data);
+        Random.NextBytes(data);
 
         for (var blocks = 0; blocks < numberOfMiB; blocks++)
         {
@@ -61,7 +79,7 @@ public class RunnerTestUtils
         if (extraBytes > 0)
         {
             var extraData = new byte[extraBytes];
-            random.NextBytes(extraData);
+            Random.NextBytes(extraData);
             await fs.WriteAsync(extraData, 0, extraBytes);
         }
 
@@ -73,7 +91,22 @@ public class RunnerTestUtils
     public static async Task AddPipelineBuffersAndCompleteChannelAsync(Channel<PipelineBuffer> pipelineBuffers,
         int numberOfParts, Uri blobUrl, int blockSize, long fileSize, string fileName)
     {
-        for (int partOrdinal = 0; partOrdinal < numberOfParts; partOrdinal++)
+        var buffers = CreatePipelineBuffers(numberOfParts, blobUrl, blockSize, fileSize, fileName);
+
+        foreach (var buffer in buffers)
+        {
+            await pipelineBuffers.Writer.WriteAsync(buffer);
+        }
+
+        pipelineBuffers.Writer.Complete();
+
+    }
+
+    public static List<PipelineBuffer> CreatePipelineBuffers(int numberOfParts, Uri blobUrl, int blockSize,
+        long fileSize, string fileName)
+    {
+        var pipelineBuffers = new List<PipelineBuffer>();
+        for (var partOrdinal = 0; partOrdinal < numberOfParts; partOrdinal++)
         {
             var buffer = new PipelineBuffer()
             {
@@ -84,24 +117,22 @@ public class RunnerTestUtils
                 Ordinal = partOrdinal,
                 NumberOfParts = numberOfParts,
                 FileSize = fileSize,
+                Data = new byte[blockSize]
             };
-
             if (partOrdinal == numberOfParts - 1)
             {
                 buffer.Length = (int)(fileSize - buffer.Offset);
             }
-
-            await pipelineBuffers.Writer.WriteAsync(buffer);
+            pipelineBuffers.Add(buffer);
         }
-
-        pipelineBuffers.Writer.Complete();
+        return pipelineBuffers;
     }
 
     public static async Task AddProcessedBufferAsync(Channel<ProcessedBuffer> processedBuffer, string fileName, int numberOfParts, long fileSize)
     {
-        for (int i = 0; i < numberOfParts; i++)
+        for (var i = 0; i < numberOfParts; i++)
         {
-            var processedPart = new ProcessedBuffer(fileName, null, fileSize, i, numberOfParts, Channel.CreateUnbounded<FileStream>(), null, 0);
+            var processedPart = new ProcessedBuffer(fileName, null, fileSize, i, numberOfParts, Channel.CreateUnbounded<FileStream>(), null, 0, null);
 
             await processedBuffer.Writer.WriteAsync(processedPart);
         }

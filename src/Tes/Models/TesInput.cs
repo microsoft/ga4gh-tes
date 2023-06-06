@@ -68,7 +68,7 @@ namespace Tes.Models
         public string Content { get; set; }
 
         /// <summary>
-        /// Indicates that the file should not be downloaded 
+        /// Indicates that the file should not be downloaded
         /// https://github.com/ga4gh/task-execution-schemas/blob/1df37d34242f74d3f03475c6b9de3324b8094054/openapi/task_execution_service.openapi.yaml#L481
         /// </summary>
         [DataMember(Name = "streamable")]
@@ -194,7 +194,7 @@ namespace Tes.Models
                 }
 
                 hashCode = hashCode * 59 + Streamable.GetHashCode();
-                
+
                 return hashCode;
             }
         }

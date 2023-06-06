@@ -18,7 +18,7 @@ namespace Tes.Runner.Test
         private BlobContainerClient blobContainerClient;
         private Guid containerId;
         private BlobUploader blobUploader;
-        private readonly BlobPipelineOptions blobPipelineOptions = new BlobPipelineOptions();
+        private readonly BlobPipelineOptions blobPipelineOptions = new();
 #pragma warning restore CS8618
 
         [TestInitialize]
@@ -31,7 +31,7 @@ namespace Tes.Runner.Test
 
             blobContainerClient = blobService.GetBlobContainerClient(containerId.ToString());
 
-            blobContainerClient.Create(PublicAccessType.None);
+            await blobContainerClient.CreateAsync(PublicAccessType.None);
 
             blobUploader = new BlobUploader(blobPipelineOptions,
                 await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(10, blobPipelineOptions.BlockSizeBytes));
