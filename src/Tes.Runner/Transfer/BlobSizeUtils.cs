@@ -19,13 +19,7 @@ namespace Tes.Runner.Transfer
             }
 
             var numberOfParts = Convert.ToInt32(Math.Ceiling((double)(length) / blockSize));
-
-            if (numberOfParts > MaxBlobBlocksCount)
-            {
-                throw new Exception(
-                    $"The number of blocks exceeds the maximum allowed by the service of {MaxBlobBlocksCount}. Try increasing the block size. Current block size: {blockSize}");
-            }
-
+            
             return numberOfParts;
         }
 

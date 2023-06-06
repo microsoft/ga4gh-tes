@@ -50,20 +50,6 @@ namespace Tes.Runner.Transfer
             return options;
         }
 
-        //public static BlobPipelineOptions OptimizeOptionsIfApplicable(BlobPipelineOptions blobPipelineOptions)
-        //{
-        //    //optimization is only available for Linux
-        //    //Windows supports an implementation of ISystemInfoProvider is required.
-        //    if (!LinuxSystemInfoProvider.IsLinuxSystem())
-        //    {
-        //        return blobPipelineOptions;
-        //    }
-
-        //    var optimizer = new PipelineOptionsOptimizer(new LinuxSystemInfoProvider());
-
-        //    return optimizer.Optimize(blobPipelineOptions, default);
-        //}
-
         public static BlobPipelineOptions OptimizeOptionsIfApplicable(BlobPipelineOptions blobPipelineOptions, List<FileOutput>? taskOutputs)
         {
             //optimization is only available for Linux
@@ -102,7 +88,7 @@ namespace Tes.Runner.Transfer
                     var newBlockSizeInBytes = (((int)minIncrementUnits - (BlobSizeUtils.DefaultBlockSizeBytes / BlockSizeIncrementUnitInBytes)) * BlockSizeIncrementUnitInBytes) + BlobSizeUtils.DefaultBlockSizeBytes;
 
                     //try again with the new value and see if it works for all outputs. 
-                    return GetAdjustedBlockSizeInBytesForUploads((int)newBlockSizeInBytes, taskOutputs);
+                    return GetAdjustedBlockSizeInBytesForUploads(newBlockSizeInBytes, taskOutputs);
                 }
             }
 
@@ -142,17 +128,7 @@ namespace Tes.Runner.Transfer
                 MemoryBufferCapacity: memoryBufferCapacity);
         }
 
-        //private int GetBlockSize(int optionsBlockSizeBytes)
-        //{
-        //    if (optionsBlockSizeBytes <= 0)
-        //    {
-        //        throw new ArgumentException("Block size must be greater than 0.");
-        //    }
-
-        //    return optionsBlockSizeBytes;
-        //}
-
-        private static int GetOptimizedWorkers(int bufferCapacity)
+        private int GetOptimizedWorkers(int bufferCapacity)
         {
             if (bufferCapacity > MaxWorkingThreadsCount)
             {
