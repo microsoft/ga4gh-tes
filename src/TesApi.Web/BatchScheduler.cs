@@ -1101,18 +1101,27 @@ namespace TesApi.Web
             {
                 // Private executor images are pulled via pool ContainerConfiguration
                 //sb.AppendLinuxLine($"write_ts ExecutorPullStart && docker pull --quiet {executor.Image} && write_ts ExecutorPullEnd && \\");
+                // Install dependencies jq, az cli, and update docker (https://docs.docker.com/engine/install/ubuntu/). 
                 sb.AppendLinuxLine($"curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash && \\");
-                sb.AppendLinuxLine($"sudo apt update -qq && sudo apt install -qq -y jq && \\");
+                sb.AppendLinuxLine($"sudo apt-get update -qq && sudo apt-get install -qq -y jq && sudo apt-get install -qq -y ca-certificates curl gnupg && \\");
                 sb.AppendLinuxLine($"az login --identity && \\");
+                sb.AppendLinuxLine($"sudo install -m 0755 -d /etc/apt/keyrings && \\");
+                sb.AppendLinuxLine($"curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \\");
+                sb.AppendLinuxLine($"sudo chmod a+r /etc/apt/keyrings/docker.gpg && \\");
+                sb.AppendLinuxLine($"echo \"deb [arch=\"$(dpkg --print-architecture)\" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \"$(. /etc/os-release && echo \"$VERSION_CODENAME\")\" stable\" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null && \\");
+                sb.AppendLinuxLine($"sudo apt-get update -qq && \\");
+                sb.AppendLinuxLine($"sudo apt-get install -y -qq docker-ce-cli && \\");
                 sb.AppendLinuxLine($"date=$(date --iso-8601) && \\");
                 sb.AppendLinuxLine($"manifest=$(docker manifest inspect {executor.Image} -v) && \\");
                 sb.AppendLinuxLine($"hash=$(echo $manifest | jq -r '.Descriptor.digest' | cut -d \":\" -f 2) && \\");
-                sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest| jq -c '.[] | select( .Descriptor.platform.architecture == \"amd64\")' | jq -r '.Descriptor.digest'); fi && \\");
+                // Get manifest if response contains multiple platforms.
+                sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest| jq -c '.[] | select( .Descriptor.platform.architecture == \"amd64\")' | jq -r '.Descriptor.digest' | cut -d \":\" -f 2); fi && \\");
+                // Check for slightly different formatted manifests from MCR. 
                 sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest | jq -r '.config.digest' | cut -d \":\" -f 2); fi && \\");
-                sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest| jq -c '.[] | select( .config.platform.architecture == \"amd64\")' | jq -r '.config.digest'); fi && \\");
+                sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest| jq -c '.[] | select( .config.platform.architecture == \"amd64\")' | jq -r '.config.digest' | cut -d \":\" -f 2); fi && \\");
                 sb.AppendLinuxLine($"if docker image ls --digests | grep $hash; then echo \"{executor.Image} already exists locally, skipping pull.\"; \\");
-                sb.AppendLinuxLine($"else if az storage blob download --container-name {DockerImageContainer} --account-name {defaultStorageAccountName} --name $hash.tar --file $hash.tar; then docker load < $hash.tar; az storage blob metadata update --container-name {DockerImageContainer} --account-name {defaultStorageAccountName} --name $hash.tar --metadata lastused=$date; \\");
-                sb.AppendLinuxLine($"else docker pull --quiet {executor.Image}; docker image save {executor.Image} > $hash.tar; az storage blob upload --container-name {DockerImageContainer} --account-name {defaultStorageAccountName} --name $hash.tar --file $hash.tar --metadata lastused=$date; fi; fi && \\");
+                sb.AppendLinuxLine($"else if az storage blob download --container-name {DockerImageContainer} --account-name {defaultStorageAccountName} --name $hash.tar --file $hash.tar; then docker load < $hash.tar; az storage blob metadata update --container-name {DockerImageContainer} --account-name {defaultStorageAccountName} --name $hash.tar --metadata lastUsed=$date; \\");
+                sb.AppendLinuxLine($"else docker pull --quiet {executor.Image}; docker image save {executor.Image} > $hash.tar; az storage blob upload --container-name {DockerImageContainer} --account-name {defaultStorageAccountName} --name $hash.tar --file $hash.tar --metadata lastUsed=$date imageName={executor.Image}; fi; fi && \\");
             }
 
             // The remainder of the script downloads the inputs, runs the main executor container, and uploads the outputs, including the metrics.txt file
