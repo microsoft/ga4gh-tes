@@ -21,7 +21,6 @@ namespace Tes.Runner.Test
         private string tempFile1;
         private string tempFile2;
         private Channel<byte[]> memoryBuffer;
-        private readonly RunnerTestUtils runnerTestUtils = new RunnerTestUtils();
 #pragma warning restore CS8618
 
         [TestInitialize]
@@ -130,10 +129,10 @@ namespace Tes.Runner.Test
             return Task.FromResult(sourceLength);
         }
 
-        public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName)
+        public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash)
         {
             Debug.Assert(blobUrl != null, nameof(blobUrl) + " != null");
-            AddMethodCall(nameof(OnCompletionAsync), length, blobUrl, fileName);
+            AddMethodCall(nameof(OnCompletionAsync), length, blobUrl, fileName, rootHash!);
             return Task.CompletedTask;
         }
 
