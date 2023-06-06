@@ -118,7 +118,7 @@ public class PartsProducer
             Ordinal = partOrdinal,
             NumberOfParts = numberOfParts,
             FileHandlerPool = fileHandlerPool,
-            FileSize = fileSize,
+            FileSize = fileSize
         };
 
         if (partOrdinal == numberOfParts - 1)

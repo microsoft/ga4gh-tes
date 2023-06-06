@@ -69,6 +69,6 @@ public class PartsWriter : PartsProcessor
     private ProcessedBuffer ToProcessedBuffer(PipelineBuffer buffer)
     {
         return new ProcessedBuffer(buffer.FileName, buffer.BlobUrl, buffer.FileSize, buffer.Ordinal,
-            buffer.NumberOfParts, buffer.FileHandlerPool, buffer.BlobPartUrl, buffer.Length);
+            buffer.NumberOfParts, buffer.FileHandlerPool, buffer.BlobPartUrl, buffer.Length, buffer.HashListProvider);
     }
 }

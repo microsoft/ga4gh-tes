@@ -52,7 +52,14 @@ public class ProcessedPartsProcessor
 
                 if (total == buffer.NumberOfParts)
                 {
-                    tasks.Add(blobPipeline.OnCompletionAsync(buffer.FileSize, buffer.BlobUrl, buffer.FileName));
+                    var rootHash = string.Empty;
+
+                    if (buffer.HashListProvider is not null)
+                    {
+                        rootHash = GetRootHash(buffer.HashListProvider);
+                    }
+
+                    tasks.Add(blobPipeline.OnCompletionAsync(buffer.FileSize, buffer.BlobUrl, buffer.FileName, rootHash));
 
                     processedFiles++;
 
@@ -62,13 +69,23 @@ public class ProcessedPartsProcessor
                 }
             }
 
-        await PartsProcessor.WhenAllOrThrowIfOneFailsAsync(tasks);
-
-        readBufferChannel.Writer.Complete();
+        try
+        {
+            await PartsProcessor.WhenAllOrThrowIfOneFailsAsync(tasks);
+        }
+        finally
+        {
+            readBufferChannel.Writer.Complete();
+        }
 
         logger.LogInformation("All parts were successfully processed.");
 
         return totalBytes;
+    }
+
+    private string GetRootHash(IHashListProvider hashListProvider)
+    {
+        return hashListProvider.GetRootHash();
     }
 
     private async ValueTask CloseFileHandlerPoolAsync(Channel<FileStream> bufferFileHandlerPool)

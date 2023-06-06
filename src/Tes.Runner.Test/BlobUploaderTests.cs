@@ -31,7 +31,7 @@ namespace Tes.Runner.Test
 
             blobContainerClient = blobService.GetBlobContainerClient(containerId.ToString());
 
-            blobContainerClient.Create(PublicAccessType.None);
+            await blobContainerClient.CreateAsync(PublicAccessType.None);
 
             blobUploader = new BlobUploader(blobPipelineOptions,
                 await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(10, blobPipelineOptions.BlockSizeBytes));
