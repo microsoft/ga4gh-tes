@@ -128,6 +128,8 @@ namespace Tes.Runner
             
             logger.LogInformation($"{tesNodeTask.Inputs.Count} inputs to download.");
 
+        private async Task<long> DownloadInputsAsync(BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel)
+        {
             var downloader = new BlobDownloader(blobPipelineOptions, memoryBufferChannel);
 
         private async Task<long> DownloadInputsAsync(BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel)
