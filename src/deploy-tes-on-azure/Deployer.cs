@@ -964,6 +964,7 @@ namespace TesDeployer
             UpdateSetting(settings, defaults, "DockerInDockerImageName", configuration.DockerInDockerImageName);
             UpdateSetting(settings, defaults, "BlobxferImageName", configuration.BlobxferImageName);
             UpdateSetting(settings, defaults, "DisableBatchNodesPublicIpAddress", configuration.DisableBatchNodesPublicIpAddress, b => b.GetValueOrDefault().ToString(), configuration.DisableBatchNodesPublicIpAddress.GetValueOrDefault().ToString());
+            UpdateSetting(settings, defaults, "TesExecutionsPathPrefix", configuration.TesExecutionsPathPrefix);
 
             if (installedVersion is null)
             {

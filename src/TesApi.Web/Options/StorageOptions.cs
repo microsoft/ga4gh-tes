@@ -17,6 +17,12 @@ namespace TesApi.Web.Options
         /// External storage container information
         /// </summary>
         public string ExternalStorageContainers { get; set; }
+
+        /// <summary>
+        /// Blob storage folder for tes task storage
+        /// </summary>
+        public string TesExecutionsPathPrefix { get; set; }
+
         /// <summary>
         /// Default storage account name.
         /// </summary>

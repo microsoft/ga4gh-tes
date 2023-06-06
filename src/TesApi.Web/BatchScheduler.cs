@@ -52,7 +52,6 @@ namespace TesApi.Web
         private const int defaultBlobxferOneShotBytes = 4_194_304;
         private const int defaultBlobxferChunkSizeBytes = 16_777_216; // max file size = 16 MiB * 50k blocks = 838,860,800,000 bytes
         private const string CromwellPathPrefix = "/cromwell-executions";
-        private const string TesExecutionsPathPrefix = "/tes-internal";
         private const string CromwellScriptFileName = "script";
         private const string BatchScriptFileName = "batch_script";
         private const string UploadFilesScriptFileName = "upload_files_script";
@@ -78,6 +77,7 @@ namespace TesApi.Web
         private readonly string marthaKeyVaultName;
         private readonly string marthaSecretName;
         private readonly string defaultStorageAccountName;
+        private readonly string tesExecutionsPathPrefix;
         private readonly string globalStartTaskPath;
         private readonly string globalManagedIdentity;
         private readonly ContainerRegistryProvider containerRegistryProvider;
@@ -150,6 +150,15 @@ namespace TesApi.Web
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
             this.enableBatchAutopool = batchSchedulingOptions.Value.UseLegacyAutopools;
             this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
+            this.tesExecutionsPathPrefix = string.IsNullOrWhiteSpace(storageOptions.Value.TesExecutionsPathPrefix)
+                ? $"/{defaultStorageAccountName}/tes-internal"
+                : storageOptions.Value.TesExecutionsPathPrefix;
+
+            if (this.tesExecutionsPathPrefix[0] != '/') // TODO: move this into the validation of StorageOptions
+            {
+                throw new ArgumentException("TesExecutionsPathPrefix must be an absolute path.", nameof(storageOptions));
+            }
+
             this.marthaUrl = marthaOptions.Value.Url;
             this.marthaKeyVaultName = marthaOptions.Value.KeyVaultName;
             this.marthaSecretName = marthaOptions.Value.SecretName;
@@ -405,9 +414,9 @@ namespace TesApi.Web
         private static string GetCromwellExecutionDirectoryPath(TesTask task)
             => GetParentPath(task.Inputs?.FirstOrDefault(IsCromwellCommandScript)?.Path.TrimStart('/'));
 
-        private static string GetStorageUploadPath(TesTask task, string storageAccountName)
+        private string GetStorageUploadPath(TesTask task)
         {
-            return $"{storageAccountName}/{TesExecutionsPathPrefix.TrimStart('/')}/{task.Id}";
+            return $"{tesExecutionsPathPrefix}/{task.Id}";
         }
 
         /// <summary>
@@ -962,7 +971,7 @@ namespace TesApi.Web
             //    }
             //}
 
-            var storageUploadPath = GetStorageUploadPath(task, defaultStorageAccountName);
+            var storageUploadPath = GetStorageUploadPath(task);
             var metricsPath = $"/{storageUploadPath}/metrics.txt";
             var metricsUrl = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync(metricsPath, cancellationToken, getContainerSas: true));
 
@@ -1247,7 +1256,7 @@ namespace TesApi.Web
 
             if (inputFile.Content is not null || IsCromwellCommandScript(inputFile))
             {
-                var storageFileName = $"/{GetStorageUploadPath(task, defaultStorageAccountName)}/{Guid.NewGuid()}";
+                var storageFileName = $"/{GetStorageUploadPath(task)}/{Guid.NewGuid()}";
                 inputFileUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(storageFileName, cancellationToken);
 
                 var content = inputFile.Content ?? await storageAccessProvider.DownloadBlobAsync(inputFile.Url, cancellationToken);
@@ -1257,7 +1266,7 @@ namespace TesApi.Web
             }
             else if (TryGetCromwellTmpFilePath(inputFile.Url, out var localPath))
             {
-                var storageFileName = $"/{GetStorageUploadPath(task, defaultStorageAccountName)}/{Guid.NewGuid()}";
+                var storageFileName = $"/{GetStorageUploadPath(task)}/{Guid.NewGuid()}";
                 inputFileUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(storageFileName, cancellationToken);
                 await storageAccessProvider.UploadBlobFromFileAsync(storageFileName, localPath, cancellationToken);
             }
@@ -1795,7 +1804,7 @@ namespace TesApi.Web
                     cromwellRcCode = temp;
                 }
 
-                var metricsContent = await storageAccessProvider.DownloadBlobAsync($"/{GetStorageUploadPath(tesTask, defaultStorageAccountName)}/metrics.txt", cancellationToken);
+                var metricsContent = await storageAccessProvider.DownloadBlobAsync($"/{GetStorageUploadPath(tesTask)}/metrics.txt", cancellationToken);
 
                 if (metricsContent is not null)
                 {
