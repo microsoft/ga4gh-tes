@@ -42,12 +42,12 @@ namespace Tes.Runner.Test.Transfer
             var referenceHashes = new List<string>();
 
             foreach (var buffer in buffers)
-        {
+            {
                 var referenceHash = RunnerTestUtils.AddRandomDataAndReturnMd5(buffer.Data);
                 referenceHashes.Add(referenceHash);
                 hashListProvider.CalculateAndAddBlockHash(buffer);
             }
-            
+
             Assert.AreEqual(numberOfParts, hashListProvider.HashList.Count);
             Assert.IsTrue(hashListProvider.HashList.All(h => referenceHashes.Contains(h.Value)));
         }
@@ -62,7 +62,7 @@ namespace Tes.Runner.Test.Transfer
             var referenceHashes = new List<string>();
 
             foreach (var buffer in buffers)
-        {
+            {
                 var referenceHash = RunnerTestUtils.AddRandomDataAndReturnMd5(buffer.Data);
                 referenceHashes.Add(referenceHash);
                 hashListProvider.CalculateAndAddBlockHash(buffer);

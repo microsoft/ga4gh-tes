@@ -44,7 +44,7 @@ namespace Tes.Runner.Transfer
             {
                 var blockSize = GetAdjustedBlockSizeInBytesForUploads(options.BlockSizeBytes, taskOutputs);
 
-                return CreateOptimizedOptions(options, blockSize);
+                return CreateOptimizedThreadingAndCapacityOptions(options, blockSize);
             }
 
             return options;
@@ -106,7 +106,7 @@ namespace Tes.Runner.Transfer
             };
         }
 
-        private BlobPipelineOptions CreateOptimizedOptions(BlobPipelineOptions options, int blockSize)
+        private BlobPipelineOptions CreateOptimizedThreadingAndCapacityOptions(BlobPipelineOptions options, int blockSize)
         {
             var bufferCapacity = GetOptimizedMemoryBufferCapacity(blockSize);
 

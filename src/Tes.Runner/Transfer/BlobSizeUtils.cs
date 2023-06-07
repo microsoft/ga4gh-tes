@@ -19,7 +19,7 @@ namespace Tes.Runner.Transfer
             }
 
             var numberOfParts = Convert.ToInt32(Math.Ceiling((double)(length) / blockSize));
-            
+
             return numberOfParts;
         }
 

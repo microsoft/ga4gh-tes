@@ -50,7 +50,7 @@ namespace Tes.RunnerCLI.Commands
             {
                 var nodeTask = DeserializeNodeTask(file.FullName);
 
-                var executor = new Executor(nodeTask, options);
+                var executor = new Executor(nodeTask);
 
                 var result = await executor.ExecuteNodeContainerTaskAsync(new DockerExecutor(dockerUri));
 
@@ -97,7 +97,7 @@ namespace Tes.RunnerCLI.Commands
 
             Console.WriteLine("Starting upload operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, exec => exec.UploadOutputsAsync(), ExpandOutputs);
+            return await ExecuteTransferTaskAsync(file, options, exec => exec.UploadOutputsAsync(options), ExpandOutputs);
         }
 
         private static void HandleResult(ProcessExecutionResult results, string command)
@@ -131,7 +131,7 @@ namespace Tes.RunnerCLI.Commands
 
             Console.WriteLine("Starting download operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, exec => exec.DownloadInputsAsync(), ExpandInputs);
+            return await ExecuteTransferTaskAsync(file, options, exec => exec.DownloadInputsAsync(options), ExpandInputs);
         }
 
         private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, BlobPipelineOptions options, Func<Executor, Task<long>> transferOperation, Action<NodeTask> expandFileSpecs)
@@ -142,7 +142,7 @@ namespace Tes.RunnerCLI.Commands
 
                 expandFileSpecs(nodeTask);
 
-                var executor = new Executor(nodeTask, options);
+                var executor = new Executor(nodeTask);
 
                 var result = await transferOperation(executor);
 

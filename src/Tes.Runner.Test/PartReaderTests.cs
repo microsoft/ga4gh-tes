@@ -11,7 +11,7 @@ namespace Tes.Runner.Test
     [TestCategory("Unit")]
     public class PartReaderTests
     {
-        private const int MemBuffersCapacity = 10;
+        private const int MemBuffersCapacity = 20;
         private PartsReader? partsReader;
         private Mock<IBlobPipeline>? pipeline;
         private Channel<byte[]>? memoryBufferChannel;
@@ -81,7 +81,7 @@ namespace Tes.Runner.Test
 
         private async Task<int> PrepareReaderChannelAsync()
         {
-            return await RunnerTestUtils.PreparePipelineChannelAsync(blockSizeBytes, fileSize, fileName, "https://foo.bar/cont/blob", readBufferChannel);
+            return await RunnerTestUtils.PreparePipelineChannelAsync(blockSizeBytes, fileSize, fileName, "https://foo.bar/cont/blob", readBufferChannel!);
         }
     }
 }
