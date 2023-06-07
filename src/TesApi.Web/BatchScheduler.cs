@@ -417,7 +417,7 @@ namespace TesApi.Web
 
         private string GetStorageUploadPath(TesTask task)
         {
-            return task.Resources.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix)
+            return task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix) ?? false
                 ? $"{defaultStorageAccountName}/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}"
                 : $"{defaultStorageAccountName}{TesExecutionsPathPrefix}/{task.Id}";
         }
