@@ -18,7 +18,7 @@ namespace Tes.Runner.Transfer
 
         public string CalculateAndAddBlockHash(PipelineBuffer pipelineBuffer)
         {
-            var hash = CreateBufferHashList(pipelineBuffer.Data);
+            var hash = CreateBufferHashList(pipelineBuffer.Data[0..pipelineBuffer.Length]);
 
             if (!hashesDictionary.TryAdd(pipelineBuffer.Ordinal, hash))
             {
@@ -31,19 +31,19 @@ namespace Tes.Runner.Transfer
 
         public string GetRootHash()
         {
-            var stringBuilder = new StringBuilder();
+            var blockHashList = new StringBuilder();
 
             foreach (var key in hashesDictionary.Keys.Order())
             {
                 hashesDictionary.TryGetValue(key, out var value);
-                stringBuilder.Append(value);
+                blockHashList.Append(value);
             }
 
-            var data = Encoding.UTF8.GetBytes(stringBuilder.ToString());
+            var data = Encoding.UTF8.GetBytes(blockHashList.ToString());
 
             var rootHash = CreateBlockMd5CheckSumValue(data, 0, data.Length);
 
-            logger.LogInformation($"Root Hash: {rootHash}");
+            logger.LogInformation($"Root Hash: {rootHash} set in property: {BlobBlockApiHttpUtils.RootHashMetadataName}");
 
             return rootHash;
         }
