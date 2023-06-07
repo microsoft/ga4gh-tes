@@ -19,7 +19,7 @@ public class BlobBlockApiHttpUtils
     private static readonly AsyncRetryPolicy RetryPolicy = Policy
         .Handle<RetriableException>()
         .WaitAndRetryAsync(MaxRetryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
-    public const string RootHashMetadataName = "md5_hashlist_root_hash";
+    public const string RootHashMetadataName = "md5_4mib_hashlist_root_hash";
 
     public static HttpRequestMessage CreatePutBlockRequestAsync(PipelineBuffer buffer, string apiVersion)
     {
