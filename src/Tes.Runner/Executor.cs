@@ -87,10 +87,20 @@ namespace Tes.Runner
             var optimizedOptions =
                 PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(blobPipelineOptions, tesNodeTask.Outputs);
 
+            ValidateBlockSize(optimizedOptions.BlockSizeBytes);
+
             LogStartConfig(optimizedOptions);
 
             logger.LogInformation($"{tesNodeTask.Outputs?.Count} outputs to upload.");
             return optimizedOptions;
+        }
+
+        private static void ValidateBlockSize(int blockSizeBytes)
+        {
+            if (blockSizeBytes % BlobSizeUtils.BlockSizeIncrementUnitInBytes > 0)
+            {
+                throw new InvalidOperationException($"The provided block size: {blockSizeBytes:n:0} is not valid for the upload operation. The block size must be a multiple of {BlobSizeUtils.BlockSizeIncrementUnitInBytes / BlobSizeUtils.MiB} MiB ({BlobSizeUtils.BlockSizeIncrementUnitInBytes:n:0} bytes)");
+            }
         }
 
         private BlobPipelineOptions OptimizeBlobPipelineOptionsForDownload(BlobPipelineOptions blobPipelineOptions)
@@ -104,47 +114,61 @@ namespace Tes.Runner
             return optimizedOptions;
         }
 
+        private async Task<long> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel)
+        {
+            var uploader = new BlobUploader(blobPipelineOptions, memoryBufferChannel);
+
+            var outputs = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Outputs);
+
+            if (outputs != null)
+            {
+                var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs));
+
+                logger.LogInformation($"Executed Upload. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
+
+                return executionResult.Result;
+            }
+
+            return 0;
+        }
 
         public async Task<long> DownloadInputsAsync(BlobPipelineOptions blobPipelineOptions)
         {
             ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
 
-            if (tesNodeTask.Inputs is null || tesNodeTask.Inputs.Count == 0)
+            var inputs = await CreateDownloadInputsAsync();
+
+            if (inputs is null)
             {
-                logger.LogInformation("No inputs provided");
                 return 0;
             }
             var optimizedOptions = OptimizeBlobPipelineOptionsForDownload(blobPipelineOptions);
 
             var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(optimizedOptions.MemoryBufferCapacity, optimizedOptions.BlockSizeBytes);
 
-            var bytesTransferred = await DownloadInputsAsync(optimizedOptions, memoryBufferChannel);
-
-            await AppendMetrics(tesNodeTask.InputsMetricsFormat, bytesTransferred);
-
-            return bytesTransferred;
+            return await DownloadInputsAsync(optimizedOptions, memoryBufferChannel);
         }
-            LogStartConfig(blobPipelineOptions);
-            
-            logger.LogInformation($"{tesNodeTask.Inputs.Count} inputs to download.");
 
-        private async Task<long> DownloadInputsAsync(BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel)
+            return await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Inputs);
+        }
+
+        private async Task<List<UploadInfo>?> CreateUploadOutputsAsync()
         {
-            var downloader = new BlobDownloader(blobPipelineOptions, memoryBufferChannel);
-
+            if (tesNodeTask.Outputs is null || tesNodeTask.Outputs.Count == 0)
+            {
         private async Task<long> DownloadInputsAsync(BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel)
         {
             var inputs = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Inputs);
-
-            if ((inputs?.Count ?? 0) <= 0)
-            {
-                logger.LogWarning("No outputs identified after applying the resolution policy.");
-                return 0;
+                {
+                    return default;
+                }
             }
 
-            var downloader = new BlobDownloader(blobPipelineOptions, memoryBufferChannel);
+            var inputs = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Inputs);
 
-            var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs!));
+            if (inputs != null)
+            {
+                var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs));
 
             logger.LogInformation($"Executed Download. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 

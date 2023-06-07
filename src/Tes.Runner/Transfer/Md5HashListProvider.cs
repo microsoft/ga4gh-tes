@@ -12,12 +12,13 @@ namespace Tes.Runner.Transfer
     {
         private readonly ILogger logger = PipelineLoggerFactory.Create<Md5HashListProvider>();
         private readonly ConcurrentDictionary<int, string> hashesDictionary = new();
+        public const int HashListItemBlockSizeInBytes = BlobSizeUtils.BlockSizeIncrementUnitInBytes;
 
         public ConcurrentDictionary<int, string> HashList => hashesDictionary;
 
         public string CalculateAndAddBlockHash(PipelineBuffer pipelineBuffer)
         {
-            var hash = CreateBlockMd5CheckSumValue(pipelineBuffer.Data, pipelineBuffer.Length);
+            var hash = CreateBufferHashList(pipelineBuffer.Data);
 
             if (!hashesDictionary.TryAdd(pipelineBuffer.Ordinal, hash))
             {
@@ -40,17 +41,29 @@ namespace Tes.Runner.Transfer
 
             var data = Encoding.UTF8.GetBytes(stringBuilder.ToString());
 
-            var rootHash = CreateBlockMd5CheckSumValue(data, data.Length);
+            var rootHash = CreateBlockMd5CheckSumValue(data, 0, data.Length);
 
             logger.LogInformation($"Root Hash: {rootHash}");
 
             return rootHash;
         }
 
-        private static string CreateBlockMd5CheckSumValue(byte[] buffer, int length)
+
+        private static string CreateBlockMd5CheckSumValue(byte[] buffer, int offset, int length)
         {
             using var md5Provider = MD5.Create();
-            return BitConverter.ToString(md5Provider.ComputeHash(buffer, 0, length)).Replace("-", "").ToLowerInvariant();
+            return BitConverter.ToString(md5Provider.ComputeHash(buffer, offset, length)).Replace("-", "").ToLowerInvariant();
+        }
+
+        private string CreateBufferHashList(byte[] buffer)
+        {
+            var stringBuilder = new StringBuilder();
+            for (var i = 0; i < buffer.Length; i += BlobSizeUtils.BlockSizeIncrementUnitInBytes)
+            {
+                var blockLength = Math.Min(BlobSizeUtils.BlockSizeIncrementUnitInBytes, buffer.Length - i);
+                stringBuilder.Append(CreateBlockMd5CheckSumValue(buffer, i, blockLength));
+            }
+            return stringBuilder.ToString();
         }
     }
 }

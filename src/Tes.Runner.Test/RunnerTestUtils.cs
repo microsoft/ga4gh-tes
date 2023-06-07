@@ -36,6 +36,13 @@ public class RunnerTestUtils
         }
     }
 
+    public static PipelineBuffer CreateBufferWithRandomData(int blockSizeInBytes)
+    {
+        var data = new byte[blockSizeInBytes];
+        Random.NextBytes(data);
+        return new PipelineBuffer() { Data = data} ;
+    }
+
     public static async Task<List<T>> ReadAllPipelineBuffersAsync<T>(IAsyncEnumerable<T> source)
     {
         var pipelineBuffers = new List<T>();
@@ -48,6 +55,11 @@ public class RunnerTestUtils
     public static string AddRandomDataAndReturnMd5(byte[] data)
     {
         Random.NextBytes(data);
+        return CalculateMd5Hash(data);
+    }
+
+    public static string CalculateMd5Hash(byte[] data)
+    {
         using var md5 = MD5.Create();
         var hash = md5.ComputeHash(data);
         return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
