@@ -5,10 +5,10 @@ namespace Tes.Runner.Transfer
 {
     public static class BlobSizeUtils
     {
-        public const int MaxBlobPartsCount = 50000;
+        public const int MaxBlobBlocksCount = 50000;
         public const int MiB = 1024 * 1024;
         public const long GiB = MiB * 1024;
-        public const int DefaultBlockSizeBytes = MiB * 10; //10 MiB;
+        public const int DefaultBlockSizeBytes = MiB * 8; //8 MiB;
 
         public static int GetNumberOfParts(long length, int blockSize)
         {
@@ -19,12 +19,6 @@ namespace Tes.Runner.Transfer
             }
 
             var numberOfParts = Convert.ToInt32(Math.Ceiling((double)(length) / blockSize));
-
-            if (numberOfParts > MaxBlobPartsCount)
-            {
-                throw new Exception(
-                    $"The number of blocks exceeds the maximum allowed by the service of {MaxBlobPartsCount}. Try increasing the block size. Current block size: {blockSize}");
-            }
 
             return numberOfParts;
         }

@@ -26,12 +26,12 @@ namespace Tes.Runner.Test
         public void SetUp()
         {
             //the memory pool must be empty as the writer will write to it
-            memoryBufferChannel = Channel.CreateBounded<byte[]>(MemBuffersCapacity);
+            memoryBufferChannel = Channel.CreateBounded<byte[]>(RunnerTestUtils.MemBuffersCapacity);
             options = new BlobPipelineOptions();
             pipeline = new Mock<IBlobPipeline>();
             partsWriter = new PartsWriter(pipeline.Object, options, memoryBufferChannel);
-            processedBufferChannel = Channel.CreateBounded<ProcessedBuffer>(10);
-            writeBufferChannel = Channel.CreateBounded<PipelineBuffer>(10);
+            processedBufferChannel = Channel.CreateBounded<ProcessedBuffer>(RunnerTestUtils.PipelineBufferCapacity);
+            writeBufferChannel = Channel.CreateBounded<PipelineBuffer>(RunnerTestUtils.PipelineBufferCapacity);
         }
 
         [TestMethod]
@@ -58,11 +58,7 @@ namespace Tes.Runner.Test
 
         private async Task<int> PrepareWriterChannelAsync()
         {
-            var buffer = new PipelineBuffer();
-            var numberOfParts = (int)(fileSize / blockSizeBytes);
-            await RunnerTestUtils.AddPipelineBuffersAndCompleteChannelAsync(writeBufferChannel!, numberOfParts,
-                new Uri("https://foo.bar/cont/blob"), blockSizeBytes, fileSize, fileName);
-            return numberOfParts;
+            return await RunnerTestUtils.PreparePipelineChannelAsync(blockSizeBytes, fileSize, fileName, "https://foo.bar/cont/blob", writeBufferChannel);
         }
     }
 }

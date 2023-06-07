@@ -45,7 +45,6 @@ public class RunnerTestUtils
         }
         return pipelineBuffers;
     }
-
     public static string AddRandomDataAndReturnMd5(byte[] data)
     {
         Random.NextBytes(data);
@@ -54,7 +53,7 @@ public class RunnerTestUtils
         return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
     }
 
-    public static string GetRootHashFromSortedHashList(List<String> hashList)
+    public static string GetRootHashFromSortedHashList(List<string> hashList)
     {
         var hashListContent = string.Join("", hashList);
         using var md5 = MD5.Create();
@@ -86,6 +85,14 @@ public class RunnerTestUtils
         fs.Close();
 
         return fs.Name;
+    }
+
+    public static async Task<int> PreparePipelineChannelAsync(int blockSizeBytes, long fileSize, string fileName, string blobUrl, Channel<PipelineBuffer> pipelineChannel)
+    {
+        var numberOfParts = BlobSizeUtils.GetNumberOfParts(fileSize, blockSizeBytes);
+        await RunnerTestUtils.AddPipelineBuffersAndCompleteChannelAsync(pipelineChannel, numberOfParts,
+            new Uri(blobUrl), blockSizeBytes, fileSize, fileName);
+        return numberOfParts;
     }
 
     public static async Task AddPipelineBuffersAndCompleteChannelAsync(Channel<PipelineBuffer> pipelineBuffers,
@@ -137,4 +144,7 @@ public class RunnerTestUtils
             await processedBuffer.Writer.WriteAsync(processedPart);
         }
     }
+
+    public const int MemBuffersCapacity = 20;
+    public const int PipelineBufferCapacity = 20;
 }
