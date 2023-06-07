@@ -31,14 +31,14 @@ namespace Tes.Runner.Test.Transfer
 
             Assert.AreEqual(numberOfParts, hashListProvider.HashList.Count);
         }
-        
+
 
         [TestMethod]
         public void CalculateAndAddBlockHash_BufferSizeIsGreaterThanHashListItemBlockSizeInBytes_Md5HashListIsCalculatedForBuffer()
         {
             //this will create a buffer 10 x larger than the hash list item block size
             var buffer = RunnerTestUtils.CreateBufferWithRandomData(Md5HashListProvider.HashListItemBlockSizeInBytes * 10);
-            
+
             hashListProvider.CalculateAndAddBlockHash(buffer);
 
             //create all hash items in the buffer independently
@@ -49,9 +49,9 @@ namespace Tes.Runner.Test.Transfer
                 var end = start + Md5HashListProvider.HashListItemBlockSizeInBytes;
                 referenceHashes.Add(RunnerTestUtils.CalculateMd5Hash(buffer.Data[start..end]));
             }
-            
+
             Assert.AreEqual(1, hashListProvider.HashList.Count);
-            Assert.AreEqual(hashListProvider.HashList.Values.First(), string.Join("",referenceHashes));
+            Assert.AreEqual(hashListProvider.HashList.Values.First(), string.Join("", referenceHashes));
         }
 
         [TestMethod]
@@ -97,7 +97,7 @@ namespace Tes.Runner.Test.Transfer
                 var referenceHash = RunnerTestUtils.CalculateMd5Hash(buffer.Data[start..end]);
                 referenceHashes.Add(referenceHash);
 
-                start = Md5HashListProvider.HashListItemBlockSizeInBytes; 
+                start = Md5HashListProvider.HashListItemBlockSizeInBytes;
                 end = Md5HashListProvider.HashListItemBlockSizeInBytes * 2;
                 referenceHash = RunnerTestUtils.CalculateMd5Hash(buffer.Data[start..end]);
                 referenceHashes.Add(referenceHash);

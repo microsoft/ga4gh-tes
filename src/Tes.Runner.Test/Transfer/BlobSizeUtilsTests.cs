@@ -18,13 +18,13 @@ namespace Tes.Runner.Test.Transfer
             var expectedNumberOfParts = (fileSizeInBytes + blockSizeInBytes - 1) / blockSizeInBytes;
             Assert.AreEqual(expectedNumberOfParts, partNumbers);
         }
-        
+
         [TestMethod]
         public void ValidateBlockSizeForUploadTest_BlockSizeIsLessThanIncrementUnit_ThrowsInvalidOperationException()
         {
             var blockSize = BlobSizeUtils.BlockSizeIncrementUnitInBytes - 1;
 
-           Assert.ThrowsException<InvalidOperationException>(()=>BlobSizeUtils.ValidateBlockSizeForUpload(blockSize));
+            Assert.ThrowsException<InvalidOperationException>(() => BlobSizeUtils.ValidateBlockSizeForUpload(blockSize));
         }
 
         [TestMethod]
@@ -40,7 +40,7 @@ namespace Tes.Runner.Test.Transfer
         {
             var blockSize = (2 * BlobSizeUtils.BlockSizeIncrementUnitInBytes);
 
-             BlobSizeUtils.ValidateBlockSizeForUpload(blockSize);
+            BlobSizeUtils.ValidateBlockSizeForUpload(blockSize);
         }
     }
 }

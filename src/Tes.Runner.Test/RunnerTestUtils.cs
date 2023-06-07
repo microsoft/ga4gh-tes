@@ -40,7 +40,7 @@ public class RunnerTestUtils
     {
         var data = new byte[blockSizeInBytes];
         Random.NextBytes(data);
-        return new PipelineBuffer() { Data = data} ;
+        return new PipelineBuffer() { Data = data };
     }
 
     public static async Task<List<T>> ReadAllPipelineBuffersAsync<T>(IAsyncEnumerable<T> source)
