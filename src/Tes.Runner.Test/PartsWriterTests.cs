@@ -11,7 +11,6 @@ namespace Tes.Runner.Test
     [TestCategory("Unit")]
     public class PartsWriterTests
     {
-        private const int MemBuffersCapacity = 10;
         private PartsWriter? partsWriter;
         private Mock<IBlobPipeline>? pipeline;
         private Channel<byte[]>? memoryBufferChannel;
@@ -58,7 +57,7 @@ namespace Tes.Runner.Test
 
         private async Task<int> PrepareWriterChannelAsync()
         {
-            return await RunnerTestUtils.PreparePipelineChannelAsync(blockSizeBytes, fileSize, fileName, "https://foo.bar/cont/blob", writeBufferChannel);
+            return await RunnerTestUtils.PreparePipelineChannelAsync(blockSizeBytes, fileSize, fileName, "https://foo.bar/cont/blob", writeBufferChannel!);
         }
     }
 }

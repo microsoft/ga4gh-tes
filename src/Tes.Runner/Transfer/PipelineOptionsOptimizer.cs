@@ -15,7 +15,6 @@ namespace Tes.Runner.Transfer
         private const double MemoryBufferCapacityFactor = 0.4; // 40% of total memory
         private const long MaxMemoryBufferSizeInBytes = BlobSizeUtils.GiB * 2; // 2 GiB of total memory
         private const int MaxWorkingThreadsCount = 90;
-        private const int BlockSizeIncrementUnitInBytes = 4 * BlobSizeUtils.MiB; // 4 MiB
 
         public PipelineOptionsOptimizer(ISystemInfoProvider systemInfoProvider) : this(systemInfoProvider, new DefaultFileInfoProvider())
         {
@@ -42,7 +41,12 @@ namespace Tes.Runner.Transfer
             //only optimize if the transfer options are the default ones
             if (IsDefaultCapacityAndWorkerTransferOptions(options))
             {
-                var blockSize = GetAdjustedBlockSizeInBytesForUploads(options.BlockSizeBytes, taskOutputs);
+                var blockSize = options.BlockSizeBytes;
+
+                if (taskOutputs?.Count > 0)
+                {
+                    blockSize = GetAdjustedBlockSizeInBytesForUploads(options.BlockSizeBytes, taskOutputs);
+                }
 
                 return CreateOptimizedThreadingAndCapacityOptions(options, blockSize);
             }
@@ -64,28 +68,20 @@ namespace Tes.Runner.Transfer
             return optimizer.Optimize(blobPipelineOptions, taskOutputs);
         }
 
-        private int GetAdjustedBlockSizeInBytesForUploads(int currentBlockSizeInBytes, List<FileOutput>? taskOutputs)
+        private int GetAdjustedBlockSizeInBytesForUploads(int currentBlockSizeInBytes, List<FileOutput> taskOutputs)
         {
-            if (currentBlockSizeInBytes <= 0)
-            {
-                throw new ArgumentException("Block size must be greater than 0.");
-            }
 
-            if (taskOutputs is null || taskOutputs.Count == 0)
-            {
-                return currentBlockSizeInBytes;
-            }
+            BlobSizeUtils.ValidateBlockSizeForUpload(currentBlockSizeInBytes);
 
             foreach (var taskOutput in taskOutputs)
             {
-
                 var fileSize = fileInfoProvider.GetFileSize(taskOutput.FullFileName!);
 
                 if (fileSize / (double)currentBlockSizeInBytes > BlobSizeUtils.MaxBlobBlocksCount)
                 {
-                    var minIncrementUnits = Math.Ceiling((double)fileSize / (BlobSizeUtils.MaxBlobBlocksCount * (long)BlockSizeIncrementUnitInBytes));
+                    var minIncrementUnits = Math.Ceiling((double)fileSize / (BlobSizeUtils.MaxBlobBlocksCount * (long)BlobSizeUtils.BlockSizeIncrementUnitInBytes));
 
-                    var newBlockSizeInBytes = (((int)minIncrementUnits - (BlobSizeUtils.DefaultBlockSizeBytes / BlockSizeIncrementUnitInBytes)) * BlockSizeIncrementUnitInBytes) + BlobSizeUtils.DefaultBlockSizeBytes;
+                    var newBlockSizeInBytes = (((int)minIncrementUnits - (BlobSizeUtils.DefaultBlockSizeBytes / BlobSizeUtils.BlockSizeIncrementUnitInBytes)) * BlobSizeUtils.BlockSizeIncrementUnitInBytes) + BlobSizeUtils.DefaultBlockSizeBytes;
 
                     //try again with the new value and see if it works for all outputs. 
                     return GetAdjustedBlockSizeInBytesForUploads(newBlockSizeInBytes, taskOutputs);

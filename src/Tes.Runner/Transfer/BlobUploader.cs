@@ -3,7 +3,6 @@
 
 using System.Collections.Concurrent;
 using System.Threading.Channels;
-using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer
