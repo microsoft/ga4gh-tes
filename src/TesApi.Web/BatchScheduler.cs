@@ -81,6 +81,7 @@ namespace TesApi.Web
         private readonly string defaultStorageAccountName;
         private readonly string globalStartTaskPath;
         private readonly string globalManagedIdentity;
+        private readonly bool cacheDockerImages;
         private readonly ContainerRegistryProvider containerRegistryProvider;
         private readonly string batchPrefix;
         private readonly IBatchPoolFactory _batchPoolFactory;
@@ -156,6 +157,7 @@ namespace TesApi.Web
             this.marthaSecretName = marthaOptions.Value.SecretName;
             this.globalStartTaskPath = StandardizeStartTaskPath(batchNodesOptions.Value.GlobalStartTask, this.defaultStorageAccountName);
             this.globalManagedIdentity = batchNodesOptions.Value.GlobalManagedIdentity;
+            this.cacheDockerImages = batchNodesOptions.Value.CacheDockerImages;
             this.allowedVmSizesService = allowedVmSizesService;
 
             if (!this.enableBatchAutopool)
@@ -1072,6 +1074,23 @@ namespace TesApi.Web
 
             var sb = new StringBuilder();
 
+            sb.AppendLinuxLine($"pull_image() {{ \\");
+            sb.AppendLinuxLine($"image=$1 && \\");
+            sb.AppendLinuxLine($"account_name=$2 && \\");
+            sb.AppendLinuxLine($"blob_container=$3 && \\");
+            sb.AppendLinuxLine($"date=$(date --iso-8601) && \\");
+            sb.AppendLinuxLine($"manifest=$(docker manifest inspect $image -v) && \\");
+            sb.AppendLinuxLine($"hash=$(echo $manifest | jq -r '.Descriptor.digest' | cut -d \":\" -f 2) && \\");
+            // Get manifest if response contains multiple platforms.
+            sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest| jq -c '.[] | select( .Descriptor.platform.architecture == \"amd64\")' | jq -r '.Descriptor.digest' | cut -d \":\" -f 2); fi && \\");
+            // Check for slightly different formatted manifests from MCR. 
+            sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest | jq -r '.config.digest' | cut -d \":\" -f 2); fi && \\");
+            sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest| jq -c '.[] | select( .config.platform.architecture == \"amd64\")' | jq -r '.config.digest' | cut -d \":\" -f 2); fi && \\");
+            sb.AppendLinuxLine($"if docker image ls --digests | grep $hash; then echo \"$image already exists locally, skipping pull.\"; \\");
+            sb.AppendLinuxLine($"else if az storage blob download --container-name $blob_container --account-name $account_name --name $hash.tar --file $hash.tar; then docker load < $hash.tar; az storage blob metadata update --container-name $blob_container --account-name $account_name --name $hash.tar --metadata lastUsed=$date; \\");
+            sb.AppendLinuxLine($"else docker pull --quiet $image; docker image save $image > $hash.tar; az storage blob upload --container-name $blob_container --account-name $account_name --name $hash.tar --file $hash.tar --metadata lastUsed=$date imageName=$image; fi; fi \\");
+            sb.AppendLinuxLine($"}} && \\");
+
             sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt; }} && \\");  // Function that appends key=value pair to metrics.txt file
             sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
             sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
@@ -1086,7 +1105,16 @@ namespace TesApi.Web
             if (drsInputFiles.Count > 0 && task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true)
             {
                 sb.AppendLinuxLine($"write_ts CromwellDrsLocalizerPullStart && \\");
-                sb.AppendLinuxLine($"docker pull --quiet {cromwellDrsLocalizerImageName} && \\");
+
+                if (cacheDockerImages)
+                {
+                    sb.AppendLinuxLine($"pull_image {cromwellDrsLocalizerImageName} {defaultStorageAccountName} {DockerImageContainer} && \\");
+                }
+                else
+                {
+                    sb.AppendLinuxLine($"docker pull --quiet {cromwellDrsLocalizerImageName} && \\");
+                }
+
                 sb.AppendLinuxLine($"write_ts CromwellDrsLocalizerPullEnd && \\");
             }
 
@@ -1097,11 +1125,11 @@ namespace TesApi.Web
                 sb.AppendLinuxLine($"write_ts BlobXferPullEnd && \\");
             }
 
-            if (executorImageIsPublic)
+
+            if (this.cacheDockerImages)
             {
-                // Private executor images are pulled via pool ContainerConfiguration
-                //sb.AppendLinuxLine($"write_ts ExecutorPullStart && docker pull --quiet {executor.Image} && write_ts ExecutorPullEnd && \\");
                 // Install dependencies jq, az cli, and update docker (https://docs.docker.com/engine/install/ubuntu/). 
+                sb.AppendLinuxLine($"write_ts EnvConfigStart && \\");
                 sb.AppendLinuxLine($"curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash && \\");
                 sb.AppendLinuxLine($"sudo apt-get update -qq && sudo apt-get install -qq -y jq && sudo apt-get install -qq -y ca-certificates curl gnupg && \\");
                 sb.AppendLinuxLine($"az login --identity && \\");
@@ -1111,17 +1139,23 @@ namespace TesApi.Web
                 sb.AppendLinuxLine($"echo \"deb [arch=\"$(dpkg --print-architecture)\" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \"$(. /etc/os-release && echo \"$VERSION_CODENAME\")\" stable\" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null && \\");
                 sb.AppendLinuxLine($"sudo apt-get update -qq && \\");
                 sb.AppendLinuxLine($"sudo apt-get install -y -qq docker-ce-cli && \\");
-                sb.AppendLinuxLine($"date=$(date --iso-8601) && \\");
-                sb.AppendLinuxLine($"manifest=$(docker manifest inspect {executor.Image} -v) && \\");
-                sb.AppendLinuxLine($"hash=$(echo $manifest | jq -r '.Descriptor.digest' | cut -d \":\" -f 2) && \\");
-                // Get manifest if response contains multiple platforms.
-                sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest| jq -c '.[] | select( .Descriptor.platform.architecture == \"amd64\")' | jq -r '.Descriptor.digest' | cut -d \":\" -f 2); fi && \\");
-                // Check for slightly different formatted manifests from MCR. 
-                sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest | jq -r '.config.digest' | cut -d \":\" -f 2); fi && \\");
-                sb.AppendLinuxLine($"if [ -z \"$hash\" ]; then hash=$(echo $manifest| jq -c '.[] | select( .config.platform.architecture == \"amd64\")' | jq -r '.config.digest' | cut -d \":\" -f 2); fi && \\");
-                sb.AppendLinuxLine($"if docker image ls --digests | grep $hash; then echo \"{executor.Image} already exists locally, skipping pull.\"; \\");
-                sb.AppendLinuxLine($"else if az storage blob download --container-name {DockerImageContainer} --account-name {defaultStorageAccountName} --name $hash.tar --file $hash.tar; then docker load < $hash.tar; az storage blob metadata update --container-name {DockerImageContainer} --account-name {defaultStorageAccountName} --name $hash.tar --metadata lastUsed=$date; \\");
-                sb.AppendLinuxLine($"else docker pull --quiet {executor.Image}; docker image save {executor.Image} > $hash.tar; az storage blob upload --container-name {DockerImageContainer} --account-name {defaultStorageAccountName} --name $hash.tar --file $hash.tar --metadata lastUsed=$date imageName={executor.Image}; fi; fi && \\");
+                sb.AppendLinuxLine($"write_ts EnvConfigEnd && \\");
+
+                sb.AppendLinuxLine($"write_ts ExecutorPullStart && \\");
+
+                if (!executorImageIsPublic)
+                {
+                    var registry = await containerRegistryProvider.GetContainerRegistryInfoAsync(executor.Image, cancellationToken);
+                    sb.AppendLinuxLine($"docker login -u {registry.Username} -p {registry.Password} {registry.RegistryServer} && \\");
+                }
+                
+                sb.AppendLinuxLine($"pull_image {executor.Image} {defaultStorageAccountName} {DockerImageContainer} && \\");
+                sb.AppendLinuxLine($"write_ts ExecutorPullEnd && \\");
+            }
+            else
+            {
+                // Private executor images are pulled via pool ContainerConfiguration
+                sb.AppendLinuxLine($"write_ts ExecutorPullStart && docker pull --quiet {executor.Image} && write_ts ExecutorPullEnd && \\");
             }
 
             // The remainder of the script downloads the inputs, runs the main executor container, and uploads the outputs, including the metrics.txt file

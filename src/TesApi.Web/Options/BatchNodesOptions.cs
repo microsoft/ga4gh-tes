@@ -29,5 +29,9 @@ namespace TesApi.Web.Options
         /// Path to the global start task script
         /// </summary>
         public string GlobalStartTask { get; set; } = string.Empty;
+        /// <summary>
+        /// Enables caching docker images in the storage account to avoid ACR charges.
+        /// </summary>
+        public bool CacheDockerImages { get; set; } = true;
     }
 }
