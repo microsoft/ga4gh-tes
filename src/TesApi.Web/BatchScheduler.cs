@@ -415,9 +415,11 @@ namespace TesApi.Web
         private static string GetCromwellExecutionDirectoryPath(TesTask task)
             => GetParentPath(task.Inputs?.FirstOrDefault(IsCromwellCommandScript)?.Path.TrimStart('/'));
 
-        private static string GetStorageUploadPath(TesTask task, string storageAccountName)
+        private string GetStorageUploadPath(TesTask task)
         {
-            return $"{storageAccountName}/{TesExecutionsPathPrefix.TrimStart('/')}/{task.Id}";
+            return task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix) ?? false
+                ? $"{defaultStorageAccountName}/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}"
+                : $"{defaultStorageAccountName}{TesExecutionsPathPrefix}/{task.Id}";
         }
 
         /// <summary>
@@ -971,7 +973,7 @@ namespace TesApi.Web
             //    }
             //}
 
-            var storageUploadPath = GetStorageUploadPath(task, defaultStorageAccountName);
+            var storageUploadPath = GetStorageUploadPath(task);
             var metricsName = "metrics.txt";
             var metricsPath = $"/{storageUploadPath}/{metricsName}";
             var metricsUrl = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync(metricsPath, cancellationToken, getContainerSas: true));
@@ -1235,7 +1237,7 @@ namespace TesApi.Web
 
             if (inputFile.Content is not null || IsCromwellCommandScript(inputFile))
             {
-                var storageFileName = $"/{GetStorageUploadPath(task, defaultStorageAccountName)}/{Guid.NewGuid()}";
+                var storageFileName = $"/{GetStorageUploadPath(task)}/{Guid.NewGuid()}";
                 inputFileUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(storageFileName, cancellationToken);
 
                 var content = inputFile.Content ?? await storageAccessProvider.DownloadBlobAsync(inputFile.Url, cancellationToken);
@@ -1245,7 +1247,7 @@ namespace TesApi.Web
             }
             else if (TryGetCromwellTmpFilePath(inputFile.Url, out var localPath))
             {
-                var storageFileName = $"/{GetStorageUploadPath(task, defaultStorageAccountName)}/{Guid.NewGuid()}";
+                var storageFileName = $"/{GetStorageUploadPath(task)}/{Guid.NewGuid()}";
                 inputFileUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(storageFileName, cancellationToken);
                 await storageAccessProvider.UploadBlobFromFileAsync(storageFileName, localPath, cancellationToken);
             }
@@ -1770,7 +1772,7 @@ namespace TesApi.Web
                     cromwellRcCode = temp;
                 }
 
-                var metricsContent = await storageAccessProvider.DownloadBlobAsync($"/{GetStorageUploadPath(tesTask, defaultStorageAccountName)}/metrics.txt", cancellationToken);
+                var metricsContent = await storageAccessProvider.DownloadBlobAsync($"/{GetStorageUploadPath(tesTask)}/metrics.txt", cancellationToken);
 
                 if (metricsContent is not null)
                 {
