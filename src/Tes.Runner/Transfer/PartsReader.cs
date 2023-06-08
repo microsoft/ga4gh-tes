@@ -57,9 +57,14 @@ public class PartsReader : PartsProcessor
             ));
         }
 
-        await WhenAllOrThrowIfOneFailsAsync(tasks);
-
-        writeBufferChannel.Writer.Complete();
+        try
+        {
+            await WhenAllOrThrowIfOneFailsAsync(tasks);
+        }
+        finally
+        {
+            writeBufferChannel.Writer.Complete();
+        }
 
         logger.LogInformation("All part read operations completed successfully.");
     }
