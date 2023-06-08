@@ -40,7 +40,7 @@ namespace Tes.Runner.Transfer
 
             if (blockSizeBytes % BlockSizeIncrementUnitInBytes > 0)
             {
-                throw new InvalidOperationException($"The provided block size: {blockSizeBytes:n:0} is not valid for the upload operation. The block size must be a multiple of {minSizeInMiB} MiB ({BlockSizeIncrementUnitInBytes:n:0} bytes)");
+                throw new InvalidOperationException($"The provided block size: {blockSizeBytes:n0} is not valid for the upload operation. The block size must be a multiple of {minSizeInMiB} MiB ({BlockSizeIncrementUnitInBytes:n0} bytes)");
             }
         }
     }
