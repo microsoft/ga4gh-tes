@@ -38,8 +38,9 @@ namespace Tes.Runner.Test
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
 
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
+            var opsList = new List<BlobOperationInfo>() { blobOp };
 
-            await partsProducer.StartPartsProducersAsync(new List<BlobOperationInfo>() { blobOp }, readBuffer);
+            await partsProducer.StartPartsProducersAsync(opsList, readBuffer);
 
             readBuffer.Writer.Complete();
 
@@ -62,8 +63,9 @@ namespace Tes.Runner.Test
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
 
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
+            var opsList = new List<BlobOperationInfo>() { blobOp };
 
-            await partsProducer.StartPartsProducersAsync(new List<BlobOperationInfo>() { blobOp }, readBuffer);
+            await partsProducer.StartPartsProducersAsync(opsList, readBuffer);
 
             readBuffer.Writer.Complete();
 
@@ -71,7 +73,7 @@ namespace Tes.Runner.Test
 
             Assert.AreEqual(expectedPartSize.Length, parts.Count);
 
-            for (int i = 0; i < parts.Count; i++)
+            for (var i = 0; i < parts.Count; i++)
             {
                 Assert.AreEqual(expectedPartSize[i], parts[i].Length);
             }
@@ -86,8 +88,9 @@ namespace Tes.Runner.Test
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
 
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
+            var opsList = new List<BlobOperationInfo>() { blobOp };
 
-            await partsProducer.StartPartsProducersAsync(new List<BlobOperationInfo>() { blobOp }, readBuffer);
+            await partsProducer.StartPartsProducersAsync(opsList, readBuffer);
 
             readBuffer.Writer.Complete();
 
@@ -99,7 +102,7 @@ namespace Tes.Runner.Test
 
             var expectedOffset = 0;
 
-            for (int i = 0; i < parts.Count; i++)
+            for (var i = 0; i < parts.Count; i++)
             {
                 var part = parts[i];
                 Assert.AreEqual(expectedOffset, part.Offset);

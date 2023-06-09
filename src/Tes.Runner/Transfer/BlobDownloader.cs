@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Linq;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
@@ -79,8 +80,9 @@ public class BlobDownloader : BlobOperationPipeline
     /// <param name="length"></param>
     /// <param name="blobUrl"></param>
     /// <param name="fileName"></param>
+    /// <param name="rootHash"></param>
     /// <returns></returns>
-    public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName)
+    public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash)
     {
         Logger.LogInformation($"Completed download. Total bytes: {length:n0} Filename: {fileName}");
 

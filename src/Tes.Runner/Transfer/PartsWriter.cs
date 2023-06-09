@@ -59,9 +59,14 @@ public class PartsWriter : PartsProcessor
             }));
         }
 
-        await WhenAllOrThrowIfOneFailsAsync(tasks);
-
-        processedBufferChannel.Writer.Complete();
+        try
+        {
+            await WhenAllOrThrowIfOneFailsAsync(tasks);
+        }
+        finally
+        {
+            processedBufferChannel.Writer.Complete();
+        }
 
         logger.LogInformation("All part write operations completed successfully.");
     }
@@ -69,6 +74,6 @@ public class PartsWriter : PartsProcessor
     private ProcessedBuffer ToProcessedBuffer(PipelineBuffer buffer)
     {
         return new ProcessedBuffer(buffer.FileName, buffer.BlobUrl, buffer.FileSize, buffer.Ordinal,
-            buffer.NumberOfParts, buffer.FileHandlerPool, buffer.BlobPartUrl, buffer.Length);
+            buffer.NumberOfParts, buffer.FileHandlerPool, buffer.BlobPartUrl, buffer.Length, buffer.HashListProvider);
     }
 }
