@@ -323,7 +323,7 @@ namespace TesDeployer
 
                             if (string.IsNullOrWhiteSpace(settings["BatchNodesSubnetId"]))
                             {
-                                await UpdateVnetWithBatchSubnet();
+                                settings["BatchNodesSubnetId"] = await UpdateVnetWithBatchSubnet();
                             }
                         }
 
@@ -2007,7 +2007,7 @@ namespace TesDeployer
             }
         }
 
-        private Task UpdateVnetWithBatchSubnet()
+        private Task<string> UpdateVnetWithBatchSubnet()
             => Execute(
                 $"Creating batch subnet...",
                 async () =>
@@ -2024,7 +2024,7 @@ namespace TesDeployer
                         ConsoleEx.WriteLine("In order to avoid unnecessary load balancer charges we suggest manually configuring your deployment to use a subnet for batch pools with service endpoints.", ConsoleColor.Red);
                         ConsoleEx.WriteLine("See: https://github.com/microsoft/CromwellOnAzure/wiki/Using-a-batch-pool-subnet-with-service-endpoints-to-avoid-load-balancer-charges.", ConsoleColor.Red);
 
-                        return;
+                        return null;
                     }
 
                     var vnetData = vnet.Data;
@@ -2037,7 +2037,8 @@ namespace TesDeployer
                         ConsoleEx.WriteLine("We detected a customized networking setup so the deployer will not automatically create the subnet.", ConsoleColor.Red);
                         ConsoleEx.WriteLine("In order to avoid unnecessary load balancer charges we suggest manually configuring your deployment to use a subnet for batch pools with service endpoints.", ConsoleColor.Red);
                         ConsoleEx.WriteLine("See: https://github.com/microsoft/CromwellOnAzure/wiki/Using-a-batch-pool-subnet-with-service-endpoints-to-avoid-load-balancer-charges.", ConsoleColor.Red);
-                        return;
+                        
+                        return null;
                     }
 
                     var batchSubnet = new SubnetData
@@ -2062,7 +2063,9 @@ namespace TesDeployer
                     });
 
                     vnetData.Subnets.Add(batchSubnet);
-                    await vnetCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, vnetData.Name, vnetData);
+                    var updatedVnet = (await vnetCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, vnetData.Name, vnetData)).Value;
+
+                    return (await updatedVnet.GetSubnetAsync(configuration.DefaultBatchSubnetName)).Value.Id.ToString();
                 });
 
         private async Task ValidateVmAsync()
