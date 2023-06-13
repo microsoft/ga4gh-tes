@@ -51,7 +51,7 @@ namespace Tes.Runner
                 return 0;
             }
 
-            var optimizedOptions = OptimizeBlobPipelineOptionsForUpload(blobPipelineOptions);
+            var optimizedOptions = OptimizeBlobPipelineOptionsForUpload(blobPipelineOptions, outputs);
 
             var bytesTransferred = await UploadOutputsAsync(optimizedOptions, outputs);
 
@@ -86,16 +86,16 @@ namespace Tes.Runner
             return await operationResolver.ResolveOutputsAsync();
         }
 
-        private BlobPipelineOptions OptimizeBlobPipelineOptionsForUpload(BlobPipelineOptions blobPipelineOptions)
+        private BlobPipelineOptions OptimizeBlobPipelineOptionsForUpload(BlobPipelineOptions blobPipelineOptions, List<UploadInfo> outputs)
         {
             var optimizedOptions =
-                PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(blobPipelineOptions, tesNodeTask.Outputs);
+                PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(blobPipelineOptions, outputs);
 
             ValidateBlockSize(optimizedOptions.BlockSizeBytes);
 
             LogStartConfig(optimizedOptions);
 
-            logger.LogInformation($"{tesNodeTask.Outputs?.Count} outputs to upload.");
+            logger.LogInformation($"{outputs.Count} outputs to upload.");
             return optimizedOptions;
         }
 

@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Microsoft.Extensions.Logging;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
@@ -11,6 +12,7 @@ namespace Tes.Runner.Storage
         private readonly NodeTask nodeTask;
         private readonly ResolutionPolicyHandler resolutionPolicyHandler;
         private readonly IFileInfoProvider fileInfoProvider;
+        private readonly ILogger logger = PipelineLoggerFactory.Create<FileOperationResolver>();
 
         public FileOperationResolver(NodeTask nodeTask) : this(nodeTask, new ResolutionPolicyHandler(), new DefaultFileInfoProvider())
         {
@@ -48,15 +50,38 @@ namespace Tes.Runner.Storage
 
             foreach (var input in nodeTask.Inputs ?? Enumerable.Empty<FileInput>())
             {
-                expandedInputs.Add(new FileInput
-                {
-                    SasStrategy = input.SasStrategy,
-                    SourceUrl = input.SourceUrl,
-                    Path = fileInfoProvider.GetFileName(input.Path!),
-                });
+                expandedInputs.Add(CreateExpandedFileInput(input));
             }
 
             return expandedInputs;
+        }
+
+        private FileInput CreateExpandedFileInput(FileInput input)
+        {
+            ValidateFileInput(input);
+
+            return new FileInput
+            {
+                SasStrategy = input.SasStrategy,
+                SourceUrl = input.SourceUrl,
+                Path = fileInfoProvider.GetFileName(input.Path!),
+            };
+        }
+
+        private void ValidateFileInput(FileInput input)
+        {
+            try
+            {
+                ArgumentNullException.ThrowIfNull(input);
+                ArgumentException.ThrowIfNullOrEmpty(input.Path, nameof(input.Path));
+                ArgumentException.ThrowIfNullOrEmpty(input.SourceUrl, nameof(input.SourceUrl));
+                ArgumentNullException.ThrowIfNull(input.SasStrategy, nameof(input.SasStrategy));
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Invalid file input. Please the task definition. All required properties must be set. The required properties are: path, sourceUrl and sasStrategy");
+                throw;
+            }
         }
 
         private List<FileOutput> ExpandOutputs()
@@ -73,6 +98,8 @@ namespace Tes.Runner.Storage
 
         private IEnumerable<FileOutput> ExpandOutput(FileOutput output)
         {
+            ValidateFileOutput(output);
+
             IEnumerable<FileOutput> expandedOutputs;
 
             switch (output.FileType)
@@ -90,6 +117,23 @@ namespace Tes.Runner.Storage
             foreach (var fileOutput in expandedOutputs)
             {
                 yield return fileOutput;
+            }
+        }
+
+        private void ValidateFileOutput(FileOutput output)
+        {
+            try
+            {
+                ArgumentNullException.ThrowIfNull(output);
+                ArgumentException.ThrowIfNullOrEmpty(output.Path, nameof(output.Path));
+                ArgumentException.ThrowIfNullOrEmpty(output.TargetUrl, nameof(output.TargetUrl));
+                ArgumentNullException.ThrowIfNull(output.SasStrategy, nameof(output.SasStrategy));
+                ArgumentNullException.ThrowIfNull(output.FileType, nameof(output.FileType));
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Invalid file output. Please the task definition. All required properties must be set. The required properties are: path, targetUrl, sasStrategy and type");
+                throw;
             }
         }
 
@@ -119,6 +163,7 @@ namespace Tes.Runner.Storage
 
             foreach (var file in fileInfoProvider.GetFilesInAllDirectories(output.PathPrefix!, path))
             {
+                logger.LogInformation($"Adding file {file} to the output list");
                 yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, file);
             }
         }
@@ -150,7 +195,7 @@ namespace Tes.Runner.Storage
         {
             var builder = new UriBuilder(output.TargetUrl!);
 
-            builder.Path = $"{builder.Path}{RemovePrefixFromPath(path, output.PathPrefix)}";
+            builder.Path = $"{builder.Path}/{RemovePrefixFromPath(path, output.PathPrefix)}";
 
             return builder.Uri.ToString();
         }
@@ -161,17 +206,17 @@ namespace Tes.Runner.Storage
 
             if (string.IsNullOrEmpty(prefix))
             {
-                return expandedPath;
+                return expandedPath.TrimStart('/');
             }
 
             var expandedPrefix = Environment.ExpandEnvironmentVariables(prefix);
 
             if (expandedPath.StartsWith(expandedPrefix))
             {
-                return expandedPath.Substring(expandedPrefix.Length);
+                return expandedPath.Substring(expandedPrefix.Length).TrimStart('/');
             }
 
-            return expandedPath;
+            return expandedPath.TrimStart('/');
         }
     }
 }
