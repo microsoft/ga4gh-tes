@@ -42,9 +42,9 @@ namespace Tes.Runner.Test
         {
             var testTaskOutputs = new List<FileOutput>
             {
-                new FileOutput(){FullFileName = "file", TargetUrl = "http://foo.bar", SasStrategy = SasResolutionStrategy.None},
-                new FileOutput(){FullFileName = "file1", TargetUrl = "http://foo1.bar", SasStrategy = SasResolutionStrategy.None},
-                new FileOutput(){FullFileName = "file2", TargetUrl = "http://foo2.bar", SasStrategy = SasResolutionStrategy.None}
+                new FileOutput(){Path = "file", TargetUrl = "http://foo.bar", SasStrategy = SasResolutionStrategy.None},
+                new FileOutput(){Path = "file1", TargetUrl = "http://foo1.bar", SasStrategy = SasResolutionStrategy.None},
+                new FileOutput(){Path = "file2", TargetUrl = "http://foo2.bar", SasStrategy = SasResolutionStrategy.None}
             };
             var result = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(testTaskOutputs);
             Assert.IsNotNull(result);
@@ -72,9 +72,9 @@ namespace Tes.Runner.Test
         {
             var testTaskInputs = new List<FileInput>
             {
-                new FileInput(){FullFileName = "file", SourceUrl = "http://foo.bar", SasStrategy = SasResolutionStrategy.None},
-                new FileInput(){FullFileName = "file1", SourceUrl = "http://foo1.bar", SasStrategy = SasResolutionStrategy.None},
-                new FileInput(){FullFileName = "file2", SourceUrl = "http://foo2.bar", SasStrategy = SasResolutionStrategy.None}
+                new FileInput(){Path = "file", SourceUrl = "http://foo.bar", SasStrategy = SasResolutionStrategy.None},
+                new FileInput(){Path = "file1", SourceUrl = "http://foo1.bar", SasStrategy = SasResolutionStrategy.None},
+                new FileInput(){Path = "file2", SourceUrl = "http://foo2.bar", SasStrategy = SasResolutionStrategy.None}
             };
             var result = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(testTaskInputs);
             Assert.IsNotNull(result);
