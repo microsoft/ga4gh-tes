@@ -28,7 +28,7 @@ namespace Tes.Runner.Test.Storage
 
             fileInfoProvider.Setup(x => x.GetFileName(It.IsAny<string>())).Returns<string>(x => x);
             fileInfoProvider.Setup(x => x.FileExists(It.IsAny<string>())).Returns(true);
-            
+
             singleFileInput = new FileInput
             {
                 Path = "/foo/bar",
@@ -99,7 +99,7 @@ namespace Tes.Runner.Test.Storage
             var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();
 
             Assert.AreEqual(2, resolvedOutputs?.Count);
-            Assert.IsTrue(resolvedOutputs!.Any(r=>r.FullFilePath.Equals("/prefix/data/foo.foo", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.FullFilePath.Equals("/prefix/data/foo.foo", StringComparison.OrdinalIgnoreCase)));
             Assert.IsTrue(resolvedOutputs!.Any(r => r.FullFilePath.Equals("/prefix/data/bar.foo", StringComparison.OrdinalIgnoreCase)));
             Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/data/foo.foo?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
             Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/data/bar.foo?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
