@@ -221,7 +221,7 @@ namespace TesApi.Web
                 }
                 else if (!string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem))
                 {
-                    tesTask.AddToSystemLog(new [] { batchInfo.AlternateSystemLogItem });
+                    tesTask.AddToSystemLog(new[] { batchInfo.AlternateSystemLogItem });
                 }
             }
 
@@ -974,7 +974,7 @@ namespace TesApi.Web
                 blobxferChunkSizeBytes = 104_857_600; // max file size = 100 MiB * 50k blocks = 5,242,880,000,000 bytes
             }
             else if (vmVCpusAvailable >= 2)
-            { 
+            {
                 blobxferChunkSizeBytes = 33_554_432; // max file size = 32 MiB * 50k blocks = 1,677,721,600,000 bytes
             }
 

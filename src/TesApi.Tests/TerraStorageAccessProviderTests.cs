@@ -118,12 +118,12 @@ namespace TesApi.Tests
                     terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>()))
                 .ReturnsAsync(terraApiStubData.GetWsmSasTokenApiResponse(responseBlobName));
 
-           var url =  await terraStorageAccessProvider.GetMappedSasUrlFromWsmAsync("blobName");
-           
-           Assert.IsNotNull(url);
-           var uri = new Uri(url);
+            var url = await terraStorageAccessProvider.GetMappedSasUrlFromWsmAsync("blobName");
 
-           Assert.AreEqual(uri.AbsolutePath,$"/{TerraApiStubData.WorkspaceContainerName}/blobName");
+            Assert.IsNotNull(url);
+            var uri = new Uri(url);
+
+            Assert.AreEqual(uri.AbsolutePath, $"/{TerraApiStubData.WorkspaceContainerName}/blobName");
         }
     }
 }

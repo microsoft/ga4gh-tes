@@ -21,7 +21,7 @@ namespace TesApi.Web.Options
         /// <summary>
         /// Connection string.
         /// </summary>
-	public string ConnectionString  { get; set; }
+        public string ConnectionString { get; set; }
         // TODO: add additional properties to run without a managed id?
     }
 }
