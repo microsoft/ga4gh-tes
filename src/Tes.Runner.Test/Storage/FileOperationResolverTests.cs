@@ -31,14 +31,14 @@ namespace Tes.Runner.Test.Storage
             
             singleFileInput = new FileInput
             {
-                FullFileName = "/foo/bar",
+                Path = "/foo/bar",
                 SourceUrl = "https://foo.bar/cont/foo/bar?sig=sasToken",
                 SasStrategy = SasResolutionStrategy.None,
             };
 
             singleFileOutput = new FileOutput
             {
-                FullFileName = "/foo/bar",
+                Path = "/foo/bar",
                 TargetUrl = "https://foo.bar/cont/foo/bar?sig=sasToken",
                 SasStrategy = SasResolutionStrategy.None,
                 FileType = FileType.File
@@ -46,7 +46,7 @@ namespace Tes.Runner.Test.Storage
 
             directoryFileOutput = new FileOutput
             {
-                FullFileName = "/foo",
+                Path = "/foo",
                 TargetUrl = "https://foo.bar/cont?sig=sasToken",
                 SasStrategy = SasResolutionStrategy.None,
                 FileType = FileType.Directory
@@ -54,7 +54,7 @@ namespace Tes.Runner.Test.Storage
 
             patternFileOutput = new FileOutput
             {
-                FullFileName = "/data/*.foo",
+                Path = "/data/*.foo",
                 TargetUrl = "https://foo.bar/cont?sig=sasToken",
                 SasStrategy = SasResolutionStrategy.None,
                 PathPrefix = "/prefix",
@@ -77,7 +77,7 @@ namespace Tes.Runner.Test.Storage
             var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();
 
             Assert.AreEqual(1, resolvedOutputs?.Count);
-            Assert.IsTrue(resolvedOutputs?.Any(r => r.FullFilePath.Equals(singleFileOutput.FullFileName, StringComparison.InvariantCultureIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs?.Any(r => r.FullFilePath.Equals(singleFileOutput.Path, StringComparison.InvariantCultureIgnoreCase)));
             Assert.IsTrue(resolvedOutputs?.Any(r => r.TargetUri.ToString().Equals(singleFileOutput.TargetUrl, StringComparison.InvariantCultureIgnoreCase)));
         }
 
@@ -153,7 +153,7 @@ namespace Tes.Runner.Test.Storage
             Assert.IsTrue(resolvedOutputs!.Any(r => r.FullFilePath.Equals("/prefix/data/bar.foo", StringComparison.OrdinalIgnoreCase)));
             Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/data/foo.foo?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
             Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/data/bar.foo?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
-            Assert.IsTrue(resolvedOutputs?.Any(r => r.FullFilePath.Equals(singleFileOutput.FullFileName, StringComparison.InvariantCultureIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs?.Any(r => r.FullFilePath.Equals(singleFileOutput.Path, StringComparison.InvariantCultureIgnoreCase)));
             Assert.IsTrue(resolvedOutputs?.Any(r => r.TargetUri.ToString().Equals(singleFileOutput.TargetUrl, StringComparison.InvariantCultureIgnoreCase)));
         }
 
@@ -173,7 +173,7 @@ namespace Tes.Runner.Test.Storage
             var resolvedInputs = await fileOperationInfoResolver.ResolveInputsAsync();
 
             Assert.AreEqual(1, resolvedInputs?.Count);
-            Assert.IsTrue(resolvedInputs?.Any(r => r.FullFilePath.Equals(singleFileInput.FullFileName, StringComparison.InvariantCultureIgnoreCase)));
+            Assert.IsTrue(resolvedInputs?.Any(r => r.FullFilePath.Equals(singleFileInput.Path, StringComparison.InvariantCultureIgnoreCase)));
             Assert.IsTrue(resolvedInputs?.Any(r => r.SourceUrl.ToString().Equals(singleFileInput.SourceUrl, StringComparison.InvariantCultureIgnoreCase)));
         }
     }

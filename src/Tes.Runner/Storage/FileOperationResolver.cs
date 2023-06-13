@@ -52,7 +52,7 @@ namespace Tes.Runner.Storage
                 {
                     SasStrategy = input.SasStrategy,
                     SourceUrl = input.SourceUrl,
-                    FullFileName = fileInfoProvider.GetFileName(input.FullFileName!),
+                    Path = fileInfoProvider.GetFileName(input.Path!),
                 });
             }
 
@@ -95,7 +95,7 @@ namespace Tes.Runner.Storage
 
         private IEnumerable<FileOutput> ExpandDirectoryOutput(FileOutput output)
         {
-            foreach (var file in fileInfoProvider.GetFilesInDirectory(output.FullFileName!))
+            foreach (var file in fileInfoProvider.GetFilesInDirectory(output.Path!))
             {
                 yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, file);
             }
@@ -107,7 +107,7 @@ namespace Tes.Runner.Storage
             if (string.IsNullOrEmpty(output.PathPrefix))
             {
                 //outputs are optional, so if the file does not exist, we just skip it
-                if (fileInfoProvider.FileExists(output.FullFileName!))
+                if (fileInfoProvider.FileExists(output.Path!))
                 {
                     yield return CreateExpandedFileOutput(output);
                 }
@@ -115,7 +115,7 @@ namespace Tes.Runner.Storage
                 yield break;
             }
 
-            var path = RemovePrefixFromPath(output.FullFileName!, output.PathPrefix!);
+            var path = RemovePrefixFromPath(output.Path!, output.PathPrefix!);
 
             foreach (var file in fileInfoProvider.GetFilesInAllDirectories(output.PathPrefix!, path))
             {
@@ -127,7 +127,7 @@ namespace Tes.Runner.Storage
         {
             return new FileOutput()
             {
-                FullFileName = Environment.ExpandEnvironmentVariables(output.FullFileName!),
+                Path = Environment.ExpandEnvironmentVariables(output.Path!),
                 PathPrefix = output.PathPrefix,
                 TargetUrl = output.TargetUrl,
                 SasStrategy = output.SasStrategy,
@@ -138,7 +138,7 @@ namespace Tes.Runner.Storage
         {
             return new FileOutput()
             {
-                FullFileName = path,
+                Path = path,
                 PathPrefix = output.PathPrefix,
                 TargetUrl = ToCombinedTargetUrl(output, path),
                 SasStrategy = output.SasStrategy,

@@ -76,7 +76,7 @@ namespace Tes.Runner.Transfer
 
             foreach (var taskOutput in taskOutputs)
             {
-                var fileSize = fileInfoProvider.GetFileSize(taskOutput.FullFileName!);
+                var fileSize = fileInfoProvider.GetFileSize(taskOutput.Path!);
 
                 if (fileSize / (double)currentBlockSizeInBytes > BlobSizeUtils.MaxBlobBlocksCount)
                 {

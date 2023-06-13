@@ -7,7 +7,7 @@
     ],
     "inputs": [
       {
-        "fullFileName": "<LOCAL_PATH>",
+        "path": "<LOCAL_PATH>",
         "sourceUrl": "<SOURCE_URL>",
         "fileType": "File",
         "sasStrategy": "None",
@@ -16,7 +16,7 @@
     ],
     "outputs": [
       {
-        "fullFileName": "<LOCAL_PATH>",
+        "path": "<LOCAL_PATH>",
         "targetUrl": "<TARGET_URL>",
         "sasStrategy": "None",
         "fileType": "File"
