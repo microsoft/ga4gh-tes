@@ -6,17 +6,20 @@
         "Hello Docker!"
     ],
     "inputs": [
-        {
-            "fullFileName": "<LOCAL_PATH>",
-            "sourceUrl": "<SOURCE_URL>",
-            "sasStrategy": "None"
-        }
+      {
+        "fullFileName": "<LOCAL_PATH>",
+        "sourceUrl": "<SOURCE_URL>",
+        "fileType": "File",
+        "sasStrategy": "None",
+        "pathPrefix": "<PATH_PREFIX>"
+      }
     ],
     "outputs": [
-        {
-            "fullFileName": "<LOCAL_PATH>",
-            "targetUrl": "<TARGET_URL>",
-            "sasStrategy": "None"
-        }
+      {
+        "fullFileName": "<LOCAL_PATH>",
+        "targetUrl": "<TARGET_URL>",
+        "sasStrategy": "None",
+        "fileType": "File"
+      }
     ]
 }

@@ -14,7 +14,7 @@ namespace Tes.Runner
     {
         private readonly ILogger logger = PipelineLoggerFactory.Create<Executor>();
         private readonly NodeTask tesNodeTask;
-        private readonly ResolutionPolicyHandler resolutionPolicyHandler;
+        private readonly FileOperationResolver operationResolver;
 
         public Executor(NodeTask tesNodeTask)
         {
@@ -22,7 +22,7 @@ namespace Tes.Runner
 
             this.tesNodeTask = tesNodeTask;
 
-            resolutionPolicyHandler = new ResolutionPolicyHandler();
+            operationResolver = new FileOperationResolver(tesNodeTask);
         }
 
         public async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(DockerExecutor dockerExecutor)
@@ -83,7 +83,7 @@ namespace Tes.Runner
                 }
             }
 
-            return await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Outputs);
+            return await operationResolver.ResolveOutputsAsync();
         }
 
         private BlobPipelineOptions OptimizeBlobPipelineOptionsForUpload(BlobPipelineOptions blobPipelineOptions)
@@ -149,7 +149,7 @@ namespace Tes.Runner
                 }
             }
 
-            return await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Inputs);
+            return await operationResolver.ResolveInputsAsync();
         }
 
         private static void ValidateBlockSize(int blockSizeBytes)

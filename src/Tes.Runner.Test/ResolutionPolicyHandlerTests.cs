@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Moq;
 using Tes.Runner.Models;
 using Tes.Runner.Storage;
 
@@ -19,7 +18,6 @@ namespace Tes.Runner.Test
         public void SetUp()
         {
             resolutionPolicyHandler = new ResolutionPolicyHandler();
-            new Mock<ISasResolutionStrategy>();
         }
 
         [TestMethod]
@@ -44,9 +42,9 @@ namespace Tes.Runner.Test
         {
             var testTaskOutputs = new List<FileOutput>
             {
-                new FileOutput(){FullFileName = "file", TargetUrl = "http://foo.bar", SasStrategy = SasResolutionStrategy.None, Required = true},
-                new FileOutput(){FullFileName = "file1", TargetUrl = "http://foo1.bar", SasStrategy = SasResolutionStrategy.None, Required = true},
-                new FileOutput(){FullFileName = "file2", TargetUrl = "http://foo2.bar", SasStrategy = SasResolutionStrategy.None, Required = true}
+                new FileOutput(){FullFileName = "file", TargetUrl = "http://foo.bar", SasStrategy = SasResolutionStrategy.None},
+                new FileOutput(){FullFileName = "file1", TargetUrl = "http://foo1.bar", SasStrategy = SasResolutionStrategy.None},
+                new FileOutput(){FullFileName = "file2", TargetUrl = "http://foo2.bar", SasStrategy = SasResolutionStrategy.None}
             };
             var result = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(testTaskOutputs);
             Assert.IsNotNull(result);

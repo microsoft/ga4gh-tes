@@ -10,4 +10,12 @@ namespace Tes.Runner.Transfer;
 public interface IFileInfoProvider
 {
     long GetFileSize(string fileName);
+
+    string GetFileName(string fileName);
+
+    bool FileExists(string fileName);
+
+    string[] GetFilesInAllDirectories(string path, string searchPattern);
+
+    string[] GetFilesInDirectory(string path);
 }
