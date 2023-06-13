@@ -30,7 +30,7 @@ namespace Tes.RunnerCLI.Commands
 
                 await ExecuteTransferAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options);
 
-                await ExecuteNodeContainerTaskAsync(file, dockerUri, options);
+                await ExecuteNodeContainerTaskAsync(file, dockerUri);
 
                 await ExecuteTransferAsSubProcessAsync(CommandFactory.UploadCommandName, file, options);
 
@@ -44,7 +44,7 @@ namespace Tes.RunnerCLI.Commands
             }
         }
 
-        private static async Task ExecuteNodeContainerTaskAsync(FileInfo file, Uri dockerUri, BlobPipelineOptions options)
+        private static async Task ExecuteNodeContainerTaskAsync(FileInfo file, Uri dockerUri)
         {
             try
             {
@@ -97,7 +97,7 @@ namespace Tes.RunnerCLI.Commands
 
             Console.WriteLine("Starting upload operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, exec => exec.UploadOutputsAsync(options), ExpandOutputs);
+            return await ExecuteTransferTaskAsync(file, exec => exec.UploadOutputsAsync(options));
         }
 
         private static void HandleResult(ProcessExecutionResult results, string command)
@@ -131,16 +131,14 @@ namespace Tes.RunnerCLI.Commands
 
             Console.WriteLine("Starting download operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, exec => exec.DownloadInputsAsync(options), ExpandInputs);
+            return await ExecuteTransferTaskAsync(file, exec => exec.DownloadInputsAsync(options));
         }
 
-        private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, BlobPipelineOptions options, Func<Executor, Task<long>> transferOperation, Action<NodeTask> expandFileSpecs)
+        private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, Func<Executor, Task<long>> transferOperation)
         {
             try
             {
                 var nodeTask = DeserializeNodeTask(taskDefinitionFile.FullName);
-
-                expandFileSpecs(nodeTask);
 
                 var executor = new Executor(nodeTask);
 
@@ -156,110 +154,6 @@ namespace Tes.RunnerCLI.Commands
                 Logger.LogError(e, $"Failed to perform transfer. Operation: {transferOperation}");
                 return ErrorExitCode;
             }
-        }
-
-        private static void ExpandInputs(NodeTask nodeTask)
-        {
-            var inputs = new List<FileInput>();
-
-            foreach (var input in nodeTask.Inputs ?? Enumerable.Empty<FileInput>())
-            {
-                inputs.Add(new FileInput
-                {
-                    SasStrategy = input.SasStrategy,
-                    SourceUrl = input.SourceUrl,
-                    FullFileName = ExpandEnvironmentVariables(input.FullFileName!)
-                });
-            }
-
-            nodeTask.Inputs = inputs;
-        }
-
-        private static void ExpandOutputs(NodeTask nodeTask)
-        {
-            var outputs = new List<FileOutput>();
-
-            foreach (var output in nodeTask.Outputs ?? Enumerable.Empty<FileOutput>())
-            {
-                outputs.AddRange(ExpandOutput(output));
-            }
-
-            nodeTask.Outputs = outputs;
-        }
-
-        private static IEnumerable<FileOutput> ExpandOutput(FileOutput output)
-        {
-            ArgumentNullException.ThrowIfNull(output);
-
-            switch (output.FileType)
-            {
-                case FileType.File:
-                    return Enumerable.Empty<FileOutput>().Append(new()
-                    {
-                        Required = output.Required,
-                        SasStrategy = output.SasStrategy,
-                        TargetUrl = output.TargetUrl,
-                        FullFileName = ExpandEnvironmentVariables(output.FullFileName!),
-                    });
-
-                case FileType.Directory:
-                    {
-                        var dir = new DirectoryInfo(ExpandEnvironmentVariables(output.FullFileName!));
-
-                        if (dir.Exists)
-                        {
-                            return ExpandDirectoryContents(dir).Select(GetFileOutput);
-                        }
-                        else if (output.Required.GetValueOrDefault())
-                        {
-                            throw new DirectoryNotFoundException($"Directory '{output.FullFileName}' was not found");
-                        }
-
-                        return Enumerable.Empty<FileOutput>();
-
-                        FileOutput GetFileOutput(FileInfo file)
-                        {
-                            return new FileOutput { Required = output.Required, SasStrategy = output.SasStrategy, FullFileName = file.FullName, TargetUrl = ExpandUrl(output.TargetUrl!, dir!.FullName, file.FullName) };
-                        }
-                    }
-
-                default:
-                    throw new ArgumentException("Invalid FileType for output file.", nameof(output));
-            }
-
-        }
-
-        private static IEnumerable<FileInfo> ExpandDirectoryContents(DirectoryInfo dir)
-        {
-            var result = Enumerable.Empty<FileInfo>();
-
-            foreach (var entry in dir.EnumerateFileSystemInfos())
-            {
-                switch (entry)
-                {
-                    case FileInfo file:
-                        result = result.Append(file);
-                        break;
-
-                    case DirectoryInfo directory:
-                        result = result.Concat(ExpandDirectoryContents(directory));
-                        break;
-                }
-            }
-
-            return result;
-        }
-
-        private static string ExpandUrl(string url, string dir, string path)
-        {
-            var uri = new Uri(url);
-            var relativePath = Path.GetRelativePath(dir, path);
-            return new Uri(uri, $"{uri.AbsolutePath}/{relativePath}{uri.Query}").ToString();
-        }
-
-        private static string ExpandEnvironmentVariables(string fullFileName)
-        {
-            return Environment.ExpandEnvironmentVariables(fullFileName);
         }
 
         private static NodeTask DeserializeNodeTask(string tesNodeTaskFilePath)

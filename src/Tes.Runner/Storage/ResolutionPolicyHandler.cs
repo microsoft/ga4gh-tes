@@ -26,23 +26,15 @@ public class ResolutionPolicyHandler
 
         foreach (var output in testTaskOutputs)
         {
-            if (IncludeOutput(output))
+            if (string.IsNullOrEmpty(output.FullFileName))
             {
-                list.Add(await CreateUploadInfoWithStrategyAsync(output));
+                throw new ArgumentException("A task output is missing the full filename. Please check the task definition.");
             }
+
+            list.Add(await CreateUploadInfoWithStrategyAsync(output));
         }
 
         return list;
-    }
-
-    private static bool IncludeOutput(FileOutput output)
-    {
-        if (string.IsNullOrEmpty(output.FullFileName))
-        {
-            throw new ArgumentException("A task output is missing the full filename. Please check the task definition.");
-        }
-
-        return output.Required.GetValueOrDefault() || File.Exists(output.FullFileName);
     }
 
     /// <summary>

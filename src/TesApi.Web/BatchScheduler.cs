@@ -1097,7 +1097,7 @@ namespace TesApi.Web
             var uploadMetricsScriptPath = $"/{storageUploadPath}/{UploadMetricsScriptFileName}";
             var uploadMetricsScriptContent = new NodeTask
             {
-                Outputs = new List<FileOutput>() { new FileOutput { Required = true, FullFileName = metricsName, TargetUrl = metricsUrl.ToString(), FileType = FileType.File, SasStrategy = SasResolutionStrategy.None } }
+                Outputs = new List<FileOutput>() { new FileOutput { FullFileName = metricsName, TargetUrl = metricsUrl.ToString(), FileType = FileType.File, SasStrategy = SasResolutionStrategy.None } }
             };
 
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
