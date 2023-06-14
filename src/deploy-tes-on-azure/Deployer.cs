@@ -17,9 +17,9 @@ using System.Threading.Tasks;
 using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
-using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Network.Models;
+using Azure.ResourceManager.Resources;
 using Azure.Security.KeyVault.Secrets;
 using Azure.Storage;
 using Azure.Storage.Blobs;
@@ -1218,46 +1218,46 @@ namespace TesDeployer
                     $"Registering resource provider features...",
                 async () =>
                 {
-                        var subscription = armClient.GetSubscriptionResource(new ResourceIdentifier($"/subscriptions/{configuration.SubscriptionId}"));
+                    var subscription = armClient.GetSubscriptionResource(new ResourceIdentifier($"/subscriptions/{configuration.SubscriptionId}"));
 
-                        foreach (var rpName in requiredResourceProviderFeatures.Keys)
+                    foreach (var rpName in requiredResourceProviderFeatures.Keys)
+                    {
+                        var rp = await subscription.GetResourceProviderAsync(rpName);
+
+                        foreach (var featureName in requiredResourceProviderFeatures[rpName])
                         {
-                            var rp = await subscription.GetResourceProviderAsync(rpName);
+                            var feature = await rp.Value.GetFeatureAsync(featureName);
 
-                            foreach (var featureName in requiredResourceProviderFeatures[rpName])
+                            if (!string.Equals(feature.Value.Data.FeatureState, "Registered", StringComparison.OrdinalIgnoreCase))
                             {
-                                var feature = await rp.Value.GetFeatureAsync(featureName);
-
-                                if (!string.Equals(feature.Value.Data.FeatureState, "Registered", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    unregisteredFeatures.Add(feature);
-                                    _ = await feature.Value.RegisterAsync();
-                                }
+                                unregisteredFeatures.Add(feature);
+                                _ = await feature.Value.RegisterAsync();
                             }
                         }
+                    }
 
-                        while (!cts.IsCancellationRequested)
+                    while (!cts.IsCancellationRequested)
+                    {
+                        if (unregisteredFeatures.Count == 0)
                         {
-                            if (unregisteredFeatures.Count == 0)
-                            {
-                                break;
-                            }
-
-                            await Task.Delay(System.TimeSpan.FromSeconds(30));
-                            var finished = new List<FeatureResource>();
-
-                            foreach (var feature in unregisteredFeatures)
-                            {
-                                var update = await feature.GetAsync();
-
-                                if (string.Equals(update.Value.Data.FeatureState, "Registered", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    finished.Add(feature);
-                                }
-                            }
-                            unregisteredFeatures.RemoveAll(x => finished.Contains(x));
+                            break;
                         }
-                    });
+
+                        await Task.Delay(System.TimeSpan.FromSeconds(30));
+                        var finished = new List<FeatureResource>();
+
+                        foreach (var feature in unregisteredFeatures)
+                        {
+                            var update = await feature.GetAsync();
+
+                            if (string.Equals(update.Value.Data.FeatureState, "Registered", StringComparison.OrdinalIgnoreCase))
+                            {
+                                finished.Add(feature);
+                            }
+                        }
+                        unregisteredFeatures.RemoveAll(x => finished.Contains(x));
+                    }
+                });
             }
             catch (Microsoft.Rest.Azure.CloudException ex) when (ex.ToCloudErrorType() == CloudErrorType.AuthorizationFailed)
             {

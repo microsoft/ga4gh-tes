@@ -119,7 +119,7 @@ namespace TesApi.Tests
                 .ReturnsAsync(terraApiStubData.GetWsmSasTokenApiResponse(responseBlobName));
 
             var url = await terraStorageAccessProvider.GetMappedSasUrlFromWsmAsync("blobName", System.Threading.CancellationToken.None);
-          
+
             Assert.IsNotNull(url);
             var uri = new Uri(url);
 
