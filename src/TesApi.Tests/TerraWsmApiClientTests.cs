@@ -94,15 +94,16 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetSasTokenAsync_ValidRequest_ReturnsPayload()
         {
-            var response = new HttpResponseMessage(HttpStatusCode.OK);
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(terraApiStubData.GetWsmSasTokenApiResponseInJson())
+            };
 
-            response.Content = new StringContent(terraApiStubData.GetWsmSasTokenApiResponseInJson());
-
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<Task<HttpResponseMessage>>>()))
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(response);
 
             var apiResponse = await terraWsmApiClient.GetSasTokenAsync(terraApiStubData.WorkspaceId,
-                terraApiStubData.ContainerResourceId, null);
+                terraApiStubData.ContainerResourceId, null, System.Threading.CancellationToken.None);
 
             Assert.IsNotNull(apiResponse);
             Assert.IsTrue(!string.IsNullOrEmpty(apiResponse.Token));
@@ -115,10 +116,10 @@ namespace TesApi.Tests
             var wsmResourceId = Guid.NewGuid();
             var response = new HttpResponseMessage(HttpStatusCode.NoContent);
 
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<Task<HttpResponseMessage>>>()))
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(response);
 
-            await terraWsmApiClient.DeleteBatchPoolAsync(terraApiStubData.WorkspaceId, wsmResourceId);
+            await terraWsmApiClient.DeleteBatchPoolAsync(terraApiStubData.WorkspaceId, wsmResourceId, System.Threading.CancellationToken.None);
         }
 
         [TestMethod]

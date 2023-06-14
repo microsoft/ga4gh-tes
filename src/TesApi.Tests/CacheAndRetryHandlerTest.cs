@@ -5,7 +5,7 @@ using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
-using LazyCache;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
@@ -17,7 +17,7 @@ namespace TesApi.Tests;
 [TestClass]
 public class CacheAndRetryHandlerTest
 {
-    private IAppCache appCache;
+    private IMemoryCache appCache;
     private CacheAndRetryHandler cacheAndRetryHandler;
     private Mock<object> mockInstanceToRetry;
     private const int MaxRetryCount = 3;
@@ -26,10 +26,16 @@ public class CacheAndRetryHandlerTest
     public void SetUp()
     {
         var mockOptions = new Mock<IOptions<RetryPolicyOptions>>();
-        appCache = new CachingService();
+        appCache = new MemoryCache(new MemoryCacheOptions());
         mockInstanceToRetry = new();
         mockOptions.SetupGet(x => x.Value).Returns(new RetryPolicyOptions() { ExponentialBackOffExponent = 1, MaxRetryCount = MaxRetryCount });
         cacheAndRetryHandler = new(appCache, mockOptions.Object);
+    }
+
+    [TestCleanup]
+    public void Cleanup()
+    {
+        appCache?.Dispose();
     }
 
     [TestMethod]

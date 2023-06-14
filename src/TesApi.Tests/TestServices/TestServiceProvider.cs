@@ -5,8 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using LazyCache;
-using LazyCache.Providers;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,10 +40,13 @@ namespace TesApi.Tests.TestServices
             Action<Mock<IBatchQuotaProvider>> batchQuotaProvider = default,
             (Func<IServiceProvider, System.Linq.Expressions.Expression<Func<ArmBatchQuotaProvider>>> expression, Action<Mock<ArmBatchQuotaProvider>> action) armBatchQuotaProvider = default, //added so config utils gets the arm implementation, to be removed once config utils is refactored.
             Action<Mock<ContainerRegistryProvider>> containerRegistryProviderSetup = default,
+            Action<Mock<IAllowedVmSizesService>> allowedVmSizesServiceSetup = default,
             Action<IServiceCollection> additionalActions = default)
         {
             Configuration = GetConfiguration(configuration);
             provider = new ServiceCollection()
+                        .AddSingleton<ConfigurationUtils>()
+                        .AddSingleton(_ => GetAllowedVmSizesServiceProviderProvider(allowedVmSizesServiceSetup).Object)
                         .AddSingleton(_ => GetContainerRegisterProvider(containerRegistryProviderSetup).Object)
                         .AddSingleton(Configuration)
                         .AddSingleton(BindHelper<BatchAccountOptions>(BatchAccountOptions.SectionName))
@@ -62,7 +63,7 @@ namespace TesApi.Tests.TestServices
                         .AddSingleton(s => wrapAzureProxy ? ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(s, GetAzureProxy(azureProxy).Object) : GetAzureProxy(azureProxy).Object)
                         .AddSingleton(_ => GetTesTaskRepository(tesTaskRepository).Object)
                         .AddSingleton(s => mockStorageAccessProvider ? GetStorageAccessProvider(storageAccessProvider).Object : ActivatorUtilities.CreateInstance<DefaultStorageAccessProvider>(s))
-                        .AddSingleton<IAppCache>(_ => new CachingService(new MemoryCacheProvider(new MemoryCache(new MemoryCacheOptions()))))
+                        .AddMemoryCache()
                         .IfThenElse(accountResourceInformation is null, s => s, s => s.AddSingleton(accountResourceInformation))
                         .AddTransient<ILogger<T>>(_ => NullLogger<T>.Instance)
                         .IfThenElse(mockStorageAccessProvider, s => s, s => s.AddTransient<ILogger<DefaultStorageAccessProvider>>(_ => NullLogger<DefaultStorageAccessProvider>.Instance))
@@ -78,6 +79,7 @@ namespace TesApi.Tests.TestServices
                         .AddTransient<ILogger<ConfigurationUtils>>(_ => NullLogger<ConfigurationUtils>.Instance)
                         .AddTransient<ILogger<PriceApiBatchSkuInformationProvider>>(_ => NullLogger<PriceApiBatchSkuInformationProvider>.Instance)
                         .AddSingleton<TestRepositoryStorage>()
+                        .AddSingleton<CacheAndRetryHandler>()
                         .AddSingleton<PriceApiClient>()
                         .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                         .AddTransient<BatchPool>()
@@ -99,6 +101,7 @@ namespace TesApi.Tests.TestServices
         internal Mock<IRepository<TesTask>> TesTaskRepository { get; private set; }
         internal Mock<IStorageAccessProvider> StorageAccessProvider { get; private set; }
         internal Mock<ContainerRegistryProvider> ContainerRegistryProvider { get; private set; }
+        internal Mock<IAllowedVmSizesService> AllowedVmSizesServiceProvider { get; private set; }
 
         internal T GetT()
             => GetT(Array.Empty<Type>(), Array.Empty<object>());
@@ -145,13 +148,27 @@ namespace TesApi.Tests.TestServices
             => ActivatorUtilities.GetServiceOrCreateInstance<TInstance>(provider);
 
         private static IConfiguration GetConfiguration(IEnumerable<(string Key, string Value)> configuration)
-            => new ConfigurationBuilder().AddInMemoryCollection(configuration?.Select(t => new KeyValuePair<string, string>(t.Key, t.Value)) ?? Enumerable.Empty<KeyValuePair<string, string>>()).Build();
+            => new ConfigurationBuilder()
+                .AddInMemoryCollection(new KeyValuePair<string, string/*?*/>[] // defaults
+                {
+                    new($"{RetryPolicyOptions.SectionName}:{nameof(RetryPolicyOptions.MaxRetryCount)}", "3"),
+                    new($"{RetryPolicyOptions.SectionName}:{nameof(RetryPolicyOptions.ExponentialBackOffExponent)}", "2")
+                })
+                .AddInMemoryCollection(configuration?.Select(t => new KeyValuePair<string, string>(t.Key, t.Value)) ?? Enumerable.Empty<KeyValuePair<string, string>>())
+                .Build();
 
         private Mock<IAzureProxy> GetAzureProxy(Action<Mock<IAzureProxy>> action)
         {
             var proxy = new Mock<IAzureProxy>();
             action?.Invoke(proxy);
             return AzureProxy = proxy;
+        }
+
+        private Mock<IAllowedVmSizesService> GetAllowedVmSizesServiceProviderProvider(Action<Mock<IAllowedVmSizesService>> action)
+        {
+            var proxy = new Mock<IAllowedVmSizesService>();
+            action?.Invoke(proxy);
+            return AllowedVmSizesServiceProvider = proxy;
         }
 
         private Mock<ContainerRegistryProvider> GetContainerRegisterProvider(Action<Mock<ContainerRegistryProvider>> action)

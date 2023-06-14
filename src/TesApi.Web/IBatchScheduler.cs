@@ -22,16 +22,26 @@ namespace TesApi.Web
         /// <summary>
         /// Loads existing pools from Azure Batch Account tagged with this instance's "Name"
         /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         /// <remarks>This should be called only once after the <see cref="BatchScheduler"/> is created before any other methods are called.</remarks>
-        Task LoadExistingPoolsAsync();
+        Task LoadExistingPoolsAsync(CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Stores the compute node task runner in the default storage account
+        /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        /// <remarks>This should be called only once after the <see cref="BatchScheduler"/> is created before any other methods are called.</remarks>
+        Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken);
 
         /// <summary>
         /// Iteratively schedule a <see cref="TesTask"/> on a batch system until completion or failure
         /// </summary>
         /// <param name="tesTask"><see cref="TesTask"/> to schedule on the batch system</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>Whether the <see cref="TesTask"/> was modified.</returns>
-        ValueTask<bool> ProcessTesTaskAsync(TesTask tesTask);
+        ValueTask<bool> ProcessTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken);
 
         /// <summary>
         /// Adds <see cref="IBatchPool"/> to the managed batch pools.
@@ -55,17 +65,11 @@ namespace TesApi.Web
         Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Provides a list of pools that can safely be disposed of.
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        ValueTask<IEnumerable<Task>> GetShutdownCandidatePools(CancellationToken cancellationToken);
-
-        /// <summary>
         /// Retrieves pools associated with this TES from the batch account.
         /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        IAsyncEnumerable<CloudPool> GetCloudPools();
+        IAsyncEnumerable<CloudPool> GetCloudPools(CancellationToken cancellationToken);
 
         /// <summary>
         /// Removes pool from list of managed pools.

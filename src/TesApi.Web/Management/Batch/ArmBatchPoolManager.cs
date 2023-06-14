@@ -37,11 +37,11 @@ namespace TesApi.Web.Management.Batch
         }
 
         /// <inheritdoc />
-        public async Task<PoolInformation> CreateBatchPoolAsync(Pool poolInfo, bool isPreemptable)
+        public async Task<PoolInformation> CreateBatchPoolAsync(Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
         {
             try
             {
-                var batchManagementClient = await azureClientsFactory.CreateBatchAccountManagementClient();
+                var batchManagementClient = await azureClientsFactory.CreateBatchAccountManagementClient(cancellationToken);
 
                 logger.LogInformation("Creating manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolInfo.Name, poolInfo.VmSize, isPreemptable);
 
@@ -66,7 +66,7 @@ namespace TesApi.Web.Management.Batch
         {
             try
             {
-                var batchManagementClient = await azureClientsFactory.CreateBatchAccountManagementClient();
+                var batchManagementClient = await azureClientsFactory.CreateBatchAccountManagementClient(cancellationToken);
 
                 logger.LogInformation(
                     $"Deleting pool with the id/name:{poolId} in Batch account:{azureClientsFactory.BatchAccountInformation.Name}");

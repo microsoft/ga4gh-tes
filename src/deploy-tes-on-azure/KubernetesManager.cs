@@ -87,6 +87,13 @@ namespace TesDeployer
             var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(resourceGroup, configuration.AksClusterName);
             var kubeConfigFile = new FileInfo(kubeConfigPath);
             await File.WriteAllTextAsync(kubeConfigFile.FullName, Encoding.Default.GetString(creds.Kubeconfigs.First().Value));
+            kubeConfigFile.Refresh();
+
+            if (!OperatingSystem.IsWindows())
+            {
+                kubeConfigFile.UnixFileMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+            }
+
             var k8sConfiguration = KubernetesClientConfiguration.LoadKubeConfig(kubeConfigFile, false);
             var k8sClientConfiguration = KubernetesClientConfiguration.BuildConfigFromConfigObject(k8sConfiguration);
             return new Kubernetes(k8sClientConfiguration);
@@ -143,14 +150,6 @@ namespace TesDeployer
             var certImageController = $"{certManagerRegistry}/jetstack/cert-manager-controller";
             var certImageWebhook = $"{certManagerRegistry}/jetstack/cert-manager-webhook";
             var certImageCainjector = $"{certManagerRegistry}/jetstack/cert-manager-cainjector";
-
-            await client.CoreV1.CreateNamespaceAsync(new V1Namespace()
-            {
-                Metadata = new V1ObjectMeta
-                {
-                    Name = configuration.AksCoANamespace
-                },
-            });
 
             V1Namespace coaNamespace = null;
             try
@@ -228,6 +227,10 @@ namespace TesDeployer
                     $"--set cainjector.image.tag={CertManagerVersion}");
 
             await WaitForWorkloadAsync(client, "ingress-nginx-controller", configuration.AksCoANamespace, cts.Token);
+            await WaitForWorkloadAsync(client, "cert-manager", configuration.AksCoANamespace, cts.Token);
+
+            // Wait 10 secs before deploying TES for cert manager to finish starting. 
+            await Task.Delay(TimeSpan.FromSeconds(10));
 
             return client;
         }
@@ -416,7 +419,6 @@ namespace TesDeployer
             batchNodes["disablePublicIpAddress"] = GetValueOrDefault(settings, "DisableBatchNodesPublicIpAddress");
             batchScheduling["disable"] = GetValueOrDefault(settings, "DisableBatchScheduling");
             batchScheduling["usePreemptibleVmsOnly"] = GetValueOrDefault(settings, "UsePreemptibleVmsOnly");
-            nodeImages["blobxfer"] = GetValueOrDefault(settings, "BlobxferImageName");
             nodeImages["docker"] = GetValueOrDefault(settings, "DockerInDockerImageName");
             batchImageGen2["offer"] = GetValueOrDefault(settings, "Gen2BatchImageOffer");
             batchImageGen2["publisher"] = GetValueOrDefault(settings, "Gen2BatchImagePublisher");
@@ -483,7 +485,6 @@ namespace TesDeployer
                 ["DisableBatchNodesPublicIpAddress"] = GetValueOrDefault(batchNodes, "disablePublicIpAddress"),
                 ["DisableBatchScheduling"] = GetValueOrDefault(batchScheduling, "disable"),
                 ["UsePreemptibleVmsOnly"] = GetValueOrDefault(batchScheduling, "usePreemptibleVmsOnly"),
-                ["BlobxferImageName"] = GetValueOrDefault(nodeImages, "blobxfer"),
                 ["DockerInDockerImageName"] = GetValueOrDefault(nodeImages, "docker"),
                 ["Gen2BatchImageOffer"] = GetValueOrDefault(batchImageGen2, "offer"),
                 ["Gen2BatchImagePublisher"] = GetValueOrDefault(batchImageGen2, "publisher"),
@@ -537,12 +538,26 @@ namespace TesDeployer
 
         private async Task<string> ExecHelmProcessAsync(string command, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
         {
+            var outputStringBuilder = new StringBuilder();
+
+            void OutputHandler(object sendingProcess, DataReceivedEventArgs outLine)
+            {
+                if (configuration.DebugLogging)
+                {
+                    ConsoleEx.WriteLine($"HELM: {outLine.Data}");
+                }
+
+                outputStringBuilder.AppendLine(outLine.Data);
+            }
+
             var process = new Process();
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
             process.StartInfo.FileName = configuration.HelmBinaryPath;
             process.StartInfo.Arguments = command;
+            process.OutputDataReceived += new DataReceivedEventHandler(OutputHandler);
+            process.ErrorDataReceived += new DataReceivedEventHandler(OutputHandler);
 
             if (!string.IsNullOrWhiteSpace(workingDirectory))
             {
@@ -550,41 +565,8 @@ namespace TesDeployer
             }
 
             process.Start();
-
-            var outputStringBuilder = new StringBuilder();
-
-            _ = Task.Run(async () =>
-            {
-                var line = (await process.StandardOutput.ReadLineAsync())?.Trim();
-
-                while (line is not null)
-                {
-                    if (configuration.DebugLogging)
-                    {
-                        ConsoleEx.WriteLine($"HELM: {line}");
-                    }
-
-                    outputStringBuilder.AppendLine(line);
-                    line = await process.StandardOutput.ReadLineAsync().WaitAsync(cts.Token);
-                }
-            });
-
-            _ = Task.Run(async () =>
-            {
-                var line = (await process.StandardError.ReadLineAsync())?.Trim();
-
-                while (line is not null)
-                {
-                    if (configuration.DebugLogging)
-                    {
-                        ConsoleEx.WriteLine($"HELM: {line}");
-                    }
-
-                    outputStringBuilder.AppendLine(line);
-                    line = await process.StandardError.ReadLineAsync().WaitAsync(cts.Token);
-                }
-            });
-
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
             await process.WaitForExitAsync();
             var output = outputStringBuilder.ToString();
 

@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -55,9 +54,9 @@ namespace TesApi.Web
 
         private readonly ILogger logger;
         private readonly BatchClient batchClient;
-        private readonly string subscriptionId;
+        //private readonly string subscriptionId;
         private readonly string location;
-        private readonly string batchResourceGroupName;
+        //private readonly string batchResourceGroupName;
         private readonly string batchAccountName;
         //TODO: This dependency should be injected at a higher level (e.g. scheduler), but that requires significant refactoring that should be done separately.
         private readonly IBatchPoolManager batchPoolManager;
@@ -105,18 +104,18 @@ namespace TesApi.Web
                 batchClient = BatchClient.Open(new BatchSharedKeyCredentials(batchAccountOptions.Value.BaseUrl,
                     batchAccountOptions.Value.AccountName, batchAccountOptions.Value.AppKey));
                 location = batchAccountOptions.Value.Region;
-                subscriptionId = batchAccountOptions.Value.SubscriptionId;
-                batchResourceGroupName = batchAccountOptions.Value.ResourceGroup;
+                //subscriptionId = batchAccountOptions.Value.SubscriptionId;
+                //batchResourceGroupName = batchAccountOptions.Value.ResourceGroup;
 
             }
             else
             {
                 batchAccountName = batchAccountOptions.Value.AccountName;
-                var (SubscriptionId, ResourceGroupName, Location, BatchAccountEndpoint) = FindBatchAccountAsync(batchAccountName).Result;
-                batchResourceGroupName = ResourceGroupName;
-                subscriptionId = SubscriptionId;
+                var (SubscriptionId, ResourceGroupName, Location, BatchAccountEndpoint) = FindBatchAccountAsync(batchAccountName, CancellationToken.None).Result;
+                //batchResourceGroupName = ResourceGroupName;
+                //subscriptionId = SubscriptionId;
                 location = Location;
-                batchClient = BatchClient.Open(new BatchTokenCredentials($"https://{BatchAccountEndpoint}", () => GetAzureAccessTokenAsync("https://batch.core.windows.net/")));
+                batchClient = BatchClient.Open(new BatchTokenCredentials($"https://{BatchAccountEndpoint}", () => GetAzureAccessTokenAsync(CancellationToken.None, "https://batch.core.windows.net/")));
             }
 
             //azureOfferDurableId = batchAccountOptions.Value.AzureOfferDurableId;
@@ -134,20 +133,23 @@ namespace TesApi.Web
         /// Gets the Application Insights instrumentation key
         /// </summary>
         /// <param name="appInsightsApplicationId">Application Insights application id</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>Application Insights instrumentation key</returns>
-        public static async Task<string> GetAppInsightsConnectionStringAsync(string appInsightsApplicationId)
+        public static async Task<string> GetAppInsightsConnectionStringAsync(string appInsightsApplicationId, CancellationToken cancellationToken)
         {
-            var azureClient = await GetAzureManagementClientAsync();
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
+            var azureClient = await GetAzureManagementClientAsync(cancellationToken);
+            var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
 
-            var credentials = new TokenCredentials(await GetAzureAccessTokenAsync());
+            var credentials = new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken));
 
-            foreach (var subscriptionId in subscriptionIds)
+            await foreach (var subscriptionId in subscriptionIds)
             {
                 try
                 {
-                    var app = (await new ApplicationInsightsManagementClient(credentials) { SubscriptionId = subscriptionId }.Components.ListAsync())
-                        .FirstOrDefault(a => a.ApplicationId.Equals(appInsightsApplicationId, StringComparison.OrdinalIgnoreCase));
+                    var components = new ApplicationInsightsManagementClient(credentials) { SubscriptionId = subscriptionId }.Components;
+                    var app = await (await components.ListAsync(cancellationToken))
+                        .ToAsyncEnumerable(components.ListNextAsync)
+                        .FirstOrDefaultAsync(a => a.ApplicationId.Equals(appInsightsApplicationId, StringComparison.OrdinalIgnoreCase), cancellationToken: cancellationToken);
 
                     if (app is not null)
                     {
@@ -163,7 +165,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<string> GetNextBatchJobIdAsync(string tesTaskId)
+        public async Task<string> GetNextBatchJobIdAsync(string tesTaskId, CancellationToken cancellationToken)
         {
             var jobFilter = new ODATADetailLevel
             {
@@ -171,7 +173,7 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            var lastAttemptNumber = (await batchClient.JobOperations.ListJobs(jobFilter).ToListAsync())
+            var lastAttemptNumber = (await batchClient.JobOperations.ListJobs(jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken: cancellationToken))
                 .Select(j => int.Parse(j.Id.Split(BatchJobAttemptSeparator)[1]))
                 .OrderBy(a => a)
                 .LastOrDefault();
@@ -200,7 +202,7 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            return batchClient.PoolOperations.ListPools(activePoolsFilter).Count();
+            return batchClient.PoolOperations.ListPools(activePoolsFilter).ToAsyncEnumerable().CountAsync(CancellationToken.None).AsTask().Result;
         }
 
         /// <inheritdoc/>
@@ -212,7 +214,7 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            return batchClient.JobOperations.ListJobs(activeJobsFilter).Count();
+            return batchClient.JobOperations.ListJobs(activeJobsFilter).ToAsyncEnumerable().CountAsync(CancellationToken.None).AsTask().Result;
         }
 
         /// <inheritdoc/>
@@ -242,7 +244,7 @@ namespace TesApi.Web
 
                 try
                 {
-                    await batchClient.JobOperations.DeleteJobAsync(job.Id, cancellationToken: CancellationToken.None);
+                    await batchClient.JobOperations.DeleteJobAsync(job.Id, cancellationToken: cancellationToken);
                 }
                 catch (Exception e)
                 {
@@ -292,7 +294,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1826:Do not use Enumerable methods on indexable collections", Justification = "FirstOrDefault() is straightforward, the alternative is less clear.")]
-        public async Task<AzureBatchJobAndTaskState> GetBatchJobAndTaskStateAsync(TesTask tesTask, bool usingAutoPools)
+        public async Task<AzureBatchJobAndTaskState> GetBatchJobAndTaskStateAsync(TesTask tesTask, bool usingAutoPools, CancellationToken cancellationToken)
         {
             try
             {
@@ -319,7 +321,7 @@ namespace TesApi.Web
                     // Normally, we will only find one job. If we find more, we always want the latest one. Thus, we use ListJobs()
                     var jobInfos = await batchClient.JobOperations.ListJobs(jobOrTaskFilter).ToAsyncEnumerable()
                         .Select(j => new { Job = j, AttemptNumber = int.Parse(j.Id.Split(BatchJobAttemptSeparator)[1]) })
-                        .ToListAsync();
+                        .ToListAsync(cancellationToken: cancellationToken);
 
                     if (!jobInfos.Any())
                     {
@@ -338,7 +340,7 @@ namespace TesApi.Web
 
                     try
                     {
-                        batchTask = await batchClient.JobOperations.GetTaskAsync(job.Id, tesTask.Id);
+                        batchTask = await batchClient.JobOperations.GetTaskAsync(job.Id, tesTask.Id, cancellationToken: cancellationToken);
                     }
                     catch (Exception ex)
                     {
@@ -354,7 +356,7 @@ namespace TesApi.Web
 
                     try
                     {
-                        job = await batchClient.JobOperations.GetJobAsync(tesTask.PoolId);
+                        job = await batchClient.JobOperations.GetJobAsync(tesTask.PoolId, cancellationToken: cancellationToken);
                     }
                     catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException e && e.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
                     {
@@ -364,7 +366,7 @@ namespace TesApi.Web
 
                     var taskInfos = await batchClient.JobOperations.ListTasks(tesTask.PoolId, jobOrTaskFilter).ToAsyncEnumerable()
                         .Select(t => new { Task = t, AttemptNumber = int.Parse(t.Id.Split(BatchJobAttemptSeparator)[1]) })
-                        .ToListAsync();
+                        .ToListAsync(cancellationToken);
 
                     if (!taskInfos.Any())
                     {
@@ -389,6 +391,8 @@ namespace TesApi.Web
                     ? n => (n.RecentTasks?.Select(t => t.JobId) ?? Enumerable.Empty<string>()).Contains(job.Id)
                     : n => (n.RecentTasks?.Select(t => t.TaskId) ?? Enumerable.Empty<string>()).Contains(batchTask?.Id);
 
+                var nodeId = string.Empty;
+
                 if (job.State == JobState.Active && poolId is not null)
                 {
                     var poolFilter = new ODATADetailLevel
@@ -400,7 +404,7 @@ namespace TesApi.Web
 
                     try
                     {
-                        pool = await batchClient.PoolOperations.GetPoolAsync(poolId, poolFilter);
+                        pool = await batchClient.PoolOperations.GetPoolAsync(poolId, poolFilter, cancellationToken: cancellationToken);
                     }
                     catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException e && e.Response?.StatusCode == System.Net.HttpStatusCode.NotFound)
                     {
@@ -411,10 +415,11 @@ namespace TesApi.Web
                     {
                         nodeAllocationFailed = usingAutoPools && pool.ResizeErrors?.Count > 0; // When not using autopools, NodeAllocationFailed will be determined in BatchScheduler.GetBatchTaskStateAsync()
 
-                        var node = await pool.ListComputeNodes().ToAsyncEnumerable().FirstOrDefaultAsync(computeNodePredicate);
+                        var node = await pool.ListComputeNodes().ToAsyncEnumerable().FirstOrDefaultAsync(computeNodePredicate, cancellationToken);
 
                         if (node is not null)
                         {
+                            nodeId = node.Id;
                             nodeState = node.State;
                             var nodeError = node.Errors?.FirstOrDefault(e => "DiskFull".Equals(e.Code, StringComparison.InvariantCultureIgnoreCase)) ?? node.Errors?.FirstOrDefault(); // Prioritize DiskFull errors
                             nodeErrorCode = nodeError?.Code;
@@ -454,7 +459,8 @@ namespace TesApi.Web
                     TaskExitCode = taskExecutionInformation?.ExitCode,
                     TaskFailureInformation = taskExecutionInformation?.FailureInformation,
                     TaskContainerState = taskExecutionInformation?.ContainerInformation?.State,
-                    TaskContainerError = taskExecutionInformation?.ContainerInformation?.Error
+                    TaskContainerError = taskExecutionInformation?.ContainerInformation?.Error,
+                    NodeId = !string.IsNullOrEmpty(nodeId) ? nodeId : null
                 };
             }
             catch (Exception ex)
@@ -473,7 +479,7 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            var batchJobsToDelete = await batchClient.JobOperations.ListJobs(jobFilter).ToListAsync(cancellationToken);
+            var batchJobsToDelete = await batchClient.JobOperations.ListJobs(jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
 
             if (batchJobsToDelete.Count > 1)
             {
@@ -496,7 +502,7 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            var batchTasksToDelete = await batchClient.JobOperations.ListTasks(pool.PoolId, jobFilter).ToListAsync(cancellationToken);
+            var batchTasksToDelete = await batchClient.JobOperations.ListTasks(pool.PoolId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
 
             if (batchTasksToDelete.Count > 1)
             {
@@ -511,7 +517,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<IEnumerable<string>> ListOldJobsToDeleteAsync(TimeSpan oldestJobAge)
+        public async Task<IEnumerable<string>> ListOldJobsToDeleteAsync(TimeSpan oldestJobAge, CancellationToken cancellationToken)
         {
             var filter = new ODATADetailLevel
             {
@@ -519,7 +525,7 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            return (await batchClient.JobOperations.ListJobs(filter).ToListAsync()).Select(c => c.Id);
+            return (await batchClient.JobOperations.ListJobs(filter).ToAsyncEnumerable().ToListAsync()).Select(c => c.Id);
         }
 
         /// <inheritdoc/>
@@ -531,7 +537,7 @@ namespace TesApi.Web
                 SelectClause = "id,poolInfo,onAllTasksComplete"
             };
 
-            var noActionTesjobs = (await batchClient.JobOperations.ListJobs(filter).ToListAsync(cancellationToken))
+            var noActionTesjobs = (await batchClient.JobOperations.ListJobs(filter).ToAsyncEnumerable().ToListAsync(cancellationToken))
                 .Where(j => j.PoolInformation?.AutoPoolSpecification?.AutoPoolIdPrefix == "TES" && j.OnAllTasksComplete == OnAllTasksComplete.NoAction);
 
             var noActionTesjobsWithNoTasks = await noActionTesjobs.ToAsyncEnumerable().WhereAwait(async j => !(await j.ListTasks().ToListAsync(cancellationToken)).Any()).ToListAsync(cancellationToken);
@@ -572,7 +578,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task DeleteBatchComputeNodesAsync(string poolId, IEnumerable<ComputeNode> computeNodes, CancellationToken cancellationToken = default)
-            => batchClient.PoolOperations.RemoveFromPoolAsync(poolId, computeNodes, deallocationOption: ComputeNodeDeallocationOption.TaskCompletion, cancellationToken: cancellationToken);
+            => batchClient.PoolOperations.RemoveFromPoolAsync(poolId, computeNodes, deallocationOption: ComputeNodeDeallocationOption.Requeue, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
         public Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken = default)
@@ -615,11 +621,11 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public Task<CloudPool> GetBatchPoolAsync(string poolId, DetailLevel detailLevel = default, CancellationToken cancellationToken = default)
+        public Task<CloudPool> GetBatchPoolAsync(string poolId, CancellationToken cancellationToken = default, DetailLevel detailLevel = default)
             => batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: detailLevel, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
-        public Task<CloudJob> GetBatchJobAsync(string jobId, DetailLevel detailLevel, CancellationToken cancellationToken)
+        public Task<CloudJob> GetBatchJobAsync(string jobId, CancellationToken cancellationToken, DetailLevel detailLevel)
             => batchClient.JobOperations.GetJobAsync(jobId, detailLevel, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
@@ -629,29 +635,25 @@ namespace TesApi.Web
             return (pool.AllocationState, pool.AutoScaleEnabled, pool.TargetLowPriorityComputeNodes, pool.CurrentLowPriorityComputeNodes, pool.TargetDedicatedComputeNodes, pool.CurrentDedicatedComputeNodes);
         }
 
-        private static async Task<IEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync()
+        private static async Task<IEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync(CancellationToken cancellationToken)
         {
-            var azureClient = await GetAzureManagementClientAsync();
-
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
-
-            return (await Task.WhenAll(
-                subscriptionIds.Select(async subId =>
-                    (await azureClient.WithSubscription(subId).StorageAccounts.ListAsync())
-                        .Select(a => new StorageAccountInfo { Id = a.Id, Name = a.Name, SubscriptionId = subId, BlobEndpoint = a.EndPoints.Primary.Blob }))))
-                .SelectMany(a => a)
-                .ToList();
+            var azureClient = await GetAzureManagementClientAsync(cancellationToken);
+            return await (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable()
+                .Select(s => s.SubscriptionId).SelectManyAwait(async (subscriptionId, ct) =>
+                    (await azureClient.WithSubscription(subscriptionId).StorageAccounts.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable()
+                    .Select(a => new StorageAccountInfo { Id = a.Id, Name = a.Name, SubscriptionId = subscriptionId, BlobEndpoint = a.EndPoints.Primary.Blob }))
+                .ToListAsync(cancellationToken: cancellationToken);
         }
 
         /// <inheritdoc/>
-        public async Task<string> GetStorageAccountKeyAsync(StorageAccountInfo storageAccountInfo)
+        public async Task<string> GetStorageAccountKeyAsync(StorageAccountInfo storageAccountInfo, CancellationToken cancellationToken)
         {
             try
             {
-                var azureClient = await GetAzureManagementClientAsync();
+                var azureClient = await GetAzureManagementClientAsync(cancellationToken);
                 var storageAccount = await azureClient.WithSubscription(storageAccountInfo.SubscriptionId).StorageAccounts.GetByIdAsync(storageAccountInfo.Id);
 
-                return (await storageAccount.GetKeysAsync())[0].Value;
+                return (await storageAccount.GetKeysAsync(cancellationToken))[0].Value;
             }
             catch (Exception ex)
             {
@@ -661,23 +663,37 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public Task UploadBlobAsync(Uri blobAbsoluteUri, string content)
-            => new CloudBlockBlob(blobAbsoluteUri).UploadTextAsync(content);
+        public Task UploadBlobAsync(Uri blobAbsoluteUri, string content, CancellationToken cancellationToken)
+            => new CloudBlockBlob(blobAbsoluteUri).UploadTextAsync(content, null, null, null, null, cancellationToken);
 
         /// <inheritdoc/>
-        public Task UploadBlobFromFileAsync(Uri blobAbsoluteUri, string filePath)
-            => new CloudBlockBlob(blobAbsoluteUri).UploadFromFileAsync(filePath);
+        public Task UploadBlobFromFileAsync(Uri blobAbsoluteUri, string filePath, CancellationToken cancellationToken)
+            => new CloudBlockBlob(blobAbsoluteUri).UploadFromFileAsync(filePath, null, null, null, cancellationToken);
 
         /// <inheritdoc/>
-        public Task<string> DownloadBlobAsync(Uri blobAbsoluteUri)
-            => new CloudBlockBlob(blobAbsoluteUri).DownloadTextAsync();
+        public Task<string> DownloadBlobAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
+            => new CloudBlockBlob(blobAbsoluteUri).DownloadTextAsync(null, null, null, null, cancellationToken);
 
         /// <inheritdoc/>
-        public Task<bool> BlobExistsAsync(Uri blobAbsoluteUri)
-            => new CloudBlockBlob(blobAbsoluteUri).ExistsAsync();
+        public Task<bool> BlobExistsAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
+            => new CloudBlockBlob(blobAbsoluteUri).ExistsAsync(null, null, cancellationToken);
 
         /// <inheritdoc/>
-        public async Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri)
+        public async Task<BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
+        {
+            var blob = new CloudBlockBlob(blobAbsoluteUri);
+
+            if (await blob.ExistsAsync(null, null, cancellationToken))
+            {
+                await blob.FetchAttributesAsync(null, null, null, cancellationToken);
+                return blob.Properties;
+            }
+
+            return default;
+        }
+
+        /// <inheritdoc/>
+        public async Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
         {
             var blob = new CloudBlockBlob(directoryUri);
             var directory = blob.Container.GetDirectoryReference(blob.Name);
@@ -728,16 +744,17 @@ namespace TesApi.Web
         public string GetArmRegion()
             => location;
 
-        private static Task<string> GetAzureAccessTokenAsync(string resource = "https://management.azure.com/")
-            => new AzureServiceTokenProvider().GetAccessTokenAsync(resource);
+        private static Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string resource = "https://management.azure.com/")
+            => new AzureServiceTokenProvider().GetAccessTokenAsync(resource, cancellationToken: cancellationToken);
 
         /// <summary>
         /// Gets an authenticated Azure Client instance
         /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>An authenticated Azure Client instance</returns>
-        private static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync()
+        private static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(CancellationToken cancellationToken)
         {
-            var accessToken = await GetAzureAccessTokenAsync();
+            var accessToken = await GetAzureAccessTokenAsync(cancellationToken);
             var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, AzureEnvironment.AzureGlobalCloud);
             var azureClient = FluentAzure.Authenticate(azureCredentials);
 
@@ -745,25 +762,27 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable)
-            => await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable);
+        public async Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
+            => await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable, cancellationToken);
 
         // https://learn.microsoft.com/azure/azure-resource-manager/management/move-resource-group-and-subscription#changed-resource-id
         [GeneratedRegex("/*/resourceGroups/([^/]*)/*")]
         private static partial Regex GetResourceGroupRegex();
 
-        private static async Task<(string SubscriptionId, string ResourceGroupName, string Location, string BatchAccountEndpoint)> FindBatchAccountAsync(string batchAccountName)
+        private static async Task<(string SubscriptionId, string ResourceGroupName, string Location, string BatchAccountEndpoint)> FindBatchAccountAsync(string batchAccountName, CancellationToken cancellationToken)
         {
             var resourceGroupRegex = GetResourceGroupRegex();
-            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync());
-            var azureClient = await GetAzureManagementClientAsync();
+            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken));
+            var azureClient = await GetAzureManagementClientAsync(cancellationToken);
 
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
+            var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
 
-            foreach (var subId in subscriptionIds)
+            await foreach (var subId in subscriptionIds)
             {
-                var batchAccount = (await new BatchManagementClient(tokenCredentials) { SubscriptionId = subId }.BatchAccount.ListAsync())
-                    .FirstOrDefault(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase));
+                var batchAccountOperations = new BatchManagementClient(tokenCredentials) { SubscriptionId = subId }.BatchAccount;
+                var batchAccount = await (await batchAccountOperations.ListAsync(cancellationToken: cancellationToken))
+                    .ToAsyncEnumerable(batchAccountOperations.ListNextAsync)
+                    .FirstOrDefaultAsync(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken: cancellationToken);
 
                 if (batchAccount is not null)
                 {
@@ -777,8 +796,8 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName)
-            => (await GetAccessibleStorageAccountsAsync())
+        public async Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken)
+            => (await GetAccessibleStorageAccountsAsync(cancellationToken))
                 .FirstOrDefault(storageAccount => storageAccount.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase));
 
         /// <inheritdoc/>

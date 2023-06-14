@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
@@ -16,11 +17,6 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// Cromwell path prefix
     /// </summary>
     protected const string CromwellPathPrefix = "/cromwell-executions/";
-    /// <summary>
-    /// Executions path prefix
-    /// </summary>
-    protected const string BatchPathPrefix = "/executions/";
-
     /// <summary>
     /// Logger instance. 
     /// </summary>
@@ -42,11 +38,11 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     }
 
     /// <inheritdoc />
-    public async Task<string> DownloadBlobAsync(string blobRelativePath)
+    public async Task<string> DownloadBlobAsync(string blobRelativePath, CancellationToken cancellationToken)
     {
         try
         {
-            return await this.AzureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath)));
+            return await this.AzureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken)), cancellationToken);
         }
         catch
         {
@@ -55,33 +51,18 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     }
 
     /// <inheritdoc />
-    public async Task<bool> TryDownloadBlobAsync(string blobRelativePath, Action<string> action)
-    {
-        try
-        {
-            var content = await this.AzureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath)));
-            action?.Invoke(content);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    public async Task UploadBlobAsync(string blobRelativePath, string content, CancellationToken cancellationToken)
+        => await this.AzureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, true)), content, cancellationToken);
 
     /// <inheritdoc />
-    public async Task UploadBlobAsync(string blobRelativePath, string content)
-        => await this.AzureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), content);
+    public async Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath, CancellationToken cancellationToken)
+        => await this.AzureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, true)), sourceLocalFilePath, cancellationToken);
 
     /// <inheritdoc />
-    public async Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath)
-        => await this.AzureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, true)), sourceLocalFilePath);
+    public abstract Task<bool> IsPublicHttpUrlAsync(string uriString, CancellationToken cancellationToken);
 
     /// <inheritdoc />
-    public abstract Task<bool> IsPublicHttpUrlAsync(string uriString);
-
-    /// <inheritdoc />
-    public abstract Task<string> MapLocalPathToSasUrlAsync(string path, bool getContainerSas = false);
+    public abstract Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, bool getContainerSas = false);
 
     /// <summary>
     /// Tries to parse the input into a Http Url. 
@@ -93,11 +74,10 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
         => Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// True if the path is the cromwell or executions folder
+    /// True if the path is the cromwell executions folder
     /// </summary>
     /// <param name="path"></param>
     /// <returns></returns>
     protected bool IsKnownExecutionFilePath(string path)
-        => path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase)
-               || path.StartsWith(BatchPathPrefix, StringComparison.OrdinalIgnoreCase);
+        => path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase);
 }

@@ -4,7 +4,7 @@
 using System;
 using System.Net.Http;
 using System.Threading.Tasks;
-using LazyCache;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace TesApi.Web
 {
@@ -25,14 +25,14 @@ namespace TesApi.Web
     public class TesDockerClient : ITesDockerClient
     {
         private const string defaultDockerRegistryHost = "index.docker.io";
-        private readonly HttpClient httpClient = new HttpClient();
-        private readonly IAppCache cache;
+        private readonly HttpClient httpClient = new();
+        private readonly IMemoryCache cache;
 
         /// <summary>
         /// Requires the cache
         /// </summary>
         /// <param name="cache"></param>
-        public TesDockerClient(IAppCache cache)
+        public TesDockerClient(IMemoryCache cache)
         {
             this.cache = cache;
         }
@@ -46,7 +46,7 @@ namespace TesApi.Web
         {
             try
             {
-                string cacheKey = $"{nameof(TesDockerClient)}-{image}";
+                var cacheKey = $"{nameof(TesDockerClient)}-{image}";
 
                 if (cache?.TryGetValue(cacheKey, out bool isImagePublic) == true)
                 {
@@ -54,8 +54,8 @@ namespace TesApi.Web
                 }
 
                 var slashIndex = image.IndexOf('/');
-                string dockerRegistryHost = defaultDockerRegistryHost;
-                string imagePart = $"{image}";
+                var dockerRegistryHost = defaultDockerRegistryHost;
+                var imagePart = $"{image}";
 
                 if (slashIndex > 0)
                 {
@@ -63,11 +63,11 @@ namespace TesApi.Web
                     imagePart = image.Substring(slashIndex + 1);
                 }
 
-                string url = $"https://{dockerRegistryHost}/v2/{imagePart}/tags/list";
+                var url = $"https://{dockerRegistryHost}/v2/{imagePart}/tags/list";
                 var registryResponse = await httpClient.GetAsync(url);
                 var content = await registryResponse.Content.ReadAsStringAsync();
 
-                bool isImagePublicResult = false;
+                var isImagePublicResult = false;
 
                 // If the name is garbage, the API still returns 200 OK but with HTML instead of JSON
                 // Check if the response starts with JSON
@@ -76,7 +76,7 @@ namespace TesApi.Web
                     isImagePublicResult = true;
                 }
 
-                cache?.Add(cacheKey, isImagePublicResult);
+                cache?.Set(cacheKey, isImagePublicResult);
                 return isImagePublicResult;
             }
             catch (Exception)

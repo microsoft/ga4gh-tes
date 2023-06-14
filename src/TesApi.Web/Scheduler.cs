@@ -71,6 +71,17 @@ namespace TesApi.Web
         /// <returns>A System.Threading.Tasks.Task that represents the long running operations.</returns>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            try
+            {
+                // Delay "starting" Scheduler until this completes to finish initializing BatchScheduler.
+                await batchScheduler.UploadTaskRunnerIfNeeded(stoppingToken);
+            }
+            catch (Exception exc)
+            {
+                logger.LogError(exc, @"Checking/storing the node task runner binary failed with {Message}", exc.Message);
+                throw;
+            }
+
             logger.LogInformation("Scheduler started.");
 
             while (!stoppingToken.IsCancellationRequested)
@@ -113,7 +124,8 @@ namespace TesApi.Web
                     predicate: t => t.State == TesState.QUEUEDEnum
                         || t.State == TesState.INITIALIZINGEnum
                         || t.State == TesState.RUNNINGEnum
-                        || (t.State == TesState.CANCELEDEnum && t.IsCancelRequested)))
+                        || (t.State == TesState.CANCELEDEnum && t.IsCancelRequested),
+                    cancellationToken: stoppingToken))
                 .OrderBy(t => t.CreationTime)
                 .ToList();
 
@@ -132,7 +144,7 @@ namespace TesApi.Web
                     var isModified = false;
                     try
                     {
-                        isModified = await batchScheduler.ProcessTesTaskAsync(tesTask);
+                        isModified = await batchScheduler.ProcessTesTaskAsync(tesTask, stoppingToken);
                     }
                     catch (Exception exc)
                     {
@@ -169,7 +181,7 @@ namespace TesApi.Web
                         }
 
                         logger.LogError(exc, "TES task: {TesTask} threw an exception in OrchestrateTesTasksOnBatch().", tesTask.Id);
-                        await repository.UpdateItemAsync(tesTask);
+                        await repository.UpdateItemAsync(tesTask, stoppingToken);
                     }
 
                     if (isModified)
@@ -204,7 +216,7 @@ namespace TesApi.Web
                             logger.LogDebug("{TesTask} failed, state: {TesTaskState}, reason: {TesTaskFailureReason}", tesTask.Id, tesTask.State, tesTask.FailureReason);
                         }
 
-                        await repository.UpdateItemAsync(tesTask);
+                        await repository.UpdateItemAsync(tesTask, stoppingToken);
                     }
                 }
                 // TODO catch EF / postgres exception?

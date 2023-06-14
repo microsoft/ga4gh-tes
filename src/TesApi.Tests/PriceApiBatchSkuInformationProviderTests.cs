@@ -3,7 +3,7 @@
 
 using System.Linq;
 using System.Threading.Tasks;
-using LazyCache;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -19,14 +19,14 @@ namespace TesApi.Tests
     {
         private PriceApiClient pricingApiClient;
         private PriceApiBatchSkuInformationProvider provider;
-        private IAppCache appCache;
+        private IMemoryCache appCache;
         private CacheAndRetryHandler cacheAndRetryHandler;
         private Mock<IOptions<RetryPolicyOptions>> mockRetryOptions;
 
         [TestInitialize]
         public void Initialize()
         {
-            appCache = new CachingService();
+            appCache = new MemoryCache(new MemoryCacheOptions());
             mockRetryOptions = new Mock<IOptions<RetryPolicyOptions>>();
             mockRetryOptions.Setup(m => m.Value).Returns(new RetryPolicyOptions());
 
@@ -35,12 +35,18 @@ namespace TesApi.Tests
             provider = new PriceApiBatchSkuInformationProvider(pricingApiClient, new NullLogger<PriceApiBatchSkuInformationProvider>());
         }
 
+        [TestCleanup]
+        public void Cleanup()
+        {
+            appCache?.Dispose();
+        }
+
         [TestMethod]
         public async Task GetVmSizesAndPricesAsync_ReturnsVmsWithPricingInformation()
         {
             //using var serviceProvider = new TestServices.TestServiceProvider<PriceApiBatchSkuInformationProvider>();
             //var provider = serviceProvider.GetT();
-            var results = await provider.GetVmSizesAndPricesAsync("eastus");
+            var results = await provider.GetVmSizesAndPricesAsync("eastus", System.Threading.CancellationToken.None);
 
             Assert.IsTrue(results.Any(r => r.PricePerHour is not null && r.PricePerHour > 0));
         }
@@ -50,7 +56,7 @@ namespace TesApi.Tests
         {
             ///using var serviceProvider = new TestServices.TestServiceProvider<PriceApiBatchSkuInformationProvider>();
             //provider = serviceProvider.GetT();
-            var results = await provider.GetVmSizesAndPricesAsync("eastus");
+            var results = await provider.GetVmSizesAndPricesAsync("eastus", System.Threading.CancellationToken.None);
 
             Assert.IsTrue(results.Any(r => r.LowPriority && r.PricePerHour is not null && r.PricePerHour > 0));
             Assert.IsTrue(results.Any(r => !r.LowPriority && r.PricePerHour is not null && r.PricePerHour > 0));
