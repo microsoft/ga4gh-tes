@@ -23,7 +23,7 @@ namespace Tes.Runner.Models
         public string? TargetUrl { get; set; }
         public SasResolutionStrategy? SasStrategy { get; set; }
         public FileType? FileType { get; set; }
-        public string? PathPrefix { get; set;}
+        public string? PathPrefix { get; set; }
     }
 
     public class FileInput

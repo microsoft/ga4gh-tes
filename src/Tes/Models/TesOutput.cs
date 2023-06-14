@@ -138,7 +138,7 @@ namespace Tes.Models
                     Type.Equals(other.Type)
                 ) &&
                 (
-                    PathPrefix == other.PathPrefix || 
+                    PathPrefix == other.PathPrefix ||
                     PathPrefix.Equals(other.PathPrefix)
                     ),
             };
