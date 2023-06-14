@@ -1492,7 +1492,6 @@ namespace TesApi.Web
                 };
             }
 
-            logger.LogInformation("Pool Spec:" + JsonConvert.SerializeObject(poolSpecification));
             return poolSpecification;
         }
 
