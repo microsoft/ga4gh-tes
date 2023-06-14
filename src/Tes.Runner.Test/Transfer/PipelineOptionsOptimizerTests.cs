@@ -54,19 +54,19 @@ namespace Tes.Runner.Test.Transfer
         }
 
         [DataTestMethod]
-        [DataRow(1, 50)]
-        [DataRow(2, 90)]
-        [DataRow(3, 90)]
+        [DataRow(1, 25)]
+        [DataRow(2, 50)]
+        [DataRow(3, 75)]
         [DataRow(4, 90)]
         [DataRow(5, 90)]
         [DataRow(6, 90)]
         [DataRow(7, 90)]
         [DataRow(8, 90)]
-        public void OptimizeOptionsIfApplicable_DefaultOptionsAreProvided_OptimizesReadersAndWriters(int numberOfGigs, int expectedReadersAndWriters)
+        public void OptimizeOptionsIfApplicable_DefaultOptionsAreProvided_OptimizesReadersAndWriters(int numberOfCores, int expectedReadersAndWriters)
         {
             var options = new BlobPipelineOptions();
 
-            systemInfoProviderMock.Setup(x => x.TotalMemory).Returns(numberOfGigs * BlobSizeUtils.GiB);
+            systemInfoProviderMock.Setup(x => x.ProcessorCount).Returns(numberOfCores);
 
             var newOptions = optimizer.Optimize(options);
 
