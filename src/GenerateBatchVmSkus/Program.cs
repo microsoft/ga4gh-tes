@@ -11,6 +11,7 @@ using Azure.ResourceManager.Batch;
 using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.Compute.Models;
 using Azure.ResourceManager.Resources.Models;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -89,7 +90,7 @@ namespace TesUtils
             var validSet = vmPrices.Select(vm => vm.VmSize).ToHashSet();
 
             var client = new ArmClient(new DefaultAzureCredential());
-            var appCache = new CachingService();
+            var appCache = new MemoryCache(new MemoryCacheOptions());
             var options = new Mock<IOptions<RetryPolicyOptions>>();
             options.Setup(o => o.Value).Returns(new RetryPolicyOptions());
             var cacheAndRetryHandler = new CacheAndRetryHandler(appCache, options.Object);
@@ -103,7 +104,7 @@ namespace TesUtils
             var skuForVm = new Dictionary<string, ComputeResourceSku>();
             var priceForVm = new Dictionary<string, PricingItem>();
 
-            var pricesInWE = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(AzureLocation.WestEurope).ToListAsync();
+            var pricesInWE = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(AzureLocation.WestEurope, CancellationToken.None).ToListAsync();
             foreach (var price in pricesInWE.Where(p => !p.meterName.Contains("Low Priority")))
             {
                 priceForVm.Add(price.armSkuName, price);

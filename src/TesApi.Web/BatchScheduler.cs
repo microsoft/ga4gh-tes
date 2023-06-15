@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
@@ -527,7 +528,7 @@ namespace TesApi.Web
                             nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                             containerConfiguration: containerConfiguration,
                             encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
-                            cancellationToken: cancellationToken)
+                            cancellationToken: cancellationToken),
                         tesTaskId: tesTask.Id,
                         jobId: jobOrTaskId,
                         cancellationToken: cancellationToken,
