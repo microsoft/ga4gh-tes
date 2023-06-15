@@ -110,15 +110,15 @@ namespace Tes.Runner.Test
 
         public ConcurrentDictionary<string, List<MethodCall>> MethodCalls => methodCalls;
 
-        public override ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
+        public override ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
         {
-            AddMethodCall(nameof(ExecuteWriteAsync), buffer);
+            AddMethodCall(nameof(ExecuteWriteAsync), buffer, cancellationToken);
             return ValueTask.FromResult(buffer.Length);
         }
 
-        public override ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer)
+        public override ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
         {
-            AddMethodCall(nameof(ExecuteReadAsync), buffer);
+            AddMethodCall(nameof(ExecuteReadAsync), buffer, cancellationToken);
             return ValueTask.FromResult(buffer.Length);
         }
 

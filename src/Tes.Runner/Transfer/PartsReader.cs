@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
+using System.Threading;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
@@ -28,34 +30,16 @@ public class PartsReader : PartsProcessor
     /// <returns>A tasks that completes when all tasks complete</returns>
     public async Task StartPartsReaderAsync(Channel<PipelineBuffer> readBufferChannel, Channel<PipelineBuffer> writeBufferChannel)
     {
-        var tasks = new List<Task>();
-
-        for (int i = 0; i < BlobPipelineOptions.NumberOfReaders; i++)
+        async Task ReadPartAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
         {
-            tasks.Add(Task.Run(async () =>
-                {
-                    PipelineBuffer? buffer;
+            buffer.Data = await MemoryBufferChannel.Reader.ReadAsync(cancellationToken);
 
-                    while (await readBufferChannel.Reader.WaitToReadAsync())
-                        while (readBufferChannel.Reader.TryRead(out buffer))
-                        {
-                            try
-                            {
-                                buffer.Data = await MemoryBufferChannel.Reader.ReadAsync();
+            await BlobPipeline.ExecuteReadAsync(buffer, cancellationToken);
 
-                                await BlobPipeline.ExecuteReadAsync(buffer);
-
-                                await writeBufferChannel.Writer.WriteAsync(buffer);
-                            }
-                            catch (Exception e)
-                            {
-                                logger.LogError(e, "Failed to execute read operation.");
-                                throw;
-                            }
-                        }
-                }
-            ));
+            await writeBufferChannel.Writer.WriteAsync(buffer, cancellationToken);
         }
+
+        var tasks = StartProcessors(BlobPipelineOptions.NumberOfReaders, readBufferChannel, ReadPartAsync);
 
         try
         {

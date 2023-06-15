@@ -40,9 +40,9 @@ public abstract class BlobOperationPipeline : IBlobPipeline
         processedPartsProcessor = new ProcessedPartsProcessor(this);
     }
 
-    public abstract ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer);
+    public abstract ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer, CancellationToken cancellationToken);
 
-    public abstract ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer);
+    public abstract ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer, CancellationToken cancellationToken);
 
     public abstract Task<long> GetSourceLengthAsync(string source);
 

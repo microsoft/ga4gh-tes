@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Linq;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
@@ -38,16 +37,17 @@ public class BlobDownloader : BlobOperationPipeline
     /// Writes the part's data to the target file.
     /// </summary>
     /// <param name="buffer">Part's data <see cref="PipelineBuffer"/></param>
+    /// <param name="cancellationToken"></param>
     /// <returns>Part's size in bytes</returns>
-    public override async ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
+    public override async ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
     {
-        var fileStream = await buffer.FileHandlerPool.Reader.ReadAsync();
+        var fileStream = await buffer.FileHandlerPool.Reader.ReadAsync(cancellationToken);
 
         fileStream.Position = buffer.Offset;
 
-        await fileStream.WriteAsync(buffer.Data, 0, buffer.Length);
+        await fileStream.WriteAsync(buffer.Data, 0, buffer.Length, cancellationToken);
 
-        await buffer.FileHandlerPool.Writer.WriteAsync(fileStream);
+        await buffer.FileHandlerPool.Writer.WriteAsync(fileStream, cancellationToken);
 
         return buffer.Length;
     }
@@ -56,8 +56,9 @@ public class BlobDownloader : BlobOperationPipeline
     /// Reads part's data from the file requesting the data by range.
     /// </summary>
     /// <param name="buffer"><see cref="PipelineBuffer"/> where to write the part's data</param>
+    /// <param name="cancellationToken"></param>
     /// <returns>Part's length in bytes</returns>
-    public override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer)
+    public override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
     {
         return await BlobBlockApiHttpUtils.ExecuteHttpRequestAndReadBodyResponseAsync(buffer, () => BlobBlockApiHttpUtils.CreateReadByRangeHttpRequest(buffer));
     }

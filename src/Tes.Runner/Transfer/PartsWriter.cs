@@ -28,36 +28,16 @@ public class PartsWriter : PartsProcessor
     /// <returns>A task that completes when all the writer tasks complete</returns>
     public async Task StartPartsWritersAsync(Channel<PipelineBuffer> writeBufferChannel, Channel<ProcessedBuffer> processedBufferChannel)
     {
-        ArgumentNullException.ThrowIfNull(writeBufferChannel);
-        ArgumentNullException.ThrowIfNull(processedBufferChannel);
-
-        var tasks = new List<Task>();
-
-        for (int i = 0; i < BlobPipelineOptions.NumberOfWriters; i++)
+        async Task WritePartAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
         {
-            tasks.Add(Task.Run(async () =>
-            {
-                PipelineBuffer? buffer;
+            await BlobPipeline.ExecuteWriteAsync(buffer, cancellationToken);
 
-                while (await writeBufferChannel.Reader.WaitToReadAsync())
-                    while (writeBufferChannel.Reader.TryRead(out buffer))
-                    {
-                        try
-                        {
-                            await BlobPipeline.ExecuteWriteAsync(buffer);
+            await processedBufferChannel.Writer.WriteAsync(ToProcessedBuffer(buffer), cancellationToken);
 
-                            await processedBufferChannel.Writer.WriteAsync(ToProcessedBuffer(buffer));
-
-                            await MemoryBufferChannel.Writer.WriteAsync(buffer.Data);
-                        }
-                        catch (Exception e)
-                        {
-                            logger.LogError(e, "Failed to execute write operation");
-                            throw;
-                        }
-                    }
-            }));
+            await MemoryBufferChannel.Writer.WriteAsync(buffer.Data, cancellationToken);
         }
+
+        var tasks = StartProcessors(BlobPipelineOptions.NumberOfWriters, writeBufferChannel, WritePartAsync);
 
         try
         {
@@ -69,6 +49,15 @@ public class PartsWriter : PartsProcessor
         }
 
         logger.LogInformation("All part write operations completed successfully.");
+    }
+
+    private async Task ProcessWritePartAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
+    {
+        await BlobPipeline.ExecuteWriteAsync(buffer, cancellationToken);
+        //
+        //                     await processedBufferChannel.Writer.WriteAsync(ToProcessedBuffer(buffer));
+        //
+        //                     await MemoryBufferChannel.Writer.WriteAsync(buffer.Data);
     }
 
     private ProcessedBuffer ToProcessedBuffer(PipelineBuffer buffer)

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer;
 /// <summary>
-/// Base class for the parts processor.
+/// Base class for the parts processorAsync.
 /// </summary>
 public abstract class PartsProcessor
 {
@@ -66,5 +66,40 @@ public abstract class PartsProcessor
                 throw new InvalidOperationException("At least one of the tasks has failed.", completedTask.Exception);
             }
         }
+    }
+
+    protected List<Task> StartProcessors(int numberOfProcessors, Channel<PipelineBuffer> readFromChannel, Func<PipelineBuffer, CancellationToken, Task> processorAsync)
+    {
+        ArgumentNullException.ThrowIfNull(readFromChannel);
+        ArgumentNullException.ThrowIfNull(processorAsync);
+
+        var cancellationTokenSource = new CancellationTokenSource();
+
+        var tasks = new List<Task>();
+        for (var i = 0; i < numberOfProcessors; i++)
+        {
+            tasks.Add(Task.Run(async () =>
+            {
+                PipelineBuffer? buffer;
+                while (await readFromChannel.Reader.WaitToReadAsync(cancellationTokenSource.Token))
+                    while (readFromChannel.Reader.TryRead(out buffer))
+                    {
+                        try
+                        {
+                            await processorAsync(buffer, cancellationTokenSource.Token);
+                        }
+                        catch (Exception e)
+                        {
+                            logger.LogError(e, "Failed to execute processorAsync");
+                            if (cancellationTokenSource.Token.CanBeCanceled)
+                            {
+                                cancellationTokenSource.Cancel();
+                            }
+                            throw;
+                        }
+                    }
+            }, cancellationTokenSource.Token));
+        }
+        return tasks;
     }
 }

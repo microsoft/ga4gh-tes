@@ -33,8 +33,9 @@ namespace Tes.Runner.Transfer
         /// Writes the part as a block to the blob.
         /// </summary>
         /// <param name="buffer">Pipeline buffer containing the block data</param>
+        /// <param name="cancellationToken"></param>
         /// <returns>Number of bytes written</returns>
-        public override async ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
+        public override async ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
         {
             if (IsFileEmptyScenario(buffer))
             {
@@ -69,18 +70,19 @@ namespace Tes.Runner.Transfer
         /// Reads part's data from the file
         /// </summary>
         /// <param name="buffer">Pipeline buffer in which the file data will be written</param>
+        /// <param name="cancellationToken">Signals cancellation of read operations on the channels and file handler</param>
         /// <returns>Number of bytes read</returns>
-        public override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer)
+        public override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
         {
-            var fileHandler = await buffer.FileHandlerPool.Reader.ReadAsync();
+            var fileHandler = await buffer.FileHandlerPool.Reader.ReadAsync(cancellationToken);
 
             fileHandler.Position = buffer.Offset;
 
-            var dataRead = await fileHandler.ReadAsync(buffer.Data, 0, buffer.Length);
+            var dataRead = await fileHandler.ReadAsync(buffer.Data, 0, buffer.Length, cancellationToken);
 
             buffer.HashListProvider?.CalculateAndAddBlockHash(buffer);
 
-            await buffer.FileHandlerPool.Writer.WriteAsync(fileHandler);
+            await buffer.FileHandlerPool.Writer.WriteAsync(fileHandler, cancellationToken);
 
             return dataRead;
         }
