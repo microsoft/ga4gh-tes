@@ -14,7 +14,7 @@ namespace Tes.Runner.Transfer;
 public class BlobBlockApiHttpUtils
 {
     private const string BlobType = "BlockBlob";
-    private const int MaxRetryCount = 3;
+    private const int MaxRetryCount = 9;
     private static readonly HttpClient HttpClient = new HttpClient();
     private static readonly AsyncRetryPolicy RetryPolicy = Policy
         .Handle<RetriableException>()

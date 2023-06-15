@@ -15,7 +15,7 @@ namespace Tes.Runner.Transfer
         private const double MemoryBufferCapacityFactor = 0.4; // 40% of total memory
         private const long MaxMemoryBufferSizeInBytes = BlobSizeUtils.GiB * 2; // 2 GiB of total memory
         private const int MaxWorkingThreadsCount = 90;
-        private const int WorkersPerCpuCore = 25;
+        private const int WorkersPerCpuCore = 10;
 
         public PipelineOptionsOptimizer(ISystemInfoProvider systemInfoProvider) : this(systemInfoProvider, new DefaultFileInfoProvider())
         {
