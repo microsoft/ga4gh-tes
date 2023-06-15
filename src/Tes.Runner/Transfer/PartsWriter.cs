@@ -43,6 +43,11 @@ public class PartsWriter : PartsProcessor
         {
             await WhenAllOrThrowIfOneFailsAsync(tasks);
         }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Error writing parts to the pipeline.");
+            throw;
+        }
         finally
         {
             processedBufferChannel.Writer.Complete();

@@ -45,6 +45,11 @@ public class PartsReader : PartsProcessor
         {
             await WhenAllOrThrowIfOneFailsAsync(tasks);
         }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Error reading parts from the pipeline.");
+            throw;
+        }
         finally
         {
             writeBufferChannel.Writer.Complete();
