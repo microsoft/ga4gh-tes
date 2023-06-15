@@ -51,15 +51,6 @@ public class PartsWriter : PartsProcessor
         logger.LogInformation("All part write operations completed successfully.");
     }
 
-    private async Task ProcessWritePartAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
-    {
-        await BlobPipeline.ExecuteWriteAsync(buffer, cancellationToken);
-        //
-        //                     await processedBufferChannel.Writer.WriteAsync(ToProcessedBuffer(buffer));
-        //
-        //                     await MemoryBufferChannel.Writer.WriteAsync(buffer.Data);
-    }
-
     private ProcessedBuffer ToProcessedBuffer(PipelineBuffer buffer)
     {
         return new ProcessedBuffer(buffer.FileName, buffer.BlobUrl, buffer.FileSize, buffer.Ordinal,
