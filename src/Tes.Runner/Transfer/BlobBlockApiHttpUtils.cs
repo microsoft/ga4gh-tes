@@ -4,6 +4,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
 
@@ -16,9 +17,16 @@ public class BlobBlockApiHttpUtils
     private const string BlobType = "BlockBlob";
     private const int MaxRetryCount = 9;
     private static readonly HttpClient HttpClient = new HttpClient();
+    private static readonly ILogger Logger = PipelineLoggerFactory.Create<BlobBlockApiHttpUtils>();
     private static readonly AsyncRetryPolicy RetryPolicy = Policy
         .Handle<RetriableException>()
-        .WaitAndRetryAsync(MaxRetryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+        .WaitAndRetryAsync(MaxRetryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+            onRetryAsync:
+            (exception, timeSpan, retryCount, context) =>
+            {
+                Logger.LogError(exception, "Retrying failed request. Retry count: {retryCount}", retryCount);
+                return Task.CompletedTask;
+            });
     public const string RootHashMetadataName = "md5_4mib_hashlist_root_hash";
 
     public static HttpRequestMessage CreatePutBlockRequestAsync(PipelineBuffer buffer, string apiVersion)
