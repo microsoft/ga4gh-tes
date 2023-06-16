@@ -82,6 +82,7 @@ namespace TesDeployer
         public string LetsEncryptEmail { get; set; } = null;
         public string TesUsername { get; set; } = "tes";
         public string TesPassword { get; set; }
+        public string AadGroupIds { get; set; }
 
         public static Configuration BuildConfiguration(string[] args)
         {

@@ -915,6 +915,13 @@ namespace TesDeployer
                     UserAssignedIdentities = new Dictionary<string, ManagedClusterIdentityUserAssignedIdentitiesValue>()
                 }
             };
+            cluster.EnableRBAC = true;
+            cluster.AadProfile = new ManagedClusterAADProfile()
+            {
+                AdminGroupObjectIDs = configuration.AadGroupIds.Split(",", StringSplitOptions.RemoveEmptyEntries),
+                EnableAzureRBAC = false,
+                Managed = true
+            };
             cluster.Identity.UserAssignedIdentities.Add(managedIdentity.Id, new(managedIdentity.PrincipalId, managedIdentity.ClientId));
             cluster.IdentityProfile = new Dictionary<string, ManagedClusterPropertiesIdentityProfileValue>
             {
