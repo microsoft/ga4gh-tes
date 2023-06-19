@@ -22,7 +22,7 @@ public class BlobBlockApiHttpUtils
         .Handle<RetriableException>()
         .WaitAndRetryAsync(MaxRetryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
             onRetryAsync:
-            (exception, timeSpan, retryCount, context) =>
+            (exception, _, retryCount, _) =>
             {
                 Logger.LogError(exception, "Retrying failed request. Retry count: {retryCount}", retryCount);
                 return Task.CompletedTask;
@@ -152,6 +152,12 @@ public class BlobBlockApiHttpUtils
             {
                 throw new RetriableException(ex.Message, ex);
             }
+
+            if (IsInnerExceptionRetriable(ex))
+            {
+                throw new RetriableException(ex.Message, ex);
+            }
+
             throw;
         }
         catch (IOException ex)
