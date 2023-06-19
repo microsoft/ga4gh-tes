@@ -49,7 +49,7 @@ namespace TesApi.Tests
         [DataRow("/foo/bar", false)]
         [DataRow("foo/bar", false)]
         [DataRow($"https://{WorkspaceStorageAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}", false)]
-        [DataRow($"https://{WorkspaceStorageAccountName}.blob.core.windows.net/foo", true)]
+        [DataRow($"https://{WorkspaceStorageAccountName}.blob.core.windows.net/foo", false)]
         [DataRow($"https://bar.blob.core.windows.net/{WorkspaceStorageContainerName}", true)]
         public async Task IsHttpPublicAsync_StringScenario(string input, bool expectedResult)
         {

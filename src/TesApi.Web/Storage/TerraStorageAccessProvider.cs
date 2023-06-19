@@ -58,7 +58,7 @@ namespace TesApi.Web.Storage
 
             if (StorageAccountUrlSegments.TryCreate(uriString, out var parts))
             {
-                if (IsTerraWorkspaceContainer(parts.ContainerName) && IsTerraWorkspaceStorageAccount(parts.AccountName))
+                if (IsTerraWorkspaceStorageAccount(parts.AccountName))
                 {
                     return Task.FromResult(false);
                 }
@@ -95,9 +95,42 @@ namespace TesApi.Web.Storage
                     "Invalid path provided. The path must be a valid blob storage url or a path with the following format: /accountName/container");
             }
 
-            CheckIfAccountAndContainerAreWorkspaceStorage(segments.AccountName, segments.ContainerName);
+            CheckIfAccountIsTerraStorageAccount(segments.AccountName);
 
             return await GetMappedSasUrlFromWsmAsync(segments.BlobName, cancellationToken);
+        }
+
+        public TerraBlobInfo GetTerraBlobInfo(string normalizedPath)
+        {
+            if (!StorageAccountUrlSegments.TryCreate(normalizedPath, out var segments))
+            {
+                throw new Exception(
+                    "Invalid path provided. The path must be a valid blob storage url or a path with the following format: /accountName/container");
+            }
+
+            CheckIfAccountIsTerraStorageAccount(segments.AccountName);
+
+            var workspaceId = ToWorkspaceId(segments.ContainerName);
+
+            var wsmContainerResourceId = await GetWsmContainerResourceIdAsync(workspaceId, segments.ContainerName);
+
+            return new TerraBlobInfo(workspaceId,wsmContainerResourceId, segments.BlobName);
+        }
+
+        private async Task<string> GetWsmContainerResourceIdAsync(string workspaceId, string segmentsContainerName)
+        {
+            //terraWsmApiClient.
+        }
+
+        private string ToWorkspaceId(string segmentsContainerName)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(segmentsContainerName);
+
+            var guidString = segmentsContainerName.Substring(3); // remove the sc- prefix
+
+            var guid = Guid.Parse(guidString); // throws if not a guid
+
+            return guid.ToString();
         }
 
         private async Task<string> MapAndGetSasContainerUrlFromWsmAsync(string inputPath, CancellationToken cancellationToken)
@@ -176,16 +209,25 @@ namespace TesApi.Web.Storage
                 tokenParams, cancellationToken);
         }
 
-        private void CheckIfAccountAndContainerAreWorkspaceStorage(string accountName, string containerName)
+        private async Task<WsmSasTokenApiResponse> GetSasTokenFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
+        {
+            var tokenParams = CreateTokenParamsFromOptions(blobInfo.BlobName, SasBlobPermissions);
+            
+            Logger.LogInformation(
+                $"Getting Sas Url from Terra. Wsm workspace id:{terraOptions.WorkspaceStorageContainerResourceId}");
+
+            return await terraWsmApiClient.GetSasTokenAsync(
+                Guid.Parse(terraOptions.WorkspaceId),
+                Guid.Parse(terraOptions.WorkspaceStorageContainerResourceId),
+                tokenParams, cancellationToken);
+        }
+
+
+        private void CheckIfAccountIsTerraStorageAccount(string accountName)
         {
             if (!IsTerraWorkspaceStorageAccount(accountName))
             {
                 throw new Exception($"The account name does not match the configuration for Terra.");
-            }
-
-            if (!IsTerraWorkspaceContainer(containerName))
-            {
-                throw new Exception($"The container name does not match the configuration for Terra");
             }
         }
 
@@ -195,4 +237,7 @@ namespace TesApi.Web.Storage
         private bool IsTerraWorkspaceStorageAccount(string value)
             => terraOptions.WorkspaceStorageAccountName.Equals(value, StringComparison.OrdinalIgnoreCase);
     }
+
+    public record TerraBlobInfo(string WorkspaceId, string WsmContainerResourceId, string BlobName);
+
 }
