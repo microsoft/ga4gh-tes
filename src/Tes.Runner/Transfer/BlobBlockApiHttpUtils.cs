@@ -134,10 +134,11 @@ public class BlobBlockApiHttpUtils
 
     private static async Task<int> ExecuteHttpRequestAndReadBodyResponseImplAsync(PipelineBuffer buffer, Func<HttpRequestMessage> requestFactory)
     {
-        var response = await HttpClient.SendAsync(requestFactory(), HttpCompletionOption.ResponseHeadersRead);
-
+        HttpResponseMessage? response = null;
         try
         {
+            response = await HttpClient.SendAsync(requestFactory(), HttpCompletionOption.ResponseHeadersRead);
+
             response.EnsureSuccessStatusCode();
 
             var data = await response.Content.ReadAsStreamAsync();
@@ -148,7 +149,7 @@ public class BlobBlockApiHttpUtils
         }
         catch (HttpRequestException ex)
         {
-            if (IsRetriableStatusCode(response.StatusCode))
+            if (response is not null && IsRetriableStatusCode(response.StatusCode))
             {
                 throw new RetriableException(ex.Message, ex);
             }
@@ -166,7 +167,7 @@ public class BlobBlockApiHttpUtils
         }
         finally
         {
-            response.Dispose();
+            response?.Dispose();
         }
     }
 
