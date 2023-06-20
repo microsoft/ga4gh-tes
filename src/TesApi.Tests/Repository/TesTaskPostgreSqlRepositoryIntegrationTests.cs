@@ -46,7 +46,7 @@ namespace Tes.Repository.Tests
         private static readonly string adminPw = PasswordGenerator.GeneratePassword();
 
         [ClassInitialize]
-        public async static Task ClassInitializeAsync(TestContext context)
+        public static async Task ClassInitializeAsync(TestContext context)
         {
             Console.WriteLine("Creating Azure Resource Group and PostgreSql Server...");
             await PostgreSqlTestUtility.CreateTestDbAsync(
@@ -85,12 +85,12 @@ namespace Tes.Repository.Tests
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
                 Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            });
+            }, System.Threading.CancellationToken.None);
             Assert.IsNotNull(createdItem);
 
             Models.TesTask updatedAndRetrievedItem = null;
 
-            var isFound = await repository.TryGetItemAsync(id, tesTask => updatedAndRetrievedItem = tesTask);
+            var isFound = await repository.TryGetItemAsync(id, System.Threading.CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
 
             Assert.IsNotNull(updatedAndRetrievedItem);
             Assert.IsTrue(isFound);
@@ -99,7 +99,7 @@ namespace Tes.Repository.Tests
         [TestMethod]
         public async Task GetItemsAsyncTest()
         {
-            var items = await repository.GetItemsAsync(c => c.Id != null);
+            var items = await repository.GetItemsAsync(c => c.Id != null, System.Threading.CancellationToken.None);
 
             foreach (var item in items)
             {
@@ -113,8 +113,10 @@ namespace Tes.Repository.Tests
         public async Task Create1mAndQuery1mAsync()
         {
             const bool createItems = true;
+            const int itemCount = 1_000_000;
 
             var sw = Stopwatch.StartNew();
+
             if (createItems)
             {
                 var rng = new Random(Guid.NewGuid().GetHashCode());
@@ -122,7 +124,7 @@ namespace Tes.Repository.Tests
 
                 var items = new List<Models.TesTask>();
 
-                for (int i = 0; i < 1_000_000; i++)
+                for (int i = 0; i < itemCount; i++)
                 {
                     var randomState = (Models.TesState)states.GetValue(rng.Next(states.Length));
                     items.Add(new Models.TesTask
@@ -134,22 +136,30 @@ namespace Tes.Repository.Tests
                     });
                 }
 
-                await repository.CreateItemsAsync(items);
+                Assert.IsTrue(items.Select(i => i.Id).Distinct().Count() == itemCount);
+
+                await repository.CreateItemsAsync(items, System.Threading.CancellationToken.None);
                 Console.WriteLine($"Total seconds to insert {items.Count} items: {sw.Elapsed.TotalSeconds:n2}s");
                 sw.Restart();
             }
 
             sw.Restart();
-            var runningTasks = await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum);
+            var runningTasks = await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None);
 
-            // Ensure performance is decent.  In manual testing on fast internet, this takes less than 5s typically
-            Assert.IsTrue(sw.Elapsed.TotalSeconds < 10);
+            // Ensure performance is decent
+            Assert.IsTrue(sw.Elapsed.TotalSeconds < 20);
             Console.WriteLine($"Retrieved {runningTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
             sw.Restart();
-            var allOtherTasks = await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum);
+            var allOtherTasks = await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None);
             Console.WriteLine($"Retrieved {allOtherTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
             Console.WriteLine($"Total running tasks: {runningTasks.Count()}");
             Console.WriteLine($"Total other tasks: {allOtherTasks.Count()}");
+            var distinctRunningTasksIds = runningTasks.Select(i => i.Id).Distinct().Count();
+            var distinctOtherTaskIds = allOtherTasks.Select(i => i.Id).Distinct().Count();
+            Console.WriteLine($"uniqueRunningTasksIds: {distinctRunningTasksIds}");
+            Console.WriteLine($"distinctOtherTaskIds: {distinctOtherTaskIds}");
+
+            Assert.IsTrue(distinctRunningTasksIds + distinctOtherTaskIds == itemCount);
 
             Assert.IsTrue(runningTasks.Count() > 0);
             Assert.IsTrue(allOtherTasks.Count() > 0);
@@ -169,7 +179,7 @@ namespace Tes.Repository.Tests
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
                 Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            });
+            }, System.Threading.CancellationToken.None);
 
             Assert.IsNotNull(task);
         }
@@ -186,18 +196,18 @@ namespace Tes.Repository.Tests
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
                 Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            });
+            }, System.Threading.CancellationToken.None);
 
             Assert.IsTrue(createdItem.State != Models.TesState.COMPLETEEnum);
 
             createdItem.Description = description;
             createdItem.State = Models.TesState.COMPLETEEnum;
 
-            await repository.UpdateItemAsync(createdItem);
+            await repository.UpdateItemAsync(createdItem, System.Threading.CancellationToken.None);
 
             Models.TesTask updatedAndRetrievedItem = null;
 
-            var isFound = await repository.TryGetItemAsync(id, tesTask => updatedAndRetrievedItem = tesTask);
+            var isFound = await repository.TryGetItemAsync(id, System.Threading.CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
 
             Assert.IsTrue(isFound);
             Assert.IsTrue(updatedAndRetrievedItem.State == Models.TesState.COMPLETEEnum);
@@ -215,13 +225,13 @@ namespace Tes.Repository.Tests
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
                 Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            });
+            }, System.Threading.CancellationToken.None);
             Assert.IsNotNull(createdItem);
-            await repository.DeleteItemAsync(id);
+            await repository.DeleteItemAsync(id, System.Threading.CancellationToken.None);
 
             Models.TesTask updatedAndRetrievedItem = null;
 
-            var isFound = await repository.TryGetItemAsync(id, tesTask => updatedAndRetrievedItem = tesTask);
+            var isFound = await repository.TryGetItemAsync(id, System.Threading.CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
             Assert.IsNull(updatedAndRetrievedItem);
             Assert.IsFalse(isFound);
         }

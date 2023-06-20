@@ -6,7 +6,6 @@ using System.IO;
 using System.Reflection;
 using Azure.Core;
 using Azure.Identity;
-using LazyCache;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -72,8 +71,8 @@ namespace TesApi.Web
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
 
-                    .AddSingleton<IAppCache, CachingService>()
-                    .AddSingleton<ICache<TesTask>, TesRepositoryLazyCache<TesTask>>()
+                    .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
+                    .AddSingleton<ICache<TesTask>, TesRepositoryCache<TesTask>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
                     .AddTransient<BatchPool>()
@@ -81,7 +80,7 @@ namespace TesApi.Web
                     .AddTransient<TerraWsmApiClient>()
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
-                    .AddControllers()
+                    .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
                     .AddNewtonsoftJson(opts =>
                     {
                         opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
@@ -104,13 +103,14 @@ namespace TesApi.Web
                     .AddSingleton(CreateBatchQuotaProviderFromConfiguration)
                     .AddSingleton<AzureManagementClientsFactory>()
                     .AddSingleton<ConfigurationUtils>()
+                    .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
                     .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
 
                     .AddSwaggerGen(c =>
                     {
-                        c.SwaggerDoc("4.3.0", new()
+                        c.SwaggerDoc("4.4.0", new()
                         {
-                            Version = "4.3.0",
+                            Version = "4.4.0",
                             Title = "GA4GH Task Execution Service",
                             Description = "Task Execution Service (ASP.NET Core 7.0)",
                             Contact = new()
@@ -132,7 +132,7 @@ namespace TesApi.Web
                     })
 
                     // Order is important for hosted services
-                    .AddHostedService<DoOnceAtStartUpService>()
+                    .AddHostedService(sp => (AllowedVmSizesService)sp.GetRequiredService(typeof(IAllowedVmSizesService)))
                     .AddHostedService<BatchPoolService>()
                     .AddHostedService<Scheduler>()
                     .AddHostedService<DeleteCompletedBatchJobsHostedService>()
@@ -232,7 +232,7 @@ namespace TesApi.Web
                 if (string.IsNullOrWhiteSpace(options.Value.AppKey))
                 {
                     //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
-                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName);
+                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName, System.Threading.CancellationToken.None);
                     task.Wait();
 
                     if (task.Result is null)
@@ -270,7 +270,7 @@ namespace TesApi.Web
                 })
                 .UseSwaggerUI(c =>
                 {
-                    c.SwaggerEndpoint("/swagger/4.3.0/openapi.json", "Task Execution Service");
+                    c.SwaggerEndpoint("/swagger/4.4.0/openapi.json", "Task Execution Service");
                 })
 
                 .IfThenElse(hostingEnvironment.IsDevelopment(),

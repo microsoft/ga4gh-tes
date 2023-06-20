@@ -118,7 +118,7 @@ namespace TesApi.Web
                     if (!_resizeErrorsRetrieved)
                     {
                         ResizeErrors.Clear();
-                        var pool = await _azureProxy.GetBatchPoolAsync(Pool.PoolId, new ODATADetailLevel { SelectClause = "resizeErrors" }, cancellationToken);
+                        var pool = await _azureProxy.GetBatchPoolAsync(Pool.PoolId, cancellationToken, new ODATADetailLevel { SelectClause = "resizeErrors" });
 
                         foreach (var error in pool.ResizeErrors ?? Enumerable.Empty<ResizeError>())
                         {
@@ -518,7 +518,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async ValueTask<DateTime> GetAllocationStateTransitionTime(CancellationToken cancellationToken = default)
-            => (await _azureProxy.GetBatchPoolAsync(Pool.PoolId, new ODATADetailLevel { SelectClause = "allocationStateTransitionTime" }, cancellationToken)).AllocationStateTransitionTime ?? DateTime.UtcNow;
+            => (await _azureProxy.GetBatchPoolAsync(Pool.PoolId, cancellationToken, new ODATADetailLevel { SelectClause = "allocationStateTransitionTime" })).AllocationStateTransitionTime ?? DateTime.UtcNow;
 
         /// <inheritdoc/>
         public async ValueTask CreatePoolAndJobAsync(Microsoft.Azure.Management.Batch.Models.Pool poolModel, bool isPreemptible, CancellationToken cancellationToken)
@@ -530,8 +530,8 @@ namespace TesApi.Web
                     _azureProxy.CreateBatchJobAsync(new() { PoolId = poolModel.Name }, cancellationToken),
                     Task.Run(async () =>
                     {
-                        var poolInfo = await _azureProxy.CreateBatchPoolAsync(poolModel, isPreemptible);
-                        pool = await _azureProxy.GetBatchPoolAsync(poolInfo.PoolId, new ODATADetailLevel { SelectClause = CloudPoolSelectClause }, cancellationToken);
+                        var poolInfo = await _azureProxy.CreateBatchPoolAsync(poolModel, isPreemptible, cancellationToken);
+                        pool = await _azureProxy.GetBatchPoolAsync(poolInfo.PoolId, cancellationToken, new ODATADetailLevel { SelectClause = CloudPoolSelectClause });
                     }, cancellationToken));
 
                 Configure(pool);
@@ -589,7 +589,7 @@ namespace TesApi.Web
             }
 
             // Pool is "broken" if job is missing/not active. Reject this pool via the side effect of the exception that is thrown.
-            if (1 != (await _azureProxy.GetBatchJobAsync(pool.Id, new ODATADetailLevel { SelectClause = "id,state"/*, FilterClause = "state eq 'active'"*/ }, cancellationToken).ToAsyncEnumerable().Where(j => j.State == JobState.Active).ToListAsync(cancellationToken)).Count)
+            if (1 != (await _azureProxy.GetBatchJobAsync(pool.Id, cancellationToken, new ODATADetailLevel { SelectClause = "id,state"/*, FilterClause = "state eq 'active'"*/ }).ToAsyncEnumerable().Where(j => j.State == JobState.Active).ToListAsync(cancellationToken)).Count)
             {
                 // TODO: investigate why FilterClause throws "Type Microsoft.Azure.Batch.Protocol.BatchRequests.JobGetBatchRequest does not support a filter clause. (Parameter 'detailLevel')"
                 throw new InvalidOperationException($"Active Job not found for Pool {pool.Id}");
@@ -622,8 +622,8 @@ namespace TesApi.Web
     {
         internal int TestPendingReservationsCount => GetTasksAsync(includeCompleted: false).CountAsync().AsTask().Result;
 
-        internal int? TestTargetDedicated => _azureProxy.GetFullAllocationStateAsync(Pool.PoolId).Result.TargetDedicated;
-        internal int? TestTargetLowPriority => _azureProxy.GetFullAllocationStateAsync(Pool.PoolId).Result.TargetLowPriority;
+        internal int? TestTargetDedicated => _azureProxy.GetFullAllocationStateAsync(Pool.PoolId, CancellationToken.None).Result.TargetDedicated;
+        internal int? TestTargetLowPriority => _azureProxy.GetFullAllocationStateAsync(Pool.PoolId, CancellationToken.None).Result.TargetLowPriority;
 
         internal TimeSpan TestRotatePoolTime
             => _forcePoolRotationAge;

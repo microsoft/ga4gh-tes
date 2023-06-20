@@ -4,9 +4,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using LazyCache;
 using Microsoft.Azure.Management.Batch;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using TesApi.Web.Management.Models.Quotas;
 
@@ -22,7 +23,7 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     /// </summary>
     private readonly ILogger logger;
 
-    private readonly IAppCache appCache;
+    private readonly IMemoryCache appCache;
     private readonly AzureManagementClientsFactory clientsFactory;
 
 
@@ -32,7 +33,7 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     /// <param name="logger"></param>
     /// <param name="appCache"></param>
     /// <param name="clientsFactory"></param>
-    public ArmBatchQuotaProvider(IAppCache appCache, AzureManagementClientsFactory clientsFactory,
+    public ArmBatchQuotaProvider(IMemoryCache appCache, AzureManagementClientsFactory clientsFactory,
         ILogger<ArmBatchQuotaProvider> logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
@@ -46,14 +47,14 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
 
     /// <inheritdoc />
     public async Task<BatchVmFamilyQuotas> GetQuotaForRequirementAsync(string vmFamily, bool lowPriority,
-            int? coresRequirement)
-        => ToVmFamilyBatchAccountQuotas(await GetBatchAccountQuotasAsync(), vmFamily, lowPriority, coresRequirement);
+            int? coresRequirement, CancellationToken cancellationToken)
+        => ToVmFamilyBatchAccountQuotas(await GetBatchAccountQuotasAsync(cancellationToken), vmFamily, lowPriority, coresRequirement);
 
     /// <inheritdoc />
-    public async Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority)
+    public async Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority, CancellationToken cancellationToken)
     {
         var isDedicated = !lowPriority;
-        var batchQuota = await GetBatchAccountQuotasAsync();
+        var batchQuota = await GetBatchAccountQuotasAsync(cancellationToken);
         var isDedicatedAndPerVmFamilyCoreQuotaEnforced =
             isDedicated && batchQuota.DedicatedCoreQuotaPerVMFamilyEnforced;
         var numberOfCores = lowPriority ? batchQuota.LowPriorityCoreQuota : batchQuota.DedicatedCoreQuota;
@@ -77,16 +78,17 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     /// Getting the batch account quota.
     /// </summary>
     /// <returns></returns>
-    public virtual async Task<AzureBatchAccountQuotas> GetBatchAccountQuotasAsync()
-        => await appCache.GetOrAddAsync(clientsFactory.BatchAccountInformation.ToString(), GetBatchAccountQuotasImplAsync);
+    public virtual async Task<AzureBatchAccountQuotas> GetBatchAccountQuotasAsync(CancellationToken cancellationToken)
+        => await appCache.GetOrCreateAsync(clientsFactory.BatchAccountInformation.ToString(), _1 => GetBatchAccountQuotasImplAsync(cancellationToken)); // TODO: Consider expiring the quota daily, because quota can be changed.
 
-    private async Task<AzureBatchAccountQuotas> GetBatchAccountQuotasImplAsync()
+    private async Task<AzureBatchAccountQuotas> GetBatchAccountQuotasImplAsync(CancellationToken cancellationToken)
     {
         try
         {
             logger.LogInformation($"Getting quota information for Batch Account: {clientsFactory.BatchAccountInformation.Name} calling ARM API");
 
-            var batchAccount = await (await clientsFactory.CreateBatchAccountManagementClient()).BatchAccount.GetAsync(clientsFactory.BatchAccountInformation.ResourceGroupName, clientsFactory.BatchAccountInformation.Name);
+            using var managementClient = await clientsFactory.CreateBatchAccountManagementClient(cancellationToken);
+            var batchAccount = await managementClient.BatchAccount.GetAsync(clientsFactory.BatchAccountInformation.ResourceGroupName, clientsFactory.BatchAccountInformation.Name, cancellationToken: cancellationToken);
 
             if (batchAccount == null)
             {
