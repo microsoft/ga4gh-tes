@@ -95,10 +95,12 @@ public class BlobBlockApiHttpUtils
 
     private static async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request)
     {
-        var response = await HttpClient.SendAsync(request());
+        HttpResponseMessage? response = null;
 
         try
         {
+            response = await HttpClient.SendAsync(request());
+
             response.EnsureSuccessStatusCode();
         }
         catch (HttpRequestException ex)
@@ -114,6 +116,7 @@ public class BlobBlockApiHttpUtils
             }
             throw;
         }
+
         return response;
     }
 

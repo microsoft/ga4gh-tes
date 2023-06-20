@@ -42,7 +42,16 @@ namespace Tes.Runner.Transfer
                 return 0;
             }
 
-            await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreatePutBlockRequestAsync(buffer, PipelineOptions.ApiVersion));
+            HttpResponseMessage? response = null;
+
+            try
+            {
+                response = await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreatePutBlockRequestAsync(buffer, PipelineOptions.ApiVersion));
+            }
+            finally
+            {
+                response?.Dispose();
+            }
 
             return buffer.Length;
         }
@@ -111,14 +120,21 @@ namespace Tes.Runner.Transfer
             ArgumentNullException.ThrowIfNull(blobUrl, nameof(blobUrl));
             ArgumentException.ThrowIfNullOrEmpty(fileName, nameof(fileName));
 
+            HttpResponseMessage? response = null;
             try
             {
-                await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSizeBytes, PipelineOptions.ApiVersion, rootHash));
+                response = await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() =>
+                    BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSizeBytes,
+                        PipelineOptions.ApiVersion, rootHash));
             }
             catch (Exception e)
             {
                 Logger.LogError(e, "Failed to complete the blob block operation");
                 throw;
+            }
+            finally
+            {
+                response?.Dispose();
             }
         }
 
