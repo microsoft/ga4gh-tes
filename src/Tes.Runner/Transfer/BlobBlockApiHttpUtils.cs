@@ -105,19 +105,34 @@ public class BlobBlockApiHttpUtils
         }
         catch (HttpRequestException ex)
         {
-            if (IsRetriableStatusCode(response.StatusCode))
-            {
-                throw new RetriableException(ex.Message, ex);
-            }
+            var status = response?.StatusCode;
+            response?.Dispose();
 
-            if (IsInnerExceptionRetriable(ex))
-            {
-                throw new RetriableException(ex.Message, ex);
-            }
-            throw;
+            HandleHttpRequestException(status, ex);
+        }
+        catch (IOException ex)
+        {
+            response?.Dispose();
+
+            throw new RetriableException(ex.Message, ex);
         }
 
-        return response;
+        return response!;
+    }
+
+    private static void HandleHttpRequestException(HttpStatusCode? status, HttpRequestException ex)
+    {
+        if (IsRetriableStatusCode(status))
+        {
+            throw new RetriableException(ex.Message, ex);
+        }
+
+        if (IsInnerExceptionRetriable(ex))
+        {
+            throw new RetriableException(ex.Message, ex);
+        }
+
+        throw ex;
     }
 
     private static bool IsInnerExceptionRetriable(HttpRequestException httpRequestException)
@@ -152,17 +167,9 @@ public class BlobBlockApiHttpUtils
         }
         catch (HttpRequestException ex)
         {
-            if (response is not null && IsRetriableStatusCode(response.StatusCode))
-            {
-                throw new RetriableException(ex.Message, ex);
-            }
+            var status = response?.StatusCode;
 
-            if (IsInnerExceptionRetriable(ex))
-            {
-                throw new RetriableException(ex.Message, ex);
-            }
-
-            throw;
+            HandleHttpRequestException(status, ex);
         }
         catch (IOException ex)
         {
@@ -174,8 +181,13 @@ public class BlobBlockApiHttpUtils
         }
     }
 
-    private static bool IsRetriableStatusCode(HttpStatusCode responseStatusCode)
+    private static bool IsRetriableStatusCode(HttpStatusCode? responseStatusCode)
     {
+        if (responseStatusCode is null)
+        {
+            return false;
+        }
+
         if (responseStatusCode is
             HttpStatusCode.ServiceUnavailable or
             HttpStatusCode.GatewayTimeout or
