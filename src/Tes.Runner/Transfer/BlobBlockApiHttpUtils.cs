@@ -163,7 +163,6 @@ public class BlobBlockApiHttpUtils
 
             await data.ReadExactlyAsync(buffer.Data, 0, buffer.Length);
 
-            return buffer.Length;
         }
         catch (HttpRequestException ex)
         {
@@ -179,6 +178,8 @@ public class BlobBlockApiHttpUtils
         {
             response?.Dispose();
         }
+
+        return buffer.Length;
     }
 
     private static bool IsRetriableStatusCode(HttpStatusCode? responseStatusCode)
