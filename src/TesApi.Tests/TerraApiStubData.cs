@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
@@ -14,7 +15,7 @@ public class TerraApiStubData
     public const string WsmApiHost = "https://wsm.host";
     public const string ResourceGroup = "mrg-terra-dev-previ-20191228";
     public const string WorkspaceAccountName = "fooaccount";
-    public const string WorkspaceContainerName = "foocontainer";
+    public const string WorkspaceContainerName = "sc-ef9fed44-dba6-4825-868c-b00208522382";
     public const string SasToken = "SASTOKENSTUB=";
     public const string WsmGetSasResponseStorageUrl = $"https://bloburl.foo/{WorkspaceContainerName}";
 
@@ -290,6 +291,31 @@ public class TerraApiStubData
                 }
             },
             ResourceId = new Guid()
+        };
+    }
+
+    public WsmListContainerResourcesResponse GetWsmContainerResourcesApiResponse()
+    {
+        return new WsmListContainerResourcesResponse()
+        {
+            Resources = new List<Resource>()
+            {
+               new Resource()
+               {
+                   Metadata = new Metadata()
+                   {
+                       ResourceId = Guid.NewGuid().ToString()
+                   
+                   },
+                   ResourceAttributes = new ResourceAttributes()
+                   {
+                       AzureStorageContainer = new AzureStorageContainer()
+                       {
+                           StorageContainerName = WorkspaceContainerName
+                       }
+                   }
+                }
+            }
         };
     }
 }

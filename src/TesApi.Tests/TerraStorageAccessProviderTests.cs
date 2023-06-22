@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -53,7 +54,7 @@ namespace TesApi.Tests
         [DataRow($"https://bar.blob.core.windows.net/{WorkspaceStorageContainerName}", true)]
         public async Task IsHttpPublicAsync_StringScenario(string input, bool expectedResult)
         {
-            var result = await terraStorageAccessProvider.IsPublicHttpUrlAsync(input, System.Threading.CancellationToken.None);
+            var result = await terraStorageAccessProvider.IsPublicHttpUrlAsync(input, CancellationToken.None);
 
             Assert.AreEqual(expectedResult, result);
         }
@@ -67,11 +68,13 @@ namespace TesApi.Tests
         [DataRow($"https://{WorkspaceStorageAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}/dir/blob")]
         public async Task MapLocalPathToSasUrlAsync_ValidInput(string input)
         {
-            wsmApiClientMock.Setup(a => a.GetSasTokenAsync(terraApiStubData.WorkspaceId,
-                    terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>(), It.IsAny<System.Threading.CancellationToken>()))
+            wsmApiClientMock.Setup(a => a.GetSasTokenAsync(It.IsAny<Guid>(),
+                    It.IsAny<Guid>(), It.IsAny<SasTokenApiParameters>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(terraApiStubData.GetWsmSasTokenApiResponse());
+            wsmApiClientMock.Setup(a=>a.GetContainerResourcesAsync(It.IsAny<Guid>(),It.IsAny<int>(),It.IsAny<int>(),It.IsAny<CancellationToken>()))
+                .ReturnsAsync(terraApiStubData.GetWsmContainerResourcesApiResponse());
 
-            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input, System.Threading.CancellationToken.None);
+            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input, CancellationToken.None);
 
             Assert.IsNotNull(terraApiStubData.GetWsmSasTokenApiResponse().Url, result);
         }
@@ -80,33 +83,31 @@ namespace TesApi.Tests
         [DataRow($"{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "", TerraApiStubData.WsmGetSasResponseStorageUrl)]
         [DataRow($"/{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "", TerraApiStubData.WsmGetSasResponseStorageUrl)]
         [DataRow($"/{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "/", TerraApiStubData.WsmGetSasResponseStorageUrl)]
-        [DataRow($"/cromwell-executions/test", "", $"{TerraApiStubData.WsmGetSasResponseStorageUrl}/cromwell-executions/test")]
+        [DataRow("/cromwell-executions/test", "", $"{TerraApiStubData.WsmGetSasResponseStorageUrl}/cromwell-executions/test")]
         [DataRow($"/{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "/dir/blobName", $"{TerraApiStubData.WsmGetSasResponseStorageUrl}/dir/blobName")]
         [DataRow($"https://{WorkspaceStorageAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}", "", TerraApiStubData.WsmGetSasResponseStorageUrl)]
         [DataRow($"https://{WorkspaceStorageAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}", "/dir/blob", $"{TerraApiStubData.WsmGetSasResponseStorageUrl}/dir/blob")]
         public async Task MapLocalPathToSasUrlAsync_GetContainerSasIsTrue(string input, string blobPath, string expected)
         {
             wsmApiClientMock.Setup(a => a.GetSasTokenAsync(terraApiStubData.WorkspaceId,
-                    terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>(), It.IsAny<System.Threading.CancellationToken>()))
+                    terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(terraApiStubData.GetWsmSasTokenApiResponse());
 
-            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input + blobPath, System.Threading.CancellationToken.None, true);
+            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input + blobPath, CancellationToken.None, true);
 
             Assert.IsNotNull(result);
             Assert.AreEqual($"{expected}?sv={TerraApiStubData.SasToken}", result);
         }
 
         [TestMethod]
-        [DataRow($"{WorkspaceStorageAccountName}/foo")]
         [DataRow($"/bar/{WorkspaceStorageContainerName}")]
-        [DataRow($"/foo/bar/")]
-        [DataRow($"/foo/bar/dir/blobName")]
-        [DataRow($"https://{WorkspaceStorageAccountName}.blob.core.windows.net/foo")]
+        [DataRow("/foo/bar/")]
+        [DataRow("/foo/bar/dir/blobName")]
         [DataRow($"https://bar.blob.core.windows.net/{WorkspaceStorageContainerName}/")]
         [ExpectedException(typeof(Exception))]
         public async Task MapLocalPathToSasUrlAsync_InvalidInputs(string input)
         {
-            await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input, System.Threading.CancellationToken.None);
+            await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input, CancellationToken.None);
         }
 
         [TestMethod]
@@ -115,10 +116,11 @@ namespace TesApi.Tests
         public async Task GetMappedSasUrlFromWsmAsync_WithOrWithOutBlobName_ReturnsValidURLWithBlobName(string responseBlobName)
         {
             wsmApiClientMock.Setup(a => a.GetSasTokenAsync(terraApiStubData.WorkspaceId,
-                    terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>(), It.IsAny<System.Threading.CancellationToken>()))
+                    terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(terraApiStubData.GetWsmSasTokenApiResponse(responseBlobName));
 
-            var url = await terraStorageAccessProvider.GetMappedSasUrlFromWsmAsync("blobName", System.Threading.CancellationToken.None);
+            var blobInfo = new TerraBlobInfo(terraApiStubData.WorkspaceId,terraApiStubData.ContainerResourceId, TerraApiStubData.WorkspaceContainerName, "blobName");
+            var url = await terraStorageAccessProvider.GetMappedSasUrlFromWsmAsync(blobInfo, CancellationToken.None);
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
