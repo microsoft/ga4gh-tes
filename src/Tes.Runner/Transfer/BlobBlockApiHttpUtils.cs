@@ -99,22 +99,38 @@ public class BlobBlockApiHttpUtils
 
         try
         {
-            response = await HttpClient.SendAsync(request());
+            try
+            {
+                response = await HttpClient.SendAsync(request());
 
-            response.EnsureSuccessStatusCode();
+                response.EnsureSuccessStatusCode();
+            }
+            catch (HttpRequestException ex)
+            {
+                var status = response?.StatusCode;
+
+                HandleHttpRequestException(status, ex);
+            }
+            catch (TaskCanceledException ex)
+            {
+                if (ex.InnerException is TimeoutException)
+                {
+                    throw new RetriableException(ex.Message, ex);
+                }
+
+                throw;
+            }
+            catch (IOException ex)
+            {
+                throw new RetriableException(ex.Message, ex);
+            }
         }
-        catch (HttpRequestException ex)
+        catch (Exception e)
         {
-            var status = response?.StatusCode;
-            response?.Dispose();
+            Logger.LogError(e, "Error executing request");
 
-            HandleHttpRequestException(status, ex);
-        }
-        catch (IOException ex)
-        {
             response?.Dispose();
-
-            throw new RetriableException(ex.Message, ex);
+            throw;
         }
 
         return response!;
@@ -169,6 +185,15 @@ public class BlobBlockApiHttpUtils
             var status = response?.StatusCode;
 
             HandleHttpRequestException(status, ex);
+        }
+        catch (TaskCanceledException ex)
+        {
+            if (ex.InnerException is TimeoutException)
+            {
+                throw new RetriableException(ex.Message, ex);
+            }
+
+            throw;
         }
         catch (IOException ex)
         {

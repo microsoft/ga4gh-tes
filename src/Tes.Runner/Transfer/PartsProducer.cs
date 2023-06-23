@@ -31,7 +31,6 @@ public class PartsProducer
     /// </summary>
     /// <param name="blobOperations">A list of <see cref="BlobOperationInfo"/>></param>
     /// <param name="readBufferChannel">Channel where are parts are written</param>
-    /// <param name="cancellationToken"></param>
     /// <returns></returns>
     public async Task StartPartsProducersAsync(List<BlobOperationInfo> blobOperations, Channel<PipelineBuffer> readBufferChannel)
     {

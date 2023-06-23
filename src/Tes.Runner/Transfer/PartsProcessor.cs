@@ -65,6 +65,11 @@ public abstract class PartsProcessor
             {
                 throw new InvalidOperationException("At least one of the tasks has failed.", completedTask.Exception);
             }
+
+            if (completedTask.IsCanceled)
+            {
+                throw new InvalidOperationException("At least one of the tasks has been canceled.", completedTask.Exception);
+            }
         }
     }
 
