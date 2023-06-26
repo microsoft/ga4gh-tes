@@ -16,18 +16,22 @@ public class BlobBlockApiHttpUtils
 {
     private const string BlobType = "BlockBlob";
     private const int MaxRetryCount = 9;
-    private static readonly HttpClient HttpClient = new HttpClient();
+    private readonly HttpClient httpClient;
     private static readonly ILogger Logger = PipelineLoggerFactory.Create<BlobBlockApiHttpUtils>();
-    private static readonly AsyncRetryPolicy RetryPolicy = Policy
-        .Handle<RetriableException>()
-        .WaitAndRetryAsync(MaxRetryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-            onRetryAsync:
-            (exception, _, retryCount, _) =>
-            {
-                Logger.LogError(exception, "Retrying failed request. Retry count: {retryCount}", retryCount);
-                return Task.CompletedTask;
-            });
+    private readonly AsyncRetryPolicy retryPolicy;
+
+
     public const string RootHashMetadataName = "md5_4mib_hashlist_root_hash";
+
+    public BlobBlockApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolicy)
+    {
+        this.httpClient = httpClient;
+        this.retryPolicy = retryPolicy;
+    }
+
+    public BlobBlockApiHttpUtils() : this(new HttpClient(), DefaultAsyncRetryPolicy(MaxRetryCount))
+    {
+    }
 
     public static HttpRequestMessage CreatePutBlockRequestAsync(PipelineBuffer buffer, string apiVersion)
     {
@@ -88,12 +92,12 @@ public class BlobBlockApiHttpUtils
         return request;
     }
 
-    public static async Task<HttpResponseMessage> ExecuteHttpRequestAsync(Func<HttpRequestMessage> requestFactory)
+    public async Task<HttpResponseMessage> ExecuteHttpRequestAsync(Func<HttpRequestMessage> requestFactory)
     {
-        return await RetryPolicy.ExecuteAsync(() => ExecuteHttpRequestImplAsync(requestFactory));
+        return await retryPolicy.ExecuteAsync(() => ExecuteHttpRequestImplAsync(requestFactory));
     }
 
-    private static async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request)
+    private async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request)
     {
         HttpResponseMessage? response = null;
 
@@ -101,7 +105,7 @@ public class BlobBlockApiHttpUtils
         {
             try
             {
-                response = await HttpClient.SendAsync(request());
+                response = await httpClient.SendAsync(request());
 
                 response.EnsureSuccessStatusCode();
             }
@@ -111,18 +115,14 @@ public class BlobBlockApiHttpUtils
 
                 HandleHttpRequestException(status, ex);
             }
-            catch (OperationCanceledException ex)
+            catch (Exception ex)
             {
-                if (ex.InnerException is TimeoutException)
+                if (ContainsRetriableException(ex))
                 {
                     throw new RetriableException(ex.Message, ex);
                 }
 
                 throw;
-            }
-            catch (IOException ex)
-            {
-                throw new RetriableException(ex.Message, ex);
             }
         }
         catch (Exception e)
@@ -143,7 +143,7 @@ public class BlobBlockApiHttpUtils
             throw new RetriableException(ex.Message, ex);
         }
 
-        if (IsInnerExceptionRetriable(ex))
+        if (ContainsRetriableException(ex))
         {
             throw new RetriableException(ex.Message, ex);
         }
@@ -151,27 +151,33 @@ public class BlobBlockApiHttpUtils
         throw ex;
     }
 
-    private static bool IsInnerExceptionRetriable(HttpRequestException httpRequestException)
+
+    public async Task<int> ExecuteHttpRequestAndReadBodyResponseAsync(PipelineBuffer buffer, Func<HttpRequestMessage> requestFactory)
     {
-        if (httpRequestException.InnerException is IOException)
+        return await retryPolicy.ExecuteAsync(() => ExecuteHttpRequestAndReadBodyResponseImplAsync(buffer, requestFactory));
+    }
+
+    private static bool ContainsRetriableException(Exception? ex)
+    {
+        if (ex is null)
+        {
+            return false;
+        }
+
+        if (ex is TimeoutException or IOException)
         {
             return true;
         }
 
-        return false;
+        return ContainsRetriableException(ex.InnerException);
     }
 
-    public static async Task<int> ExecuteHttpRequestAndReadBodyResponseAsync(PipelineBuffer buffer, Func<HttpRequestMessage> requestFactory)
-    {
-        return await RetryPolicy.ExecuteAsync(() => ExecuteHttpRequestAndReadBodyResponseImplAsync(buffer, requestFactory));
-    }
-
-    private static async Task<int> ExecuteHttpRequestAndReadBodyResponseImplAsync(PipelineBuffer buffer, Func<HttpRequestMessage> requestFactory)
+    private async Task<int> ExecuteHttpRequestAndReadBodyResponseImplAsync(PipelineBuffer buffer, Func<HttpRequestMessage> requestFactory)
     {
         HttpResponseMessage? response = null;
         try
         {
-            response = await HttpClient.SendAsync(requestFactory(), HttpCompletionOption.ResponseHeadersRead);
+            response = await httpClient.SendAsync(requestFactory(), HttpCompletionOption.ResponseHeadersRead);
 
             response.EnsureSuccessStatusCode();
 
@@ -186,18 +192,14 @@ public class BlobBlockApiHttpUtils
 
             HandleHttpRequestException(status, ex);
         }
-        catch (OperationCanceledException ex)
+        catch (Exception ex)
         {
-            if (ex.InnerException is TimeoutException)
+            if (ContainsRetriableException(ex))
             {
                 throw new RetriableException(ex.Message, ex);
             }
 
             throw;
-        }
-        catch (IOException ex)
-        {
-            throw new RetriableException(ex.Message, ex);
         }
         finally
         {
@@ -253,5 +255,18 @@ public class BlobBlockApiHttpUtils
 
         request.Headers.Range = new RangeHeaderValue(buffer.Offset, buffer.Offset + buffer.Length);
         return request;
+    }
+
+    public static AsyncRetryPolicy DefaultAsyncRetryPolicy(int retryAttempts)
+    {
+        return Policy
+            .Handle<RetriableException>()
+            .WaitAndRetryAsync(retryAttempts, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                onRetryAsync:
+                (exception, _, retryCount, _) =>
+                {
+                    Logger.LogError(exception, "Retrying failed request. Retry count: {retryCount}", retryCount);
+                    return Task.CompletedTask;
+                });
     }
 }
