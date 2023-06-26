@@ -111,7 +111,7 @@ public class BlobBlockApiHttpUtils
 
                 HandleHttpRequestException(status, ex);
             }
-            catch (TaskCanceledException ex)
+            catch (OperationCanceledException ex)
             {
                 if (ex.InnerException is TimeoutException)
                 {
@@ -186,7 +186,7 @@ public class BlobBlockApiHttpUtils
 
             HandleHttpRequestException(status, ex);
         }
-        catch (TaskCanceledException ex)
+        catch (OperationCanceledException ex)
         {
             if (ex.InnerException is TimeoutException)
             {
