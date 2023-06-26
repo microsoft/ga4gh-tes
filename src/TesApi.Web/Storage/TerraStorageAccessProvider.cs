@@ -83,7 +83,6 @@ namespace TesApi.Web.Storage
             
             var terraBlobInfo = await GetTerraBlobInfoFromContainerNameAsync(path);
 
-
             if (getContainerSas)
             {
                 return await GetMappedSasContainerUrlFromWsmAsync(terraBlobInfo,cancellationToken);
@@ -95,11 +94,11 @@ namespace TesApi.Web.Storage
         /// <summary>
         /// Creates a Terra Blob Info from the container name in the path. The path must be a Terra managed storage URL.
         /// This method assumes that the container name contains the workspace ID and validates that the storage container is a Terra workspace resource.
-        /// The BlobName property contains the blob name without a leading slash.
+        /// The BlobName property contains the blob name segment without a leading slash.
         /// </summary>
         /// <param name="path"></param>
         /// <returns>Returns a Terra Blob Info</returns>
-        /// <exception cref="InvalidOperationException">This method will throw if the path is not a valid Terra blob storage url or a normalized path.</exception>
+        /// <exception cref="InvalidOperationException">This method will throw if the path is not a valid Terra blob storage url.</exception>
         public async Task<TerraBlobInfo> GetTerraBlobInfoFromContainerNameAsync(string path)
         {
             if (!StorageAccountUrlSegments.TryCreate(path, out var segments))
@@ -257,7 +256,7 @@ namespace TesApi.Web.Storage
     }
 
     /// <summary>
-    /// Contains the Terra attributes related to the blob. 
+    /// Contains the Terra and Azure Storage container properties where the blob is contained. 
     /// </summary>
     /// <param name="WorkspaceId"></param>
     /// <param name="WsmContainerResourceId"></param>

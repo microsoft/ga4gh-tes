@@ -80,11 +80,11 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        [DataRow($"{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "", TerraApiStubData.WsmGetSasResponseStorageUrl)]
-        [DataRow($"/{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "", TerraApiStubData.WsmGetSasResponseStorageUrl)]
-        [DataRow($"/{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "/", TerraApiStubData.WsmGetSasResponseStorageUrl)]
-        [DataRow("/cromwell-executions/test", "", $"{TerraApiStubData.WsmGetSasResponseStorageUrl}/cromwell-executions/test")]
-        [DataRow($"/{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "/dir/blobName", $"{TerraApiStubData.WsmGetSasResponseStorageUrl}/dir/blobName")]
+        //[DataRow($"{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "", TerraApiStubData.WsmGetSasResponseStorageUrl)]
+        //[DataRow($"/{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "", TerraApiStubData.WsmGetSasResponseStorageUrl)]
+        //[DataRow($"/{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "/", TerraApiStubData.WsmGetSasResponseStorageUrl)]
+        //[DataRow("/cromwell-executions/test", "", $"{TerraApiStubData.WsmGetSasResponseStorageUrl}/cromwell-executions/test")]
+        //[DataRow($"/{WorkspaceStorageAccountName}/{WorkspaceStorageContainerName}", "/dir/blobName", $"{TerraApiStubData.WsmGetSasResponseStorageUrl}/dir/blobName")]
         [DataRow($"https://{WorkspaceStorageAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}", "", TerraApiStubData.WsmGetSasResponseStorageUrl)]
         [DataRow($"https://{WorkspaceStorageAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}", "/dir/blob", $"{TerraApiStubData.WsmGetSasResponseStorageUrl}/dir/blob")]
         public async Task MapLocalPathToSasUrlAsync_GetContainerSasIsTrue(string input, string blobPath, string expected)

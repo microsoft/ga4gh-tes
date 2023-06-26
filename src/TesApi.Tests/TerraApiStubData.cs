@@ -14,10 +14,10 @@ public class TerraApiStubData
     public const string LandingZoneApiHost = "https://landingzone.host";
     public const string WsmApiHost = "https://wsm.host";
     public const string ResourceGroup = "mrg-terra-dev-previ-20191228";
-    public const string WorkspaceAccountName = "fooaccount";
+    public const string WorkspaceAccountName = "lzaccount1";
     public const string WorkspaceContainerName = "sc-ef9fed44-dba6-4825-868c-b00208522382";
     public const string SasToken = "SASTOKENSTUB=";
-    public const string WsmGetSasResponseStorageUrl = $"https://bloburl.foo/{WorkspaceContainerName}";
+    public const string WsmGetSasResponseStorageUrl = $"https://{WorkspaceAccountName}.blob.core.windows.net/{WorkspaceContainerName}";
 
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
