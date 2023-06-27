@@ -76,18 +76,18 @@ namespace Tes.Runner.Test
         [ExpectedException(typeof(InvalidOperationException))]
         public async Task ExecuteAsync_ThrowsOnRead_ExecutesThrows()
         {
-            
+
             var pipeline = new BlobOperationPipelineTestImpl(options, memoryBuffer, sourceSize);
-            
+
             //throw on when processing the 5th block
-            pipeline.ThrowOnExecuteRead<InvalidOperationException>((buffer, token)=> buffer.Ordinal == 5); 
+            pipeline.ThrowOnExecuteRead<InvalidOperationException>((buffer, token) => buffer.Ordinal == 5);
 
             var blobOps = new List<BlobOperationInfo>()
             {
                 new BlobOperationInfo(new Uri("https://foo.bar/con/blob1"), tempFile1, tempFile1, true),
                 new BlobOperationInfo(new Uri("https://foo.bar/con/blob2"), tempFile2, tempFile2, true)
             };
-            
+
             await pipeline.ExecuteAsync(blobOps);
         }
 

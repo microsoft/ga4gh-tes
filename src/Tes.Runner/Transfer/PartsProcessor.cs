@@ -111,7 +111,7 @@ public abstract class PartsProcessor
         return tasks;
     }
 
-    private async Task TryCloseFileHandlerPoolAsync(Channel<FileStream>? fileHandlerPool )
+    private async Task TryCloseFileHandlerPoolAsync(Channel<FileStream>? fileHandlerPool)
     {
         if (fileHandlerPool is null)
         {
