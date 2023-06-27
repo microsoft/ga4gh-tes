@@ -17,25 +17,6 @@ jobs:
         uses: JesseTG/rm@v1.0.3
         with:
           path: nuget.config
-          
-      - name: Move global.sjon config to repo root
-        run: |  
-            mv format/global.json global.json
-          
-      - name: Setup .NET Core
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '7.0.203'
-          
-      - name: Display dotnet format version   
-        shell: bash
-        run: |
-            dotnet format --version
-            
-      - name: Display dotnet version   
-        shell: bash
-        run: |  
-            dotnet --info
 
       - name: Run dotnet format
         shell: bash
