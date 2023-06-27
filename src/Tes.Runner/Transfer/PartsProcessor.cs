@@ -100,11 +100,33 @@ public abstract class PartsProcessor
                             {
                                 cancellationTokenSource.Cancel();
                             }
+
+                            await TryCloseFileHandlerPoolAsync(buffer.FileHandlerPool);
+
                             throw;
                         }
                     }
             }, cancellationTokenSource.Token));
         }
         return tasks;
+    }
+
+    private async Task TryCloseFileHandlerPoolAsync(Channel<FileStream>? fileHandlerPool )
+    {
+        if (fileHandlerPool is null)
+        {
+            return;
+        }
+
+        if (fileHandlerPool.Writer.TryComplete())
+        {
+            await foreach (var fileStream in fileHandlerPool.Reader.ReadAllAsync())
+            {
+                if (!fileStream.SafeFileHandle.IsClosed)
+                {
+                    fileStream.Close();
+                }
+            }
+        }
     }
 }
