@@ -181,7 +181,7 @@ public class BlobBlockApiHttpUtils
 
             response.EnsureSuccessStatusCode();
 
-            var data = await response.Content.ReadAsStreamAsync();
+            await using var data = await response.Content.ReadAsStreamAsync();
 
             await data.ReadExactlyAsync(buffer.Data, 0, buffer.Length);
 
