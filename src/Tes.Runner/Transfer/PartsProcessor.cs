@@ -52,27 +52,6 @@ public abstract class PartsProcessor
         }
     }
 
-    public static async Task WhenAllOrThrowIfOneFailsAsync(List<Task> tasks)
-    {
-        var tasksPending = tasks.ToList();
-        while (tasksPending.Any())
-        {
-            var completedTask = await Task.WhenAny(tasksPending);
-
-            tasksPending.Remove(completedTask);
-
-            if (completedTask.IsFaulted)
-            {
-                throw new InvalidOperationException("At least one of the tasks has failed.", completedTask.Exception);
-            }
-
-            if (completedTask.IsCanceled)
-            {
-                throw new InvalidOperationException("At least one of the tasks has been canceled.", completedTask.Exception);
-            }
-        }
-    }
-
     protected List<Task> StartProcessors(int numberOfProcessors, Channel<PipelineBuffer> readFromChannel, Func<PipelineBuffer, CancellationToken, Task> processorAsync)
     {
         ArgumentNullException.ThrowIfNull(readFromChannel);
@@ -91,7 +70,9 @@ public abstract class PartsProcessor
                     {
                         try
                         {
+                            logger.LogDebug($"Starting part processing. Part: {buffer.FileName}:{buffer.Ordinal}. Method:{processorAsync.Method.Name}");
                             await processorAsync(buffer, cancellationTokenSource.Token);
+                            logger.LogDebug($"Part processed. Part: {buffer.FileName}:{buffer.Ordinal}. Method:{processorAsync.Method.Name}");
                         }
                         catch (Exception e)
                         {

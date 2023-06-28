@@ -41,7 +41,7 @@ public class PartsWriter : PartsProcessor
 
         try
         {
-            await WhenAllOrThrowIfOneFailsAsync(tasks);
+            await Task.WhenAll(tasks);
         }
         catch (Exception e)
         {

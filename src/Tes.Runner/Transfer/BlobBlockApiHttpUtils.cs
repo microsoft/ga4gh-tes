@@ -152,9 +152,10 @@ public class BlobBlockApiHttpUtils
     }
 
 
-    public async Task<int> ExecuteHttpRequestAndReadBodyResponseAsync(PipelineBuffer buffer, Func<HttpRequestMessage> requestFactory)
+    public async Task<int> ExecuteHttpRequestAndReadBodyResponseAsync(PipelineBuffer buffer,
+        Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken = default)
     {
-        return await retryPolicy.ExecuteAsync(() => ExecuteHttpRequestAndReadBodyResponseImplAsync(buffer, requestFactory));
+        return await retryPolicy.ExecuteAsync(() => ExecuteHttpRequestAndReadBodyResponseImplAsync(buffer, requestFactory, cancellationToken));
     }
 
     private static bool ContainsRetriableException(Exception? ex)
@@ -172,28 +173,33 @@ public class BlobBlockApiHttpUtils
         return ContainsRetriableException(ex.InnerException);
     }
 
-    private async Task<int> ExecuteHttpRequestAndReadBodyResponseImplAsync(PipelineBuffer buffer, Func<HttpRequestMessage> requestFactory)
+    private async Task<int> ExecuteHttpRequestAndReadBodyResponseImplAsync(PipelineBuffer buffer,
+        Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken)
     {
         HttpResponseMessage? response = null;
         try
         {
-            response = await httpClient.SendAsync(requestFactory(), HttpCompletionOption.ResponseHeadersRead);
+            response = await httpClient.SendAsync(requestFactory(), HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
             response.EnsureSuccessStatusCode();
 
-            await using var data = await response.Content.ReadAsStreamAsync();
+            await using var data = await response.Content.ReadAsStreamAsync(cancellationToken);
 
-            await data.ReadExactlyAsync(buffer.Data, 0, buffer.Length);
+            await data.ReadExactlyAsync(buffer.Data, 0, buffer.Length, cancellationToken);
 
         }
         catch (HttpRequestException ex)
         {
+            Logger.LogDebug($"Failed to process part. Part: {buffer.FileName} Ordinal: {buffer.Ordinal}. Error: {ex.Message}");
+
             var status = response?.StatusCode;
 
             HandleHttpRequestException(status, ex);
         }
         catch (Exception ex)
         {
+            Logger.LogDebug($"Failed to process part. Part: {buffer.FileName} Ordinal: {buffer.Ordinal}. Error: {ex.Message}");
+
             if (ContainsRetriableException(ex))
             {
                 throw new RetriableException(ex.Message, ex);
@@ -203,7 +209,14 @@ public class BlobBlockApiHttpUtils
         }
         finally
         {
-            response?.Dispose();
+            try
+            {
+                response?.Dispose();
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e, "Error disposing response");
+            }
         }
 
         return buffer.Length;

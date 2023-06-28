@@ -64,7 +64,8 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
         try
         {
-            await PartsProcessor.WhenAllOrThrowIfOneFailsAsync(pipelineTasks);
+            await Task.WhenAll(pipelineTasks);
+            Logger.LogInformation("Pipeline processing completed.");
         }
         catch (Exception e)
         {
@@ -72,6 +73,10 @@ public abstract class BlobOperationPipeline : IBlobPipeline
             throw;
         }
 
-        return await processedPartsProcessorTask;
+        Logger.LogInformation("Waiting for processed part processor to complete.");
+        var bytesProcessed = await processedPartsProcessorTask;
+        Logger.LogInformation("Processed parts completed.");
+
+        return bytesProcessed;
     }
 }
