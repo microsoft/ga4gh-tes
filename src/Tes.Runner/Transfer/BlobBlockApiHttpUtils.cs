@@ -179,14 +179,11 @@ public class BlobBlockApiHttpUtils
         HttpResponseMessage? response = null;
         try
         {
-            response = await httpClient.SendAsync(requestFactory(), HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            var request = requestFactory();
 
-            response.EnsureSuccessStatusCode();
+            response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
-            await using var data = await response.Content.ReadAsStreamAsync(cancellationToken);
-
-            await data.ReadExactlyAsync(buffer.Data, 0, buffer.Length, cancellationToken);
-
+            await ReadPartFromBodyAsync(buffer, cancellationToken, response);
         }
         catch (HttpRequestException ex)
         {
@@ -220,6 +217,21 @@ public class BlobBlockApiHttpUtils
         }
 
         return buffer.Length;
+    }
+
+    private async Task ReadPartFromBodyAsync(PipelineBuffer buffer, CancellationToken cancellationToken,
+        HttpResponseMessage response)
+    {
+        response.EnsureSuccessStatusCode();
+
+        await using var data = await response.Content.ReadAsStreamAsync(cancellationToken)
+            .WaitAsync(httpClient.Timeout, cancellationToken)
+            .ConfigureAwait(false);
+
+        await data.ReadExactlyAsync(buffer.Data, 0, buffer.Length, cancellationToken)
+            .AsTask()
+            .WaitAsync(httpClient.Timeout, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static bool IsRetriableStatusCode(HttpStatusCode? responseStatusCode)

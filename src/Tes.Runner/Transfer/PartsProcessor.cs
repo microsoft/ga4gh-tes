@@ -70,9 +70,7 @@ public abstract class PartsProcessor
                     {
                         try
                         {
-                            logger.LogDebug($"Starting part processing. Part: {buffer.FileName}:{buffer.Ordinal}. Method:{processorAsync.Method.Name}");
                             await processorAsync(buffer, cancellationTokenSource.Token);
-                            logger.LogDebug($"Part processed. Part: {buffer.FileName}:{buffer.Ordinal}. Method:{processorAsync.Method.Name}");
                         }
                         catch (Exception e)
                         {
