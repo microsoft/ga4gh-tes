@@ -225,13 +225,11 @@ public class BlobBlockApiHttpUtils
         response.EnsureSuccessStatusCode();
 
         await using var data = await response.Content.ReadAsStreamAsync(cancellationToken)
-            .WaitAsync(httpClient.Timeout, cancellationToken)
-            .ConfigureAwait(false);
+            .WaitAsync(httpClient.Timeout, cancellationToken).ConfigureAwait(=);
 
         await data.ReadExactlyAsync(buffer.Data, 0, buffer.Length, cancellationToken)
             .AsTask()
-            .WaitAsync(httpClient.Timeout, cancellationToken)
-            .ConfigureAwait(false);
+            .WaitAsync(httpClient.Timeout, cancellationToken);
     }
 
     private static bool IsRetriableStatusCode(HttpStatusCode? responseStatusCode)
