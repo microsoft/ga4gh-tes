@@ -225,7 +225,7 @@ public class BlobBlockApiHttpUtils
         response.EnsureSuccessStatusCode();
 
         await using var data = await response.Content.ReadAsStreamAsync(cancellationToken)
-            .WaitAsync(httpClient.Timeout, cancellationToken).ConfigureAwait(=);
+            .WaitAsync(httpClient.Timeout, cancellationToken);
 
         await data.ReadExactlyAsync(buffer.Data, 0, buffer.Length, cancellationToken)
             .AsTask()
