@@ -37,15 +37,17 @@ public class PartsProducer
         ValidateOperations(blobOperations, readBufferChannel);
 
         var partsProducerTasks = new List<Task>();
+        var cancellationTokenSource = new CancellationTokenSource();
 
         foreach (var operation in blobOperations)
         {
-            partsProducerTasks.Add(StartPartsProducerAsync(operation, readBufferChannel));
+            partsProducerTasks.Add(StartPartsProducerAsync(operation, readBufferChannel, cancellationTokenSource));
         }
 
         try
         {
-            await PartsProcessor.WhenAllOrThrowIfOneFailsAsync(partsProducerTasks);
+            await Task.WhenAll(partsProducerTasks);
+
             logger.LogInformation("All parts from requested operations were created.");
         }
         catch (Exception e)
@@ -76,33 +78,45 @@ public class PartsProducer
         }
     }
 
-    private async Task StartPartsProducerAsync(BlobOperationInfo operation, Channel<PipelineBuffer> readBufferChannel)
+    private async Task StartPartsProducerAsync(BlobOperationInfo operation, Channel<PipelineBuffer> readBufferChannel, CancellationTokenSource cancellationTokenSource)
     {
-        var length = await blobPipeline.GetSourceLengthAsync(operation.SourceLocationForLength);
-
-        var numberOfParts = BlobSizeUtils.GetNumberOfParts(length, blobPipelineOptions.BlockSizeBytes);
-
-        var fileHandlerPool = await GetNewFileHandlerPoolAsync(operation.FileName, operation.ReadOnlyHandlerForExistingFile);
-
-        if (length == 0)
+        try
         {
-            await CreateAndWritePipelinePartBufferAsync(operation, readBufferChannel, fileHandlerPool, length, partOrdinal: 0, numberOfParts: 1);
-            return;
+            var length = await blobPipeline.GetSourceLengthAsync(operation.SourceLocationForLength);
+
+            var numberOfParts = BlobSizeUtils.GetNumberOfParts(length, blobPipelineOptions.BlockSizeBytes);
+
+            var fileHandlerPool = await GetNewFileHandlerPoolAsync(operation.FileName, operation.ReadOnlyHandlerForExistingFile, cancellationTokenSource.Token);
+
+            if (length == 0)
+            {
+                await CreateAndWritePipelinePartBufferAsync(operation, readBufferChannel, fileHandlerPool, length, partOrdinal: 0, numberOfParts: 1, cancellationTokenSource.Token);
+                return;
+            }
+
+            for (var i = 0; i < numberOfParts; i++)
+            {
+                await CreateAndWritePipelinePartBufferAsync(operation, readBufferChannel, fileHandlerPool, length, partOrdinal: i, numberOfParts, cancellationTokenSource.Token);
+            }
         }
-
-        for (var i = 0; i < numberOfParts; i++)
+        catch (Exception e)
         {
-            await CreateAndWritePipelinePartBufferAsync(operation, readBufferChannel, fileHandlerPool, length, partOrdinal: i, numberOfParts);
+            logger.LogError(e, $"Failed to create parts for file {operation.FileName}");
+            if (!cancellationTokenSource.IsCancellationRequested)
+            {
+                cancellationTokenSource.Cancel();
+            }
+            throw;
         }
     }
 
     private async Task CreateAndWritePipelinePartBufferAsync(BlobOperationInfo operation, Channel<PipelineBuffer> readBufferChannel,
-        Channel<FileStream> fileHandlerPool, long length, int partOrdinal, int numberOfParts)
+        Channel<FileStream> fileHandlerPool, long length, int partOrdinal, int numberOfParts, CancellationToken cancellationToken)
     {
         PipelineBuffer buffer;
         buffer = GetNewPipelinePartBuffer(operation.Url, operation.FileName, fileHandlerPool, length, partOrdinal, numberOfParts);
 
-        await readBufferChannel.Writer.WriteAsync(buffer);
+        await readBufferChannel.Writer.WriteAsync(buffer, cancellationToken);
     }
 
     private PipelineBuffer GetNewPipelinePartBuffer(Uri blobUrl, string fileName, Channel<FileStream> fileHandlerPool,
@@ -131,7 +145,7 @@ public class PartsProducer
         return buffer;
     }
 
-    private async ValueTask<Channel<FileStream>> GetNewFileHandlerPoolAsync(string fileName, bool readOnly)
+    private async ValueTask<Channel<FileStream>> GetNewFileHandlerPoolAsync(string fileName, bool readOnly, CancellationToken cancellationToken)
     {
         var pool = Channel.CreateBounded<FileStream>(blobPipelineOptions.FileHandlerPoolCapacity);
 
@@ -142,13 +156,13 @@ public class PartsProducer
                 if (readOnly)
                 {
                     //when readonly we are assuming the file already exist so no need to create directory and the file
-                    await pool.Writer.WriteAsync(File.Open(fileName, FileMode.Open, FileAccess.Read, FileShare.Read));
+                    await pool.Writer.WriteAsync(File.Open(fileName, FileMode.Open, FileAccess.Read, FileShare.Read), cancellationToken);
                     continue;
                 }
 
                 CreateDirectoryIfNotPresent(fileName);
 
-                await pool.Writer.WriteAsync(File.Open(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite));
+                await pool.Writer.WriteAsync(File.Open(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite), cancellationToken);
             }
             catch (Exception e)
             {

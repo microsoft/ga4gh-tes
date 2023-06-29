@@ -15,6 +15,7 @@ namespace Tes.Runner.Transfer
         private const double MemoryBufferCapacityFactor = 0.4; // 40% of total memory
         private const long MaxMemoryBufferSizeInBytes = BlobSizeUtils.GiB * 2; // 2 GiB of total memory
         private const int MaxWorkingThreadsCount = 90;
+        private const int WorkersPerCpuCore = 10;
 
         public PipelineOptionsOptimizer(ISystemInfoProvider systemInfoProvider) : this(systemInfoProvider, new DefaultFileInfoProvider())
         {
@@ -107,7 +108,7 @@ namespace Tes.Runner.Transfer
             var bufferCapacity = GetOptimizedMemoryBufferCapacity(blockSize);
 
             // for now, readers and writers are the same
-            var readers = GetOptimizedWorkers(bufferCapacity);
+            var readers = GetOptimizedWorkers();
             var writers = readers;
 
             // for now, memory buffer capacity is the same as the buffer capacity
@@ -124,14 +125,16 @@ namespace Tes.Runner.Transfer
                 MemoryBufferCapacity: memoryBufferCapacity);
         }
 
-        private int GetOptimizedWorkers(int bufferCapacity)
+        private int GetOptimizedWorkers()
         {
-            if (bufferCapacity > MaxWorkingThreadsCount)
+            var workerCount = systemInfoProvider.ProcessorCount * WorkersPerCpuCore;
+
+            if (workerCount > MaxWorkingThreadsCount)
             {
                 return MaxWorkingThreadsCount;
             }
 
-            return bufferCapacity;
+            return workerCount;
         }
 
         private int GetOptimizedMemoryBufferCapacity(int blockSize)
