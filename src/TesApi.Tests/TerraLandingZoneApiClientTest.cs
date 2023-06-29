@@ -3,7 +3,6 @@
 
 using System;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -41,10 +40,10 @@ namespace TesApi.Tests
         {
             var body = terraApiStubData.GetResourceQuotaApiResponseInJson();
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
-                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>()))
+                    It.IsAny<Func<System.Threading.CancellationToken, Task<string>>>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(body);
 
-            var quota = await terraLandingZoneApiClient.GetResourceQuotaAsync(terraApiStubData.LandingZoneId, terraApiStubData.BatchAccountId, cacheResults: true, CancellationToken.None);
+            var quota = await terraLandingZoneApiClient.GetResourceQuotaAsync(terraApiStubData.LandingZoneId, terraApiStubData.BatchAccountId, cacheResults: true, cancellationToken: System.Threading.CancellationToken.None);
 
             Assert.IsNotNull(quota);
             Assert.AreEqual(terraApiStubData.LandingZoneId, quota.LandingZoneId);
@@ -58,7 +57,7 @@ namespace TesApi.Tests
             Assert.AreEqual("standardLSv2Family", quota.QuotaValues.DedicatedCoreQuotaPerVmFamily.Keys.First());
             Assert.AreEqual(0, quota.QuotaValues.DedicatedCoreQuotaPerVmFamily.Values.First());
             tokenCredential.Verify(t => t.GetTokenAsync(It.IsAny<TokenRequestContext>(),
-                    It.IsAny<CancellationToken>()),
+                    It.IsAny<System.Threading.CancellationToken>()),
                 Times.Once);
         }
 
@@ -68,16 +67,16 @@ namespace TesApi.Tests
             var body = terraApiStubData.GetResourceApiResponseInJson();
 
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
-                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>()))
+                    It.IsAny<Func<System.Threading.CancellationToken, Task<string>>>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(body);
 
-            var resources = await terraLandingZoneApiClient.GetLandingZoneResourcesAsync(terraApiStubData.LandingZoneId, CancellationToken.None);
+            var resources = await terraLandingZoneApiClient.GetLandingZoneResourcesAsync(terraApiStubData.LandingZoneId, System.Threading.CancellationToken.None);
 
             Assert.IsNotNull(resources);
             Assert.AreEqual(terraApiStubData.LandingZoneId, resources.Id);
             Assert.AreEqual(5, resources.Resources.Length);
             tokenCredential.Verify(t => t.GetTokenAsync(It.IsAny<TokenRequestContext>(),
-                    It.IsAny<CancellationToken>()),
+                    It.IsAny<System.Threading.CancellationToken>()),
                 Times.Once);
 
         }

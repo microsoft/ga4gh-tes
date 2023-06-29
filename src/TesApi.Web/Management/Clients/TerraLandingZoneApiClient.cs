@@ -49,7 +49,7 @@ namespace TesApi.Web.Management.Clients
         /// <param name="resourceId">The fully qualified ID of the Azure resource, including the resource name and resource type.
         /// Use the format, /subscriptions/{guid}/resourceGroups/{resource-group-name}/{resource-provider-namespace}/{resource-type}/{resource-name}.</param>
         /// <param name="cacheResults"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public virtual async Task<QuotaApiResponse> GetResourceQuotaAsync(Guid landingZoneId, string resourceId, bool cacheResults, CancellationToken cancellationToken)
         {
@@ -58,7 +58,7 @@ namespace TesApi.Web.Management.Clients
 
             var url = GetQuotaApiUrl(landingZoneId, resourceId);
 
-            return await HttpGetRequestAsync<QuotaApiResponse>(url, setAuthorizationHeader: true, cacheResults, cancellationToken);
+            return await HttpGetRequestAsync<QuotaApiResponse>(url, setAuthorizationHeader: true, cacheResults: cacheResults, cancellationToken: cancellationToken);
         }
 
 
@@ -66,7 +66,7 @@ namespace TesApi.Web.Management.Clients
         /// List the resources in a landing zone. 
         /// </summary>
         /// <param name="landingZoneId"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="cacheResults"></param>
         /// <returns></returns>
         public virtual async Task<LandingZoneResourcesApiResponse> GetLandingZoneResourcesAsync(Guid landingZoneId, CancellationToken cancellationToken, bool cacheResults = true)
@@ -75,7 +75,7 @@ namespace TesApi.Web.Management.Clients
 
             var url = GetLandingZoneResourcesApiUrl(landingZoneId);
 
-            return await HttpGetRequestAsync<LandingZoneResourcesApiResponse>(url, setAuthorizationHeader: true, cacheResults, cancellationToken);
+            return await HttpGetRequestAsync<LandingZoneResourcesApiResponse>(url, setAuthorizationHeader: true, cacheResults: cacheResults, cancellationToken: cancellationToken);
         }
 
         /// <summary>

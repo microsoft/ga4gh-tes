@@ -26,11 +26,11 @@ namespace TesApi.Web.Management
         public static async Task<string> GetAppInsightsInstrumentationKeyAsync(string accountName, CancellationToken cancellationToken)
         {
             var azureClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(cancellationToken);
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
+            var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).ToAsyncEnumerable().Select(s => s.SubscriptionId);
 
             var credentials = new TokenCredentials(await GetAzureAccessTokenAsync());
 
-            foreach (var subscriptionId in subscriptionIds)
+            await foreach (var subscriptionId in subscriptionIds)
             {
                 var app = (await new ApplicationInsightsManagementClient(credentials) { SubscriptionId = subscriptionId }.Components.ListAsync())
                     .FirstOrDefault(a => a.ApplicationId.Equals(accountName, StringComparison.OrdinalIgnoreCase));
@@ -43,6 +43,7 @@ namespace TesApi.Web.Management
 
             return null;
         }
+
         //TODO: refactor this to use Azure Identity token provider. 
         private static Task<string> GetAzureAccessTokenAsync(string resource = "https://management.azure.com/")
             => new AzureServiceTokenProvider().GetAccessTokenAsync(resource);
@@ -60,14 +61,17 @@ namespace TesApi.Web.Management
             var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync());
             var azureClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(cancellationToken);
 
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
+            var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken))
+                .ToAsyncEnumerable().Select(s => s.SubscriptionId);
 
-            foreach (var subId in subscriptionIds)
+            await foreach (var subId in subscriptionIds)
             {
                 using var batchClient = new BatchManagementClient(tokenCredentials) { SubscriptionId = subId };
+                var batchAccountOperations = batchClient.BatchAccount;
 
-                var batchAccount = (await batchClient.BatchAccount.ListAsync())
-                    .FirstOrDefault(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase));
+                var batchAccount = await (await batchAccountOperations.ListAsync(cancellationToken: cancellationToken))
+                    .ToAsyncEnumerable(batchAccountOperations.ListNextAsync)
+                    .FirstOrDefaultAsync(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
 
                 if (batchAccount is not null)
                 {

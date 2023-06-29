@@ -18,7 +18,7 @@ namespace TesApi.Web.Management
         /// <param name="vmFamily"></param>
         /// <param name="lowPriority"></param>
         /// <param name="coresRequirement"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         Task<BatchVmFamilyQuotas> GetQuotaForRequirementAsync(
             string vmFamily,
@@ -31,7 +31,7 @@ namespace TesApi.Web.Management
         /// If quota per family is not enforced, returns the total core quota for low or normal priority vms.
         /// </summary>
         /// <param name="lowPriority"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority, CancellationToken cancellationToken);
     }

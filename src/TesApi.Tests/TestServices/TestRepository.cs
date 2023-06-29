@@ -132,7 +132,7 @@ namespace TesApi.Tests.TestServices
         Task<IEnumerable<T>> IRepository<T>.GetItemsAsync(Expression<Func<T, bool>> predicate, CancellationToken _1)
             => ThrowIfDisposed<Task<IEnumerable<T>>>() ?? Task.FromResult(Items<T>().Values.Where(predicate.Compile().Invoke).Select(Clone));
 
-        Task<(string, IEnumerable<T>)> IRepository<T>.GetItemsAsync(Expression<Func<T, bool>> predicate, string token, int size, CancellationToken _1)
+        Task<(string, IEnumerable<T>)> IRepository<T>.GetItemsAsync(Expression<Func<T, bool>> predicate, int size, string token, CancellationToken _1)
         {
             ThrowIfDisposed();
             var count = Items<T>().Count;
@@ -141,7 +141,7 @@ namespace TesApi.Tests.TestServices
             return Task.FromResult((continuation, Items<T>().Values.Skip(start).Take(size).Where(predicate.Compile().Invoke).Select(Clone)));
         }
 
-        Task<bool> IRepository<T>.TryGetItemAsync(string id, Action<T> onSuccess, CancellationToken _1)
+        Task<bool> IRepository<T>.TryGetItemAsync(string id, CancellationToken _1, Action<T> onSuccess)
         {
             ThrowIfDisposed();
             if (Items<T>().TryGetValue(id, out var item))
@@ -165,6 +165,11 @@ namespace TesApi.Tests.TestServices
             }
 
             throw new InvalidOperationException();
+        }
+
+        public ValueTask<bool> TryRemoveItemFromCacheAsync(T item, CancellationToken _1)
+        {
+            throw new NotImplementedException();
         }
     }
 }

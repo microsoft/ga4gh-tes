@@ -75,7 +75,7 @@ namespace TesApi.Controllers
         {
             TesTask tesTask = null;
 
-            if (await repository.TryGetItemAsync(id, item => tesTask = item, cancellationToken))
+            if (await repository.TryGetItemAsync(id, cancellationToken, item => tesTask = item))
             {
                 if (tesTask.State == TesState.COMPLETEEnum ||
                     tesTask.State == TesState.EXECUTORERROREnum ||
@@ -121,6 +121,22 @@ namespace TesApi.Controllers
             if (string.IsNullOrWhiteSpace(tesTask.Executors?.FirstOrDefault()?.Image))
             {
                 return BadRequest("Docker container image name is required.");
+            }
+
+            foreach (var input in tesTask.Inputs ?? Enumerable.Empty<TesInput>())
+            {
+                if (!input.Path.StartsWith('/'))
+                {
+                    return BadRequest("Input paths in the container must be absolute paths.");
+                }
+            }
+
+            foreach (var output in tesTask.Outputs ?? Enumerable.Empty<TesOutput>())
+            {
+                if (!output.Path.StartsWith('/'))
+                {
+                    return BadRequest("Output paths in the container must be absolute paths.");
+                }
             }
 
             tesTask.State = TesState.QUEUEDEnum;
@@ -238,9 +254,15 @@ namespace TesApi.Controllers
         public virtual async Task<IActionResult> GetTaskAsync([FromRoute][Required] string id, [FromQuery] string view, CancellationToken cancellationToken)
         {
             TesTask tesTask = null;
-            var itemFound = await repository.TryGetItemAsync(id, item => tesTask = item, cancellationToken);
+            var itemFound = await repository.TryGetItemAsync(id, cancellationToken, item => tesTask = item);
 
-            return itemFound ? TesJsonResult(tesTask, view) : NotFound($"The task with id {id} does not exist.");
+            if (!itemFound)
+            {
+                return NotFound($"The task with id {id} does not exist.");
+            }
+
+            await TryRemoveItemFromCacheAsync(tesTask, view, cancellationToken);
+            return TesJsonResult(tesTask, view);
         }
 
         /// <summary>
@@ -270,14 +292,39 @@ namespace TesApi.Controllers
 
             (var nextPageToken, var tasks) = await repository.GetItemsAsync(
                 t => string.IsNullOrWhiteSpace(namePrefix) || t.Name.StartsWith(namePrefix),
-                decodedPageToken,
                 pageSize.HasValue ? (int)pageSize : 256,
+                decodedPageToken,
                 cancellationToken);
 
             var encodedNextPageToken = nextPageToken is not null ? Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(nextPageToken)) : null;
             var response = new TesListTasksResponse { Tasks = tasks.ToList(), NextPageToken = encodedNextPageToken };
 
             return TesJsonResult(response, view);
+        }
+
+        private async ValueTask<bool> TryRemoveItemFromCacheAsync(TesTask tesTask, string view, CancellationToken cancellationToken)
+        {
+            try
+            {
+                if (tesTask.State == TesState.COMPLETEEnum
+                   || tesTask.State == TesState.CANCELEDEnum
+                   || ((tesTask.State == TesState.SYSTEMERROREnum || tesTask.State == TesState.EXECUTORERROREnum)
+                        && Enum.TryParse<TesView>(view, true, out var tesView)
+                        && tesView == TesView.FULL))
+                {
+                    // Cache optimization:
+                    // If a task completed/canceled with no errors, Cromwell will not call again
+                    // OR if the task failed with an error, Cromwell will call a second time requesting FULL view, at which point can remove from cache
+                    return await repository.TryRemoveItemFromCacheAsync(tesTask, cancellationToken);
+                }
+            }
+            catch (Exception exc)
+            {
+                // Do not re-throw, since a cache issue should not fail the GET request
+                logger.LogWarning(exc, $"An exception occurred while trying to remove TesTask with ID {tesTask.Id} with view {view} from the cache");
+            }
+
+            return false;
         }
 
         private IActionResult TesJsonResult(object value, string view)

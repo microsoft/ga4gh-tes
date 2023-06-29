@@ -21,7 +21,7 @@ namespace TesApi.Web
         /// Gets a new Azure Batch job id to schedule another task
         /// </summary>
         /// <param name="tesTaskId">The unique TES task ID</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The next logical, new Azure Batch job ID</returns>
         Task<string> GetNextBatchJobIdAsync(string tesTaskId, CancellationToken cancellationToken);
 
@@ -61,7 +61,7 @@ namespace TesApi.Web
         /// Gets the <see cref="StorageAccountInfo"/> for the given storage account name
         /// </summary>
         /// <param name="storageAccountName">Storage account name</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns><see cref="StorageAccountInfo"/></returns>
         Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken);
 
@@ -70,7 +70,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="poolInfo">Contains information about the pool. <see cref="BatchModels.ProxyResource.Name"/> becomes the <see cref="Microsoft.Azure.Batch.Protocol.Models.CloudPool.Id"/></param>
         /// <param name="isPreemptable">True if nodes in this pool will all be preemptable. False if nodes will all be dedicated.</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken);
 
         /// <summary>
@@ -132,7 +132,7 @@ namespace TesApi.Web
         /// Gets the primary key of the given storage account.
         /// </summary>
         /// <param name="storageAccountInfo">Storage account info</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The primary key</returns>
         Task<string> GetStorageAccountKeyAsync(StorageAccountInfo storageAccountInfo, CancellationToken cancellationToken);
 
@@ -141,44 +141,58 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="blobAbsoluteUri">Absolute Blob URI</param>
         /// <param name="content">Blob content</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>A task to await</returns>
-        Task UploadBlobAsync(Uri blobAbsoluteUri, string content);
+        Task UploadBlobAsync(Uri blobAbsoluteUri, string content, CancellationToken cancellationToken);
 
         /// <summary>
         /// Uploads the file content to a blob
         /// </summary>
         /// <param name="blobAbsoluteUri">Absolute Blob URI</param>
         /// <param name="filePath">File path</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>A task to await</returns>
-        Task UploadBlobFromFileAsync(Uri blobAbsoluteUri, string filePath);
+        Task UploadBlobFromFileAsync(Uri blobAbsoluteUri, string filePath, CancellationToken cancellationToken);
 
         /// <summary>
         /// Downloads a blob
         /// </summary>
         /// <param name="blobAbsoluteUri">Absolute Blob URI</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>Blob content</returns>
-        Task<string> DownloadBlobAsync(Uri blobAbsoluteUri);
+        Task<string> DownloadBlobAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken);
 
         /// <summary>
         /// Check if a blob exists.
         /// </summary>
         /// <param name="blobAbsoluteUri">Absolute Blob URI</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>Blob exists boolean.</returns>
-        Task<bool> BlobExistsAsync(Uri blobAbsoluteUri);
+        Task<bool> BlobExistsAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the list of blobs in the given directory
         /// </summary>
         /// <param name="directoryUri">Directory Uri</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>List of blob paths</returns>
-        Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri);
+        Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Fetches the blobs properties
+        /// </summary>
+        /// <param name="blobAbsoluteUri">Absolute Blob URI</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        Task<Microsoft.WindowsAzure.Storage.Blob.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the ids of completed Batch jobs older than specified timespan
         /// </summary>
         /// <param name="oldestJobAge"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>List of Batch job ids</returns>
-        Task<IEnumerable<string>> ListOldJobsToDeleteAsync(TimeSpan oldestJobAge);
+        Task<IEnumerable<string>> ListOldJobsToDeleteAsync(TimeSpan oldestJobAge, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the ids of orphaned Batch jobs older than specified timespan
@@ -228,8 +242,8 @@ namespace TesApi.Web
         /// Retrieves the specified pool
         /// </summary>
         /// <param name="poolId">The <see cref="CloudPool.Id"/> of the pool to retrieve.</param>
-        /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for controlling which properties are retrieved from the service.</param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for controlling which properties are retrieved from the service.</param>
         /// <returns><see cref="CloudPool"/></returns>
         Task<CloudPool> GetBatchPoolAsync(string poolId, CancellationToken cancellationToken, DetailLevel detailLevel = default);
 
@@ -237,8 +251,8 @@ namespace TesApi.Web
         /// Retrieves the specified batch job.
         /// </summary>
         /// <param name="jobId">The <see cref="Microsoft.Azure.Batch.Protocol.Models.CloudJob"/> of the job to retrieve.</param>
-        /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for controlling which properties are retrieved from the service.</param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for controlling which properties are retrieved from the service.</param>
         /// <returns></returns>
         Task<CloudJob> GetBatchJobAsync(string jobId, CancellationToken cancellationToken, DetailLevel detailLevel = default);
 
@@ -265,7 +279,7 @@ namespace TesApi.Web
         /// <param name="computeNodes">Enumerable list of <see cref="ComputeNode"/>s to delete.</param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        Task DeleteBatchComputeNodesAsync(string poolId, IEnumerable<ComputeNode> computeNodes, CancellationToken cancellationToken = default);
+        Task DeleteBatchComputeNodesAsync(string poolId, IEnumerable<ComputeNode> computeNodes, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the allocation state and numbers of targeted and current compute nodes
@@ -273,7 +287,7 @@ namespace TesApi.Web
         /// <param name="poolId">The id of the pool.</param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        Task<AzureBatchPoolAllocationState> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken = default);
+        Task<AzureBatchPoolAllocationState> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Checks if a local file exists

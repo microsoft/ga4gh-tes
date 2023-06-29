@@ -27,7 +27,7 @@ namespace TesApi.Tests
             var azureProxy = await ArrangeTest(new[] { firstTesTask, secondTesTask, thirdTesTask });
 
             // Assert
-            azureProxy.Verify(i => i.ListOldJobsToDeleteAsync(oldestJobAge));
+            azureProxy.Verify(i => i.ListOldJobsToDeleteAsync(oldestJobAge, It.IsAny<System.Threading.CancellationToken>()));
             azureProxy.Verify(i => i.DeleteBatchJobAsync("tesTaskId1", It.IsAny<System.Threading.CancellationToken>()));
             azureProxy.Verify(i => i.DeleteBatchPoolIfExistsAsync("tesTaskId1", It.IsAny<System.Threading.CancellationToken>()));
             azureProxy.VerifyNoOtherCalls();
@@ -43,7 +43,7 @@ namespace TesApi.Tests
             var azureProxy = await ArrangeTest(new[] { firstTesTask, secondTesTask, thirdTesTask });
 
             // Assert
-            azureProxy.Verify(i => i.ListOldJobsToDeleteAsync(oldestJobAge));
+            azureProxy.Verify(i => i.ListOldJobsToDeleteAsync(oldestJobAge, It.IsAny<System.Threading.CancellationToken>()));
             azureProxy.Verify(i => i.DeleteBatchJobAsync("tesTaskId1", It.IsAny<System.Threading.CancellationToken>()));
             azureProxy.Verify(i => i.DeleteBatchJobAsync("tesTaskId2", It.IsAny<System.Threading.CancellationToken>()));
             azureProxy.Verify(i => i.DeleteBatchPoolIfExistsAsync("tesTaskId1", It.IsAny<System.Threading.CancellationToken>()));
@@ -61,7 +61,7 @@ namespace TesApi.Tests
             var azureProxy = await ArrangeTest(new[] { firstTesTask, secondTesTask, thirdTesTask });
 
             // Assert
-            azureProxy.Verify(i => i.ListOldJobsToDeleteAsync(oldestJobAge));
+            azureProxy.Verify(i => i.ListOldJobsToDeleteAsync(oldestJobAge, It.IsAny<System.Threading.CancellationToken>()));
             azureProxy.Verify(i => i.DeleteBatchJobAsync("tesTaskId1", It.IsAny<System.Threading.CancellationToken>()));
             azureProxy.Verify(i => i.DeleteBatchPoolIfExistsAsync("tesTaskId1", It.IsAny<System.Threading.CancellationToken>()));
             azureProxy.VerifyNoOtherCalls();
@@ -77,7 +77,7 @@ namespace TesApi.Tests
             var azureProxy = await ArrangeTest(new[] { firstTesTask, secondTesTask, thirdTesTask });
 
             // Assert
-            azureProxy.Verify(i => i.ListOldJobsToDeleteAsync(oldestJobAge));
+            azureProxy.Verify(i => i.ListOldJobsToDeleteAsync(oldestJobAge, It.IsAny<System.Threading.CancellationToken>()));
             azureProxy.Verify(i => i.DeleteBatchJobAsync("tesTaskId1", It.IsAny<System.Threading.CancellationToken>()));
             azureProxy.Verify(i => i.DeleteBatchPoolIfExistsAsync("tesTaskId1", It.IsAny<System.Threading.CancellationToken>()));
             azureProxy.VerifyNoOtherCalls();
@@ -89,8 +89,8 @@ namespace TesApi.Tests
             {
                 foreach (var item in tasks)
                 {
-                    mockRepo.Setup(repo => repo.TryGetItemAsync(item.Id, It.IsAny<Action<TesTask>>(), It.IsAny<System.Threading.CancellationToken>()))
-                        .Callback<string, Action<TesTask>, System.Threading.CancellationToken>((id, action, cancellationToken) =>
+                    mockRepo.Setup(repo => repo.TryGetItemAsync(item.Id, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
+                        .Callback<string, System.Threading.CancellationToken, Action<TesTask>>((id, _1, action) =>
                         {
                             action(item);
                         })
@@ -100,7 +100,7 @@ namespace TesApi.Tests
 
             using var serviceProvider = new TestServices.TestServiceProvider<DeleteCompletedBatchJobsHostedService>(
                 configuration: Enumerable.Repeat(("BatchScheduling:UseLegacyAutopools", true.ToString()), 1),
-                azureProxy: a => a.Setup(p => p.ListOldJobsToDeleteAsync(oldestJobAge))
+                azureProxy: a => a.Setup(p => p.ListOldJobsToDeleteAsync(oldestJobAge, It.IsAny<System.Threading.CancellationToken>()))
                     .ReturnsAsync(tasks.Select(i => i.Id + "-1")),
                 tesTaskRepository: SetupRepository);
 

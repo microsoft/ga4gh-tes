@@ -17,7 +17,7 @@ namespace TesApi.Web.Management
         /// Returns the size and pricing information for Batch supported VMs
         /// </summary>
         /// <param name="region"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync(string region, CancellationToken cancellationToken);
     }

@@ -7,7 +7,6 @@ using System.Reflection;
 using System.Threading;
 using Azure.Core;
 using Azure.Identity;
-using LazyCache;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -73,8 +72,7 @@ namespace TesApi.Web
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
 
-                    .AddDistributedMemoryCache(options => options.SizeLimit = null)
-                    .AddSingleton<IAppCache, CachingService>()
+                    .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
@@ -111,9 +109,9 @@ namespace TesApi.Web
 
                     .AddSwaggerGen(c =>
                     {
-                        c.SwaggerDoc("4.3.0", new()
+                        c.SwaggerDoc("4.4.0", new()
                         {
-                            Version = "4.3.0",
+                            Version = "4.4.0",
                             Title = "GA4GH Task Execution Service",
                             Description = "Task Execution Service (ASP.NET Core 7.0)",
                             Contact = new()
@@ -271,7 +269,7 @@ namespace TesApi.Web
                 })
                 .UseSwaggerUI(c =>
                 {
-                    c.SwaggerEndpoint("/swagger/4.3.0/openapi.json", "Task Execution Service");
+                    c.SwaggerEndpoint("/swagger/4.4.0/openapi.json", "Task Execution Service");
                 })
 
                 .IfThenElse(hostingEnvironment.IsDevelopment(),

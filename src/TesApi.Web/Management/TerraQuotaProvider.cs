@@ -89,7 +89,7 @@ namespace TesApi.Web.Management
         {
             var batchResourceId = await GetBatchAccountResourceIdFromLandingZone(cancellationToken);
 
-            return await terraLandingZoneClient.GetResourceQuotaAsync(landingZoneId, batchResourceId, cacheResults: true, cancellationToken);
+            return await terraLandingZoneClient.GetResourceQuotaAsync(landingZoneId, batchResourceId, cacheResults: true, cancellationToken: cancellationToken);
         }
 
         private async Task<string> GetBatchAccountResourceIdFromLandingZone(CancellationToken cancellationToken)

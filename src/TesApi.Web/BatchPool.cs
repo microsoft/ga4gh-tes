@@ -648,8 +648,8 @@ namespace TesApi.Web
     {
         internal int TestPendingReservationsCount => GetTasksAsync(includeCompleted: false).CountAsync().AsTask().Result;
 
-        internal int? TestTargetDedicated => _azureProxy.GetFullAllocationStateAsync(Pool.PoolId).Result.TargetDedicated;
-        internal int? TestTargetLowPriority => _azureProxy.GetFullAllocationStateAsync(Pool.PoolId).Result.TargetLowPriority;
+        internal int? TestTargetDedicated => _azureProxy.GetFullAllocationStateAsync(Pool.PoolId, CancellationToken.None).Result.TargetDedicated;
+        internal int? TestTargetLowPriority => _azureProxy.GetFullAllocationStateAsync(Pool.PoolId, CancellationToken.None).Result.TargetLowPriority;
 
         internal TimeSpan TestRotatePoolTime
             => _forcePoolRotationAge;

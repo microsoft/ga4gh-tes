@@ -78,7 +78,7 @@ namespace TesApi.Web.Management.Clients
         /// </summary>
         /// <param name="httpRequestFactory">Factory that creates new http requests, in the event of retry the factory is called again
         /// and must be idempotent</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
         /// <returns></returns>
         protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(
@@ -102,7 +102,7 @@ namespace TesApi.Web.Management.Clients
         /// <param name="requestUrl"></param>
         /// <param name="setAuthorizationHeader"></param>
         /// <param name="cacheResults"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         protected async Task<string> HttpGetRequestAsync(Uri requestUrl, bool setAuthorizationHeader, bool cacheResults, CancellationToken cancellationToken)
         {
@@ -120,7 +120,7 @@ namespace TesApi.Web.Management.Clients
         /// <param name="requestUrl"></param>
         /// <param name="setAuthorizationHeader"></param>
         /// <param name="cacheResults"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <typeparam name="TResponse"></typeparam>
         /// <returns></returns>
         protected async Task<TResponse> HttpGetRequestAsync<TResponse>(Uri requestUrl, bool setAuthorizationHeader,
@@ -135,7 +135,7 @@ namespace TesApi.Web.Management.Clients
         /// Checks the cache and if the request was not found, sends the GET request with a retry policy
         /// </summary>
         /// <param name="requestUrl"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="setAuthorizationHeader"></param>
         /// <returns></returns>
         protected async Task<string> HttpGetRequestWithCachingAndRetryPolicyAsync(Uri requestUrl,
@@ -155,8 +155,8 @@ namespace TesApi.Web.Management.Clients
         /// Get request with retry policy
         /// </summary>
         /// <param name="requestUrl"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="setAuthorizationHeader"></param>
-        /// <param name="cancellationToken"></param>
         /// <returns></returns>
         protected async Task<string> HttpGetRequestWithRetryPolicyAsync(Uri requestUrl,
             CancellationToken cancellationToken, bool setAuthorizationHeader = false)
@@ -292,7 +292,7 @@ namespace TesApi.Web.Management.Clients
         /// </summary>
         /// <param name="requestUrl">Request url</param>
         /// <param name="perUser">if true, caching data will be per user</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public async Task<string> ToCacheKeyAsync(Uri requestUrl, bool perUser, CancellationToken cancellationToken)
         {
@@ -319,7 +319,7 @@ namespace TesApi.Web.Management.Clients
         /// Returns the response content, the response is successful 
         /// </summary>
         /// <param name="response">Response</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <typeparam name="T">Response's content deserialization type</typeparam>
         /// <returns></returns>
         protected static async Task<T> GetApiResponseContentAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)

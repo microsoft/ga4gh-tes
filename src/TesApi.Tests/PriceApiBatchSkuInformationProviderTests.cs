@@ -3,7 +3,7 @@
 
 using System.Linq;
 using System.Threading.Tasks;
-using LazyCache;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -19,20 +19,26 @@ namespace TesApi.Tests
     {
         private PriceApiClient pricingApiClient;
         private PriceApiBatchSkuInformationProvider provider;
-        private IAppCache appCache;
+        private IMemoryCache appCache;
         private CacheAndRetryHandler cacheAndRetryHandler;
         private Mock<IOptions<RetryPolicyOptions>> mockRetryOptions;
 
         [TestInitialize]
         public void Initialize()
         {
-            appCache = new CachingService();
+            appCache = new MemoryCache(new MemoryCacheOptions());
             mockRetryOptions = new Mock<IOptions<RetryPolicyOptions>>();
             mockRetryOptions.Setup(m => m.Value).Returns(new RetryPolicyOptions());
 
             cacheAndRetryHandler = new CacheAndRetryHandler(appCache, mockRetryOptions.Object);
             pricingApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
             provider = new PriceApiBatchSkuInformationProvider(pricingApiClient, new NullLogger<PriceApiBatchSkuInformationProvider>());
+        }
+
+        [TestCleanup]
+        public void Cleanup()
+        {
+            appCache?.Dispose();
         }
 
         [TestMethod]

@@ -38,10 +38,10 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
+            var result = await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None) as ObjectResult;
 
             Assert.IsNotNull(result);
-            services.TesTaskRepository.Verify(x => x.CreateItemAsync(tesTask, It.IsAny<CancellationToken>()));
+            services.TesTaskRepository.Verify(x => x.CreateItemAsync(tesTask, It.IsAny<System.Threading.CancellationToken>()));
             Assert.AreEqual(32, tesTask.Id.Length);
             Assert.AreEqual(TesState.QUEUEDEnum, tesTask.State);
             Assert.IsTrue(tesTask.Resources.BackendParameters.ContainsKey(backend_parameter_key));
@@ -68,10 +68,10 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
+            var result = await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None) as ObjectResult;
 
             Assert.IsNotNull(result);
-            services.TesTaskRepository.Verify(x => x.CreateItemAsync(tesTask, It.IsAny<CancellationToken>()));
+            services.TesTaskRepository.Verify(x => x.CreateItemAsync(tesTask, It.IsAny<System.Threading.CancellationToken>()));
             Assert.AreEqual(32, tesTask.Id.Length);
             Assert.AreEqual(TesState.QUEUEDEnum, tesTask.State);
             Assert.IsTrue(tesTask.Resources.BackendParameters.ContainsKey(backend_parameter_key));
@@ -98,10 +98,10 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
+            var result = await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None) as ObjectResult;
 
             Assert.IsNotNull(result);
-            services.TesTaskRepository.Verify(x => x.CreateItemAsync(tesTask, It.IsAny<CancellationToken>()));
+            services.TesTaskRepository.Verify(x => x.CreateItemAsync(tesTask, It.IsAny<System.Threading.CancellationToken>()));
             Assert.AreEqual(32, tesTask.Id.Length);
             Assert.AreEqual(TesState.QUEUEDEnum, tesTask.State);
 
@@ -130,7 +130,7 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as BadRequestObjectResult;
+            var result = await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None) as BadRequestObjectResult;
 
             Assert.IsNotNull(result);
 
@@ -162,7 +162,7 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as BadRequestObjectResult;
+            var result = await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None) as BadRequestObjectResult;
 
             Assert.IsNotNull(result);
 
@@ -176,7 +176,7 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as BadRequestObjectResult;
+            var result = await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None) as BadRequestObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(400, result.StatusCode);
@@ -189,7 +189,7 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
+            var result = await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None) as ObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(400, result.StatusCode);
@@ -203,10 +203,10 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            var result = await controller.CreateTaskAsync(tesTask, CancellationToken.None) as ObjectResult;
+            var result = await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None) as ObjectResult;
 
             Assert.IsNotNull(result);
-            services.TesTaskRepository.Verify(x => x.CreateItemAsync(tesTask, It.IsAny<CancellationToken>()));
+            services.TesTaskRepository.Verify(x => x.CreateItemAsync(tesTask, It.IsAny<System.Threading.CancellationToken>()));
             Assert.AreEqual(32, tesTask.Id.Length);
             Assert.AreEqual(TesState.QUEUEDEnum, tesTask.State);
             Assert.AreEqual(200, result.StatusCode);
@@ -229,7 +229,7 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            await controller.CreateTaskAsync(tesTask, CancellationToken.None);
+            await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None);
 
             Assert.AreEqual(41, tesTask.Id.Length); // First eight characters of Cromwell's job id + underscore + GUID without dashes
             Assert.IsTrue(tesTask.Id.StartsWith(cromwellWorkflowId[..8] + "_"));
@@ -241,15 +241,15 @@ namespace TesApi.Tests
             var tesTaskId = "IdDoesNotExist";
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
-                r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<Action<TesTask>>(), It.IsAny<CancellationToken>()))
-                .Callback<string, Action<TesTask>, CancellationToken>((id, action, cancellationToken) =>
+                r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
+                .Callback<string, System.Threading.CancellationToken, Action<TesTask>>((id, _1, action) =>
                 {
                     action(null);
                 })
                 .ReturnsAsync(false));
             var controller = services.GetT();
 
-            var result = await controller.CancelTask(tesTaskId, CancellationToken.None) as NotFoundObjectResult;
+            var result = await controller.CancelTask(tesTaskId, System.Threading.CancellationToken.None) as NotFoundObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(404, result.StatusCode);
@@ -261,20 +261,17 @@ namespace TesApi.Tests
             var tesTask = new TesTask() { Id = "testTaskId", State = TesState.QUEUEDEnum };
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
-                r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<Action<TesTask>>(), It.IsAny<CancellationToken>()))
-                .Callback<string, Action<TesTask>, CancellationToken>((id, action, cancellationToken) =>
-                {
-                    action(tesTask);
-                })
+                r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
+                .Callback<string, System.Threading.CancellationToken, Action<TesTask>>((id, _1, action) => { action(tesTask); })
                 .ReturnsAsync(true));
             var controller = services.GetT();
 
-            var result = await controller.CancelTask(tesTask.Id, CancellationToken.None) as ObjectResult;
+            var result = await controller.CancelTask(tesTask.Id, System.Threading.CancellationToken.None) as ObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(200, result.StatusCode);
             Assert.AreEqual(TesState.CANCELEDEnum, tesTask.State);
-            services.TesTaskRepository.Verify(x => x.UpdateItemAsync(tesTask, It.IsAny<CancellationToken>()));
+            services.TesTaskRepository.Verify(x => x.UpdateItemAsync(tesTask, It.IsAny<System.Threading.CancellationToken>()));
         }
 
         [TestMethod]
@@ -295,11 +292,11 @@ namespace TesApi.Tests
             var tesTaskId = "IdDoesNotExist";
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
-                r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<Action<TesTask>>(), It.IsAny<CancellationToken>()))
+                r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
                     .ReturnsAsync(false));
             var controller = services.GetT();
 
-            var result = await controller.GetTaskAsync(tesTaskId, "MINIMAL", CancellationToken.None) as NotFoundObjectResult;
+            var result = await controller.GetTaskAsync(tesTaskId, "MINIMAL", System.Threading.CancellationToken.None) as NotFoundObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(404, result.StatusCode);
@@ -311,15 +308,15 @@ namespace TesApi.Tests
             var tesTask = new TesTask();
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
-                r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<Action<TesTask>>(), It.IsAny<CancellationToken>()))
-                .Callback<string, Action<TesTask>, CancellationToken>((id, action, cancellationToken) =>
+                r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
+                .Callback<string, System.Threading.CancellationToken, Action<TesTask>>((id, _1, action) =>
                 {
                     action(tesTask);
                 })
                 .ReturnsAsync(true));
             var controller = services.GetT();
 
-            var result = await controller.GetTaskAsync(tesTask.Id, "INVALID", CancellationToken.None) as BadRequestObjectResult;
+            var result = await controller.GetTaskAsync(tesTask.Id, "INVALID", System.Threading.CancellationToken.None) as BadRequestObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(400, result.StatusCode);
@@ -334,18 +331,18 @@ namespace TesApi.Tests
             };
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
-                r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<Action<TesTask>>(), It.IsAny<CancellationToken>()))
-                .Callback<string, Action<TesTask>, CancellationToken>((id, action, cancellationToken) =>
+                r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
+                .Callback<string, System.Threading.CancellationToken, Action<TesTask>>((id, _1, action) =>
                 {
                     action(tesTask);
                 })
                 .ReturnsAsync(true));
             var controller = services.GetT();
 
-            var result = await controller.GetTaskAsync(tesTask.Id, "MINIMAL", CancellationToken.None) as JsonResult;
+            var result = await controller.GetTaskAsync(tesTask.Id, "MINIMAL", System.Threading.CancellationToken.None) as JsonResult;
 
             Assert.IsNotNull(result);
-            services.TesTaskRepository.Verify(x => x.TryGetItemAsync(tesTask.Id, It.IsAny<Action<TesTask>>(), It.IsAny<CancellationToken>()));
+            services.TesTaskRepository.Verify(x => x.TryGetItemAsync(tesTask.Id, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()));
             Assert.AreEqual(TesState.RUNNINGEnum, tesTask.State);
             Assert.AreEqual(200, result.StatusCode);
         }
@@ -356,7 +353,7 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            var result = await controller.ListTasks(null, 0, null, "BASIC", CancellationToken.None) as BadRequestObjectResult;
+            var result = await controller.ListTasks(null, 0, null, "BASIC", System.Threading.CancellationToken.None) as BadRequestObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(400, result.StatusCode);
@@ -374,12 +371,12 @@ namespace TesApi.Tests
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo
-                .GetItemsAsync(It.IsAny<Expression<Func<TesTask, bool>>>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync((Expression<Func<TesTask, bool>> predicate, string continuationToken, int pageSize, CancellationToken cancellationToken) =>
+                .GetItemsAsync(It.IsAny<Expression<Func<TesTask, bool>>>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync((Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken, System.Threading.CancellationToken _1) =>
                     (string.Empty, tesTasks.Where(i => predicate.Compile().Invoke(i)).Take(pageSize))));
             var controller = services.GetT();
 
-            var result = await controller.ListTasks(namePrefix, 1, null, "BASIC", CancellationToken.None) as JsonResult;
+            var result = await controller.ListTasks(namePrefix, 1, null, "BASIC", System.Threading.CancellationToken.None) as JsonResult;
             var listOfTesTasks = (TesListTasksResponse)result.Value;
 
             Assert.IsNotNull(result);
@@ -404,7 +401,7 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            await controller.CreateTaskAsync(tesTask, CancellationToken.None);
+            await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None);
 
             Assert.AreEqual(cromwellWorkflowId, tesTask.WorkflowId);
         }
@@ -424,7 +421,7 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            await controller.CreateTaskAsync(tesTask1, CancellationToken.None);
+            await controller.CreateTaskAsync(tesTask1, System.Threading.CancellationToken.None);
 
             Assert.IsNull(tesTask1.WorkflowId);
 
@@ -435,7 +432,7 @@ namespace TesApi.Tests
                 Inputs = new() { new() { Path = "/cromwell-executions/" } }
             };
 
-            await controller.CreateTaskAsync(tesTask2, CancellationToken.None);
+            await controller.CreateTaskAsync(tesTask2, System.Threading.CancellationToken.None);
 
             Assert.IsNull(tesTask2.WorkflowId);
 
@@ -446,7 +443,7 @@ namespace TesApi.Tests
                 Inputs = new() { new() { Path = "/cromwell-executions/" } }
             };
 
-            await controller.CreateTaskAsync(tesTask3, CancellationToken.None);
+            await controller.CreateTaskAsync(tesTask3, System.Threading.CancellationToken.None);
 
             Assert.IsNull(tesTask3.WorkflowId);
 
@@ -457,7 +454,7 @@ namespace TesApi.Tests
                 Inputs = new() { new() { Path = "/cromwell-executions/test/" } }
             };
 
-            await controller.CreateTaskAsync(tesTask4, CancellationToken.None);
+            await controller.CreateTaskAsync(tesTask4, System.Threading.CancellationToken.None);
 
             Assert.IsNull(tesTask4.WorkflowId);
         }
@@ -600,7 +597,7 @@ namespace TesApi.Tests
                 azureProxy: a => a.Setup(a => a.TryReadCwlFile(It.IsAny<string>(), out cwlFileContent)).Returns(true));
             var controller = services.GetT();
 
-            await controller.CreateTaskAsync(tesTask, CancellationToken.None);
+            await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None);
 
             return tesTask;
         }

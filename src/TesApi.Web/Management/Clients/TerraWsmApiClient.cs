@@ -50,7 +50,7 @@ namespace TesApi.Web.Management.Clients
         /// <param name="workspaceId">Terra workspace id</param>
         /// <param name="resourceId">Terra resource id</param>
         /// <param name="sasTokenApiParameters">Sas token parameters</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public virtual async Task<WsmSasTokenApiResponse> GetSasTokenAsync(Guid workspaceId, Guid resourceId, SasTokenApiParameters sasTokenApiParameters, CancellationToken cancellationToken)
         {
@@ -67,7 +67,7 @@ namespace TesApi.Web.Management.Clients
         /// </summary>
         /// <param name="workspaceId">Wsm Workspace id</param>
         /// <param name="apiCreateBatchPool">Create batch pool request</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public virtual async Task<ApiCreateBatchPoolResponse> CreateBatchPool(Guid workspaceId, ApiCreateBatchPoolRequest apiCreateBatchPool, CancellationToken cancellationToken)
         {
@@ -97,13 +97,12 @@ namespace TesApi.Web.Management.Clients
             }
         }
 
-
         /// <summary>
         /// Deletes a batch pool using the WSM API
         /// </summary>
         /// <param name="workspaceId">WSM workspace id</param>
         /// <param name="wsmBatchPoolResourceId">WSM resource id</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         public virtual async Task DeleteBatchPoolAsync(Guid workspaceId, Guid wsmBatchPoolResourceId, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(workspaceId);

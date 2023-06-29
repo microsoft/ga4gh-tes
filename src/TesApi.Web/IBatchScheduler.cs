@@ -22,17 +22,26 @@ namespace TesApi.Web
         /// <summary>
         /// Loads existing pools from Azure Batch Account tagged with this instance's "Name"
         /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         /// <remarks>This should be called only once after the <see cref="BatchScheduler"/> is created before any other methods are called.</remarks>
-        Task LoadExistingPoolsAsync();
+        Task LoadExistingPoolsAsync(CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Stores the compute node task runner in the default storage account
+        /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        /// <remarks>This should be called only once after the <see cref="BatchScheduler"/> is created before any other methods are called.</remarks>
+        Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken);
 
         /// <summary>
         /// Schedule an enumeration of <see cref="TesTask"/> on a batch system until completion or failure
         /// </summary>
         /// <param name="tesTasks">An enumeration of <see cref="TesTask"/> to schedule on the batch system</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>Whether each <see cref="TesTask"/> was modified.</returns>
-        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsChangedAsync)> ProcessTesTasksAsync(IEnumerable<TesTask> tesTasks, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsChangedAsync)> ProcessTesTasksAsync(IEnumerable<TesTask> tesTasks, CancellationToken cancellationToken);
 
         /// <summary>
         /// Adds <see cref="IBatchPool"/> to the managed batch pools.
@@ -58,8 +67,9 @@ namespace TesApi.Web
         /// <summary>
         /// Retrieves pools associated with this TES from the batch account.
         /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        IAsyncEnumerable<CloudPool> GetCloudPools();
+        IAsyncEnumerable<CloudPool> GetCloudPools(CancellationToken cancellationToken);
 
         /// <summary>
         /// Removes pool from list of managed pools.

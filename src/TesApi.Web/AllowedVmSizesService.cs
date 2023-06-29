@@ -35,12 +35,12 @@ namespace TesApi.Web
             this.logger = logger;
         }
 
-        private async Task GetAllowedVmSizesImpl(CancellationToken stoppingToken)
+        private async Task GetAllowedVmSizesImpl(CancellationToken cancellationToken)
         {
             try
             {
                 logger.LogInformation("Executing allowed vm sizes config setup");
-                allowedVmSizes = await configUtils.ProcessAllowedVmSizesConfigurationFileAsync(stoppingToken);
+                allowedVmSizes = await configUtils.ProcessAllowedVmSizesConfigurationFileAsync(cancellationToken);
             }
             catch (Exception e)
             {
@@ -73,14 +73,15 @@ namespace TesApi.Web
         /// <summary>
         /// Awaits start up and then return allowed vm sizes. 
         /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>List of allowed vms.</returns>
-        public async Task<List<string>> GetAllowedVmSizes()
+        public async Task<List<string>> GetAllowedVmSizes(CancellationToken cancellationToken)
         {
             if (allowedVmSizes == null)
             {
                 while (firstTask is null)
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(1));
+                    await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
                 }
                 await firstTask;
             }

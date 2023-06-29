@@ -55,7 +55,7 @@ namespace TesApi.Web.Management
         /// Looks for the container registry information from the image name.
         /// </summary>
         /// <param name="imageName">Container image name</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>Container registry information, or null if auto-discovery is disabled or the repository was not found</returns>
         public virtual async Task<ContainerRegistryInfo> GetContainerRegistryInfoAsync(string imageName, CancellationToken cancellationToken)
         {
@@ -81,9 +81,12 @@ namespace TesApi.Web.Management
         /// <returns>True if the image is expected to be publically available, otherwise false</returns>
         public bool IsImagePublic(string imageName)
         {
+            var lastColon = imageName.LastIndexOf(':');
+            var probableImageNameWithoutTag = lastColon == -1 ? imageName : imageName[0..lastColon];
+
             // mcr.microsoft.com = public
             // no domain specified = public
-            var host = imageName.Split('/', StringSplitOptions.RemoveEmptyEntries).First();
+            var host = probableImageNameWithoutTag.Split('/', StringSplitOptions.RemoveEmptyEntries).First();
 
             if (host.Equals("mcr.microsoft.com", StringComparison.OrdinalIgnoreCase) || !host.Contains('.'))
             {
@@ -95,7 +98,7 @@ namespace TesApi.Web.Management
 
         private async Task<ContainerRegistryInfo> LookUpAndAddToCacheContainerRegistryInfoAsync(string imageName, CancellationToken cancellationToken)
         {
-            var repositories = await CacheAndRetryHandler.ExecuteWithRetryAsync(ct => GetAccessibleContainerRegistriesAsync(ct), cancellationToken);
+            var repositories = await CacheAndRetryHandler.ExecuteWithRetryAsync(GetAccessibleContainerRegistriesAsync, cancellationToken: cancellationToken);
 
             var requestedRepo = repositories?.FirstOrDefault(reg =>
                 reg.RegistryServer.Equals(imageName.Split('/').FirstOrDefault(), StringComparison.OrdinalIgnoreCase));
@@ -103,20 +106,14 @@ namespace TesApi.Web.Management
             if (requestedRepo is not null)
             {
                 Logger.LogInformation($"Requested repository: {imageName} was found.");
-
-                CacheAndRetryHandler.AppCache.Add($"{nameof(ContainerRegistryProvider)}:{imageName}", requestedRepo,
-                    //I find kind of odd the Add method of the cache does not exposes the expiration directly as param as the GetOrAdd method does.
-                    new MemoryCacheEntryOptions()
-                    {
-                        AbsoluteExpiration = DateTimeOffset.UtcNow.AddHours(options.RegistryInfoCacheExpirationInHours)
-                    });
-
-                return requestedRepo;
+                CacheAndRetryHandler.AppCache.Set($"{nameof(ContainerRegistryProvider)}:{imageName}", requestedRepo, DateTimeOffset.UtcNow.AddHours(options.RegistryInfoCacheExpirationInHours));
+            }
+            else
+            {
+                Logger.LogWarning($"The TES service did not find the requested repository: {imageName}");
             }
 
-            Logger.LogWarning($"The TES service did not find the requested repository: {imageName}");
-
-            return null;
+            return requestedRepo;
         }
 
         private bool IsKnownOrDefaultContainerRegistry(string imageName)

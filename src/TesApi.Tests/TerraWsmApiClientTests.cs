@@ -95,11 +95,12 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetSasTokenAsync_ValidRequest_ReturnsPayload()
         {
-            var response = new HttpResponseMessage(HttpStatusCode.OK);
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(terraApiStubData.GetWsmSasTokenApiResponseInJson())
+            };
 
-            response.Content = new StringContent(terraApiStubData.GetWsmSasTokenApiResponseInJson());
-
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>()))
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(response);
 
             var apiResponse = await terraWsmApiClient.GetSasTokenAsync(terraApiStubData.WorkspaceId,
@@ -116,10 +117,10 @@ namespace TesApi.Tests
             var wsmResourceId = Guid.NewGuid();
             var response = new HttpResponseMessage(HttpStatusCode.NoContent);
 
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>()))
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(response);
 
-            await terraWsmApiClient.DeleteBatchPoolAsync(terraApiStubData.WorkspaceId, wsmResourceId, CancellationToken.None);
+            await terraWsmApiClient.DeleteBatchPoolAsync(terraApiStubData.WorkspaceId, wsmResourceId, System.Threading.CancellationToken.None);
         }
 
         [TestMethod]

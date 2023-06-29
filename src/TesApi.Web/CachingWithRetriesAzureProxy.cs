@@ -7,17 +7,14 @@ using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
-
-using LazyCache;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
-
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
-
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
 namespace TesApi.Web
@@ -117,10 +114,10 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public Task<string> DownloadBlobAsync(Uri blobAbsoluteUri) => cacheAndRetryHandler.ExecuteWithRetryAsync(() => azureProxy.DownloadBlobAsync(blobAbsoluteUri));
+        public Task<string> DownloadBlobAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DownloadBlobAsync(blobAbsoluteUri, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task<bool> BlobExistsAsync(Uri blobAbsoluteUri) => cacheAndRetryHandler.ExecuteWithRetryAsync(() => azureProxy.BlobExistsAsync(blobAbsoluteUri));
+        public Task<bool> BlobExistsAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.BlobExistsAsync(blobAbsoluteUri, ct), cancellationToken);
 
         /// <inheritdoc/>
         public Task<IEnumerable<string>> GetActivePoolIdsAsync(string prefix, TimeSpan minAge, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.GetActivePoolIdsAsync(prefix, minAge, ct), cancellationToken);
@@ -149,7 +146,7 @@ namespace TesApi.Web
         public Task<string> GetNextBatchJobIdAsync(string tesTaskId, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.GetNextBatchJobIdAsync(tesTaskId, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task<IEnumerable<string>> GetPoolIdsReferencedByJobsAsync(CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.GetPoolIdsReferencedByJobsAsync(ct), cancellationToken);
+        public Task<IEnumerable<string>> GetPoolIdsReferencedByJobsAsync(CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(azureProxy.GetPoolIdsReferencedByJobsAsync, cancellationToken);
 
         /// <inheritdoc/>
         public Task<string> GetStorageAccountKeyAsync(StorageAccountInfo storageAccountInfo, CancellationToken cancellationToken)
@@ -172,19 +169,22 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri) => cacheAndRetryHandler.ExecuteWithRetryAsync(() => azureProxy.ListBlobsAsync(directoryUri));
+        public Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.ListBlobsAsync(directoryUri, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task<IEnumerable<string>> ListOldJobsToDeleteAsync(TimeSpan oldestJobAge) => cacheAndRetryHandler.ExecuteWithRetryAsync(() => azureProxy.ListOldJobsToDeleteAsync(oldestJobAge));
+        public Task<IEnumerable<string>> ListOldJobsToDeleteAsync(TimeSpan oldestJobAge, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.ListOldJobsToDeleteAsync(oldestJobAge, ct), cancellationToken);
 
         /// <inheritdoc/>
         public Task<IEnumerable<string>> ListOrphanedJobsToDeleteAsync(TimeSpan minJobAge, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.ListOrphanedJobsToDeleteAsync(minJobAge, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task UploadBlobAsync(Uri blobAbsoluteUri, string content) => cacheAndRetryHandler.ExecuteWithRetryAsync(() => azureProxy.UploadBlobAsync(blobAbsoluteUri, content));
+        public Task UploadBlobAsync(Uri blobAbsoluteUri, string content, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.UploadBlobAsync(blobAbsoluteUri, content, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task UploadBlobFromFileAsync(Uri blobAbsoluteUri, string filePath) => cacheAndRetryHandler.ExecuteWithRetryAsync(() => azureProxy.UploadBlobFromFileAsync(blobAbsoluteUri, filePath));
+        public Task UploadBlobFromFileAsync(Uri blobAbsoluteUri, string filePath, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.UploadBlobFromFileAsync(blobAbsoluteUri, filePath, ct), cancellationToken);
+
+        /// <inheritdoc/>
+        public Task<Microsoft.WindowsAzure.Storage.Blob.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken) => cacheAndRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.GetBlobPropertiesAsync(blobAbsoluteUri, ct), cancellationToken);
 
         /// <inheritdoc/>
         public bool LocalFileExists(string path) => cacheAndRetryHandler.RetryPolicy.Execute(() => azureProxy.LocalFileExists(path));

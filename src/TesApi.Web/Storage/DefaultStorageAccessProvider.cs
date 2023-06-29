@@ -85,7 +85,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> MapLocalPathToSasUrlAsync(string path, System.Threading.CancellationToken cancellationToken, bool getContainerSas = false)
+        public override async Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, bool getContainerSas = false)
         {
             // TODO: Optional: If path is /container/... where container matches the name of the container in the default storage account, prepend the account name to the path.
             // This would allow the user to omit the account name for files stored in the default storage account

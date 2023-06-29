@@ -135,9 +135,9 @@ namespace TesApi.Web.Storage
         /// Returns a Url with a SAS token for the given input
         /// </summary>
         /// <param name="blobName"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>SAS Token URL</returns>
-        internal async Task<string> GetMappedSasUrlFromWsmAsync(string blobName, CancellationToken cancellationToken)
+        public async Task<string> GetMappedSasUrlFromWsmAsync(string blobName, CancellationToken cancellationToken)
         {
             var normalizedBlobName = blobName.TrimStart('/');
 

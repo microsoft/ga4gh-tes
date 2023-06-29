@@ -18,7 +18,7 @@ namespace TesApi.Web.Management
         /// <param name="virtualMachineInformation"></param>
         /// <param name="needPoolOrJobQuotaCheck">Flag to enable checking pool and job quotas.</param>
         /// <param name="needCoresUtilizationQuotaCheck">Flag to enable checking core quotas against current utilization. Zero quota checks are always performed.</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         /// <exception cref="AzureBatchLowQuotaException">Thrown when a task requires more cores than total quota available</exception>
         /// <exception cref="AzureBatchQuotaMaxedOutException">Thrown when a max quota condition was identified</exception>

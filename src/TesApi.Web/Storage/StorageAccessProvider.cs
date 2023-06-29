@@ -18,11 +18,6 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// </summary>
     protected const string CromwellPathPrefix = "/cromwell-executions/";
     /// <summary>
-    /// Executions path prefix
-    /// </summary>
-    protected const string BatchPathPrefix = "/executions/";
-
-    /// <summary>
     /// Logger instance. 
     /// </summary>
     protected readonly ILogger Logger;
@@ -47,7 +42,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     {
         try
         {
-            return await this.AzureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken)));
+            return await this.AzureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken)), cancellationToken);
         }
         catch
         {
@@ -57,11 +52,11 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
 
     /// <inheritdoc />
     public async Task UploadBlobAsync(string blobRelativePath, string content, CancellationToken cancellationToken)
-        => await this.AzureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, true)), content);
+        => await this.AzureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, true)), content, cancellationToken);
 
     /// <inheritdoc />
     public async Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath, CancellationToken cancellationToken)
-        => await this.AzureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, true)), sourceLocalFilePath);
+        => await this.AzureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, true)), sourceLocalFilePath, cancellationToken);
 
     /// <inheritdoc />
     public abstract Task<bool> IsPublicHttpUrlAsync(string uriString, CancellationToken cancellationToken);
@@ -79,11 +74,10 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
         => Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// True if the path is the cromwell or executions folder
+    /// True if the path is the cromwell executions folder
     /// </summary>
     /// <param name="path"></param>
     /// <returns></returns>
     protected bool IsKnownExecutionFilePath(string path)
-        => path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase)
-               || path.StartsWith(BatchPathPrefix, StringComparison.OrdinalIgnoreCase);
+        => path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase);
 }

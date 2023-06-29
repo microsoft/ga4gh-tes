@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
@@ -52,29 +53,32 @@ namespace TesApi.Web.Management
         /// </summary>
         protected AzureManagementClientsFactory() { }
 
-        private static Task<string> GetAzureAccessTokenAsync(System.Threading.CancellationToken cancellationToken, string resource = "https://management.azure.com/")
+        private static Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string resource = "https://management.azure.com/")
             => new AzureServiceTokenProvider().GetAccessTokenAsync(resource, cancellationToken: cancellationToken);
 
         /// <summary>
         /// Creates Batch Account management client using AAD authentication.
         /// Configure to the subscription id that contains the batch account.
         /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public async Task<BatchManagementClient> CreateBatchAccountManagementClient(System.Threading.CancellationToken cancellationToken)
+        public async Task<BatchManagementClient> CreateBatchAccountManagementClient(CancellationToken cancellationToken)
             => new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken))) { SubscriptionId = batchAccountInformation.SubscriptionId };
 
         /// <summary>
         /// Creates a new instance of Azure Management Client with the default credentials and subscription.
         /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public async Task<FluentAzure.IAuthenticated> CreateAzureManagementClientAsync(System.Threading.CancellationToken cancellationToken)
-            => await AzureManagementClientsFactory.GetAzureManagementClientAsync(cancellationToken);
+        public async Task<FluentAzure.IAuthenticated> CreateAzureManagementClientAsync(CancellationToken cancellationToken)
+            => await GetAzureManagementClientAsync(cancellationToken);
 
         /// <summary>
         /// Creates a new instance of Azure Management client
         /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(System.Threading.CancellationToken cancellationToken)
+        public static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(CancellationToken cancellationToken)
         {
             var accessToken = await GetAzureAccessTokenAsync(cancellationToken);
             var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, AzureEnvironment.AzureGlobalCloud);

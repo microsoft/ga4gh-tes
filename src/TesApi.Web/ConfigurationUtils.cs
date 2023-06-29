@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -20,7 +21,6 @@ namespace TesApi.Web
     /// </summary>
     public class ConfigurationUtils
     {
-        private readonly IConfiguration configuration;
         private readonly string defaultStorageAccountName;
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly ILogger<ConfigurationUtils> logger;
@@ -31,7 +31,6 @@ namespace TesApi.Web
         /// <summary>
         /// The constructor
         /// </summary>
-        /// <param name="configuration"><see cref="IConfiguration"/></param>
         /// <param name="defaultStorageOptions">Configuration of <see cref="Options.StorageOptions"/></param>
         /// <param name="storageAccessProvider"><see cref="IStorageAccessProvider"/></param>
         /// <param name="quotaProvider"><see cref="IBatchQuotaProvider"/>></param>
@@ -39,7 +38,6 @@ namespace TesApi.Web
         /// <param name="batchAccountResourceInformation"><see cref="BatchAccountResourceInformation"/></param>
         /// <param name="logger"><see cref="ILogger"/></param>
         public ConfigurationUtils(
-            IConfiguration configuration,
             IOptions<Options.StorageOptions> defaultStorageOptions,
             IStorageAccessProvider storageAccessProvider,
             IBatchQuotaProvider quotaProvider,
@@ -47,7 +45,6 @@ namespace TesApi.Web
             BatchAccountResourceInformation batchAccountResourceInformation,
             ILogger<ConfigurationUtils> logger)
         {
-            ArgumentNullException.ThrowIfNull(configuration);
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(quotaProvider);
             ArgumentNullException.ThrowIfNull(batchAccountResourceInformation);
@@ -58,7 +55,6 @@ namespace TesApi.Web
             }
             ArgumentNullException.ThrowIfNull(logger);
 
-            this.configuration = configuration;
             this.defaultStorageAccountName = defaultStorageOptions.Value.DefaultAccountName;
             this.storageAccessProvider = storageAccessProvider;
             this.logger = logger;
@@ -71,14 +67,15 @@ namespace TesApi.Web
         /// Combines the allowed-vm-sizes configuration file and list of supported+available VMs to produce the supported-vm-sizes file and tag incorrect 
         /// entries in the allowed-vm-sizes file with a warning. Sets the AllowedVmSizes configuration key.
         /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public async Task<List<string>> ProcessAllowedVmSizesConfigurationFileAsync(System.Threading.CancellationToken cancellationToken)
+        public async Task<List<string>> ProcessAllowedVmSizesConfigurationFileAsync(CancellationToken cancellationToken)
         {
             var supportedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/supported-vm-sizes";
             var allowedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/allowed-vm-sizes";
 
             var supportedVmSizes = (await skuInformationProvider.GetVmSizesAndPricesAsync(batchAccountResourceInformation.Region, cancellationToken)).ToList();
-            var batchAccountQuotas = await quotaProvider.GetVmCoreQuotaAsync(lowPriority: false, cancellationToken);
+            var batchAccountQuotas = await quotaProvider.GetVmCoreQuotaAsync(lowPriority: false, cancellationToken: cancellationToken);
             var supportedVmSizesFileContent = VirtualMachineInfoToFixedWidthColumns(supportedVmSizes.OrderBy(v => v.VmFamily).ThenBy(v => v.VmSize), batchAccountQuotas);
 
             try

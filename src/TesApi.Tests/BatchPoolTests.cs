@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Management.Batch.Models;
@@ -91,7 +90,7 @@ namespace TesApi.Tests
 
             Assert.IsTrue(isDeleted);
 
-            void DeletePool(string poolId, CancellationToken cancellationToken)
+            void DeletePool(string poolId, System.Threading.CancellationToken cancellationToken)
             {
                 Assert.AreEqual(poolId, pool.Pool.PoolId);
                 isDeleted = true;
@@ -112,7 +111,7 @@ namespace TesApi.Tests
         }
 
         private static async Task<BatchPool> AddPool(BatchScheduler batchPools, bool isPreemtable)
-            => (BatchPool)await batchPools.GetOrAddPoolAsync("key1", isPreemtable, (id, ct) => ValueTask.FromResult(new Pool(name: id, displayName: "display1", vmSize: "vmSize1")), CancellationToken.None);
+            => (BatchPool)await batchPools.GetOrAddPoolAsync("key1", isPreemtable, (id, _1) => ValueTask.FromResult(new Pool(name: id, displayName: "display1", vmSize: "vmSize1")), System.Threading.CancellationToken.None);
 
         private static void TimeShift(TimeSpan shift, BatchPool pool)
             => pool.TimeShift(shift);
@@ -126,15 +125,15 @@ namespace TesApi.Tests
             internal int ActivePoolCount { get; set; } = 0;
 
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<ComputeNode>> AzureProxyListComputeNodesAsync { get; set; } = (poolId, detailLevel) => AsyncEnumerable.Empty<ComputeNode>();
-            internal Action<string, IEnumerable<ComputeNode>, CancellationToken> AzureProxyDeleteBatchComputeNodes { get; set; } = (poolId, computeNodes, cancellationToken) => { };
+            internal Action<string, IEnumerable<ComputeNode>, System.Threading.CancellationToken> AzureProxyDeleteBatchComputeNodes { get; set; } = (poolId, computeNodes, cancellationToken) => { };
             internal Func<string, AzureBatchPoolAllocationState> AzureProxyGetComputeNodeAllocationState { get; set; } = id => new(DateTime.UtcNow, true, 0, 0, 0, 0) { AllocationState = Microsoft.Azure.Batch.Common.AllocationState.Steady };
-            internal Action<string, CancellationToken> AzureProxyDeleteBatchPool { get; set; } = (poolId, cancellationToken) => { };
+            internal Action<string, System.Threading.CancellationToken> AzureProxyDeleteBatchPool { get; set; } = (poolId, cancellationToken) => { };
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<CloudTask>> AzureProxyListTasks { get; set; } = (jobId, detailLevel) => AsyncEnumerable.Empty<CloudTask>();
             internal List<VirtualMachineInformation> VmSizesAndPrices { get; set; } = new();
 
             private readonly Dictionary<string, IList<Microsoft.Azure.Batch.MetadataItem>> poolMetadata = new();
 
-            internal void AzureProxyDeleteBatchPoolImpl(string poolId, CancellationToken cancellationToken)
+            internal void AzureProxyDeleteBatchPoolImpl(string poolId, System.Threading.CancellationToken cancellationToken)
             {
                 _ = poolMetadata.Remove(poolId);
                 AzureProxyDeleteBatchPool(poolId, cancellationToken);
@@ -164,7 +163,7 @@ namespace TesApi.Tests
 
         private static Action<Mock<IBatchSkuInformationProvider>> GetMockSkuInfoProvider(AzureProxyReturnValues azureProxyReturnValues)
             => new(proxy =>
-                proxy.Setup(p => p.GetVmSizesAndPricesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                proxy.Setup(p => p.GetVmSizesAndPricesAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
                     .ReturnsAsync(azureProxyReturnValues.VmSizesAndPrices));
 
         private static Action<Mock<IBatchQuotaProvider>> GetMockQuotaProvider(AzureProxyReturnValues azureProxyReturnValues)
@@ -174,14 +173,14 @@ namespace TesApi.Tests
                 var vmFamilyQuota = batchQuotas.DedicatedCoreQuotaPerVMFamily?.FirstOrDefault(v => string.Equals(v.Name, "VmFamily1", StringComparison.InvariantCultureIgnoreCase))?.CoreQuota ?? 0;
 
                 quotaProvider.Setup(p =>
-                        p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.Is<bool>(p => p == false), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+                        p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.Is<bool>(p => p == false), It.IsAny<int?>(), It.IsAny<System.Threading.CancellationToken>()))
                     .ReturnsAsync(() => new BatchVmFamilyQuotas(batchQuotas.DedicatedCoreQuota,
                         vmFamilyQuota,
                         batchQuotas.PoolQuota,
                         batchQuotas.ActiveJobAndJobScheduleQuota,
                         batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced, "VmSize1"));
                 quotaProvider.Setup(p =>
-                        p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.Is<bool>(p => p == true), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+                        p.GetQuotaForRequirementAsync(It.IsAny<string>(), It.Is<bool>(p => p == true), It.IsAny<int?>(), It.IsAny<System.Threading.CancellationToken>()))
                     .ReturnsAsync(() => new BatchVmFamilyQuotas(batchQuotas.LowPriorityCoreQuota,
                         vmFamilyQuota,
                         batchQuotas.PoolQuota,
@@ -189,14 +188,14 @@ namespace TesApi.Tests
                         batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced, "VmSize1"));
 
                 quotaProvider.Setup(p =>
-                        p.GetVmCoreQuotaAsync(It.Is<bool>(l => l == true), It.IsAny<CancellationToken>()))
+                        p.GetVmCoreQuotaAsync(It.Is<bool>(l => l == true), It.IsAny<System.Threading.CancellationToken>()))
                     .ReturnsAsync(new BatchVmCoreQuota(batchQuotas.LowPriorityCoreQuota,
                         true,
                         batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced,
                         batchQuotas.DedicatedCoreQuotaPerVMFamily?.Select(v => new BatchVmCoresPerFamily(v.Name, v.CoreQuota)).ToList(),
                         new(batchQuotas.ActiveJobAndJobScheduleQuota, batchQuotas.PoolQuota, batchQuotas.DedicatedCoreQuota, batchQuotas.LowPriorityCoreQuota)));
                 quotaProvider.Setup(p =>
-                        p.GetVmCoreQuotaAsync(It.Is<bool>(l => l == false), It.IsAny<CancellationToken>()))
+                        p.GetVmCoreQuotaAsync(It.Is<bool>(l => l == false), It.IsAny<System.Threading.CancellationToken>()))
                     .ReturnsAsync(new BatchVmCoreQuota(batchQuotas.DedicatedCoreQuota,
                         false,
                         batchQuotas.DedicatedCoreQuotaPerVMFamilyEnforced,
@@ -209,13 +208,13 @@ namespace TesApi.Tests
             {
                 azureProxy.Setup(a => a.GetActivePoolsAsync(It.IsAny<string>())).Returns(AsyncEnumerable.Empty<CloudPool>());
                 azureProxy.Setup(a => a.GetBatchActivePoolCount()).Returns(azureProxyReturnValues.ActivePoolCount);
-                azureProxy.Setup(a => a.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).Returns((Pool p, bool _1, CancellationToken _2) => Task.FromResult(azureProxyReturnValues.CreateBatchPoolImpl(p)));
+                azureProxy.Setup(a => a.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>())).Returns((Pool p, bool _1, System.Threading.CancellationToken _2) => Task.FromResult(azureProxyReturnValues.CreateBatchPoolImpl(p)));
                 azureProxy.Setup(a => a.ListComputeNodesAsync(It.IsAny<string>(), It.IsAny<DetailLevel>())).Returns<string, ODATADetailLevel>((poolId, detailLevel) => azureProxyReturnValues.AzureProxyListComputeNodesAsync(poolId, detailLevel));
                 azureProxy.Setup(a => a.ListTasksAsync(It.IsAny<string>(), It.IsAny<DetailLevel>())).Returns<string, ODATADetailLevel>((jobId, detailLevel) => azureProxyReturnValues.AzureProxyListTasks(jobId, detailLevel));
-                azureProxy.Setup(a => a.DeleteBatchComputeNodesAsync(It.IsAny<string>(), It.IsAny<IEnumerable<ComputeNode>>(), It.IsAny<CancellationToken>())).Callback<string, IEnumerable<ComputeNode>, CancellationToken>((poolId, computeNodes, cancellationToken) => azureProxyReturnValues.AzureProxyDeleteBatchComputeNodes(poolId, computeNodes, cancellationToken)).Returns(Task.CompletedTask);
-                azureProxy.Setup(a => a.GetBatchPoolAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<DetailLevel>())).Returns((string id, CancellationToken _1, DetailLevel _2) => Task.FromResult(azureProxyReturnValues.GetBatchPoolImpl(id)));
-                azureProxy.Setup(a => a.GetFullAllocationStateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns((string poolId, CancellationToken _1) => Task.FromResult(azureProxyReturnValues.AzureProxyGetComputeNodeAllocationState(poolId)));
-                azureProxy.Setup(a => a.DeleteBatchPoolAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).Callback<string, CancellationToken>((poolId, cancellationToken) => azureProxyReturnValues.AzureProxyDeleteBatchPoolImpl(poolId, cancellationToken)).Returns(Task.CompletedTask);
+                azureProxy.Setup(a => a.DeleteBatchComputeNodesAsync(It.IsAny<string>(), It.IsAny<IEnumerable<ComputeNode>>(), It.IsAny<System.Threading.CancellationToken>())).Callback<string, IEnumerable<ComputeNode>, System.Threading.CancellationToken>((poolId, computeNodes, cancellationToken) => azureProxyReturnValues.AzureProxyDeleteBatchComputeNodes(poolId, computeNodes, cancellationToken)).Returns(Task.CompletedTask);
+                azureProxy.Setup(a => a.GetBatchPoolAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>(), It.IsAny<DetailLevel>())).Returns((string id, System.Threading.CancellationToken cancellationToken, DetailLevel detailLevel) => Task.FromResult(azureProxyReturnValues.GetBatchPoolImpl(id)));
+                azureProxy.Setup(a => a.GetFullAllocationStateAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Returns((string poolId, System.Threading.CancellationToken _1) => Task.FromResult(azureProxyReturnValues.AzureProxyGetComputeNodeAllocationState(poolId)));
+                azureProxy.Setup(a => a.DeleteBatchPoolAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Callback<string, System.Threading.CancellationToken>((poolId, cancellationToken) => azureProxyReturnValues.AzureProxyDeleteBatchPoolImpl(poolId, cancellationToken)).Returns(Task.CompletedTask);
             };
 
         private static IEnumerable<(string Key, string Value)> GetMockConfig()

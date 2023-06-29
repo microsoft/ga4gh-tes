@@ -69,7 +69,7 @@ namespace TesApi.Web.Management.Batch
         /// </summary>
         /// <param name="poolInfo"></param>
         /// <param name="isPreemptable"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public async Task<PoolInformation> CreateBatchPoolAsync(Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
         {
@@ -99,7 +99,7 @@ namespace TesApi.Web.Management.Batch
             return new PoolInformation() { PoolId = response.AzureBatchPool.Attributes.Id };
         }
 
-        private void AddResourceIdToPoolMetadata(ApiCreateBatchPoolRequest apiRequest, Guid resourceId)
+        private static void AddResourceIdToPoolMetadata(ApiCreateBatchPoolRequest apiRequest, Guid resourceId)
         {
             var resourceIdMetadataItem =
                 new ApiBatchPoolMetadataItem() { Name = TerraResourceIdMetadataKey, Value = resourceId.ToString() };
@@ -120,7 +120,7 @@ namespace TesApi.Web.Management.Batch
         /// Deletes batch pool 
         /// </summary>
         /// <param name="poolId"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         public async Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrEmpty(poolId);
@@ -168,10 +168,8 @@ namespace TesApi.Web.Management.Batch
         }
 
         private BatchClient CreateBatchClientFromOptions()
-        {
-            return BatchClient.Open(new BatchSharedKeyCredentials(batchAccountOptions.BaseUrl,
+            => BatchClient.Open(new BatchSharedKeyCredentials(batchAccountOptions.BaseUrl,
                 batchAccountOptions.AccountName, batchAccountOptions.AppKey));
-        }
 
         private void ValidateOptions()
         {

@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -206,6 +209,11 @@ namespace TesApi.Web
                 .ToAsyncEnumerable()
                 .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
                 .ToListAsync(cancellationToken);
+
+        /// <inheritdoc/>
+        public async ValueTask<IEnumerable<Task>> GetShutdownCandidatePools(CancellationToken cancellationToken)
+            => (await GetEmptyPools(cancellationToken))
+                .Select(pool => DeletePoolAsync(pool, cancellationToken));
 
         /// <inheritdoc/>
         public IEnumerable<IBatchPool> GetPools()

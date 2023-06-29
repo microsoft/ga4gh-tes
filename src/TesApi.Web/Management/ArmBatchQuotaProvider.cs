@@ -6,8 +6,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using LazyCache;
 using Microsoft.Azure.Management.Batch;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using TesApi.Web.Management.Models.Quotas;
 
@@ -23,7 +23,7 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     /// </summary>
     private readonly ILogger logger;
 
-    private readonly IAppCache appCache;
+    private readonly IMemoryCache appCache;
     private readonly AzureManagementClientsFactory clientsFactory;
 
 
@@ -33,7 +33,7 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     /// <param name="logger"></param>
     /// <param name="appCache"></param>
     /// <param name="clientsFactory"></param>
-    public ArmBatchQuotaProvider(IAppCache appCache, AzureManagementClientsFactory clientsFactory,
+    public ArmBatchQuotaProvider(IMemoryCache appCache, AzureManagementClientsFactory clientsFactory,
         ILogger<ArmBatchQuotaProvider> logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
@@ -79,7 +79,7 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     /// </summary>
     /// <returns></returns>
     public virtual async Task<AzureBatchAccountQuotas> GetBatchAccountQuotasAsync(CancellationToken cancellationToken)
-        => await appCache.GetOrAddAsync(clientsFactory.BatchAccountInformation.ToString(), async _1 => await GetBatchAccountQuotasImplAsync(cancellationToken));
+        => await appCache.GetOrCreateAsync(clientsFactory.BatchAccountInformation.ToString(), _1 => GetBatchAccountQuotasImplAsync(cancellationToken)); // TODO: Consider expiring the quota daily, because quota can be changed.
 
     private async Task<AzureBatchAccountQuotas> GetBatchAccountQuotasImplAsync(CancellationToken cancellationToken)
     {
@@ -87,7 +87,8 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
         {
             logger.LogInformation($"Getting quota information for Batch Account: {clientsFactory.BatchAccountInformation.Name} calling ARM API");
 
-            var batchAccount = await (await clientsFactory.CreateBatchAccountManagementClient(cancellationToken)).BatchAccount.GetAsync(clientsFactory.BatchAccountInformation.ResourceGroupName, clientsFactory.BatchAccountInformation.Name, cancellationToken);
+            using var managementClient = await clientsFactory.CreateBatchAccountManagementClient(cancellationToken);
+            var batchAccount = await managementClient.BatchAccount.GetAsync(clientsFactory.BatchAccountInformation.ResourceGroupName, clientsFactory.BatchAccountInformation.Name, cancellationToken: cancellationToken);
 
             if (batchAccount == null)
             {
