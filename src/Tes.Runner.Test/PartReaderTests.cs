@@ -41,7 +41,7 @@ namespace Tes.Runner.Test
 
             await partsReader!.StartPartsReaderAsync(readBufferChannel!, writeBufferChannel!);
 
-            pipeline!.Verify(p => p.ExecuteReadAsync(It.IsAny<PipelineBuffer>()), Times.Exactly(numberOfParts));
+            pipeline!.Verify(p => p.ExecuteReadAsync(It.IsAny<PipelineBuffer>(), It.IsAny<CancellationToken>()), Times.Exactly(numberOfParts));
             Assert.AreEqual(numberOfParts, writeBufferChannel!.Reader.Count);
         }
 
@@ -50,7 +50,7 @@ namespace Tes.Runner.Test
         {
             await PrepareReaderChannelAsync();
             var calls = 0;
-            pipeline!.Setup(p => p.ExecuteReadAsync(It.IsAny<PipelineBuffer>()))
+            pipeline!.Setup(p => p.ExecuteReadAsync(It.IsAny<PipelineBuffer>(), It.IsAny<CancellationToken>()))
                 .Callback(() =>
                 {
                     calls++;

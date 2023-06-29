@@ -16,6 +16,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
     protected readonly Channel<byte[]> MemoryBufferChannel;
     protected readonly BlobPipelineOptions PipelineOptions;
     protected readonly ILogger Logger = PipelineLoggerFactory.Create<BlobOperationPipeline>();
+    protected readonly BlobBlockApiHttpUtils BlobBlockApiHttpUtils = new BlobBlockApiHttpUtils();
 
     private readonly PartsProducer partsProducer;
     private readonly PartsWriter partsWriter;
@@ -40,9 +41,9 @@ public abstract class BlobOperationPipeline : IBlobPipeline
         processedPartsProcessor = new ProcessedPartsProcessor(this);
     }
 
-    public abstract ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer);
+    public abstract ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer, CancellationToken cancellationToken);
 
-    public abstract ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer);
+    public abstract ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer, CancellationToken cancellationToken);
 
     public abstract Task<long> GetSourceLengthAsync(string source);
 
@@ -63,7 +64,8 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
         try
         {
-            await PartsProcessor.WhenAllOrThrowIfOneFailsAsync(pipelineTasks);
+            await Task.WhenAll(pipelineTasks);
+            Logger.LogInformation("Pipeline processing completed.");
         }
         catch (Exception e)
         {
@@ -71,6 +73,10 @@ public abstract class BlobOperationPipeline : IBlobPipeline
             throw;
         }
 
-        return await processedPartsProcessorTask;
+        Logger.LogInformation("Waiting for processed part processor to complete.");
+        var bytesProcessed = await processedPartsProcessorTask;
+        Logger.LogInformation("Processed parts completed.");
+
+        return bytesProcessed;
     }
 }

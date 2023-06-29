@@ -40,7 +40,7 @@ namespace Tes.Runner.Test
 
             await partsWriter!.StartPartsWritersAsync(writeBufferChannel!, processedBufferChannel!);
 
-            pipeline!.Verify(p => p.ExecuteWriteAsync(It.IsAny<PipelineBuffer>()), Times.Exactly(numberOfParts));
+            pipeline!.Verify(p => p.ExecuteWriteAsync(It.IsAny<PipelineBuffer>(), It.IsAny<CancellationToken>()), Times.Exactly(numberOfParts));
             Assert.AreEqual(numberOfParts, processedBufferChannel!.Reader.Count);
         }
         [TestMethod]
