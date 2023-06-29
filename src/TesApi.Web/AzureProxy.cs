@@ -502,7 +502,17 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            var batchTasksToDelete = await batchClient.JobOperations.ListTasks(pool.PoolId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
+            List<CloudTask> batchTasksToDelete = default;
+
+            try
+            {
+                batchTasksToDelete = await batchClient.JobOperations.ListTasks(pool.PoolId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
+            }
+            catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException bee && "JobNotFound".Equals(bee.Body?.Code, StringComparison.InvariantCultureIgnoreCase))
+            {
+                logger.LogWarning("Job not found for TES task {TesTask}", tesTaskId);
+                return; // Task cannot exist if the job is not found.
+            }
 
             if (batchTasksToDelete.Count > 1)
             {
