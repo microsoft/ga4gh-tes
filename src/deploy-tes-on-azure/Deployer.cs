@@ -145,7 +145,7 @@ namespace TesDeployer
                     tokenCredentials = new(tokenProvider);
                     azureCredentials = new(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
                     azureClient = GetAzureClient(azureCredentials);
-                    armClient = new ArmClient(new DefaultAzureCredential());
+                    armClient = new ArmClient(new AzureCliCredential());
                     azureSubscriptionClient = azureClient.WithSubscription(configuration.SubscriptionId);
                     subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
                     resourceManagerClient = GetResourceManagerClient(azureCredentials);
@@ -915,6 +915,18 @@ namespace TesDeployer
                     UserAssignedIdentities = new Dictionary<string, ManagedClusterIdentityUserAssignedIdentitiesValue>()
                 }
             };
+
+            if (!string.IsNullOrWhiteSpace(configuration.AadGroupIds))
+            {
+                cluster.EnableRBAC = true;
+                cluster.AadProfile = new ManagedClusterAADProfile()
+                {
+                    AdminGroupObjectIDs = configuration.AadGroupIds.Split(",", StringSplitOptions.RemoveEmptyEntries),
+                    EnableAzureRBAC = false,
+                    Managed = true
+                };
+            }
+
             cluster.Identity.UserAssignedIdentities.Add(managedIdentity.Id, new(managedIdentity.PrincipalId, managedIdentity.ClientId));
             cluster.IdentityProfile = new Dictionary<string, ManagedClusterPropertiesIdentityProfileValue>
             {
