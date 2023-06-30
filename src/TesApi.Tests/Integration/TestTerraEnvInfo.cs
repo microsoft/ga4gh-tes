@@ -28,7 +28,7 @@ namespace TesApi.Tests.Integration
             lzStorageAccountName = Environment.GetEnvironmentVariable(LzStorageAccountNameEnvVarName);
             workspaceContainerName = Environment.GetEnvironmentVariable(WorkspaceContainerNameEnvVarName);
             wsmApiHost = Environment.GetEnvironmentVariable(WsmApiHostEnvVarName);
-            
+
             if (string.IsNullOrEmpty(lzStorageAccountName))
             {
                 throw new InvalidOperationException(

@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TesApi.Web.Management;
@@ -17,6 +16,7 @@ using TesApi.Web.Management.Configuration;
 namespace TesApi.Tests.Integration
 {
     [TestClass, TestCategory("TerraIntegration")]
+    [Ignore]
     public class TerraWsmApiClientIntegrationTests
     {
         private TerraWsmApiClient wsmApiClient = null!;
@@ -35,7 +35,7 @@ namespace TesApi.Tests.Integration
             var memoryCache = new MemoryCache(new MemoryCacheOptions());
 
             wsmApiClient = new TerraWsmApiClient(new TestEnvTokenCredential(), terraOptions,
-                new CacheAndRetryHandler(memoryCache,retryOptions), TestLoggerFactory.Create<TerraWsmApiClient>());
+                new CacheAndRetryHandler(memoryCache, retryOptions), TestLoggerFactory.Create<TerraWsmApiClient>());
 
         }
 
@@ -47,7 +47,7 @@ namespace TesApi.Tests.Integration
             var results = await wsmApiClient.GetContainerResourcesAsync(workspaceId, 0, 100, CancellationToken.None);
 
             Assert.IsNotNull(results);
-            Assert.IsTrue(results.Resources.Any(i=>i.ResourceAttributes.AzureStorageContainer.StorageContainerName.Equals(envInfo.WorkspaceContainerName,StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(results.Resources.Any(i => i.ResourceAttributes.AzureStorageContainer.StorageContainerName.Equals(envInfo.WorkspaceContainerName, StringComparison.OrdinalIgnoreCase)));
         }
     }
 
@@ -62,7 +62,7 @@ namespace TesApi.Tests.Integration
                     options.TimestampFormat = "yyyy-MM-dd HH:mm:ss.fff ";
                     options.UseUtcTimestamp = true;
                 });
-            
+
             builder.SetMinimumLevel(LogLevel.Trace);
         });
 

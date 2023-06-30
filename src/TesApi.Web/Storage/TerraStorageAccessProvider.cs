@@ -80,17 +80,17 @@ namespace TesApi.Web.Storage
             {
                 throw new InvalidOperationException("The path must be a valid HTTP URL");
             }
-            
+
             var terraBlobInfo = await GetTerraBlobInfoFromContainerNameAsync(path);
 
             if (getContainerSas)
             {
-                return await GetMappedSasContainerUrlFromWsmAsync(terraBlobInfo,cancellationToken);
+                return await GetMappedSasContainerUrlFromWsmAsync(terraBlobInfo, cancellationToken);
             }
 
             return await GetMappedSasUrlFromWsmAsync(terraBlobInfo, cancellationToken);
         }
-        
+
         /// <summary>
         /// Creates a Terra Blob Info from the container name in the path. The path must be a Terra managed storage URL.
         /// This method assumes that the container name contains the workspace ID and validates that the storage container is a Terra workspace resource.
@@ -188,11 +188,11 @@ namespace TesApi.Web.Storage
         public async Task<string> GetMappedSasUrlFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
         {
             var tokenInfo = await GetSasTokenFromWsmAsync(blobInfo, cancellationToken);
-            
+
             Logger.LogInformation($"Successfully obtained the Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
-            
+
             var uriBuilder = new UriBuilder(tokenInfo.Url);
-            
+
             if (blobInfo.BlobName != string.Empty)
             {
                 if (!uriBuilder.Path.Contains(blobInfo.BlobName, StringComparison.OrdinalIgnoreCase))
@@ -200,7 +200,7 @@ namespace TesApi.Web.Storage
                     uriBuilder.Path += $"/{blobInfo.BlobName}";
                 }
             }
-            
+
             return uriBuilder.Uri.ToString();
         }
 
@@ -214,7 +214,7 @@ namespace TesApi.Web.Storage
         private async Task<WsmSasTokenApiResponse> GetSasTokenFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
         {
             var tokenParams = CreateTokenParamsFromOptions(blobInfo.BlobName, SasBlobPermissions);
-            
+
             Logger.LogInformation(
                 $"Getting Sas Url from Terra. Wsm workspace id:{blobInfo.WorkspaceId}");
 
@@ -227,7 +227,7 @@ namespace TesApi.Web.Storage
         private async Task<WsmSasTokenApiResponse> GetSasTokenForContainerFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
         {
             // an empty blob name gets a container Sas token
-            var tokenParams = CreateTokenParamsFromOptions(blobName:"", SasContainerPermissions);
+            var tokenParams = CreateTokenParamsFromOptions(blobName: "", SasContainerPermissions);
 
             Logger.LogInformation(
                 $"Getting Sas container Url from Terra. Wsm workspace id:{blobInfo.WorkspaceId}");

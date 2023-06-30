@@ -1,8 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace TesApi.Web.Management.Models.Terra
@@ -95,31 +95,31 @@ namespace TesApi.Web.Management.Models.Terra
         /// </summary>
         [JsonPropertyName("cloudPlatform")]
         public string CloudPlatform { get; set; }
-        
+
         /// <summary>
         /// 
         /// </summary>
         [JsonPropertyName("cloningInstructions")]
         public string CloningInstructions { get; set; }
-        
+
         /// <summary>
         /// Controlled resource metadata
         /// </summary>
         [JsonPropertyName("controlledResourceMetadata")]
         public ControlledResourceMetadata ControlledResourceMetadata { get; set; }
-        
+
         /// <summary>
         /// Resource linage
         /// </summary>
         [JsonPropertyName("resourceLineage")]
         public List<object> ResourceLineage { get; set; }
-        
+
         /// <summary>
         /// Additional properties
         /// </summary>
         [JsonPropertyName("properties")]
         public List<object> Properties { get; set; }
-        
+
         /// <summary>
         /// Created by
         /// </summary>
@@ -161,7 +161,7 @@ namespace TesApi.Web.Management.Models.Terra
         /// </summary>
         [JsonPropertyName("privateResourceIamRole")]
         public object PrivateResourceIamRole { get; set; }
-        
+
         /// <summary>
         /// email of the workspace user to grant access
         /// </summary>

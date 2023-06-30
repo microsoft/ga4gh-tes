@@ -123,11 +123,11 @@ namespace TesApi.Tests
                 .ReturnsAsync(response);
 
             var apiResponse = await terraWsmApiClient.GetContainerResourcesAsync(terraApiStubData.WorkspaceId,
-                offset:0, limit:10, System.Threading.CancellationToken.None);
+                offset: 0, limit: 10, System.Threading.CancellationToken.None);
 
             Assert.IsNotNull(apiResponse);
             Assert.AreEqual(1, apiResponse.Resources.Count);
-            Assert.IsTrue(apiResponse.Resources.Any(r=>r.Metadata.ResourceId.ToString().Equals(terraApiStubData.ContainerResourceId.ToString(), StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(apiResponse.Resources.Any(r => r.Metadata.ResourceId.ToString().Equals(terraApiStubData.ContainerResourceId.ToString(), StringComparison.OrdinalIgnoreCase)));
         }
 
         [TestMethod]

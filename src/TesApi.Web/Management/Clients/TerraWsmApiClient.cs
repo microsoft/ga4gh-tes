@@ -71,7 +71,7 @@ namespace TesApi.Web.Management.Clients
 
             //TODO: add support for resource and stewardship parameters if required later 
             builder.Query = $"offset={offset}&limit={limit}&resource=AZURE_STORAGE_CONTAINER&stewardship=CONTROLLED";
-            
+
             return builder.Uri;
         }
 

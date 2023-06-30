@@ -32,7 +32,7 @@ public class TerraApiStubData
 
     public Guid GetWorkspaceIdFromContainerName(string containerName)
     {
-        return Guid.Parse(containerName.Replace("sc-",""));
+        return Guid.Parse(containerName.Replace("sc-", ""));
     }
     public LandingZoneResourcesApiResponse GetResourceApiResponse()
     {
