@@ -104,7 +104,6 @@ namespace TesApi.Tests
         [DataRow($"https://bar.blob.core.windows.net/{WorkspaceStorageContainerName}/")]
         [DataRow($"https://bar.blob.core.windows.net/container/")]
         [ExpectedException(typeof(InvalidOperationException))]
-        //[ExpectedException(typeof(Exception))]
         public async Task MapLocalPathToSasUrlAsync_InvalidStorageAccountInputs(string input)
         {
             await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input, CancellationToken.None);

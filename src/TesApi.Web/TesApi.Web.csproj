@@ -147,4 +147,5 @@
       </ResolvedFileToPublish>
     </ItemGroup>
   </Target>
+
 </Project>
