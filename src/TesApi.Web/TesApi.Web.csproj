@@ -63,7 +63,9 @@
   <ItemGroup>
     <ProjectReference Include="..\CommonUtilities\CommonUtilities.csproj" />
 
-    <ProjectReference Include="..\Tes.RunnerCLI\Tes.RunnerCLI.csproj" Targets="Publish" AdditionalProperties="PublishProfile=FolderProfile">
+    <ProjectReference Include="..\Tes.RunnerCLI\Tes.RunnerCLI.csproj"
+		      Targets="Publish"
+		      AdditionalProperties="PublishProfile=FolderProfile">
       <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
       <OutputItemType>None</OutputItemType>
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
@@ -103,12 +105,12 @@
 
   <Target Name="__AssignPublishProperties" BeforeTargets="ResolveProjectReferences" AfterTargets="PrepareProjectReferences">
     <ConvertToAbsolutePath Paths="$(OutputPath)scripts\">
-      <Output TaskParameter="AbsolutePaths" PropertyName="__TesRunnerPublishDir" />
+      <Output TaskParameter="AbsolutePaths" PropertyName="__TesRunnerPublishDir"/>
     </ConvertToAbsolutePath>
 
     <ItemGroup>
-      <__ProjectNotReferenced Include="@(_MSBuildProjectReferenceExistent)" Condition=" '%(Filename)' == 'Tes.RunnerCLI' " />
-      <_MSBuildProjectReferenceExistent Remove="@(__ProjectNotReferenced)" />
+      <__ProjectNotReferenced Include="@(_MSBuildProjectReferenceExistent)" Condition=" '%(Filename)' == 'Tes.RunnerCLI' "/>
+      <_MSBuildProjectReferenceExistent Remove="@(__ProjectNotReferenced)"/>
       <_MSBuildProjectReferenceExistent Include="@(__ProjectNotReferenced)">
         <Properties>%(__ProjectNotReferenced.AdditionalProperties);PublishDir=$(__TesRunnerPublishDir);%(__ProjectNotReferenced.SetConfiguration);%(__ProjectNotReferenced.SetPlatform);%(__ProjectNotReferenced.SetTargetFramework)</Properties>
         <AdditionalProperties></AdditionalProperties>

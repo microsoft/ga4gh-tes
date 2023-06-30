@@ -81,7 +81,7 @@ namespace TesApi.Web.Storage
                 throw new InvalidOperationException("The path must be a valid HTTP URL");
             }
 
-            var terraBlobInfo = await GetTerraBlobInfoFromContainerNameAsync(path);
+            var terraBlobInfo = await GetTerraBlobInfoFromContainerNameAsync(path, cancellationToken);
 
             if (getContainerSas)
             {
@@ -97,9 +97,10 @@ namespace TesApi.Web.Storage
         /// The BlobName property contains the blob name segment without a leading slash.
         /// </summary>
         /// <param name="path"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns>Returns a Terra Blob Info</returns>
         /// <exception cref="InvalidOperationException">This method will throw if the path is not a valid Terra blob storage url.</exception>
-        public async Task<TerraBlobInfo> GetTerraBlobInfoFromContainerNameAsync(string path)
+        private async Task<TerraBlobInfo> GetTerraBlobInfoFromContainerNameAsync(string path, CancellationToken cancellationToken)
         {
             if (!StorageAccountUrlSegments.TryCreate(path, out var segments))
             {
@@ -115,12 +116,12 @@ namespace TesApi.Web.Storage
 
             Logger.LogInformation($"Workspace ID to use: {segments.ContainerName}");
 
-            var wsmContainerResourceId = await GetWsmContainerResourceIdAsync(workspaceId, segments.ContainerName);
+            var wsmContainerResourceId = await GetWsmContainerResourceIdAsync(workspaceId, segments.ContainerName, cancellationToken);
 
             return new TerraBlobInfo(workspaceId, wsmContainerResourceId, segments.ContainerName, segments.BlobName.TrimStart('/'));
         }
 
-        private async Task<Guid> GetWsmContainerResourceIdAsync(Guid workspaceId, string containerName)
+        private async Task<Guid> GetWsmContainerResourceIdAsync(Guid workspaceId, string containerName, CancellationToken cancellationToken)
         {
             Logger.LogInformation($"Getting container resource information from WSM. Workspace ID: {workspaceId} Container Name: {containerName}");
 
@@ -128,8 +129,7 @@ namespace TesApi.Web.Storage
             {
                 //the goal is to get all containers, therefore the limit is set to 10000 which is a reasonable unreachable number of storage containers in a workspace.
                 var response =
-                    await terraWsmApiClient.GetContainerResourcesAsync(workspaceId, offset: 0, limit: 10000,
-                        cancellationToken: default);
+                    await terraWsmApiClient.GetContainerResourcesAsync(workspaceId, offset: 0, limit: 10000, cancellationToken);
 
                 var metadata = response.Resources.Single(r =>
                     r.ResourceAttributes.AzureStorageContainer.StorageContainerName.Equals(containerName,
@@ -243,7 +243,7 @@ namespace TesApi.Web.Storage
         {
             if (!IsTerraWorkspaceStorageAccount(accountName))
             {
-                throw new Exception($"The account name does not match the configuration for Terra.");
+                throw new InvalidOperationException($"The account name does not match the configuration for Terra.");
             }
         }
 
