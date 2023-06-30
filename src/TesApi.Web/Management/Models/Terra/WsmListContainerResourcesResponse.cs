@@ -118,7 +118,7 @@ namespace TesApi.Web.Management.Models.Terra
         /// Additional properties
         /// </summary>
         [JsonPropertyName("properties")]
-        public Dictionary<string,object> Properties { get; set; }
+        public List<object> Properties { get; set; }
         
         /// <summary>
         /// Created by

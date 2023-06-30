@@ -46,7 +46,7 @@ namespace TesApi.Web.Management.Clients
         protected TerraWsmApiClient() { }
 
         /// <summary>
-        /// Returns the SAS token of a container or blob for WSM managed storage account.
+        /// Returns storage containers in the workspace.
         /// </summary>
         /// <param name="workspaceId">Terra workspace id</param>
         /// <param name="offset">Number of items to skip before starting to collect the result</param>
@@ -57,7 +57,7 @@ namespace TesApi.Web.Management.Clients
         {
             var url = GetContainerResourcesApiUrl(workspaceId, offset, limit);
 
-            var response = await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, url),
+            var response = await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Get, url),
                 cancellationToken, setAuthorizationHeader: true);
 
             return await GetApiResponseContentAsync<WsmListContainerResourcesResponse>(response, cancellationToken);
