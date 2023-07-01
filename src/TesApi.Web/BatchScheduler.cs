@@ -1005,7 +1005,7 @@ namespace TesApi.Web
             {
                 MetricsFilename = metricsName,
                 InputsMetricsFormat = "FileDownloadSizeInBytes={Size}",
-                Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, FullFileName = LocalizeLocalPath(f.Path), SasStrategy = SasResolutionStrategy.None }).ToList()
+                Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, Path = LocalizeLocalPath(f.Path), SasStrategy = SasResolutionStrategy.None }).ToList()
             };
 
             var filesToUpload = Array.Empty<TesOutput>();
@@ -1031,7 +1031,7 @@ namespace TesApi.Web
             {
                 MetricsFilename = metricsName,
                 OutputsMetricsFormat = "FileUploadSizeInBytes={Size}",
-                Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, FullFileName = LocalizeLocalPath(f.Path), FileType = ConvertFileType(f.Type), SasStrategy = SasResolutionStrategy.None }).ToList()
+                Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, Path = LocalizeLocalPath(f.Path), FileType = ConvertFileType(f.Type), SasStrategy = SasResolutionStrategy.None, PathPrefix = f.PathPrefix }).ToList()
             };
 
             var executor = task.Executors.First();
@@ -1097,7 +1097,7 @@ namespace TesApi.Web
             var uploadMetricsScriptPath = $"/{storageUploadPath}/{UploadMetricsScriptFileName}";
             var uploadMetricsScriptContent = new NodeTask
             {
-                Outputs = new List<FileOutput>() { new FileOutput { Required = true, FullFileName = metricsName, TargetUrl = metricsUrl.ToString(), FileType = FileType.File, SasStrategy = SasResolutionStrategy.None } }
+                Outputs = new List<FileOutput>() { new FileOutput { Path = metricsName, TargetUrl = metricsUrl.ToString(), FileType = FileType.File, SasStrategy = SasResolutionStrategy.None } }
             };
 
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");

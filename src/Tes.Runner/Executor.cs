@@ -14,7 +14,7 @@ namespace Tes.Runner
     {
         private readonly ILogger logger = PipelineLoggerFactory.Create<Executor>();
         private readonly NodeTask tesNodeTask;
-        private readonly ResolutionPolicyHandler resolutionPolicyHandler;
+        private readonly FileOperationResolver operationResolver;
 
         public Executor(NodeTask tesNodeTask)
         {
@@ -22,7 +22,7 @@ namespace Tes.Runner
 
             this.tesNodeTask = tesNodeTask;
 
-            resolutionPolicyHandler = new ResolutionPolicyHandler();
+            operationResolver = new FileOperationResolver(tesNodeTask);
         }
 
         public async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(DockerExecutor dockerExecutor)
@@ -51,7 +51,7 @@ namespace Tes.Runner
                 return 0;
             }
 
-            var optimizedOptions = OptimizeBlobPipelineOptionsForUpload(blobPipelineOptions);
+            var optimizedOptions = OptimizeBlobPipelineOptionsForUpload(blobPipelineOptions, outputs);
 
             var bytesTransferred = await UploadOutputsAsync(optimizedOptions, outputs);
 
@@ -83,19 +83,19 @@ namespace Tes.Runner
                 }
             }
 
-            return await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Outputs);
+            return await operationResolver.ResolveOutputsAsync();
         }
 
-        private BlobPipelineOptions OptimizeBlobPipelineOptionsForUpload(BlobPipelineOptions blobPipelineOptions)
+        private BlobPipelineOptions OptimizeBlobPipelineOptionsForUpload(BlobPipelineOptions blobPipelineOptions, List<UploadInfo> outputs)
         {
             var optimizedOptions =
-                PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(blobPipelineOptions, tesNodeTask.Outputs);
+                PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(blobPipelineOptions, outputs);
 
             ValidateBlockSize(optimizedOptions.BlockSizeBytes);
 
             LogStartConfig(optimizedOptions);
 
-            logger.LogInformation($"{tesNodeTask.Outputs?.Count} outputs to upload.");
+            logger.LogInformation($"{outputs.Count} outputs to upload.");
             return optimizedOptions;
         }
 
@@ -149,7 +149,7 @@ namespace Tes.Runner
                 }
             }
 
-            return await resolutionPolicyHandler.ApplyResolutionPolicyAsync(tesNodeTask.Inputs);
+            return await operationResolver.ResolveInputsAsync();
         }
 
         private static void ValidateBlockSize(int blockSizeBytes)

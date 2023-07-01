@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using Moq;
-using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Test.Transfer
@@ -119,7 +118,7 @@ namespace Tes.Runner.Test.Transfer
             systemInfoProviderMock.Setup(x => x.TotalMemory).Returns(10 * BlobSizeUtils.GiB);
             fileInfoProviderMock.Setup(x => x.GetFileSize(It.IsAny<string>())).Returns(fileSizeInGiB * BlobSizeUtils.GiB);
 
-            var outputs = new List<FileOutput>() { new FileOutput() { FullFileName = "fileName", SasStrategy = SasResolutionStrategy.None, TargetUrl = "https://blob.foo/cont/blob" } };
+            var outputs = new List<UploadInfo>() { new UploadInfo("fileName", new Uri("https://blob.foo/cont/blob")) };
             var options = new BlobPipelineOptions();
 
             var newOptions = optimizer.Optimize(options, outputs);

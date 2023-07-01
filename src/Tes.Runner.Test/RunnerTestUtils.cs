@@ -52,11 +52,6 @@ public class RunnerTestUtils
         }
         return pipelineBuffers;
     }
-    public static string AddRandomDataAndReturnMd5(byte[] data)
-    {
-        Random.NextBytes(data);
-        return CalculateMd5Hash(data);
-    }
 
     public static string CalculateMd5Hash(byte[] data)
     {
