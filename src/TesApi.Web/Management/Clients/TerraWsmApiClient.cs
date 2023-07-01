@@ -46,6 +46,36 @@ namespace TesApi.Web.Management.Clients
         protected TerraWsmApiClient() { }
 
         /// <summary>
+        /// Returns storage containers in the workspace.
+        /// </summary>
+        /// <param name="workspaceId">Terra workspace id</param>
+        /// <param name="offset">Number of items to skip before starting to collect the result</param>
+        /// <param name="limit">Maximum number of items to return</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        public virtual async Task<WsmListContainerResourcesResponse> GetContainerResourcesAsync(Guid workspaceId, int offset, int limit, CancellationToken cancellationToken)
+        {
+            var url = GetContainerResourcesApiUrl(workspaceId, offset, limit);
+
+            var response = await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Get, url),
+                cancellationToken, setAuthorizationHeader: true);
+
+            return await GetApiResponseContentAsync<WsmListContainerResourcesResponse>(response, cancellationToken);
+        }
+
+        private Uri GetContainerResourcesApiUrl(Guid workspaceId, int offset, int limit)
+        {
+            var segments = "/resources";
+
+            var builder = GetWsmUriBuilder(workspaceId, segments);
+
+            //TODO: add support for resource and stewardship parameters if required later 
+            builder.Query = $"offset={offset}&limit={limit}&resource=AZURE_STORAGE_CONTAINER&stewardship=CONTROLLED";
+
+            return builder.Uri;
+        }
+
+        /// <summary>
         /// Returns the SAS token of a container or blob for WSM managed storage account.
         /// </summary>
         /// <param name="workspaceId">Terra workspace id</param>

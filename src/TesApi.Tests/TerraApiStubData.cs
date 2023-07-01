@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
@@ -13,10 +14,10 @@ public class TerraApiStubData
     public const string LandingZoneApiHost = "https://landingzone.host";
     public const string WsmApiHost = "https://wsm.host";
     public const string ResourceGroup = "mrg-terra-dev-previ-20191228";
-    public const string WorkspaceAccountName = "fooaccount";
-    public const string WorkspaceContainerName = "foocontainer";
+    public const string WorkspaceAccountName = "lzaccount1";
+    public const string WorkspaceStorageContainerName = "sc-ef9fed44-dba6-4825-868c-b00208522382";
     public const string SasToken = "SASTOKENSTUB=";
-    public const string WsmGetSasResponseStorageUrl = $"https://bloburl.foo/{WorkspaceContainerName}";
+    public const string WsmGetSasResponseStorageUrl = $"https://{WorkspaceAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}";
 
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
@@ -28,6 +29,11 @@ public class TerraApiStubData
         $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Batch/batchAccounts/{BatchAccountName}";
 
     public string PoolId => "poolId";
+
+    public Guid GetWorkspaceIdFromContainerName(string containerName)
+    {
+        return Guid.Parse(containerName.Replace("sc-", ""));
+    }
     public LandingZoneResourcesApiResponse GetResourceApiResponse()
     {
         return JsonSerializer.Deserialize<LandingZoneResourcesApiResponse>(GetResourceApiResponseInJson());
@@ -50,7 +56,7 @@ public class TerraApiStubData
             LandingZoneApiHost = LandingZoneApiHost,
             WsmApiHost = WsmApiHost,
             WorkspaceStorageAccountName = WorkspaceAccountName,
-            WorkspaceStorageContainerName = WorkspaceContainerName,
+            WorkspaceStorageContainerName = WorkspaceStorageContainerName,
             WorkspaceStorageContainerResourceId = ContainerResourceId.ToString()
         };
     }
@@ -182,6 +188,44 @@ public class TerraApiStubData
 }}";
     }
 
+    public string GetContainerResourcesApiResponseInJson()
+    {
+        return $@"{{
+  ""resources"": [
+    {{
+      ""metadata"": {{
+        ""workspaceId"": ""{WorkspaceId}"",
+        ""resourceId"": ""{ContainerResourceId}"",
+        ""name"": ""{WorkspaceStorageContainerName}"",
+        ""resourceType"": ""AZURE_STORAGE_CONTAINER"",
+        ""stewardshipType"": ""CONTROLLED"",
+        ""cloudPlatform"": ""AZURE"",
+        ""cloningInstructions"": ""COPY_NOTHING"",
+        ""controlledResourceMetadata"": {{
+          ""accessScope"": ""SHARED_ACCESS"",
+          ""managedBy"": ""USER"",
+          ""privateResourceUser"": {{}},
+          ""privateResourceState"": ""NOT_APPLICABLE"",
+          ""region"": ""southcentralus""
+        }},
+        ""resourceLineage"": [],
+        ""properties"": [],
+        ""createdBy"": ""user@foo.com"",
+        ""createdDate"": ""2023-02-09T01:48:46.040052Z"",
+        ""lastUpdatedBy"": ""user@foo.com"",
+        ""lastUpdatedDate"": ""2023-02-09T01:48:48.345442Z"",
+        ""state"": ""READY""
+      }},
+      ""resourceAttributes"": {{
+        ""azureStorageContainer"": {{
+          ""storageContainerName"": ""{WorkspaceStorageContainerName}""
+        }}
+      }}
+    }}
+  ]
+}}";
+    }
+
     public string GetResourceQuotaApiResponseInJson()
     {
         return $@"{{
@@ -290,6 +334,31 @@ public class TerraApiStubData
                 }
             },
             ResourceId = new Guid()
+        };
+    }
+
+    public WsmListContainerResourcesResponse GetWsmContainerResourcesApiResponse()
+    {
+        return new WsmListContainerResourcesResponse()
+        {
+            Resources = new List<Resource>()
+            {
+               new Resource()
+               {
+                   Metadata = new Metadata()
+                   {
+                       ResourceId = ContainerResourceId.ToString(),
+                       Name = WorkspaceStorageContainerName
+                   },
+                   ResourceAttributes = new ResourceAttributes()
+                   {
+                       AzureStorageContainer = new AzureStorageContainer()
+                       {
+                           StorageContainerName = WorkspaceStorageContainerName
+                       }
+                   }
+                }
+            }
         };
     }
 }
