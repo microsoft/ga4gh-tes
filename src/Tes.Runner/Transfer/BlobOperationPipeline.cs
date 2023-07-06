@@ -53,7 +53,6 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
     protected async Task<long> ExecutePipelineAsync(List<BlobOperationInfo> operations)
     {
-        var cancellationTokenSource = new CancellationTokenSource();
         var pipelineTasks = new List<Task>
         {
             partsProducer.StartPartsProducersAsync(operations, ReadBufferChannel),
@@ -89,7 +88,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
             var completedTask = await Task.WhenAny(taskList);
             if (completedTask.IsFaulted)
             {
-                throw completedTask.Exception!.InnerException!;
+                throw completedTask.Exception?.InnerException!;
             }
             if (completedTask.IsCanceled)
             {
