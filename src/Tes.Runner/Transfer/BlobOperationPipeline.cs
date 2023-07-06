@@ -53,6 +53,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
     protected async Task<long> ExecutePipelineAsync(List<BlobOperationInfo> operations)
     {
+        var cancellationTokenSource = new CancellationTokenSource();
         var pipelineTasks = new List<Task>
         {
             partsProducer.StartPartsProducersAsync(operations, ReadBufferChannel),
@@ -64,7 +65,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
         try
         {
-            await Task.WhenAll(pipelineTasks);
+            await WhenAllFailFast(pipelineTasks);
             Logger.LogInformation("Pipeline processing completed.");
         }
         catch (Exception e)
@@ -78,5 +79,23 @@ public abstract class BlobOperationPipeline : IBlobPipeline
         Logger.LogInformation("Processed parts completed.");
 
         return bytesProcessed;
+    }
+
+    protected static async Task WhenAllFailFast(IEnumerable<Task> tasks)
+    {
+        var taskList = tasks.ToList();
+        while (taskList.Count > 0)
+        {
+            var completedTask = await Task.WhenAny(taskList);
+            if (completedTask.IsFaulted)
+            {
+                throw completedTask.Exception!.InnerException!;
+            }
+            if (completedTask.IsCanceled)
+            {
+                throw new TaskCanceledException("Processing task was canceled.");
+            }
+            taskList.Remove(completedTask);
+        }
     }
 }

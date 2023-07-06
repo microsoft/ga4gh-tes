@@ -3,6 +3,7 @@
 
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Polly;
@@ -165,10 +166,11 @@ public class BlobBlockApiHttpUtils
             return false;
         }
 
-        if (ex is TimeoutException or IOException)
+        if (ex is TimeoutException or IOException or SocketException)
         {
             return true;
         }
+
 
         return ContainsRetriableException(ex.InnerException);
     }
