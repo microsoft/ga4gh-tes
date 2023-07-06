@@ -5,6 +5,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Tes.Models;
 
 namespace TesApi.Web.Storage;
 
@@ -17,6 +18,12 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// Cromwell path prefix
     /// </summary>
     protected const string CromwellPathPrefix = "/cromwell-executions/";
+
+    /// <summary>
+    /// TES path for internal execution files
+    /// </summary>
+    protected const string TesExecutionsPathPrefix = "/tes-internal";
+
     /// <summary>
     /// Logger instance. 
     /// </summary>
@@ -55,6 +62,10 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
         => await this.AzureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, true)), content, cancellationToken);
 
     /// <inheritdoc />
+    public abstract Task<string> UploadAsInternalTesTaskBlobAsync(TesTask tesTask, string blobPath, string content,
+        CancellationToken cancellationToken);
+
+    /// <inheritdoc />
     public async Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath, CancellationToken cancellationToken)
         => await this.AzureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, true)), sourceLocalFilePath, cancellationToken);
 
@@ -63,6 +74,12 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
 
     /// <inheritdoc />
     public abstract Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, bool getContainerSas = false);
+
+    /// <inheritdoc />
+    public abstract Task<string> GetTesInternalBlobUrlAsync(string blobPath, CancellationToken cancellationToken);
+
+    /// <inheritdoc />
+    public abstract Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);
 
     /// <summary>
     /// Tries to parse the input into a Http Url. 

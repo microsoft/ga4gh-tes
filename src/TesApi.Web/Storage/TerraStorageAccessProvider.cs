@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Tes.Models;
 using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
@@ -89,6 +90,18 @@ namespace TesApi.Web.Storage
             }
 
             return await GetMappedSasUrlFromWsmAsync(terraBlobInfo, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public override Task<string> GetTesInternalBlobUrlAsync(string blobPath, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <inheritdoc />
+        public override Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
         }
 
         /// <summary>

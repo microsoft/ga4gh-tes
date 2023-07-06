@@ -4,6 +4,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Tes.Models;
 
 namespace TesApi.Web.Storage
 {
@@ -28,6 +29,16 @@ namespace TesApi.Web.Storage
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public Task UploadBlobAsync(string blobRelativePath, string content, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Uploads the content of as an internal TES task Blob.
+        /// </summary>
+        /// <param name="tesTask"></param>
+        /// <param name="blobPath"></param>
+        /// <param name="content"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public Task<string> UploadAsInternalTesTaskBlobAsync(TesTask tesTask, string blobPath, string content, CancellationToken cancellationToken);
 
         /// <summary>
         /// Updates the content of the file, creating the file if necessary
@@ -59,5 +70,21 @@ namespace TesApi.Web.Storage
         /// <param name="getContainerSas">Get the container SAS even if path is longer than two parts</param>
         /// <returns>An Azure Block Blob or Container URL with SAS token</returns>
         public Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, bool getContainerSas = false);
+
+        /// <summary>
+        /// Returns an Azure Storage Blob URL with a SAS token for the specified blob path in the TES internal storage location
+        /// </summary>
+        /// <param name="blobPath"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public Task<string> GetTesInternalBlobUrlAsync(string blobPath, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Returns an Azure Storage Blob URL with a SAS token for the specified blob path in the internal storage location.
+        /// </summary>
+        /// <param name="blobPath"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);
     }
 }
