@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Net;
+using System.Net.Sockets;
 using System.Xml;
 using Moq;
 using Moq.Protected;
@@ -81,6 +82,7 @@ namespace Tes.Runner.Test.Transfer
         [DataTestMethod]
         [DataRow(typeof(TimeoutException))]
         [DataRow(typeof(IOException))]
+        [DataRow(typeof(SocketException))]
         public async Task ExecuteHttpRequestAsync_TaskIsCancelledWithRetriableException_RetriesAndSucceeds(
             Type innerExceptionType)
         {
