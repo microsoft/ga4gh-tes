@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.Models;
@@ -21,7 +20,10 @@ namespace TesApi.Web
     /// </summary>
     public class ConfigurationUtils
     {
-        private readonly string defaultStorageAccountName;
+        private const string TerraConfigurationPrefix = "/Configuration";
+        private const string DefaultConfigurationContainer = "configuration";
+
+        private readonly string containerPath;
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly ILogger<ConfigurationUtils> logger;
         private readonly IBatchQuotaProvider quotaProvider;
@@ -32,6 +34,7 @@ namespace TesApi.Web
         /// The constructor
         /// </summary>
         /// <param name="defaultStorageOptions">Configuration of <see cref="Options.StorageOptions"/></param>
+        /// <param name="terraOptions">Configuration of <see cref="Management.Configuration.TerraOptions"/></param>
         /// <param name="storageAccessProvider"><see cref="IStorageAccessProvider"/></param>
         /// <param name="quotaProvider"><see cref="IBatchQuotaProvider"/>></param>
         /// <param name="skuInformationProvider"><see cref="IBatchSkuInformationProvider"/>></param>
@@ -39,6 +42,7 @@ namespace TesApi.Web
         /// <param name="logger"><see cref="ILogger"/></param>
         public ConfigurationUtils(
             IOptions<Options.StorageOptions> defaultStorageOptions,
+            IOptions<Management.Configuration.TerraOptions> terraOptions,
             IStorageAccessProvider storageAccessProvider,
             IBatchQuotaProvider quotaProvider,
             IBatchSkuInformationProvider skuInformationProvider,
@@ -48,6 +52,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(quotaProvider);
             ArgumentNullException.ThrowIfNull(batchAccountResourceInformation);
+
             if (string.IsNullOrEmpty(batchAccountResourceInformation.Region))
             {
                 throw new ArgumentException(
@@ -55,7 +60,17 @@ namespace TesApi.Web
             }
             ArgumentNullException.ThrowIfNull(logger);
 
-            this.defaultStorageAccountName = defaultStorageOptions.Value.DefaultAccountName;
+            if (string.IsNullOrWhiteSpace(terraOptions?.Value.WorkspaceStorageAccountName))
+            {
+                ArgumentException.ThrowIfNullOrEmpty(defaultStorageOptions?.Value.DefaultAccountName, nameof(defaultStorageOptions));
+                this.containerPath = $"/{defaultStorageOptions.Value.DefaultAccountName}/{DefaultConfigurationContainer}";
+            }
+            else
+            {
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.Value.TesExecutionsPathPrefix, nameof(terraOptions));
+                this.containerPath = $"/{terraOptions.Value.WorkspaceStorageAccountName}/{terraOptions.Value.TesExecutionsPathPrefix.TrimEnd('/')}{TerraConfigurationPrefix}";
+            }
+
             this.storageAccessProvider = storageAccessProvider;
             this.logger = logger;
             this.quotaProvider = quotaProvider;
@@ -71,8 +86,8 @@ namespace TesApi.Web
         /// <returns></returns>
         public async Task<List<string>> ProcessAllowedVmSizesConfigurationFileAsync(CancellationToken cancellationToken)
         {
-            var supportedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/supported-vm-sizes";
-            var allowedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/allowed-vm-sizes";
+            var supportedVmSizesFilePath = $"/{containerPath}/supported-vm-sizes";
+            var allowedVmSizesFilePath = $"/{containerPath}/allowed-vm-sizes";
 
             var supportedVmSizes = (await skuInformationProvider.GetVmSizesAndPricesAsync(batchAccountResourceInformation.Region, cancellationToken)).ToList();
             var batchAccountQuotas = await quotaProvider.GetVmCoreQuotaAsync(lowPriority: false, cancellationToken: cancellationToken);
@@ -84,14 +99,14 @@ namespace TesApi.Web
             }
             catch
             {
-                logger.LogWarning($"Failed to write {supportedVmSizesFilePath}. Updated VM size information will not be available in the configuration directory. This will not impact the workflow execution.");
+                logger.LogWarning("Failed to write {SupportedVmSizesFilePath}. Updated VM size information will not be available in the configuration directory. This will not impact the workflow execution.", supportedVmSizesFilePath);
             }
 
             var allowedVmSizesFileContent = await storageAccessProvider.DownloadBlobAsync(allowedVmSizesFilePath, cancellationToken);
 
             if (allowedVmSizesFileContent is null)
             {
-                logger.LogWarning($"Unable to read from {allowedVmSizesFilePath}. All supported VM sizes will be eligible for Azure Batch task scheduling.");
+                logger.LogWarning("Unable to read from {AllowedVmSizesFilePath}. All supported VM sizes will be eligible for Azure Batch task scheduling.", allowedVmSizesFilePath);
                 return new List<string>();
             }
 
@@ -115,7 +130,7 @@ namespace TesApi.Web
 
             if (allowedVmSizesButNotSupported.Any())
             {
-                logger.LogWarning($"The following VM sizes or families are listed in {allowedVmSizesFilePath}, but are either misspelled or not supported in your region: {string.Join(", ", allowedVmSizesButNotSupported)}. These will be ignored.");
+                logger.LogWarning("The following VM sizes or families are listed in {AllowedVmSizesFilePath}, but are either misspelled or not supported in your region: {AllowedVmSizesButNotSupported}. These will be ignored.", allowedVmSizesFilePath, string.Join(", ", allowedVmSizesButNotSupported));
 
                 var linesWithWarningsAdded = allowedVmSizesLines.ConvertAll(line =>
                     allowedVmSizesButNotSupported.Contains(line, StringComparer.OrdinalIgnoreCase)
@@ -133,7 +148,7 @@ namespace TesApi.Web
                     }
                     catch
                     {
-                        logger.LogWarning($"Failed to write warnings to {allowedVmSizesFilePath}.");
+                        logger.LogWarning("Failed to write warnings to {AllowedVmSizesFilePath}.", allowedVmSizesFilePath);
                     }
                 }
             }

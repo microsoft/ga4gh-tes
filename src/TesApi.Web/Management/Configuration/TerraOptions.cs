@@ -58,4 +58,9 @@ public class TerraOptions
     /// Sas token allowed Ip ranges
     /// </summary>
     public string SasAllowedIpRange { get; set; }
+
+    /// <summary>
+    /// TES executions path prefix
+    /// </summary>
+    public string TesExecutionsPathPrefix { get; set; }
 }

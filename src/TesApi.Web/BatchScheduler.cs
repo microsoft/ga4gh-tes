@@ -50,7 +50,9 @@ namespace TesApi.Web
         private const int DefaultMemoryGb = 2;
         private const int DefaultDiskGb = 10;
         private const string CromwellPathPrefix = "/cromwell-executions";
-        private const string TesExecutionsPathPrefix = "/tes-internal";
+        private const string DefaultTesExecutionsPathPrefix = "/tes-internal";
+        private const string TesExecutionsBinariesPrefix = "/Binaries";
+        private const string TesExecutionsTasksPrefix = "/Tasks";
         private const string CromwellScriptFileName = "script";
         private const string BatchScriptFileName = "batch_script";
         private const string UploadFilesScriptFileName = "upload_files_script";
@@ -79,6 +81,7 @@ namespace TesApi.Web
         private readonly string marthaKeyVaultName;
         private readonly string marthaSecretName;
         private readonly string defaultStorageAccountName;
+        private readonly string tesExecutionsPathPrefix;
         private readonly string globalStartTaskPath;
         private readonly string globalManagedIdentity;
         private readonly ContainerRegistryProvider containerRegistryProvider;
@@ -97,6 +100,7 @@ namespace TesApi.Web
         /// <param name="batchGen1Options">Configuration of <see cref="Options.BatchImageGeneration1Options"/></param>
         /// <param name="batchGen2Options">Configuration of <see cref="Options.BatchImageGeneration2Options"/></param>
         /// <param name="marthaOptions">Configuration of <see cref="Options.MarthaOptions"/></param>
+        /// <param name="terraOptions">Configuration of <see cref="Management.Configuration.TerraOptions"/></param>
         /// <param name="storageOptions">Configuration of <see cref="Options.StorageOptions"/></param>
         /// <param name="batchImageNameOptions">Configuration of <see cref="Options.BatchImageNameOptions"/></param>
         /// <param name="batchNodesOptions">Configuration of <see cref="Options.BatchNodesOptions"/></param>
@@ -113,6 +117,7 @@ namespace TesApi.Web
             IOptions<Options.BatchImageGeneration1Options> batchGen1Options,
             IOptions<Options.BatchImageGeneration2Options> batchGen2Options,
             IOptions<Options.MarthaOptions> marthaOptions,
+            IOptions<Management.Configuration.TerraOptions> terraOptions,
             IOptions<Options.StorageOptions> storageOptions,
             IOptions<Options.BatchImageNameOptions> batchImageNameOptions,
             IOptions<Options.BatchNodesOptions> batchNodesOptions,
@@ -148,7 +153,19 @@ namespace TesApi.Web
             if (string.IsNullOrWhiteSpace(this.cromwellDrsLocalizerImageName)) { this.cromwellDrsLocalizerImageName = Options.MarthaOptions.DefaultCromwellDrsLocalizer; }
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
             this.enableBatchAutopool = batchSchedulingOptions.Value.UseLegacyAutopools;
-            this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
+
+            if (string.IsNullOrWhiteSpace(terraOptions?.Value.WorkspaceStorageAccountName))
+            {
+                this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
+                this.tesExecutionsPathPrefix = DefaultTesExecutionsPathPrefix;
+            }
+            else
+            {
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions?.Value.TesExecutionsPathPrefix, nameof(terraOptions));
+                this.defaultStorageAccountName = terraOptions.Value.WorkspaceStorageAccountName;
+                this.tesExecutionsPathPrefix = $"/{terraOptions.Value.TesExecutionsPathPrefix.TrimEnd('/')}";
+            }
+
             this.marthaUrl = marthaOptions.Value.Url;
             this.marthaKeyVaultName = marthaOptions.Value.KeyVaultName;
             this.marthaSecretName = marthaOptions.Value.SecretName;
@@ -370,7 +387,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken)
         {
-            var blobUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{defaultStorageAccountName}{TesExecutionsPathPrefix}/{NodeTaskRunnerFilename}", cancellationToken, true));
+            var blobUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{defaultStorageAccountName}{tesExecutionsPathPrefix}{TesExecutionsBinariesPrefix}/{NodeTaskRunnerFilename}", cancellationToken, true));
             var blobProperties = await azureProxy.GetBlobPropertiesAsync(blobUri, cancellationToken);
             if (!(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, $"scripts/{NodeTaskRunnerMD5HashFilename}"), cancellationToken)).Trim().Equals(blobProperties?.ContentMD5, StringComparison.OrdinalIgnoreCase))
             {
@@ -419,7 +436,7 @@ namespace TesApi.Web
         {
             return task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix) ?? false
                 ? $"{defaultStorageAccountName}/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}"
-                : $"{defaultStorageAccountName}{TesExecutionsPathPrefix}/{task.Id}";
+                : $"{defaultStorageAccountName}{tesExecutionsPathPrefix}{TesExecutionsTasksPrefix}/{task.Id}";
         }
 
         /// <summary>
@@ -1120,7 +1137,7 @@ namespace TesApi.Web
             await storageAccessProvider.UploadBlobAsync(uploadMetricsScriptPath, SerializeNodeTask(uploadMetricsScriptContent), cancellationToken);
             await storageAccessProvider.UploadBlobAsync(batchScriptPath, sb.ToString(), cancellationToken);
 
-            var nodeTaskRunnerSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{defaultStorageAccountName}{TesExecutionsPathPrefix}/{NodeTaskRunnerFilename}", cancellationToken);
+            var nodeTaskRunnerSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{defaultStorageAccountName}{tesExecutionsPathPrefix}{TesExecutionsBinariesPrefix}/{NodeTaskRunnerFilename}", cancellationToken);
             var batchScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(batchScriptPath, cancellationToken);
             var downloadFilesScriptUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(downloadFilesScriptPath, cancellationToken);
             var uploadFilesScriptSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(uploadFilesScriptPath, cancellationToken);
@@ -1803,13 +1820,13 @@ namespace TesApi.Web
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError($"Failed to parse metrics for task {tesTask.Id}. Error: {ex.Message}");
+                        logger.LogError(ex, "Failed to parse metrics for task {TesTaskId}. Error: {ExceptionMessage}", tesTask.Id, ex.Message);
                     }
                 }
             }
             catch (Exception ex)
             {
-                logger.LogError($"Failed to get batch node metrics for task {tesTask.Id}. Error: {ex.Message}");
+                logger.LogError(ex, "Failed to get batch node metrics for task {TesTaskId}. Error: {ExceptionMessage}", tesTask.Id, ex.Message);
             }
 
             return (batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode);
