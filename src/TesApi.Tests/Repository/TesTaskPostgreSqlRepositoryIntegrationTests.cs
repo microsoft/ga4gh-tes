@@ -71,6 +71,7 @@ namespace Tes.Repository.Tests
         public static async Task ClassCleanupAsync()
         {
             Console.WriteLine("Deleting Azure Resource Group...");
+            repository?.Dispose();
             await PostgreSqlTestUtility.DeleteResourceGroupAsync(subscriptionId, resourceGroupName);
             Console.WriteLine("Done");
         }
@@ -99,14 +100,16 @@ namespace Tes.Repository.Tests
         [TestMethod]
         public async Task GetItemsAsyncTest()
         {
-            var items = await repository.GetItemsAsync(c => c.Id != null, System.Threading.CancellationToken.None);
+            var items = (await repository.GetItemsAsync(c => c.Id != null, System.Threading.CancellationToken.None)).ToList();
 
             foreach (var item in items)
             {
                 Assert.IsTrue(!string.IsNullOrWhiteSpace(item.Id));
             }
 
-            Assert.IsTrue(items.Count() > 0);
+            Assert.IsTrue(items.Any());
+            Console.WriteLine(items.Count);
+            Assert.AreEqual(items.Count, items.Select(t => t.Id).Distinct().Count());
         }
 
         [TestMethod]
@@ -120,19 +123,18 @@ namespace Tes.Repository.Tests
             if (createItems)
             {
                 var rng = new Random(Guid.NewGuid().GetHashCode());
-                var states = Enum.GetValues(typeof(Models.TesState));
+                var states = Enum.GetValues(typeof(Models.TesState)).Cast<Models.TesState>().ToArray();
 
                 var items = new List<Models.TesTask>();
 
-                for (int i = 0; i < itemCount; i++)
+                for (var i = 0; i < itemCount; i++)
                 {
-                    var randomState = (Models.TesState)states.GetValue(rng.Next(states.Length));
                     items.Add(new Models.TesTask
                     {
                         Id = Guid.NewGuid().ToString(),
                         Description = Guid.NewGuid().ToString(),
                         CreationTime = DateTime.UtcNow,
-                        State = randomState
+                        State = states[rng.Next(states.Length)]
                     });
                 }
 
@@ -144,16 +146,16 @@ namespace Tes.Repository.Tests
             }
 
             sw.Restart();
-            var runningTasks = await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None);
+            var runningTasks = (await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None)).ToList();
 
             // Ensure performance is decent
             Assert.IsTrue(sw.Elapsed.TotalSeconds < 20);
-            Console.WriteLine($"Retrieved {runningTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
+            Console.WriteLine($"Retrieved {runningTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
             sw.Restart();
-            var allOtherTasks = await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None);
-            Console.WriteLine($"Retrieved {allOtherTasks.Count()} in {sw.Elapsed.TotalSeconds:n1}s");
-            Console.WriteLine($"Total running tasks: {runningTasks.Count()}");
-            Console.WriteLine($"Total other tasks: {allOtherTasks.Count()}");
+            var allOtherTasks = (await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None)).ToList();
+            Console.WriteLine($"Retrieved {allOtherTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
+            Console.WriteLine($"Total running tasks: {runningTasks.Count}");
+            Console.WriteLine($"Total other tasks: {allOtherTasks.Count}");
             var distinctRunningTasksIds = runningTasks.Select(i => i.Id).Distinct().Count();
             var distinctOtherTaskIds = allOtherTasks.Select(i => i.Id).Distinct().Count();
             Console.WriteLine($"uniqueRunningTasksIds: {distinctRunningTasksIds}");
@@ -161,11 +163,36 @@ namespace Tes.Repository.Tests
 
             Assert.IsTrue(distinctRunningTasksIds + distinctOtherTaskIds == itemCount);
 
-            Assert.IsTrue(runningTasks.Count() > 0);
-            Assert.IsTrue(allOtherTasks.Count() > 0);
-            Assert.IsTrue(runningTasks.Count() != allOtherTasks.Count());
+            Assert.IsTrue(runningTasks.Count > 0);
+            Assert.IsTrue(allOtherTasks.Count > 0);
+            Assert.IsTrue(runningTasks.Count != allOtherTasks.Count);
             Assert.IsTrue(runningTasks.All(c => c.State == Models.TesState.RUNNINGEnum));
             Assert.IsTrue(allOtherTasks.All(c => c.State != Models.TesState.RUNNINGEnum));
+        }
+
+        [TestMethod]
+        public async Task GetItemsContinuationAsyncTest()
+        {
+            const int pageSize = 256;
+
+            var (continuation, items) = await repository.GetItemsAsync(c => c.Id != null, pageSize, null, CancellationToken.None);
+            var itemsList = items.ToList();
+            Assert.IsTrue(itemsList.Count <= pageSize);
+
+            while (!string.IsNullOrWhiteSpace(continuation))
+            {
+                (continuation, items) = await repository.GetItemsAsync(c => c.Id != null, pageSize, continuation, CancellationToken.None);
+                itemsList.AddRange(items);
+            }
+
+            foreach (var item in itemsList)
+            {
+                Assert.IsTrue(!string.IsNullOrWhiteSpace(item.Id));
+            }
+
+            Assert.IsTrue(itemsList.Any());
+            Console.WriteLine(itemsList.Count);
+            Assert.AreEqual(itemsList.Count, itemsList.Select(t => t.Id).Distinct().Count());
         }
 
         [TestMethod]
@@ -187,7 +214,7 @@ namespace Tes.Repository.Tests
         [TestMethod]
         public async Task UpdateItemAsyncTest()
         {
-            string description = $"created at {DateTime.UtcNow}";
+            var description = $"created at {DateTime.UtcNow}";
             var id = Guid.NewGuid().ToString();
 
             var createdItem = await repository.CreateItemAsync(new Models.TesTask

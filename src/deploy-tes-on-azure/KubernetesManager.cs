@@ -417,7 +417,6 @@ namespace TesDeployer
             batchNodes["subnetId"] = GetValueOrDefault(settings, "BatchNodesSubnetId");
             values.Config["coaNamespace"] = GetValueOrDefault(settings, "AksCoANamespace");
             batchNodes["disablePublicIpAddress"] = GetValueOrDefault(settings, "DisableBatchNodesPublicIpAddress");
-            batchScheduling["disable"] = GetValueOrDefault(settings, "DisableBatchScheduling");
             batchScheduling["usePreemptibleVmsOnly"] = GetValueOrDefault(settings, "UsePreemptibleVmsOnly");
             nodeImages["docker"] = GetValueOrDefault(settings, "DockerInDockerImageName");
             batchImageGen2["offer"] = GetValueOrDefault(settings, "Gen2BatchImageOffer");
@@ -483,7 +482,6 @@ namespace TesDeployer
                 ["BatchNodesSubnetId"] = GetValueOrDefault(batchNodes, "subnetId"),
                 ["AksCoANamespace"] = GetValueOrDefault(values.Config, "coaNamespace") as string,
                 ["DisableBatchNodesPublicIpAddress"] = GetValueOrDefault(batchNodes, "disablePublicIpAddress"),
-                ["DisableBatchScheduling"] = GetValueOrDefault(batchScheduling, "disable"),
                 ["UsePreemptibleVmsOnly"] = GetValueOrDefault(batchScheduling, "usePreemptibleVmsOnly"),
                 ["DockerInDockerImageName"] = GetValueOrDefault(nodeImages, "docker"),
                 ["Gen2BatchImageOffer"] = GetValueOrDefault(batchImageGen2, "offer"),

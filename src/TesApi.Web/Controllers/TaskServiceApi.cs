@@ -88,7 +88,15 @@ namespace TesApi.Controllers
                     logger.LogInformation("Canceling task");
                     tesTask.IsCancelRequested = true;
                     tesTask.State = TesState.CANCELEDEnum;
-                    await repository.UpdateItemAsync(tesTask, cancellationToken);
+
+                    try
+                    {
+                        await repository.UpdateItemAsync(tesTask, cancellationToken);
+                    }
+                    catch (RepositoryCollisionException exc)
+                    {
+                        // TODO
+                    }
                 }
             }
             else
