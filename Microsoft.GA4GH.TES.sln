@@ -35,8 +35,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.Runner.Test", "src\Tes.
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.RunnerCLI", "src\Tes.RunnerCLI\Tes.RunnerCLI.csproj", "{D5DFB5A4-2E18-456A-9A29-5BD8C82DF250}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PublishTesRunnerToTesApiArtifacts", "src\PublishTesRunnerToTesApiArtifacts\PublishTesRunnerToTesApiArtifacts.csproj", "{4A98F17B-0C4F-4412-8D48-54BA97601407}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -87,10 +85,6 @@ Global
 		{D5DFB5A4-2E18-456A-9A29-5BD8C82DF250}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D5DFB5A4-2E18-456A-9A29-5BD8C82DF250}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D5DFB5A4-2E18-456A-9A29-5BD8C82DF250}.Release|Any CPU.Build.0 = Release|Any CPU
-		{4A98F17B-0C4F-4412-8D48-54BA97601407}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{4A98F17B-0C4F-4412-8D48-54BA97601407}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{4A98F17B-0C4F-4412-8D48-54BA97601407}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{4A98F17B-0C4F-4412-8D48-54BA97601407}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
