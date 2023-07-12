@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Diagnostics;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
@@ -26,6 +27,8 @@ namespace Tes.Runner.Docker
             ArgumentNullException.ThrowIfNull(commandsToExecute);
 
             await PullImageAsync(imageName, tag);
+
+            await BlockDockerContainerAccessToAzureInstanceMetadataService();
 
             var createResponse = await CreateContainerAsync(imageName, commandsToExecute);
 
@@ -82,6 +85,45 @@ namespace Tes.Runner.Docker
                 },
                 authConfig,
                 new Progress<JSONMessage>(message => logger.LogInformation(message.Status)));
+        }
+
+        private async Task BlockDockerContainerAccessToAzureInstanceMetadataService()
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                return;
+            }
+
+            const string imdsIpAddress = "169.254.169.254"; // https://learn.microsoft.com/en-us/azure/virtual-machines/instance-metadata-service
+            const string command = "iptables";
+
+            string arguments = $"-A DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdstaddr {imdsIpAddress} -j DROP";
+
+            var process = new Process
+            {
+                StartInfo =
+                {
+                    FileName = command,
+                    Arguments = arguments,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+
+            process.Start();
+            await process.WaitForExitAsync();
+
+            string output = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+
+            if (process.ExitCode != 0)
+            {
+                var exc = new Exception($"BlockDockerContainerAccessToAzureInstanceMetadataService failed. Exit code: {process.ExitCode}\nOutput: {output}\nError: {error}");
+                logger.LogError(exc, exc.Message);
+                throw exc;
+            }
         }
     }
 }
