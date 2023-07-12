@@ -37,22 +37,6 @@
           TargetPath="tesapi.dll" />
   </ItemGroup>
 
-  <!--<Target Name="__AssignPublishProperties" BeforeTargets="ResolveProjectReferences" AfterTargets="PrepareProjectReferences">
-    <ConvertToAbsolutePath Paths="$(OutputPath)scripts\">
-      <Output TaskParameter="AbsolutePaths" PropertyName="__TesRunnerPublishDir"/>
-    </ConvertToAbsolutePath>
-
-    <ItemGroup>
-      <__ProjectNotReferenced Include="@(_MSBuildProjectReferenceExistent)" />
-      <_MSBuildProjectReferenceExistent Remove="@(__ProjectNotReferenced)" />
-      <_MSBuildProjectReferenceExistent Include="@(__ProjectNotReferenced)">
-        <Properties>%(__ProjectNotReferenced.AdditionalProperties);PublishDir=$(__TesRunnerPublishDir);%(__ProjectNotReferenced.SetConfiguration);%(__ProjectNotReferenced.SetPlatform);%(__ProjectNotReferenced.SetTargetFramework)</Properties>
-        <AdditionalProperties></AdditionalProperties>
-        <GlobalPropertiesToRemove>%(__ProjectNotReferenced.GlobalPropertiesToRemove);PublishSingleFile;PublishTrimmed;SelfContained</GlobalPropertiesToRemove>
-      </_MSBuildProjectReferenceExistent>
-    </ItemGroup>
-  </Target>-->
-
   <Import Sdk="Microsoft.NET.Sdk" Project="Sdk.targets"/>
 
   <UsingTask TaskName="ConvertNoneToPublishDir" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
@@ -77,7 +61,6 @@
                 file.CopyMetadataTo(dir);
                 dirs.Add(dir);
             }
-            //PublishedDirectories = Enumerable.DistinctBy(dirs, item => item.ItemSpec).ToArray();
             PublishedDirectories = dirs.ToArray();
         ]]>
       </Code>
