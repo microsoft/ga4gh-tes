@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -154,6 +155,28 @@ namespace TesApi.Tests
             Assert.IsNotNull(url);
             var uri = new Uri(url);
             Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}{StorageAccessProvider.TesExecutionsPathPrefix}/{task.Id}/{blobName.TrimStart('/')}", uri.AbsolutePath);
+        }
+
+        [TestMethod]
+        [DataRow("script/foo.sh")]
+        [DataRow("/script/foo.sh")]
+        public async Task GetInternalTesTaskBlobUrlAsync_BlobPathAndInternalPathPrefixIsProvided_ReturnsValidURLWithWsmContainerTaskIdAndInternalPathPrefixAppended(
+            string blobName)
+        {
+            var internalPathPrefix = "internalPathPrefix";
+
+            SetUpTerraApiClient();
+            var task = new TesTask { Name = "taskName", Id = Guid.NewGuid().ToString() };
+            task.Resources = new TesResources();
+            task.Resources.BackendParameters = new Dictionary<string, string>
+            {
+                { TesResources.SupportedBackendParameters.internal_path_prefix.ToString(), internalPathPrefix }
+            };
+            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
+
+            Assert.IsNotNull(url);
+            var uri = new Uri(url);
+            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{internalPathPrefix}/{blobName.TrimStart('/')}", uri.AbsolutePath);
         }
     }
 }

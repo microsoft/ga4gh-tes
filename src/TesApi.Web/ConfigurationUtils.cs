@@ -72,8 +72,6 @@ namespace TesApi.Web
         /// <returns></returns>
         public async Task<List<string>> ProcessAllowedVmSizesConfigurationFileAsync(CancellationToken cancellationToken)
         {
-            // var supportedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/supported-vm-sizes";
-            // var allowedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/allowed-vm-sizes";
             var supportedVmSizesUrl = new Uri(await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/supported-vm-sizes", cancellationToken));
             var allowedVmSizesUrl = new Uri(await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/allowed-vm-sizes", cancellationToken));
 
