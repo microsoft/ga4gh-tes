@@ -12,6 +12,7 @@ using Microsoft.Extensions.Options;
 using Tes.Models;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
+using TesApi.Web.Options;
 using TesApi.Web.Storage;
 
 namespace TesApi.Web
@@ -31,7 +32,7 @@ namespace TesApi.Web
         /// <summary>
         /// The constructor
         /// </summary>
-        /// <param name="defaultStorageOptions">Configuration of <see cref="Options.StorageOptions"/></param>
+        /// <param name="defaultStorageOptions">Configuration of <see cref="StorageOptions"/></param>
         /// <param name="storageAccessProvider"><see cref="IStorageAccessProvider"/></param>
         /// <param name="quotaProvider"><see cref="IBatchQuotaProvider"/>></param>
         /// <param name="skuInformationProvider"><see cref="IBatchSkuInformationProvider"/>></param>
@@ -71,8 +72,10 @@ namespace TesApi.Web
         /// <returns></returns>
         public async Task<List<string>> ProcessAllowedVmSizesConfigurationFileAsync(CancellationToken cancellationToken)
         {
-            var supportedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/supported-vm-sizes";
-            var allowedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/allowed-vm-sizes";
+            // var supportedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/supported-vm-sizes";
+            // var allowedVmSizesFilePath = $"/{defaultStorageAccountName}/configuration/allowed-vm-sizes";
+            var supportedVmSizesUrl = new Uri(await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/supported-vm-sizes", cancellationToken));
+            var allowedVmSizesUrl = new Uri(await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/allowed-vm-sizes", cancellationToken));
 
             var supportedVmSizes = (await skuInformationProvider.GetVmSizesAndPricesAsync(batchAccountResourceInformation.Region, cancellationToken)).ToList();
             var batchAccountQuotas = await quotaProvider.GetVmCoreQuotaAsync(lowPriority: false, cancellationToken: cancellationToken);
@@ -80,18 +83,18 @@ namespace TesApi.Web
 
             try
             {
-                await storageAccessProvider.UploadBlobAsync(supportedVmSizesFilePath, supportedVmSizesFileContent, cancellationToken);
+                await storageAccessProvider.UploadBlobAsync(supportedVmSizesUrl, supportedVmSizesFileContent, cancellationToken);
             }
             catch
             {
-                logger.LogWarning($"Failed to write {supportedVmSizesFilePath}. Updated VM size information will not be available in the configuration directory. This will not impact the workflow execution.");
+                logger.LogWarning($"Failed to write {supportedVmSizesUrl.AbsolutePath}. Updated VM size information will not be available in the configuration directory. This will not impact the workflow execution.");
             }
 
-            var allowedVmSizesFileContent = await storageAccessProvider.DownloadBlobAsync(allowedVmSizesFilePath, cancellationToken);
+            var allowedVmSizesFileContent = await storageAccessProvider.DownloadBlobAsync(allowedVmSizesUrl, cancellationToken);
 
             if (allowedVmSizesFileContent is null)
             {
-                logger.LogWarning($"Unable to read from {allowedVmSizesFilePath}. All supported VM sizes will be eligible for Azure Batch task scheduling.");
+                logger.LogWarning($"Unable to read from {allowedVmSizesUrl.AbsolutePath}. All supported VM sizes will be eligible for Azure Batch task scheduling.");
                 return new List<string>();
             }
 
@@ -115,7 +118,7 @@ namespace TesApi.Web
 
             if (allowedVmSizesButNotSupported.Any())
             {
-                logger.LogWarning($"The following VM sizes or families are listed in {allowedVmSizesFilePath}, but are either misspelled or not supported in your region: {string.Join(", ", allowedVmSizesButNotSupported)}. These will be ignored.");
+                logger.LogWarning($"The following VM sizes or families are listed in {allowedVmSizesUrl.AbsolutePath}, but are either misspelled or not supported in your region: {string.Join(", ", allowedVmSizesButNotSupported)}. These will be ignored.");
 
                 var linesWithWarningsAdded = allowedVmSizesLines.ConvertAll(line =>
                     allowedVmSizesButNotSupported.Contains(line, StringComparer.OrdinalIgnoreCase)
@@ -129,11 +132,11 @@ namespace TesApi.Web
                 {
                     try
                     {
-                        await storageAccessProvider.UploadBlobAsync(allowedVmSizesFilePath, allowedVmSizesFileContentWithWarningsAdded, cancellationToken);
+                        await storageAccessProvider.UploadBlobAsync(allowedVmSizesUrl, allowedVmSizesFileContentWithWarningsAdded, cancellationToken);
                     }
                     catch
                     {
-                        logger.LogWarning($"Failed to write warnings to {allowedVmSizesFilePath}.");
+                        logger.LogWarning($"Failed to write warnings to {allowedVmSizesUrl.AbsolutePath}.");
                     }
                 }
             }

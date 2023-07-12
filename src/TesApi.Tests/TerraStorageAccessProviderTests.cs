@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
+using Tes.Models;
 using TesApi.Web;
 using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
@@ -123,6 +124,36 @@ namespace TesApi.Tests
             var uri = new Uri(url);
 
             Assert.AreEqual(uri.AbsolutePath, $"/{TerraApiStubData.WorkspaceStorageContainerName}/blobName");
+        }
+
+        [TestMethod]
+        [DataRow("script/foo.sh")]
+        [DataRow("/script/foo.sh")]
+        public async Task GetInternalTesBlobUrlAsync_BlobPathIsProvided_ReturnsValidURLWithWsmContainerAndTesPrefixAppended(
+            string blobName)
+        {
+            SetUpTerraApiClient();
+
+            var url = await terraStorageAccessProvider.GetInternalTesBlobUrlAsync(blobName, CancellationToken.None);
+
+            Assert.IsNotNull(url);
+            var uri = new Uri(url);
+            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}{StorageAccessProvider.TesExecutionsPathPrefix}/{blobName.TrimStart('/')}", uri.AbsolutePath);
+        }
+
+        [TestMethod]
+        [DataRow("script/foo.sh")]
+        [DataRow("/script/foo.sh")]
+        public async Task GetInternalTesTaskBlobUrlAsync_BlobPathIsProvided_ReturnsValidURLWithWsmContainerTaskIdAndTesPrefixAppended(
+            string blobName)
+        {
+            SetUpTerraApiClient();
+            var task = new TesTask { Name = "taskName", Id = Guid.NewGuid().ToString() };
+            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
+
+            Assert.IsNotNull(url);
+            var uri = new Uri(url);
+            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}{StorageAccessProvider.TesExecutionsPathPrefix}/{task.Id}/{blobName.TrimStart('/')}", uri.AbsolutePath);
         }
     }
 }

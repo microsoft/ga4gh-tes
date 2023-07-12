@@ -22,6 +22,14 @@ namespace TesApi.Web.Storage
         public Task<string> DownloadBlobAsync(string blobRelativePath, CancellationToken cancellationToken);
 
         /// <summary>
+        /// Retrieves file content
+        /// </summary>
+        /// <param name="blobAbsoluteUrl">Blob storage URL with a SAS token</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>The content of the file</returns>
+        public Task<string> DownloadBlobAsync(Uri blobAbsoluteUrl, CancellationToken cancellationToken);
+
+        /// <summary>
         /// Updates the content of the file, creating the file if necessary
         /// </summary>
         /// <param name="blobRelativePath">Path to the file in form of /storageaccountname/container/path</param>
@@ -31,14 +39,13 @@ namespace TesApi.Web.Storage
         public Task UploadBlobAsync(string blobRelativePath, string content, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Uploads the content of as an internal TES task Blob.
+        /// Uploads the content as Blob to the provided Blob URL
         /// </summary>
-        /// <param name="tesTask"></param>
-        /// <param name="blobPath"></param>
-        /// <param name="content"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="blobAbsoluteUrl">Absolute Blob Storage URL with a SAS token</param>
+        /// <param name="content">Blob content</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public Task<string> UploadAsInternalTesTaskBlobAsync(TesTask tesTask, string blobPath, string content, CancellationToken cancellationToken);
+        public Task<string> UploadBlobAsync(Uri blobAbsoluteUrl, string content, CancellationToken cancellationToken);
 
         /// <summary>
         /// Updates the content of the file, creating the file if necessary
@@ -77,11 +84,12 @@ namespace TesApi.Web.Storage
         /// <param name="blobPath"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public Task<string> GetTesInternalBlobUrlAsync(string blobPath, CancellationToken cancellationToken);
+        public Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken);
 
         /// <summary>
         /// Returns an Azure Storage Blob URL with a SAS token for the specified blob path in the internal storage location.
         /// </summary>
+        /// <param name="task"></param>
         /// <param name="blobPath"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>

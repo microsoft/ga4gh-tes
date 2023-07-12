@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using System.Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.Identity.Client;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
@@ -56,17 +55,6 @@ namespace TesApi.Web.Storage
                 })
                 .Where(storageAccountInfo => storageAccountInfo is not null)
                 .ToList();
-        }
-
-        /// <inheritdoc />
-        public override async Task<string> UploadAsInternalTesTaskBlobAsync(TesTask tesTask, string blobPath, string content,
-            CancellationToken cancellationToken)
-        {
-            var url = await GetInternalTesTaskBlobUrlAsync(tesTask, blobPath, cancellationToken);
-            var uri = new Uri(url);
-            await AzureProxy.UploadBlobAsync(uri, content, cancellationToken);
-
-            return url;
         }
 
         /// <inheritdoc />
@@ -165,13 +153,13 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> GetTesInternalBlobUrlAsync(string blobPath, CancellationToken cancellationToken)
+        public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken)
         {
             var normalizedBlobPath = NormalizedBlobPath(blobPath);
 
             return await MapLocalPathToSasUrlAsync($"/{defaultStorageAccountName}{TesExecutionsPathPrefix}{normalizedBlobPath}", cancellationToken, true);
         }
-        
+
 
         private static string NormalizedBlobPath(string blobPath)
         {
@@ -189,7 +177,7 @@ namespace TesApi.Web.Storage
                 return await MapLocalPathToSasUrlAsync($"/{defaultStorageAccountName}/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}", cancellationToken, true);
             }
 
-            return await GetTesInternalBlobUrlAsync($"/{task.Id}{normalizedBlobPath}", cancellationToken);
+            return await GetInternalTesBlobUrlAsync($"/{task.Id}{normalizedBlobPath}", cancellationToken);
         }
 
         private async Task<bool> TryGetStorageAccountInfoAsync(string accountName, CancellationToken cancellationToken, Action<StorageAccountInfo> onSuccess = null)

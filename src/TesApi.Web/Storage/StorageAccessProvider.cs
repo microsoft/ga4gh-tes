@@ -22,7 +22,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <summary>
     /// TES path for internal execution files
     /// </summary>
-    protected const string TesExecutionsPathPrefix = "/tes-internal";
+    public const string TesExecutionsPathPrefix = "/tes-internal";
 
     /// <summary>
     /// Logger instance. 
@@ -58,12 +58,25 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     }
 
     /// <inheritdoc />
+    public async Task<string> DownloadBlobAsync(Uri blobAbsoluteUrl, CancellationToken cancellationToken)
+    {
+        return await AzureProxy.DownloadBlobAsync(blobAbsoluteUrl, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task UploadBlobAsync(string blobRelativePath, string content, CancellationToken cancellationToken)
         => await this.AzureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, true)), content, cancellationToken);
 
     /// <inheritdoc />
-    public abstract Task<string> UploadAsInternalTesTaskBlobAsync(TesTask tesTask, string blobPath, string content,
-        CancellationToken cancellationToken);
+    public async Task<string> UploadBlobAsync(Uri blobAbsoluteUrl, string content,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(blobAbsoluteUrl);
+
+        await AzureProxy.UploadBlobAsync(blobAbsoluteUrl, content, cancellationToken);
+
+        return blobAbsoluteUrl.ToString();
+    }
 
     /// <inheritdoc />
     public async Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath, CancellationToken cancellationToken)
@@ -76,7 +89,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     public abstract Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, bool getContainerSas = false);
 
     /// <inheritdoc />
-    public abstract Task<string> GetTesInternalBlobUrlAsync(string blobPath, CancellationToken cancellationToken);
+    public abstract Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken);
 
     /// <inheritdoc />
     public abstract Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);

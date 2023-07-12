@@ -15,14 +15,17 @@ public class TerraApiStubData
     public const string WsmApiHost = "https://wsm.host";
     public const string ResourceGroup = "mrg-terra-dev-previ-20191228";
     public const string WorkspaceAccountName = "lzaccount1";
-    public const string WorkspaceStorageContainerName = "sc-ef9fed44-dba6-4825-868c-b00208522382";
     public const string SasToken = "SASTOKENSTUB=";
+    private const string WorkspaceIdValue = "41aa9346-670f-4206-8b6f-6b921a564bdd";
+
+    public const string WorkspaceStorageContainerName = $"sc-{WorkspaceIdValue}";
     public const string WsmGetSasResponseStorageUrl = $"https://{WorkspaceAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}";
 
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
-    public Guid WorkspaceId { get; } = Guid.NewGuid();
     public Guid ContainerResourceId { get; } = Guid.NewGuid();
+    public Guid WorkspaceId { get; } = Guid.Parse(WorkspaceIdValue);
+
     public string BatchAccountName => "lzee170c71b6cf678cfca744";
     public string Region => "westus3";
     public string BatchAccountId =>
@@ -310,7 +313,7 @@ public class TerraApiStubData
             Common = new ApiCommon(),
             AzureBatchPool = new ApiAzureBatchPool()
             {
-                UserAssignedIdentities = new ApiUserAssignedIdentity[]
+                UserAssignedIdentities = new[]
                 {
                     new ApiUserAssignedIdentity()
                     {
