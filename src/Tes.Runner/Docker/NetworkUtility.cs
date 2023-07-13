@@ -58,13 +58,13 @@ namespace Tes.Runner.Docker
             var process = new Process
             {
                 StartInfo =
-        {
-            FileName = "iptables",
-            Arguments = arguments,
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        }
+                {
+                    FileName = "iptables",
+                    Arguments = arguments,
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
             };
 
             process.Start();
