@@ -52,7 +52,7 @@ namespace Tes.Runner.Docker
 
         private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress)
         {
-            string checkCommand = $"-C DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdstaddr {ipAddress} -j ACCEPT";
+            string checkCommand = $"-S DOCKER-USER | grep {ipAddress}";
             string arguments = $"{checkCommand} 2>&1";
 
             var process = new Process
@@ -70,8 +70,10 @@ namespace Tes.Runner.Docker
             process.Start();
             await process.WaitForExitAsync();
 
-            return process.ExitCode == 0;
+            string output = process.StandardOutput.ReadToEnd();
+            return !string.IsNullOrWhiteSpace(output);
         }
+
 
         private async Task AddBlockRuleAsync(string ipAddress, string callerMemberName)
         {
