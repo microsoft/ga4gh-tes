@@ -174,7 +174,9 @@ namespace TesApi.Web.Storage
             if (task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters
                     .internal_path_prefix) == true)
             {
-                return await MapLocalPathToSasUrlAsync($"/{defaultStorageAccountName}/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}", cancellationToken, true);
+                var blobPathWithPathPrefix =
+                    $"/{defaultStorageAccountName}/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}{normalizedBlobPath}";
+                return await MapLocalPathToSasUrlAsync(blobPathWithPathPrefix, cancellationToken, true);
             }
 
             return await GetInternalTesBlobUrlAsync($"/{task.Id}{normalizedBlobPath}", cancellationToken);
