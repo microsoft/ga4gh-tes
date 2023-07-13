@@ -60,6 +60,11 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <inheritdoc />
     public async Task<string> DownloadBlobAsync(Uri blobAbsoluteUrl, CancellationToken cancellationToken)
     {
+        if (!await AzureProxy.BlobExistsAsync(blobAbsoluteUrl, cancellationToken))
+        {
+            return default;
+        }
+
         return await AzureProxy.DownloadBlobAsync(blobAbsoluteUrl, cancellationToken);
     }
 
