@@ -74,7 +74,6 @@ namespace Tes.Runner.Docker
             return !string.IsNullOrWhiteSpace(output);
         }
 
-
         private async Task AddBlockRuleAsync(string ipAddress, string callerMemberName)
         {
             string addCommand = $"-A DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdstaddr {ipAddress} -j DROP";
