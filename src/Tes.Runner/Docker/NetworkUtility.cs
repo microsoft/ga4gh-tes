@@ -18,8 +18,14 @@ namespace Tes.Runner.Docker
         /// <param name="ipAddress">The IP address to block</param>
         /// <param name="callerMemberName">The caller of the function</param>
         /// <returns></returns>
-        public async Task BlockIpAddressOnLinuxAsync(string ipAddress, [CallerMemberName] string callerMemberName = "")
+        public async Task BlockIpAddressAsync(string ipAddress, [CallerMemberName] string callerMemberName = "")
         {
+            if (!OperatingSystem.IsLinux())
+            {
+                // Not implemented; TES only supports Linux VMs
+                return;
+            }
+
             bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress);
 
             if (!isBlocked)
@@ -28,8 +34,14 @@ namespace Tes.Runner.Docker
             }
         }
 
-        public async Task UnblockIpAddressOnLinuxAsync(string ipAddress, [CallerMemberName] string callerMemberName = "")
+        public async Task UnblockIpAddressAsync(string ipAddress, [CallerMemberName] string callerMemberName = "")
         {
+            if (!OperatingSystem.IsLinux())
+            {
+                // Not implemented; TES only supports Linux VMs
+                return;
+            }
+
             bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress);
 
             if (isBlocked)

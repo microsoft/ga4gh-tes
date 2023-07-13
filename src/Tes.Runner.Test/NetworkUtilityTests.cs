@@ -28,7 +28,7 @@ namespace Tes.Runner.Test
             using var client = new HttpClient();
             await client.GetStringAsync(uri);
 
-            await utility.BlockIpAddressOnLinuxAsync(ipAddress);
+            await utility.BlockIpAddressAsync(ipAddress);
 
             try
             {
@@ -39,7 +39,7 @@ namespace Tes.Runner.Test
                 Console.WriteLine("Successfully blocked");
             }
 
-            await utility.UnblockIpAddressOnLinuxAsync(ipAddress);
+            await utility.UnblockIpAddressAsync(ipAddress);
             await client.GetStringAsync(uri);
         }
 
@@ -59,8 +59,8 @@ namespace Tes.Runner.Test
             using var client = new HttpClient();
             await client.GetStringAsync(uri);
 
-            await utility.BlockIpAddressOnLinuxAsync(ipAddress);
-            await utility.BlockIpAddressOnLinuxAsync(ipAddress);
+            await utility.BlockIpAddressAsync(ipAddress);
+            await utility.BlockIpAddressAsync(ipAddress);
 
             try
             {
@@ -71,8 +71,8 @@ namespace Tes.Runner.Test
                 Console.WriteLine("Successfully blocked");
             }
 
-            await utility.UnblockIpAddressOnLinuxAsync(ipAddress);
-            await utility.UnblockIpAddressOnLinuxAsync(ipAddress);
+            await utility.UnblockIpAddressAsync(ipAddress);
+            await utility.UnblockIpAddressAsync(ipAddress);
             await client.GetStringAsync(uri);
         }
     }

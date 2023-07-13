@@ -100,17 +100,9 @@ namespace Tes.Runner.Docker
         /// </summary>
         private async Task BlockDockerContainerAccessToAzureInstanceMetadataService()
         {
-            if (!OperatingSystem.IsLinux())
-            {
-                // Not implemented; TES only supports Linux VMs
-                return;
-            }
-
             const string imdsIpAddress = "169.254.169.254"; // https://learn.microsoft.com/en-us/azure/virtual-machines/instance-metadata-service
 
-            await networkUtility.BlockIpAddressOnLinuxAsync(imdsIpAddress);
+            await networkUtility.BlockIpAddressAsync(imdsIpAddress);
         }
-
-
     }
 }
