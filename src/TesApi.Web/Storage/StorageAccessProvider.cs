@@ -47,14 +47,23 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <inheritdoc />
     public async Task<string> DownloadBlobAsync(string blobRelativePath, CancellationToken cancellationToken)
     {
-        try
+        var url = await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken);
+
+        if (url is null)
         {
-            return await this.AzureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken)), cancellationToken);
+            Logger.LogWarning($"The relative path provided could not be mapped to a valid blob URL. Download will be skipped. Blob relative path: {blobRelativePath}");
+            return default;
         }
-        catch
+
+        var blobUrl = new Uri(url);
+
+        if (!await AzureProxy.BlobExistsAsync(blobUrl, cancellationToken))
         {
-            return null;
+            Logger.LogWarning($"The relative path provided was mapped to a blob URL. However, the blob does not exist in the storage account. Download will be skipped. Blob relative path: {blobRelativePath} Storage account: {blobUrl.Host} Blob path: {blobUrl.AbsolutePath}");
+            return default;
         }
+
+        return await this.AzureProxy.DownloadBlobAsync(blobUrl, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -62,6 +71,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     {
         if (!await AzureProxy.BlobExistsAsync(blobAbsoluteUrl, cancellationToken))
         {
+            Logger.LogWarning($"The blob does not exist in the storage account. Download will be skipped. Storage account: {blobAbsoluteUrl.Host} Blob path: {blobAbsoluteUrl.AbsolutePath}");
             return default;
         }
 
