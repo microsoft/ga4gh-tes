@@ -52,19 +52,19 @@ namespace Tes.Runner.Docker
 
         private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress)
         {
-            string checkCommand = $"-C DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdstaddr {ipAddress} -j DROP";
+            string checkCommand = $"-C DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdstaddr {ipAddress} -j ACCEPT";
             string arguments = $"{checkCommand} 2>&1";
 
             var process = new Process
             {
                 StartInfo =
-                {
-                    FileName = "iptables",
-                    Arguments = arguments,
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                }
+        {
+            FileName = "iptables",
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        }
             };
 
             process.Start();
