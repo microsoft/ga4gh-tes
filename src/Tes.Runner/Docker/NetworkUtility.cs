@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Transfer;
 
@@ -18,7 +17,7 @@ namespace Tes.Runner.Docker
         /// <param name="ipAddress">The IP address to block</param>
         /// <param name="callerMemberName">The caller of the function</param>
         /// <returns></returns>
-        public async Task BlockIpAddressAsync(string ipAddress, [CallerMemberName] string callerMemberName = "")
+        public async Task BlockIpAddressAsync(string ipAddress)
         {
             if (!OperatingSystem.IsLinux())
             {
@@ -26,15 +25,15 @@ namespace Tes.Runner.Docker
                 return;
             }
 
-            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress, callerMemberName);
+            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress);
 
             if (!isBlocked)
             {
-                await AddBlockRuleAsync(ipAddress, callerMemberName);
+                await AddBlockRuleAsync(ipAddress);
             }
         }
 
-        public async Task UnblockIpAddressAsync(string ipAddress, [CallerMemberName] string callerMemberName = "")
+        public async Task UnblockIpAddressAsync(string ipAddress)
         {
             if (!OperatingSystem.IsLinux())
             {
@@ -42,27 +41,27 @@ namespace Tes.Runner.Docker
                 return;
             }
 
-            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress, callerMemberName);
+            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress);
 
             if (isBlocked)
             {
-                await RemoveBlockRuleAsync(ipAddress, callerMemberName);
+                await RemoveBlockRuleAsync(ipAddress);
             }
         }
 
-        private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress, string callerMemberName)
+        private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress)
         {
             var output = await RunIptablesCommandAsync($"-S DOCKER-USER");
             return output.Contains(ipAddress, StringComparison.OrdinalIgnoreCase);
         }
 
-        private async Task AddBlockRuleAsync(string ipAddress, string callerMemberName)
+        private async Task AddBlockRuleAsync(string ipAddress)
         {
             string addCommand = $"-A DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
             _ = await RunIptablesCommandAsync(addCommand);
         }
 
-        private async Task RemoveBlockRuleAsync(string ipAddress, string callerMemberName)
+        private async Task RemoveBlockRuleAsync(string ipAddress)
         {
             string removeCommand = $"-D DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
             _ = await RunIptablesCommandAsync(removeCommand);
