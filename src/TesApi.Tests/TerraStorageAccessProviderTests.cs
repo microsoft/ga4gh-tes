@@ -14,6 +14,7 @@ using TesApi.Web;
 using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
+using TesApi.Web.Options;
 using TesApi.Web.Storage;
 
 namespace TesApi.Tests
@@ -31,6 +32,7 @@ namespace TesApi.Tests
         private TerraApiStubData terraApiStubData;
         private Mock<IOptions<TerraOptions>> optionsMock;
         private TerraOptions terraOptions;
+        private BatchSchedulingOptions batchSchedulingOptions;
 
         [TestInitialize]
         public void SetUp()
@@ -39,10 +41,11 @@ namespace TesApi.Tests
             wsmApiClientMock = new Mock<TerraWsmApiClient>();
             optionsMock = new Mock<IOptions<TerraOptions>>();
             terraOptions = terraApiStubData.GetTerraOptions();
+            batchSchedulingOptions = new BatchSchedulingOptions() { Prefix = Guid.NewGuid().ToString() };
             optionsMock.Setup(o => o.Value).Returns(terraOptions);
             azureProxyMock = new Mock<IAzureProxy>();
             terraStorageAccessProvider = new TerraStorageAccessProvider(NullLogger<TerraStorageAccessProvider>.Instance,
-                optionsMock.Object, azureProxyMock.Object, wsmApiClientMock.Object);
+                optionsMock.Object, azureProxyMock.Object, wsmApiClientMock.Object, batchSchedulingOptions);
         }
 
         [TestMethod]
@@ -139,7 +142,7 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
-            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{terraOptions.AppId}{StorageAccessProvider.TesExecutionsPathPrefix}/{blobName.TrimStart('/')}", uri.AbsolutePath);
+            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{batchSchedulingOptions.Prefix}{StorageAccessProvider.TesExecutionsPathPrefix}/{blobName.TrimStart('/')}", uri.AbsolutePath);
         }
 
         [TestMethod]
@@ -154,7 +157,7 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
-            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{terraOptions.AppId}{StorageAccessProvider.TesExecutionsPathPrefix}/{task.Id}/{blobName.TrimStart('/')}", uri.AbsolutePath);
+            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{batchSchedulingOptions.Prefix}{StorageAccessProvider.TesExecutionsPathPrefix}/{task.Id}/{blobName.TrimStart('/')}", uri.AbsolutePath);
         }
 
         [TestMethod]

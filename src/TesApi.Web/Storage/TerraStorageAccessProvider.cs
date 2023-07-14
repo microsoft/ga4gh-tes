@@ -14,6 +14,7 @@ using Tes.Models;
 using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
+using TesApi.Web.Options;
 
 namespace TesApi.Web.Storage
 {
@@ -23,6 +24,7 @@ namespace TesApi.Web.Storage
     public class TerraStorageAccessProvider : StorageAccessProvider
     {
         private readonly TerraOptions terraOptions;
+        private readonly BatchSchedulingOptions batchSchedulingOptions;
         private readonly TerraWsmApiClient terraWsmApiClient;
         private const string SasBlobPermissions = "racw";
         private const string SasContainerPermissions = "racwl";
@@ -35,14 +37,18 @@ namespace TesApi.Web.Storage
         /// <param name="logger">Logger <see cref="ILogger"/></param>
         /// <param name="terraOptions"><see cref="TerraOptions"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
-        /// <param name="terraWsmApiClient"><see cref="terraWsmApiClient"/></param>
+        /// <param name="terraWsmApiClient"><see cref="TerraWsmApiClient"/></param>
+        /// <param name="batchSchedulingOptions"><see cref="BatchSchedulingOptions"/>></param>
         public TerraStorageAccessProvider(ILogger<TerraStorageAccessProvider> logger,
-            IOptions<TerraOptions> terraOptions, IAzureProxy azureProxy, TerraWsmApiClient terraWsmApiClient) : base(
+            IOptions<TerraOptions> terraOptions, IAzureProxy azureProxy, TerraWsmApiClient terraWsmApiClient, BatchSchedulingOptions batchSchedulingOptions) : base(
             logger, azureProxy)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
+            ArgumentNullException.ThrowIfNull(batchSchedulingOptions);
+            ArgumentNullException.ThrowIfNull(batchSchedulingOptions.Prefix, nameof(batchSchedulingOptions.Prefix));
 
             this.terraWsmApiClient = terraWsmApiClient;
+            this.batchSchedulingOptions = batchSchedulingOptions;
             this.terraOptions = terraOptions.Value;
         }
 
@@ -122,7 +128,7 @@ namespace TesApi.Web.Storage
 
         private string GetInternalTesPath()
         {
-            return $"{terraOptions.AppId.Trim('/')}{TesExecutionsPathPrefix}";
+            return $"{batchSchedulingOptions.Prefix.Trim('/')}{TesExecutionsPathPrefix}";
         }
 
         private TerraBlobInfo GetTerraBlobInfoForInternalTesTask(TesTask task, string blobPath)
