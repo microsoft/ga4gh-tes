@@ -52,19 +52,19 @@ namespace Tes.Runner.Docker
 
         private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress, string callerMemberName)
         {
-            var output = await RunIptablesCommandAsync($"-S DOCKER-USER | grep {ipAddress} 2>&1");
-            return !string.IsNullOrWhiteSpace(output);
+            var output = await RunIptablesCommandAsync($"-S DOCKER-USER");
+            return output.Contains(ipAddress, StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task AddBlockRuleAsync(string ipAddress, string callerMemberName)
         {
-            string addCommand = $"-A DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdstaddr {ipAddress} -j DROP";
+            string addCommand = $"-A DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
             _ = await RunIptablesCommandAsync(addCommand);
         }
 
         private async Task RemoveBlockRuleAsync(string ipAddress, string callerMemberName)
         {
-            string removeCommand = $"-D DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdstaddr {ipAddress} -j DROP";
+            string removeCommand = $"-D DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
             _ = await RunIptablesCommandAsync(removeCommand);
         }
 
