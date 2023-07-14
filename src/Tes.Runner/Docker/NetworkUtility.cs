@@ -26,7 +26,7 @@ namespace Tes.Runner.Docker
                 return;
             }
 
-            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress);
+            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress, callerMemberName);
 
             if (!isBlocked)
             {
@@ -42,7 +42,7 @@ namespace Tes.Runner.Docker
                 return;
             }
 
-            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress);
+            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress, callerMemberName);
 
             if (isBlocked)
             {
@@ -50,27 +50,9 @@ namespace Tes.Runner.Docker
             }
         }
 
-        private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress)
+        private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress, string callerMemberName)
         {
-            string checkCommand = $"-S DOCKER-USER | grep {ipAddress}";
-            string arguments = $"{checkCommand} 2>&1";
-
-            var process = new Process
-            {
-                StartInfo =
-                {
-                    FileName = "iptables",
-                    Arguments = arguments,
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                }
-            };
-
-            process.Start();
-            await process.WaitForExitAsync();
-
-            string output = process.StandardOutput.ReadToEnd();
+            var output = await RunIptablesCommandAsync($"-S DOCKER-USER | grep {ipAddress} 2>&1", ipAddress, "checking", callerMemberName);
             return !string.IsNullOrWhiteSpace(output);
         }
 
@@ -86,7 +68,7 @@ namespace Tes.Runner.Docker
             await RunIptablesCommandAsync(removeCommand, ipAddress, "unblocking", callerMemberName);
         }
 
-        private async Task RunIptablesCommandAsync(string arguments, string ipAddress, string action, string callerMemberName)
+        private async Task<string> RunIptablesCommandAsync(string arguments, string ipAddress, string action, string callerMemberName)
         {
             var process = new Process
             {
@@ -104,8 +86,8 @@ namespace Tes.Runner.Docker
             process.Start();
             await process.WaitForExitAsync();
 
-            string output = process.StandardOutput.ReadToEnd();
-            string error = process.StandardError.ReadToEnd();
+            string output = await process.StandardOutput.ReadToEndAsync();
+            string error = await process.StandardError.ReadToEndAsync();
 
             if (process.ExitCode != 0)
             {
@@ -113,6 +95,8 @@ namespace Tes.Runner.Docker
                 logger.LogError(exc, exc.Message);
                 throw exc;
             }
+
+            return output;
         }
     }
 }
