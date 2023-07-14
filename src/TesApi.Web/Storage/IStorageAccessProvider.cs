@@ -45,7 +45,7 @@ namespace TesApi.Web.Storage
         /// <param name="content">Blob content</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public Task<string> UploadBlobAsync(Uri blobAbsoluteUrl, string content, CancellationToken cancellationToken);
+        public Task UploadBlobAsync(Uri blobAbsoluteUrl, string content, CancellationToken cancellationToken);
 
         /// <summary>
         /// Updates the content of the file, creating the file if necessary

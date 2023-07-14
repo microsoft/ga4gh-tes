@@ -83,14 +83,12 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
         => await this.AzureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, true)), content, cancellationToken);
 
     /// <inheritdoc />
-    public async Task<string> UploadBlobAsync(Uri blobAbsoluteUrl, string content,
+    public async Task UploadBlobAsync(Uri blobAbsoluteUrl, string content,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(blobAbsoluteUrl);
 
         await AzureProxy.UploadBlobAsync(blobAbsoluteUrl, content, cancellationToken);
-
-        return blobAbsoluteUrl.ToString();
     }
 
     /// <inheritdoc />
