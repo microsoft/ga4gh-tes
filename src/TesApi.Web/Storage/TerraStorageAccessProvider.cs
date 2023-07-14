@@ -111,7 +111,8 @@ namespace TesApi.Web.Storage
 
         private TerraBlobInfo GetTerraBlobInfoForInternalTes(string blobPath)
         {
-            var internalPath = TesExecutionsPathPrefix;
+            var internalPath = GetInternalTesPath();
+
             if (!string.IsNullOrEmpty(blobPath))
             {
                 internalPath += $"/{blobPath.TrimStart('/')}";
@@ -119,9 +120,14 @@ namespace TesApi.Web.Storage
             return new TerraBlobInfo(Guid.Parse(terraOptions.WorkspaceId), Guid.Parse(terraOptions.WorkspaceStorageContainerResourceId), terraOptions.WorkspaceStorageContainerName, internalPath);
         }
 
+        private string GetInternalTesPath()
+        {
+            return $"{terraOptions.AppId.Trim('/')}{TesExecutionsPathPrefix}";
+        }
+
         private TerraBlobInfo GetTerraBlobInfoForInternalTesTask(TesTask task, string blobPath)
         {
-            var internalPath = $"{TesExecutionsPathPrefix}/{task.Id}";
+            var internalPath = $"{GetInternalTesPath()}/{task.Id}";
 
             if (task.Resources != null && task.Resources.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix))
             {

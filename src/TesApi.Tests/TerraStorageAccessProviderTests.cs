@@ -139,7 +139,7 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
-            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}{StorageAccessProvider.TesExecutionsPathPrefix}/{blobName.TrimStart('/')}", uri.AbsolutePath);
+            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{terraOptions.AppId}{StorageAccessProvider.TesExecutionsPathPrefix}/{blobName.TrimStart('/')}", uri.AbsolutePath);
         }
 
         [TestMethod]
@@ -154,7 +154,7 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
-            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}{StorageAccessProvider.TesExecutionsPathPrefix}/{task.Id}/{blobName.TrimStart('/')}", uri.AbsolutePath);
+            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{terraOptions.AppId}{StorageAccessProvider.TesExecutionsPathPrefix}/{task.Id}/{blobName.TrimStart('/')}", uri.AbsolutePath);
         }
 
         [TestMethod]

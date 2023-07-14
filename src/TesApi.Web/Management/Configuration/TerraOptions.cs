@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
+
 namespace TesApi.Web.Management.Configuration;
 
 /// <summary>
@@ -13,6 +15,7 @@ public class TerraOptions
     /// </summary>
     public const string SectionName = "Terra";
     private const int DefaultSasTokenExpirationInSeconds = 60 * 24 * 3; // 3 days
+    private static readonly string DefaultAppId = Guid.NewGuid().ToString();
 
     /// <summary>
     /// Landing zone id containing the Tes back-end resources
@@ -49,7 +52,7 @@ public class TerraOptions
     /// </summary>
     public string WorkspaceId { get; set; }
 
-    /// <summary>
+    /// <summary>`
     /// Sas token expiration in seconds
     /// </summary>
     public int SasTokenExpirationInSeconds { get; set; } = DefaultSasTokenExpirationInSeconds;
@@ -58,4 +61,9 @@ public class TerraOptions
     /// Sas token allowed Ip ranges
     /// </summary>
     public string SasAllowedIpRange { get; set; }
+
+    /// <summary>
+    /// Unique identifier of the TES instance running in Terra
+    /// </summary>
+    public string AppId { get; set; } = DefaultAppId;
 }
