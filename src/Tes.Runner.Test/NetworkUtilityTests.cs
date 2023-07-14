@@ -10,6 +10,7 @@ namespace Tes.Runner.Test
     [TestCategory("Unit")]
     public class NetworkUtilityTests
     {
+        private const string testUrl = "https://www.example.com";
         private readonly NetworkUtility utility = new NetworkUtility();
 
         [TestMethod]
@@ -22,7 +23,7 @@ namespace Tes.Runner.Test
                 return;
             }
 
-            var uri = new Uri("https://www.microsoft.com");
+            var uri = new Uri(testUrl);
             var ipAddress = Dns.GetHostAddresses(uri.Host).First().ToString();
 
             using var client = new HttpClient();
@@ -53,7 +54,7 @@ namespace Tes.Runner.Test
                 return;
             }
 
-            var uri = new Uri("https://www.microsoft.com");
+            var uri = new Uri(testUrl);
             var ipAddress = Dns.GetHostAddresses(uri.Host).First().ToString();
 
             using var client = new HttpClient();
