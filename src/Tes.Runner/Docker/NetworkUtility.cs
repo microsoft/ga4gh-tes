@@ -102,7 +102,7 @@ namespace Tes.Runner.Docker
                 case 4:
                 {
                     // iptables v1.8.7 (nf_tables): Could not fetch rule set generation id: Permission denied (you must be root)
-                    var exc = new UnauthorizedAccessException(error);
+                    var exc = new UnauthorizedAccessException($"TES Runner and Tests must be run with 'sudo' or as a user with root priveledges.\nError: {error}");
                     logger.LogError(exc, exc.Message);
                     throw exc;
                 }
