@@ -52,8 +52,8 @@ namespace Tes.Runner.Docker
         private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress)
         {
             const string listRulesCommand = "-S DOCKER-USER";
-            var output = await RunIptablesCommandAsync(listRulesCommand);
-            return output.Contains(ipAddress, StringComparison.OrdinalIgnoreCase);
+            var outputAndError = await RunIptablesCommandAsync(listRulesCommand);
+            return outputAndError.Output.Contains(ipAddress, StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task AddBlockRuleAsync(string ipAddress)
@@ -68,7 +68,13 @@ namespace Tes.Runner.Docker
             _ = await RunIptablesCommandAsync(removeRuleCommand);
         }
 
-        private async Task<string> RunIptablesCommandAsync(string arguments)
+        /// <summary>
+        /// Executes the "iptables" command in Linux
+        /// </summary>
+        /// <param name="arguments">Arguments to pass to iptables</param>
+        /// <returns>A tuple with the output and error</returns>
+        /// <exception cref="UnauthorizedAccessException"></exception>
+        private async Task<(string Output, string Error)> RunIptablesCommandAsync(string arguments)
         {
             var process = new Process
             {
@@ -89,14 +95,24 @@ namespace Tes.Runner.Docker
             string output = await process.StandardOutput.ReadToEndAsync();
             string error = await process.StandardError.ReadToEndAsync();
 
-            if (process.ExitCode != 0)
+            switch (process.ExitCode)
             {
-                var exc = new Exception($"'iptables {arguments}' failed. Exit code: {process.ExitCode}\nOutput: {output}\nError: {error}");
-                logger.LogError(exc, exc.Message);
-                throw exc;
+                case 0:
+                    return (output, error);
+                case 4:
+                {
+                    // iptables v1.8.7 (nf_tables): Could not fetch rule set generation id: Permission denied (you must be root)
+                    var exc = new UnauthorizedAccessException(error);
+                    logger.LogError(exc, exc.Message);
+                    throw exc;
+                }
+                default:
+                {
+                    var exc = new Exception($"'iptables {arguments}' failed. Exit code: {process.ExitCode}\nOutput: {output}\nError: {error}");
+                    logger.LogError(exc, exc.Message);
+                    throw exc;
+                }
             }
-
-            return output;
         }
     }
 }
