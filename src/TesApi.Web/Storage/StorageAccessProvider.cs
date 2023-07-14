@@ -5,6 +5,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Tes.Models;
 
 namespace TesApi.Web.Storage;
 
@@ -17,6 +18,12 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// Cromwell path prefix
     /// </summary>
     protected const string CromwellPathPrefix = "/cromwell-executions/";
+
+    /// <summary>
+    /// TES path for internal execution files
+    /// </summary>
+    public const string TesExecutionsPathPrefix = "/tes-internal";
+
     /// <summary>
     /// Logger instance. 
     /// </summary>
@@ -40,19 +47,49 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <inheritdoc />
     public async Task<string> DownloadBlobAsync(string blobRelativePath, CancellationToken cancellationToken)
     {
-        try
+        var url = await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken);
+
+        if (url is null)
         {
-            return await this.AzureProxy.DownloadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken)), cancellationToken);
+            Logger.LogWarning($"The relative path provided could not be mapped to a valid blob URL. Download will be skipped. Blob relative path: {blobRelativePath}");
+            return default;
         }
-        catch
+
+        var blobUrl = new Uri(url);
+
+        if (!await AzureProxy.BlobExistsAsync(blobUrl, cancellationToken))
         {
-            return null;
+            Logger.LogWarning($"The relative path provided was mapped to a blob URL. However, the blob does not exist in the storage account. Download will be skipped. Blob relative path: {blobRelativePath} Storage account: {blobUrl.Host} Blob path: {blobUrl.AbsolutePath}");
+            return default;
         }
+
+        return await this.AzureProxy.DownloadBlobAsync(blobUrl, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<string> DownloadBlobAsync(Uri blobAbsoluteUrl, CancellationToken cancellationToken)
+    {
+        if (!await AzureProxy.BlobExistsAsync(blobAbsoluteUrl, cancellationToken))
+        {
+            Logger.LogWarning($"The blob does not exist in the storage account. Download will be skipped. Storage account: {blobAbsoluteUrl.Host} Blob path: {blobAbsoluteUrl.AbsolutePath}");
+            return default;
+        }
+
+        return await AzureProxy.DownloadBlobAsync(blobAbsoluteUrl, cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task UploadBlobAsync(string blobRelativePath, string content, CancellationToken cancellationToken)
         => await this.AzureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, true)), content, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task UploadBlobAsync(Uri blobAbsoluteUrl, string content,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(blobAbsoluteUrl);
+
+        await AzureProxy.UploadBlobAsync(blobAbsoluteUrl, content, cancellationToken);
+    }
 
     /// <inheritdoc />
     public async Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath, CancellationToken cancellationToken)
@@ -63,6 +100,12 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
 
     /// <inheritdoc />
     public abstract Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, bool getContainerSas = false);
+
+    /// <inheritdoc />
+    public abstract Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken);
+
+    /// <inheritdoc />
+    public abstract Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);
 
     /// <summary>
     /// Tries to parse the input into a Http Url. 

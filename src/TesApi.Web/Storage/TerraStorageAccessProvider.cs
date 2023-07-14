@@ -9,9 +9,12 @@ using System.Threading.Tasks;
 using System.Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Tes.Extensions;
+using Tes.Models;
 using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
+using TesApi.Web.Options;
 
 namespace TesApi.Web.Storage
 {
@@ -21,6 +24,7 @@ namespace TesApi.Web.Storage
     public class TerraStorageAccessProvider : StorageAccessProvider
     {
         private readonly TerraOptions terraOptions;
+        private readonly BatchSchedulingOptions batchSchedulingOptions;
         private readonly TerraWsmApiClient terraWsmApiClient;
         private const string SasBlobPermissions = "racw";
         private const string SasContainerPermissions = "racwl";
@@ -33,14 +37,18 @@ namespace TesApi.Web.Storage
         /// <param name="logger">Logger <see cref="ILogger"/></param>
         /// <param name="terraOptions"><see cref="TerraOptions"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
-        /// <param name="terraWsmApiClient"><see cref="terraWsmApiClient"/></param>
+        /// <param name="terraWsmApiClient"><see cref="TerraWsmApiClient"/></param>
+        /// <param name="batchSchedulingOptions"><see cref="BatchSchedulingOptions"/>></param>
         public TerraStorageAccessProvider(ILogger<TerraStorageAccessProvider> logger,
-            IOptions<TerraOptions> terraOptions, IAzureProxy azureProxy, TerraWsmApiClient terraWsmApiClient) : base(
+            IOptions<TerraOptions> terraOptions, IAzureProxy azureProxy, TerraWsmApiClient terraWsmApiClient, BatchSchedulingOptions batchSchedulingOptions) : base(
             logger, azureProxy)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
+            ArgumentNullException.ThrowIfNull(batchSchedulingOptions);
+            ArgumentNullException.ThrowIfNull(batchSchedulingOptions.Prefix, nameof(batchSchedulingOptions.Prefix));
 
             this.terraWsmApiClient = terraWsmApiClient;
+            this.batchSchedulingOptions = batchSchedulingOptions;
             this.terraOptions = terraOptions.Value;
         }
 
@@ -89,6 +97,54 @@ namespace TesApi.Web.Storage
             }
 
             return await GetMappedSasUrlFromWsmAsync(terraBlobInfo, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken)
+        {
+            var blobInfo = GetTerraBlobInfoForInternalTes(blobPath);
+
+            return await GetMappedSasUrlFromWsmAsync(blobInfo, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public override async Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken)
+        {
+            var blobInfo = GetTerraBlobInfoForInternalTesTask(task, blobPath);
+
+            return await GetMappedSasUrlFromWsmAsync(blobInfo, cancellationToken);
+        }
+
+        private TerraBlobInfo GetTerraBlobInfoForInternalTes(string blobPath)
+        {
+            var internalPath = GetInternalTesPath();
+
+            if (!string.IsNullOrEmpty(blobPath))
+            {
+                internalPath += $"/{blobPath.TrimStart('/')}";
+            }
+            return new TerraBlobInfo(Guid.Parse(terraOptions.WorkspaceId), Guid.Parse(terraOptions.WorkspaceStorageContainerResourceId), terraOptions.WorkspaceStorageContainerName, internalPath);
+        }
+
+        private string GetInternalTesPath()
+        {
+            return $"{batchSchedulingOptions.Prefix.Trim('/')}{TesExecutionsPathPrefix}";
+        }
+
+        private TerraBlobInfo GetTerraBlobInfoForInternalTesTask(TesTask task, string blobPath)
+        {
+            var internalPath = $"{GetInternalTesPath()}/{task.Id}";
+
+            if (task.Resources != null && task.Resources.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix))
+            {
+                internalPath = $"/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}";
+            }
+
+            if (!string.IsNullOrEmpty(blobPath))
+            {
+                internalPath += $"/{blobPath.TrimStart('/')}";
+            }
+            return new TerraBlobInfo(Guid.Parse(terraOptions.WorkspaceId), Guid.Parse(terraOptions.WorkspaceStorageContainerResourceId), terraOptions.WorkspaceStorageContainerName, internalPath);
         }
 
         /// <summary>
@@ -167,7 +223,7 @@ namespace TesApi.Web.Storage
         private async Task<string> GetMappedSasContainerUrlFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
         {
             //an empty blob name gets a container Sas token
-            var tokenInfo = await GetSasTokenForContainerFromWsmAsync(blobInfo, cancellationToken);
+            var tokenInfo = await GetWorkspaceContainerSasTokenFromWsmAsync(blobInfo, cancellationToken);
 
             var urlBuilder = new UriBuilder(tokenInfo.Url);
 
@@ -187,7 +243,7 @@ namespace TesApi.Web.Storage
         /// <returns>URL with a SAS token</returns>
         public async Task<string> GetMappedSasUrlFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
         {
-            var tokenInfo = await GetSasTokenFromWsmAsync(blobInfo, cancellationToken);
+            var tokenInfo = await GetWorkspaceBlobSasTokenFromWsmAsync(blobInfo, cancellationToken);
 
             Logger.LogInformation($"Successfully obtained the Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
 
@@ -197,7 +253,7 @@ namespace TesApi.Web.Storage
             {
                 if (!uriBuilder.Path.Contains(blobInfo.BlobName, StringComparison.OrdinalIgnoreCase))
                 {
-                    uriBuilder.Path += $"/{blobInfo.BlobName}";
+                    uriBuilder.Path += $"/{blobInfo.BlobName.TrimStart('/')}";
                 }
             }
 
@@ -211,7 +267,7 @@ namespace TesApi.Web.Storage
                 sasPermissions, blobName);
 
 
-        private async Task<WsmSasTokenApiResponse> GetSasTokenFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
+        private async Task<WsmSasTokenApiResponse> GetWorkspaceBlobSasTokenFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
         {
             var tokenParams = CreateTokenParamsFromOptions(blobInfo.BlobName, SasBlobPermissions);
 
@@ -224,7 +280,7 @@ namespace TesApi.Web.Storage
                 tokenParams, cancellationToken);
         }
 
-        private async Task<WsmSasTokenApiResponse> GetSasTokenForContainerFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
+        private async Task<WsmSasTokenApiResponse> GetWorkspaceContainerSasTokenFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
         {
             // an empty blob name gets a container Sas token
             var tokenParams = CreateTokenParamsFromOptions(blobName: "", SasContainerPermissions);

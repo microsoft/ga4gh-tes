@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
@@ -1488,6 +1489,9 @@ namespace TesApi.Tests
         private static Action<Mock<IAzureProxy>> GetMockAzureProxy(AzureProxyReturnValues azureProxyReturnValues)
             => azureProxy =>
             {
+                azureProxy.Setup(a => a.BlobExistsAsync(It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(true);
+
                 azureProxy.Setup(a => a.GetActivePoolsAsync(It.IsAny<string>()))
                     .Returns(AsyncEnumerable.Empty<CloudPool>());
 
