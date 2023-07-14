@@ -52,23 +52,23 @@ namespace Tes.Runner.Docker
 
         private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress, string callerMemberName)
         {
-            var output = await RunIptablesCommandAsync($"-S DOCKER-USER | grep {ipAddress} 2>&1", ipAddress, "checking", callerMemberName);
+            var output = await RunIptablesCommandAsync($"-S DOCKER-USER | grep {ipAddress} 2>&1");
             return !string.IsNullOrWhiteSpace(output);
         }
 
         private async Task AddBlockRuleAsync(string ipAddress, string callerMemberName)
         {
             string addCommand = $"-A DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdstaddr {ipAddress} -j DROP";
-            await RunIptablesCommandAsync(addCommand, ipAddress, "blocking", callerMemberName);
+            _ = await RunIptablesCommandAsync(addCommand);
         }
 
         private async Task RemoveBlockRuleAsync(string ipAddress, string callerMemberName)
         {
             string removeCommand = $"-D DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdstaddr {ipAddress} -j DROP";
-            await RunIptablesCommandAsync(removeCommand, ipAddress, "unblocking", callerMemberName);
+            _ = await RunIptablesCommandAsync(removeCommand);
         }
 
-        private async Task<string> RunIptablesCommandAsync(string arguments, string ipAddress, string action, string callerMemberName)
+        private async Task<string> RunIptablesCommandAsync(string arguments)
         {
             var process = new Process
             {
@@ -91,7 +91,7 @@ namespace Tes.Runner.Docker
 
             if (process.ExitCode != 0)
             {
-                var exc = new Exception($"IP address {ipAddress} {action} failed in {callerMemberName}. Exit code: {process.ExitCode}\nOutput: {output}\nError: {error}");
+                var exc = new Exception($"'iptables {arguments}' failed. Exit code: {process.ExitCode}\nOutput: {output}\nError: {error}");
                 logger.LogError(exc, exc.Message);
                 throw exc;
             }
