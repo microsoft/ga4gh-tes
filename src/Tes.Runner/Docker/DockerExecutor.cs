@@ -12,6 +12,7 @@ namespace Tes.Runner.Docker
     {
         private readonly IDockerClient dockerClient;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
+        private readonly NetworkUtility networkUtility = new NetworkUtility();
 
         public DockerExecutor(Uri dockerHost)
         {
@@ -26,6 +27,8 @@ namespace Tes.Runner.Docker
             ArgumentNullException.ThrowIfNull(commandsToExecute);
 
             await PullImageAsync(imageName, tag);
+
+            await ConfigureNetworkAsync();
 
             var createResponse = await CreateContainerAsync(imageName, commandsToExecute);
 
@@ -82,6 +85,24 @@ namespace Tes.Runner.Docker
                 },
                 authConfig,
                 new Progress<JSONMessage>(message => logger.LogInformation(message.Status)));
+        }
+
+        /// <summary>
+        /// Configures the host machine's network security prior to running user code
+        /// </summary>
+        private async Task ConfigureNetworkAsync()
+        {
+            await BlockDockerContainerAccessToAzureInstanceMetadataService();
+        }
+
+        /// <summary>
+        /// Blocks access to IMDS via the iptables command
+        /// </summary>
+        private async Task BlockDockerContainerAccessToAzureInstanceMetadataService()
+        {
+            const string imdsIpAddress = "169.254.169.254"; // https://learn.microsoft.com/en-us/azure/virtual-machines/instance-metadata-service
+
+            await networkUtility.BlockIpAddressAsync(imdsIpAddress);
         }
     }
 }
