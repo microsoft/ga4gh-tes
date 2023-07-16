@@ -15,6 +15,7 @@ namespace Tes.Runner.Test
 
         [TestMethod]
         [TestCategory("Unit")]
+        [TestCategory("RequiresRoot")]
         public async Task BlockAndUnblockAnIpAddressOnLinux()
         {
             if (!OperatingSystem.IsLinux())
@@ -46,6 +47,7 @@ namespace Tes.Runner.Test
 
         [TestMethod]
         [TestCategory("Unit")]
+        [TestCategory("RequiresRoot")]
         public async Task BlockAndUnblockFunctionsAreIdempotentOnLinux()
         {
             if (!OperatingSystem.IsLinux())
