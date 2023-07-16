@@ -24,4 +24,4 @@ jobs:
     - name: Build
       run: dotnet build --no-restore
     - name: Test
-      run: sudo dotnet test --no-build --verbosity normal --filter "TestCategory=RequiresRoot"
+      run: sudo dotnet test --no-build --verbosity normal --filter "TestCategory=RequiresRoot" --logger "console;verbosity=detailed"
