@@ -59,13 +59,13 @@ namespace Tes.Runner.Docker
 
         private async Task AddBlockRuleAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
-            string addRuleCommand = $"-A {ruleChain} -i eth0 -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
+            string addRuleCommand = $"-A {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
             _ = await RunIptablesCommandAsync(addRuleCommand);
         }
 
         private async Task RemoveBlockRuleAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
-            string removeRuleCommand = $"-D {ruleChain} -i eth0 -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
+            string removeRuleCommand = $"-D {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
             _ = await RunIptablesCommandAsync(removeRuleCommand);
         }
 
