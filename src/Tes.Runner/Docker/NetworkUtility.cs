@@ -9,6 +9,7 @@ namespace Tes.Runner.Docker
 {
     public class NetworkUtility
     {
+        private const string defaultRuleChain = "DOCKER-USER";
         private readonly ILogger logger = PipelineLoggerFactory.Create<NetworkUtility>();
 
         /// <summary>
@@ -17,7 +18,7 @@ namespace Tes.Runner.Docker
         /// <param name="ipAddress">The IP address to block</param>
         /// <param name="callerMemberName">The caller of the function</param>
         /// <returns></returns>
-        public async Task BlockIpAddressAsync(string ipAddress)
+        public async Task BlockIpAddressAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
             if (!OperatingSystem.IsLinux())
             {
@@ -25,15 +26,15 @@ namespace Tes.Runner.Docker
                 return;
             }
 
-            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress);
+            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress, ruleChain);
 
             if (!isBlocked)
             {
-                await AddBlockRuleAsync(ipAddress);
+                await AddBlockRuleAsync(ipAddress, ruleChain);
             }
         }
 
-        public async Task UnblockIpAddressAsync(string ipAddress)
+        public async Task UnblockIpAddressAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
             if (!OperatingSystem.IsLinux())
             {
@@ -41,30 +42,30 @@ namespace Tes.Runner.Docker
                 return;
             }
 
-            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress);
+            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress, ruleChain);
 
             if (isBlocked)
             {
-                await RemoveBlockRuleAsync(ipAddress);
+                await RemoveBlockRuleAsync(ipAddress, ruleChain);
             }
         }
 
-        private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress)
+        private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
-            const string listRulesCommand = "-S DOCKER-USER";
+            string listRulesCommand = $"-S {ruleChain}";
             var outputAndError = await RunIptablesCommandAsync(listRulesCommand);
             return outputAndError.Output.Contains(ipAddress, StringComparison.OrdinalIgnoreCase);
         }
 
-        private async Task AddBlockRuleAsync(string ipAddress)
+        private async Task AddBlockRuleAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
-            string addRuleCommand = $"-A DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
+            string addRuleCommand = $"-A {ruleChain} -i eth0 -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
             _ = await RunIptablesCommandAsync(addRuleCommand);
         }
 
-        private async Task RemoveBlockRuleAsync(string ipAddress)
+        private async Task RemoveBlockRuleAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
-            string removeRuleCommand = $"-D DOCKER-USER -i eth0 -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
+            string removeRuleCommand = $"-D {ruleChain} -i eth0 -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
             _ = await RunIptablesCommandAsync(removeRuleCommand);
         }
 

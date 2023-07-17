@@ -11,6 +11,7 @@ namespace Tes.Runner.Test
     public class NetworkUtilityTests
     {
         private const string testUrl = "https://www.example.com";
+        private const string ruleChain = "OUTPUT";
         private readonly NetworkUtility utility = new NetworkUtility();
 
         [TestMethod]
@@ -32,7 +33,7 @@ namespace Tes.Runner.Test
             using var client = new HttpClient();
             await client.GetStringAsync(uri);
 
-            await utility.BlockIpAddressAsync(ipAddress);
+            await utility.BlockIpAddressAsync(ipAddress, ruleChain);
             bool isExceptionThrown = false;
 
             try
@@ -50,7 +51,7 @@ namespace Tes.Runner.Test
                 throw new Exception("IP address was not blocked");
             }
 
-            await utility.UnblockIpAddressAsync(ipAddress);
+            await utility.UnblockIpAddressAsync(ipAddress, ruleChain);
             await client.GetStringAsync(uri);
         }
 
@@ -73,8 +74,8 @@ namespace Tes.Runner.Test
             using var client = new HttpClient();
             await client.GetStringAsync(uri);
 
-            await utility.BlockIpAddressAsync(ipAddress);
-            await utility.BlockIpAddressAsync(ipAddress);
+            await utility.BlockIpAddressAsync(ipAddress, ruleChain);
+            await utility.BlockIpAddressAsync(ipAddress, ruleChain);
             bool isExceptionThrown = false;
 
             try
@@ -92,8 +93,8 @@ namespace Tes.Runner.Test
                 throw new Exception("IP address was not blocked");
             }
 
-            await utility.UnblockIpAddressAsync(ipAddress);
-            await utility.UnblockIpAddressAsync(ipAddress);
+            await utility.UnblockIpAddressAsync(ipAddress, ruleChain);
+            await utility.UnblockIpAddressAsync(ipAddress, ruleChain);
             await client.GetStringAsync(uri);
         }
     }
