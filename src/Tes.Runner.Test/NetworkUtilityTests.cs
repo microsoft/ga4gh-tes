@@ -21,6 +21,8 @@ namespace Tes.Runner.Test
             if (!OperatingSystem.IsLinux())
             {
                 // Not implemented; TES only supports Linux VMs
+                Console.WriteLine("Test did not run because host is not Linux.");
+                Assert.Inconclusive();
                 return;
             }
 
@@ -31,6 +33,7 @@ namespace Tes.Runner.Test
             await client.GetStringAsync(uri);
 
             await utility.BlockIpAddressAsync(ipAddress);
+            bool isExceptionThrown = false;
 
             try
             {
@@ -38,7 +41,13 @@ namespace Tes.Runner.Test
             }
             catch (HttpRequestException ex) when (ex.InnerException is WebException webException && webException.Status == WebExceptionStatus.ConnectFailure)
             {
+                isExceptionThrown = true;
                 Console.WriteLine("Successfully blocked");
+            }
+
+            if (!isExceptionThrown)
+            {
+                throw new Exception("IP address was not blocked");
             }
 
             await utility.UnblockIpAddressAsync(ipAddress);
@@ -53,6 +62,8 @@ namespace Tes.Runner.Test
             if (!OperatingSystem.IsLinux())
             {
                 // Not implemented; TES only supports Linux VMs
+                Console.WriteLine("Test did not run because host is not Linux.");
+                Assert.Inconclusive();
                 return;
             }
 
@@ -64,6 +75,7 @@ namespace Tes.Runner.Test
 
             await utility.BlockIpAddressAsync(ipAddress);
             await utility.BlockIpAddressAsync(ipAddress);
+            bool isExceptionThrown = false;
 
             try
             {
@@ -71,7 +83,13 @@ namespace Tes.Runner.Test
             }
             catch (Exception)
             {
+                isExceptionThrown = true;
                 Console.WriteLine("Successfully blocked");
+            }
+
+            if (!isExceptionThrown)
+            {
+                throw new Exception("IP address was not blocked");
             }
 
             await utility.UnblockIpAddressAsync(ipAddress);
