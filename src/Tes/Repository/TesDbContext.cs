@@ -32,38 +32,40 @@ namespace Tes.Repository
 
         protected override async void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            if (!optionsBuilder.IsConfigured)
+            if (optionsBuilder.IsConfigured)
             {
-                string tempConnectionString = ConnectionString;
-                string managedIdentityPasswordSetting = $"PASSWORD={defaultManagedIdentityPassword};";
-                bool isManagedIdentityEnabled = tempConnectionString.Contains(managedIdentityPasswordSetting, StringComparison.OrdinalIgnoreCase);
-
-                if (isManagedIdentityEnabled)
-                {
-                    // Use AAD managed identity
-                    // https://learn.microsoft.com/en-us/azure/postgresql/single-server/how-to-connect-with-managed-identity
-                    // https://learn.microsoft.com/en-us/azure/postgresql/single-server/concepts-azure-ad-authentication
-                    // Instructions:
-                    // 1.  Replace 'myuser' and run on your server
-                    /*
-                            SET aad_validate_oids_in_tenant = off;
-                            CREATE ROLE myuser WITH LOGIN PASSWORD 'CLIENT_ID' IN ROLE azure_ad_user;
-                    */
-                    // 2.  Set "DatabaseUserPassword" to "CLIENT_ID" in the TES AKS configuration
-                    // 3.  Ensure the managed identity that TES runs under has the role
-
-                    // Note: this supports token caching internally
-                    var credential = new DefaultAzureCredential();
-                    var accessToken = await credential.GetTokenAsync(
-                        new Azure.Core.TokenRequestContext(scopes: new string[] { azureDatabaseForPostgresqlScope }));
-                    
-                    tempConnectionString = tempConnectionString.Replace(managedIdentityPasswordSetting, $"PASSWORD={accessToken.Token};");
-                }
-
-                optionsBuilder
-                    .UseNpgsql(tempConnectionString, options => options.MaxBatchSize(1000))
-                    .UseLowerCaseNamingConvention();
+                return;
             }
+            
+            string tempConnectionString = ConnectionString;
+            string managedIdentityPasswordSetting = $"PASSWORD={defaultManagedIdentityPassword};";
+            bool isManagedIdentityEnabled = tempConnectionString.Contains(managedIdentityPasswordSetting, StringComparison.OrdinalIgnoreCase);
+
+            if (isManagedIdentityEnabled)
+            {
+                // Use AAD managed identity
+                // https://learn.microsoft.com/en-us/azure/postgresql/single-server/how-to-connect-with-managed-identity
+                // https://learn.microsoft.com/en-us/azure/postgresql/single-server/concepts-azure-ad-authentication
+                // Instructions:
+                // 1.  Replace 'myuser' and run on your server
+                /*
+                        SET aad_validate_oids_in_tenant = off;
+                        CREATE ROLE myuser WITH LOGIN PASSWORD 'CLIENT_ID' IN ROLE azure_ad_user;
+                */
+                // 2.  Set "DatabaseUserPassword" to "CLIENT_ID" in the TES AKS configuration
+                // 3.  Ensure the managed identity that TES runs under has the role
+
+                // Note: this supports token caching internally
+                var credential = new DefaultAzureCredential();
+                var accessToken = await credential.GetTokenAsync(
+                    new Azure.Core.TokenRequestContext(scopes: new string[] { azureDatabaseForPostgresqlScope }));
+                    
+                tempConnectionString = tempConnectionString.Replace(managedIdentityPasswordSetting, $"PASSWORD={accessToken.Token};");
+            }
+
+            optionsBuilder
+                .UseNpgsql(tempConnectionString, options => options.MaxBatchSize(1000))
+                .UseLowerCaseNamingConvention();
         }
     }
 }
