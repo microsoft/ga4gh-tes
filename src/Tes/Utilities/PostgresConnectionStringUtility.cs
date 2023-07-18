@@ -21,7 +21,14 @@ namespace Tes.Utilities
 
             if (!options.Value.UseManagedIdentity)
             {
+                // Ensure password is set if NOT using Managed Identity
                 ArgumentException.ThrowIfNullOrEmpty(options.Value.DatabaseUserPassword, nameof(options.Value.DatabaseUserPassword));
+            }
+
+            if (options.Value.UseManagedIdentity && !string.IsNullOrWhiteSpace(options.Value.DatabaseUserPassword))
+            {
+                // throw if password IS set when using Managed Identity
+                throw new ArgumentException("DatabaseUserPassword shall not be set if UseManagedIdentity is true");
             }
 
             if (options.Value.ServerName.Contains(options.Value.ServerNameSuffix, StringComparison.OrdinalIgnoreCase))
