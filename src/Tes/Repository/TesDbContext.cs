@@ -53,7 +53,7 @@ namespace Tes.Repository
                 var accessToken = await credential.GetTokenAsync(
                     new Azure.Core.TokenRequestContext(scopes: new string[] { azureDatabaseForPostgresqlScope }));
 
-                tempConnectionString = tempConnectionString.TrimEnd(';') + $"PASSWORD={accessToken.Token};";
+                tempConnectionString = tempConnectionString.TrimEnd(';') + $";PASSWORD={accessToken.Token};";
             }
 
             optionsBuilder
