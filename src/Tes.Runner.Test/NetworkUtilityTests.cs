@@ -41,10 +41,9 @@ namespace Tes.Runner.Test
                 await client.GetStringAsync(uri);
             }
             catch (Exception)
-            //catch (HttpRequestException ex) when (ex.InnerException is WebException webException && webException.Status == WebExceptionStatus.ConnectFailure)
             {
                 isExceptionThrown = true;
-                Console.WriteLine("Successfully blocked");
+                Console.WriteLine($"Successfully blocked {ipAddress} ({testUrl})");
             }
 
             if (!isExceptionThrown)
@@ -86,7 +85,7 @@ namespace Tes.Runner.Test
             catch (Exception)
             {
                 isExceptionThrown = true;
-                Console.WriteLine("Successfully blocked");
+                Console.WriteLine($"Successfully blocked {ipAddress} ({testUrl})");
             }
 
             if (!isExceptionThrown)
