@@ -181,10 +181,5 @@ namespace Tes.Runner.Test.Storage
             Assert.IsTrue(resolvedInputs?.Any(r => r.SourceUrl.ToString().Equals(singleFileInput.SourceUrl, StringComparison.InvariantCultureIgnoreCase)));
         }
 
-        // [TestMethod]
-        // public async Task ResolveOutputsAsync_DirectoryOutputIsProvided_AllFilesInDirectoryAreResolved()
-        // {
-        //
-        // }
     }
 }
