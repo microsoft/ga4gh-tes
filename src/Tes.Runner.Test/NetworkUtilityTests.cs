@@ -34,22 +34,12 @@ namespace Tes.Runner.Test
             await client.GetStringAsync(uri);
 
             await utility.BlockIpAddressAsync(ipAddress, ruleChain);
-            bool isExceptionThrown = false;
 
-            try
+            await Assert.ThrowsExceptionAsync<Exception>(async () =>
             {
                 await client.GetStringAsync(uri);
-            }
-            catch (Exception)
-            {
-                isExceptionThrown = true;
                 Console.WriteLine($"Successfully blocked {ipAddress} ({testUrl})");
-            }
-
-            if (!isExceptionThrown)
-            {
-                throw new Exception("IP address was not blocked");
-            }
+            }, "IP address was not blocked");
 
             await utility.UnblockIpAddressAsync(ipAddress, ruleChain);
             await client.GetStringAsync(uri);
@@ -76,22 +66,12 @@ namespace Tes.Runner.Test
 
             await utility.BlockIpAddressAsync(ipAddress, ruleChain);
             await utility.BlockIpAddressAsync(ipAddress, ruleChain);
-            bool isExceptionThrown = false;
 
-            try
+            await Assert.ThrowsExceptionAsync<Exception>(async () =>
             {
                 await client.GetStringAsync(uri);
-            }
-            catch (Exception)
-            {
-                isExceptionThrown = true;
                 Console.WriteLine($"Successfully blocked {ipAddress} ({testUrl})");
-            }
-
-            if (!isExceptionThrown)
-            {
-                throw new Exception("IP address was not blocked");
-            }
+            }, "IP address was not blocked");
 
             await utility.UnblockIpAddressAsync(ipAddress, ruleChain);
             await utility.UnblockIpAddressAsync(ipAddress, ruleChain);
