@@ -55,7 +55,7 @@ namespace Tes.Repository
 
                 // ConnectionStringUtility omits password when UseManagedIdentity is set.
                 // Omitting an assertion here to avoid the performance hit of string comparison on every creation
-                tempConnectionString = tempConnectionString.TrimEnd(';') + $";PASSWORD={accessToken.Token};";
+                tempConnectionString = tempConnectionString.TrimEnd(';') + $";Password={accessToken.Token};";
             }
 
             optionsBuilder
