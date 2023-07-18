@@ -35,9 +35,10 @@ namespace Tes.Repository
             if (!optionsBuilder.IsConfigured)
             {
                 string tempConnectionString = ConnectionString;
-                string connectionStringTargetReplacement = $"PASSWORD={defaultManagedIdentityPassword};";
+                string managedIdentityPasswordSetting = $"PASSWORD={defaultManagedIdentityPassword};";
+                bool isManagedIdentityEnabled = tempConnectionString.Contains(managedIdentityPasswordSetting, StringComparison.OrdinalIgnoreCase);
 
-                if (tempConnectionString.Contains(connectionStringTargetReplacement, StringComparison.OrdinalIgnoreCase))
+                if (isManagedIdentityEnabled)
                 {
                     // Use AAD managed identity
                     // https://learn.microsoft.com/en-us/azure/postgresql/single-server/how-to-connect-with-managed-identity
@@ -56,7 +57,7 @@ namespace Tes.Repository
                     var accessToken = await credential.GetTokenAsync(
                         new Azure.Core.TokenRequestContext(scopes: new string[] { azureDatabaseForPostgresqlScope }));
                     
-                    tempConnectionString = tempConnectionString.Replace(connectionStringTargetReplacement, $"PASSWORD={accessToken.Token};");
+                    tempConnectionString = tempConnectionString.Replace(managedIdentityPasswordSetting, $"PASSWORD={accessToken.Token};");
                 }
 
                 optionsBuilder
