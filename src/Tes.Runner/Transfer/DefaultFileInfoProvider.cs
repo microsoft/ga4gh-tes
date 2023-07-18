@@ -5,6 +5,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer;
 
+/// <summary>
+/// Default file info provider implementation that uses the standard .NET APIs.
+/// Glob support is limited to the standard .NET APIs.
+/// </summary>
 public class DefaultFileInfoProvider : IFileInfoProvider
 {
     private readonly ILogger logger = PipelineLoggerFactory.Create<DefaultFileInfoProvider>();
@@ -13,10 +17,10 @@ public class DefaultFileInfoProvider : IFileInfoProvider
     {
         logger.LogInformation($"Getting file size for file: {fileName}");
 
-        return new FileInfo(Environment.ExpandEnvironmentVariables(fileName)).Length;
+        return GetFileInfoOrThrowIfFileDoesNotExist(fileName).Length;
     }
 
-    public string GetFileName(string fileName)
+    public string GetExpandedFileName(string fileName)
     {
         logger.LogInformation($"Expanding file name: {fileName}");
 
@@ -32,17 +36,30 @@ public class DefaultFileInfoProvider : IFileInfoProvider
         return fileInfo.Exists;
     }
 
-    public string[] GetFilesInAllDirectories(string path, string searchPattern)
+
+    public string[] GetFilesBySearchPattern(string path, string searchPattern)
     {
         logger.LogInformation($"Searching for files in path: {path} with search pattern: {searchPattern}");
 
         return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), Environment.ExpandEnvironmentVariables(searchPattern), SearchOption.AllDirectories);
     }
 
-    public string[] GetFilesInDirectory(string path)
+    public string[] GetAllFilesInDirectory(string path)
     {
-        logger.LogDebug($"Searching for files in path: {path}");
+        logger.LogInformation($"Getting all files in path: {path}");
 
-        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path));
+        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), "*", SearchOption.AllDirectories);
+    }
+
+    private FileInfo GetFileInfoOrThrowIfFileDoesNotExist(string fileName)
+    {
+        var expandedFilename = Environment.ExpandEnvironmentVariables(fileName);
+
+        var fileInfo = new FileInfo(expandedFilename);
+        if (!fileInfo.Exists)
+        {
+            throw new FileNotFoundException($"File {fileName} does not exist. Expanded value: {expandedFilename}");
+        }
+        return fileInfo;
     }
 }

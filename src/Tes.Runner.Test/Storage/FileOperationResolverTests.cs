@@ -26,7 +26,7 @@ namespace Tes.Runner.Test.Storage
             resolutionPolicyHandler = new ResolutionPolicyHandler();
             fileInfoProvider = new Mock<IFileInfoProvider>();
 
-            fileInfoProvider.Setup(x => x.GetFileName(It.IsAny<string>())).Returns<string>(x => x);
+            fileInfoProvider.Setup(x => x.GetExpandedFileName(It.IsAny<string>())).Returns<string>(x => x);
             fileInfoProvider.Setup(x => x.FileExists(It.IsAny<string>())).Returns(true);
 
             singleFileInput = new FileInput
@@ -46,7 +46,7 @@ namespace Tes.Runner.Test.Storage
 
             directoryFileOutput = new FileOutput
             {
-                Path = "/foo",
+                Path = "/root",
                 TargetUrl = "https://foo.bar/cont?sig=sasToken",
                 SasStrategy = SasResolutionStrategy.None,
                 FileType = FileType.Directory
@@ -92,7 +92,7 @@ namespace Tes.Runner.Test.Storage
                 }
             };
 
-            fileInfoProvider.Setup(x => x.GetFilesInAllDirectories(It.IsAny<string>(), It.IsAny<string>()))
+            fileInfoProvider.Setup(x => x.GetFilesBySearchPattern(It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(new List<string> { "/prefix/data/foo.foo", "/prefix/data/bar.foo" }.ToArray);
 
             var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
@@ -106,7 +106,7 @@ namespace Tes.Runner.Test.Storage
         }
 
         [TestMethod]
-        public async Task ResolveOutputsAsync_DirectoryOutputProvided_FileOperationsAreResolved()
+        public async Task ResolveOutputsAsync_DirectoryOutputProvided_TargetUrlDoesNotContainRootDirInPathProperty()
         {
             var nodeTask = new NodeTask()
             {
@@ -115,18 +115,22 @@ namespace Tes.Runner.Test.Storage
                     directoryFileOutput
                 }
             };
+            var rootDir = directoryFileOutput.Path;
+            var file1 = "/dir1/file1.tmp";
+            var file2 = "/dir1/dir2/file2.tmp";
 
-            fileInfoProvider.Setup(x => x.GetFilesInDirectory(It.IsAny<string>()))
-                .Returns(new List<string> { "/foo/foo.foo", "/foo/bar.foo" }.ToArray);
+            fileInfoProvider.Setup(x => x.GetAllFilesInDirectory(It.IsAny<string>()))
+                .Returns(new List<string> { $"{rootDir}{file1}", $"{rootDir}{file2}" }.ToArray);
 
             var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
             var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();
 
+
             Assert.AreEqual(2, resolvedOutputs?.Count);
-            Assert.IsTrue(resolvedOutputs!.Any(r => r.FullFilePath.Equals("/foo/foo.foo", StringComparison.OrdinalIgnoreCase)));
-            Assert.IsTrue(resolvedOutputs!.Any(r => r.FullFilePath.Equals("/foo/bar.foo", StringComparison.OrdinalIgnoreCase)));
-            Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/foo/foo.foo?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
-            Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/foo/bar.foo?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.FullFilePath.Equals($"{rootDir}{file1}", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.FullFilePath.Equals($"{rootDir}{file2}", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.AbsoluteUri.ToString().Equals($@"https://foo.bar/cont{file1}?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.AbsoluteUri.ToString().Equals($@"https://foo.bar/cont{file2}?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
         }
 
         [TestMethod]
@@ -141,7 +145,7 @@ namespace Tes.Runner.Test.Storage
                 }
             };
 
-            fileInfoProvider.Setup(x => x.GetFilesInAllDirectories(It.IsAny<string>(), It.IsAny<string>()))
+            fileInfoProvider.Setup(x => x.GetFilesBySearchPattern(It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(new List<string> { "/prefix/data/foo.foo", "/prefix/data/bar.foo" }.ToArray);
 
             var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
@@ -176,5 +180,11 @@ namespace Tes.Runner.Test.Storage
             Assert.IsTrue(resolvedInputs?.Any(r => r.FullFilePath.Equals(singleFileInput.Path, StringComparison.InvariantCultureIgnoreCase)));
             Assert.IsTrue(resolvedInputs?.Any(r => r.SourceUrl.ToString().Equals(singleFileInput.SourceUrl, StringComparison.InvariantCultureIgnoreCase)));
         }
+
+        // [TestMethod]
+        // public async Task ResolveOutputsAsync_DirectoryOutputIsProvided_AllFilesInDirectoryAreResolved()
+        // {
+        //
+        // }
     }
 }

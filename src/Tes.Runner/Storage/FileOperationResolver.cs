@@ -7,6 +7,9 @@ using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Storage
 {
+    /// <summary>
+    /// Expands the file inputs and outputs and resolves the SAS tokens.
+    /// </summary>
     public class FileOperationResolver
     {
         private readonly NodeTask nodeTask;
@@ -64,7 +67,7 @@ namespace Tes.Runner.Storage
             {
                 SasStrategy = input.SasStrategy,
                 SourceUrl = input.SourceUrl,
-                Path = fileInfoProvider.GetFileName(input.Path!),
+                Path = fileInfoProvider.GetExpandedFileName(input.Path!),
             };
         }
 
@@ -111,7 +114,9 @@ namespace Tes.Runner.Storage
                     expandedOutputs = ExpandFileOutput(output);
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException(nameof(output.FileType), output.FileType, "File output type");
+                    logger.LogWarning($"File type was not set for the output: {output.Path}. Expanding the output as file type.");
+                    expandedOutputs = ExpandFileOutput(output);
+                    break;
             }
 
             foreach (var fileOutput in expandedOutputs)
@@ -139,9 +144,10 @@ namespace Tes.Runner.Storage
 
         private IEnumerable<FileOutput> ExpandDirectoryOutput(FileOutput output)
         {
-            foreach (var file in fileInfoProvider.GetFilesInDirectory(output.Path!))
+            foreach (var file in fileInfoProvider.GetAllFilesInDirectory(output.Path!))
             {
-                yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, file);
+                //remove the path from property (root directory) from the target url
+                yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, path: file, prefixToRemove: output.Path!);
             }
         }
 
@@ -159,12 +165,10 @@ namespace Tes.Runner.Storage
                 yield break;
             }
 
-            var path = RemovePrefixFromPath(output.Path!, output.PathPrefix!);
-
-            foreach (var file in fileInfoProvider.GetFilesInAllDirectories(output.PathPrefix!, path))
+            foreach (var file in fileInfoProvider.GetFilesBySearchPattern(output.PathPrefix!, output.Path!))
             {
                 logger.LogInformation($"Adding file {file} to the output list");
-                yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, file);
+                yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, path: file, prefixToRemove: output.PathPrefix!);
             }
         }
 
@@ -179,23 +183,23 @@ namespace Tes.Runner.Storage
                 FileType = FileType.File,
             };
         }
-        private FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string path)
+        private static FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string path, string prefixToRemove)
         {
             return new FileOutput()
             {
                 Path = path,
                 PathPrefix = output.PathPrefix,
-                TargetUrl = ToCombinedTargetUrl(output, path),
+                TargetUrl = ToCombinedTargetUrl(output.TargetUrl!, prefixToRemove, path),
                 SasStrategy = output.SasStrategy,
                 FileType = FileType.File,
             };
         }
 
-        private string ToCombinedTargetUrl(FileOutput output, string path)
+        private static string ToCombinedTargetUrl(string targetUrl, string prefixToRemoveFromPath, string path)
         {
-            var builder = new UriBuilder(output.TargetUrl!);
+            var builder = new UriBuilder(targetUrl);
 
-            builder.Path = $"{builder.Path}/{RemovePrefixFromPath(path, output.PathPrefix)}";
+            builder.Path = $"{builder.Path}/{RemovePrefixFromPath(path, prefixToRemoveFromPath)}";
 
             return builder.Uri.ToString();
         }

@@ -20,6 +20,30 @@ public class RunnerTestUtils
         return file;
     }
 
+    public static DirectoryInfo CreateTempFilesInDirectory(string dirStructure, string filePrefix)
+    {
+        var parentDirName = Guid.NewGuid().ToString();
+        var root = Directory.CreateDirectory($"{parentDirName}/{dirStructure}");
+
+        while (root.Parent != null)
+        {
+            var fileName = $"{root.FullName}/{filePrefix}{Guid.NewGuid()}.tmp";
+
+            using var fs = File.Create(fileName);
+
+            fs.Close();
+
+            if (root.Name.Equals(parentDirName, StringComparison.InvariantCultureIgnoreCase))
+            {
+                return root;
+            }
+
+            root = root.Parent;
+        }
+
+        throw new Exception("Could not find root directory");
+    }
+
     public static string CalculateMd5(string file)
     {
         using var md5 = MD5.Create();
