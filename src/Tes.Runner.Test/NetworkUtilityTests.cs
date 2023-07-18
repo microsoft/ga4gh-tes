@@ -39,8 +39,9 @@ namespace Tes.Runner.Test
             {
                 // The request was canceled due to the configured HttpClient.Timeout of 10 seconds elapsing.
                 await client.GetStringAsync(uri);
-                Console.WriteLine($"Successfully blocked {ipAddress} ({testUrl})");
             }, "IP address was not blocked");
+
+            Console.WriteLine($"Successfully blocked {ipAddress} ({testUrl})");
 
             await utility.UnblockIpAddressAsync(ipAddress, ruleChain);
             await client.GetStringAsync(uri);
@@ -72,8 +73,9 @@ namespace Tes.Runner.Test
             {
                 // The request was canceled due to the configured HttpClient.Timeout of 10 seconds elapsing.
                 await client.GetStringAsync(uri);
-                Console.WriteLine($"Successfully blocked {ipAddress} ({testUrl})");
             }, "IP address was not blocked");
+
+            Console.WriteLine($"Successfully blocked {ipAddress} ({testUrl})");
 
             await utility.UnblockIpAddressAsync(ipAddress, ruleChain);
             await utility.UnblockIpAddressAsync(ipAddress, ruleChain);
