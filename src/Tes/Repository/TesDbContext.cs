@@ -53,6 +53,8 @@ namespace Tes.Repository
                 var accessToken = await credential.GetTokenAsync(
                     new Azure.Core.TokenRequestContext(scopes: new string[] { azureDatabaseForPostgresqlScope }));
 
+                // ConnectionStringUtility omits password when UseManagedIdentity is set.
+                // Omitting an assertion here to avoid the performance hit of string comparison on every creation
                 tempConnectionString = tempConnectionString.TrimEnd(';') + $";PASSWORD={accessToken.Token};";
             }
 
