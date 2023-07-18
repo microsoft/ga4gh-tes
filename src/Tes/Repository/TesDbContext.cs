@@ -14,7 +14,6 @@ namespace Tes.Repository
         private const string azureDatabaseForPostgresqlScope = "https://ossrdbms-aad.database.windows.net/.default";
         private const string defaultManagedIdentityPassword = "CLIENT_ID";
         public const string TesTasksPostgresTableName = "testasks";
-        private static DateTimeOffset accessTokenLastExpiration = DateTimeOffset.MinValue;
 
         public TesDbContext()
         {
@@ -57,10 +56,7 @@ namespace Tes.Repository
                     var accessToken = await credential.GetTokenAsync(
                         new Azure.Core.TokenRequestContext(scopes: new string[] { azureDatabaseForPostgresqlScope }));
                     
-                    if (accessToken.ExpiresOn != accessTokenLastExpiration)
-                    {
-                        tempConnectionString = tempConnectionString.Replace(connectionStringTargetReplacement, $"PASSWORD={accessToken.Token};");
-                    }
+                    tempConnectionString = tempConnectionString.Replace(connectionStringTargetReplacement, $"PASSWORD={accessToken.Token};");
                 }
 
                 optionsBuilder
