@@ -14,6 +14,7 @@ namespace Tes.Repository
         private const string azureDatabaseForPostgresqlScope = "https://ossrdbms-aad.database.windows.net/.default";
         private const string defaultManagedIdentityPassword = "CLIENT_ID";
         public const string TesTasksPostgresTableName = "testasks";
+        private static DateTimeOffset accessTokenLastExpiration = DateTimeOffset.MinValue;
 
         public TesDbContext()
         {
@@ -34,12 +35,15 @@ namespace Tes.Repository
         {
             if (!optionsBuilder.IsConfigured)
             {
+                string tempConnectionString = ConnectionString;
+
                 string connectionStringTargetReplacement = $"PASSWORD={defaultManagedIdentityPassword};";
 
-                if (ConnectionString.Contains(connectionStringTargetReplacement, StringComparison.OrdinalIgnoreCase))
+                if (tempConnectionString.Contains(connectionStringTargetReplacement, StringComparison.OrdinalIgnoreCase))
                 {
                     // Use AAD managed identity
                     // https://learn.microsoft.com/en-us/azure/postgresql/single-server/how-to-connect-with-managed-identity
+                    // https://learn.microsoft.com/en-us/azure/postgresql/single-server/concepts-azure-ad-authentication
                     // Instructions:
                     // 1.  Replace 'myuser' and run on your server
                     /*
@@ -47,17 +51,21 @@ namespace Tes.Repository
                             CREATE ROLE myuser WITH LOGIN PASSWORD 'CLIENT_ID' IN ROLE azure_ad_user;
                     */
                     // 2.  Set "DatabaseUserPassword" to "CLIENT_ID" in the TES AKS configuration
+                    // 3.  Ensure the managed identity that TES runs under has the role
 
                     // Note: this supports token caching internally
                     var credential = new DefaultAzureCredential();
                     var accessToken = await credential.GetTokenAsync(
                         new Azure.Core.TokenRequestContext(scopes: new string[] { azureDatabaseForPostgresqlScope }));
-
-                    ConnectionString.Replace(connectionStringTargetReplacement, $"PASSWORD={accessToken.Token};");
+                    
+                    if (accessToken.ExpiresOn != accessTokenLastExpiration)
+                    {
+                        tempConnectionString = tempConnectionString.Replace(connectionStringTargetReplacement, $"PASSWORD={accessToken.Token};");
+                    }
                 }
 
                 optionsBuilder
-                    .UseNpgsql(ConnectionString, options => options.MaxBatchSize(1000))
+                    .UseNpgsql(tempConnectionString, options => options.MaxBatchSize(1000))
                     .UseLowerCaseNamingConvention();
             }
         }
