@@ -36,7 +36,6 @@ namespace Tes.Repository
             if (!optionsBuilder.IsConfigured)
             {
                 string tempConnectionString = ConnectionString;
-
                 string connectionStringTargetReplacement = $"PASSWORD={defaultManagedIdentityPassword};";
 
                 if (tempConnectionString.Contains(connectionStringTargetReplacement, StringComparison.OrdinalIgnoreCase))
