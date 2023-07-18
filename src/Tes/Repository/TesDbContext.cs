@@ -11,7 +11,8 @@ namespace Tes.Repository
 {
     public class TesDbContext : DbContext
     {
-        private const string aadResourceId = "https://ossrdbms-aad.database.windows.net/.default";
+        private const string azureDatabaseForPostgresqlScope = "https://ossrdbms-aad.database.windows.net/.default";
+        private const string defaultManagedIdentityPassword = "CLIENT_ID";
         public const string TesTasksPostgresTableName = "testasks";
 
         public TesDbContext()
@@ -33,23 +34,26 @@ namespace Tes.Repository
         {
             if (!optionsBuilder.IsConfigured)
             {
-                if (ConnectionString.Contains("PASSWORD=CLIENT_ID;", StringComparison.OrdinalIgnoreCase))
+                string connectionStringTargetReplacement = $"PASSWORD={defaultManagedIdentityPassword};";
+
+                if (ConnectionString.Contains(connectionStringTargetReplacement, StringComparison.OrdinalIgnoreCase))
                 {
-                    // Use AAD managed identity (https://learn.microsoft.com/en-us/azure/postgresql/single-server/how-to-connect-with-managed-identity)
+                    // Use AAD managed identity
+                    // https://learn.microsoft.com/en-us/azure/postgresql/single-server/how-to-connect-with-managed-identity
                     // Instructions:
-                    // 1.  You must run this on your PostgreSQL server, replacing 'myuser' with the correct user:
+                    // 1.  Replace 'myuser' and run on your server
                     /*
                             SET aad_validate_oids_in_tenant = off;
                             CREATE ROLE myuser WITH LOGIN PASSWORD 'CLIENT_ID' IN ROLE azure_ad_user;
                     */
-                    // 2.  You must set DatabaseUserPassword to "CLIENT_ID" in the TES AKS configuration
+                    // 2.  Set "DatabaseUserPassword" to "CLIENT_ID" in the TES AKS configuration
 
                     // Note: this supports token caching internally
                     var credential = new DefaultAzureCredential();
                     var accessToken = await credential.GetTokenAsync(
-                        new Azure.Core.TokenRequestContext(scopes: new string[] { aadResourceId }));
+                        new Azure.Core.TokenRequestContext(scopes: new string[] { azureDatabaseForPostgresqlScope }));
 
-                    ConnectionString.Replace("PASSWORD=CLIENT_ID;", $"PASSWORD={accessToken.Token};");
+                    ConnectionString.Replace(connectionStringTargetReplacement, $"PASSWORD={accessToken.Token};");
                 }
 
                 optionsBuilder
