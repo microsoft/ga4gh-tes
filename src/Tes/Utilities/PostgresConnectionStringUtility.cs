@@ -18,7 +18,11 @@ namespace Tes.Utilities
             ArgumentException.ThrowIfNullOrEmpty(options.Value.ServerSslMode, nameof(options.Value.ServerSslMode));
             ArgumentException.ThrowIfNullOrEmpty(options.Value.DatabaseName, nameof(options.Value.DatabaseName));
             ArgumentException.ThrowIfNullOrEmpty(options.Value.DatabaseUserLogin, nameof(options.Value.DatabaseUserLogin));
-            ArgumentException.ThrowIfNullOrEmpty(options.Value.DatabaseUserPassword, nameof(options.Value.DatabaseUserPassword));
+
+            if (!options.Value.UseManagedIdentity)
+            {
+                ArgumentException.ThrowIfNullOrEmpty(options.Value.DatabaseUserPassword, nameof(options.Value.DatabaseUserPassword));
+            }
 
             if (options.Value.ServerName.Contains(options.Value.ServerNameSuffix, StringComparison.OrdinalIgnoreCase))
             {
@@ -30,7 +34,12 @@ namespace Tes.Utilities
             connectionStringBuilder.Append($"Database={options.Value.DatabaseName};");
             connectionStringBuilder.Append($"Port={options.Value.ServerPort};");
             connectionStringBuilder.Append($"User Id={options.Value.DatabaseUserLogin};");
-            connectionStringBuilder.Append($"Password={options.Value.DatabaseUserPassword};");
+
+            if (!options.Value.UseManagedIdentity)
+            {
+                connectionStringBuilder.Append($"Password={options.Value.DatabaseUserPassword};");
+            }
+
             connectionStringBuilder.Append($"SSL Mode={options.Value.ServerSslMode};");
             return connectionStringBuilder.ToString();
         }

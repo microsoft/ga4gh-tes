@@ -33,7 +33,7 @@ namespace Tes.Repository
             : base(logger, cache)
         {
             var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
-            CreateDbContext = () => { return new TesDbContext(connectionString); };
+            CreateDbContext = () => { return new TesDbContext(connectionString, options.Value.UseManagedIdentity); };
             using var dbContext = CreateDbContext();
             dbContext.Database.MigrateAsync().Wait();
             WarmCacheAsync(CancellationToken.None).Wait();
