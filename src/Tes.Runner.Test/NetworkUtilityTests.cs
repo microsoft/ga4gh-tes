@@ -30,13 +30,14 @@ namespace Tes.Runner.Test
             var uri = new Uri(testUrl);
             var ipAddress = Dns.GetHostAddresses(uri.Host).First().ToString();
 
-            using var client = new HttpClient();
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             await client.GetStringAsync(uri);
 
             await utility.BlockIpAddressAsync(ipAddress, ruleChain);
 
-            await Assert.ThrowsExceptionAsync<Exception>(async () =>
+            await Assert.ThrowsExceptionAsync<TaskCanceledException>(async () =>
             {
+                // The request was canceled due to the configured HttpClient.Timeout of 10 seconds elapsing.
                 await client.GetStringAsync(uri);
                 Console.WriteLine($"Successfully blocked {ipAddress} ({testUrl})");
             }, "IP address was not blocked");
@@ -61,14 +62,15 @@ namespace Tes.Runner.Test
             var uri = new Uri(testUrl);
             var ipAddress = Dns.GetHostAddresses(uri.Host).First().ToString();
 
-            using var client = new HttpClient();
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             await client.GetStringAsync(uri);
 
             await utility.BlockIpAddressAsync(ipAddress, ruleChain);
             await utility.BlockIpAddressAsync(ipAddress, ruleChain);
 
-            await Assert.ThrowsExceptionAsync<Exception>(async () =>
+            await Assert.ThrowsExceptionAsync<TaskCanceledException>(async () =>
             {
+                // The request was canceled due to the configured HttpClient.Timeout of 10 seconds elapsing.
                 await client.GetStringAsync(uri);
                 Console.WriteLine($"Successfully blocked {ipAddress} ({testUrl})");
             }, "IP address was not blocked");
