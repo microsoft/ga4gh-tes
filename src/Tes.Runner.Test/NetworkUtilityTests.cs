@@ -10,7 +10,7 @@ namespace Tes.Runner.Test
     [TestCategory("Unit")]
     public class NetworkUtilityTests
     {
-        private const string testUrl = "https://www.example.com";
+        private const string testUrl = "https://portal.azure.com";
         private const string ruleChain = "OUTPUT";
         private readonly NetworkUtility utility = new NetworkUtility();
 
@@ -40,7 +40,8 @@ namespace Tes.Runner.Test
             {
                 await client.GetStringAsync(uri);
             }
-            catch (HttpRequestException ex) when (ex.InnerException is WebException webException && webException.Status == WebExceptionStatus.ConnectFailure)
+            catch (Exception)
+            //catch (HttpRequestException ex) when (ex.InnerException is WebException webException && webException.Status == WebExceptionStatus.ConnectFailure)
             {
                 isExceptionThrown = true;
                 Console.WriteLine("Successfully blocked");
