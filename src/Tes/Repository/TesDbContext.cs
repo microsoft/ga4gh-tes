@@ -12,7 +12,7 @@ namespace Tes.Repository
     {
         private const string azureDatabaseForPostgresqlScope = "https://ossrdbms-aad.database.windows.net/.default";
         public const string TesTasksPostgresTableName = "testasks";
-        public bool UseManagedIdentity { get; set; }             
+        public bool UseManagedIdentity { get; set; }
 
         public TesDbContext()
         {
@@ -31,7 +31,7 @@ namespace Tes.Repository
         public DbSet<TesTaskDatabaseItem> TesTasks { get; set; }
 
         protected override async void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        {           
+        {
             string tempConnectionString = ConnectionString;
 
             if (UseManagedIdentity)
