@@ -58,7 +58,7 @@ namespace Tes.Repository
                 // omitting this to avoid performance hit of string comparison on every creation
                 // if (tempConnectionString.Contains("Password=", StringComparison.OrdinalIgnoreCase)) throw new Exception("Password shall not be provided when using managed identity");
 
-                tempConnectionString = tempConnectionString.TrimEnd(';') + $";Password={accessToken.Token};";
+                tempConnectionString = $"{tempConnectionString.TrimEnd(';')};Password={accessToken.Token};";
             }
 
             optionsBuilder
