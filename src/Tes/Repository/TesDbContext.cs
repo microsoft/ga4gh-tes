@@ -10,6 +10,7 @@ namespace Tes.Repository
 {
     public class TesDbContext : DbContext
     {
+        private const int maxBatchSize = 1000;
         private const string azureDatabaseForPostgresqlScope = "https://ossrdbms-aad.database.windows.net/.default";
         public const string TesTasksPostgresTableName = "testasks";
         public bool UseManagedIdentity { get; set; }
@@ -61,7 +62,7 @@ namespace Tes.Repository
             }
 
             optionsBuilder
-                .UseNpgsql(tempConnectionString, options => options.MaxBatchSize(1000))
+                .UseNpgsql(tempConnectionString, options => options.MaxBatchSize(maxBatchSize))
                 .UseLowerCaseNamingConvention();
         }
     }
