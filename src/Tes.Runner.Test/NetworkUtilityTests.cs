@@ -10,7 +10,7 @@ namespace Tes.Runner.Test
     [TestCategory("Unit")]
     public class NetworkUtilityTests
     {
-        private const string testUrl = "https://portal.azure.com";
+        private const string testUrl = "https://github.com";
         private const string ruleChain = "OUTPUT";
         private readonly NetworkUtility utility = new NetworkUtility();
 
