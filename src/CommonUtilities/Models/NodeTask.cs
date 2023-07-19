@@ -19,16 +19,16 @@ namespace Tes.Runner.Models
 
     public class FileOutput
     {
-        public string? FullFileName { get; set; }
+        public string? Path { get; set; }
         public string? TargetUrl { get; set; }
         public SasResolutionStrategy? SasStrategy { get; set; }
         public FileType? FileType { get; set; }
-        public bool? Required { get; set; }
+        public string? PathPrefix { get; set; }
     }
 
     public class FileInput
     {
-        public string? FullFileName { get; set; }
+        public string? Path { get; set; }
         public string? SourceUrl { get; set; }
         public SasResolutionStrategy? SasStrategy { get; set; }
     }
