@@ -45,6 +45,7 @@ namespace TesApi.Tests.TestServices
         {
             Configuration = GetConfiguration(configuration);
             provider = new ServiceCollection()
+                        .AddSingleton(_ => new TesServiceInfo())
                         .AddSingleton<ConfigurationUtils>()
                         .AddSingleton(_ => GetAllowedVmSizesServiceProviderProvider(allowedVmSizesServiceSetup).Object)
                         .AddSingleton(_ => GetContainerRegisterProvider(containerRegistryProviderSetup).Object)

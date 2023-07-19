@@ -238,7 +238,7 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(TesServiceInfo), description: "")]
         public virtual IActionResult GetServiceInfo()
         {
-            logger.LogInformation($"Id: {serviceInfo.Id} Name: {serviceInfo.Name} Type: {serviceInfo.Type} Description: {serviceInfo.Description} Organization: {serviceInfo.Organization} ContactUrl: {serviceInfo.ContactUrl} DocumentationUrl: {serviceInfo.DocumentationUrl} CreatedAt:{serviceInfo.CreatedAt} UpdatedAt:{serviceInfo.UpdatedAt} Environment: {serviceInfo.Environment} Version: {serviceInfo.Version} Storage: {string.Join(",", serviceInfo.Storage)} TesResourcesSupportedBackendParameters: {string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters)}");
+            logger.LogInformation($"Id: {serviceInfo.Id} Name: {serviceInfo.Name} Type: {serviceInfo.Type} Description: {serviceInfo.Description} Organization: {serviceInfo.Organization} ContactUrl: {serviceInfo.ContactUrl} DocumentationUrl: {serviceInfo.DocumentationUrl} CreatedAt:{serviceInfo.CreatedAt} UpdatedAt:{serviceInfo.UpdatedAt} Environment: {serviceInfo.Environment} Version: {serviceInfo.Version} Storage: {string.Join(",", serviceInfo.Storage ?? new())} TesResourcesSupportedBackendParameters: {string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters ?? new())}");
             return StatusCode(200, serviceInfo);
         }
 
