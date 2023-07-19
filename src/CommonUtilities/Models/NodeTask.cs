@@ -37,7 +37,7 @@ namespace Tes.Runner.Models
     public enum SasResolutionStrategy
     {
         None,
-        StorageAccountNameAndKey,
+        AzureResourceManager,
         TerraWsm,
         SchemeConverter,
     }
