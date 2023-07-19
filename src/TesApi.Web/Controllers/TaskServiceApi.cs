@@ -39,6 +39,7 @@ namespace TesApi.Controllers
         private readonly IRepository<TesTask> repository;
         private readonly ILogger<TaskServiceApiController> logger;
         private readonly IAzureProxy azureProxy;
+        private readonly TesServiceInfo serviceInfo;
 
         private static readonly Dictionary<TesView, JsonSerializerSettings> TesJsonSerializerSettings = new()
         {
@@ -47,43 +48,19 @@ namespace TesApi.Controllers
             { TesView.FULL, new JsonSerializerSettings{ ContractResolver = FullTesTaskContractResolver.Instance } }
         };
 
-        private static readonly TesServiceInfo serviceInfo = new()
-        {
-            Id = "tesprefixname", // TODO: of this instance. Consider reverse dotted domain by default.
-            Name = "GA4GH Task Execution Service",
-            Type = new()
-            {  // TODO: update type to default all values
-                Group = "org.ga4gh",
-                Artifact = "tes",
-                Version = "1.1"
-            },
-            Description = "GA4GH TES on Azure",
-            Organization = new()
-            { // TODO: configuration
-                Name = "My name",
-                Url = "http://example"
-            },
-            Version = "4.4.0", // TODO: configuration
-            Environment = "prod", // TODO: configuration
-            DocumentationUrl = "https://github.com/microsoft/ga4gh-tes/wiki",
-            ContactUrl = "letsencryptemail", // TODO: configuration
-            CreatedAt = DateTimeOffset.UtcNow, // TODO: initial deployment of this instance
-            UpdatedAt = DateTimeOffset.UtcNow, // TODO: most recent deployment of this instance
-            Storage = new(),
-            TesResourcesSupportedBackendParameters = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList()
-        };
-
         /// <summary>
         /// Contruct a <see cref="TaskServiceApiController"/>
         /// </summary>
         /// <param name="repository">The main <see cref="TesTask"/> database repository</param>
         /// <param name="logger">The logger instance</param>
         /// <param name="azureProxy">The Azure Proxy instance</param>
-        public TaskServiceApiController(IRepository<TesTask> repository, ILogger<TaskServiceApiController> logger, IAzureProxy azureProxy)
+        /// <param name="serviceInfo">The GA4GH TES service information</param>
+        public TaskServiceApiController(IRepository<TesTask> repository, ILogger<TaskServiceApiController> logger, IAzureProxy azureProxy, TesServiceInfo serviceInfo)
         {
             this.repository = repository;
             this.logger = logger;
             this.azureProxy = azureProxy;
+            this.serviceInfo = serviceInfo;
         }
 
         /// <summary>

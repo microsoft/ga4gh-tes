@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Azure.Core;
 using Azure.Identity;
@@ -106,6 +107,32 @@ namespace TesApi.Web
                     .AddSingleton<ConfigurationUtils>()
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
                     .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
+
+                    .AddSingleton(c => new TesServiceInfo
+                    {
+                        Id = "tesprefixname", // TODO: of this instance. Consider reverse dotted domain by default.
+                        Name = "GA4GH Task Execution Service",
+                        Type = new()
+                        {  // TODO: update type to default all values
+                            Group = "org.ga4gh",
+                            Artifact = "tes",
+                            Version = "1.1"
+                        },
+                        Description = "GA4GH TES on Azure",
+                        Organization = new()
+                        { // TODO: configuration
+                            Name = "My name",
+                            Url = "http://example"
+                        },
+                        Version = "4.4.0", // TODO: configuration
+                        Environment = "prod", // TODO: configuration
+                        DocumentationUrl = "https://github.com/microsoft/ga4gh-tes/wiki",
+                        ContactUrl = "letsencryptemail", // TODO: configuration
+                        CreatedAt = DateTimeOffset.UtcNow, // TODO: initial deployment of this instance
+                        UpdatedAt = DateTimeOffset.UtcNow, // TODO: most recent deployment of this instance
+                        Storage = new(),
+                        TesResourcesSupportedBackendParameters = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList()
+                    })
 
                     .AddSwaggerGen(c =>
                     {
