@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.
+﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 
@@ -102,12 +102,12 @@ namespace Tes.Models
                 // Suitable nullity checks etc, of course :)
                 if (Name is not null)
                 {
-                    hashCode = hashCode * 59 + Group.GetHashCode();
+                    hashCode = hashCode * 59 + Name.GetHashCode();
                 }
 
                 if (Url is not null)
                 {
-                    hashCode = hashCode * 59 + Artifact.GetHashCode();
+                    hashCode = hashCode * 59 + Url.GetHashCode();
                 }
 
                 return hashCode;

@@ -47,6 +47,32 @@ namespace TesApi.Controllers
             { TesView.FULL, new JsonSerializerSettings{ ContractResolver = FullTesTaskContractResolver.Instance } }
         };
 
+        private static readonly TesServiceInfo serviceInfo = new()
+        {
+            Id = "tesprefixname", // TODO: of this instance. Consider reverse dotted domain by default.
+            Name = "GA4GH Task Execution Service",
+            Type = new()
+            {  // TODO: update type to default all values
+                Group = "org.ga4gh",
+                Artifact = "tes",
+                Version = "1.1"
+            },
+            Description = "GA4GH TES on Azure",
+            Organization = new()
+            { // TODO: configuration
+                Name = "My name",
+                Url = "http://example"
+            },
+            Version = "4.4.0", // TODO: configuration
+            Environment = "prod", // TODO: configuration
+            DocumentationUrl = "https://github.com/microsoft/ga4gh-tes/wiki",
+            ContactUrl = "letsencryptemail", // TODO: configuration
+            CreatedAt = DateTimeOffset.UtcNow, // TODO: initial deployment of this instance
+            UpdatedAt = DateTimeOffset.UtcNow, // TODO: most recent deployment of this instance
+            Storage = new(),
+            TesResourcesSupportedBackendParameters = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList()
+        };
+
         /// <summary>
         /// Contruct a <see cref="TaskServiceApiController"/>
         /// </summary>
@@ -235,23 +261,7 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(TesServiceInfo), description: "")]
         public virtual IActionResult GetServiceInfo()
         {
-            var serviceInfo = new TesServiceInfo
-            {
-                Id = "tesprefixname",
-                Name = "GA4GH Task Execution Service",
-                Type = new <string>(),
-                Organization = new <string>(),
-                Version = "4.2.0",
-                Description = "GA4GH TES on Azure",
-                DocumentationURL = "https://github.com/microsoft/ga4gh-tes/wiki",
-                ContactUrl = "letsencryptemail",
-                CreatedAt = "Date Created",
-                UpdatedAt = "Date Updated"
-                Storage = new List<string>(),
-                TesResourcesSupportedBackendParameters = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList()
-            };
-
-            logger.LogInformation($"Id: {serviceInfo.Id} Name: {serviceInfo.Name} Type: {serviceInfo.Type} Organization: {serviceInfo.Organization} Version: {serviceInfo.Version} Description: {serviceInfo.Description} DocumentationURL: {serviceInfo.DocumentationURL} DocumentationURL: {serviceInfo.ContactUrl} CreatedAt:{serviceInfo.CreatedAt} UpdatedAt:{serviceInfo.UpdatedAt} Storage: {serviceInfo.Storage} TesResourcesSupportedBackendParameters: {string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters)}");
+            logger.LogInformation($"Id: {serviceInfo.Id} Name: {serviceInfo.Name} Type: {serviceInfo.Type} Description: {serviceInfo.Description} Organization: {serviceInfo.Organization} ContactUrl: {serviceInfo.ContactUrl} DocumentationUrl: {serviceInfo.DocumentationUrl} CreatedAt:{serviceInfo.CreatedAt} UpdatedAt:{serviceInfo.UpdatedAt} Environment: {serviceInfo.Environment} Version: {serviceInfo.Version} Storage: {string.Join(",", serviceInfo.Storage)} TesResourcesSupportedBackendParameters: {string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters)}");
             return StatusCode(200, serviceInfo);
         }
 

@@ -52,38 +52,18 @@ namespace Tes.Models
         public TesServiceType Type { get; set; }
 
         /// <summary>
+        /// Description of the service. Should be human readable and provide information about the service.
+        /// </summary>
+        /// <value>Description of the service. Should be human readable and provide information about the service.</value>
+        [DataMember(Name = "description")]
+        public string Description { get; set; }
+
+        /// <summary>
         /// Returns the organization providing the service.
         /// </summary>
         /// <value>Returns the organization providing the service.</value>
         [DataMember(Name = "organization")]
         public TesOrganization Organization { get; set; }
-
-        /// <summary>
-        /// Returns the version of the service being described.
-        /// </summary>
-        /// <value>Returns the version of the service being described.</value>
-        [DataMember(Name = "version")]
-        public string Version { get; set; }
-
-        /// <summary>
-        /// Returns the description of the service being described.
-        /// </summary>
-        /// <value>Returns the description of the service being described.</value>
-        [DataMember(Name = "description")]
-        public string Description { get; set; }
-
-        /// <summary>
-        /// Gets or Sets Resources
-        /// </summary>
-        [DataMember(Name = "resources")]
-        public TesResources Resources { get; set; }
-
-        /// <summary>
-        /// Returns a documentation url, e.g. \&quot;https://docs.myservice.example.com\&quot;.
-        /// </summary>
-        /// <value>Returns a documentation url, e.g. \&quot;https://docs.myservice.example.com\&quot;.</value>
-        [DataMember(Name = "documentationUrl")]
-        public string DocumentationUrl { get; set; }
 
         /// <summary>
         /// Returns  contact url.
@@ -93,17 +73,11 @@ namespace Tes.Models
         public string ContactUrl { get; set; }
 
         /// <summary>
-        /// Lists some, but not necessarily all, storage locations supported by the service.  Must be in a valid URL format. e.g.  file:///path/to/local/funnel-storage s3://ohsu-compbio-funnel/storage etc.
+        /// Returns a documentation url, e.g. \&quot;https://docs.myservice.example.com\&quot;.
         /// </summary>
-        /// <value>Lists some, but not necessarily all, storage locations supported by the service.  Must be in a valid URL format. e.g.  file:///path/to/local/funnel-storage s3://ohsu-compbio-funnel/storage etc.</value>
-        [DataMember(Name = "storage")]
-        public List<string> Storage { get; set; }
-
-        /// <summary>
-        /// List keys supported in TesResources.backend_parameters
-        /// </summary>
-        [DataMember(Name = "tesResources_backend_parameters")]
-        public List<string> TesResourcesSupportedBackendParameters { get; set; }
+        /// <value>Returns a documentation url, e.g. \&quot;https://docs.myservice.example.com\&quot;.</value>
+        [DataMember(Name = "documentationUrl")]
+        public string DocumentationUrl { get; set; }
 
         /// <summary>
         /// Timestamp describing when the service was first deployed and available, in RFC 3339 format. This is set by the system, not the client.
@@ -120,6 +94,33 @@ namespace Tes.Models
         public DateTimeOffset? UpdatedAt { get; set; }
 
         /// <summary>
+        /// Environment the service is running in. Use this to distinguish between production, development and testing/staging deployments. Suggested values are prod, test, dev, staging. However this is advised and not enforced.
+        /// </summary>
+        /// <value>Environment the service is running in. Use this to distinguish between production, development and testing/staging deployments. Suggested values are prod, test, dev, staging. However this is advised and not enforced.</value>
+        [DataMember(Name = "environment")]
+        public string Environment { get; set; }
+
+        /// <summary>
+        /// Returns the version of the service being described. Semantic versioning is recommended, but other identifiers, such as dates or commit hashes, are also allowed. The version should be changed whenever the service is updated.
+        /// </summary>
+        /// <value>Returns the version of the service being described. Semantic versioning is recommended, but other identifiers, such as dates or commit hashes, are also allowed. The version should be changed whenever the service is updated.</value>
+        [DataMember(Name = "version")]
+        public string Version { get; set; }
+
+        /// <summary>
+        /// Lists some, but not necessarily all, storage locations supported by the service.  Must be in a valid URL format. e.g.  file:///path/to/local/funnel-storage s3://ohsu-compbio-funnel/storage etc.
+        /// </summary>
+        /// <value>Lists some, but not necessarily all, storage locations supported by the service.  Must be in a valid URL format. e.g.  file:///path/to/local/funnel-storage s3://ohsu-compbio-funnel/storage etc.</value>
+        [DataMember(Name = "storage")]
+        public List<string> Storage { get; set; }
+
+        /// <summary>
+        /// List keys supported in TesResources.backend_parameters
+        /// </summary>
+        [DataMember(Name = "tesResources_backend_parameters")]
+        public List<string> TesResourcesSupportedBackendParameters { get; set; }
+
+        /// <summary>
         /// Returns the string presentation of the object
         /// </summary>
         /// <returns>String presentation of the object</returns>
@@ -128,14 +129,15 @@ namespace Tes.Models
                 .Append("class TesServiceInfo {\n")
                 .Append("  Id: ").Append(Id).Append('\n')
                 .Append("  Name: ").Append(Name).Append('\n')
-                .Append("  Type: ").Append(TesServiceType).Append('\n')
-                .Append("  Organization: ").Append(TesOrganization).Append('\n')
-                .Append("  Version: ").Append(Version).Append('\n')
+                .Append("  Type: ").Append(Type).Append('\n')
                 .Append("  Description: ").Append(Description).Append('\n')
-                .Append("  DocumentationUrl: ").Append(DocumentationUrl).Append('\n')
+                .Append("  Organization: ").Append(Organization).Append('\n')
                 .Append("  ContactUrl: ").Append(ContactUrl).Append('\n')
+                .Append("  DocumentationUrl: ").Append(DocumentationUrl).Append('\n')
                 .Append("  CreatedAt: ").Append(CreatedAt).Append('\n')
                 .Append("  UpdatedAt: ").Append(UpdatedAt).Append('\n')
+                .Append("  Environment: ").Append(Environment).Append('\n')
+                .Append("  Version: ").Append(Version).Append('\n')
                 .Append("  Storage: ")
                 .Append(
                     Storage?.Count > 0 ?
@@ -196,29 +198,24 @@ namespace Tes.Models
                     Type.Equals(other.Type)
                 ) &&
                 (
+                    Description == other.Description ||
+                    Description is not null &&
+                    Description.Equals(other.Description)
+                ) &&
+                (
                     Organization == other.Organization ||
                     Organization is not null &&
                     Organization.Equals(other.Organization)
                 ) &&
                 (
-                    Version == other.Version ||
-                    Version is not null &&
-                    Version.Equals(other.Version)
-                ) &&
-                (
-                    Description == other.Description ||
-                    Description is not null &&
-                    Description.Equals(other.Description)
-                ) &&
-                 (
-                    DocumentationUrl == other.DocumentationUrl ||
-                    DocumentationUrl is not null &&
-                    DocumentationUrl.Equals(other.DocumentationUrl)
-                ) &&
-                (
                     ContactUrl == other.ContactUrl ||
                     ContactUrl is not null &&
                     ContactUrl.Equals(other.ContactUrl)
+                ) &&
+                (
+                    DocumentationUrl == other.DocumentationUrl ||
+                    DocumentationUrl is not null &&
+                    DocumentationUrl.Equals(other.DocumentationUrl)
                 ) &&
                 (
                     CreatedAt == other.CreatedAt ||
@@ -229,6 +226,16 @@ namespace Tes.Models
                     UpdatedAt == other.UpdatedAt ||
                     UpdatedAt is not null &&
                     UpdatedAt.Equals(other.UpdatedAt)
+                ) &&
+                (
+                    Environment == other.Environment ||
+                    Environment is not null &&
+                    Environment.Equals(other.Environment)
+                ) &&
+                (
+                    Version == other.Version ||
+                    Version is not null &&
+                    Version.Equals(other.Version)
                 ) &&
                 (
                     Storage == other.Storage ||
@@ -267,29 +274,24 @@ namespace Tes.Models
                     hashCode = hashCode * 59 + Type.GetHashCode();
                 }
 
-                if (Organization is not null)
-                {
-                    hashCode = hashCode * 59 + Organization.GetHashCode();
-                }
-
-                if (Version is not null)
-                {
-                    hashCode = hashCode * 59 + Version.GetHashCode();
-                }
-
                 if (Description is not null)
                 {
                     hashCode = hashCode * 59 + Description.GetHashCode();
                 }
 
-                if (DocumentationUrl is not null)
+                if (Organization is not null)
                 {
-                    hashCode = hashCode * 59 + DocumentationUrl.GetHashCode();
+                    hashCode = hashCode * 59 + Organization.GetHashCode();
                 }
 
                 if (ContactUrl is not null)
                 {
                     hashCode = hashCode * 59 + ContactUrl.GetHashCode();
+                }
+
+                if (DocumentationUrl is not null)
+                {
+                    hashCode = hashCode * 59 + DocumentationUrl.GetHashCode();
                 }
 
                 if (CreatedAt is not null)
@@ -302,6 +304,15 @@ namespace Tes.Models
                     hashCode = hashCode * 59 + UpdatedAt.GetHashCode();
                 }
 
+                if (Environment is not null)
+                {
+                    hashCode = hashCode * 59 + Environment.GetHashCode();
+                }
+
+                if (Version is not null)
+                {
+                    hashCode = hashCode * 59 + Version.GetHashCode();
+                }
 
                 if (Storage is not null)
                 {
