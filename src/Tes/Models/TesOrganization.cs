@@ -87,7 +87,7 @@ namespace Tes.Models
                     Url == other.Url ||
                     Url is not null &&
                     Url.Equals(other.Url)
-                ) 
+                )
             };
 
         /// <summary>

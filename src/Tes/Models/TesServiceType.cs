@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.
+﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 using System;
@@ -99,7 +99,7 @@ namespace Tes.Models
                     Version == other.Version ||
                     Version is not null &&
                     Version.SequenceEqual(other.Version)
-                ) 
+                )
             };
 
         /// <summary>
