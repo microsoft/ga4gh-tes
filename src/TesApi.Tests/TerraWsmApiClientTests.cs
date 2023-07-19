@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -94,19 +95,39 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetSasTokenAsync_ValidRequest_ReturnsPayload()
         {
-            var response = new HttpResponseMessage(HttpStatusCode.OK);
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(terraApiStubData.GetWsmSasTokenApiResponseInJson())
+            };
 
-            response.Content = new StringContent(terraApiStubData.GetWsmSasTokenApiResponseInJson());
-
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<Task<HttpResponseMessage>>>()))
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(response);
 
             var apiResponse = await terraWsmApiClient.GetSasTokenAsync(terraApiStubData.WorkspaceId,
-                terraApiStubData.ContainerResourceId, null);
+                terraApiStubData.ContainerResourceId, null, System.Threading.CancellationToken.None);
 
             Assert.IsNotNull(apiResponse);
             Assert.IsTrue(!string.IsNullOrEmpty(apiResponse.Token));
             Assert.IsTrue(!string.IsNullOrEmpty(apiResponse.Url));
+        }
+
+        [TestMethod]
+        public async Task GetContainerResourcesAsync_ValidRequest_ReturnsPayload()
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(terraApiStubData.GetContainerResourcesApiResponseInJson())
+            };
+
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync(response);
+
+            var apiResponse = await terraWsmApiClient.GetContainerResourcesAsync(terraApiStubData.WorkspaceId,
+                offset: 0, limit: 10, System.Threading.CancellationToken.None);
+
+            Assert.IsNotNull(apiResponse);
+            Assert.AreEqual(1, apiResponse.Resources.Count);
+            Assert.IsTrue(apiResponse.Resources.Any(r => r.Metadata.ResourceId.ToString().Equals(terraApiStubData.ContainerResourceId.ToString(), StringComparison.OrdinalIgnoreCase)));
         }
 
         [TestMethod]
@@ -115,10 +136,10 @@ namespace TesApi.Tests
             var wsmResourceId = Guid.NewGuid();
             var response = new HttpResponseMessage(HttpStatusCode.NoContent);
 
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<Task<HttpResponseMessage>>>()))
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(response);
 
-            await terraWsmApiClient.DeleteBatchPoolAsync(terraApiStubData.WorkspaceId, wsmResourceId);
+            await terraWsmApiClient.DeleteBatchPoolAsync(terraApiStubData.WorkspaceId, wsmResourceId, System.Threading.CancellationToken.None);
         }
 
         [TestMethod]

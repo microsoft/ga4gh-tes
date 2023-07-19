@@ -12,15 +12,17 @@ public interface IBlobPipeline
     /// Writes the buffer's data to the destination.
     /// </summary>
     /// <param name="buffer"><see cref="PipelineBuffer"/></param>
+    /// <param name="cancellationToken">Signals the cancellation of the pipeline</param>
     /// <returns>Number of bytes written</returns>
-    ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer);
+    ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer, CancellationToken cancellationToken);
 
     /// <summary>
     /// Reads from the source and writes to the buffer.
     /// </summary>
     /// <param name="buffer"><see cref="PipelineBuffer"/></param>
+    /// <param name="cancellationToken">Signals the cancellation of the pipeline</param>
     /// <returns>Number of bytes read into the buffer</returns>
-    ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer);
+    ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer, CancellationToken cancellationToken);
 
     /// <summary>
     /// Returns the length in bytes of the source provided. The source is either a URL or path to file.
@@ -35,8 +37,9 @@ public interface IBlobPipeline
     /// <param name="length">Blob length in bytes</param>
     /// <param name="blobUrl">Url to the blob in azure storage</param>
     /// <param name="fileName">Path to the file</param>
+    /// <param name="rootHash"></param>
     /// <returns></returns>
-    Task OnCompletionAsync(long length, Uri? blobUrl, string fileName);
+    Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash);
 
     /// <summary>
     /// Called when a buffer is created. This is used to configure the buffer with additional information.

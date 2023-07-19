@@ -20,6 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Tes.RunnerCLI\Tes.RunnerCLI.csproj" />
     <ProjectReference Include="..\Tes.Runner\Tes.Runner.csproj" />
   </ItemGroup>
 

@@ -14,7 +14,11 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Core;
 using Azure.Identity;
+using Azure.ResourceManager;
+using Azure.ResourceManager.Network;
+using Azure.ResourceManager.Network.Models;
 using Azure.Security.KeyVault.Secrets;
 using Azure.Storage;
 using Azure.Storage.Blobs;
@@ -36,6 +40,7 @@ using Microsoft.Azure.Management.KeyVault.Models;
 using Microsoft.Azure.Management.Msi.Fluent;
 using Microsoft.Azure.Management.Network;
 using Microsoft.Azure.Management.Network.Fluent;
+using Microsoft.Azure.Management.Network.Fluent.Models;
 using Microsoft.Azure.Management.PostgreSQL;
 using Microsoft.Azure.Management.PrivateDns.Fluent;
 using Microsoft.Azure.Management.ResourceGraph;
@@ -110,6 +115,7 @@ namespace TesDeployer
         private IAzure azureSubscriptionClient { get; set; }
         private Microsoft.Azure.Management.Fluent.Azure.IAuthenticated azureClient { get; set; }
         private IResourceManager resourceManagerClient { get; set; }
+        private ArmClient armClient { get; set; }
         private Microsoft.Azure.Management.Network.INetworkManagementClient networkManagementClient { get; set; }
         private AzureCredentials azureCredentials { get; set; }
         private FlexibleServer.IPostgreSQLManagementClient postgreSqlFlexManagementClient { get; set; }
@@ -139,6 +145,7 @@ namespace TesDeployer
                     tokenCredentials = new(tokenProvider);
                     azureCredentials = new(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
                     azureClient = GetAzureClient(azureCredentials);
+                    armClient = new ArmClient(new AzureCliCredential());
                     azureSubscriptionClient = azureClient.WithSubscription(configuration.SubscriptionId);
                     subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
                     resourceManagerClient = GetResourceManagerClient(azureCredentials);
@@ -309,6 +316,17 @@ namespace TesDeployer
                         //{
                         //}
 
+                        if (installedVersion is null || installedVersion < new Version(4, 4))
+                        {
+                            // Ensure all storage containers are created.
+                            await CreateDefaultStorageContainersAsync(storageAccount);
+
+                            if (string.IsNullOrWhiteSpace(settings["BatchNodesSubnetId"]))
+                            {
+                                settings["BatchNodesSubnetId"] = await UpdateVnetWithBatchSubnet();
+                            }
+                        }
+
                         await kubernetesManager.UpgradeValuesYamlAsync(storageAccount, settings);
                         await PerformHelmDeploymentAsync(resourceGroup);
                     }
@@ -420,9 +438,15 @@ namespace TesDeployer
                         if (vnetAndSubnet is null)
                         {
                             configuration.VnetName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
-                            configuration.PostgreSqlSubnetName = String.IsNullOrEmpty(configuration.PostgreSqlSubnetName) && configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault() ? configuration.DefaultPostgreSqlSubnetName : configuration.PostgreSqlSubnetName;
-                            configuration.VmSubnetName = String.IsNullOrEmpty(configuration.VmSubnetName) ? configuration.DefaultVmSubnetName : configuration.VmSubnetName;
+                            configuration.PostgreSqlSubnetName = string.IsNullOrEmpty(configuration.PostgreSqlSubnetName) ? configuration.DefaultPostgreSqlSubnetName : configuration.PostgreSqlSubnetName;
+                            configuration.BatchSubnetName = string.IsNullOrEmpty(configuration.BatchSubnetName) ? configuration.DefaultBatchSubnetName : configuration.BatchSubnetName;
+                            configuration.VmSubnetName = string.IsNullOrEmpty(configuration.VmSubnetName) ? configuration.DefaultVmSubnetName : configuration.VmSubnetName;
                             vnetAndSubnet = await CreateVnetAndSubnetsAsync(resourceGroup);
+
+                            if (string.IsNullOrEmpty(this.configuration.BatchNodesSubnetId))
+                            {
+                                this.configuration.BatchNodesSubnetId = vnetAndSubnet.Value.batchSubnet.Inner.Id;
+                            }
                         }
 
                         if (string.IsNullOrWhiteSpace(configuration.LogAnalyticsArmId))
@@ -440,6 +464,7 @@ namespace TesDeployer
                             await AssignVmAsContributorToStorageAccountAsync(managedIdentity, storageAccount);
                             await AssignVmAsDataReaderToStorageAccountAsync(managedIdentity, storageAccount);
                             await AssignManagedIdOperatorToResourceAsync(managedIdentity, resourceGroup);
+                            await AssignMIAsNetworkContributorToResourceAsync(managedIdentity, resourceGroup);
                         });
 
                         if (configuration.CrossSubscriptionAKSDeployment.GetValueOrDefault())
@@ -890,6 +915,18 @@ namespace TesDeployer
                     UserAssignedIdentities = new Dictionary<string, ManagedClusterIdentityUserAssignedIdentitiesValue>()
                 }
             };
+
+            if (!string.IsNullOrWhiteSpace(configuration.AadGroupIds))
+            {
+                cluster.EnableRBAC = true;
+                cluster.AadProfile = new ManagedClusterAADProfile()
+                {
+                    AdminGroupObjectIDs = configuration.AadGroupIds.Split(",", StringSplitOptions.RemoveEmptyEntries),
+                    EnableAzureRBAC = false,
+                    Managed = true
+                };
+            }
+
             cluster.Identity.UserAssignedIdentities.Add(managedIdentity.Id, new(managedIdentity.PrincipalId, managedIdentity.ClientId));
             cluster.IdentityProfile = new Dictionary<string, ManagedClusterPropertiesIdentityProfileValue>
             {
@@ -956,7 +993,6 @@ namespace TesDeployer
             // Additional non-personalized settings
             UpdateSetting(settings, defaults, "BatchNodesSubnetId", configuration.BatchNodesSubnetId);
             UpdateSetting(settings, defaults, "DockerInDockerImageName", configuration.DockerInDockerImageName);
-            UpdateSetting(settings, defaults, "BlobxferImageName", configuration.BlobxferImageName);
             UpdateSetting(settings, defaults, "DisableBatchNodesPublicIpAddress", configuration.DisableBatchNodesPublicIpAddress, b => b.GetValueOrDefault().ToString(), configuration.DisableBatchNodesPublicIpAddress.GetValueOrDefault().ToString());
 
             if (installedVersion is null)
@@ -1177,6 +1213,21 @@ namespace TesDeployer
             return notRegisteredResourceProviders;
         }
 
+        private Task AssignMIAsNetworkContributorToResourceAsync(IIdentity managedIdentity, IResource resource)
+        {
+            // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#network-contributor
+            var roleDefinitionId = $"/subscriptions/{configuration.SubscriptionId}/providers/Microsoft.Authorization/roleDefinitions/4d97b98b-1d4f-4787-a291-c67834d212e7";
+            return Execute(
+                $"Assigning Network Contributor role for the managed id to resource group scope...",
+                () => roleAssignmentHashConflictRetryPolicy.ExecuteAsync(
+                    () => azureSubscriptionClient.AccessManagement.RoleAssignments
+                        .Define(Guid.NewGuid().ToString())
+                        .ForObjectId(managedIdentity.PrincipalId)
+                        .WithRoleDefinition(roleDefinitionId)
+                        .WithResourceScope(resource)
+                        .CreateAsync(cts.Token)));
+        }
+
         private Task AssignManagedIdOperatorToResourceAsync(IIdentity managedIdentity, IResource resource)
         {
             // https://docs.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#managed-identity-operator
@@ -1270,7 +1321,7 @@ namespace TesDeployer
         {
             var blobClient = await GetBlobClientAsync(storageAccount);
 
-            var defaultContainers = new List<string> { "executions", InputsContainerName, "outputs", ConfigurationContainerName };
+            var defaultContainers = new List<string> { "tes-internal", InputsContainerName, "outputs", ConfigurationContainerName };
             await Task.WhenAll(defaultContainers.Select(c => blobClient.GetBlobContainerClient(c).CreateIfNotExistsAsync(cancellationToken: cts.Token)));
         }
 
@@ -1490,7 +1541,7 @@ namespace TesDeployer
                         .WithResourceScope(appInsights)
                         .CreateAsync(cts.Token)));
 
-        private Task<(INetwork virtualNetwork, ISubnet vmSubnet, ISubnet postgreSqlSubnet)> CreateVnetAndSubnetsAsync(IResourceGroup resourceGroup)
+        private Task<(INetwork virtualNetwork, ISubnet vmSubnet, ISubnet postgreSqlSubnet, ISubnet batchSubnet)> CreateVnetAndSubnetsAsync(IResourceGroup resourceGroup)
           => Execute(
                 $"Creating virtual network and subnets: {configuration.VnetName}...",
                 async () =>
@@ -1500,15 +1551,32 @@ namespace TesDeployer
                         .WithRegion(configuration.RegionName)
                         .WithExistingResourceGroup(resourceGroup)
                         .WithAddressSpace(configuration.VnetAddressSpace)
-                        .DefineSubnet(configuration.VmSubnetName).WithAddressPrefix(configuration.VmSubnetAddressSpace).Attach();
+                        .DefineSubnet(configuration.VmSubnetName)
+                        .WithAddressPrefix(configuration.VmSubnetAddressSpace).Attach();
 
-                    vnetDefinition = configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault()
-                        ? vnetDefinition.DefineSubnet(configuration.PostgreSqlSubnetName).WithAddressPrefix(configuration.PostgreSqlSubnetAddressSpace).WithDelegation("Microsoft.DBforPostgreSQL/flexibleServers").Attach()
-                        : vnetDefinition;
+                    vnetDefinition = vnetDefinition.DefineSubnet(configuration.PostgreSqlSubnetName)
+                        .WithAddressPrefix(configuration.PostgreSqlSubnetAddressSpace)
+                        .WithDelegation("Microsoft.DBforPostgreSQL/flexibleServers")
+                        .Attach();
+
+                    vnetDefinition = vnetDefinition.DefineSubnet(configuration.BatchSubnetName)
+                        .WithAddressPrefix(configuration.BatchNodesSubnetAddressSpace)
+                        .Attach();
 
                     var vnet = await vnetDefinition.CreateAsync();
+                    var batchSubnet = vnet.Subnets.FirstOrDefault(s => s.Key.Equals(configuration.BatchSubnetName, StringComparison.OrdinalIgnoreCase)).Value;
 
-                    return (vnet, vnet.Subnets.FirstOrDefault(s => s.Key.Equals(configuration.VmSubnetName, StringComparison.OrdinalIgnoreCase)).Value, vnet.Subnets.FirstOrDefault(s => s.Key.Equals(configuration.PostgreSqlSubnetName, StringComparison.OrdinalIgnoreCase)).Value);
+                    // Use the new ResourceManager sdk to add the ACR service endpoint since it is absent from the fluent sdk.
+                    var armBatchSubnet = (await armClient.GetSubnetResource(new ResourceIdentifier(batchSubnet.Inner.Id)).GetAsync()).Value;
+
+                    AddServiceEndpointsToSubnet(armBatchSubnet.Data);
+
+                    await armBatchSubnet.UpdateAsync(Azure.WaitUntil.Completed, armBatchSubnet.Data);
+
+                    return (vnet,
+                        vnet.Subnets.FirstOrDefault(s => s.Key.Equals(configuration.VmSubnetName, StringComparison.OrdinalIgnoreCase)).Value,
+                        vnet.Subnets.FirstOrDefault(s => s.Key.Equals(configuration.PostgreSqlSubnetName, StringComparison.OrdinalIgnoreCase)).Value,
+                        batchSubnet);
                 });
 
         //private Task<INetworkSecurityGroup> CreateNetworkSecurityGroupAsync(IResourceGroup resourceGroup, string networkSecurityGroupName)
@@ -1853,7 +1921,7 @@ namespace TesDeployer
                 ?? throw new ValidationException($"If BatchAccountName is provided, the batch account must already exist in region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
         }
 
-        private async Task<(INetwork virtualNetwork, ISubnet vmSubnet, ISubnet postgreSqlSubnet)?> ValidateAndGetExistingVirtualNetworkAsync()
+        private async Task<(INetwork virtualNetwork, ISubnet vmSubnet, ISubnet postgreSqlSubnet, ISubnet batchSubnet)?> ValidateAndGetExistingVirtualNetworkAsync()
         {
             static bool AllOrNoneSet(params string[] values) => values.All(v => !string.IsNullOrEmpty(v)) || values.All(v => string.IsNullOrEmpty(v));
             static bool NoneSet(params string[] values) => values.All(v => string.IsNullOrEmpty(v));
@@ -1930,7 +1998,9 @@ namespace TesDeployer
                 }
             }
 
-            return (vnet, vmSubnet, postgreSqlSubnet);
+            var batchSubnet = vnet.Subnets.FirstOrDefault(s => s.Key.Equals(configuration.BatchSubnetName, StringComparison.OrdinalIgnoreCase)).Value;
+
+            return (vnet, vmSubnet, postgreSqlSubnet, batchSubnet);
         }
 
         private async Task ValidateBatchAccountQuotaAsync()
@@ -1942,6 +2012,77 @@ namespace TesDeployer
             {
                 throw new ValidationException($"The regional Batch account quota ({accountQuota} account(s) per region) for the specified subscription has been reached. Submit a support request to increase the quota or choose another region.", displayExample: false);
             }
+        }
+
+        private Task<string> UpdateVnetWithBatchSubnet()
+            => Execute(
+                $"Creating batch subnet...",
+                async () =>
+                {
+                    var resourceId = new ResourceIdentifier($"/subscriptions/{configuration.SubscriptionId}/resourceGroups/{configuration.ResourceGroupName}/");
+                    var coaRg = armClient.GetResourceGroupResource(resourceId);
+
+                    var vnetCollection = coaRg.GetVirtualNetworks();
+                    var vnet = vnetCollection.FirstOrDefault();
+
+                    if (vnetCollection.Count() != 1)
+                    {
+                        ConsoleEx.WriteLine("There are multiple vnets found in the resource group so the deployer cannot automatically create the subnet.", ConsoleColor.Red);
+                        ConsoleEx.WriteLine("In order to avoid unnecessary load balancer charges we suggest manually configuring your deployment to use a subnet for batch pools with service endpoints.", ConsoleColor.Red);
+                        ConsoleEx.WriteLine("See: https://github.com/microsoft/CromwellOnAzure/wiki/Using-a-batch-pool-subnet-with-service-endpoints-to-avoid-load-balancer-charges.", ConsoleColor.Red);
+
+                        return null;
+                    }
+
+                    var vnetData = vnet.Data;
+                    var ipRange = vnetData.AddressPrefixes.Single();
+                    var defaultSubnetNames = new List<string> { configuration.DefaultVmSubnetName, configuration.DefaultPostgreSqlSubnetName, configuration.DefaultBatchSubnetName };
+
+                    if (!string.Equals(ipRange, configuration.VnetAddressSpace, StringComparison.OrdinalIgnoreCase) ||
+                        vnetData.Subnets.Select(x => x.Name).Except(defaultSubnetNames).Any())
+                    {
+                        ConsoleEx.WriteLine("We detected a customized networking setup so the deployer will not automatically create the subnet.", ConsoleColor.Red);
+                        ConsoleEx.WriteLine("In order to avoid unnecessary load balancer charges we suggest manually configuring your deployment to use a subnet for batch pools with service endpoints.", ConsoleColor.Red);
+                        ConsoleEx.WriteLine("See: https://github.com/microsoft/CromwellOnAzure/wiki/Using-a-batch-pool-subnet-with-service-endpoints-to-avoid-load-balancer-charges.", ConsoleColor.Red);
+
+                        return null;
+                    }
+
+                    var batchSubnet = new SubnetData
+                    {
+                        Name = configuration.DefaultBatchSubnetName,
+                        AddressPrefix = configuration.BatchNodesSubnetAddressSpace,
+                    };
+
+                    AddServiceEndpointsToSubnet(batchSubnet);
+
+                    vnetData.Subnets.Add(batchSubnet);
+                    var updatedVnet = (await vnetCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, vnetData.Name, vnetData)).Value;
+
+                    return (await updatedVnet.GetSubnetAsync(configuration.DefaultBatchSubnetName)).Value.Id.ToString();
+                });
+
+        private void AddServiceEndpointsToSubnet(SubnetData subnet)
+        {
+            subnet.ServiceEndpoints.Add(new ServiceEndpointProperties()
+            {
+                Service = "Microsoft.Storage.Global",
+            });
+
+            subnet.ServiceEndpoints.Add(new ServiceEndpointProperties()
+            {
+                Service = "Microsoft.Sql",
+            });
+
+            subnet.ServiceEndpoints.Add(new ServiceEndpointProperties()
+            {
+                Service = "Microsoft.ContainerRegistry",
+            });
+
+            subnet.ServiceEndpoints.Add(new ServiceEndpointProperties()
+            {
+                Service = "Microsoft.KeyVault",
+            });
         }
 
         private async Task ValidateVmAsync()
@@ -2112,6 +2253,11 @@ namespace TesDeployer
                 {
                     throw new ValidationException("BatchPrefix must not be longer than 11 chars and may contain only ASCII letters or digits", false);
                 }
+            }
+
+            if (!string.IsNullOrWhiteSpace(configuration.BatchNodesSubnetId) && !string.IsNullOrWhiteSpace(configuration.BatchSubnetName))
+            {
+                throw new Exception("Invalid configuration options BatchNodesSubnetId and BatchSubnetName are mutually exclusive.");
             }
         }
 

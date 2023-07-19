@@ -26,6 +26,11 @@ public class ResolutionPolicyHandler
 
         foreach (var output in testTaskOutputs)
         {
+            if (string.IsNullOrEmpty(output.Path))
+            {
+                throw new ArgumentException("A task output is missing the path property. Please check the task definition.");
+            }
+
             list.Add(await CreateUploadInfoWithStrategyAsync(output));
         }
 
@@ -54,36 +59,32 @@ public class ResolutionPolicyHandler
         return list;
     }
 
-    private async Task<DownloadInfo> CreateDownloadInfoWithStrategyAsync(FileInput input)
+    private static async Task<DownloadInfo> CreateDownloadInfoWithStrategyAsync(FileInput input)
     {
-        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy);
-
-        if (string.IsNullOrEmpty(input.FullFileName))
+        if (string.IsNullOrEmpty(input.Path))
         {
-            throw new ArgumentException("A task input is missing the full filename. Please check the task definition.");
+            throw new ArgumentException("A task input is missing the path property. Please check the task definition.");
         }
 
-        return new DownloadInfo(input.FullFileName, uri);
+        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy);
+
+        return new DownloadInfo(input.Path, uri);
     }
 
-    private async Task<UploadInfo> CreateUploadInfoWithStrategyAsync(FileOutput output)
+    private static async Task<UploadInfo> CreateUploadInfoWithStrategyAsync(FileOutput output)
     {
         var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy);
 
-        if (string.IsNullOrEmpty(output.FullFileName))
-        {
-            throw new ArgumentException("A task output is missing the full filename. Please check the task definition.");
-        }
-
-        return new UploadInfo(output.FullFileName, uri);
+        return new UploadInfo(output.Path!, uri);
     }
 
-    private async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, SasResolutionStrategy strategy)
+    private static async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, SasResolutionStrategy? strategy)
     {
+        ArgumentNullException.ThrowIfNull(strategy);
         ArgumentException.ThrowIfNullOrEmpty(sourceUrl);
 
         var strategyImpl =
-            SasResolutionStrategyFactory.CreateSasResolutionStrategy(strategy);
+            SasResolutionStrategyFactory.CreateSasResolutionStrategy(strategy.Value);
 
         return await strategyImpl.CreateSasTokenWithStrategyAsync(sourceUrl);
     }

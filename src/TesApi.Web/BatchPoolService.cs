@@ -38,7 +38,7 @@ namespace TesApi.Web
         {
             _batchScheduler = batchScheduler ?? throw new ArgumentNullException(nameof(batchScheduler));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _isDisabled = batchSchedulingOptions.Value.Disable || batchSchedulingOptions.Value.UseLegacyAutopools;
+            _isDisabled = batchSchedulingOptions.Value.UseLegacyAutopools;
         }
 
         /// <inheritdoc />
@@ -63,7 +63,7 @@ namespace TesApi.Web
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("Batch Pools started.");
-            _batchScheduler.LoadExistingPoolsAsync().Wait(stoppingToken); // Delay starting Scheduler until this completes to finish initializing BatchScheduler.
+            _batchScheduler.LoadExistingPoolsAsync(stoppingToken).Wait(stoppingToken); // Delay starting Scheduler until this completes to finish initializing BatchScheduler.
 
             while (!stoppingToken.IsCancellationRequested)
             {

@@ -13,16 +13,13 @@ namespace Tes.Runner.Test
     [TestCategory("Unit")]
     public class BlobPipelineTests
     {
-#pragma warning disable CS8618
-        private BlobOperationPipelineTestImpl operationPipeline;
-        private BlobPipelineOptions options;
+        private BlobOperationPipelineTestImpl operationPipeline = null!;
+        private BlobPipelineOptions options = null!;
         private readonly int blockSize = BlobSizeUtils.MiB;
         private readonly long sourceSize = BlobSizeUtils.MiB * 10;
-        private string tempFile1;
-        private string tempFile2;
-        private Channel<byte[]> memoryBuffer;
-        private readonly RunnerTestUtils runnerTestUtils = new RunnerTestUtils();
-#pragma warning restore CS8618
+        private string tempFile1 = null!;
+        private string tempFile2 = null!;
+        private Channel<byte[]> memoryBuffer = null!;
 
         [TestInitialize]
         public async Task SetUp()
@@ -75,9 +72,28 @@ namespace Tes.Runner.Test
             AssertReaderWriterAndCompleteMethodsAreCalled(pipeline, expectedNumberOfCalls, 2);
         }
 
-        private void AssertReaderWriterAndCompleteMethodsAreCalled(BlobOperationPipelineTestImpl operationPipeline, long numberOfWriterReaderCalls, int numberOfCompleteCalls)
+        [TestMethod]
+        [ExpectedException(typeof(InvalidOperationException))]
+        public async Task ExecuteAsync_ThrowsOnRead_ExecutesThrows()
         {
-            List<MethodCall> executeWriteInfo = operationPipeline.MethodCalls["ExecuteWriteAsync"];
+
+            var pipeline = new BlobOperationPipelineTestImpl(options, memoryBuffer, sourceSize);
+
+            //throw on when processing the 5th block
+            pipeline.ThrowOnExecuteRead<InvalidOperationException>((buffer, token) => buffer.Ordinal == 5);
+
+            var blobOps = new List<BlobOperationInfo>()
+            {
+                new BlobOperationInfo(new Uri("https://foo.bar/con/blob1"), tempFile1, tempFile1, true),
+                new BlobOperationInfo(new Uri("https://foo.bar/con/blob2"), tempFile2, tempFile2, true)
+            };
+
+            await pipeline.ExecuteAsync(blobOps);
+        }
+
+        private static void AssertReaderWriterAndCompleteMethodsAreCalled(BlobOperationPipelineTestImpl operationPipeline, long numberOfWriterReaderCalls, int numberOfCompleteCalls)
+        {
+            var executeWriteInfo = operationPipeline.MethodCalls["ExecuteWriteAsync"];
             Assert.IsNotNull(executeWriteInfo);
             Assert.AreEqual(numberOfWriterReaderCalls, executeWriteInfo.Count);
 
@@ -98,29 +114,56 @@ namespace Tes.Runner.Test
     /// </summary>
     class BlobOperationPipelineTestImpl : BlobOperationPipeline
     {
-        private readonly ConcurrentDictionary<string, List<MethodCall>> methodCalls =
-            new ConcurrentDictionary<string, List<MethodCall>>();
+        private readonly ConcurrentDictionary<string, List<MethodCall>> methodCalls = new();
 
         private readonly long sourceLength;
 
-        private readonly SemaphoreSlim semaphore = new SemaphoreSlim(1);
+        private readonly SemaphoreSlim semaphore = new(1);
+        private Func<PipelineBuffer, CancellationToken, bool>? throwOnExecuteWrite = null!;
+        private Exception? exceptionOnExecuteWrite = null!;
+        private Func<PipelineBuffer, CancellationToken, bool>? throwOnExecuteRead = null!;
+        private Exception? exceptionOnExecuteRead = null!;
+        public ConcurrentDictionary<string, List<MethodCall>> MethodCalls => methodCalls;
 
         public BlobOperationPipelineTestImpl(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer, long sourceLength) : base(pipelineOptions, memoryBuffer)
         {
             this.sourceLength = sourceLength;
         }
 
-        public ConcurrentDictionary<string, List<MethodCall>> MethodCalls => methodCalls;
-
-        public override ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
+        public void ThrowOnExecuteWrite<T>(Func<PipelineBuffer, CancellationToken, bool> predicate)
+            where T : Exception, new()
         {
-            AddMethodCall(nameof(ExecuteWriteAsync), buffer);
+            exceptionOnExecuteWrite = new T();
+            throwOnExecuteWrite = predicate;
+        }
+        public void ThrowOnExecuteRead<T>(Func<PipelineBuffer, CancellationToken, bool> predicate)
+            where T : Exception, new()
+        {
+            exceptionOnExecuteRead = new T();
+            throwOnExecuteRead = predicate;
+        }
+
+        public override ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
+        {
+            AddMethodCall(nameof(ExecuteWriteAsync), buffer, cancellationToken);
+
+            if (throwOnExecuteWrite != null && throwOnExecuteWrite(buffer, cancellationToken))
+            {
+                throw exceptionOnExecuteWrite!;
+            }
+
             return ValueTask.FromResult(buffer.Length);
         }
 
-        public override ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer)
+        public override ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
         {
-            AddMethodCall(nameof(ExecuteReadAsync), buffer);
+            AddMethodCall(nameof(ExecuteReadAsync), buffer, cancellationToken);
+
+            if (throwOnExecuteRead != null && throwOnExecuteRead(buffer, cancellationToken))
+            {
+                throw exceptionOnExecuteRead!;
+            }
+
             return ValueTask.FromResult(buffer.Length);
         }
 
@@ -130,10 +173,10 @@ namespace Tes.Runner.Test
             return Task.FromResult(sourceLength);
         }
 
-        public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName)
+        public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash)
         {
             Debug.Assert(blobUrl != null, nameof(blobUrl) + " != null");
-            AddMethodCall(nameof(OnCompletionAsync), length, blobUrl, fileName);
+            AddMethodCall(nameof(OnCompletionAsync), length, blobUrl, fileName, rootHash!);
             return Task.CompletedTask;
         }
 

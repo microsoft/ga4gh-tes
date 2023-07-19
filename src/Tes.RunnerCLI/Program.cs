@@ -4,14 +4,13 @@
 using System.CommandLine;
 using Tes.RunnerCLI.Commands;
 
-await StartUpAsync(args);
+return await StartUpAsync(args);
 
-static async Task StartUpAsync(string[] args)
+static async Task<int> StartUpAsync(string[] args)
 {
     var rootCommand = CommandFactory.CreateExecutorCommand();
     CommandFactory.CreateUploadCommand(rootCommand);
     CommandFactory.CreateDownloadCommand(rootCommand);
 
-
-    await rootCommand.InvokeAsync(args);
+    return await rootCommand.InvokeAsync(args);
 }

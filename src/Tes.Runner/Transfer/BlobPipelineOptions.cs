@@ -9,7 +9,7 @@ namespace Tes.Runner.Transfer
         public const int DefaultNumberOfWriters = 10;
         public const int DefaultNumberOfReaders = 10;
         public const string DefaultApiVersion = "2020-10-02";
-        public const int DefaultFileHandlerPoolCapacity = 10;
+        public const int DefaultFileHandlerPoolCapacity = 20;
         public const int DefaultMemoryBufferCapacity = 10;
         public const int DefaultReadWriteBuffersCapacity = 10;
     }

@@ -5,8 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using LazyCache;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Tes.Models;
@@ -20,7 +21,7 @@ namespace TesApi.Web.Management
     public class PriceApiBatchSkuInformationProvider : IBatchSkuInformationProvider
     {
         private readonly PriceApiClient priceApiClient;
-        private readonly IAppCache appCache;
+        private readonly IMemoryCache appCache;
         private readonly ILogger logger;
 
         /// <summary>
@@ -29,7 +30,7 @@ namespace TesApi.Web.Management
         /// <param name="appCache">Cache instance. If null, calls to the retail pricing API won't be cached.</param>
         /// <param name="priceApiClient">Retail pricing API client.</param>
         /// <param name="logger">Logger instance. </param>
-        public PriceApiBatchSkuInformationProvider(IAppCache appCache, PriceApiClient priceApiClient,
+        public PriceApiBatchSkuInformationProvider(IMemoryCache appCache, PriceApiClient priceApiClient,
             ILogger<PriceApiBatchSkuInformationProvider> logger)
         {
             ArgumentNullException.ThrowIfNull(priceApiClient);
@@ -52,25 +53,24 @@ namespace TesApi.Web.Management
         }
 
         /// <inheritdoc />
-        public async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync(string region)
+        public async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsync(string region, CancellationToken cancellationToken)
         {
             if (appCache is null)
             {
-                return await GetVmSizesAndPricesAsyncImpl(region);
+                return await GetVmSizesAndPricesAsyncImpl(region, cancellationToken);
             }
 
             logger.LogInformation($"Trying to get pricing information from the cache for region: {region}.");
 
-            return await appCache.GetOrAddAsync(region, async () => await GetVmSizesAndPricesAsyncImpl(region));
+            return await appCache.GetOrCreateAsync(region, async _1 => await GetVmSizesAndPricesAsyncImpl(region, cancellationToken));
         }
 
-        private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsyncImpl(string region)
+        private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsyncImpl(string region, CancellationToken cancellationToken)
         {
             logger.LogInformation($"Getting VM sizes and price information for region:{region}");
 
-            var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync()).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase));
-            var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region)
-                .ToListAsync();
+            var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync(cancellationToken)).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase));
+            var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region, cancellationToken).ToListAsync(cancellationToken);
 
             logger.LogInformation($"Received {pricingItems.Count} pricing items");
 
@@ -121,11 +121,11 @@ namespace TesApi.Web.Management
                 HyperVGenerations = vmReference.HyperVGenerations
             };
 
-        private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync()
+        private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync(CancellationToken cancellationToken)
         {
             return JsonConvert.DeserializeObject<List<VirtualMachineInformation>>(
                 await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,
-                    "BatchSupportedVmSizeInformation.json")));
+                    "BatchSupportedVmSizeInformation.json"), cancellationToken));
         }
     }
 }

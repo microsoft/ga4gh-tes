@@ -1,0 +1,118 @@
+﻿<Project>
+  <Import Sdk="Microsoft.NET.Sdk" Project="Sdk.props"/>
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(ArtifactStagingDirectory)' != '' ">
+    <TesApiWebArchive>$(ArtifactStagingDirectory)\TesApi.Web</TesApiWebArchive>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tes.RunnerCLI\Tes.RunnerCLI.csproj"
+          Targets="Publish;PublishItemsOutputGroup"
+          AdditionalProperties="PublishProfile=FolderProfile">
+        <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
+        <OutputItemType>None</OutputItemType>
+        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+        <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Condition=" '$(TesApiWebArchive)' == '' "
+          Include="..\TesApi.Web\TesApi.Web.csproj"
+          Targets="Publish;PublishItemsOutputGroup"
+          AdditionalProperties="RuntimeIdentifiers=$(RuntimeIdentifiers)">
+        <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
+        <OutputItemType>None</OutputItemType>
+        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+        <Private>False</Private>
+    </ProjectReference>
+    <None Condition=" '$(TesApiWebArchive)' != '' "
+          Include="$(TesApiWebArchive)\tesapi.dll"
+          MsBuildSourceProjectFile="$(TesApiWebArchive)\proj"
+          OutputPath="tesapi.dll"
+          TargetPath="tesapi.dll" />
+  </ItemGroup>
+
+  <Import Sdk="Microsoft.NET.Sdk" Project="Sdk.targets"/>
+
+  <UsingTask TaskName="ConvertNoneToPublishDir" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <PublishedFiles ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <PublishedDirectories ParameterType="Microsoft.Build.Framework.ITaskItem[]" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <!--<Reference Include="System.Linq"/>-->
+      <Using Namespace="System.Linq" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="Microsoft.Build.Framework" />
+      <Using Namespace="Microsoft.Build.Utilities" />
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+            var dirs = new List<ITaskItem>();
+            foreach (var file in PublishedFiles)
+            {
+                Log.LogMessage(MessageImportance.Normal, "Parsing {0}", file.ItemSpec);
+                var dirInfo = Directory.GetParent(Path.Combine(Directory.GetParent(file.GetMetadata("MsBuildSourceProjectFile")).FullName, file.GetMetadata("OutputPath")));
+                var dir = new TaskItem(dirInfo.FullName);
+                file.CopyMetadataTo(dir);
+                dirs.Add(dir);
+            }
+            PublishedDirectories = dirs.ToArray();
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+  <UsingTask TaskName="GenerateMD5" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <InputFile ParameterType="Microsoft.Build.Framework.ITaskItem" Required="true" />
+      <MD5Hash Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Security.Cryptography" />
+      <Using Namespace="Microsoft.Build.Framework" />
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+            Log.LogMessage(MessageImportance.Normal, "Computing MD5 hash for {0}", InputFile.ItemSpec);
+            var md5spc = MD5.Create();
+            MD5Hash = Convert.ToBase64String(md5spc.ComputeHash(File.ReadAllBytes(InputFile.ItemSpec)));
+            Log.LogMessage(MessageImportance.Normal, "Computed MD5 hash is {0}", MD5Hash);
+        ]]>
+      </Code>
+  </Task>
+
+  </UsingTask>
+
+  <Target Name="Compile">
+    <ConvertNoneToPublishDir PublishedFiles="@(None)">
+      <Output ItemName="__PublishDirs" TaskParameter="PublishedDirectories"/>
+    </ConvertNoneToPublishDir>
+    <ItemGroup>
+      <IntermediateAssembly Remove="@(IntermediateAssembly)" />
+        <__tRunnerPath Include="@(__PublishDirs)" Condition="Exists('%(__PublishDirs.Identity)/tRunner') and '%(__PublishDirs.TargetPath)' == 'tRunner'" />
+        <__tRunnerFiles Include="%(__tRunnerPath.FullPath)\**\*" />
+        <__tesapiScriptsPath Include="@(__PublishDirs->'%(FullPath)\scripts')"  Condition="Exists('%(__PublishDirs.Identity)/tesapi.dll') and '%(__PublishDirs.TargetPath)' == 'tesapi.dll'" />
+    </ItemGroup>
+    <Copy SourceFiles="@(__tRunnerFiles)"
+          DestinationFolder="@(__tesapiScriptsPath)"
+          SkipUnchangedFiles="false"
+          Condition=" '%(__tRunnerFiles.Filename)%(__tRunnerFiles.Extension)' == 'tRunner' "/>
+    <GenerateMD5 InputFile="@(__tesapiScriptsPath->'%(FullPath)\tRunner')">
+      <Output TaskParameter="MD5Hash" PropertyName="__TRunnerMD5Hash" />
+    </GenerateMD5>
+    <WriteLinesToFile Lines="$(__TRunnerMD5Hash)" File="@(__tesapiScriptsPath->'%(FullPath)\TRunnerMD5Hash.txt')" WriteOnlyWhenDifferent="true" Overwrite="true" />
+    <ItemGroup>
+      <FileWrites Include="@(__tesapiScriptsPath->'%(FullPath)\TRunnerMD5Hash.txt')" />
+      <FileWrites Include="@(__tesapiScriptsPath->'%(FullPath)\tRunner')" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CopyFilesToOutputDirectory" />
+    
+</Project>

@@ -37,8 +37,9 @@ public class ProcessedPartsProcessor
         var allFilesProcessed = false;
         var processedFiles = 0;
         long totalBytes = 0;
+        var cancellationTokenSource = new CancellationTokenSource();
 
-        while (!allFilesProcessed && await processedBufferChannel.Reader.WaitToReadAsync())
+        while (!allFilesProcessed && await processedBufferChannel.Reader.WaitToReadAsync(cancellationTokenSource.Token))
             while (processedBufferChannel.Reader.TryRead(out buffer))
             {
                 totalBytes += buffer.Length;
@@ -52,32 +53,69 @@ public class ProcessedPartsProcessor
 
                 if (total == buffer.NumberOfParts)
                 {
-                    tasks.Add(blobPipeline.OnCompletionAsync(buffer.FileSize, buffer.BlobUrl, buffer.FileName));
+                    tasks.Add(CompleteFileProcessingAsync(buffer, cancellationTokenSource));
 
                     processedFiles++;
-
-                    await CloseFileHandlerPoolAsync(buffer.FileHandlerPool);
 
                     allFilesProcessed = processedFiles == expectedNumberOfFiles;
                 }
             }
 
-        await Task.WhenAll(tasks);
-
-        readBufferChannel.Writer.Complete();
+        try
+        {
+            await Task.WhenAll(tasks);
+        }
+        finally
+        {
+            readBufferChannel.Writer.Complete();
+        }
 
         logger.LogInformation("All parts were successfully processed.");
 
         return totalBytes;
     }
 
-    private async ValueTask CloseFileHandlerPoolAsync(Channel<FileStream> bufferFileHandlerPool)
+    private async Task CompleteFileProcessingAsync(ProcessedBuffer buffer, CancellationTokenSource cancellationTokenSource)
     {
-        bufferFileHandlerPool.Writer.Complete();
-
-        await foreach (FileStream fileStream in bufferFileHandlerPool.Reader.ReadAllAsync())
+        try
         {
-            CloseFileHandler(fileStream);
+            var rootHash = string.Empty;
+
+            if (buffer.HashListProvider is not null)
+            {
+                rootHash = GetRootHash(buffer.HashListProvider);
+            }
+
+            await blobPipeline.OnCompletionAsync(buffer.FileSize, buffer.BlobUrl, buffer.FileName, rootHash);
+
+            await CloseFileHandlerPoolAsync(buffer.FileHandlerPool, cancellationTokenSource.Token);
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, $"Failed to complete the file operation. File name: {buffer.FileName}");
+
+            if (!cancellationTokenSource.IsCancellationRequested)
+            {
+                logger.LogDebug("Cancelling tasks in the processed parts processor.");
+                cancellationTokenSource.Cancel();
+            }
+            throw;
+        }
+    }
+
+    private string GetRootHash(IHashListProvider hashListProvider)
+    {
+        return hashListProvider.GetRootHash();
+    }
+
+    private async ValueTask CloseFileHandlerPoolAsync(Channel<FileStream> bufferFileHandlerPool, CancellationToken cancellationToken)
+    {
+        if (bufferFileHandlerPool.Writer.TryComplete())
+        {
+            await foreach (var fileStream in bufferFileHandlerPool.Reader.ReadAllAsync(cancellationToken))
+            {
+                CloseFileHandler(fileStream);
+            }
         }
     }
 

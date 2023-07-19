@@ -38,8 +38,9 @@ namespace Tes.Runner.Test
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
 
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
+            var opsList = new List<BlobOperationInfo>() { blobOp };
 
-            await partsProducer.StartPartsProducersAsync(new List<BlobOperationInfo>() { blobOp }, readBuffer);
+            await partsProducer.StartPartsProducersAsync(opsList, readBuffer);
 
             readBuffer.Writer.Complete();
 
@@ -62,8 +63,9 @@ namespace Tes.Runner.Test
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
 
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
+            var opsList = new List<BlobOperationInfo>() { blobOp };
 
-            await partsProducer.StartPartsProducersAsync(new List<BlobOperationInfo>() { blobOp }, readBuffer);
+            await partsProducer.StartPartsProducersAsync(opsList, readBuffer);
 
             readBuffer.Writer.Complete();
 
@@ -71,7 +73,7 @@ namespace Tes.Runner.Test
 
             Assert.AreEqual(expectedPartSize.Length, parts.Count);
 
-            for (int i = 0; i < parts.Count; i++)
+            for (var i = 0; i < parts.Count; i++)
             {
                 Assert.AreEqual(expectedPartSize[i], parts[i].Length);
             }
@@ -86,20 +88,19 @@ namespace Tes.Runner.Test
             pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(fileSize);
 
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
+            var opsList = new List<BlobOperationInfo>() { blobOp };
 
-            await partsProducer.StartPartsProducersAsync(new List<BlobOperationInfo>() { blobOp }, readBuffer);
+            await partsProducer.StartPartsProducersAsync(opsList, readBuffer);
 
             readBuffer.Writer.Complete();
 
             var parts = await RunnerTestUtils.ReadAllPipelineBuffersAsync(readBuffer.Reader.ReadAllAsync());
 
-            //Assert.AreEqual(expectedPartSize.Length, parts.Count);
-
             var partsFilesSize = parts.Sum(p => p.Length);
 
             var expectedOffset = 0;
 
-            for (int i = 0; i < parts.Count; i++)
+            for (var i = 0; i < parts.Count; i++)
             {
                 var part = parts[i];
                 Assert.AreEqual(expectedOffset, part.Offset);
@@ -108,6 +109,20 @@ namespace Tes.Runner.Test
             }
 
             Assert.AreEqual(fileSize, partsFilesSize);
+        }
+
+        [TestMethod]
+        public void StartPartsProducersAsync_ThrowsIfBlobSizeIsZero()
+        {
+            var options = new BlobPipelineOptions(BlockSizeBytes: BlobSizeUtils.MiB);
+
+            partsProducer = new PartsProducer(pipeline.Object, options);
+            pipeline.Setup(p => p.GetSourceLengthAsync(It.IsAny<string>())).ReturnsAsync(0);
+
+            var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
+            var opsList = new List<BlobOperationInfo>() { blobOp };
+
+            Assert.ThrowsExceptionAsync<InvalidOperationException>(() => partsProducer.StartPartsProducersAsync(opsList, readBuffer));
         }
     }
 }
