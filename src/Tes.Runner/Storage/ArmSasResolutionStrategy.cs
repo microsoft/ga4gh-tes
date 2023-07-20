@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Runtime.InteropServices;
+using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
@@ -48,7 +50,7 @@ namespace Tes.Runner.Storage
             try
             {
                 var blobUrl = new BlobUriBuilder(new Uri(sourceUrl));
-                var blobServiceClient = blobServiceClientFactory(blobUrl.ToUri());
+                var blobServiceClient = blobServiceClientFactory(new Uri($"https://{blobUrl.Host}"));
 
                 var userKey = GetUserDelegationKey(blobServiceClient, blobUrl.AccountName);
 
@@ -78,6 +80,7 @@ namespace Tes.Runner.Storage
 
         private UserDelegationKey GetUserDelegationKey(BlobServiceClient blobServiceClient, string storageAccountName)
         {
+
             try
             {
                 semaphoreSlim.Wait();
@@ -86,8 +89,7 @@ namespace Tes.Runner.Storage
 
                 if (userDelegationKey is null || userDelegationKey.SignedExpiresOn < DateTimeOffset.UtcNow)
                 {
-                    userDelegationKey = blobServiceClient.GetUserDelegationKey(DateTimeOffset.UtcNow,
-                        DateTimeOffset.UtcNow.AddHours(UserDelegationKeyExpirationInHours));
+                    userDelegationKey = blobServiceClient.GetUserDelegationKey(startsOn: default, expiresOn: DateTimeOffset.UtcNow.AddHours(UserDelegationKeyExpirationInHours));
 
                     userDelegationKeyDictionary[storageAccountName] = userDelegationKey;
                 }
@@ -96,7 +98,7 @@ namespace Tes.Runner.Storage
             }
             catch (Exception e)
             {
-                logger.LogError(e, "Error while getting user delegation key");
+                logger.LogError(e, $"Error while getting user delegation key.");
                 throw;
             }
             finally
