@@ -57,15 +57,13 @@ namespace Tes.Runner.Transfer
 
         private string CreateBufferHashList(PipelineBuffer pipelineBuffer)
         {
-            var blockHashList = new string[pipelineBuffer.Length / BlobSizeUtils.BlockSizeIncrementUnitInBytes];
-            var item = 0;
+            var stringBuilder = new StringBuilder();
             for (var i = 0; i < pipelineBuffer.Length; i += BlobSizeUtils.BlockSizeIncrementUnitInBytes)
             {
                 var blockLength = Math.Min(BlobSizeUtils.BlockSizeIncrementUnitInBytes, pipelineBuffer.Length - i);
-                blockHashList[item] = CreateBlockMd5CheckSumValue(pipelineBuffer.Data, i, blockLength);
-                item++;
+                stringBuilder.Append(CreateBlockMd5CheckSumValue(pipelineBuffer.Data, i, blockLength));
             }
-            return String.Join("", blockHashList);
+            return stringBuilder.ToString();
         }
     }
 }
