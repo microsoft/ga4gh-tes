@@ -65,7 +65,7 @@ namespace Tes.Runner.Transfer
                 blockHashList[item] = CreateBlockMd5CheckSumValue(pipelineBuffer.Data, i, blockLength);
                 item++;
             }
-            return String.Join("",blockHashList);
+            return String.Join("", blockHashList);
         }
     }
 }
