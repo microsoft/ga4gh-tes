@@ -1094,7 +1094,7 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
             sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR/wd && \\");
             sb.AppendLinuxLine($"write_ts ExecutorStart && \\");
-            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= {workdirOption}{executor.Image} {executor.Command[0]}  \"{string.Join(" && ", executor.Command.Skip(1))}\" && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= {workdirOption}{executor.Image} {executor.Command[0]} {string.Join(" ", executor.Command.Skip(1).Select(BashWrapShellArgument))} && \\");
             sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
             sb.AppendLinuxLine($"write_ts UploadStart && \\");
             sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {UploadFilesScriptFileName} && \\");
@@ -1154,15 +1154,16 @@ namespace TesApi.Web
 
             return cloudTask;
 
+            static string BashWrapShellArgument(string argument)
+                => $"'{argument.Replace(@"'", @"'\''")}'";
+
             static FileType ConvertFileType(TesFileType tesFileType)
-            {
-                return tesFileType switch
+                => tesFileType switch
                 {
                     TesFileType.FILEEnum => FileType.File,
                     TesFileType.DIRECTORYEnum => FileType.Directory,
                     _ => throw new ArgumentOutOfRangeException(nameof(tesFileType)),
-                }; ;
-            }
+                };
 
             // Yes, this looks "Windowsy", while all our executors run on Linux. Environment.ExpandEnvironmentVariables requires environment variables to be delimited by '%' no matter the platform.
             static string LocalizeLocalPath(string path)
