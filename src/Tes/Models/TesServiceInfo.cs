@@ -14,6 +14,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.Serialization;
 using System.Text;
 using Newtonsoft.Json;
@@ -28,6 +29,9 @@ namespace Tes.Models
     public partial class TesServiceInfo : IEquatable<TesServiceInfo>
     {
         public TesServiceInfo()
+        { }
+
+        static TesServiceInfo()
             => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
         /// <summary>
@@ -42,21 +46,26 @@ namespace Tes.Models
         /// </summary>
         /// <value>Returns the name of the service, e.g. \&quot;ohsu-compbio-funnel\&quot;.</value>
         [DataMember(Name = "name")]
-        public string Name { get; set; }
+        public string Name { get; set; } = "GA4GH Task Execution Service";
 
         /// <summary>
         /// Returns the type of a GA4GH service.
         /// </summary>
         /// <value>Returns the type of the service.</value>
         [DataMember(Name = "type")]
-        public TesServiceType Type { get; set; }
+        public TesServiceType Type { get; set; } = new()
+        {
+            Group = "org.ga4gh",
+            Artifact = "tes",
+            Version = "1.1"
+        };
 
         /// <summary>
         /// Description of the service. Should be human readable and provide information about the service.
         /// </summary>
         /// <value>Description of the service. Should be human readable and provide information about the service.</value>
         [DataMember(Name = "description")]
-        public string Description { get; set; }
+        public string Description { get; set; } = "GA4GH TES on Azure";
 
         /// <summary>
         /// Returns the organization providing the service.
@@ -77,7 +86,7 @@ namespace Tes.Models
         /// </summary>
         /// <value>Returns a documentation url, e.g. \&quot;https://docs.myservice.example.com\&quot;.</value>
         [DataMember(Name = "documentationUrl")]
-        public string DocumentationUrl { get; set; }
+        public string DocumentationUrl { get; set; } = "https://github.com/microsoft/ga4gh-tes/wiki";
 
         /// <summary>
         /// Timestamp describing when the service was first deployed and available, in RFC 3339 format. This is set by the system, not the client.
@@ -105,7 +114,7 @@ namespace Tes.Models
         /// </summary>
         /// <value>Returns the version of the service being described. Semantic versioning is recommended, but other identifiers, such as dates or commit hashes, are also allowed. The version should be changed whenever the service is updated.</value>
         [DataMember(Name = "version")]
-        public string Version { get; set; }
+        public string Version { get; set; } = System.Diagnostics.FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location).FileVersion;
 
         /// <summary>
         /// Lists some, but not necessarily all, storage locations supported by the service.  Must be in a valid URL format. e.g.  file:///path/to/local/funnel-storage s3://ohsu-compbio-funnel/storage etc.
@@ -118,7 +127,7 @@ namespace Tes.Models
         /// List keys supported in TesResources.backend_parameters
         /// </summary>
         [DataMember(Name = "tesResources_backend_parameters")]
-        public List<string> TesResourcesSupportedBackendParameters { get; set; }
+        public List<string> TesResourcesSupportedBackendParameters { get; set; } = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList();
 
         /// <summary>
         /// Returns the string presentation of the object

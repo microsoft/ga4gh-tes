@@ -108,30 +108,50 @@ namespace TesApi.Web
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
                     .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
 
-                    .AddSingleton(c => new TesServiceInfo
+                    .AddSingleton(c =>
                     {
-                        Id = "tesprefixname", // TODO: of this instance. Consider reverse dotted domain by default.
-                        Name = "GA4GH Task Execution Service",
-                        Type = new()
-                        {  // TODO: update type to default all values
-                            Group = "org.ga4gh",
-                            Artifact = "tes",
-                            Version = "1.1"
-                        },
-                        Description = "GA4GH TES on Azure",
-                        Organization = new()
-                        { // TODO: configuration
-                            Name = "My name",
-                            Url = "http://example"
-                        },
-                        Version = "4.4.0", // TODO: configuration
-                        Environment = "prod", // TODO: configuration
-                        DocumentationUrl = "https://github.com/microsoft/ga4gh-tes/wiki",
-                        ContactUrl = "letsencryptemail", // TODO: configuration
-                        CreatedAt = DateTimeOffset.UtcNow, // TODO: initial deployment of this instance
-                        UpdatedAt = DateTimeOffset.UtcNow, // TODO: most recent deployment of this instance
-                        Storage = new(),
-                        TesResourcesSupportedBackendParameters = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList()
+                        return new TesServiceInfo
+                        {
+                            Id = GetServiceId(c.GetRequiredService<IOptions<TerraOptions>>().Value, c.GetRequiredService<IOptions<BatchSchedulingOptions>>().Value),
+                            Organization = new()
+                            { // TODO: configuration
+                                Name = "My name",
+                                Url = "http://example"
+                            },
+                            Environment = "prod", // TODO: configuration
+                            ContactUrl = "letsencryptemail", // TODO: configuration
+                            CreatedAt = DateTimeOffset.UtcNow, // TODO: initial deployment of this instance
+                            UpdatedAt = DateTimeOffset.UtcNow, // TODO: most recent deployment of this instance
+                            Storage = c.GetRequiredService<IOptions<StorageOptions>>().Value.ExternalStorageContainers?.Split(';').Select(ParseStorageUri).ToList() ?? new()
+                        };
+
+                        static string GetServiceId(TerraOptions terra, BatchSchedulingOptions scheduling) // TODO: of this instance. Consider reverse dotted domain by default.
+                        {
+                            if (!string.IsNullOrWhiteSpace(terra?.WorkspaceId))
+                            {
+                                return $"Terra Workspace: {terra.WorkspaceId}";
+                            }
+                            else if (!string.IsNullOrWhiteSpace(scheduling?.Prefix))
+                            {
+                                return $"CoA/ToA Prefix: {scheduling.Prefix}";
+                            }
+                            else
+                            {
+                                return "tesprefixname";
+                            }
+                        }
+
+                        static string ParseStorageUri(string uri)
+                        {
+                            var builder = new UriBuilder(uri.Trim())
+                            {
+                                Query = null // remove SAS
+                            };
+
+                            // TODO: change schema and reduce host to account name, if name is azure storage blob. Similar for other cloud storage techs
+
+                            return builder.Uri.AbsoluteUri;
+                        }
                     })
 
                     .AddSwaggerGen(c =>
