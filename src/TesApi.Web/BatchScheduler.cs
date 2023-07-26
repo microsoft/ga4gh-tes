@@ -1265,7 +1265,7 @@ namespace TesApi.Web
         {
             return Task.FromResult(new StartTask
             {
-                CommandLine = @"/usr/bin/bash -c 'sudo touch tmp2.json && sudo cp /etc/docker/daemon.json tmp1.json && sudo chmod a+w tmp?.json && if fgrep -q ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")/docker"" tmp1.json; then sudo apt-get install -y jq && jq '\''.[""data-root""]=""/mnt/docker-data""'\'' /etc/docker/daemon.json >> tmp2.json && sudo mv tmp2.json /etc/docker/daemon.json && sudo systemctl restart docker; fi'",
+                CommandLine = @"/usr/bin/bash -c 'sudo touch tmp2.json && sudo cp /etc/docker/daemon.json tmp1.json && sudo chmod a+w tmp?.json && if fgrep -q ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")/docker"" tmp1.json; then sudo apt-get install -y jq && jq \.\[\""data-root\""\]=\""""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")/docker""\"" tmp1.json >> tmp2.json && sudo mv tmp2.json /etc/docker/daemon.json && sudo systemctl restart docker; fi'",
                 UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool))
             });
         }
