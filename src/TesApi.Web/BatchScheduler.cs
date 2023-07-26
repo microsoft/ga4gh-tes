@@ -1260,30 +1260,13 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        private async Task<StartTask> StartTaskIfNeeded(CancellationToken cancellationToken)
+        private /*async*/ Task<StartTask> StartTaskIfNeeded(CancellationToken cancellationToken)
         {
-            string startTaskSasUrl = default;
-
-            if (!string.IsNullOrWhiteSpace(globalStartTaskPath))
+            return Task.FromResult(new StartTask
             {
-                startTaskSasUrl = await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, cancellationToken);
-                if (!await azureProxy.BlobExistsAsync(new Uri(startTaskSasUrl), cancellationToken))
-                {
-                    startTaskSasUrl = null;
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(startTaskSasUrl) && !string.IsNullOrWhiteSpace(StartTaskScriptFilename))
-            {
-                return new StartTask
-                {
-                    CommandLine = $"./{StartTaskScriptFilename}",
-                    UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
-                    ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(startTaskSasUrl, StartTaskScriptFilename) }
-                };
-            }
-
-            return default;
+                CommandLine = @"sudo apt-get install -y jq && sudo jq '.[""data-root""]=""/mnt/docker-data""' /etc/docker/daemon.json > tmp.json && sudo mv tmp.json /etc/docker/daemon.json && sudo systemctl restart docker",
+                UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool))
+            });
         }
 
         /// <summary>
