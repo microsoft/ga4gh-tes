@@ -1264,7 +1264,7 @@ namespace TesApi.Web
         {
             return Task.FromResult(new StartTask
             {
-                CommandLine = @"sudo apt-get install -y jq && sudo jq '.[""data-root""]=""/mnt/docker-data""' /etc/docker/daemon.json > tmp.json && sudo mv tmp.json /etc/docker/daemon.json && sudo systemctl restart docker",
+                CommandLine = @"/usr/bin/bash -c 'sudo touch tmp2.json && sudo cp /etc/docker/daemon.json tmp1.json && sudo chmod a+w tmp?.json && sudo apt-get install -y jq && jq '\''.[""data-root""]=""/mnt/docker-data""'\'' /etc/docker/daemon.json >> tmp2.json && sudo mv tmp2.json /etc/docker/daemon.json && sudo systemctl restart docker'",
                 UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool))
             });
         }
