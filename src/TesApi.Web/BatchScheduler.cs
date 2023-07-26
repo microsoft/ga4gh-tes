@@ -1262,6 +1262,7 @@ namespace TesApi.Web
         /// <returns></returns>
         private async Task<StartTask> StartTaskIfNeeded(CancellationToken cancellationToken)
         {
+            const string dockerConfigCommand = $@"sudo apt-get install -y jq && jq '.[""data-root""]=""/mnt/docker-data""' /etc/docker/daemon.json > tmp.json && sudo mv tmp.json /etc/docker/daemon.json && sudo systemctl restart docker";
             string startTaskSasUrl = default;
 
             if (!string.IsNullOrWhiteSpace(globalStartTaskPath))
@@ -1277,13 +1278,17 @@ namespace TesApi.Web
             {
                 return new StartTask
                 {
-                    CommandLine = $"./{StartTaskScriptFilename}",
+                    CommandLine = $"{dockerConfigCommand} && ./{StartTaskScriptFilename}",
                     UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
                     ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(startTaskSasUrl, StartTaskScriptFilename) }
                 };
             }
 
-            return default;
+            return new StartTask
+            {
+                CommandLine = dockerConfigCommand,
+                UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool))
+            };
         }
 
         /// <summary>
