@@ -95,7 +95,7 @@ namespace TesApi.Tests
         {
             SetUpTerraApiClient();
 
-            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input + blobPath, CancellationToken.None, true);
+            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input + blobPath, CancellationToken.None, getContainerSas: true);
 
             Assert.IsNotNull(result);
             Assert.AreEqual($"{expected}?sv={TerraApiStubData.SasToken}", result);

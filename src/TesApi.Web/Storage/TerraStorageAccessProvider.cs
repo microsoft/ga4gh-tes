@@ -79,10 +79,13 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, bool getContainerSas = false)
+        public override async Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
-
+            if (sasTokenDuration is not null)
+            {
+                throw new ArgumentException("Terra does not support extended length SAS tokens.");
+            }
 
             if (!TryParseHttpUrlFromInput(path, out _))
             {
