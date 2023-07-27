@@ -10,6 +10,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.ApplicationInsights;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("TesApi.Tests")]
+
 namespace TesApi.Web
 {
     /// <summary>
