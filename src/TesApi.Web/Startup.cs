@@ -127,13 +127,17 @@ namespace TesApi.Web
 
                         static string GetServiceId(TerraOptions terra, BatchSchedulingOptions scheduling) // TODO: of this instance. Consider reverse dotted domain by default.
                         {
-                            if (!string.IsNullOrWhiteSpace(terra?.WorkspaceId))
+                            /*if (false)
+                            {
+                                return "ingresshostnamebackwards";
+                            }
+                            else*/ if (!string.IsNullOrWhiteSpace(terra?.WorkspaceId))
                             {
                                 return $"Terra Workspace: {terra.WorkspaceId}";
                             }
                             else if (!string.IsNullOrWhiteSpace(scheduling?.Prefix))
                             {
-                                return $"CoA/ToA Prefix: {scheduling.Prefix}";
+                                return $"BatchPrefix: {scheduling.Prefix}";
                             }
                             else
                             {
