@@ -1577,7 +1577,7 @@ namespace TesApi.Tests
             var fileInputs = JsonConvert.DeserializeObject<Tes.Runner.Models.NodeTask>(downloadFilesScriptContent)?.Inputs ?? Enumerable.Empty<Tes.Runner.Models.FileInput>().ToList();
 
             return fileInputs
-                .Select(f => new FileToDownload { LocalPath = f.FullFileName, StorageUrl = f.SourceUrl });
+                .Select(f => new FileToDownload { LocalPath = f.Path, StorageUrl = f.SourceUrl });
         }
 
         private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProvider(AzureProxyReturnValues azureProxyReturn = default)

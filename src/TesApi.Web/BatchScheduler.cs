@@ -993,7 +993,7 @@ namespace TesApi.Web
             {
                 MetricsFilename = metricsName,
                 InputsMetricsFormat = "FileDownloadSizeInBytes={Size}",
-                Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, FullFileName = LocalizeLocalPath(f.Path), SasStrategy = SasResolutionStrategy.None }).ToList()
+                Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, Path = LocalizeLocalPath(f.Path), SasStrategy = SasResolutionStrategy.None }).ToList()
             };
 
             var filesToUpload = Array.Empty<TesOutput>();
@@ -1018,7 +1018,7 @@ namespace TesApi.Web
             {
                 MetricsFilename = metricsName,
                 OutputsMetricsFormat = "FileUploadSizeInBytes={Size}",
-                Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, FullFileName = LocalizeLocalPath(f.Path), FileType = ConvertFileType(f.Type), SasStrategy = SasResolutionStrategy.None }).ToList()
+                Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, Path = LocalizeLocalPath(f.Path), FileType = ConvertFileType(f.Type), SasStrategy = SasResolutionStrategy.None, PathPrefix = f.PathPrefix }).ToList()
             };
 
             var executor = task.Executors.First();
@@ -1031,6 +1031,7 @@ namespace TesApi.Web
                 .Distinct(StringComparer.Ordinal)
                 .Select(s => $"-v $AZ_BATCH_TASK_WORKING_DIR/wd/{s}:/{s}"));
 
+            var workdirOption = string.IsNullOrWhiteSpace(executor.Workdir) ? string.Empty : $"--workdir {executor.Workdir} ";
             var executorImageIsPublic = containerRegistryProvider.IsImagePublic(executor.Image);
             var dockerInDockerImageIsPublic = containerRegistryProvider.IsImagePublic(dockerInDockerImageName);
 
@@ -1080,10 +1081,11 @@ namespace TesApi.Web
                 sb.AppendLinuxLine($"write_ts DrsLocalizationEnd && \\");
             }
 
-            var uploadMetricsScriptSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, UploadFilesScriptFileName, cancellationToken);
+            var uploadMetricsScriptSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, UploadMetricsScriptFileName, cancellationToken);
+            var metricsSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, metricsName, cancellationToken);
             var uploadMetricsScriptContent = new NodeTask
             {
-                Outputs = new List<FileOutput>() { new FileOutput { Required = true, FullFileName = metricsName, TargetUrl = uploadMetricsScriptSasUrl, FileType = FileType.File, SasStrategy = SasResolutionStrategy.None } }
+                Outputs = new List<FileOutput>() { new FileOutput { Path = metricsName, TargetUrl = metricsSasUrl, FileType = FileType.File, SasStrategy = SasResolutionStrategy.None } }
             };
 
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
@@ -1092,7 +1094,7 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
             sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR/wd && \\");
             sb.AppendLinuxLine($"write_ts ExecutorStart && \\");
-            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= --workdir / {executor.Image} {executor.Command[0]}  \"{string.Join(" && ", executor.Command.Skip(1))}\" && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= {workdirOption}{executor.Image} {executor.Command[0]} {string.Join(" ", executor.Command.Skip(1).Select(BashWrapShellArgument))} && \\");
             sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
             sb.AppendLinuxLine($"write_ts UploadStart && \\");
             sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {UploadFilesScriptFileName} && \\");
@@ -1152,15 +1154,16 @@ namespace TesApi.Web
 
             return cloudTask;
 
+            static string BashWrapShellArgument(string argument)
+                => $"'{argument.Replace(@"'", @"'\''")}'";
+
             static FileType ConvertFileType(TesFileType tesFileType)
-            {
-                return tesFileType switch
+                => tesFileType switch
                 {
                     TesFileType.FILEEnum => FileType.File,
                     TesFileType.DIRECTORYEnum => FileType.Directory,
                     _ => throw new ArgumentOutOfRangeException(nameof(tesFileType)),
-                }; ;
-            }
+                };
 
             // Yes, this looks "Windowsy", while all our executors run on Linux. Environment.ExpandEnvironmentVariables requires environment variables to be delimited by '%' no matter the platform.
             static string LocalizeLocalPath(string path)
