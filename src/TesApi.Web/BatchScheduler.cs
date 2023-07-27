@@ -491,14 +491,12 @@ namespace TesApi.Web
             {
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
 
-                (poolKey, var displayName) = enableBatchAutopool ? default : await GetPoolKey(tesTask, virtualMachineInfo, cancellationToken);
+                var containerMetadata = await GetContainerConfigurationIfNeededAsync(tesTask, cancellationToken);
+                (poolKey, var displayName) = enableBatchAutopool ? default : GetPoolKey(tesTask, virtualMachineInfo, containerMetadata.ContainerConfiguration, cancellationToken);
                 await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: enableBatchAutopool || !IsPoolAvailable(poolKey), needCoresUtilizationQuotaCheck: enableBatchAutopool, cancellationToken: cancellationToken);
 
                 var tesTaskLog = tesTask.AddTesTaskLog();
                 tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
-
-                // TODO?: Support for multiple executors. Cromwell has single executor per task.
-                var containerConfiguration = await GetContainerConfigurationIfNeededAsync(tesTask.Executors.First().Image, cancellationToken);
                 var identities = new List<string>();
 
                 if (!string.IsNullOrWhiteSpace(globalManagedIdentity))
@@ -522,7 +520,7 @@ namespace TesApi.Web
                         autoscaled: false,
                         preemptable: virtualMachineInfo.LowPriority,
                         nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                        containerConfiguration: containerConfiguration,
+                        containerConfiguration: containerMetadata.ContainerConfiguration,
                         cancellationToken: cancellationToken),
                     tesTaskId: tesTask.Id,
                     jobId: jobOrTaskId,
@@ -543,7 +541,7 @@ namespace TesApi.Web
                                 autoscaled: true,
                                 preemptable: virtualMachineInfo.LowPriority,
                                 nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                                containerConfiguration: containerConfiguration,
+                                containerConfiguration: containerMetadata.ContainerConfiguration,
                                 cancellationToken: ct)),
                         cancellationToken: cancellationToken)
                         ).Pool;
@@ -551,7 +549,7 @@ namespace TesApi.Web
                 }
 
                 tesTask.PoolId = poolInformation.PoolId;
-                var cloudTask = await ConvertTesTaskToBatchTaskAsync(enableBatchAutopool ? tesTask.Id : jobOrTaskId, tesTask, containerConfiguration is not null, cancellationToken);
+                var cloudTask = await ConvertTesTaskToBatchTaskAsync(enableBatchAutopool ? tesTask.Id : jobOrTaskId, tesTask, containerMetadata.IsPublic, cancellationToken);
                 logger.LogInformation($"Creating batch task for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
 
                 if (enableBatchAutopool)
@@ -945,11 +943,12 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="taskId">The Batch Task Id</param>
         /// <param name="task">The <see cref="TesTask"/></param>
-        /// <param name="poolHasContainerConfig">Indicates that <see cref="CloudTask.ContainerSettings"/> must be set.</param>
+        /// <param name="isPublic">Indicates which container images are public.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>Job preparation and main Batch tasks</returns>
-        private async Task<CloudTask> ConvertTesTaskToBatchTaskAsync(string taskId, TesTask task, bool poolHasContainerConfig, CancellationToken cancellationToken)
+        private async Task<CloudTask> ConvertTesTaskToBatchTaskAsync(string taskId, TesTask task, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) isPublic, CancellationToken cancellationToken)
         {
+            var poolHasContainerConfig = !(isPublic.ExecutorImage && isPublic.DockerInDockerImage && isPublic.CromwellDrsImage);
             var cromwellExecutionDirectoryPath = GetCromwellExecutionDirectoryPath(task);
             var isCromwell = cromwellExecutionDirectoryPath is not null;
 
@@ -1034,8 +1033,6 @@ namespace TesApi.Web
                 .Select(s => $"-v $AZ_BATCH_TASK_WORKING_DIR/wd/{s}:/{s}"));
 
             var workdirOption = string.IsNullOrWhiteSpace(executor.Workdir) ? string.Empty : $"--workdir {executor.Workdir} ";
-            var executorImageIsPublic = containerRegistryProvider.IsImagePublic(executor.Image);
-            var dockerInDockerImageIsPublic = containerRegistryProvider.IsImagePublic(dockerInDockerImageName);
 
             var sb = new StringBuilder();
 
@@ -1043,7 +1040,7 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
             sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
 
-            if (dockerInDockerImageIsPublic)
+            if (isPublic.DockerInDockerImage)
             {
                 sb.AppendLinuxLine($"(grep -q alpine /etc/os-release && apk add bash || :) && \\");  // Install bash if running on alpine (will be the case if running inside "docker" image)
             }
@@ -1057,7 +1054,7 @@ namespace TesApi.Web
                 sb.AppendLinuxLine($"write_ts CromwellDrsLocalizerPullEnd && \\");
             }
 
-            if (executorImageIsPublic)
+            if (isPublic.ExecutorImage)
             {
                 // Private executor images are pulled via pool ContainerConfiguration
                 sb.AppendLinuxLine($"write_ts ExecutorPullStart && docker pull --quiet {executor.Image} && write_ts ExecutorPullEnd && \\");
@@ -1301,52 +1298,72 @@ namespace TesApi.Web
         /// <summary>
         /// Constructs an Azure Batch Container Configuration instance
         /// </summary>
-        /// <param name="executorImage">The image name for the current <see cref="TesTask"/></param>
+        /// <param name="tesTask">The <see cref="TesTask"/> to schedule on Azure Batch</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        private async ValueTask<ContainerConfiguration> GetContainerConfigurationIfNeededAsync(string executorImage, CancellationToken cancellationToken)
+        private async ValueTask<(ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic)> GetContainerConfigurationIfNeededAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
-            if (containerRegistryProvider.IsImagePublic(executorImage))
-            {
-                return default;
-            }
+            var drsImageNeeded = tesTask.Inputs?.Any(i => i?.Url?.StartsWith("drs://") ?? false) ?? false;
+            // TODO: Support for multiple executors. Cromwell has single executor per task.
+            var executorImage = tesTask.Executors.First().Image;
+
+            var dockerInDockerIsPublic = true;
+            var executorImageIsPublic = containerRegistryProvider.IsImagePublic(executorImage);
+            var cromwellDrsIsPublic = drsImageNeeded ? containerRegistryProvider.IsImagePublic(cromwellDrsLocalizerImageName) : true;
 
             BatchModels.ContainerConfiguration result = default;
-            var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage, cancellationToken);
 
-            if (containerRegistryInfo is not null)
+            if (!executorImageIsPublic || !cromwellDrsIsPublic)
             {
+                var neededImages = new List<string> { executorImage, dockerInDockerImageName };
+                if (drsImageNeeded)
+                {
+                    neededImages.Add(cromwellDrsLocalizerImageName);
+                }
+
                 // Download private images at node startup, since those cannot be downloaded in the main task that runs multiple containers.
                 // Doing this also requires that the main task runs inside a container, hence downloading the "docker" image (contains docker client) as well.
-                result = new BatchModels.ContainerConfiguration
+                result = new BatchModels.ContainerConfiguration { ContainerImageNames = neededImages, ContainerRegistries = new List<BatchModels.ContainerRegistry>() };
+
+                if (!executorImageIsPublic)
                 {
-                    ContainerImageNames = new List<string> { executorImage, dockerInDockerImageName },
-                    ContainerRegistries = new List<BatchModels.ContainerRegistry>
-                    {
-                        new(
-                            userName: containerRegistryInfo.Username,
-                            registryServer: containerRegistryInfo.RegistryServer,
-                            password: containerRegistryInfo.Password)
-                    }
-                };
-
-                ContainerRegistryInfo containerRegistryInfoForDockerInDocker = null;
-
-                if (!containerRegistryProvider.IsImagePublic(dockerInDockerImageName))
-                {
-                    containerRegistryInfoForDockerInDocker = await containerRegistryProvider.GetContainerRegistryInfoAsync(dockerInDockerImageName, cancellationToken);
-
-                    if (containerRegistryInfoForDockerInDocker is not null && containerRegistryInfoForDockerInDocker.RegistryServer != containerRegistryInfo.RegistryServer)
+                    var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage, cancellationToken);
+                    if (containerRegistryInfo is not null)
                     {
                         result.ContainerRegistries.Add(new(
-                            userName: containerRegistryInfoForDockerInDocker.Username,
-                            registryServer: containerRegistryInfoForDockerInDocker.RegistryServer,
-                            password: containerRegistryInfoForDockerInDocker.Password));
+                            userName: containerRegistryInfo.Username,
+                            registryServer: containerRegistryInfo.RegistryServer,
+                            password: containerRegistryInfo.Password));
+                    }
+                }
+
+                if (!cromwellDrsIsPublic)
+                {
+                    var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(cromwellDrsLocalizerImageName, cancellationToken);
+                    if (containerRegistryInfo is not null && !result.ContainerRegistries.Any(registry => registry.RegistryServer == containerRegistryInfo.RegistryServer))
+                    {
+                        result.ContainerRegistries.Add(new(
+                            userName: containerRegistryInfo.Username,
+                            registryServer: containerRegistryInfo.RegistryServer,
+                            password: containerRegistryInfo.Password));
+                    }
+                }
+
+                if (result.ContainerRegistries.Count != 0)
+                {
+                    var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(dockerInDockerImageName, cancellationToken);
+                    dockerInDockerIsPublic = containerRegistryInfo is null;
+                    if (containerRegistryInfo is not null && !result.ContainerRegistries.Any(registry => registry.RegistryServer == containerRegistryInfo.RegistryServer))
+                    {
+                        result.ContainerRegistries.Add(new(
+                            userName: containerRegistryInfo.Username,
+                            registryServer: containerRegistryInfo.RegistryServer,
+                            password: containerRegistryInfo.Password));
                     }
                 }
             }
 
-            return result is null ? default : new()
+            return result is null || result.ContainerRegistries.Count == 0 ? (default, (true, true, true)) : (new()
             {
                 ContainerImageNames = result.ContainerImageNames,
                 ContainerRegistries = result
@@ -1357,7 +1374,7 @@ namespace TesApi.Web
                                         registryServer: r.RegistryServer,
                                         identityReference: r.IdentityReference is null ? null : new() { ResourceId = r.IdentityReference.ResourceId }))
                                     .ToList()
-            };
+            }, (executorImageIsPublic, dockerInDockerIsPublic, cromwellDrsIsPublic));
         }
 
         /// <summary>
