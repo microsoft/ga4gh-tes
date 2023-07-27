@@ -73,6 +73,7 @@ namespace TesApi.Web
         private readonly string batchNodesSubnetId;
         private readonly bool disableBatchNodesPublicIpAddress;
         private readonly bool enableBatchAutopool;
+        private readonly TimeSpan poolLifetime;
         private readonly BatchNodeInfo gen2BatchNodeInfo;
         private readonly BatchNodeInfo gen1BatchNodeInfo;
         private readonly string marthaUrl;
@@ -148,6 +149,7 @@ namespace TesApi.Web
             if (string.IsNullOrWhiteSpace(this.cromwellDrsLocalizerImageName)) { this.cromwellDrsLocalizerImageName = Options.MarthaOptions.DefaultCromwellDrsLocalizer; }
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
             this.enableBatchAutopool = batchSchedulingOptions.Value.UseLegacyAutopools;
+            this.poolLifetime = this.enableBatchAutopool ? TimeSpan.Zero : TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.PoolRotationForcedDays);
             this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
             this.marthaUrl = marthaOptions.Value.Url;
             this.marthaKeyVaultName = marthaOptions.Value.KeyVaultName;
@@ -1261,13 +1263,39 @@ namespace TesApi.Web
         /// <param name="machineConfiguration">A <see cref="VirtualMachineConfiguration"/> describing the OS of the pool's nodes.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        private /*async*/ Task<StartTask> StartTaskIfNeeded(VirtualMachineConfiguration machineConfiguration, CancellationToken cancellationToken)
+        /// <remarks>This method also mitigates errors associated with docker daemons that are not configured to place their filestsystem assets on the data drive. Errors attempting to do so are ignored.</remarks>
+        private async Task<StartTask> StartTaskIfNeeded(VirtualMachineConfiguration machineConfiguration, CancellationToken cancellationToken)
         {
-            return Task.FromResult(new StartTask
+            var installJq = machineConfiguration.NodeAgentSkuId switch
             {
-                CommandLine = @"/usr/bin/bash -c 'sudo touch tmp2.json && sudo cp /etc/docker/daemon.json tmp1.json && sudo chmod a+w tmp?.json && if fgrep -q ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")/docker"" tmp1.json; then sudo apt-get install -y jq && jq \.\[\""data-root\""\]=\""""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")/docker""\"" tmp1.json >> tmp2.json && sudo mv tmp2.json /etc/docker/daemon.json && sudo systemctl restart docker; fi'",
-                UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool))
-            });
+                var s when s.StartsWith("batch.node.ubuntu ") => "sudo apt-get install -y jq",
+                var s when s.StartsWith("batch.node.centos ") => "sudo yum install epel-release -y && sudo yum update -y && sudo yum install jq -y",
+                _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message. ({machineConfiguration.NodeAgentSkuId})")
+            };
+
+            var commandPart1 = @"/usr/bin/bash -c 'trap ""echo Error trapped; exit 0"" ERR; sudo touch tmp2.json && sudo cp /etc/docker/daemon.json tmp1.json && sudo chmod a+w tmp?.json && if fgrep -q ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")/docker"" tmp1.json; then ";
+            var commandPart2 = @" && jq \.\[\""data-root\""\]=\""""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")/docker""\"" tmp1.json >> tmp2.json && sudo mv tmp2.json /etc/docker/daemon.json && sudo systemctl restart docker; fi'";
+
+            var startTask = new StartTask
+            {
+                CommandLine = commandPart1 + installJq + commandPart2,
+                UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
+            };
+
+            if (!string.IsNullOrWhiteSpace(globalStartTaskPath))
+            {
+                var startTaskSasUrl = enableBatchAutopool
+                    ? await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, cancellationToken)
+                    : await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, cancellationToken, sasTokenDuration: BatchPoolService.RunInterval.Multiply(2).Add(poolLifetime).Add(TimeSpan.FromMinutes(15)));
+
+                if (await azureProxy.BlobExistsAsync(new Uri(startTaskSasUrl), cancellationToken))
+                {
+                    startTask.ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(startTaskSasUrl, StartTaskScriptFilename) };
+                    startTask.CommandLine = $"({startTask.CommandLine}) && ./{StartTaskScriptFilename}";
+                }
+            }
+
+            return startTask;
         }
 
         /// <summary>
