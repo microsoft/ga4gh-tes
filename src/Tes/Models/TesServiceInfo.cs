@@ -57,7 +57,7 @@ namespace Tes.Models
         {
             Group = "org.ga4gh",
             Artifact = "tes",
-            Version = "1.1"
+            Version = "1.1.0"
         };
 
         /// <summary>
