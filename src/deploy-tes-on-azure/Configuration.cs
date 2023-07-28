@@ -83,6 +83,10 @@ namespace TesDeployer
         public string TesUsername { get; set; } = "tes";
         public string TesPassword { get; set; }
         public string AadGroupIds { get; set; }
+        public string DeploymentOrganizationName { get; set; }
+        public string DeploymentOrganizationUrl { get; set; }
+        public string DeploymentContactUri { get; set; }
+        public string DeploymentEnvironment { get; set; }
 
         public static Configuration BuildConfiguration(string[] args)
         {

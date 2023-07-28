@@ -72,6 +72,7 @@ namespace TesApi.Web
                     .Configure<BatchSchedulingOptions>(configuration.GetSection(BatchSchedulingOptions.SectionName))
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
+                    .Configure<DeploymentOptions>(configuration.GetSection(DeploymentOptions.SectionName))
 
                     .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
@@ -110,39 +111,111 @@ namespace TesApi.Web
 
                     .AddSingleton(c =>
                     {
-                        return new TesServiceInfo
+                        var deployment = c.GetRequiredService<IOptions<DeploymentOptions>>().Value;
+
+                        var serviceInfo = new TesServiceInfo
                         {
-                            Id = GetServiceId(c.GetRequiredService<IOptions<TerraOptions>>().Value, c.GetRequiredService<IOptions<BatchSchedulingOptions>>().Value),
-                            Organization = new()
-                            { // TODO: configuration
-                                Name = "My name",
-                                Url = "http://example"
-                            },
-                            Environment = "prod", // TODO: configuration
-                            ContactUrl = "letsencryptemail", // TODO: configuration
-                            CreatedAt = DateTimeOffset.UtcNow, // TODO: initial deployment of this instance
-                            UpdatedAt = DateTimeOffset.UtcNow, // TODO: most recent deployment of this instance
+                            Id = GetServiceId(),
+                            Organization = GetOrganization(),
                             Storage = c.GetRequiredService<IOptions<StorageOptions>>().Value.ExternalStorageContainers?.Split(';').Select(ParseStorageUri).ToList() ?? new()
                         };
 
-                        static string GetServiceId(TerraOptions terra, BatchSchedulingOptions scheduling) // TODO: of this instance. Consider reverse dotted domain by default.
+                        if (!string.IsNullOrWhiteSpace(deployment.Environment))
                         {
-                            /*if (false)
+                            serviceInfo.Environment = deployment.Environment;
+                        }
+                        else
+                        {
+                            var configuration = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyConfigurationAttribute>().Configuration;
+
+                            if (!string.IsNullOrWhiteSpace(deployment.TesImage))
                             {
-                                return "ingresshostnamebackwards";
+                                var tag = string.Empty;
+                                var tagStart = deployment.TesImage.LastIndexOf(':');
+                                if (tagStart >= 0)
+                                {
+                                    tag = deployment.TesImage[tagStart..];
+                                }
+
+                                serviceInfo.Environment = configuration switch
+                                {
+                                    "Release" => tag.StartsWith(":int-") ? "test" : "prod",
+                                    "Debug" => "dev",
+                                    _ => default
+                                };
                             }
-                            else*/ if (!string.IsNullOrWhiteSpace(terra?.WorkspaceId))
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(deployment.ContactUri))
+                        {
+                            serviceInfo.ContactUrl = deployment.ContactUri;
+                        }
+                        else if (!string.IsNullOrWhiteSpace(deployment.LetsEncryptEmail))
+                        {
+                            serviceInfo.ContactUrl = $"mailto:{deployment.LetsEncryptEmail.Trim()}";
+                        }
+
+                        if (deployment.Created != default)
+                        {
+                            serviceInfo.CreatedAt = deployment.Created.ToUniversalTime();
+                        }
+
+                        if (deployment.Updated != default)
+                        {
+                            serviceInfo.UpdatedAt = deployment.Updated.ToUniversalTime();
+                        }
+
+                        return serviceInfo;
+
+                        string GetServiceId()
+                        {
+                            if (!string.IsNullOrWhiteSpace(deployment.TesHostname))
+                            {
+                                return string.Join('.', deployment.TesHostname.Trim().Split('.').Reverse());
+                            }
+
+                            var terra = c.GetRequiredService<IOptions<TerraOptions>>().Value;
+
+                            if (!string.IsNullOrWhiteSpace(terra?.WorkspaceId))
                             {
                                 return $"Terra Workspace: {terra.WorkspaceId}";
                             }
-                            else if (!string.IsNullOrWhiteSpace(scheduling?.Prefix))
+
+                            var scheduling = c.GetRequiredService<IOptions<BatchSchedulingOptions>>().Value;
+
+                            if (!string.IsNullOrWhiteSpace(scheduling?.Prefix))
                             {
                                 return $"BatchPrefix: {scheduling.Prefix}";
                             }
+
+                            return "Unknown";
+                        }
+
+                        TesOrganization GetOrganization()
+                        {
+                            if (!string.IsNullOrWhiteSpace(deployment.OrganizationName) && !string.IsNullOrWhiteSpace(deployment.OrganizationUrl))
+                            {
+                                return new TesOrganization
+                                {
+                                    Name = deployment.OrganizationName,
+                                    Url = deployment.OrganizationUrl
+                                };
+                            }
+
+                            if (string.IsNullOrWhiteSpace(deployment.OrganizationName) != string.IsNullOrWhiteSpace(deployment.OrganizationUrl))
+                            {
+                                logger.LogWarning(@"Partial organizational information is missing. Ignored values are OrganizationName: '{OrganizationName}' and OrganizationUrl: '{OrganizationUrl}'", deployment.OrganizationName, deployment.OrganizationUrl);
+                            }
                             else
                             {
-                                return "tesprefixname";
+                                logger.LogWarning(@"Organizational information is missing.");
                             }
+
+                            return new TesOrganization
+                            {
+                                Name = @"Example Organization",
+                                Url = @"https://www.example.com"
+                            };
                         }
 
                         static string ParseStorageUri(string uri)

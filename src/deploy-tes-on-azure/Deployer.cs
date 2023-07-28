@@ -312,10 +312,6 @@ namespace TesDeployer
 
                         var settings = ConfigureSettings(managedIdentity.ClientId, aksValues, installedVersion);
 
-                        //if (installedVersion is null || installedVersion < new Version(4, 2))
-                        //{
-                        //}
-
                         if (installedVersion is null || installedVersion < new Version(4, 4))
                         {
                             // Ensure all storage containers are created.
@@ -326,6 +322,18 @@ namespace TesDeployer
                                 settings["BatchNodesSubnetId"] = await UpdateVnetWithBatchSubnet();
                             }
                         }
+
+                        if (installedVersion is null || installedVersion < new Version(4, 5))
+                        {
+                            if (string.IsNullOrWhiteSpace(settings["DeploymentCreated"]))
+                            {
+                                settings["DeploymentCreated"] = settings["DeploymentUpdated"];
+                            }
+                        }
+
+                        //if (installedVersion is null || installedVersion < new Version(4, x))
+                        //{
+                        //}
 
                         await kubernetesManager.UpgradeValuesYamlAsync(storageAccount, settings);
                         await PerformHelmDeploymentAsync(resourceGroup);
@@ -980,11 +988,13 @@ namespace TesDeployer
         {
             settings ??= new();
             var defaults = GetDefaultValues(new[] { "env-00-tes-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt" });
+            var currentTime = DateTime.UtcNow;
 
             // We always overwrite the CoA version
             UpdateSetting(settings, defaults, "TesOnAzureVersion", default(string), ignoreDefaults: false);
             UpdateSetting(settings, defaults, "ResourceGroupName", configuration.ResourceGroupName, ignoreDefaults: false);
             UpdateSetting(settings, defaults, "RegionName", configuration.RegionName, ignoreDefaults: false);
+            UpdateSetting(settings, defaults, "DeploymentUpdated", currentTime.ToString("O"), ignoreDefaults: false);
 
             // Process images
             UpdateSetting(settings, defaults, "TesImageName", configuration.TesImageName,
@@ -994,6 +1004,10 @@ namespace TesDeployer
             UpdateSetting(settings, defaults, "BatchNodesSubnetId", configuration.BatchNodesSubnetId);
             UpdateSetting(settings, defaults, "DockerInDockerImageName", configuration.DockerInDockerImageName);
             UpdateSetting(settings, defaults, "DisableBatchNodesPublicIpAddress", configuration.DisableBatchNodesPublicIpAddress, b => b.GetValueOrDefault().ToString(), configuration.DisableBatchNodesPublicIpAddress.GetValueOrDefault().ToString());
+            UpdateSetting(settings, defaults, "DeploymentOrganizationName", configuration.DeploymentOrganizationName);
+            UpdateSetting(settings, defaults, "DeploymentOrganizationUrl", configuration.DeploymentOrganizationUrl);
+            UpdateSetting(settings, defaults, "DeploymentContactUri", configuration.DeploymentContactUri);
+            UpdateSetting(settings, defaults, "DeploymentEnvironment", configuration.DeploymentEnvironment);
 
             if (installedVersion is null)
             {
@@ -1018,6 +1032,7 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
                 UpdateSetting(settings, defaults, "TesHostname", kubernetesManager.TesHostname, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "DeploymentCreated", currentTime.ToString("O"), ignoreDefaults: true);
             }
 
             BackFillSettings(settings, defaults);
@@ -2257,7 +2272,12 @@ namespace TesDeployer
 
             if (!string.IsNullOrWhiteSpace(configuration.BatchNodesSubnetId) && !string.IsNullOrWhiteSpace(configuration.BatchSubnetName))
             {
-                throw new Exception("Invalid configuration options BatchNodesSubnetId and BatchSubnetName are mutually exclusive.");
+                throw new ValidationException("Invalid configuration options BatchNodesSubnetId and BatchSubnetName are mutually exclusive.");
+            }
+
+            if (string.IsNullOrWhiteSpace(configuration.DeploymentOrganizationName) != string.IsNullOrWhiteSpace(configuration.DeploymentOrganizationUrl))
+            {
+                throw new ValidationException("Invalid configuration options DeploymentOrganizationName and DeploymentOrganizationUrl must both be provided together.");
             }
         }
 
