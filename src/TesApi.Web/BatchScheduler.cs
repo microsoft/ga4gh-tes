@@ -995,7 +995,12 @@ namespace TesApi.Web
             {
                 MetricsFilename = metricsName,
                 InputsMetricsFormat = "FileDownloadSizeInBytes={Size}",
-                Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, Path = LocalizeLocalPath(f.Path), SasStrategy = SasResolutionStrategy.None }).ToList()
+                Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, Path = LocalizeLocalPath(f.Path), SasStrategy = SasResolutionStrategy.None }).ToList(),
+                Outputs = new()
+                {
+                    new() { TargetUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, "StartTask-stderr.txt", cancellationToken), Path = @"%AZ_BATCH_NODE_STARTUP_DIR%/stderr.txt", SasStrategy = SasResolutionStrategy.None },
+                    new() { TargetUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, "StartTask-stdout.txt", cancellationToken), Path = @"%AZ_BATCH_NODE_STARTUP_DIR%/stdout.txt", SasStrategy = SasResolutionStrategy.None },
+                }
             };
 
             var filesToUpload = Array.Empty<TesOutput>();
@@ -1039,6 +1044,7 @@ namespace TesApi.Web
 
             var sb = new StringBuilder();
 
+            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {DownloadFilesScriptFileName} && \\"); // Upload the start-task console spews
             sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt; }} && \\");  // Function that appends key=value pair to metrics.txt file
             sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
             sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
@@ -1139,7 +1145,7 @@ namespace TesApi.Web
                     new OutputFile(
                         "../std*.txt",
                         new OutputFileDestination(new(tesInternalDirectorySasUrl)),
-                        new OutputFileUploadOptions(OutputFileUploadCondition.TaskFailure))
+                        new OutputFileUploadOptions(OutputFileUploadCondition.TaskCompletion))
                 }
             };
 
