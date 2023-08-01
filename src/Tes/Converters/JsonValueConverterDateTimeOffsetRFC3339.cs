@@ -22,7 +22,7 @@ namespace Tes.Converters
                 throw new JsonSerializationException($"Unexpected value when converting date. Expected DateTime or DateTimeOffset, got {value?.GetType().FullName ?? "<null>"}.");
             }
 
-            var dateTimeOffset = (DateTimeOffset) value;
+            var dateTimeOffset = (DateTimeOffset)value;
             dateTimeOffset = dateTimeOffset.ToUniversalTime();
             writer.WriteValue(dateTimeOffset.ToString("O"));
         }
