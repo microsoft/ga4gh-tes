@@ -15,6 +15,7 @@ using System;
 using System.Runtime.Serialization;
 using System.Text;
 using Newtonsoft.Json;
+using Tes.Converters;
 using Tes.Utilities;
 
 namespace Tes.Models
@@ -32,6 +33,7 @@ namespace Tes.Models
         /// Time the executor started, in RFC 3339 format.
         /// </summary>
         /// <value>Time the executor started, in RFC 3339 format.</value>
+        [JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339))]
         [DataMember(Name = "start_time")]
         public DateTimeOffset? StartTime { get; set; }
 
@@ -39,6 +41,7 @@ namespace Tes.Models
         /// Time the executor ended, in RFC 3339 format.
         /// </summary>
         /// <value>Time the executor ended, in RFC 3339 format.</value>
+        [JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339))]
         [DataMember(Name = "end_time")]
         public DateTimeOffset? EndTime { get; set; }
 

@@ -956,8 +956,8 @@ namespace TesApi.Tests
             var executorLog = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
             Assert.IsNotNull(executorLog);
             Assert.AreEqual(0, executorLog.ExitCode);
-            Assert.AreEqual(DateTimeOffset.Parse("2020-10-08T02:30:39+00:00"), executorLog.StartTime);
-            Assert.AreEqual(DateTimeOffset.Parse("2020-10-08T02:49:39+00:00"), executorLog.EndTime);
+            Assert.AreEqual(DateTimeOffset.Parse("2020-10-08T02:30:39Z"), executorLog.StartTime);
+            Assert.AreEqual(DateTimeOffset.Parse("2020-10-08T02:49:39Z"), executorLog.EndTime);
         }
 
         [TestMethod]

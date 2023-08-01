@@ -17,6 +17,7 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
 using Newtonsoft.Json;
+using Tes.Converters;
 using Tes.Utilities;
 
 namespace Tes.Models
@@ -107,6 +108,7 @@ namespace Tes.Models
         /// Date + time the task was created, in RFC 3339 format. This is set by the system, not the client.
         /// </summary>
         /// <value>Date + time the task was created, in RFC 3339 format. This is set by the system, not the client.</value>
+        [JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339))]
         [DataMember(Name = "creation_time")]
         public DateTimeOffset? CreationTime { get; set; }
 

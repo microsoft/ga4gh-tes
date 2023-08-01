@@ -18,6 +18,7 @@ using System.Reflection;
 using System.Runtime.Serialization;
 using System.Text;
 using Newtonsoft.Json;
+using Tes.Converters;
 using Tes.Utilities;
 
 namespace Tes.Models
@@ -92,6 +93,7 @@ namespace Tes.Models
         /// Timestamp describing when the service was first deployed and available, in RFC 3339 format. This is set by the system, not the client.
         /// </summary>
         /// <value>Timestamp describing when the service was first deployed and available, in RFC 3339 format. This is set by the system, not the client.</value>
+        [JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339))]
         [DataMember(Name = "createdAt")]
         public DateTimeOffset? CreatedAt { get; set; }
 
@@ -99,6 +101,7 @@ namespace Tes.Models
         /// Timestamp describing when the service was last updated, in RFC 3339 format. This is set by the system, not the client.
         /// </summary>
         /// <value>Timestamp describing when the service was last updated, in RFC 3339 format. This is set by the system, not the client.</value>
+        [JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339))]
         [DataMember(Name = "updatedAt")]
         public DateTimeOffset? UpdatedAt { get; set; }
 
