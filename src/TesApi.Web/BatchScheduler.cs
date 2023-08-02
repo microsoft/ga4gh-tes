@@ -1136,7 +1136,7 @@ namespace TesApi.Web
                     new OutputFile(
                         "../std*.txt",
                         new OutputFileDestination(new(tesInternalDirectorySasUrl)),
-                        new OutputFileUploadOptions(OutputFileUploadCondition.TaskFailure))
+                        new OutputFileUploadOptions(OutputFileUploadCondition.TaskCompletion))
                 }
             };
 
