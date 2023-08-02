@@ -157,12 +157,12 @@ namespace TesApi.Web
 
                         if (deployment.Created != default)
                         {
-                            serviceInfo.CreatedAt = deployment.Created.ToUniversalTime();
+                            serviceInfo.CreatedAt = deployment.Created;
                         }
 
                         if (deployment.Updated != default)
                         {
-                            serviceInfo.UpdatedAt = deployment.Updated.ToUniversalTime();
+                            serviceInfo.UpdatedAt = deployment.Updated;
                         }
 
                         return serviceInfo;

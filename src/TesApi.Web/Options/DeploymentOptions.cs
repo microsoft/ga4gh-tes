@@ -38,12 +38,12 @@ namespace TesApi.Web.Options
         /// <summary>
         /// Timestamp describing when the service was first deployed and available.
         /// </summary>
-        public DateTime Created { get; set; }
+        public DateTimeOffset Created { get; set; }
 
         /// <summary>
         /// Timestamp describing when the service was last updated.
         /// </summary>
-        public DateTime Updated { get; set; }
+        public DateTimeOffset Updated { get; set; }
 
         /// <summary>
         /// Image of the deployed service
