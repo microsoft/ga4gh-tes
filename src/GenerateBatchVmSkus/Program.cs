@@ -176,7 +176,7 @@ namespace TesUtils
                     VmSize = sizeInfo.Name,
                     VmFamily = sku?.Family,
                     HyperVGenerations = generationList,
-                    RegionsAvailable = new List<string>(regionsForVm[s])
+                    RegionsAvailable = new List<string>(regionsForVm[s].Order())
                 };
             }).Where(x => x is not null).OrderBy(x => x!.VmSize).ToList();
 

@@ -45,7 +45,7 @@ namespace TesApi.Tests
             optionsMock.Setup(o => o.Value).Returns(terraOptions);
             azureProxyMock = new Mock<IAzureProxy>();
             terraStorageAccessProvider = new TerraStorageAccessProvider(NullLogger<TerraStorageAccessProvider>.Instance,
-                optionsMock.Object, azureProxyMock.Object, wsmApiClientMock.Object, batchSchedulingOptions);
+                optionsMock.Object, azureProxyMock.Object, wsmApiClientMock.Object, Options.Create(batchSchedulingOptions));
         }
 
         [TestMethod]
