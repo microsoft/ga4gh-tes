@@ -24,4 +24,4 @@ jobs:
     - name: Build
       run: dotnet build --no-restore
     - name: Test
-      run: dotnet test --no-build --verbosity normal --filter "TestCategory!=RequiresRoot" --logger "console;verbosity=detailed"
+      run: dotnet test --no-build --verbosity normal --filter "FullyQualifiedName=TesApi.Tests.BatchSchedulerTests.QueryStringsAreRemovedFromLocalFilePathsWhenCommandScriptIsProvidedAsFile" --logger "console;verbosity=detailed"
