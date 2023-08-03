@@ -1082,6 +1082,14 @@ namespace TesApi.Tests
             var modifiedCommandScript = (string)azureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.UploadBlobAsync) && Guid.TryParseExact(Path.GetFileName(new Uri(i.Arguments[0].ToString()).AbsolutePath), "D", out _))?.Arguments[1];
             var filesToDownload = GetFilesToDownload(azureProxy);
 
+            if (TesState.INITIALIZINGEnum != tesTask.State)
+            {
+                foreach (var log in tesTask.Logs)
+                {
+                    Console.WriteLine("Task failure: State: {0}: FailureReason: {1} SystemLogs: {2}", tesTask.State, log.FailureReason, string.Join("\r\n", log.SystemLogs));
+                }
+            }
+
             Assert.AreEqual(TesState.INITIALIZINGEnum, tesTask.State);
             Assert.IsFalse(filesToDownload.Any(f => f.LocalPath.Contains('?') || f.LocalPath.Contains("param=1") || f.LocalPath.Contains("param=2")), "Query string was not removed from local file path");
             Assert.AreEqual(1, filesToDownload.Count(f => f.StorageUrl.Contains("?param=1")), "Query string was removed from blob URL");
