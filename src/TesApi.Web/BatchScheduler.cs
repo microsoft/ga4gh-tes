@@ -414,8 +414,16 @@ namespace TesApi.Web
             }
         }
 
-        private static string GetCromwellExecutionDirectoryPath(TesTask task)
-            => GetParentPath(task.Inputs?.FirstOrDefault(IsCromwellCommandScript)?.Path.TrimStart('/'));
+        private static string GetCromwellExecutionDirectoryPathAsUrl(TesTask task)
+        {
+            var commandScript = task.Inputs?.FirstOrDefault(IsCromwellCommandScript);
+            return commandScript switch
+            {
+                null => null,
+                var x when string.IsNullOrEmpty(x.Content) => GetParentUrl(commandScript.Url),
+                _ => GetParentPath(commandScript.Path).TrimStart('/')
+            };
+        }
 
         private string GetStorageUploadPath(TesTask task)
         {
@@ -441,6 +449,18 @@ namespace TesApi.Web
             return string.Join('/', pathComponents.Take(pathComponents.Length - 1));
         }
 
+        private static string GetParentUrl(string url)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out _))
+            {
+                return GetParentPath(url).TrimStart('/'); // Continue support of Cromwell in local filesystem configuration
+            }
+
+            var builder = new UriBuilder(url);
+            builder.Path = GetParentPath(builder.Path);
+            return builder.ToString();
+        }
+
         private static string StandardizeStartTaskPath(string startTaskPath, string defaultStorageAccount)
         {
             if (string.IsNullOrWhiteSpace(startTaskPath) || startTaskPath.StartsWith($"/{defaultStorageAccount}"))
@@ -460,7 +480,7 @@ namespace TesApi.Web
         /// <returns>True if the file is a Cromwell command script</returns>
         private static bool IsCromwellCommandScript(TesInput inputFile)
             // See https://github.com/broadinstitute/cromwell/blob/17efd599d541a096dc5704991daeaefdd794fefd/supportedBackends/tes/src/main/scala/cromwell/backend/impl/tes/TesTask.scala#L58
-            => (inputFile.Name?.Equals("commandScript") ?? false) && (inputFile.Description?.EndsWith(".commandScript") ?? false) && inputFile.Type == TesFileType.FILEEnum;
+            => (inputFile.Name?.Equals("commandScript") ?? false) && (inputFile.Description?.EndsWith(".commandScript") ?? false) && inputFile.Type == TesFileType.FILEEnum && inputFile.Path.EndsWith($"/{CromwellScriptFileName}");
 
         /// <summary>
         /// Verifies existence and translates local file URLs to absolute paths (e.g. file:///tmp/cwl_temp_dir_8026387118450035757/args.py becomes /tmp/cwl_temp_dir_8026387118450035757/args.py)
@@ -949,8 +969,8 @@ namespace TesApi.Web
         private async Task<CloudTask> ConvertTesTaskToBatchTaskAsync(string taskId, TesTask task, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) isPublic, CancellationToken cancellationToken)
         {
             var poolHasContainerConfig = !(isPublic.ExecutorImage && isPublic.DockerInDockerImage && isPublic.CromwellDrsImage);
-            var cromwellExecutionDirectoryPath = GetCromwellExecutionDirectoryPath(task);
-            var isCromwell = cromwellExecutionDirectoryPath is not null;
+            var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
+            var isCromwell = cromwellExecutionDirectoryUrl is not null;
 
             var queryStringsToRemoveFromLocalFilePaths = task.Inputs?
                 .Select(i => i.Path)
@@ -974,12 +994,27 @@ namespace TesApi.Web
             // TODO: Verify whether this workaround is still needed.
             if (isCromwell)
             {
-                var executionDirectoryUri = new Uri(await storageAccessProvider.MapLocalPathToSasUrlAsync($"/{cromwellExecutionDirectoryPath}", cancellationToken, getContainerSas: true));
+                if (!Uri.TryCreate(cromwellExecutionDirectoryUrl, UriKind.Absolute, out _))
+                {
+                    cromwellExecutionDirectoryUrl = $"/{cromwellExecutionDirectoryUrl}";
+                }
+
+                var executionDirectoryUri = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectoryUrl, cancellationToken, getContainerSas: true);
                 if (executionDirectoryUri is not null)
                 {
-                    var blobsInExecutionDirectory = (await azureProxy.ListBlobsAsync(executionDirectoryUri, cancellationToken)).Where(b => !b.EndsWith($"/{CromwellScriptFileName}"));
-                    var cromwellExecutionDirectory = $"/{cromwellExecutionDirectoryPath.Split("/", StringSplitOptions.RemoveEmptyEntries)[0]}";
-                    additionalInputFiles = blobsInExecutionDirectory.Select(b => $"{cromwellExecutionDirectory}/{b}").Select(b => new TesInput { Content = null, Path = b, Url = b, Name = Path.GetFileName(b), Type = TesFileType.FILEEnum }).ToList();
+                    var blobsInExecutionDirectory = (await azureProxy.ListBlobsAsync(new Uri(executionDirectoryUri), cancellationToken)).ToList();
+                    var scriptFile = blobsInExecutionDirectory.FirstOrDefault(b => b.Name.EndsWith($"/{CromwellScriptFileName}"));
+
+                    if (scriptFile is not null)
+                    {
+                        blobsInExecutionDirectory.Remove(scriptFile);
+                        var cromwellExecutionDirectory = Path.GetDirectoryName(scriptFile.Name);
+                        additionalInputFiles = await blobsInExecutionDirectory
+                            .Select(b => (Path: $"{cromwellExecutionDirectory}/{Path.GetFileName(b.Name)}", b.Uri))
+                            .ToAsyncEnumerable()
+                            .SelectAwait(async b => new TesInput { Path = b.Path, Url = await storageAccessProvider.MapLocalPathToSasUrlAsync(b.Uri.AbsoluteUri, cancellationToken, getContainerSas: true), Name = Path.GetFileName(b.Path), Type = TesFileType.FILEEnum })
+                            .ToListAsync(cancellationToken);
+                    }
                 }
             }
 
@@ -1783,7 +1818,21 @@ namespace TesApi.Web
 
             try
             {
-                var cromwellRcContent = await storageAccessProvider.DownloadBlobAsync($"/{GetCromwellExecutionDirectoryPath(tesTask)}/rc", cancellationToken);
+                var cromwellExecutionDirectoryPath = GetCromwellExecutionDirectoryPathAsUrl(tesTask);
+                string cromwellRcContentPath;
+
+                if (Uri.TryCreate(cromwellExecutionDirectoryPath, UriKind.Absolute, out _))
+                {
+                    var cromwellRcContentBuilder = new UriBuilder(cromwellExecutionDirectoryPath);
+                    cromwellRcContentBuilder.Path += "/rc";
+                    cromwellRcContentPath = cromwellRcContentBuilder.ToString();
+                }
+                else
+                {
+                    cromwellRcContentPath = $"/{cromwellExecutionDirectoryPath}/rc";
+                }
+
+                var cromwellRcContent = await storageAccessProvider.DownloadBlobAsync(cromwellRcContentPath, cancellationToken);
 
                 if (cromwellRcContent is not null && int.TryParse(cromwellRcContent, out var temp))
                 {
