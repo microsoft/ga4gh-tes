@@ -451,7 +451,7 @@ namespace TesApi.Web
 
         private static string GetParentUrl(string url)
         {
-            if (!Uri.TryCreate(url, UriKind.Absolute, out _))
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || Uri.CheckHostName(uri.Host) <= UriHostNameType.Basic)
             {
                 return GetParentPath(url).TrimStart('/'); // Continue support of Cromwell in local filesystem configuration
             }
