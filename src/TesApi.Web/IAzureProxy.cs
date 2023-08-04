@@ -164,7 +164,7 @@ namespace TesApi.Web
         /// <param name="directoryUri">Directory Uri</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>List of blob paths</returns>
-        Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken);
+        Task<IEnumerable<Microsoft.WindowsAzure.Storage.Blob.CloudBlob>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken);
 
         /// <summary>
         /// Fetches the blobs properties

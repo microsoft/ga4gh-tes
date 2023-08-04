@@ -12,6 +12,9 @@ using Microsoft.Extensions.Options;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
+using Tes.Extensions;
+using Tes.Models;
+using TesApi.Web.Options;
 
 namespace TesApi.Web.Storage
 {
@@ -29,9 +32,9 @@ namespace TesApi.Web.Storage
         /// Provides methods for blob storage access by using local path references in form of /storageaccount/container/blobpath
         /// </summary>
         /// <param name="logger">Logger <see cref="ILogger"/></param>
-        /// <param name="storageOptions">Configuration of <see cref="Options.StorageOptions"/></param>
+        /// <param name="storageOptions">Configuration of <see cref="StorageOptions"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
-        public DefaultStorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IOptions<Options.StorageOptions> storageOptions, IAzureProxy azureProxy) : base(logger, azureProxy)
+        public DefaultStorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IOptions<StorageOptions> storageOptions, IAzureProxy azureProxy) : base(logger, azureProxy)
         {
             //TODO: refactor to use the options pattern.
             defaultStorageAccountName = storageOptions.Value.DefaultAccountName;    // This account contains the cromwell-executions container
@@ -86,7 +89,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, bool getContainerSas = false)
+        public override async Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false)
         {
             // TODO: Optional: If path is /container/... where container matches the name of the container in the default storage account, prepend the account name to the path.
             // This would allow the user to omit the account name for files stored in the default storage account
@@ -127,7 +130,7 @@ namespace TesApi.Web.Storage
                         var policy = new SharedAccessBlobPolicy()
                         {
                             Permissions = SharedAccessBlobPermissions.Add | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.List | SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.Write,
-                            SharedAccessExpiryTime = DateTime.Now.Add(SasTokenDuration)
+                            SharedAccessExpiryTime = DateTime.Now.Add((sasTokenDuration ?? TimeSpan.Zero) + SasTokenDuration)
                         };
 
                         var containerUri = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName).ToUri();
@@ -135,7 +138,7 @@ namespace TesApi.Web.Storage
                     }
                     else
                     {
-                        var policy = new SharedAccessBlobPolicy() { Permissions = SharedAccessBlobPermissions.Read, SharedAccessExpiryTime = DateTime.Now.Add(SasTokenDuration) };
+                        var policy = new SharedAccessBlobPolicy() { Permissions = SharedAccessBlobPermissions.Read, SharedAccessExpiryTime = DateTime.Now.Add((sasTokenDuration ?? TimeSpan.Zero) + SasTokenDuration) };
                         resultPathSegments.SasToken = new CloudBlob(resultPathSegments.ToUri(), new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, null, SharedAccessProtocol.HttpsOnly, null);
                     }
 
@@ -147,6 +150,36 @@ namespace TesApi.Web.Storage
                     return null;
                 }
             }
+        }
+
+        /// <inheritdoc />
+        public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken)
+        {
+            var normalizedBlobPath = NormalizedBlobPath(blobPath);
+
+            return await MapLocalPathToSasUrlAsync($"/{defaultStorageAccountName}{TesExecutionsPathPrefix}{normalizedBlobPath}", cancellationToken, getContainerSas: true);
+        }
+
+
+        private static string NormalizedBlobPath(string blobPath)
+        {
+            return string.IsNullOrEmpty(blobPath) ? string.Empty : $"/{blobPath.TrimStart('/')}";
+        }
+
+        /// <inheritdoc />
+        public override async Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken)
+        {
+            var normalizedBlobPath = NormalizedBlobPath(blobPath);
+
+            if (task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters
+                    .internal_path_prefix) == true)
+            {
+                var blobPathWithPathPrefix =
+                    $"/{defaultStorageAccountName}/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}{normalizedBlobPath}";
+                return await MapLocalPathToSasUrlAsync(blobPathWithPathPrefix, cancellationToken, getContainerSas: true);
+            }
+
+            return await GetInternalTesBlobUrlAsync($"/{task.Id}{normalizedBlobPath}", cancellationToken);
         }
 
         private async Task<bool> TryGetStorageAccountInfoAsync(string accountName, CancellationToken cancellationToken, Action<StorageAccountInfo> onSuccess = null)

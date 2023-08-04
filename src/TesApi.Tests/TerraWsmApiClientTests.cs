@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -108,6 +109,25 @@ namespace TesApi.Tests
             Assert.IsNotNull(apiResponse);
             Assert.IsTrue(!string.IsNullOrEmpty(apiResponse.Token));
             Assert.IsTrue(!string.IsNullOrEmpty(apiResponse.Url));
+        }
+
+        [TestMethod]
+        public async Task GetContainerResourcesAsync_ValidRequest_ReturnsPayload()
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(terraApiStubData.GetContainerResourcesApiResponseInJson())
+            };
+
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync(response);
+
+            var apiResponse = await terraWsmApiClient.GetContainerResourcesAsync(terraApiStubData.WorkspaceId,
+                offset: 0, limit: 10, System.Threading.CancellationToken.None);
+
+            Assert.IsNotNull(apiResponse);
+            Assert.AreEqual(1, apiResponse.Resources.Count);
+            Assert.IsTrue(apiResponse.Resources.Any(r => r.Metadata.ResourceId.ToString().Equals(terraApiStubData.ContainerResourceId.ToString(), StringComparison.OrdinalIgnoreCase)));
         }
 
         [TestMethod]

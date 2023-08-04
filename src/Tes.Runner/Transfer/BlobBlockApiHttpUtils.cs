@@ -3,7 +3,9 @@
 
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
 
@@ -14,12 +16,23 @@ namespace Tes.Runner.Transfer;
 public class BlobBlockApiHttpUtils
 {
     private const string BlobType = "BlockBlob";
-    private const int MaxRetryCount = 3;
-    private static readonly HttpClient HttpClient = new HttpClient();
-    private static readonly AsyncRetryPolicy RetryPolicy = Policy
-        .Handle<RetriableException>()
-        .WaitAndRetryAsync(MaxRetryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+    private const int MaxRetryCount = 9;
+    private readonly HttpClient httpClient;
+    private static readonly ILogger Logger = PipelineLoggerFactory.Create<BlobBlockApiHttpUtils>();
+    private readonly AsyncRetryPolicy retryPolicy;
+
+
     public const string RootHashMetadataName = "md5_4mib_hashlist_root_hash";
+
+    public BlobBlockApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolicy)
+    {
+        this.httpClient = httpClient;
+        this.retryPolicy = retryPolicy;
+    }
+
+    public BlobBlockApiHttpUtils() : this(new HttpClient(), DefaultAsyncRetryPolicy(MaxRetryCount))
+    {
+    }
 
     public static HttpRequestMessage CreatePutBlockRequestAsync(PipelineBuffer buffer, string apiVersion)
     {
@@ -80,84 +93,154 @@ public class BlobBlockApiHttpUtils
         return request;
     }
 
-    public static async Task<HttpResponseMessage> ExecuteHttpRequestAsync(Func<HttpRequestMessage> requestFactory)
+    public async Task<HttpResponseMessage> ExecuteHttpRequestAsync(Func<HttpRequestMessage> requestFactory)
     {
-        return await RetryPolicy.ExecuteAsync(() => ExecuteHttpRequestImplAsync(requestFactory));
+        return await retryPolicy.ExecuteAsync(() => ExecuteHttpRequestImplAsync(requestFactory));
     }
 
-    private static async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request)
+    private async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request)
     {
-        var response = await HttpClient.SendAsync(request());
+        HttpResponseMessage? response = null;
 
         try
         {
-            response.EnsureSuccessStatusCode();
-        }
-        catch (HttpRequestException ex)
-        {
-            if (IsRetriableStatusCode(response.StatusCode))
+            try
             {
-                throw new RetriableException(ex.Message, ex);
-            }
+                response = await httpClient.SendAsync(request());
 
-            if (IsInnerExceptionRetriable(ex))
-            {
-                throw new RetriableException(ex.Message, ex);
+                response.EnsureSuccessStatusCode();
             }
+            catch (HttpRequestException ex)
+            {
+                var status = response?.StatusCode;
+
+                HandleHttpRequestException(status, ex);
+            }
+            catch (Exception ex)
+            {
+                if (ContainsRetriableException(ex))
+                {
+                    throw new RetriableException(ex.Message, ex);
+                }
+
+                throw;
+            }
+        }
+        catch (Exception e)
+        {
+            Logger.LogError(e, "Error executing request");
+
+            response?.Dispose();
             throw;
         }
-        return response;
+
+        return response!;
     }
 
-    private static bool IsInnerExceptionRetriable(HttpRequestException httpRequestException)
+    private static void HandleHttpRequestException(HttpStatusCode? status, HttpRequestException ex)
     {
-        if (httpRequestException.InnerException is IOException)
+        if (IsRetriableStatusCode(status))
+        {
+            throw new RetriableException(ex.Message, ex);
+        }
+
+        if (ContainsRetriableException(ex))
+        {
+            throw new RetriableException(ex.Message, ex);
+        }
+
+        throw ex;
+    }
+
+
+    public async Task<int> ExecuteHttpRequestAndReadBodyResponseAsync(PipelineBuffer buffer,
+        Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken = default)
+    {
+        return await retryPolicy.ExecuteAsync(() => ExecuteHttpRequestAndReadBodyResponseImplAsync(buffer, requestFactory, cancellationToken));
+    }
+
+    private static bool ContainsRetriableException(Exception? ex)
+    {
+        if (ex is null)
+        {
+            return false;
+        }
+
+        if (ex is TimeoutException or IOException or SocketException)
         {
             return true;
         }
 
-        return false;
+
+        return ContainsRetriableException(ex.InnerException);
     }
 
-    public static async Task<int> ExecuteHttpRequestAndReadBodyResponseAsync(PipelineBuffer buffer, Func<HttpRequestMessage> requestFactory)
+    private async Task<int> ExecuteHttpRequestAndReadBodyResponseImplAsync(PipelineBuffer buffer,
+        Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken)
     {
-        return await RetryPolicy.ExecuteAsync(() => ExecuteHttpRequestAndReadBodyResponseImplAsync(buffer, requestFactory));
-    }
-
-    private static async Task<int> ExecuteHttpRequestAndReadBodyResponseImplAsync(PipelineBuffer buffer, Func<HttpRequestMessage> requestFactory)
-    {
-        var response = await HttpClient.SendAsync(requestFactory(), HttpCompletionOption.ResponseHeadersRead);
-
+        HttpResponseMessage? response = null;
         try
         {
-            response.EnsureSuccessStatusCode();
+            var request = requestFactory();
 
-            var data = await response.Content.ReadAsStreamAsync();
+            response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
-            await data.ReadExactlyAsync(buffer.Data, 0, buffer.Length);
-
-            return buffer.Length;
+            await ReadPartFromBodyAsync(buffer, cancellationToken, response);
         }
         catch (HttpRequestException ex)
         {
-            if (IsRetriableStatusCode(response.StatusCode))
+            Logger.LogDebug($"Failed to process part. Part: {buffer.FileName} Ordinal: {buffer.Ordinal}. Error: {ex.Message}");
+
+            var status = response?.StatusCode;
+
+            HandleHttpRequestException(status, ex);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug($"Failed to process part. Part: {buffer.FileName} Ordinal: {buffer.Ordinal}. Error: {ex.Message}");
+
+            if (ContainsRetriableException(ex))
             {
                 throw new RetriableException(ex.Message, ex);
             }
+
             throw;
-        }
-        catch (IOException ex)
-        {
-            throw new RetriableException(ex.Message, ex);
         }
         finally
         {
-            response.Dispose();
+            try
+            {
+                response?.Dispose();
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e, "Error disposing response");
+            }
         }
+
+        return buffer.Length;
     }
 
-    private static bool IsRetriableStatusCode(HttpStatusCode responseStatusCode)
+    private async Task ReadPartFromBodyAsync(PipelineBuffer buffer, CancellationToken cancellationToken,
+        HttpResponseMessage response)
     {
+        response.EnsureSuccessStatusCode();
+
+        await using var data = await response.Content.ReadAsStreamAsync(cancellationToken)
+            .WaitAsync(httpClient.Timeout, cancellationToken);
+
+        await data.ReadExactlyAsync(buffer.Data, 0, buffer.Length, cancellationToken)
+            .AsTask()
+            .WaitAsync(httpClient.Timeout, cancellationToken);
+    }
+
+    private static bool IsRetriableStatusCode(HttpStatusCode? responseStatusCode)
+    {
+        if (responseStatusCode is null)
+        {
+            return false;
+        }
+
         if (responseStatusCode is
             HttpStatusCode.ServiceUnavailable or
             HttpStatusCode.GatewayTimeout or
@@ -197,5 +280,18 @@ public class BlobBlockApiHttpUtils
 
         request.Headers.Range = new RangeHeaderValue(buffer.Offset, buffer.Offset + buffer.Length);
         return request;
+    }
+
+    public static AsyncRetryPolicy DefaultAsyncRetryPolicy(int retryAttempts)
+    {
+        return Policy
+            .Handle<RetriableException>()
+            .WaitAndRetryAsync(retryAttempts, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                onRetryAsync:
+                (exception, _, retryCount, _) =>
+                {
+                    Logger.LogError(exception, "Retrying failed request. Retry count: {retryCount}", retryCount);
+                    return Task.CompletedTask;
+                });
     }
 }

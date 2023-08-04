@@ -198,7 +198,7 @@ namespace TesUtils
                     VmSize = sizeInfo.Name,
                     VmFamily = sku?.Family,
                     HyperVGenerations = generationList,
-                    RegionsAvailable = new List<string>(regionsForVm[s]),
+                    RegionsAvailable = new List<string>(regionsForVm[s].Order()),
                     EncryptionAtHostSupported = encryptionAtHostSupported,
                     PricePerHour = priceForVm.ContainsKey(s) ? (decimal?)priceForVm[s].retailPrice : null,
                 };

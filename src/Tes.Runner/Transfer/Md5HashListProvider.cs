@@ -18,7 +18,7 @@ namespace Tes.Runner.Transfer
 
         public string CalculateAndAddBlockHash(PipelineBuffer pipelineBuffer)
         {
-            var hash = CreateBufferHashList(pipelineBuffer.Data[0..pipelineBuffer.Length]);
+            var hash = CreateBufferHashList(pipelineBuffer);
 
             if (!hashesDictionary.TryAdd(pipelineBuffer.Ordinal, hash))
             {
@@ -55,13 +55,13 @@ namespace Tes.Runner.Transfer
             return BitConverter.ToString(md5Provider.ComputeHash(buffer, offset, length)).Replace("-", "").ToLowerInvariant();
         }
 
-        private string CreateBufferHashList(byte[] buffer)
+        private string CreateBufferHashList(PipelineBuffer pipelineBuffer)
         {
             var stringBuilder = new StringBuilder();
-            for (var i = 0; i < buffer.Length; i += BlobSizeUtils.BlockSizeIncrementUnitInBytes)
+            for (var i = 0; i < pipelineBuffer.Length; i += BlobSizeUtils.BlockSizeIncrementUnitInBytes)
             {
-                var blockLength = Math.Min(BlobSizeUtils.BlockSizeIncrementUnitInBytes, buffer.Length - i);
-                stringBuilder.Append(CreateBlockMd5CheckSumValue(buffer, i, blockLength));
+                var blockLength = Math.Min(BlobSizeUtils.BlockSizeIncrementUnitInBytes, pipelineBuffer.Length - i);
+                stringBuilder.Append(CreateBlockMd5CheckSumValue(pipelineBuffer.Data, i, blockLength));
             }
             return stringBuilder.ToString();
         }

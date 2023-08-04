@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using Moq;
-using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Test.Transfer
@@ -54,19 +53,19 @@ namespace Tes.Runner.Test.Transfer
         }
 
         [DataTestMethod]
-        [DataRow(1, 50)]
-        [DataRow(2, 90)]
-        [DataRow(3, 90)]
-        [DataRow(4, 90)]
-        [DataRow(5, 90)]
-        [DataRow(6, 90)]
-        [DataRow(7, 90)]
-        [DataRow(8, 90)]
-        public void OptimizeOptionsIfApplicable_DefaultOptionsAreProvided_OptimizesReadersAndWriters(int numberOfGigs, int expectedReadersAndWriters)
+        [DataRow(1, 10)]
+        [DataRow(2, 20)]
+        [DataRow(3, 30)]
+        [DataRow(4, 40)]
+        [DataRow(5, 50)]
+        [DataRow(6, 60)]
+        [DataRow(10, 90)]
+        [DataRow(11, 90)]
+        public void OptimizeOptionsIfApplicable_DefaultOptionsAreProvided_OptimizesReadersAndWriters(int numberOfCores, int expectedReadersAndWriters)
         {
             var options = new BlobPipelineOptions();
 
-            systemInfoProviderMock.Setup(x => x.TotalMemory).Returns(numberOfGigs * BlobSizeUtils.GiB);
+            systemInfoProviderMock.Setup(x => x.ProcessorCount).Returns(numberOfCores);
 
             var newOptions = optimizer.Optimize(options);
 
@@ -119,7 +118,7 @@ namespace Tes.Runner.Test.Transfer
             systemInfoProviderMock.Setup(x => x.TotalMemory).Returns(10 * BlobSizeUtils.GiB);
             fileInfoProviderMock.Setup(x => x.GetFileSize(It.IsAny<string>())).Returns(fileSizeInGiB * BlobSizeUtils.GiB);
 
-            var outputs = new List<FileOutput>() { new FileOutput() { FullFileName = "fileName", SasStrategy = SasResolutionStrategy.None, TargetUrl = "https://blob.foo/cont/blob" } };
+            var outputs = new List<UploadInfo>() { new UploadInfo("fileName", new Uri("https://blob.foo/cont/blob")) };
             var options = new BlobPipelineOptions();
 
             var newOptions = optimizer.Optimize(options, outputs);

@@ -8,6 +8,7 @@ using Azure.Core;
 using Azure.Identity;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -72,7 +73,7 @@ namespace TesApi.Web
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
 
                     .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
-                    .AddSingleton<ICache<TesTask>, TesRepositoryCache<TesTask>>()
+                    .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
                     .AddTransient<BatchPool>()
@@ -150,6 +151,7 @@ namespace TesApi.Web
             }
 
             logger?.LogInformation("TES successfully configured dependent services in ConfigureServices(IServiceCollection services)");
+
 
             IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
             {

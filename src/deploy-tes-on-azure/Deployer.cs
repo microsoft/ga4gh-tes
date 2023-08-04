@@ -152,7 +152,7 @@ namespace TesDeployer
                     azureCredentials = new(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
                     armClient = new ArmClient(new DefaultAzureCredential());
                     azureClient = GetAzureClient(azureCredentials);
-                    armClient = new ArmClient(new DefaultAzureCredential());
+                    armClient = new ArmClient(new AzureCliCredential());
                     azureSubscriptionClient = azureClient.WithSubscription(configuration.SubscriptionId);
                     subscriptionIds = (await azureClient.Subscriptions.ListAsync()).Select(s => s.SubscriptionId);
                     resourceManagerClient = GetResourceManagerClient(azureCredentials);
@@ -749,7 +749,7 @@ namespace TesDeployer
                         }
                     });
 
-            return await IsTaskSuccessfulAfterLongPollingAsync(client, $"{requestUri}/{response["id"]}") ? 0 : 1;
+            return await IsTaskSuccessfulAfterLongPollingAsync(client, $"{requestUri}/{response["id"]}?view=full") ? 0 : 1;
         }
 
         private static async Task<bool> RunTestTask(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
@@ -803,6 +803,7 @@ namespace TesDeployer
                     else if (response.State == TesState.EXECUTORERROREnum || response.State == TesState.SYSTEMERROREnum || response.State == TesState.CANCELEDEnum)
                     {
                         ConsoleEx.WriteLine($"TES Task State: {response.State}");
+                        ConsoleEx.WriteLine(content);
 
                         if (!string.IsNullOrWhiteSpace(response.FailureReason))
                         {
@@ -922,6 +923,18 @@ namespace TesDeployer
                     UserAssignedIdentities = new Dictionary<string, ManagedClusterIdentityUserAssignedIdentitiesValue>()
                 }
             };
+
+            if (!string.IsNullOrWhiteSpace(configuration.AadGroupIds))
+            {
+                cluster.EnableRBAC = true;
+                cluster.AadProfile = new ManagedClusterAADProfile()
+                {
+                    AdminGroupObjectIDs = configuration.AadGroupIds.Split(",", StringSplitOptions.RemoveEmptyEntries),
+                    EnableAzureRBAC = false,
+                    Managed = true
+                };
+            }
+
             cluster.Identity.UserAssignedIdentities.Add(managedIdentity.Id, new(managedIdentity.PrincipalId, managedIdentity.ClientId));
             cluster.IdentityProfile = new Dictionary<string, ManagedClusterPropertiesIdentityProfileValue>
             {

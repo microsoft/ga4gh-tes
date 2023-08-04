@@ -33,15 +33,25 @@ namespace Tes.Runner.Transfer
         /// Writes the part as a block to the blob.
         /// </summary>
         /// <param name="buffer">Pipeline buffer containing the block data</param>
+        /// <param name="cancellationToken"></param>
         /// <returns>Number of bytes written</returns>
-        public override async ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer)
+        public override async ValueTask<int> ExecuteWriteAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
         {
             if (IsFileEmptyScenario(buffer))
             {
                 return 0;
             }
 
-            await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreatePutBlockRequestAsync(buffer, PipelineOptions.ApiVersion));
+            HttpResponseMessage? response = null;
+
+            try
+            {
+                response = await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreatePutBlockRequestAsync(buffer, PipelineOptions.ApiVersion));
+            }
+            finally
+            {
+                response?.Dispose();
+            }
 
             return buffer.Length;
         }
@@ -69,18 +79,19 @@ namespace Tes.Runner.Transfer
         /// Reads part's data from the file
         /// </summary>
         /// <param name="buffer">Pipeline buffer in which the file data will be written</param>
+        /// <param name="cancellationToken">Signals cancellation of read operations on the channels and file handler</param>
         /// <returns>Number of bytes read</returns>
-        public override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer)
+        public override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
         {
-            var fileHandler = await buffer.FileHandlerPool.Reader.ReadAsync();
+            var fileHandler = await buffer.FileHandlerPool.Reader.ReadAsync(cancellationToken);
 
             fileHandler.Position = buffer.Offset;
 
-            var dataRead = await fileHandler.ReadAsync(buffer.Data, 0, buffer.Length);
+            var dataRead = await fileHandler.ReadAsync(buffer.Data, 0, buffer.Length, cancellationToken);
 
             buffer.HashListProvider?.CalculateAndAddBlockHash(buffer);
 
-            await buffer.FileHandlerPool.Writer.WriteAsync(fileHandler);
+            await buffer.FileHandlerPool.Writer.WriteAsync(fileHandler, cancellationToken);
 
             return dataRead;
         }
@@ -109,14 +120,21 @@ namespace Tes.Runner.Transfer
             ArgumentNullException.ThrowIfNull(blobUrl, nameof(blobUrl));
             ArgumentException.ThrowIfNullOrEmpty(fileName, nameof(fileName));
 
+            HttpResponseMessage? response = null;
             try
             {
-                await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSizeBytes, PipelineOptions.ApiVersion, rootHash));
+                response = await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() =>
+                    BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSizeBytes,
+                        PipelineOptions.ApiVersion, rootHash));
             }
             catch (Exception e)
             {
                 Logger.LogError(e, "Failed to complete the blob block operation");
                 throw;
+            }
+            finally
+            {
+                response?.Dispose();
             }
         }
 

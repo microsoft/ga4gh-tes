@@ -156,5 +156,28 @@ namespace TesApi.Tests
 
             Assert.AreEqual(identityName, capturedApiCreateBatchPoolRequest.AzureBatchPool.UserAssignedIdentities.SingleOrDefault().Name);
         }
+
+        [TestMethod]
+        public async Task CreateBatchPoolAsync_UserIdentityInStartTaskMapsCorrectly()
+        {
+
+            var poolInfo = new Pool()
+            {
+
+                StartTask = new StartTask()
+                {
+                    UserIdentity = new UserIdentity("user", new AutoUserSpecification(AutoUserScope.Pool, ElevationLevel.Admin))
+                }
+            };
+
+            var pool = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
+
+            var captureUserIdentity = capturedApiCreateBatchPoolRequest.AzureBatchPool.StartTask.UserIdentity;
+
+            Assert.AreEqual(poolInfo.StartTask.UserIdentity.UserName, captureUserIdentity.UserName);
+            Assert.AreEqual(poolInfo.StartTask.UserIdentity.AutoUser.Scope.ToString(), captureUserIdentity.AutoUser.Scope.ToString());
+            Assert.AreEqual(poolInfo.StartTask.UserIdentity.AutoUser.ElevationLevel.ToString(), captureUserIdentity.AutoUser.ElevationLevel.ToString());
+
+        }
     }
 }
