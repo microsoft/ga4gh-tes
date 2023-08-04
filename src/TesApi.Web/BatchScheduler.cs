@@ -145,7 +145,6 @@ namespace TesApi.Web
             this.quotaVerifier = quotaVerifier;
             this.skuInformationProvider = skuInformationProvider;
             this.containerRegistryProvider = containerRegistryProvider;
-            this.configuration = configuration;
 
             this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
             this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
@@ -568,7 +567,7 @@ namespace TesApi.Web
                                 autoscaled: true,
                                 preemptable: virtualMachineInfo.LowPriority,
                                 nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                                containerConfiguration: containerConfiguration,
+                                containerConfiguration: containerMetadata.ContainerConfiguration,
                                 encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
                                 cancellationToken: cancellationToken)),
                         cancellationToken: cancellationToken)
@@ -576,7 +575,6 @@ namespace TesApi.Web
                     jobOrTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
                 }
 
-                logger.LogInformation("Pool: " + JsonConvert.SerializeObject(poolInformation));
                 tesTask.PoolId = poolInformation.PoolId;
                 var cloudTask = await ConvertTesTaskToBatchTaskAsync(enableBatchAutopool ? tesTask.Id : jobOrTaskId, tesTask, containerMetadata.IsPublic, cancellationToken);
                 logger.LogInformation($"Creating batch task for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
@@ -1490,6 +1488,7 @@ namespace TesApi.Web
         /// <param name="preemptable"></param>
         /// <param name="nodeInfo"></param>
         /// <param name="containerConfiguration"></param>
+        /// <param name="encryptionAtHostSupported">VM supports encryption at host.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns><see cref="PoolSpecification"/></returns>
         /// <remarks>We use the PoolSpecification for both the namespace of all the constituent parts and for the fact that it allows us to configure shared and autopools using the same code.</remarks>
@@ -1653,7 +1652,7 @@ namespace TesApi.Web
             static BatchModels.NodeCommunicationMode? ConvertNodeCommunicationMode(NodeCommunicationMode? nodeCommunicationMode)
                 => (BatchModels.NodeCommunicationMode?)nodeCommunicationMode;
 
-            static BatchModels.DiskEncryptionConfiguration? ConvertDiskEncryptionConfiguration(DiskEncryptionConfiguration? diskEncryptionConfiguration)
+            static BatchModels.DiskEncryptionConfiguration ConvertDiskEncryptionConfiguration(DiskEncryptionConfiguration diskEncryptionConfiguration)
                 => diskEncryptionConfiguration is null ? default : new(diskEncryptionConfiguration.Targets.Select(x => ConvertDiskEncryptionTarget(x)).ToList());
 
             static BatchModels.DiskEncryptionTarget ConvertDiskEncryptionTarget(DiskEncryptionTarget? diskEncryptionTarget)
