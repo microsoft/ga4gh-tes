@@ -340,10 +340,10 @@ namespace TesApi.Web.Management.Models.Terra
     public class ApiAutoUserSpecification
     {
         [JsonPropertyName("scope")]
-        public ApiDynamicVNetAssignmentScope Scope { get; set; }
+        public ApiAzureBatchPoolAutoUserScope Scope { get; set; }
 
         [JsonPropertyName("elevationLevel")]
-        public ApiDynamicVNetAssignmentScope ElevationLevel { get; set; }
+        public ApiAzureBatchPoolElevationLevel ElevationLevel { get; set; }
     }
 
     public class ApiUserAssignedIdentity
@@ -402,5 +402,20 @@ namespace TesApi.Web.Management.Models.Terra
         [JsonPropertyName("value")]
         public string Value { get; set; }
     }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum ApiAzureBatchPoolAutoUserScope
+    {
+        [EnumMember(Value = "Task")] Task,
+        [EnumMember(Value = "Pool")] Pool
+    }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum ApiAzureBatchPoolElevationLevel
+    {
+        [EnumMember(Value = "NonAdmin")] NonAdmin,
+        [EnumMember(Value = "Admin")] Admin
+    }
+
 #pragma warning restore CS1591
 }
