@@ -152,7 +152,7 @@ namespace TesApi.Web.Management.Models.Terra
         public string Name { get; set; }
 
         [JsonPropertyName("protocol")]
-        public ApiDynamicVNetAssignmentScope Protocol { get; set; }
+        public ApiInboundEndpointProtocol Protocol { get; set; }
 
         [JsonPropertyName("backendPort")]
         public long BackendPort { get; set; }
@@ -232,7 +232,7 @@ namespace TesApi.Web.Management.Models.Terra
         public long TargetLowPriorityNodes { get; set; }
 
         [JsonPropertyName("nodeDeallocationOption")]
-        public ApiDynamicVNetAssignmentScope NodeDeallocationOption { get; set; }
+        public ApiAzureBatchPoolComputeNodeDeallocationOption NodeDeallocationOption { get; set; }
     }
 
     public class ApiStartTask
@@ -271,7 +271,7 @@ namespace TesApi.Web.Management.Models.Terra
         public ApiContainerRegistry Registry { get; set; }
 
         [JsonPropertyName("workingDirectory")]
-        public ApiDynamicVNetAssignmentScope WorkingDirectory { get; set; }
+        public ApiAzureBatchPoolContainerWorkingDirectory WorkingDirectory { get; set; }
     }
 
     public class ApiContainerRegistry
@@ -415,6 +415,29 @@ namespace TesApi.Web.Management.Models.Terra
     {
         [EnumMember(Value = "NonAdmin")] NonAdmin,
         [EnumMember(Value = "Admin")] Admin
+    }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum ApiAzureBatchPoolContainerWorkingDirectory
+    {
+        [EnumMember(Value = "TaskWorkingDirectory")] TaskWorkingDirectory,
+        [EnumMember(Value = "ContainerImageDefault")] ContainerImageDefault
+    }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum ApiAzureBatchPoolComputeNodeDeallocationOption
+    {
+        [EnumMember(Value = "Requeue")] Requeue,
+        [EnumMember(Value = "Terminate")] Terminate,
+        [EnumMember(Value = "TaskCompletion")] TaskCompletion,
+        [EnumMember(Value = "RetainedData")] RetainedData
+    }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum ApiInboundEndpointProtocol
+    {
+        [EnumMember(Value = "TCP")] TCP,
+        [EnumMember(Value = "UDP")] UDP
     }
 
 #pragma warning restore CS1591
