@@ -351,14 +351,23 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task BatchTaskResourcesIncludeDownloadAndUploadScripts()
         {
+            var expectedFiles = new List<string>
+            {
+                "batch_script",
+                "upload_files_script",
+                "download_files_script",
+                //"upload_metrics_script",
+                "tRunner",
+            };
+
             (_, var cloudTask, _, _) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(true);
 
-            Assert.AreEqual(5, cloudTask.ResourceFiles.Count);
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("batch_script")));
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("upload_files_script")));
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("download_files_script")));
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("upload_metrics_script")));
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("tRunner")));
+            foreach (var file in expectedFiles)
+            {
+                Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals(file)));
+            }
+
+            Assert.AreEqual(expectedFiles.Count, cloudTask.ResourceFiles.Count);
         }
 
         private async Task AddBatchTaskHandlesExceptions(TesState newState, Func<AzureProxyReturnValues, (Action<IServiceCollection>, Action<Mock<IAzureProxy>>)> testArranger, Action<TesTask, IEnumerable<(LogLevel, Exception)>> resultValidator)
