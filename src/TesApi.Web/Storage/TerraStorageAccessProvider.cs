@@ -40,15 +40,15 @@ namespace TesApi.Web.Storage
         /// <param name="terraWsmApiClient"><see cref="TerraWsmApiClient"/></param>
         /// <param name="batchSchedulingOptions"><see cref="BatchSchedulingOptions"/>></param>
         public TerraStorageAccessProvider(ILogger<TerraStorageAccessProvider> logger,
-            IOptions<TerraOptions> terraOptions, IAzureProxy azureProxy, TerraWsmApiClient terraWsmApiClient, BatchSchedulingOptions batchSchedulingOptions) : base(
+            IOptions<TerraOptions> terraOptions, IAzureProxy azureProxy, TerraWsmApiClient terraWsmApiClient, IOptions<BatchSchedulingOptions> batchSchedulingOptions) : base(
             logger, azureProxy)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(batchSchedulingOptions);
-            ArgumentNullException.ThrowIfNull(batchSchedulingOptions.Prefix, nameof(batchSchedulingOptions.Prefix));
+            ArgumentNullException.ThrowIfNull(batchSchedulingOptions.Value.Prefix, nameof(batchSchedulingOptions.Value.Prefix));
 
             this.terraWsmApiClient = terraWsmApiClient;
-            this.batchSchedulingOptions = batchSchedulingOptions;
+            this.batchSchedulingOptions = batchSchedulingOptions.Value;
             this.terraOptions = terraOptions.Value;
         }
 
