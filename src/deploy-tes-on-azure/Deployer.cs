@@ -534,7 +534,7 @@ namespace TesDeployer
                                 await kubernetesClient.AppsV1.CreateNamespacedDeploymentAsync(ubuntuDeployment, deploymentNamespace);
                                 await ExecuteQueriesOnAzurePostgreSQLDbFromK8(kubernetesClient, deploymentName, deploymentNamespace);
                                 await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace);
-                                
+
 
                                 if (configuration.EnableIngress.GetValueOrDefault())
                                 {
@@ -549,63 +549,50 @@ namespace TesDeployer
 
                     int exitCode;
 
-                    if (configuration.EnableIngress.GetValueOrDefault() || true)
+                    if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
                     {
-                        //ConsoleEx.WriteLine($"TES ingress is enabled");
-                        //ConsoleEx.WriteLine($"TES is secured with basic auth at {kubernetesManager.TesHostname}");
+                        // Write credentials to JSON file in working directory
+                        var credentialsJson = System.Text.Json.JsonSerializer.Serialize<TesCredentials>(
+                            new(kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword));
 
-                        if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
+                        var credentialsPath = Path.Combine(Directory.GetCurrentDirectory(), TesCredentialsFileName);
+                        await File.WriteAllTextAsync(credentialsPath, credentialsJson);
+                        ConsoleEx.WriteLine($"TES credentials file written to: {credentialsPath}");
+                    }
+
+                    if (isBatchQuotaAvailable)
+                    {
+                        if (configuration.SkipTestWorkflow)
                         {
-                            // Write credentials to JSON file in working directory
-                            var credentialsJson = System.Text.Json.JsonSerializer.Serialize<TesCredentials>(
-                                new(kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword));
-
-                            var credentialsPath = Path.Combine(Directory.GetCurrentDirectory(), TesCredentialsFileName);
-                            await File.WriteAllTextAsync(credentialsPath, credentialsJson);
-                            ConsoleEx.WriteLine($"TES credentials file written to: {credentialsPath}");
-                        }
-
-
-
-                        if (isBatchQuotaAvailable)
-                        {
-                            if (configuration.SkipTestWorkflow)
-                            {
-                                exitCode = 0;
-                            }
-                            else
-                            {
-                                var tokenSource = new CancellationTokenSource();
-                                var token = tokenSource.Token;
-                                var portForwardTask = kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 80:80", token, appendKubeconfig: true);
-
-                                var isTestWorkflowSuccessful = await RunTestTask("localhost", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
-
-                                if (!isTestWorkflowSuccessful)
-                                {
-                                    await DeleteResourceGroupIfUserConsentsAsync();
-                                }
-
-                                tokenSource.Cancel();
-                                exitCode = isTestWorkflowSuccessful ? 0 : 1;
-                            }
+                            exitCode = 0;
                         }
                         else
                         {
-                            if (!configuration.SkipTestWorkflow)
+                            var tokenSource = new CancellationTokenSource();
+                            var token = tokenSource.Token;
+                            var portForwardTask = kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 80:80", token, appendKubeconfig: true);
+
+                            var isTestWorkflowSuccessful = await RunTestTask("localhost", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+
+                            if (!isTestWorkflowSuccessful)
                             {
-                                ConsoleEx.WriteLine($"Could not run the test task.", ConsoleColor.Yellow);
+                                await DeleteResourceGroupIfUserConsentsAsync();
                             }
 
-                            ConsoleEx.WriteLine($"Deployment was successful, but Batch account {configuration.BatchAccountName} does not have sufficient core quota to run workflows.", ConsoleColor.Yellow);
-                            ConsoleEx.WriteLine($"Request Batch core quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
-                            ConsoleEx.WriteLine($"After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
-                            exitCode = 2;
+                            tokenSource.Cancel();
+                            exitCode = isTestWorkflowSuccessful ? 0 : 1;
                         }
                     }
                     else
                     {
-                        ConsoleEx.WriteLine($"TES ingress is not enabled, skipping test tasks.");
+                        if (!configuration.SkipTestWorkflow)
+                        {
+                            ConsoleEx.WriteLine($"Could not run the test task.", ConsoleColor.Yellow);
+                        }
+
+                        ConsoleEx.WriteLine($"Deployment was successful, but Batch account {configuration.BatchAccountName} does not have sufficient core quota to run workflows.", ConsoleColor.Yellow);
+                        ConsoleEx.WriteLine($"Request Batch core quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
+                        ConsoleEx.WriteLine($"After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
                         exitCode = 2;
                     }
 
@@ -710,7 +697,6 @@ namespace TesDeployer
         private static async Task<int> TestTaskAsync(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
         {
             using var client = new HttpClient();
-            //client.SetBasicAuthentication(tesUsername, tesPassword);
 
             var task = new TesTask()
             {
