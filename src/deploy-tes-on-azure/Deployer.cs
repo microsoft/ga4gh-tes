@@ -526,7 +526,7 @@ namespace TesDeployer
                             },
                             async kubernetesClient =>
                             {
-                                await kubernetesManager.DeployCoADependenciesAsync();
+                                await kubernetesManager.DeployCoADependenciesAsync(cts.Token);
 
                                 // Deploy an ubuntu pod to run PSQL commands, then delete it
                                 const string deploymentNamespace = "default";
@@ -534,13 +534,84 @@ namespace TesDeployer
                                 await kubernetesClient.AppsV1.CreateNamespacedDeploymentAsync(ubuntuDeployment, deploymentNamespace);
                                 await ExecuteQueriesOnAzurePostgreSQLDbFromK8(kubernetesClient, deploymentName, deploymentNamespace);
                                 await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace);
+                                
 
                                 if (configuration.EnableIngress.GetValueOrDefault())
                                 {
-                                    _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
+                                    _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient, cts.Token);
                                 }
                             });
                     }
+
+
+                    var maxPerFamilyQuota = batchAccount.DedicatedCoreQuotaPerVMFamilyEnforced ? batchAccount.DedicatedCoreQuotaPerVMFamily.Select(q => q.CoreQuota).Where(q => 0 != q) : Enumerable.Repeat(batchAccount.DedicatedCoreQuota ?? 0, 1);
+                    var isBatchQuotaAvailable = batchAccount.LowPriorityCoreQuota > 0 || (batchAccount.DedicatedCoreQuota > 0 && maxPerFamilyQuota.Append(0).Max() > 0);
+
+                    int exitCode;
+
+                    if (configuration.EnableIngress.GetValueOrDefault() || true)
+                    {
+                        //ConsoleEx.WriteLine($"TES ingress is enabled");
+                        //ConsoleEx.WriteLine($"TES is secured with basic auth at {kubernetesManager.TesHostname}");
+
+                        if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
+                        {
+                            // Write credentials to JSON file in working directory
+                            var credentialsJson = System.Text.Json.JsonSerializer.Serialize<TesCredentials>(
+                                new(kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword));
+
+                            var credentialsPath = Path.Combine(Directory.GetCurrentDirectory(), TesCredentialsFileName);
+                            await File.WriteAllTextAsync(credentialsPath, credentialsJson);
+                            ConsoleEx.WriteLine($"TES credentials file written to: {credentialsPath}");
+                        }
+
+
+
+                        if (isBatchQuotaAvailable)
+                        {
+                            if (configuration.SkipTestWorkflow)
+                            {
+                                exitCode = 0;
+                            }
+                            else
+                            {
+                                var tokenSource = new CancellationTokenSource();
+                                var token = tokenSource.Token;
+                                var portForwardTask = kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 80:80", token, appendKubeconfig: true);
+
+                                var isTestWorkflowSuccessful = await RunTestTask("localhost", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+
+                                if (!isTestWorkflowSuccessful)
+                                {
+                                    await DeleteResourceGroupIfUserConsentsAsync();
+                                }
+
+                                tokenSource.Cancel();
+                                exitCode = isTestWorkflowSuccessful ? 0 : 1;
+                            }
+                        }
+                        else
+                        {
+                            if (!configuration.SkipTestWorkflow)
+                            {
+                                ConsoleEx.WriteLine($"Could not run the test task.", ConsoleColor.Yellow);
+                            }
+
+                            ConsoleEx.WriteLine($"Deployment was successful, but Batch account {configuration.BatchAccountName} does not have sufficient core quota to run workflows.", ConsoleColor.Yellow);
+                            ConsoleEx.WriteLine($"Request Batch core quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
+                            ConsoleEx.WriteLine($"After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
+                            exitCode = 2;
+                        }
+                    }
+                    else
+                    {
+                        ConsoleEx.WriteLine($"TES ingress is not enabled, skipping test tasks.");
+                        exitCode = 2;
+                    }
+
+                    ConsoleEx.WriteLine($"Completed in {mainTimer.Elapsed.TotalMinutes:n1} minutes.");
+
+                    return exitCode;
                 }
                 finally
                 {
@@ -549,70 +620,6 @@ namespace TesDeployer
                         kubernetesManager.DeleteTempFiles();
                     }
                 }
-
-                var maxPerFamilyQuota = batchAccount.DedicatedCoreQuotaPerVMFamilyEnforced ? batchAccount.DedicatedCoreQuotaPerVMFamily.Select(q => q.CoreQuota).Where(q => 0 != q) : Enumerable.Repeat(batchAccount.DedicatedCoreQuota ?? 0, 1);
-                var isBatchQuotaAvailable = batchAccount.LowPriorityCoreQuota > 0 || (batchAccount.DedicatedCoreQuota > 0 && maxPerFamilyQuota.Append(0).Max() > 0);
-
-                int exitCode;
-
-                if (configuration.EnableIngress.GetValueOrDefault())
-                {
-                    ConsoleEx.WriteLine($"TES ingress is enabled");
-                    ConsoleEx.WriteLine($"TES is secured with basic auth at {kubernetesManager.TesHostname}");
-
-                    if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
-                    {
-                        // Write credentials to JSON file in working directory
-                        var credentialsJson = System.Text.Json.JsonSerializer.Serialize<TesCredentials>(
-                            new(kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword));
-
-                        var credentialsPath = Path.Combine(Directory.GetCurrentDirectory(), TesCredentialsFileName);
-                        await File.WriteAllTextAsync(credentialsPath, credentialsJson);
-                        ConsoleEx.WriteLine($"TES credentials file written to: {credentialsPath}");
-                    }
-
-
-
-                    if (isBatchQuotaAvailable)
-                    {
-                        if (configuration.SkipTestWorkflow)
-                        {
-                            exitCode = 0;
-                        }
-                        else
-                        {
-                            var isTestWorkflowSuccessful = await RunTestTask(kubernetesManager.TesHostname, batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
-
-                            if (!isTestWorkflowSuccessful)
-                            {
-                                await DeleteResourceGroupIfUserConsentsAsync();
-                            }
-
-                            exitCode = isTestWorkflowSuccessful ? 0 : 1;
-                        }
-                    }
-                    else
-                    {
-                        if (!configuration.SkipTestWorkflow)
-                        {
-                            ConsoleEx.WriteLine($"Could not run the test task.", ConsoleColor.Yellow);
-                        }
-
-                        ConsoleEx.WriteLine($"Deployment was successful, but Batch account {configuration.BatchAccountName} does not have sufficient core quota to run workflows.", ConsoleColor.Yellow);
-                        ConsoleEx.WriteLine($"Request Batch core quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
-                        ConsoleEx.WriteLine($"After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
-                        exitCode = 2;
-                    }
-                }
-                else
-                {
-                    ConsoleEx.WriteLine($"TES ingress is not enabled, skipping test tasks.");
-                    exitCode = 2;
-                }
-
-                ConsoleEx.WriteLine($"Completed in {mainTimer.Elapsed.TotalMinutes:n1} minutes.");
-
-                return exitCode;
             }
             catch (ValidationException validationException)
             {
@@ -696,14 +703,14 @@ namespace TesDeployer
             {
                 var kubernetesClient = await kubernetesManager.GetKubernetesClientAsync(resourceGroup);
                 await (asyncTask?.Invoke(kubernetesClient) ?? Task.CompletedTask);
-                await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
+                await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient, cts.Token);
             }
         }
 
         private static async Task<int> TestTaskAsync(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
         {
             using var client = new HttpClient();
-            client.SetBasicAuthentication(tesUsername, tesPassword);
+            //client.SetBasicAuthentication(tesUsername, tesPassword);
 
             var task = new TesTask()
             {
@@ -724,7 +731,7 @@ namespace TesDeployer
             };
 
             var content = new StringContent(JsonConvert.SerializeObject(task), Encoding.UTF8, "application/json");
-            var requestUri = $"https://{tesEndpoint}/v1/tasks";
+            var requestUri = $"http://{tesEndpoint}/v1/tasks";
             Dictionary<string, string> response = null;
             await longRetryPolicy.ExecuteAsync(
                     async () =>
