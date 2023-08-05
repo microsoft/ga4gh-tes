@@ -1075,15 +1075,15 @@ namespace TesApi.Web
 
             var sb = new StringBuilder();
 
-            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {DownloadFilesScriptFileName} && \\"); // Upload the start-task console spews
-            sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_DIR/{metricsName}; }} && \\");  // Function that appends key=value pair to metrics.txt file
-            sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
-            sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
-
             if (isPublic.DockerInDockerImage)
             {
                 sb.AppendLinuxLine($"(grep -q alpine /etc/os-release && apk add bash || :) && \\");  // Install bash if running on alpine (will be the case if running inside "docker" image)
             }
+
+            sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_DIR/{metricsName}; }} && \\");  // Function that appends key=value pair to metrics.txt file
+            sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
+            sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
+            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {DownloadFilesScriptFileName} && \\"); // Upload the start-task console spews
 
             var vmSize = task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
 
