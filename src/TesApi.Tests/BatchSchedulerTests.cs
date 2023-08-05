@@ -356,7 +356,6 @@ namespace TesApi.Tests
                 "batch_script",
                 "upload_files_script",
                 "download_files_script",
-                //"upload_metrics_script",
                 "tRunner",
             };
 

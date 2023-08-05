@@ -55,7 +55,6 @@ namespace TesApi.Web
         private const string BatchScriptFileName = "batch_script";
         private const string UploadFilesScriptFileName = "upload_files_script";
         private const string DownloadFilesScriptFileName = "download_files_script";
-        //private const string UploadMetricsScriptFileName = "upload_metrics_script";
         private const string StartTaskScriptFilename = "start-task.sh";
         private const string NodeTaskRunnerFilename = "tRunner";
         private const string NodeRunnerTaskInfoFilename = "TesTask.json";
@@ -1027,7 +1026,7 @@ namespace TesApi.Web
 
             var downloadFilesScriptContent = new NodeTask
             {
-                MetricsFilename = metricsName,
+                MetricsFilename = $"../{metricsName}",
                 InputsMetricsFormat = "FileDownloadSizeInBytes={Size}",
                 Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, Path = LocalizeLocalPath(f.Path), SasStrategy = SasResolutionStrategy.None }).ToList(),
                 Outputs = new()
@@ -1057,7 +1056,7 @@ namespace TesApi.Web
             // Implementation: do not set Required to True (it defaults to False)
             var uploadFilesScriptContent = new NodeTask
             {
-                MetricsFilename = metricsName,
+                MetricsFilename = $"../{metricsName}",
                 OutputsMetricsFormat = "FileUploadSizeInBytes={Size}",
                 Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, Path = LocalizeLocalPath(f.Path), FileType = ConvertFileType(f.Type), SasStrategy = SasResolutionStrategy.None, PathPrefix = f.PathPrefix }).ToList()
             };
@@ -1077,7 +1076,7 @@ namespace TesApi.Web
             var sb = new StringBuilder();
 
             sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {DownloadFilesScriptFileName} && \\"); // Upload the start-task console spews
-            sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt; }} && \\");  // Function that appends key=value pair to metrics.txt file
+            sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_DIR/{metricsName}; }} && \\");  // Function that appends key=value pair to metrics.txt file
             sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
             sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
 
@@ -1121,12 +1120,7 @@ namespace TesApi.Web
                 sb.AppendLinuxLine($"write_ts DrsLocalizationEnd && \\");
             }
 
-            //var uploadMetricsScriptSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, UploadMetricsScriptFileName, cancellationToken);
             var metricsSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, metricsName, cancellationToken);
-            //var uploadMetricsScriptContent = new NodeTask
-            //{
-            //    Outputs = new List<FileOutput>() { new FileOutput { Path = metricsName, TargetUrl = metricsSasUrl, FileType = FileType.File, SasStrategy = SasResolutionStrategy.None } }
-            //};
 
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
             sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} download --file {DownloadFilesScriptFileName} && \\");
@@ -1141,8 +1135,7 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"write_ts UploadEnd && \\");
             sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
-            //sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {UploadMetricsScriptFileName}");
-            sb.AppendLinuxLine($"mv {metricsName} ..");
+            sb.AppendLinuxLine($"echo Task complete.");
 
             var nodeTaskRunnerSasUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
             var batchScriptSasUrl =
@@ -1155,7 +1148,6 @@ namespace TesApi.Web
 
             await storageAccessProvider.UploadBlobAsync(new Uri(downloadFilesScriptUrl), SerializeNodeTask(downloadFilesScriptContent), cancellationToken);
             await storageAccessProvider.UploadBlobAsync(new Uri(uploadFilesScriptSasUrl), SerializeNodeTask(uploadFilesScriptContent), cancellationToken);
-            //await storageAccessProvider.UploadBlobAsync(new Uri(uploadMetricsScriptSasUrl), SerializeNodeTask(uploadMetricsScriptContent), cancellationToken);
             await storageAccessProvider.UploadBlobAsync(new Uri(batchScriptSasUrl), sb.ToString(), cancellationToken);
 
             var batchRunCommand = enableBatchAutopool
@@ -1171,7 +1163,6 @@ namespace TesApi.Web
                     ResourceFile.FromUrl(batchScriptSasUrl, BatchScriptFileName),
                     ResourceFile.FromUrl(downloadFilesScriptUrl, DownloadFilesScriptFileName),
                     ResourceFile.FromUrl(uploadFilesScriptSasUrl, UploadFilesScriptFileName),
-                    //ResourceFile.FromUrl(uploadMetricsScriptSasUrl, UploadMetricsScriptFileName),
                 },
                 OutputFiles = new List<OutputFile>
                 {
