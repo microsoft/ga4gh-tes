@@ -570,9 +570,9 @@ namespace TesDeployer
                         {
                             var tokenSource = new CancellationTokenSource();
                             var token = tokenSource.Token;
-                            var portForwardTask = kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 80:80", token, appendKubeconfig: true);
+                            var portForwardTask = kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true);
 
-                            var isTestWorkflowSuccessful = await RunTestTask("localhost", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+                            var isTestWorkflowSuccessful = await RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
 
                             if (!isTestWorkflowSuccessful)
                             {
