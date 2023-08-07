@@ -144,6 +144,15 @@ namespace TesDeployer
             await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig \"{kubeConfigPath}\"", cToken);
         }
 
+        /// <summary>
+        /// Enable ingress for TES
+        /// See: https://cert-manager.io/docs/tutorials/acme/nginx-ingress/
+        /// </summary>
+        /// <param name="tesUsername"></param>
+        /// <param name="tesPassword"></param>
+        /// <param name="client"></param>
+        /// <param name="cToken"></param>
+        /// <returns></returns>
         public async Task<IKubernetes> EnableIngress(string tesUsername, string tesPassword, IKubernetes client, CancellationToken cToken)
         {
             var certManagerRegistry = "quay.io";
