@@ -40,12 +40,12 @@ namespace TesDeployer
 
         // "master" is used despite not being a best practice: https://github.com/kubernetes-sigs/blob-csi-driver/issues/783
         private const string NginxIngressRepo = "https://kubernetes.github.io/ingress-nginx";
-        private const string NginxIngressVersion = "4.4.2";
+        private const string NginxIngressVersion = "4.7.1";
         private const string CertManagerRepo = "https://charts.jetstack.io";
-        private const string CertManagerVersion = "v1.8.0";
-        private const string AadPluginGithubReleaseVersion = "v1.8.13";
+        private const string CertManagerVersion = "v1.12.3";
+        private const string AadPluginGithubReleaseVersion = "v1.8.17";
         private const string AadPluginRepo = $"https://raw.githubusercontent.com/Azure/aad-pod-identity/{AadPluginGithubReleaseVersion}/charts";
-        private const string AadPluginVersion = "4.1.14";
+        private const string AadPluginVersion = "4.1.18";
 
         private Configuration configuration { get; set; }
         private AzureCredentials azureCredentials { get; set; }
