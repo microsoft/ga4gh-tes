@@ -23,7 +23,6 @@ using Azure.Security.KeyVault.Secrets;
 using Azure.Storage;
 using Azure.Storage.Blobs;
 using CommonUtilities;
-using IdentityModel.Client;
 using k8s;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.Batch.Models;
@@ -40,7 +39,6 @@ using Microsoft.Azure.Management.KeyVault.Models;
 using Microsoft.Azure.Management.Msi.Fluent;
 using Microsoft.Azure.Management.Network;
 using Microsoft.Azure.Management.Network.Fluent;
-using Microsoft.Azure.Management.Network.Fluent.Models;
 using Microsoft.Azure.Management.PostgreSQL;
 using Microsoft.Azure.Management.PrivateDns.Fluent;
 using Microsoft.Azure.Management.ResourceGraph;
@@ -569,18 +567,31 @@ namespace TesDeployer
                         else
                         {
                             var tokenSource = new CancellationTokenSource();
-                            var token = tokenSource.Token;
-                            var portForwardTask = kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true);
 
-                            var isTestWorkflowSuccessful = await RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
-
-                            if (!isTestWorkflowSuccessful)
+                            try
                             {
-                                await DeleteResourceGroupIfUserConsentsAsync();
+                                var token = tokenSource.Token;
+                                var portForwardTask = kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true);
+
+                                var isTestWorkflowSuccessful = await RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+                                exitCode = isTestWorkflowSuccessful ? 0 : 1;
+
+                                if (!isTestWorkflowSuccessful)
+                                {
+                                    await DeleteResourceGroupIfUserConsentsAsync();
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                ConsoleEx.WriteLine("Exception occurred running test task.", ConsoleColor.Red);
+                                ConsoleEx.Write(e.Message, ConsoleColor.Red);
+                                exitCode = 1;
+                            }
+                            finally
+                            {
+                                tokenSource.Cancel();
                             }
 
-                            tokenSource.Cancel();
-                            exitCode = isTestWorkflowSuccessful ? 0 : 1;
                         }
                     }
                     else
