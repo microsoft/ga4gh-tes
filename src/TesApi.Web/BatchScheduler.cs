@@ -64,7 +64,6 @@ namespace TesApi.Web
         private static readonly Regex queryStringRegex = GetQueryStringRegex();
         private readonly string dockerInDockerImageName;
         private readonly string cromwellDrsLocalizerImageName;
-        private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
         private readonly IStorageAccessProvider storageAccessProvider;
@@ -92,9 +91,6 @@ namespace TesApi.Web
         private readonly IAllowedVmSizesService allowedVmSizesService;
 
         private HashSet<string> onlyLogBatchTaskStateOnce = new();
-
-        private static string GetStringValue(IConfiguration configuration, string key, string defaultValue = "") => string.IsNullOrWhiteSpace(configuration[key]) ? defaultValue : configuration[key];
-        private IEnumerable<string> allowedVmSizes => GetStringValue(this.configuration, "AllowedVmSizes", null)?.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
 
         /// <summary>
         /// Orchestrates <see cref="Tes.Models.TesTask"/>s on Azure Batch
