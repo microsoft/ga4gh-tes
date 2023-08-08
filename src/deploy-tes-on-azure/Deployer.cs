@@ -84,6 +84,7 @@ namespace TesDeployer
             .WaitAndRetryAsync(60, retryAttempt => System.TimeSpan.FromSeconds(15));
 
         public const string ConfigurationContainerName = "configuration";
+        public const string TesInternalContainerName = "tes-internal";
         public const string ContainersToMountFileName = "containers-to-mount";
         public const string AllowedVmSizesFileName = "allowed-vm-sizes";
         public const string TesCredentialsFileName = "TesCredentials.json";
@@ -1437,7 +1438,7 @@ namespace TesDeployer
                     //    }, "scripts", CromwellConfigurationFileName));
                     //}
 
-                    await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, AllowedVmSizesFileName, Utility.GetFileContent("scripts", AllowedVmSizesFileName));
+                    await UploadTextToStorageAccountAsync(storageAccount, TesInternalContainerName, $"{ConfigurationContainerName}/{AllowedVmSizesFileName}", Utility.GetFileContent("scripts", AllowedVmSizesFileName));
                 });
 
         private Task AssignVmAsContributorToBatchAccountAsync(IIdentity managedIdentity, BatchAccount batchAccount)
