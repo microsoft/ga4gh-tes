@@ -53,8 +53,7 @@ namespace TesApi.Web
         private const string TesExecutionsPathPrefix = "/tes-internal";
         private const string CromwellScriptFileName = "script";
         private const string BatchScriptFileName = "batch_script";
-        private const string UploadFilesScriptFileName = "upload_files_script";
-        private const string DownloadFilesScriptFileName = "download_files_script";
+        private const string NodeTaskRunnerStartTaskFileName = "starttask_uploadlogs.json";
         private const string StartTaskScriptFilename = "start-task.sh";
         private const string NodeTaskRunnerFilename = "tRunner";
         private const string NodeRunnerTaskInfoFilename = "TesTask.json";
@@ -1017,24 +1016,21 @@ namespace TesApi.Web
                 }
             }
 
-            var filesToDownload = await Task.WhenAll(
-                inputFiles
-                .Except(drsInputFiles) // do not attempt to download DRS input files since the cromwell-drs-localizer will
-                .Where(f => f?.Streamable == false) // Don't download files where localization_optional is set to true in WDL (corresponds to "Streamable" property being true on TesInput)
-                .Union(additionalInputFiles)
-                .Select(async f => await GetTesInputFileUrlAsync(f, task, queryStringsToRemoveFromLocalFilePaths, cancellationToken)));
-
-            var downloadFilesScriptContent = new NodeTask
+            var uploadStartTaskFilesContent = new NodeTask
             {
-                MetricsFilename = $"../{metricsName}",
-                InputsMetricsFormat = "FileDownloadSizeInBytes={Size}",
-                Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, Path = LocalizeLocalPath(f.Path), SasStrategy = SasResolutionStrategy.None }).ToList(),
                 Outputs = new()
                 {
                     new() { TargetUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, "StartTask-stderr.txt", cancellationToken), Path = @"%AZ_BATCH_NODE_STARTUP_DIR%/stderr.txt", SasStrategy = SasResolutionStrategy.None, FileType = FileType.File },
                     new() { TargetUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, "StartTask-stdout.txt", cancellationToken), Path = @"%AZ_BATCH_NODE_STARTUP_DIR%/stdout.txt", SasStrategy = SasResolutionStrategy.None, FileType = FileType.File },
                 }
             };
+
+            var filesToDownload = await Task.WhenAll(
+                inputFiles
+                .Except(drsInputFiles) // do not attempt to download DRS input files since the cromwell-drs-localizer will
+                .Where(f => f?.Streamable == false) // Don't download files where localization_optional is set to true in WDL (corresponds to "Streamable" property being true on TesInput)
+                .Union(additionalInputFiles)
+                .Select(async f => await GetTesInputFileUrlAsync(f, task, queryStringsToRemoveFromLocalFilePaths, cancellationToken)));
 
             var filesToUpload = Array.Empty<TesOutput>();
 
@@ -1051,12 +1047,16 @@ namespace TesApi.Web
                         }));
             }
 
-            // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
-            // Ignore any other missing files and directories. WDL tasks can have optional output files.
-            // Implementation: do not set Required to True (it defaults to False)
-            var uploadFilesScriptContent = new NodeTask
+            var nodeTaskRunnerContent = new NodeTask
             {
                 MetricsFilename = $"../{metricsName}",
+
+                InputsMetricsFormat = "FileDownloadSizeInBytes={Size}",
+                Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, Path = LocalizeLocalPath(f.Path), SasStrategy = SasResolutionStrategy.None }).ToList(),
+
+                // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
+                // Ignore any other missing files and directories. WDL tasks can have optional output files.
+                // Implementation: do not set Required to True (it defaults to False)
                 OutputsMetricsFormat = "FileUploadSizeInBytes={Size}",
                 Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, Path = LocalizeLocalPath(f.Path), FileType = ConvertFileType(f.Type), SasStrategy = SasResolutionStrategy.None, PathPrefix = f.PathPrefix }).ToList()
             };
@@ -1083,7 +1083,7 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_DIR/{metricsName}; }} && \\");  // Function that appends key=value pair to metrics.txt file
             sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
             sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
-            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {DownloadFilesScriptFileName} && \\"); // Upload the start-task console spews
+            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {NodeTaskRunnerStartTaskFileName} && \\"); // Upload the start-task console spews
 
             var vmSize = task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
 
@@ -1123,7 +1123,7 @@ namespace TesApi.Web
             var metricsSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, metricsName, cancellationToken);
 
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
-            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} download --file {DownloadFilesScriptFileName} && \\");
+            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} download --file {NodeRunnerTaskInfoFilename} && \\");
             sb.AppendLinuxLine($"write_ts DownloadEnd && \\");
             sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
             sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR/wd && \\");
@@ -1131,7 +1131,7 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= {workdirOption}{executor.Image} {executor.Command[0]} {string.Join(" ", executor.Command.Skip(1).Select(BashWrapShellArgument))} && \\");
             sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
             sb.AppendLinuxLine($"write_ts UploadStart && \\");
-            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {UploadFilesScriptFileName} && \\");
+            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {NodeRunnerTaskInfoFilename} && \\");
             sb.AppendLinuxLine($"write_ts UploadEnd && \\");
             sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
@@ -1141,13 +1141,13 @@ namespace TesApi.Web
             var batchScriptSasUrl =
                 await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, BatchScriptFileName,
                     cancellationToken);
-            var downloadFilesScriptUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, DownloadFilesScriptFileName, cancellationToken);
-            var uploadFilesScriptSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, UploadFilesScriptFileName, cancellationToken);
+            var uploaduploadStartTaskFilesSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, NodeTaskRunnerStartTaskFileName, cancellationToken);
+            var nodeTaskRunnerContentSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, NodeRunnerTaskInfoFilename, cancellationToken);
 
             var tesInternalDirectorySasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobPath: string.Empty, cancellationToken);
 
-            await storageAccessProvider.UploadBlobAsync(new Uri(downloadFilesScriptUrl), SerializeNodeTask(downloadFilesScriptContent), cancellationToken);
-            await storageAccessProvider.UploadBlobAsync(new Uri(uploadFilesScriptSasUrl), SerializeNodeTask(uploadFilesScriptContent), cancellationToken);
+            await storageAccessProvider.UploadBlobAsync(new Uri(nodeTaskRunnerContentSasUrl), SerializeNodeTask(nodeTaskRunnerContent), cancellationToken);
+            await storageAccessProvider.UploadBlobAsync(new Uri(uploaduploadStartTaskFilesSasUrl), SerializeNodeTask(uploadStartTaskFilesContent), cancellationToken);
             await storageAccessProvider.UploadBlobAsync(new Uri(batchScriptSasUrl), sb.ToString(), cancellationToken);
 
             var batchRunCommand = enableBatchAutopool
@@ -1161,8 +1161,8 @@ namespace TesApi.Web
                 {
                     ResourceFile.FromUrl(nodeTaskRunnerSasUrl, NodeTaskRunnerFilename),
                     ResourceFile.FromUrl(batchScriptSasUrl, BatchScriptFileName),
-                    ResourceFile.FromUrl(downloadFilesScriptUrl, DownloadFilesScriptFileName),
-                    ResourceFile.FromUrl(uploadFilesScriptSasUrl, UploadFilesScriptFileName),
+                    ResourceFile.FromUrl(uploaduploadStartTaskFilesSasUrl, NodeTaskRunnerStartTaskFileName),
+                    ResourceFile.FromUrl(uploaduploadStartTaskFilesSasUrl, NodeRunnerTaskInfoFilename),
                 },
                 OutputFiles = new List<OutputFile>
                 {

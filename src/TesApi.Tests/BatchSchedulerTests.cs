@@ -354,8 +354,8 @@ namespace TesApi.Tests
             var expectedFiles = new List<string>
             {
                 "batch_script",
-                "upload_files_script",
-                "download_files_script",
+                "TesTask.json",
+                "starttask_uploadlogs.json",
                 "tRunner",
             };
 
@@ -1686,15 +1686,15 @@ namespace TesApi.Tests
                 var config = Enumerable.Empty<(string Key, string Value)>()
                 .Append(("Storage:DefaultAccountName", "defaultstorageaccount"))
                 .Append(("BatchScheduling:Prefix", "hostname"))
-                //.Append(("BatchImageGen1:Offer", "ubuntu-server-container"))
-                //.Append(("BatchImageGen1:Publisher", "microsoft-azure-batch"))
-                //.Append(("BatchImageGen1:Sku", "20-04-lts"))
-                //.Append(("BatchImageGen1:Version", "latest"))
+                .Append(("BatchImageGen1:Offer", "ubuntu-server-container"))
+                .Append(("BatchImageGen1:Publisher", "microsoft-azure-batch"))
+                .Append(("BatchImageGen1:Sku", "20-04-lts"))
+                .Append(("BatchImageGen1:Version", "latest"))
                 .Append(("BatchImageGen1:NodeAgentSkuId", "batch.node.ubuntu 20.04"))
-                //.Append(("BatchImageGen2:Offer", "ubuntu-hpc"))
-                //.Append(("BatchImageGen2:Publisher", "microsoft-dsvm"))
-                //.Append(("BatchImageGen2:Sku", "2004"))
-                //.Append(("BatchImageGen2:Version", "latest"))
+                .Append(("BatchImageGen2:Offer", "ubuntu-hpc"))
+                .Append(("BatchImageGen2:Publisher", "microsoft-dsvm"))
+                .Append(("BatchImageGen2:Sku", "2004"))
+                .Append(("BatchImageGen2:Version", "latest"))
                 .Append(("BatchImageGen2:NodeAgentSkuId", "batch.node.ubuntu 20.04"));
                 if (autopool)
                 {
