@@ -1083,7 +1083,7 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_DIR/{metricsName}; }} && \\");  // Function that appends key=value pair to metrics.txt file
             sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
             sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
-            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {NodeTaskRunnerStartTaskFileName} && \\"); // Upload the start-task console spews
+            sb.AppendLinuxLine($"if compgen -G $AZ_BATCH_NODE_STARTUP_DIR/std*.txt; then ./{NodeTaskRunnerFilename} upload --file {NodeTaskRunnerStartTaskFileName}; fi && \\"); // Upload the start-task console spews
 
             var vmSize = task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
 
@@ -1120,10 +1120,8 @@ namespace TesApi.Web
                 sb.AppendLinuxLine($"write_ts DrsLocalizationEnd && \\");
             }
 
-            var metricsSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, metricsName, cancellationToken);
-
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
-            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} download --file {NodeRunnerTaskInfoFilename} && \\");
+            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} download && \\");
             sb.AppendLinuxLine($"write_ts DownloadEnd && \\");
             sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
             sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR/wd && \\");
@@ -1131,24 +1129,19 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= {workdirOption}{executor.Image} {executor.Command[0]} {string.Join(" ", executor.Command.Skip(1).Select(BashWrapShellArgument))} && \\");
             sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
             sb.AppendLinuxLine($"write_ts UploadStart && \\");
-            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {NodeRunnerTaskInfoFilename} && \\");
+            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload && \\");
             sb.AppendLinuxLine($"write_ts UploadEnd && \\");
             sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
             sb.AppendLinuxLine($"echo Task complete.");
 
-            var nodeTaskRunnerSasUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
-            var batchScriptSasUrl =
-                await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, BatchScriptFileName,
-                    cancellationToken);
-            var uploaduploadStartTaskFilesSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, NodeTaskRunnerStartTaskFileName, cancellationToken);
-            var nodeTaskRunnerContentSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, NodeRunnerTaskInfoFilename, cancellationToken);
-
-            var tesInternalDirectorySasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobPath: string.Empty, cancellationToken);
-
-            await storageAccessProvider.UploadBlobAsync(new Uri(nodeTaskRunnerContentSasUrl), SerializeNodeTask(nodeTaskRunnerContent), cancellationToken);
-            await storageAccessProvider.UploadBlobAsync(new Uri(uploaduploadStartTaskFilesSasUrl), SerializeNodeTask(uploadStartTaskFilesContent), cancellationToken);
-            await storageAccessProvider.UploadBlobAsync(new Uri(batchScriptSasUrl), sb.ToString(), cancellationToken);
+            var resourceFiles = new List<ResourceFile>
+            {
+                ResourceFile.FromUrl(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), NodeTaskRunnerFilename),
+                await UploadBlobAsync(NodeRunnerTaskInfoFilename, SerializeNodeTask(nodeTaskRunnerContent)),
+                await UploadBlobAsync(BatchScriptFileName, sb.ToString()),
+                await UploadBlobAsync(NodeTaskRunnerStartTaskFileName, SerializeNodeTask(uploadStartTaskFilesContent))
+            };
 
             var batchRunCommand = enableBatchAutopool
                 ? $"/bin/bash -c chmod u+x ./{NodeTaskRunnerFilename} && /bin/bash $AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
@@ -1156,19 +1149,13 @@ namespace TesApi.Web
 
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
+                ResourceFiles = resourceFiles,
                 UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
-                ResourceFiles = new List<ResourceFile>
-                {
-                    ResourceFile.FromUrl(nodeTaskRunnerSasUrl, NodeTaskRunnerFilename),
-                    ResourceFile.FromUrl(batchScriptSasUrl, BatchScriptFileName),
-                    ResourceFile.FromUrl(uploaduploadStartTaskFilesSasUrl, NodeTaskRunnerStartTaskFileName),
-                    ResourceFile.FromUrl(uploaduploadStartTaskFilesSasUrl, NodeRunnerTaskInfoFilename),
-                },
                 OutputFiles = new List<OutputFile>
                 {
                     new OutputFile(
                         "../*.txt",
-                        new OutputFileDestination(new(tesInternalDirectorySasUrl)),
+                        new OutputFileDestination(new(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobPath: string.Empty, cancellationToken))),
                         new OutputFileUploadOptions(OutputFileUploadCondition.TaskCompletion)),
                 }
             };
@@ -1203,6 +1190,13 @@ namespace TesApi.Web
 
             static string SerializeNodeTask(NodeTask task)
                 => JsonConvert.SerializeObject(task, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore });
+
+            async ValueTask<ResourceFile> UploadBlobAsync(string fileName, string content)
+            {
+                var sasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, fileName, cancellationToken);
+                await storageAccessProvider.UploadBlobAsync(new Uri(sasUrl), content, cancellationToken);
+                return ResourceFile.FromUrl(sasUrl, fileName);
+            }
 
             string MungeBatchScript()
                 => string.Join("\n", taskRunScriptContent)
