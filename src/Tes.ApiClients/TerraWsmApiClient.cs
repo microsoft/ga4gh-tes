@@ -6,11 +6,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Azure.Core;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Tes.ApiClients;
 using TesApi.Web.Management.Models.Terra;
 
-namespace TesApi.Web.Management.Clients
+namespace Tes.ApiClients
 {
     /// <summary>
     /// Terra Workspace Manager api client
@@ -95,7 +93,7 @@ namespace TesApi.Web.Management.Clients
         {
             ArgumentNullException.ThrowIfNull(apiCreateBatchPool);
 
-            HttpResponseMessage response = null;
+            HttpResponseMessage response = null!;
             try
             {
                 var uri = GetCreateBatchPoolUrl(workspaceId);
@@ -130,7 +128,7 @@ namespace TesApi.Web.Management.Clients
             ArgumentNullException.ThrowIfNull(workspaceId);
             ArgumentNullException.ThrowIfNull(wsmBatchPoolResourceId);
 
-            HttpResponseMessage response = null;
+            HttpResponseMessage response = null!;
             try
             {
                 var uri = GetDeleteBatchPoolUrl(workspaceId, wsmBatchPoolResourceId);

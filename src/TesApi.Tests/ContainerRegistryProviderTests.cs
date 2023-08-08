@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
+using Tes.ApiClients;
 using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Configuration;

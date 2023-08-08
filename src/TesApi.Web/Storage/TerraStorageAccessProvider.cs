@@ -9,9 +9,9 @@ using System.Threading.Tasks;
 using System.Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Tes.ApiClients;
 using Tes.Extensions;
 using Tes.Models;
-using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 using TesApi.Web.Options;
@@ -34,13 +34,14 @@ namespace TesApi.Web.Storage
         /// Provides methods for blob storage access for Terra
         /// for Terra
         /// </summary>
-        /// <param name="logger">Logger <see cref="ILogger"/></param>
-        /// <param name="terraOptions"><see cref="TerraOptions"/></param>
-        /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         /// <param name="terraWsmApiClient"><see cref="TerraWsmApiClient"/></param>
+        /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
+        /// <param name="terraOptions"><see cref="TerraOptions"/></param>
         /// <param name="batchSchedulingOptions"><see cref="BatchSchedulingOptions"/>></param>
-        public TerraStorageAccessProvider(ILogger<TerraStorageAccessProvider> logger,
-            IOptions<TerraOptions> terraOptions, IAzureProxy azureProxy, TerraWsmApiClient terraWsmApiClient, IOptions<BatchSchedulingOptions> batchSchedulingOptions) : base(
+        /// <param name="logger">Logger <see cref="ILogger"/></param>
+        public TerraStorageAccessProvider(TerraWsmApiClient terraWsmApiClient, IAzureProxy azureProxy,
+            IOptions<TerraOptions> terraOptions, IOptions<BatchSchedulingOptions> batchSchedulingOptions,
+            ILogger<TerraStorageAccessProvider> logger) : base(
             logger, azureProxy)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);

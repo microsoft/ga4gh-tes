@@ -11,7 +11,7 @@ using Microsoft.Azure.Batch.Auth;
 using Microsoft.Azure.Management.Batch.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TesApi.Web.Management.Clients;
+using Tes.ApiClients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 

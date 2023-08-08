@@ -13,6 +13,8 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
+using Tes.ApiClients;
+using Tes.ApiClients.Options;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
@@ -25,7 +27,7 @@ namespace TesApi.Web
     public class CachingWithRetriesAzureProxy : IAzureProxy
     {
         private readonly IAzureProxy azureProxy;
-        private readonly Management.CacheAndRetryHandler cacheAndRetryHandler;
+        private readonly CacheAndRetryHandler cacheAndRetryHandler;
         private readonly AsyncRetryPolicy batchPoolOrJobCreateOrTaskAddHandler;
 
         /// <summary>
@@ -34,7 +36,7 @@ namespace TesApi.Web
         /// <param name="azureProxy"><see cref="IAzureProxy"/></param>
         /// <param name="retryPolicyOptions"></param>
         /// <param name="cacheAndRetryHandler"></param>
-        public CachingWithRetriesAzureProxy(IAzureProxy azureProxy, IOptions<RetryPolicyOptions> retryPolicyOptions, Management.CacheAndRetryHandler cacheAndRetryHandler)
+        public CachingWithRetriesAzureProxy(IAzureProxy azureProxy, IOptions<RetryPolicyOptions> retryPolicyOptions, CacheAndRetryHandler cacheAndRetryHandler)
         {
             ArgumentNullException.ThrowIfNull(azureProxy);
             ArgumentNullException.ThrowIfNull(cacheAndRetryHandler);

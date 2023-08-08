@@ -8,9 +8,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
+using Tes.ApiClients;
+using Tes.ApiClients.Options;
 using TesApi.Web.Management;
-using TesApi.Web.Management.Clients;
-using TesApi.Web.Management.Configuration;
 
 namespace TesApi.Tests
 {
@@ -54,7 +54,6 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetVmSizesAndPricesAsync_ReturnsLowAndNormalPriorityInformation()
         {
-            ///using var serviceProvider = new TestServices.TestServiceProvider<PriceApiBatchSkuInformationProvider>();
             //provider = serviceProvider.GetT();
             var results = await provider.GetVmSizesAndPricesAsync("eastus", System.Threading.CancellationToken.None);
 

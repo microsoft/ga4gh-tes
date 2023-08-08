@@ -4,7 +4,6 @@
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Tes.ApiClients.Options;
-using TesApi.Web.Management.Clients;
 
 namespace Tes.ApiClients.Tests.TerraIntegration
 {

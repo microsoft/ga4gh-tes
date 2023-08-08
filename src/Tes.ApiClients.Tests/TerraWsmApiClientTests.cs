@@ -6,7 +6,6 @@ using System.Web;
 using Azure.Core;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Models.Terra;
 
 namespace Tes.ApiClients.Tests

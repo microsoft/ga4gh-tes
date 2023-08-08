@@ -77,10 +77,7 @@ namespace Tes.ApiClients
 
             var result = await HttpGetRequestAsync<RetailPricingData>(builder.Uri, setAuthorizationHeader: false, cacheResults: cacheResults, cancellationToken: cancellationToken);
 
-            if (result is not null)
-            {
-                result.RequestLink = builder.ToString();
-            }
+            result.RequestLink = builder.ToString();
 
             return result;
         }
