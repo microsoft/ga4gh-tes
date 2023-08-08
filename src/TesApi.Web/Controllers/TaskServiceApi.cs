@@ -287,6 +287,8 @@ namespace TesApi.Controllers
         /// <param name="pageSize">OPTIONAL. Number of tasks to return in one page. Must be less than 2048. Defaults to 256.</param>
         /// <param name="pageToken">OPTIONAL. Page token is used to retrieve the next page of results. If unspecified, returns the first page of results. See ListTasksResponse.next_page_token</param>
         /// <param name="view">OPTIONAL. Affects the fields included in the returned Task messages. See TaskView below.   - MINIMAL: Task message will include ONLY the fields:   Task.Id   Task.State  - BASIC: Task message will include all fields EXCEPT:   Task.ExecutorLog.stdout   Task.ExecutorLog.stderr   Input.content   TaskLog.system_logs  - FULL: Task message includes all fields.</param>
+        /// <param name="tagKeys">OPTIONAL. Array of tag_key (see spec)</param>
+        /// <param name="tagValues">OPTIONAL. Array of tag_value (see spec)</param>
         /// <param name="cancellationToken">A<see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <response code="200"></response>
         [HttpGet]
@@ -305,7 +307,7 @@ namespace TesApi.Controllers
                 return BadRequest("If provided, pageSize must be greater than 0 and less than 2048. Defaults to 256.");
             }
 
-            if (tagKeys.Length != tagValues.Length)
+            if (tagKeys?.Length != tagValues?.Length)
             {
                 return BadRequest("Mismatched tag_key and tag_value counts");
             }
