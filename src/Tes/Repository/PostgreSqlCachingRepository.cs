@@ -110,10 +110,9 @@ namespace Tes.Repository
             ArgumentNullException.ThrowIfNull(tags);
             if (tags.Count == 0) throw new ArgumentOutOfRangeException("Must specify more than one tag");
 
-            StringBuilder sqlBuilder = new StringBuilder();
+            var sqlBuilder = new StringBuilder();
             sqlBuilder.AppendLine("SELECT * FROM TesTasks WHERE ");
-
-            var tagConditions = tags.Select(kvp => $"\"Tags\"->>'{kvp.Key}' = @p_{kvp.Key}");
+            var tagConditions = tags.Select(kvp => $"\"Json\"->'Tags'->>'{kvp.Key}' = @p_{kvp.Key}");
             sqlBuilder.AppendLine(string.Join(" AND ", tagConditions));
 
             using var connection = dbContext.Database.GetDbConnection();
