@@ -8,7 +8,6 @@ using Microsoft.Azure.Batch;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.Batch.Models;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 
 namespace TesApi.Web.Management.Batch
 {
