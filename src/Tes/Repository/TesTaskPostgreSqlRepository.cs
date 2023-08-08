@@ -117,6 +117,17 @@ namespace Tes.Repository
         }
 
         /// <summary>
+        /// Get TesTask items
+        /// </summary>
+        /// <param name="predicate">Predicate to query the TesTasks</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task<IEnumerable<TesTask>> GetItemsByTagAsync(Dictionary<string, string> tags, CancellationToken cancellationToken)
+        {
+            return (await InternalGetTesTasksByTagsRawAsync(tags, cancellationToken));
+        }
+
+        /// <summary>
         /// Encapsulates a TesTask as JSON
         /// </summary>
         /// <param name="item">TesTask to store as JSON in the database</param>
@@ -236,6 +247,13 @@ namespace Tes.Repository
             }
 
             return item;
+        }
+
+        private async Task<IEnumerable<TesTask>> InternalGetTesTasksByTagsRawAsync(Dictionary<string, string> tags, CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default)
+        {
+            // TODO - orderby and pagination
+            using var dbContext = CreateDbContext();
+            return (await GetTesTaskDatabaseItemsByTagAsync(dbContext, tags, cancellationToken)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
         }
 
         /// <summary>

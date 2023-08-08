@@ -314,22 +314,25 @@ namespace TesApi.Controllers
 
             // ?tag_key=foo1&tag_value=bar1&tag_key=foo2&tag_value=bar2
             var tags = new Dictionary<string, string>();
+            string nextPageToken = default;
+            IEnumerable<TesTask> tasks = default;
 
             if (tagKeys.Length > 0)
             {
                 tags = tagKeys.Zip(tagValues, (key, value) => new { key, value })
                     .ToDictionary(x => x.key, x => x.value);
+                (nextPageToken, tasks) = await repository.GetItemsByTagAsync(tags, cancellationToken); // TODO
+            }
+            else
+            {
+                (nextPageToken, tasks) = await repository.GetItemsAsync(
+                    t => string.IsNullOrWhiteSpace(namePrefix) || t.Name.StartsWith(namePrefix),
+                    pageSize.HasValue ? (int)pageSize : 256,
+                    decodedPageToken, cancellationToken);
             }
 
-            (var nextPageToken, var tasks) = await repository.GetItemsAsync(
-                t => string.IsNullOrWhiteSpace(namePrefix) || t.Name.StartsWith(namePrefix),
-                pageSize.HasValue ? (int)pageSize : 256,
-                decodedPageToken, cancellationToken);
-
-            // Filtered in-memory.  TODO - move this to the above query, written in a way that will translate to PostgreSQL SQL 
-            var filteredTasks = tasks.Where(t => tags.All(query => t.Tags.ContainsKey(query.Key) && t.Tags[query.Key] == query.Value)).ToList();
             var encodedNextPageToken = nextPageToken is not null ? Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(nextPageToken)) : null;
-            var response = new TesListTasksResponse { Tasks = filteredTasks, NextPageToken = encodedNextPageToken };
+            var response = new TesListTasksResponse { Tasks = tasks.ToList(), NextPageToken = encodedNextPageToken };
 
             return TesJsonResult(response, view);
         }

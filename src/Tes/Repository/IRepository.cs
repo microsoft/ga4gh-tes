@@ -47,6 +47,8 @@ namespace Tes.Repository
         /// <returns>The collection of retrieved items</returns>
         Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken);
 
+        Task<IEnumerable<T>> GetItemsByTagAsync(Dictionary<string, string> tags, CancellationToken cancellationToken);
+
         /// <summary>
         /// Reads a collection of items from the repository
         /// </summary>

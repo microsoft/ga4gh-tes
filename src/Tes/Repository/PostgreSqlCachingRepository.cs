@@ -7,11 +7,15 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using Polly;
+using Tes.Models;
 
 namespace Tes.Repository
 {
@@ -95,6 +99,49 @@ namespace Tes.Repository
             //System.Diagnostics.Debugger.Break();
 
             return await _asyncPolicy.ExecuteAsync(ct => query.ToListAsync(ct), cancellationToken);
+        }
+
+        protected async Task<IEnumerable<TesTaskDatabaseItem>> GetTesTaskDatabaseItemsByTagAsync(
+            TesDbContext dbContext,
+            Dictionary<string, string> tags,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(dbContext);
+            ArgumentNullException.ThrowIfNull(tags);
+            if (tags.Count == 0) throw new ArgumentOutOfRangeException("Must specify more than one tag");
+
+            StringBuilder sqlBuilder = new StringBuilder();
+            sqlBuilder.AppendLine("SELECT * FROM TesTasks WHERE ");
+
+            var tagConditions = tags.Select(kvp => $"\"Tags\"->>'{kvp.Key}' = @p_{kvp.Key}");
+            sqlBuilder.AppendLine(string.Join(" AND ", tagConditions));
+
+            using var connection = dbContext.Database.GetDbConnection();
+            await connection.OpenAsync();
+
+            using var command = connection.CreateCommand();
+            command.CommandText = sqlBuilder.ToString();
+
+            foreach (var tag in tags)
+            {
+                command.Parameters.Add(new NpgsqlParameter($"p_{tag.Key}", tag.Value));
+            }
+
+            var result = new List<TesTaskDatabaseItem>();
+            using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var item = new TesTaskDatabaseItem
+                {
+                    Id = reader.IsDBNull(0) ? default : reader.GetInt64(0),
+                    Json = JsonSerializer.Deserialize<TesTask>(reader.IsDBNull(1) ? default : reader.GetString(1)),
+                };
+
+                result.Add(item);
+            }
+
+            return result;
         }
 
         /// <summary>
