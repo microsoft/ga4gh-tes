@@ -159,6 +159,13 @@ namespace TesApi.Controllers
                 ?.Skip(2)
                 ?.FirstOrDefault();
 
+            if (tesTask.Tags == null)
+            {
+                tesTask.Tags = new Dictionary<string, string>();
+            }
+
+            tesTask.Tags["workflow_id"] = tesTask.WorkflowId;
+
             // Prefix the TES task id with first eight characters of root Cromwell job id to facilitate easier debugging
             var tesTaskIdPrefix = tesTask.WorkflowId is not null && Guid.TryParse(tesTask.WorkflowId, out _) ? $"{tesTask.WorkflowId.Substring(0, 8)}_" : string.Empty;
             tesTask.Id = $"{tesTaskIdPrefix}{Guid.NewGuid():N}";
@@ -287,7 +294,7 @@ namespace TesApi.Controllers
         [ValidateModelState]
         [SwaggerOperation("ListTasks")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesListTasksResponse), description: "")]
-        public virtual async Task<IActionResult> ListTasks([FromQuery] string namePrefix, [FromQuery] long? pageSize, [FromQuery] string pageToken, [FromQuery] string view, CancellationToken cancellationToken)
+        public virtual async Task<IActionResult> ListTasks([FromQuery(Name = "name_prefix")] string namePrefix, [FromQuery(Name = "page_size")] long? pageSize, [FromQuery(Name = "page_token")] string pageToken, [FromQuery] string view, [FromQuery(Name = "tag_key")] string[] tagKeys, [FromQuery(Name = "tag_value")] string[] tagValues, CancellationToken cancellationToken)
         {
             var decodedPageToken =
                 pageToken is not null ? Encoding.UTF8.GetString(Base64UrlTextEncoder.Decode(pageToken)) : null;
@@ -298,13 +305,29 @@ namespace TesApi.Controllers
                 return BadRequest("If provided, pageSize must be greater than 0 and less than 2048. Defaults to 256.");
             }
 
+            if (tagKeys.Length != tagValues.Length)
+            {
+                return BadRequest("Mismatched tag_key and tag_value counts");
+            }
+
+            // ?tag_key=foo1&tag_value=bar1&tag_key=foo2&tag_value=bar2
+            var tags = new Dictionary<string, string>();
+
+            if (tagKeys.Length > 0)
+            {
+                tags = tagKeys.Zip(tagValues, (key, value) => new { key, value })
+                    .ToDictionary(x => x.key, x => x.value);
+            }
+
             (var nextPageToken, var tasks) = await repository.GetItemsAsync(
                 t => string.IsNullOrWhiteSpace(namePrefix) || t.Name.StartsWith(namePrefix),
                 pageSize.HasValue ? (int)pageSize : 256,
                 decodedPageToken, cancellationToken);
 
+            // Filtered in-memory.  TODO - move this to the above query, written in a way that will translate to PostgreSQL SQL 
+            var filteredTasks = tasks.Where(t => tags.All(query => t.Tags.ContainsKey(query.Key) && t.Tags[query.Key] == query.Value)).ToList();
             var encodedNextPageToken = nextPageToken is not null ? Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(nextPageToken)) : null;
-            var response = new TesListTasksResponse { Tasks = tasks.ToList(), NextPageToken = encodedNextPageToken };
+            var response = new TesListTasksResponse { Tasks = filteredTasks, NextPageToken = encodedNextPageToken };
 
             return TesJsonResult(response, view);
         }
