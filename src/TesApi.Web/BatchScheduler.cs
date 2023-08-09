@@ -1155,7 +1155,7 @@ namespace TesApi.Web
                 {
                     new OutputFile(
                         "../*.txt",
-                        new OutputFileDestination(new(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobPath: string.Empty, cancellationToken))),
+                        await CreateOutputFileDestinationInTesInternalLocationAsync(task, cancellationToken),
                         new OutputFileUploadOptions(OutputFileUploadCondition.TaskCompletion)),
                 }
             };
@@ -1216,6 +1216,29 @@ namespace TesApi.Web
 
             static IEnumerable<string> MungeCleanupScriptForContainerConfig(IEnumerable<string> content)
                 => MungeCleanupScript(content.Where(line => !line.Contains(@"{TaskExecutor}")));
+        }
+
+        /// <summary>
+        /// Creates a OutputFileDestination in the TES internal blob storage location
+        /// </summary>
+        /// <param name="task"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task<OutputFileDestination> CreateOutputFileDestinationInTesInternalLocationAsync(TesTask task, CancellationToken cancellationToken)
+        {
+            var internalUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobPath: string.Empty,
+                cancellationToken);
+            var storageSegments = StorageAccountUrlSegments.Create(internalUrl);
+
+            var containerUrl = $"{storageSegments.BlobEndpoint}/{storageSegments.ContainerName}?{storageSegments.SasToken}";
+            var path = string.Empty;
+
+            if (!string.IsNullOrEmpty(storageSegments.BlobName))
+            {
+                path = storageSegments.BlobName;
+            }
+
+            return new OutputFileDestination(new OutputFileBlobContainerDestination(containerUrl, path));
         }
 
         /// <summary>
