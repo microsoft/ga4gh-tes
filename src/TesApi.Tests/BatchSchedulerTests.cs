@@ -23,6 +23,7 @@ using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
 using TesApi.Web.Storage;
+using ResourceFile = Microsoft.Azure.Batch.ResourceFile;
 
 namespace TesApi.Tests
 {
@@ -1477,6 +1478,25 @@ namespace TesApi.Tests
                 Assert.AreEqual("subnet1", poolNetworkConfiguration?.SubnetId);
             });
         }
+        [DataTestMethod]
+        [DataRow("https://blob.foo/cont/blob?sas=sas", "https://blob.foo/cont?sas=sas", "blob")]
+        [DataRow("https://blob.foo/cont?sas=sas", "https://blob.foo/cont?sas=sas", "")]
+        [DataRow("https://blob.foo/cont/?sas=sas", "https://blob.foo/cont?sas=sas", "")]
+        public async Task
+            CreateOutputFileDestinationInTesInternalLocationAsync_BlobOrContainerUrlProvided_OutputDestinationHasContainerUrlAndPath(string inputUrl, string expectedUrl, string expectedPath)
+        {
+            await using var serviceProvider = GetServiceProvider();
+            var batchScheduler = serviceProvider.GetT() as BatchScheduler;
+            // var storageProvider = serviceProvider.GetT() as IStorageAccessProvider;
+            serviceProvider.StorageAccessProvider.Setup(p => p.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(inputUrl);
+
+            var tesTask = GetTesTask();
+            var destination = await batchScheduler!.CreateOutputFileDestinationInTesInternalLocationAsync(tesTask, CancellationToken.None);
+
+            Assert.AreEqual(expectedUrl, destination.Container.ContainerUrl);
+            Assert.AreEqual(expectedPath, destination.Container.Path);
+        }
 
         private static async Task<(string FailureReason, string[] SystemLog)> ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(TesTask tesTask, AzureBatchJobAndTaskState? azureBatchJobAndTaskState = null)
         {
@@ -1574,7 +1594,7 @@ namespace TesApi.Tests
             });
 
         private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProvider(IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchQuotaProvider>> quotaProvider, Action<Mock<IBatchSkuInformationProvider>> skuInfoProvider, Action<Mock<ContainerRegistryProvider>> containerRegistryProviderSetup, Action<Mock<IAllowedVmSizesService>> allowedVmSizesServiceSetup, Action<IServiceCollection> additionalActions = default)
-            => new(wrapAzureProxy: true, configuration: configuration, azureProxy: azureProxy, batchQuotaProvider: quotaProvider, batchSkuInformationProvider: skuInfoProvider, accountResourceInformation: GetNewBatchResourceInfo(), containerRegistryProviderSetup: containerRegistryProviderSetup, allowedVmSizesServiceSetup: allowedVmSizesServiceSetup, additionalActions: additionalActions);
+            => new(wrapAzureProxy: true, mockStorageAccessProvider: true, configuration: configuration, azureProxy: azureProxy, batchQuotaProvider: quotaProvider, batchSkuInformationProvider: skuInfoProvider, accountResourceInformation: GetNewBatchResourceInfo(), containerRegistryProviderSetup: containerRegistryProviderSetup, allowedVmSizesServiceSetup: allowedVmSizesServiceSetup, additionalActions: additionalActions);
 
         private static async Task<TesState> GetNewTesTaskStateAsync(TesTask tesTask, AzureProxyReturnValues azureProxyReturnValues)
         {
@@ -1725,6 +1745,7 @@ namespace TesApi.Tests
             var config = GetMockConfig(false)();
             return new(
                 wrapAzureProxy: true,
+                mockStorageAccessProvider: true,
                 accountResourceInformation: new("defaultbatchaccount", "defaultresourcegroup", "defaultsubscription", "defaultregion"),
                 configuration: config,
                 azureProxy: GetMockAzureProxy(azureProxyReturn),
