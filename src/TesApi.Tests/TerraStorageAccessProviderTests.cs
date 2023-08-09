@@ -146,10 +146,11 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        [DataRow("script/foo.sh")]
-        [DataRow("/script/foo.sh")]
+        [DataRow("script/foo.sh", "/script/foo.sh")]
+        [DataRow("/script/foo.sh", "/script/foo.sh")]
+        [DataRow("", "")]
         public async Task GetInternalTesTaskBlobUrlAsync_BlobPathIsProvided_ReturnsValidURLWithWsmContainerTaskIdAndTesPrefixAppended(
-            string blobName)
+            string blobName, string expectedBlobName)
         {
             SetUpTerraApiClient();
             var task = new TesTask { Name = "taskName", Id = Guid.NewGuid().ToString() };
@@ -157,14 +158,15 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
-            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{batchSchedulingOptions.Prefix}{StorageAccessProvider.TesExecutionsPathPrefix}/{task.Id}/{blobName.TrimStart('/')}", uri.AbsolutePath);
+            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{batchSchedulingOptions.Prefix}{StorageAccessProvider.TesExecutionsPathPrefix}/{task.Id}{expectedBlobName}", uri.AbsolutePath);
         }
 
         [TestMethod]
-        [DataRow("script/foo.sh")]
-        [DataRow("/script/foo.sh")]
+        [DataRow("script/foo.sh", "/script/foo.sh")]
+        [DataRow("/script/foo.sh", "/script/foo.sh")]
+        [DataRow("", "")]
         public async Task GetInternalTesTaskBlobUrlAsync_BlobPathAndInternalPathPrefixIsProvided_ReturnsValidURLWithWsmContainerTaskIdAndInternalPathPrefixAppended(
-            string blobName)
+            string blobName, string expectedBlobName)
         {
             var internalPathPrefix = "internalPathPrefix";
 
@@ -179,7 +181,7 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
-            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{internalPathPrefix}/{blobName.TrimStart('/')}", uri.AbsolutePath);
+            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{internalPathPrefix}{expectedBlobName}", uri.AbsolutePath);
         }
     }
 }
