@@ -1487,7 +1487,6 @@ namespace TesApi.Tests
         {
             await using var serviceProvider = GetServiceProviderWithMockStorageProvider();
             var batchScheduler = serviceProvider.GetT() as BatchScheduler;
-            // var storageProvider = serviceProvider.GetT() as IStorageAccessProvider;
             serviceProvider.StorageAccessProvider.Setup(p => p.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(inputUrl);
 
