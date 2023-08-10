@@ -1020,8 +1020,14 @@ namespace TesApi.Web
             {
                 Outputs = new()
                 {
-                    new() { TargetUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, "StartTask-stderr.txt", cancellationToken), Path = @"%AZ_BATCH_NODE_STARTUP_DIR%/stderr.txt", SasStrategy = SasResolutionStrategy.None, FileType = FileType.File },
-                    new() { TargetUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, "StartTask-stdout.txt", cancellationToken), Path = @"%AZ_BATCH_NODE_STARTUP_DIR%/stdout.txt", SasStrategy = SasResolutionStrategy.None, FileType = FileType.File },
+                    new()
+                    {
+                        TargetUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, "start-task", cancellationToken),
+                        Path = @"%AZ_BATCH_NODE_STARTUP_DIR%/std*.txt",
+                        PathPrefix="%AZ_BATCH_NODE_STARTUP_DIR%/",
+                        SasStrategy = SasResolutionStrategy.None,
+                        FileType = FileType.Directory
+                    }
                 }
             };
 
@@ -1083,7 +1089,7 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_DIR/{metricsName}; }} && \\");  // Function that appends key=value pair to metrics.txt file
             sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
             sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
-            sb.AppendLinuxLine($"if compgen -G $AZ_BATCH_NODE_STARTUP_DIR/std*.txt; then ./{NodeTaskRunnerFilename} upload --file {NodeTaskRunnerStartTaskFileName}; fi && \\"); // Upload the start-task console spews
+            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {NodeTaskRunnerStartTaskFileName} && \\"); // Upload the start-task console spews
 
             var vmSize = task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
 
