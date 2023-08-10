@@ -1200,8 +1200,8 @@ namespace TesApi.Web
             async ValueTask<ResourceFile> UploadBlobAsync(string fileName, string content)
             {
                 var sasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, fileName, cancellationToken);
-                await storageAccessProvider.UploadBlobAsync(new Uri(sasUrl), content, cancellationToken);
-                return ResourceFile.FromUrl(sasUrl, fileName);
+                await storageAccessProvider.UploadBlobAsync(new Uri(sasUrl), content, cancellationToken); // SAS is used for creating here
+                return ResourceFile.FromUrl(sasUrl, fileName); // SAS is used for reading here
             }
 
             string MungeBatchScript()
