@@ -714,7 +714,7 @@ namespace TesDeployer
                     new TesExecutor()
                     {
                         Image = "ubuntu:22.04",
-                        Command = new List<string>{"echo 'hello world'" },
+                        Command = new List<string>{ "echo", "hello world" },
                     }
                 },
                 Resources = new TesResources()
