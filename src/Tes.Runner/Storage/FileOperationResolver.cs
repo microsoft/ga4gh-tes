@@ -12,14 +12,19 @@ namespace Tes.Runner.Storage
     /// </summary>
     public class FileOperationResolver
     {
-        private readonly NodeTask nodeTask;
-        private readonly ResolutionPolicyHandler resolutionPolicyHandler;
-        private readonly IFileInfoProvider fileInfoProvider;
+        private readonly NodeTask nodeTask = null!;
+        private readonly ResolutionPolicyHandler resolutionPolicyHandler = null!;
+        private readonly IFileInfoProvider fileInfoProvider = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<FileOperationResolver>();
 
         public FileOperationResolver(NodeTask nodeTask) : this(nodeTask, new ResolutionPolicyHandler(), new DefaultFileInfoProvider())
         {
         }
+
+        /// <summary>
+        /// Parameter-less constructor for mocking
+        /// </summary>
+        protected FileOperationResolver() { }
 
         public FileOperationResolver(NodeTask nodeTask, ResolutionPolicyHandler resolutionPolicyHandler,
             IFileInfoProvider fileInfoProvider)
@@ -33,14 +38,14 @@ namespace Tes.Runner.Storage
             this.fileInfoProvider = fileInfoProvider;
         }
 
-        public async Task<List<DownloadInfo>?> ResolveInputsAsync()
+        public virtual async Task<List<DownloadInfo>?> ResolveInputsAsync()
         {
             var expandedInputs = ExpandInputs();
 
             return await resolutionPolicyHandler.ApplyResolutionPolicyAsync(expandedInputs);
         }
 
-        public async Task<List<UploadInfo>?> ResolveOutputsAsync()
+        public virtual async Task<List<UploadInfo>?> ResolveOutputsAsync()
         {
             var expandedOutputs = ExpandOutputs();
 
