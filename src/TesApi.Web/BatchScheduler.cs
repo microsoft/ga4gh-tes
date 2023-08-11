@@ -1347,7 +1347,7 @@ namespace TesApi.Web
             if (!dockerConfigured)
             {
                 var commandLine = new StringBuilder();
-                commandLine.Append(@"/usr/bin/bash -c 'sudo touch tmp2.json && (sudo cp /etc/docker/daemon.json tmp1.json || sudo echo {} > tmp1.json) && sudo chmod a+w tmp?.json && if fgrep ""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker"" tmp1.json; then echo grep ""found docker path""; elif [ $? -eq 1 ]; then ");
+                commandLine.Append(@"/usr/bin/bash -c 'trap ""echo Error trapped; exit 0"" ERR; sudo touch tmp2.json && (sudo cp /etc/docker/daemon.json tmp1.json || sudo echo {} > tmp1.json) && sudo chmod a+w tmp?.json && if fgrep ""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker"" tmp1.json; then echo grep ""found docker path""; elif [ $? -eq 1 ]; then ");
                 commandLine.Append(machineConfiguration.NodeAgentSkuId switch
                 {
                     var s when s.StartsWith("batch.node.ubuntu ") => "sudo apt-get install -y jq",
