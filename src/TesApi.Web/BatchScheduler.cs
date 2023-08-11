@@ -1020,8 +1020,14 @@ namespace TesApi.Web
             {
                 Outputs = new()
                 {
-                    new() { TargetUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, "StartTask-stderr.txt", cancellationToken), Path = @"%AZ_BATCH_NODE_STARTUP_DIR%/stderr.txt", SasStrategy = SasResolutionStrategy.None, FileType = FileType.File },
-                    new() { TargetUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, "StartTask-stdout.txt", cancellationToken), Path = @"%AZ_BATCH_NODE_STARTUP_DIR%/stdout.txt", SasStrategy = SasResolutionStrategy.None, FileType = FileType.File },
+                    new()
+                    {
+                        TargetUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, "start-task", cancellationToken),
+                        Path = @"std*.txt",
+                        PathPrefix="%AZ_BATCH_NODE_STARTUP_DIR%/",
+                        SasStrategy = SasResolutionStrategy.None,
+                        FileType = FileType.File
+                    }
                 }
             };
 
@@ -1083,7 +1089,7 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_DIR/{metricsName}; }} && \\");  // Function that appends key=value pair to metrics.txt file
             sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
             sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
-            sb.AppendLinuxLine($"if compgen -G $AZ_BATCH_NODE_STARTUP_DIR/std*.txt; then ./{NodeTaskRunnerFilename} upload --file {NodeTaskRunnerStartTaskFileName}; fi && \\"); // Upload the start-task console spews
+            sb.AppendLinuxLine($"(./{NodeTaskRunnerFilename} upload --file {NodeTaskRunnerStartTaskFileName} || :) && \\"); // Upload the start-task console spews
 
             var vmSize = task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
 
@@ -1194,8 +1200,8 @@ namespace TesApi.Web
             async ValueTask<ResourceFile> UploadBlobAsync(string fileName, string content)
             {
                 var sasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, fileName, cancellationToken);
-                await storageAccessProvider.UploadBlobAsync(new Uri(sasUrl), content, cancellationToken);
-                return ResourceFile.FromUrl(sasUrl, fileName);
+                await storageAccessProvider.UploadBlobAsync(new Uri(sasUrl), content, cancellationToken); // SAS is used for creating here
+                return ResourceFile.FromUrl(sasUrl, fileName); // SAS is used for reading here
             }
 
             string MungeBatchScript()
@@ -1341,7 +1347,7 @@ namespace TesApi.Web
             if (!dockerConfigured)
             {
                 var commandLine = new StringBuilder();
-                commandLine.Append(@"/usr/bin/bash -c 'sudo touch tmp2.json && (sudo cp /etc/docker/daemon.json tmp1.json || sudo echo {} > tmp1.json) && sudo chmod a+w tmp?.json && if fgrep ""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker"" tmp1.json; then echo grep ""found docker path""; elif [ $? -eq 1 ]; then ");
+                commandLine.Append(@"/usr/bin/bash -c 'trap ""echo Error trapped; exit 0"" ERR; sudo touch tmp2.json && (sudo cp /etc/docker/daemon.json tmp1.json || sudo echo {} > tmp1.json) && sudo chmod a+w tmp?.json && if fgrep ""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker"" tmp1.json; then echo grep ""found docker path""; elif [ $? -eq 1 ]; then ");
                 commandLine.Append(machineConfiguration.NodeAgentSkuId switch
                 {
                     var s when s.StartsWith("batch.node.ubuntu ") => "sudo apt-get install -y jq",
