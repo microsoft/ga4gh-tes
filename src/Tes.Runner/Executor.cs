@@ -123,7 +123,11 @@ namespace Tes.Runner
 
             var optimizedOptions = OptimizeBlobPipelineOptionsForDownload(blobPipelineOptions);
 
-            return await DownloadInputsAsync(optimizedOptions, inputs);
+            var bytesTransferred = await DownloadInputsAsync(optimizedOptions, inputs);
+
+            await AppendMetrics(tesNodeTask.InputsMetricsFormat, bytesTransferred);
+
+            return bytesTransferred;
         }
 
         private async Task<long> DownloadInputsAsync(BlobPipelineOptions blobPipelineOptions, List<DownloadInfo> inputs)
