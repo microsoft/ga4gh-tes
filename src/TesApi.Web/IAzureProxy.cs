@@ -324,5 +324,14 @@ namespace TesApi.Web
         /// <param name="currentTarget">Current number of compute nodes.</param>
         /// <returns></returns>
         delegate string BatchPoolAutoScaleFormulaFactory(bool preemptable, int currentTarget);
+
+        /// <summary>
+        /// Appends TES task JSON to an existing blob, or creates a new one
+        /// </summary>
+        /// <param name="containerAbsoluteUri"></param>
+        /// <param name="content"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        Task UploadBlockToTesTasksAppendBlobAsync(Uri containerAbsoluteUri, string content, CancellationToken cancellationToken);
     }
 }

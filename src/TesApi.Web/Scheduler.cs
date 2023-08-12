@@ -2,12 +2,14 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using Tes.Extensions;
 using Tes.Models;
 using Tes.Repository;
@@ -25,17 +27,18 @@ namespace TesApi.Web
         private readonly IBatchScheduler batchScheduler;
         private readonly ILogger<Scheduler> logger;
         private readonly TimeSpan runInterval = TimeSpan.FromSeconds(5);
-
+        private readonly ITesTaskAppender tesTaskAppender;
         /// <summary>
         /// Default constructor
         /// </summary>
         /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler">The batch scheduler implementation</param>
         /// <param name="logger">The logger instance</param>
-        public Scheduler(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
+        public Scheduler(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ITesTaskAppender tesTaskAppender, ILogger<Scheduler> logger)
         {
             this.repository = repository;
             this.batchScheduler = batchScheduler;
+            this.tesTaskAppender = tesTaskAppender;
             this.logger = logger;
         }
 
@@ -199,6 +202,11 @@ namespace TesApi.Web
                         }
 
                         await repository.UpdateItemAsync(tesTask, stoppingToken);
+
+                        if (!tesTask.IsActiveState())
+                        {
+                            tesTaskAppender.Append(tesTask);
+                        }
                     }
                 }
                 catch (RepositoryCollisionException exc)

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,6 +21,7 @@ using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Rest;
+using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
 using Polly;
@@ -671,6 +673,49 @@ namespace TesApi.Web
                 throw;
             }
         }
+
+        public async Task UploadBlockToTesTasksAppendBlobAsync(Uri containerAbsoluteUri, string content, CancellationToken cancellationToken)
+        {
+            var container = new CloudBlobContainer(containerAbsoluteUri);
+            CloudAppendBlob appendBlob = null;
+            const int maxBlocks = 50000;
+
+            for (int i = 0; i < int.MaxValue; i++)
+            {
+                var blobName = $"testasks{i}.jsonl";
+                appendBlob = container.GetAppendBlobReference(blobName);
+
+                // If the blob exists and has less than the max number of blocks, use it.
+                if (await appendBlob.ExistsAsync(null, null, cancellationToken))
+                {
+                    await appendBlob.FetchAttributesAsync(null, null, null, cancellationToken);
+                    
+                    if (appendBlob.Properties.AppendBlobCommittedBlockCount < maxBlocks)
+                    {
+                        break;
+                    }
+
+                    continue; // If the blob has max blocks, continue to the next blob.
+                }
+
+                // If the blob does not exist, try creating it.
+                try
+                {
+                    await appendBlob.CreateOrReplaceAsync(null, null, null, cancellationToken);
+                    break; // If successful, break the loop.
+                }
+                catch (StorageException ex) when (ex.RequestInformation?.HttpStatusCode == 409) // Conflict
+                {
+                    // If there's a conflict, another process might have created the blob, so continue the loop.
+                    continue;
+                }
+            }
+
+            // Append the text content to the blob.
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+            await appendBlob.AppendBlockAsync(stream, null, null, null, null, cancellationToken);
+        }
+
 
         /// <inheritdoc/>
         public Task UploadBlobAsync(Uri blobAbsoluteUri, string content, CancellationToken cancellationToken)
