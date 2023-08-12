@@ -1182,7 +1182,7 @@ namespace TesApi.Web
             static string AppendPathToUrl(string url, string path)
             {
                 var uri = new UriBuilder(url);
-                uri.Path += $"/{path}";
+                uri.Path = string.Concat(uri.Path.TrimEnd('/'), "/", path.TrimStart('/'));
                 return uri.Uri.ToString();
             }
 
