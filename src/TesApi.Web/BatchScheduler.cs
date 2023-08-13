@@ -1022,9 +1022,9 @@ namespace TesApi.Web
                 {
                     new()
                     {
-                        TargetUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, "start-task", cancellationToken),
+                        TargetUrl = AppendPathToUrl(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, string.Empty, cancellationToken), "start-task"),
                         Path = @"std*.txt",
-                        PathPrefix="%AZ_BATCH_NODE_STARTUP_DIR%/",
+                        PathPrefix = "%AZ_BATCH_NODE_STARTUP_DIR%/",
                         SasStrategy = SasResolutionStrategy.None,
                         FileType = FileType.File
                     }
@@ -1178,6 +1178,13 @@ namespace TesApi.Web
             }
 
             return cloudTask;
+
+            static string AppendPathToUrl(string url, string path)
+            {
+                var uri = new UriBuilder(url);
+                uri.Path = string.Concat(uri.Path.TrimEnd('/'), "/", path.TrimStart('/'));
+                return uri.Uri.ToString();
+            }
 
             static string BashWrapShellArgument(string argument)
                 => $"'{argument.Replace(@"'", @"'\''")}'";
