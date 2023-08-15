@@ -714,7 +714,7 @@ namespace TesDeployer
                     new TesExecutor()
                     {
                         Image = "ubuntu:22.04",
-                        Command = new List<string>{"echo 'hello world'" },
+                        Command = new List<string>{ "echo", "hello world" },
                     }
                 },
                 Resources = new TesResources()
@@ -742,7 +742,7 @@ namespace TesDeployer
                         }
                     });
 
-            return await IsTaskSuccessfulAfterLongPollingAsync(client, $"{requestUri}/{response["id"]}") ? 0 : 1;
+            return await IsTaskSuccessfulAfterLongPollingAsync(client, $"{requestUri}/{response["id"]}?view=full") ? 0 : 1;
         }
 
         private static async Task<bool> RunTestTask(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
@@ -796,6 +796,7 @@ namespace TesDeployer
                     else if (response.State == TesState.EXECUTORERROREnum || response.State == TesState.SYSTEMERROREnum || response.State == TesState.CANCELEDEnum)
                     {
                         ConsoleEx.WriteLine($"TES Task State: {response.State}");
+                        ConsoleEx.WriteLine(content);
 
                         if (!string.IsNullOrWhiteSpace(response.FailureReason))
                         {

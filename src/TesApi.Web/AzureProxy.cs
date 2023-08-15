@@ -703,19 +703,19 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
+        public async Task<IEnumerable<CloudBlob>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
         {
             var blob = new CloudBlockBlob(directoryUri);
             var directory = blob.Container.GetDirectoryReference(blob.Name);
 
             BlobContinuationToken continuationToken = null;
-            var results = new List<string>();
+            var results = new List<CloudBlob>();
 
             do
             {
-                var response = await directory.ListBlobsSegmentedAsync(useFlatBlobListing: true, blobListingDetails: BlobListingDetails.None, maxResults: null, currentToken: continuationToken, options: null, operationContext: null);
+                var response = await directory.ListBlobsSegmentedAsync(useFlatBlobListing: true, blobListingDetails: BlobListingDetails.None, maxResults: null, currentToken: continuationToken, options: null, operationContext: null, cancellationToken: cancellationToken);
                 continuationToken = response.ContinuationToken;
-                results.AddRange(response.Results.Cast<CloudBlob>().Select(b => b.Name));
+                results.AddRange(response.Results.OfType<CloudBlob>());
             }
             while (continuationToken is not null);
 

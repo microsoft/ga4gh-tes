@@ -3,6 +3,7 @@
 
 using System;
 using Microsoft.Extensions.Logging;
+using Tes.ApiClients;
 
 namespace TesApi.Web.Management
 {

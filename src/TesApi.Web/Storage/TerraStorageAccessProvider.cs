@@ -9,9 +9,9 @@ using System.Threading.Tasks;
 using System.Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Tes.ApiClients;
 using Tes.Extensions;
 using Tes.Models;
-using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 using TesApi.Web.Options;
@@ -34,21 +34,22 @@ namespace TesApi.Web.Storage
         /// Provides methods for blob storage access for Terra
         /// for Terra
         /// </summary>
-        /// <param name="logger">Logger <see cref="ILogger"/></param>
-        /// <param name="terraOptions"><see cref="TerraOptions"/></param>
-        /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         /// <param name="terraWsmApiClient"><see cref="TerraWsmApiClient"/></param>
+        /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
+        /// <param name="terraOptions"><see cref="TerraOptions"/></param>
         /// <param name="batchSchedulingOptions"><see cref="BatchSchedulingOptions"/>></param>
-        public TerraStorageAccessProvider(ILogger<TerraStorageAccessProvider> logger,
-            IOptions<TerraOptions> terraOptions, IAzureProxy azureProxy, TerraWsmApiClient terraWsmApiClient, BatchSchedulingOptions batchSchedulingOptions) : base(
+        /// <param name="logger">Logger <see cref="ILogger"/></param>
+        public TerraStorageAccessProvider(TerraWsmApiClient terraWsmApiClient, IAzureProxy azureProxy,
+            IOptions<TerraOptions> terraOptions, IOptions<BatchSchedulingOptions> batchSchedulingOptions,
+            ILogger<TerraStorageAccessProvider> logger) : base(
             logger, azureProxy)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(batchSchedulingOptions);
-            ArgumentNullException.ThrowIfNull(batchSchedulingOptions.Prefix, nameof(batchSchedulingOptions.Prefix));
+            ArgumentNullException.ThrowIfNull(batchSchedulingOptions.Value.Prefix, nameof(batchSchedulingOptions.Value.Prefix));
 
             this.terraWsmApiClient = terraWsmApiClient;
-            this.batchSchedulingOptions = batchSchedulingOptions;
+            this.batchSchedulingOptions = batchSchedulingOptions.Value;
             this.terraOptions = terraOptions.Value;
         }
 
@@ -79,10 +80,13 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, bool getContainerSas = false)
+        public override async Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
-
+            if (sasTokenDuration is not null)
+            {
+                throw new ArgumentException("Terra does not support extended length SAS tokens.");
+            }
 
             if (!TryParseHttpUrlFromInput(path, out _))
             {
@@ -99,18 +103,43 @@ namespace TesApi.Web.Storage
             return await GetMappedSasUrlFromWsmAsync(terraBlobInfo, cancellationToken);
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Returns a URL with a SAS token for the provided blobPath.The resulting URL contains the TES internal segments as a prefix to the blobPath.
+        /// If the blobPath is not provided(empty), a container SAS token is generated.
+        /// If the blobPath is provided, a SAS token to the blobPath prefixed with the TES internal segments is generated.
+        /// </summary>
+        /// <param name="blobPath"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken)
         {
             var blobInfo = GetTerraBlobInfoForInternalTes(blobPath);
 
+            if (string.IsNullOrEmpty(blobPath))
+            {
+                return await GetMappedSasContainerUrlFromWsmAsync(blobInfo, cancellationToken);
+            }
+
             return await GetMappedSasUrlFromWsmAsync(blobInfo, cancellationToken);
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Returns a URL with a SAS token for the provided blobPath.The resulting URL contains the TES task internal segments as a prefix to the blobPath.
+        /// If the blobPath is not provided(empty), a container SAS token is generated.
+        /// If the blobPath is provided, a SAS token to the blobPath prefixed with the TES task internal segments is generated.
+        /// </summary>
+        /// <param name="task"></param>
+        /// <param name="blobPath"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         public override async Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken)
         {
             var blobInfo = GetTerraBlobInfoForInternalTesTask(task, blobPath);
+
+            if (string.IsNullOrEmpty(blobPath))
+            {
+                return await GetMappedSasContainerUrlFromWsmAsync(blobInfo, cancellationToken);
+            }
 
             return await GetMappedSasUrlFromWsmAsync(blobInfo, cancellationToken);
         }
@@ -222,14 +251,13 @@ namespace TesApi.Web.Storage
 
         private async Task<string> GetMappedSasContainerUrlFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
         {
-            //an empty blob name gets a container Sas token
             var tokenInfo = await GetWorkspaceContainerSasTokenFromWsmAsync(blobInfo, cancellationToken);
 
             var urlBuilder = new UriBuilder(tokenInfo.Url);
 
             if (!string.IsNullOrEmpty(blobInfo.BlobName))
             {
-                urlBuilder.Path += $"/{blobInfo.BlobName}";
+                urlBuilder.Path += $"/{blobInfo.BlobName.TrimStart('/')}";
             }
 
             return urlBuilder.Uri.ToString();
