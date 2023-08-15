@@ -12,7 +12,7 @@ namespace Tes.Runner.Storage
     public class ArmSasResolutionStrategy : ISasResolutionStrategy
     {
         const string StorageHostSuffix = ".blob.core.windows.net";
-        const int BlobSasTokenExpirationInHours = 48;
+        private const int BlobSasTokenExpirationInHours = 24 * 7; //7 days which is the Azure Batch node runtime;
         const int UserDelegationKeyExpirationInHours = 1;
 
         private readonly ILogger logger = PipelineLoggerFactory.Create<ArmSasResolutionStrategy>();
@@ -28,7 +28,7 @@ namespace Tes.Runner.Storage
             userDelegationKeyDictionary = new Dictionary<string, UserDelegationKey>();
         }
 
-        public Task<Uri> CreateSasTokenWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
+        public async Task<Uri> CreateSasTokenWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
         {
             ArgumentNullException.ThrowIfNull(sourceUrl);
 
@@ -37,20 +37,20 @@ namespace Tes.Runner.Storage
                 var uri = new Uri(sourceUrl);
                 logger.LogWarning($"The URL provide is not a valid storage account. The resolution strategy won't be applied. Host: {uri.Host}");
 
-                return Task.FromResult(uri);
+                return uri;
             }
 
-            return Task.FromResult(GetStorageUriWithSasToken(sourceUrl, blobSasPermissions));
+            return await GetStorageUriWithSasTokenAsync(sourceUrl, blobSasPermissions);
         }
 
-        private Uri GetStorageUriWithSasToken(string sourceUrl, BlobSasPermissions permissions)
+        private async Task<Uri> GetStorageUriWithSasTokenAsync(string sourceUrl, BlobSasPermissions permissions)
         {
             try
             {
                 var blobUrl = new BlobUriBuilder(new Uri(sourceUrl));
                 var blobServiceClient = blobServiceClientFactory(new Uri($"https://{blobUrl.Host}"));
 
-                var userKey = GetUserDelegationKey(blobServiceClient, blobUrl.AccountName);
+                var userKey = await GetUserDelegationKeyAsync(blobServiceClient, blobUrl.AccountName);
 
                 var sasBuilder = new BlobSasBuilder()
                 {
@@ -76,18 +76,18 @@ namespace Tes.Runner.Storage
             }
         }
 
-        private UserDelegationKey GetUserDelegationKey(BlobServiceClient blobServiceClient, string storageAccountName)
+        private async Task<UserDelegationKey> GetUserDelegationKeyAsync(BlobServiceClient blobServiceClient, string storageAccountName)
         {
 
             try
             {
-                semaphoreSlim.Wait();
+                await semaphoreSlim.WaitAsync();
 
                 var userDelegationKey = userDelegationKeyDictionary.GetValueOrDefault(storageAccountName);
 
                 if (userDelegationKey is null || userDelegationKey.SignedExpiresOn < DateTimeOffset.UtcNow)
                 {
-                    userDelegationKey = blobServiceClient.GetUserDelegationKey(startsOn: default, expiresOn: DateTimeOffset.UtcNow.AddHours(UserDelegationKeyExpirationInHours));
+                    userDelegationKey = await blobServiceClient.GetUserDelegationKeyAsync(startsOn: default, expiresOn: DateTimeOffset.UtcNow.AddHours(UserDelegationKeyExpirationInHours));
 
                     userDelegationKeyDictionary[storageAccountName] = userDelegationKey;
                 }

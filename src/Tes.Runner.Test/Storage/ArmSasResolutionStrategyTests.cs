@@ -24,8 +24,8 @@ namespace Tes.Runner.Test.Storage
             armSasResolutionStrategy = new ArmSasResolutionStrategy(_ => mockBlobServiceClient.Object);
             userDelegationKey = BlobsModelFactory.UserDelegationKey(Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow.AddHours(1), "SIGNED_SERVICE", "V1_0", RunnerTestUtils.GenerateRandomTestAzureStorageKey());
-            mockBlobServiceClient.Setup(c => c.GetUserDelegationKey(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-                .Returns(Azure.Response.FromValue(userDelegationKey, null!));
+            mockBlobServiceClient.Setup(c => c.GetUserDelegationKeyAsync(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Azure.Response.FromValue(userDelegationKey, null!));
 
         }
 
@@ -68,7 +68,7 @@ namespace Tes.Runner.Test.Storage
             Assert.IsNotNull(sasTokenUrl1);
             Assert.IsNotNull(sasTokenUrl2);
             Assert.AreEqual(sasTokenUrl1, sasTokenUrl2);
-            mockBlobServiceClient.Verify(c => c.GetUserDelegationKey(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()), Times.Once);
+            mockBlobServiceClient.Verify(c => c.GetUserDelegationKeyAsync(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()), Times.Once);
         }
     }
 }
