@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Azure.Identity;
+using Azure.Storage.Blobs;
 using Tes.Runner.Models;
 
 namespace Tes.Runner.Storage
@@ -15,6 +17,8 @@ namespace Tes.Runner.Storage
                     return new PassThroughSasResolutionStrategy();
                 case SasResolutionStrategy.SchemeConverter:
                     return new CloudProviderSchemeConverter();
+                case SasResolutionStrategy.AzureResourceManager:
+                    return new ArmSasResolutionStrategy(u => new BlobServiceClient(u, new DefaultAzureCredential()));
             }
 
             throw new NotImplementedException();
