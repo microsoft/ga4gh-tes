@@ -1,13 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace TesApi.Tests.Integration
+namespace Tes.ApiClients.Tests.TerraIntegration
 {
     internal class TestTerraEnvInfo
     {
@@ -25,9 +19,9 @@ namespace TesApi.Tests.Integration
 
         public TestTerraEnvInfo()
         {
-            lzStorageAccountName = Environment.GetEnvironmentVariable(LzStorageAccountNameEnvVarName);
-            workspaceContainerName = Environment.GetEnvironmentVariable(WorkspaceContainerNameEnvVarName);
-            wsmApiHost = Environment.GetEnvironmentVariable(WsmApiHostEnvVarName);
+            lzStorageAccountName = Environment.GetEnvironmentVariable(LzStorageAccountNameEnvVarName)!;
+            workspaceContainerName = Environment.GetEnvironmentVariable(WorkspaceContainerNameEnvVarName)!;
+            wsmApiHost = Environment.GetEnvironmentVariable(WsmApiHostEnvVarName)!;
 
             if (string.IsNullOrEmpty(lzStorageAccountName))
             {

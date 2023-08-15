@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
+using Tes.ApiClients.Options;
 using Tes.Repository;
 
 namespace TesApi.Web
@@ -26,8 +27,8 @@ namespace TesApi.Web
         /// Constructor for <see cref="RepositoryRetryHandler{T}"/>.
         /// </summary>
         /// <param name="repository">The <see cref="IRepository{T}"/> to wrap.</param>
-        /// <param name="retryPolicyOptions">The <see cref="Management.Configuration.RetryPolicyOptions"/> to use. Note that we will quadruple the max retry count set in options.</param>
-        public RepositoryRetryHandler(IRepository<T> repository, IOptions<Management.Configuration.RetryPolicyOptions> retryPolicyOptions)
+        /// <param name="retryPolicyOptions">The <see cref="RetryPolicyOptions"/> to use. Note that we will quadruple the max retry count set in options.</param>
+        public RepositoryRetryHandler(IRepository<T> repository, IOptions<RetryPolicyOptions> retryPolicyOptions)
         {
             ArgumentNullException.ThrowIfNull(repository);
             ArgumentNullException.ThrowIfNull(retryPolicyOptions);

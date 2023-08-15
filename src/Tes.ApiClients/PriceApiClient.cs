@@ -1,16 +1,11 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using TesApi.Web.Management.Models.Pricing;
+using Tes.ApiClients.Models.Pricing;
 
-namespace TesApi.Web.Management.Clients
+namespace Tes.ApiClients
 {
     /// <summary>
     /// Azure Retail Price API client. 
@@ -82,10 +77,7 @@ namespace TesApi.Web.Management.Clients
 
             var result = await HttpGetRequestAsync<RetailPricingData>(builder.Uri, setAuthorizationHeader: false, cacheResults: cacheResults, cancellationToken: cancellationToken);
 
-            if (result is not null)
-            {
-                result.RequestLink = builder.ToString();
-            }
+            result.RequestLink = builder.ToString();
 
             return result;
         }

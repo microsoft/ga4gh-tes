@@ -1,19 +1,11 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using TesApi.Web.Management;
-using TesApi.Web.Management.Clients;
-using TesApi.Web.Management.Configuration;
+using Tes.ApiClients.Options;
 
-namespace TesApi.Tests.Integration
+namespace Tes.ApiClients.Tests.TerraIntegration
 {
     [TestClass, TestCategory("TerraIntegration")]
     [Ignore]
@@ -27,14 +19,11 @@ namespace TesApi.Tests.Integration
         {
             envInfo = new TestTerraEnvInfo();
 
-            var terraOptions = Options.Create(new TerraOptions()
-            {
-                WsmApiHost = envInfo.WsmApiHost
-            });
-            var retryOptions = Options.Create(new RetryPolicyOptions());
+
+            var retryOptions = Microsoft.Extensions.Options.Options.Create(new RetryPolicyOptions());
             var memoryCache = new MemoryCache(new MemoryCacheOptions());
 
-            wsmApiClient = new TerraWsmApiClient(new TestEnvTokenCredential(), terraOptions,
+            wsmApiClient = new TerraWsmApiClient(envInfo.WsmApiHost, new TestEnvTokenCredential(),
                 new CacheAndRetryHandler(memoryCache, retryOptions), TestLoggerFactory.Create<TerraWsmApiClient>());
 
         }

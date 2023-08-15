@@ -16,12 +16,13 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Serialization;
+using Tes.ApiClients;
+using Tes.ApiClients.Options;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Filters;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
-using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
 using TesApi.Web.Storage;
@@ -78,7 +79,6 @@ namespace TesApi.Web
                     .AddSingleton<AzureProxy>()
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
-                    .AddTransient<TerraWsmApiClient>()
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
                     .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
@@ -141,7 +141,6 @@ namespace TesApi.Web
                     .AddHostedService<DeleteOrphanedAutoPoolsHostedService>();
                 //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
 
-
             }
             catch (Exception exc)
             {
@@ -161,9 +160,9 @@ namespace TesApi.Web
 
                 if (!string.IsNullOrEmpty(terraOptions?.Value.LandingZoneApiHost))
                 {
-                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraLandingZoneApiClient>(services);
-
                     logger.LogInformation("Terra Landing Zone API Host is set. Using the Terra Quota Provider.");
+
+                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraLandingZoneApiClient>(services, terraOptions.Value.LandingZoneApiHost);
 
                     return new TerraQuotaProvider(terraApiClient, terraOptions);
                 }
@@ -183,7 +182,9 @@ namespace TesApi.Web
                 {
                     logger.LogInformation("Terra WSM API Host is set. Using Terra Batch Pool Manager");
 
-                    return ActivatorUtilities.CreateInstance<TerraBatchPoolManager>(services);
+                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, terraOptions.Value.WsmApiHost);
+
+                    return ActivatorUtilities.CreateInstance<TerraBatchPoolManager>(services, terraApiClient);
                 }
 
                 logger.LogInformation("Using default Batch Pool Manager.");
@@ -204,7 +205,9 @@ namespace TesApi.Web
 
                     ValidateRequiredOptionsForTerraStorageProvider(options.Value);
 
-                    return ActivatorUtilities.CreateInstance<TerraStorageAccessProvider>(services);
+                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, options.Value.WsmApiHost);
+
+                    return ActivatorUtilities.CreateInstance<TerraStorageAccessProvider>(services, terraApiClient);
                 }
 
                 logger.LogInformation("Using Default Storage Provider");
@@ -218,7 +221,7 @@ namespace TesApi.Web
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageAccountName, nameof(terraOptions.WorkspaceStorageAccountName));
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerName, nameof(terraOptions.WorkspaceStorageContainerName));
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerResourceId, nameof(terraOptions.WorkspaceStorageContainerResourceId));
-                ArgumentException.ThrowIfNullOrEmpty(terraOptions.LandingZoneApiHost, nameof(terraOptions.WsmApiHost));
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.WsmApiHost, nameof(terraOptions.WsmApiHost));
             }
 
             BatchAccountResourceInformation CreateBatchAccountResourceInformation(IServiceProvider services)
@@ -250,6 +253,7 @@ namespace TesApi.Web
                 return new BatchAccountResourceInformation(options.Value.AccountName, options.Value.ResourceGroup, options.Value.SubscriptionId, options.Value.Region);
             }
         }
+
 
         /// <summary>
         /// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

@@ -1,29 +1,25 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Net;
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Extensions.Http;
 using Polly.Retry;
-using TesApi.Web.Management.Configuration;
+using Tes.ApiClients.Options;
 
-namespace TesApi.Web.Management
+namespace Tes.ApiClients
 {
     /// <summary>
     /// Contains an App Cache instances and retry policies. 
     /// </summary>
     public class CacheAndRetryHandler
     {
-        private readonly IMemoryCache appCache;
-        private readonly RetryPolicy retryPolicy;
-        private readonly AsyncRetryPolicy asyncRetryPolicy;
-        private readonly AsyncRetryPolicy<HttpResponseMessage> asyncHttpRetryPolicy;
+        private readonly IMemoryCache appCache = null!;
+        private readonly RetryPolicy retryPolicy = null!;
+        private readonly AsyncRetryPolicy asyncRetryPolicy = null!;
+        private readonly AsyncRetryPolicy<HttpResponseMessage> asyncHttpRetryPolicy = null!;
 
         /// <summary>
         /// Synchronous retry policy instance.
@@ -228,9 +224,13 @@ namespace TesApi.Web.Management
         {
             ValidateArgs(cacheKey, action);
 
-            if (appCache.TryGetValue(cacheKey, out HttpResponseMessage response))
+            if (appCache.TryGetValue(cacheKey, out HttpResponseMessage? response))
             {
-                return response;
+                if (response is null)
+                {
+                    throw new InvalidOperationException("The value found in the cache is null");
+                }
+                return response!;
             }
 
             response = await ExecuteHttpRequestWithRetryAsync(action);
@@ -263,13 +263,13 @@ namespace TesApi.Web.Management
         }
 
         private async Task<TResult> ExecuteWithCacheAsync<TResult>(string cacheKey, Func<Task<TResult>> action)
-            => await appCache.GetOrCreateAsync(cacheKey, _1 => action());
+            => (await appCache.GetOrCreateAsync(cacheKey, _1 => action()))!;
 
         private async Task<TResult> ExecuteWithCacheAsync<TResult>(string cacheKey, Func<Task<TResult>> action, DateTimeOffset cacheExpires)
-            => await appCache.GetOrCreateAsync(cacheKey, entry =>
+            => (await appCache.GetOrCreateAsync(cacheKey, entry =>
             {
                 entry.AbsoluteExpiration = cacheExpires;
                 return action();
-            });
+            }))!;
     }
 }

@@ -10,8 +10,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Tes.ApiClients;
 using Tes.Models;
-using TesApi.Web.Management.Clients;
 
 namespace TesApi.Web.Management
 {

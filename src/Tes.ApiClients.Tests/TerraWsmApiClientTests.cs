@@ -1,42 +1,30 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
 using System.Web;
 using Azure.Core;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
-using TesApi.Web.Management;
-using TesApi.Web.Management.Clients;
-using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 
-namespace TesApi.Tests
+namespace Tes.ApiClients.Tests
 {
-    [TestClass]
+    [TestClass, TestCategory("Unit")]
     public class TerraWsmApiClientTests
     {
-        private TerraWsmApiClient terraWsmApiClient;
-        private Mock<TokenCredential> tokenCredential;
-        private Mock<CacheAndRetryHandler> cacheAndRetryHandler;
-        private TerraApiStubData terraApiStubData;
+        private TerraWsmApiClient terraWsmApiClient = null!;
+        private Mock<TokenCredential> tokenCredential = null!;
+        private Mock<CacheAndRetryHandler> cacheAndRetryHandler = null!;
+        private TerraApiStubData terraApiStubData = null!;
 
         [TestInitialize]
         public void SetUp()
         {
-            terraApiStubData = new();
-            tokenCredential = new();
-            cacheAndRetryHandler = new();
-            var terraOptions = new Mock<IOptions<TerraOptions>>();
-            terraOptions.Setup(o => o.Value)
-                .Returns(new TerraOptions() { WsmApiHost = TerraApiStubData.WsmApiHost });
-            terraWsmApiClient = new(tokenCredential.Object, terraOptions.Object,
+            terraApiStubData = new TerraApiStubData();
+            tokenCredential = new Mock<TokenCredential>();
+            cacheAndRetryHandler = new Mock<CacheAndRetryHandler>();
+            terraWsmApiClient = new TerraWsmApiClient(TerraApiStubData.WsmApiHost, tokenCredential.Object,
                 cacheAndRetryHandler.Object, NullLogger<TerraWsmApiClient>.Instance);
         }
 
@@ -44,7 +32,7 @@ namespace TesApi.Tests
         public void GetContainerSasTokenApiUri_NoSasParameters_ReturnsExpectedUriWithoutQueryString()
         {
             var uri = terraWsmApiClient.GetSasTokenApiUrl(terraApiStubData.WorkspaceId,
-                terraApiStubData.ContainerResourceId, null);
+                terraApiStubData.ContainerResourceId, null!);
 
             var expectedUri =
                 $"{TerraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/storageContainer/{terraApiStubData.ContainerResourceId}/getSasToken";
@@ -76,7 +64,7 @@ namespace TesApi.Tests
         [TestMethod]
         public void GetContainerSasTokenApiUri_WithSomeSasParameters_ReturnsExpectedUriWithQueryString()
         {
-            var sasParams = new SasTokenApiParameters("ipRange", 10, null, null);
+            var sasParams = new SasTokenApiParameters("ipRange", 10, null!, null!);
 
             var uri = terraWsmApiClient.GetSasTokenApiUrl(terraApiStubData.WorkspaceId,
                 terraApiStubData.ContainerResourceId, sasParams);
@@ -100,11 +88,11 @@ namespace TesApi.Tests
                 Content = new StringContent(terraApiStubData.GetWsmSasTokenApiResponseInJson())
             };
 
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<System.Threading.CancellationToken>()))
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(response);
 
             var apiResponse = await terraWsmApiClient.GetSasTokenAsync(terraApiStubData.WorkspaceId,
-                terraApiStubData.ContainerResourceId, null, System.Threading.CancellationToken.None);
+                terraApiStubData.ContainerResourceId, null!, CancellationToken.None);
 
             Assert.IsNotNull(apiResponse);
             Assert.IsTrue(!string.IsNullOrEmpty(apiResponse.Token));
@@ -119,11 +107,11 @@ namespace TesApi.Tests
                 Content = new StringContent(terraApiStubData.GetContainerResourcesApiResponseInJson())
             };
 
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<System.Threading.CancellationToken>()))
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(response);
 
             var apiResponse = await terraWsmApiClient.GetContainerResourcesAsync(terraApiStubData.WorkspaceId,
-                offset: 0, limit: 10, System.Threading.CancellationToken.None);
+                offset: 0, limit: 10, CancellationToken.None);
 
             Assert.IsNotNull(apiResponse);
             Assert.AreEqual(1, apiResponse.Resources.Count);
@@ -136,10 +124,10 @@ namespace TesApi.Tests
             var wsmResourceId = Guid.NewGuid();
             var response = new HttpResponseMessage(HttpStatusCode.NoContent);
 
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<System.Threading.CancellationToken>()))
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(response);
 
-            await terraWsmApiClient.DeleteBatchPoolAsync(terraApiStubData.WorkspaceId, wsmResourceId, System.Threading.CancellationToken.None);
+            await terraWsmApiClient.DeleteBatchPoolAsync(terraApiStubData.WorkspaceId, wsmResourceId, CancellationToken.None);
         }
 
         [TestMethod]

@@ -10,6 +10,7 @@ using Microsoft.Azure.Management.ContainerRegistry.Fluent;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Tes.ApiClients;
 using TesApi.Web.Management.Configuration;
 
 namespace TesApi.Web.Management

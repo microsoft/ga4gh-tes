@@ -35,6 +35,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.Runner.Test", "src\Tes.
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.RunnerCLI", "src\Tes.RunnerCLI\Tes.RunnerCLI.csproj", "{D5DFB5A4-2E18-456A-9A29-5BD8C82DF250}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tes.ApiClients", "src\Tes.ApiClients\Tes.ApiClients.csproj", "{36B45D5B-0C96-4B26-B077-57C4D09DB799}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tes.ApiClients.Tests", "src\Tes.ApiClients.Tests\Tes.ApiClients.Tests.csproj", "{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -85,6 +89,14 @@ Global
 		{D5DFB5A4-2E18-456A-9A29-5BD8C82DF250}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D5DFB5A4-2E18-456A-9A29-5BD8C82DF250}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D5DFB5A4-2E18-456A-9A29-5BD8C82DF250}.Release|Any CPU.Build.0 = Release|Any CPU
+		{36B45D5B-0C96-4B26-B077-57C4D09DB799}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{36B45D5B-0C96-4B26-B077-57C4D09DB799}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{36B45D5B-0C96-4B26-B077-57C4D09DB799}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{36B45D5B-0C96-4B26-B077-57C4D09DB799}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
