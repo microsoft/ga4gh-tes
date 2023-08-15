@@ -109,9 +109,9 @@ namespace TesApi.Web
 
                     .AddSwaggerGen(c =>
                     {
-                        c.SwaggerDoc("4.4.0", new()
+                        c.SwaggerDoc("4.5.0", new()
                         {
-                            Version = "4.4.0",
+                            Version = "4.5.0",
                             Title = "GA4GH Task Execution Service",
                             Description = "Task Execution Service (ASP.NET Core 7.0)",
                             Contact = new()
@@ -272,7 +272,7 @@ namespace TesApi.Web
                 })
                 .UseSwaggerUI(c =>
                 {
-                    c.SwaggerEndpoint("/swagger/4.4.0/openapi.json", "Task Execution Service");
+                    c.SwaggerEndpoint("/swagger/4.5.0/openapi.json", "Task Execution Service");
                 })
 
                 .IfThenElse(hostingEnvironment.IsDevelopment(),
