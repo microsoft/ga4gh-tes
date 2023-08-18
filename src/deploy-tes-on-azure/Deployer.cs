@@ -24,7 +24,6 @@ using Azure.Security.KeyVault.Secrets;
 using Azure.Storage;
 using Azure.Storage.Blobs;
 using CommonUtilities;
-using IdentityModel.Client;
 using k8s;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.Batch.Models;
@@ -41,7 +40,6 @@ using Microsoft.Azure.Management.KeyVault.Models;
 using Microsoft.Azure.Management.Msi.Fluent;
 using Microsoft.Azure.Management.Network;
 using Microsoft.Azure.Management.Network.Fluent;
-using Microsoft.Azure.Management.Network.Fluent.Models;
 using Microsoft.Azure.Management.PostgreSQL;
 using Microsoft.Azure.Management.PrivateDns.Fluent;
 using Microsoft.Azure.Management.ResourceGraph;
@@ -534,7 +532,7 @@ namespace TesDeployer
                             },
                             async kubernetesClient =>
                             {
-                                await kubernetesManager.DeployCoADependenciesAsync();
+                                await kubernetesManager.DeployCoADependenciesAsync(cts.Token);
 
                                 // Deploy an ubuntu pod to run PSQL commands, then delete it
                                 const string deploymentNamespace = "default";
@@ -543,30 +541,19 @@ namespace TesDeployer
                                 await ExecuteQueriesOnAzurePostgreSQLDbFromK8(kubernetesClient, deploymentName, deploymentNamespace);
                                 await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace);
 
+
                                 if (configuration.EnableIngress.GetValueOrDefault())
                                 {
-                                    _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
+                                    _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient, cts.Token);
                                 }
                             });
                     }
-                }
-                finally
-                {
-                    if (!configuration.ManualHelmDeployment)
-                    {
-                        kubernetesManager.DeleteTempFiles();
-                    }
-                }
 
-                var maxPerFamilyQuota = batchAccount.DedicatedCoreQuotaPerVMFamilyEnforced ? batchAccount.DedicatedCoreQuotaPerVMFamily.Select(q => q.CoreQuota).Where(q => 0 != q) : Enumerable.Repeat(batchAccount.DedicatedCoreQuota ?? 0, 1);
-                var isBatchQuotaAvailable = batchAccount.LowPriorityCoreQuota > 0 || (batchAccount.DedicatedCoreQuota > 0 && maxPerFamilyQuota.Append(0).Max() > 0);
 
-                int exitCode;
+                    var maxPerFamilyQuota = batchAccount.DedicatedCoreQuotaPerVMFamilyEnforced ? batchAccount.DedicatedCoreQuotaPerVMFamily.Select(q => q.CoreQuota).Where(q => 0 != q) : Enumerable.Repeat(batchAccount.DedicatedCoreQuota ?? 0, 1);
+                    var isBatchQuotaAvailable = batchAccount.LowPriorityCoreQuota > 0 || (batchAccount.DedicatedCoreQuota > 0 && maxPerFamilyQuota.Append(0).Max() > 0);
 
-                if (configuration.EnableIngress.GetValueOrDefault())
-                {
-                    ConsoleEx.WriteLine($"TES ingress is enabled");
-                    ConsoleEx.WriteLine($"TES is secured with basic auth at {kubernetesManager.TesHostname}");
+                    int exitCode;
 
                     if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
                     {
@@ -579,8 +566,6 @@ namespace TesDeployer
                         ConsoleEx.WriteLine($"TES credentials file written to: {credentialsPath}");
                     }
 
-
-
                     if (isBatchQuotaAvailable)
                     {
                         if (configuration.SkipTestWorkflow)
@@ -589,14 +574,32 @@ namespace TesDeployer
                         }
                         else
                         {
-                            var isTestWorkflowSuccessful = await RunTestTask(kubernetesManager.TesHostname, batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+                            var tokenSource = new CancellationTokenSource();
 
-                            if (!isTestWorkflowSuccessful)
+                            try
                             {
-                                await DeleteResourceGroupIfUserConsentsAsync();
+                                var token = tokenSource.Token;
+                                var portForwardTask = kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true);
+
+                                var isTestWorkflowSuccessful = await RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+                                exitCode = isTestWorkflowSuccessful ? 0 : 1;
+
+                                if (!isTestWorkflowSuccessful)
+                                {
+                                    await DeleteResourceGroupIfUserConsentsAsync();
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                ConsoleEx.WriteLine("Exception occurred running test task.", ConsoleColor.Red);
+                                ConsoleEx.Write(e.Message, ConsoleColor.Red);
+                                exitCode = 1;
+                            }
+                            finally
+                            {
+                                tokenSource.Cancel();
                             }
 
-                            exitCode = isTestWorkflowSuccessful ? 0 : 1;
                         }
                     }
                     else
@@ -611,16 +614,18 @@ namespace TesDeployer
                         ConsoleEx.WriteLine($"After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
                         exitCode = 2;
                     }
+
+                    ConsoleEx.WriteLine($"Completed in {mainTimer.Elapsed.TotalMinutes:n1} minutes.");
+
+                    return exitCode;
                 }
-                else
+                finally
                 {
-                    ConsoleEx.WriteLine($"TES ingress is not enabled, skipping test tasks.");
-                    exitCode = 2;
+                    if (!configuration.ManualHelmDeployment)
+                    {
+                        kubernetesManager.DeleteTempFiles();
+                    }
                 }
-
-                ConsoleEx.WriteLine($"Completed in {mainTimer.Elapsed.TotalMinutes:n1} minutes.");
-
-                return exitCode;
             }
             catch (ValidationException validationException)
             {
@@ -704,14 +709,13 @@ namespace TesDeployer
             {
                 var kubernetesClient = await kubernetesManager.GetKubernetesClientAsync(resourceGroup);
                 await (asyncTask?.Invoke(kubernetesClient) ?? Task.CompletedTask);
-                await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
+                await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient, cts.Token);
             }
         }
 
         private static async Task<int> TestTaskAsync(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
         {
             using var client = new HttpClient();
-            client.SetBasicAuthentication(tesUsername, tesPassword);
 
             var task = new TesTask()
             {
@@ -732,7 +736,7 @@ namespace TesDeployer
             };
 
             var content = new StringContent(JsonConvert.SerializeObject(task), Encoding.UTF8, "application/json");
-            var requestUri = $"https://{tesEndpoint}/v1/tasks";
+            var requestUri = $"http://{tesEndpoint}/v1/tasks";
             Dictionary<string, string> response = null;
             await longRetryPolicy.ExecuteAsync(
                     async () =>
