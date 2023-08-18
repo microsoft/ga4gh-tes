@@ -19,6 +19,7 @@ using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Network.Models;
+using Azure.ResourceManager.Resources;
 using Azure.Security.KeyVault.Secrets;
 using Azure.Storage;
 using Azure.Storage.Blobs;
@@ -83,6 +84,7 @@ namespace TesDeployer
             .WaitAndRetryAsync(60, retryAttempt => System.TimeSpan.FromSeconds(15));
 
         public const string ConfigurationContainerName = "configuration";
+        public const string TesInternalContainerName = "tes-internal";
         public const string ContainersToMountFileName = "containers-to-mount";
         public const string AllowedVmSizesFileName = "allowed-vm-sizes";
         public const string TesCredentialsFileName = "TesCredentials.json";
@@ -107,6 +109,11 @@ namespace TesDeployer
             "Microsoft.Network",
             "Microsoft.Storage",
             "Microsoft.DBforPostgreSQL"
+        };
+
+        private readonly Dictionary<string, List<string>> requiredResourceProviderFeatures = new Dictionary<string, List<string>>()
+        {
+            { "Microsoft.Compute", new List<string> { "EncryptionAtHost" } }
         };
 
         private Configuration configuration { get; set; }
@@ -144,6 +151,7 @@ namespace TesDeployer
                     tokenProvider = new RefreshableAzureServiceTokenProvider("https://management.azure.com/");
                     tokenCredentials = new(tokenProvider);
                     azureCredentials = new(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
+                    armClient = new ArmClient(new DefaultAzureCredential());
                     azureClient = GetAzureClient(azureCredentials);
                     armClient = new ArmClient(new AzureCliCredential());
                     azureSubscriptionClient = azureClient.WithSubscription(configuration.SubscriptionId);
@@ -395,7 +403,7 @@ namespace TesDeployer
                         }
 
                         await RegisterResourceProvidersAsync();
-                        await ValidateVmAsync();
+                        await RegisterResourceProviderFeaturesAsync();
 
                         if (batchAccount is null)
                         {
@@ -942,6 +950,7 @@ namespace TesDeployer
                     VmSize = configuration.VmSize,
                     OsDiskSizeGB = 128,
                     OsDiskType = OSDiskType.Managed,
+                    EnableEncryptionAtHost = true,
                     Type = "VirtualMachineScaleSets",
                     EnableAutoScaling = false,
                     EnableNodePublicIP = false,
@@ -1214,6 +1223,74 @@ namespace TesDeployer
             return notRegisteredResourceProviders;
         }
 
+        private async Task RegisterResourceProviderFeaturesAsync()
+        {
+            var unregisteredFeatures = new List<FeatureResource>();
+            try
+            {
+                await Execute(
+                    $"Registering resource provider features...",
+                async () =>
+                {
+                    var subscription = armClient.GetSubscriptionResource(new ResourceIdentifier($"/subscriptions/{configuration.SubscriptionId}"));
+
+                    foreach (var rpName in requiredResourceProviderFeatures.Keys)
+                    {
+                        var rp = await subscription.GetResourceProviderAsync(rpName);
+
+                        foreach (var featureName in requiredResourceProviderFeatures[rpName])
+                        {
+                            var feature = await rp.Value.GetFeatureAsync(featureName);
+
+                            if (!string.Equals(feature.Value.Data.FeatureState, "Registered", StringComparison.OrdinalIgnoreCase))
+                            {
+                                unregisteredFeatures.Add(feature);
+                                _ = await feature.Value.RegisterAsync();
+                            }
+                        }
+                    }
+
+                    while (!cts.IsCancellationRequested)
+                    {
+                        if (unregisteredFeatures.Count == 0)
+                        {
+                            break;
+                        }
+
+                        await Task.Delay(System.TimeSpan.FromSeconds(30));
+                        var finished = new List<FeatureResource>();
+
+                        foreach (var feature in unregisteredFeatures)
+                        {
+                            var update = await feature.GetAsync();
+
+                            if (string.Equals(update.Value.Data.FeatureState, "Registered", StringComparison.OrdinalIgnoreCase))
+                            {
+                                finished.Add(feature);
+                            }
+                        }
+                        unregisteredFeatures.RemoveAll(x => finished.Contains(x));
+                    }
+                });
+            }
+            catch (Microsoft.Rest.Azure.CloudException ex) when (ex.ToCloudErrorType() == CloudErrorType.AuthorizationFailed)
+            {
+                ConsoleEx.WriteLine();
+                ConsoleEx.WriteLine("Unable to programatically register the required features.", ConsoleColor.Red);
+                ConsoleEx.WriteLine("This can happen if you don't have the Owner or Contributor role assignment for the subscription.", ConsoleColor.Red);
+                ConsoleEx.WriteLine();
+                ConsoleEx.WriteLine("Please contact the Owner or Contributor of your Azure subscription, and have them:", ConsoleColor.Yellow);
+                ConsoleEx.WriteLine();
+                ConsoleEx.WriteLine("1. For each of the following, execute 'az feature register --namespace {RESOURCE_PROVIDER_NAME} --name {FEATURE_NAME}'", ConsoleColor.Yellow);
+                ConsoleEx.WriteLine();
+                unregisteredFeatures.ForEach(f => ConsoleEx.WriteLine($"- {f.Data.Name}", ConsoleColor.Yellow));
+                ConsoleEx.WriteLine();
+                ConsoleEx.WriteLine("After completion, please re-attempt deployment.");
+
+                Environment.Exit(1);
+            }
+        }
+
         private Task AssignMIAsNetworkContributorToResourceAsync(IIdentity managedIdentity, IResource resource)
         {
             // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#network-contributor
@@ -1361,7 +1438,7 @@ namespace TesDeployer
                     //    }, "scripts", CromwellConfigurationFileName));
                     //}
 
-                    await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, AllowedVmSizesFileName, Utility.GetFileContent("scripts", AllowedVmSizesFileName));
+                    await UploadTextToStorageAccountAsync(storageAccount, TesInternalContainerName, $"{ConfigurationContainerName}/{AllowedVmSizesFileName}", Utility.GetFileContent("scripts", AllowedVmSizesFileName));
                 });
 
         private Task AssignVmAsContributorToBatchAccountAsync(IIdentity managedIdentity, BatchAccount batchAccount)
@@ -1521,8 +1598,8 @@ namespace TesDeployer
                     }
 
                     var commands = new List<string[]> {
-                        new string[] { "apt", "update" },
-                        new string[] { "apt", "install", "-y", "postgresql-client" },
+                        new string[] { "apt", "-qq", "update" },
+                        new string[] { "apt", "-qq", "install", "-y", "postgresql-client" },
                         new string[] { "bash", "-lic", $"echo {configuration.PostgreSqlServerName}{configuration.PostgreSqlServerNameSuffix}:{configuration.PostgreSqlServerPort}:{configuration.PostgreSqlTesDatabaseName}:{adminUser}:{configuration.PostgreSqlAdministratorPassword} >> ~/.pgpass" },
                         new string[] { "bash", "-lic", "chmod 0600 ~/.pgpass" },
                         new string[] { "/usr/bin/psql", "-h", serverPath, "-U", adminUser, "-d", configuration.PostgreSqlTesDatabaseName, "-c", tesScript }
