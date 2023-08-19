@@ -17,11 +17,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Newtonsoft.Json;
+using Tes.ApiClients;
+using Tes.ApiClients.Models.Pricing;
+using Tes.ApiClients.Options;
 using Tes.Models;
-using TesApi.Web.Management;
-using TesApi.Web.Management.Clients;
-using TesApi.Web.Management.Configuration;
-using TesApi.Web.Management.Models.Pricing;
 
 namespace TesUtils
 {
