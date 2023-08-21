@@ -14,6 +14,20 @@ public class ResolutionPolicyHandler
     const BlobSasPermissions DownloadBlobSasPermissions = BlobSasPermissions.Read | BlobSasPermissions.List;
     const BlobSasPermissions UploadBlobSasPermissions = BlobSasPermissions.Read | BlobSasPermissions.Write | BlobSasPermissions.Create | BlobSasPermissions.List;
 
+    private readonly RuntimeOptions runtimeOptions = null!;
+
+    public ResolutionPolicyHandler(RuntimeOptions runtimeOptions)
+    {
+        ArgumentNullException.ThrowIfNull(runtimeOptions);
+
+        this.runtimeOptions = runtimeOptions;
+    }
+
+    /// <summary>
+    /// Parameter-less constructor for mocking
+    /// </summary>
+    protected ResolutionPolicyHandler() { }
+
     /// <summary>
     /// Applies SAS resolution strategy to task outputs.
     /// </summary>
@@ -63,7 +77,7 @@ public class ResolutionPolicyHandler
         return list;
     }
 
-    private static async Task<DownloadInfo> CreateDownloadInfoWithStrategyAsync(FileInput input,
+    private async Task<DownloadInfo> CreateDownloadInfoWithStrategyAsync(FileInput input,
         BlobSasPermissions downloadBlobSasPermissions)
     {
         if (string.IsNullOrEmpty(input.Path))
@@ -71,27 +85,27 @@ public class ResolutionPolicyHandler
             throw new ArgumentException("A task input is missing the path property. Please check the task definition.");
         }
 
-        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy, downloadBlobSasPermissions);
+        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy, downloadBlobSasPermissions, runtimeOptions);
 
         return new DownloadInfo(input.Path, uri);
     }
 
-    private static async Task<UploadInfo> CreateUploadInfoWithStrategyAsync(FileOutput output,
+    private async Task<UploadInfo> CreateUploadInfoWithStrategyAsync(FileOutput output,
         BlobSasPermissions uploadBlobSasPermissions)
     {
-        var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy, uploadBlobSasPermissions);
+        var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy, uploadBlobSasPermissions, runtimeOptions);
 
         return new UploadInfo(output.Path!, uri);
     }
 
     private static async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, SasResolutionStrategy? strategy,
-        BlobSasPermissions blobSasPermissions)
+        BlobSasPermissions blobSasPermissions, RuntimeOptions runtimeOptions)
     {
         ArgumentNullException.ThrowIfNull(strategy);
         ArgumentException.ThrowIfNullOrEmpty(sourceUrl);
 
         var strategyImpl =
-            SasResolutionStrategyFactory.CreateSasResolutionStrategy(strategy.Value);
+            SasResolutionStrategyFactory.CreateSasResolutionStrategy(strategy.Value, runtimeOptions);
 
         return await strategyImpl.CreateSasTokenWithStrategyAsync(sourceUrl, blobSasPermissions);
     }

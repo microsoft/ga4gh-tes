@@ -10,6 +10,7 @@ using System.Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.ApiClients;
+using Tes.ApiClients.Models.Terra;
 using Tes.Extensions;
 using Tes.Models;
 using TesApi.Web.Management.Configuration;

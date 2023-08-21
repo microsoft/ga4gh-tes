@@ -80,7 +80,7 @@ namespace TesApi.Tests.TestServices
                         .AddTransient<ILogger<ConfigurationUtils>>(_ => NullLogger<ConfigurationUtils>.Instance)
                         .AddTransient<ILogger<PriceApiBatchSkuInformationProvider>>(_ => NullLogger<PriceApiBatchSkuInformationProvider>.Instance)
                         .AddSingleton<TestRepositoryStorage>()
-                        .AddSingleton<CacheAndRetryHandler>()
+                        .AddSingleton<CachingRetryHandler>()
                         .AddSingleton<PriceApiClient>()
                         .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                         .AddTransient<BatchPool>()

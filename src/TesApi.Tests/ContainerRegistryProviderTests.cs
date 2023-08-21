@@ -22,7 +22,7 @@ namespace TesApi.Tests
     {
         private ContainerRegistryProvider containerRegistryProvider;
         private ContainerRegistryOptions containerRegistryOptions;
-        private Mock<CacheAndRetryHandler> retryHandlerMock;
+        private Mock<CachingRetryHandler> retryHandlerMock;
         private Mock<IMemoryCache> appCacheMock;
         private Mock<IOptions<ContainerRegistryOptions>> containerRegistryOptionsMock;
         private Mock<ILogger<ContainerRegistryProvider>> loggerMock;
@@ -34,7 +34,7 @@ namespace TesApi.Tests
         public void Setup()
         {
             appCacheMock = new Mock<IMemoryCache>();
-            retryHandlerMock = new Mock<CacheAndRetryHandler>();
+            retryHandlerMock = new Mock<CachingRetryHandler>();
             retryHandlerMock.Setup(r => r.AppCache).Returns(appCacheMock.Object);
             clientFactoryMock = new Mock<AzureManagementClientsFactory>();
             containerRegistryOptionsMock = new Mock<IOptions<ContainerRegistryOptions>>();

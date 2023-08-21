@@ -3,7 +3,6 @@
 
 using Azure.Core;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using TesApi.Web.Management.Models.Terra;
 
 namespace Tes.ApiClients
@@ -20,9 +19,9 @@ namespace Tes.ApiClients
         /// </summary>
         /// <param name="apiUrl"></param>
         /// <param name="tokenCredential"></param>
-        /// <param name="cacheAndRetryHandler"></param>
+        /// <param name="cachingRetryHandler"></param>
         /// <param name="logger"></param>
-        public TerraLandingZoneApiClient(string apiUrl, TokenCredential tokenCredential, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraLandingZoneApiClient> logger) : base(apiUrl, tokenCredential, cacheAndRetryHandler, logger)
+        public TerraLandingZoneApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryHandler cachingRetryHandler, ILogger<TerraLandingZoneApiClient> logger) : base(apiUrl, tokenCredential, cachingRetryHandler, logger)
         {
         }
 

@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-namespace TesApi.Web.Management.Models.Terra
+namespace Tes.ApiClients.Models.Terra
 {
     /// <summary>
     /// Sas Token Api Parameters

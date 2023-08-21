@@ -17,7 +17,7 @@ namespace Tes.Runner.Storage
         private readonly IFileInfoProvider fileInfoProvider = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<FileOperationResolver>();
 
-        public FileOperationResolver(NodeTask nodeTask) : this(nodeTask, new ResolutionPolicyHandler(), new DefaultFileInfoProvider())
+        public FileOperationResolver(NodeTask nodeTask) : this(nodeTask, new ResolutionPolicyHandler(nodeTask.RuntimeOptions), new DefaultFileInfoProvider())
         {
         }
 

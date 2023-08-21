@@ -15,6 +15,7 @@ namespace Tes.Runner.Models
         public string? MetricsFilename { get; set; }
         public string? InputsMetricsFormat { get; set; }
         public string? OutputsMetricsFormat { get; set; }
+        public RuntimeOptions RuntimeOptions { get; set; } = null!;
     }
 
     public class FileOutput
@@ -31,6 +32,19 @@ namespace Tes.Runner.Models
         public string? Path { get; set; }
         public string? SourceUrl { get; set; }
         public SasResolutionStrategy? SasStrategy { get; set; }
+    }
+
+    public class RuntimeOptions
+    {
+        public TerraRuntimeOptions? Terra { get; set; }
+    }
+
+
+    public class TerraRuntimeOptions
+    {
+        public string? WsmApiHost { get; set; }
+        public string? LandingZoneApiHost { get; set; }
+        public string? SasAllowedIpRange { get; set; }
     }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
