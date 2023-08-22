@@ -352,7 +352,7 @@ namespace TesApi.Web
         {
             if (!enableBatchAutopool)
             {
-                await foreach (var cloudPool in GetCloudPools(cancellationToken))
+                await foreach (var cloudPool in GetCloudPools(cancellationToken).WithCancellation(cancellationToken))
                 {
                     try
                     {
