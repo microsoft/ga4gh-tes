@@ -190,6 +190,7 @@ public class RunnerTestUtils
 
         return result.ToString();
     }
+
     public const int MemBuffersCapacity = 20;
     public const int PipelineBufferCapacity = 20;
 }

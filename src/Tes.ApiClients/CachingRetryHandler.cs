@@ -38,19 +38,6 @@ namespace Tes.ApiClients
 
 
         /// <summary>
-        /// Executes a delegate with the specified async retry policy and persisting the result in a cache. 
-        /// </summary>
-        /// <param name="cacheKey"></param>
-        /// <param name="action">Action to execute</param>
-        /// <returns></returns>
-        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<Task<TResult>> action)
-        {
-            ValidateArgs(cacheKey, action);
-
-            return await ExecuteWithCacheAsync(cacheKey, () => ExecuteWithRetryAsync(action));
-        }
-
-        /// <summary>
         /// Executes a delegate with the specified async retry policy and persisting the result in a cache.
         /// </summary>
         /// <param name="cacheKey"></param>

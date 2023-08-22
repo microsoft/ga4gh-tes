@@ -144,7 +144,7 @@ namespace TesApi.Web
         public Task<string> GetNextBatchJobIdAsync(string tesTaskId, CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.GetNextBatchJobIdAsync(tesTaskId, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task<IEnumerable<string>> GetPoolIdsReferencedByJobsAsync(CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(() => azureProxy.GetPoolIdsReferencedByJobsAsync(cancellationToken));
+        public Task<IEnumerable<string>> GetPoolIdsReferencedByJobsAsync(CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(azureProxy.GetPoolIdsReferencedByJobsAsync, cancellationToken);
 
         /// <inheritdoc/>
         public Task<string> GetStorageAccountKeyAsync(StorageAccountInfo storageAccountInfo, CancellationToken cancellationToken)
@@ -201,7 +201,7 @@ namespace TesApi.Web
         {
             try
             {
-                return await batchPoolOrJobCreateOrTaskAddHandler.ExecuteAsync(() => azureProxy.CreateBatchPoolAsync(poolInfo, isPreemptable, cancellationToken));
+                return await batchPoolOrJobCreateOrTaskAddHandler.ExecuteAsync(ct => azureProxy.CreateBatchPoolAsync(poolInfo, isPreemptable, ct), cancellationToken);
             }
             catch (BatchException exc) when (BatchErrorCodeStrings.PoolExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             {

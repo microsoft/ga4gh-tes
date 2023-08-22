@@ -81,7 +81,7 @@ namespace TesApi.Tests
             Assert.AreEqual(server, container.RegistryServer);
             appCacheMock.Verify(c => c.TryGetValue(It.Is<object>(v => $"{nameof(ContainerRegistryProvider)}:{image}".Equals(v)), out It.Ref<object>.IsAny), Times.Once());
             retryHandlerMock.Verify(r =>
-                r.ExecuteWithRetryAsync(It.IsAny<Func<Task<IEnumerable<ContainerRegistryInfo>>>>()), Times.Never);
+                r.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(), It.IsAny<System.Threading.CancellationToken>()), Times.Never);
         }
 
         [TestMethod]
@@ -101,7 +101,9 @@ namespace TesApi.Tests
             var server = "registry";
             var image = $"{server}_other/image";
             retryHandlerMock.Setup(r =>
-                    r.ExecuteWithRetryAsync(It.IsAny<Func<Task<IEnumerable<ContainerRegistryInfo>>>>()))
+                    r.ExecuteWithRetryAsync(
+                        It.IsAny<Func<System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(),
+                        It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(new List<ContainerRegistryInfo>()
                 {
                     new ContainerRegistryInfo() { RegistryServer = server }

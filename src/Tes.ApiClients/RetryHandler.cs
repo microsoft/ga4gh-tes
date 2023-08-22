@@ -93,18 +93,6 @@ public class RetryHandler
     }
 
     /// <summary>
-    /// Executes a delegate with the specified async policy. 
-    /// </summary>
-    /// <param name="action">Action to execute</param>
-    /// <returns>Result instance</returns>
-    public async Task ExecuteWithRetryAsync(Func<Task> action)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-
-        await asyncRetryPolicy.ExecuteAsync(action);
-    }
-
-    /// <summary>
     /// Executes a delegate with the specified async policy.
     /// </summary>
     /// <param name="action">Action to execute</param>
@@ -115,7 +103,7 @@ public class RetryHandler
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        return asyncRetryPolicy.ExecuteAsync(ct => action(ct), cancellationToken);
+        return asyncRetryPolicy.ExecuteAsync(action, cancellationToken);
     }
 
     /// <summary>
@@ -128,18 +116,19 @@ public class RetryHandler
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        await asyncRetryPolicy.ExecuteAsync(ct => action(ct), cancellationToken);
+        await asyncRetryPolicy.ExecuteAsync(action, cancellationToken);
     }
 
     /// <summary>
     /// Executes a delegate with the specified async policy. 
     /// </summary>
     /// <param name="action">Action to execute</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
     /// <returns>Result HttpResponse</returns>
-    public virtual async Task<HttpResponseMessage> ExecuteHttpRequestWithRetryAsync(Func<Task<HttpResponseMessage>> action)
+    public virtual async Task<HttpResponseMessage> ExecuteHttpRequestWithRetryAsync(Func<CancellationToken, Task<HttpResponseMessage>> action, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        return await asyncHttpRetryPolicy.ExecuteAsync(action);
+        return await asyncHttpRetryPolicy.ExecuteAsync(action, cancellationToken);
     }
 }

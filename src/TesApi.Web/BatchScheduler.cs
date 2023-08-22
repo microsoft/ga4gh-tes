@@ -352,7 +352,7 @@ namespace TesApi.Web
         {
             if (!enableBatchAutopool)
             {
-                await foreach (var cloudPool in GetCloudPools(cancellationToken))
+                await foreach (var cloudPool in GetCloudPools(cancellationToken).WithCancellation(cancellationToken))
                 {
                     try
                     {
@@ -562,7 +562,7 @@ namespace TesApi.Web
                                 nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                                 containerConfiguration: containerMetadata.ContainerConfiguration,
                                 encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
-                                cancellationToken: cancellationToken)),
+                                cancellationToken: ct)),
                         cancellationToken: cancellationToken)
                         ).Pool;
                     jobOrTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";

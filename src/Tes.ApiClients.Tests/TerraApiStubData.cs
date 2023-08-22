@@ -34,10 +34,12 @@ public class TerraApiStubData
     {
         return Guid.Parse(containerName.Replace("sc-", ""));
     }
+
     public LandingZoneResourcesApiResponse GetResourceApiResponse()
     {
         return JsonSerializer.Deserialize<LandingZoneResourcesApiResponse>(GetResourceApiResponseInJson())!;
     }
+
     public QuotaApiResponse GetResourceQuotaApiResponse()
     {
         return JsonSerializer.Deserialize<QuotaApiResponse>(GetResourceQuotaApiResponseInJson())!;
