@@ -160,15 +160,24 @@ namespace Tes.RunnerCLI.Commands
         {
             try
             {
-                var nodeTask = File.ReadAllText(tesNodeTaskFilePath);
+                var nodeTaskText = File.ReadAllText(tesNodeTaskFilePath);
 
-                return JsonSerializer.Deserialize<NodeTask>(nodeTask, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true }) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
+                var nodeTask = JsonSerializer.Deserialize<NodeTask>(nodeTaskText, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true }) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
+
+                AddDefaultValuesIfMissing(nodeTask);
+
+                return nodeTask;
             }
             catch (Exception e)
             {
                 Logger.LogError(e, "Failed to deserialize task JSON file.");
                 throw;
             }
+        }
+
+        private static void AddDefaultValuesIfMissing(NodeTask nodeTask)
+        {
+            nodeTask.RuntimeOptions ??= new RuntimeOptions();
         }
     }
 }
