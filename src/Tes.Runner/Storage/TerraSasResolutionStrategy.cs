@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Text.RegularExpressions;
 using Azure.Storage.Blobs;
 using Azure.Storage.Sas;
@@ -16,7 +15,8 @@ namespace Tes.Runner.Storage
 {
     public class TerraSasResolutionStrategy : ISasResolutionStrategy
     {
-        private const int TokenExpirationInSeconds = 3600 * 48; //48 hours, max Azure Batch node runtime. 
+        private const int MaxNumberOfContainerResources = 10000;
+        private const int TokenExpirationInSeconds = 3600 * 24 * 7; //7 days, max Azure Batch node runtime. 
         private readonly TerraWsmApiClient terraWsmApiClient;
         private readonly TerraRuntimeOptions terraRuntimeOptions;
         private const string LzStorageAccountNamePattern = "lz[0-9a-f]*";
@@ -66,11 +66,11 @@ namespace Tes.Runner.Storage
         {
             var tokenInfo = await GetWorkspaceBlobSasTokenFromWsmAsync(blobInfo, blobSasPermissions);
 
-            logger.LogInformation($"Successfully obtained the Sas Url from Terra. Wsm resource id:{blobInfo.WsmContainerResourceId}");
+            logger.LogInformation($"Successfully obtained the SAS URL from Terra. WSM resource ID:{blobInfo.WsmContainerResourceId}");
 
             var uriBuilder = new UriBuilder(tokenInfo.Url);
 
-            if (blobInfo.BlobName != string.Empty)
+            if (!string.IsNullOrWhiteSpace(blobInfo.BlobName))
             {
                 if (!uriBuilder.Path.Contains(blobInfo.BlobName, StringComparison.OrdinalIgnoreCase))
                 {
@@ -86,7 +86,7 @@ namespace Tes.Runner.Storage
             var tokenParams = CreateTokenParamsFromOptions(blobInfo.BlobName, sasBlobPermissions);
 
             logger.LogInformation(
-                $"Getting Sas Url from Terra. Wsm workspace id:{blobInfo.WorkspaceId}");
+                $"Getting SAS URL from Terra. WSM workspace ID:{blobInfo.WorkspaceId}");
 
             return await terraWsmApiClient.GetSasTokenAsync(
                 blobInfo.WorkspaceId,
@@ -170,7 +170,7 @@ namespace Tes.Runner.Storage
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Failed parse the URL. The URL provided is not a valid Blob URL: {url}");
+                logger.LogError(e, $"Failed to parse the URL. The URL provided is not a valid Blob URL: {url}");
                 throw;
             }
 
@@ -199,15 +199,16 @@ namespace Tes.Runner.Storage
 
             try
             {
-                //the goal is to get all containers, therefore the limit is set to 10000 which is a reasonable unreachable number of storage containers in a workspace.
+                //the goal is to get all containers, therefore the limit is set to MaxNumberOfContainerResources (10000) which is a reasonable unreachable number of storage containers in a workspace.
+
                 var response =
-                    await terraWsmApiClient.GetContainerResourcesAsync(workspaceId, offset: 0, limit: 10000, CancellationToken.None);
+                    await terraWsmApiClient.GetContainerResourcesAsync(workspaceId, offset: 0, limit: MaxNumberOfContainerResources, CancellationToken.None);
 
                 var metadata = response.Resources.Single(r =>
                     r.ResourceAttributes.AzureStorageContainer.StorageContainerName.Equals(containerName,
                         StringComparison.OrdinalIgnoreCase)).Metadata;
 
-                logger.LogInformation($"Found the resource id for storage container resource. Resource ID: {metadata.ResourceId} Container Name: {containerName}");
+                logger.LogInformation($"Found the resource ID for storage container resource. Resource ID: {metadata.ResourceId} Container Name: {containerName}");
 
                 return Guid.Parse(metadata.ResourceId);
             }
