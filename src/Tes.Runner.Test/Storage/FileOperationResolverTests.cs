@@ -23,7 +23,7 @@ namespace Tes.Runner.Test.Storage
         [TestInitialize]
         public void SetUp()
         {
-            resolutionPolicyHandler = new ResolutionPolicyHandler();
+            resolutionPolicyHandler = new ResolutionPolicyHandler(new RuntimeOptions());
             fileInfoProvider = new Mock<IFileInfoProvider>();
 
             fileInfoProvider.Setup(x => x.GetExpandedFileName(It.IsAny<string>())).Returns<string>(x => x);

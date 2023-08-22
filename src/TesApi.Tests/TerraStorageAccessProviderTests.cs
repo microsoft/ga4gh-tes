@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.ApiClients;
+using Tes.ApiClients.Models.Terra;
 using Tes.Models;
 using TesApi.Web;
 using TesApi.Web.Management.Configuration;
