@@ -126,11 +126,11 @@ namespace Tes.Runner.Storage
         {
             if (!IsTerraWorkspaceStorageAccount(accountName))
             {
-                throw new InvalidOperationException($"The account name does not match the configuration for Terra.");
+                throw new InvalidOperationException($"The account name does not match the expected naming convention for Terra.");
             }
         }
 
-        private bool IsTerraWorkspaceStorageAccount(string value)
+        private static bool IsTerraWorkspaceStorageAccount(string value)
         {
             var match = Regex.Match(value, LzStorageAccountNamePattern);
 
