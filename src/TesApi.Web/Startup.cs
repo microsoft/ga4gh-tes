@@ -82,11 +82,12 @@ namespace TesApi.Web
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
                     .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
-                    .AddNewtonsoftJson(opts =>
-                    {
-                        opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                        opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
-                    }).Services
+                        .AddNewtonsoftJson(opts =>
+                        {
+                            opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                            opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
+                        })
+                    .Services
 
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
@@ -140,8 +141,6 @@ namespace TesApi.Web
                     .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedAutoPoolsHostedService>();
                 //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
-
-
             }
             catch (Exception exc)
             {

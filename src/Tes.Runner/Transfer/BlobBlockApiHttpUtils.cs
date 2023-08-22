@@ -185,7 +185,7 @@ public class BlobBlockApiHttpUtils
 
             response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
-            await ReadPartFromBodyAsync(buffer, cancellationToken, response);
+            await ReadPartFromBodyAsync(buffer, response, cancellationToken);
         }
         catch (HttpRequestException ex)
         {
@@ -221,8 +221,8 @@ public class BlobBlockApiHttpUtils
         return buffer.Length;
     }
 
-    private async Task ReadPartFromBodyAsync(PipelineBuffer buffer, CancellationToken cancellationToken,
-        HttpResponseMessage response)
+    private async Task ReadPartFromBodyAsync(PipelineBuffer buffer,
+        HttpResponseMessage response, CancellationToken cancellationToken)
     {
         response.EnsureSuccessStatusCode();
 
