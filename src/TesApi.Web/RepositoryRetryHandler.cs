@@ -45,27 +45,27 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task<T> CreateItemAsync(T item, CancellationToken cancellationToken)
-            => _asyncRetryPolicy.ExecuteAsync(() => _repository.CreateItemAsync(item, cancellationToken));
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.CreateItemAsync(item, ct), cancellationToken);
 
         /// <inheritdoc/>
         public Task DeleteItemAsync(string id, CancellationToken cancellationToken)
-            => _asyncRetryPolicy.ExecuteAsync(() => _repository.DeleteItemAsync(id, cancellationToken));
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.DeleteItemAsync(id, ct), cancellationToken);
 
         /// <inheritdoc/>
         public Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken)
-            => _asyncRetryPolicy.ExecuteAsync(() => _repository.GetItemsAsync(predicate, cancellationToken));
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, ct), cancellationToken);
 
         /// <inheritdoc/>
         public Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken)
-            => _asyncRetryPolicy.ExecuteAsync(() => _repository.GetItemsAsync(predicate, pageSize, continuationToken, cancellationToken));
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, pageSize, continuationToken, ct), cancellationToken);
 
         /// <inheritdoc/>
         public Task<bool> TryGetItemAsync(string id, CancellationToken cancellationToken, Action<T> onSuccess)
-            => _asyncRetryPolicy.ExecuteAsync(() => _repository.TryGetItemAsync(id, cancellationToken, onSuccess));
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.TryGetItemAsync(id, ct, onSuccess), cancellationToken);
 
         /// <inheritdoc/>
         public Task<T> UpdateItemAsync(T item, CancellationToken cancellationToken)
-            => _asyncRetryPolicy.ExecuteAsync(() => _repository.UpdateItemAsync(item, cancellationToken));
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.UpdateItemAsync(item, ct), cancellationToken);
 
         /// <inheritdoc/>
         public ValueTask<bool> TryRemoveItemFromCacheAsync(T item, CancellationToken cancellationToken)

@@ -97,31 +97,6 @@ namespace TesApi.Web.Management
         }
 
         /// <summary>
-        /// Executes a delegate with the specified async policy. 
-        /// </summary>
-        /// <param name="action">Action to execute</param>
-        /// <typeparam name="TResult">Result type</typeparam>
-        /// <returns>Result instance</returns>
-        public virtual Task<TResult> ExecuteWithRetryAsync<TResult>(Func<Task<TResult>> action)
-        {
-            ArgumentNullException.ThrowIfNull(action);
-
-            return asyncRetryPolicy.ExecuteAsync(action);
-        }
-
-        /// <summary>
-        /// Executes a delegate with the specified async policy. 
-        /// </summary>
-        /// <param name="action">Action to execute</param>
-        /// <returns>Result instance</returns>
-        public async Task ExecuteWithRetryAsync(Func<Task> action)
-        {
-            ArgumentNullException.ThrowIfNull(action);
-
-            await asyncRetryPolicy.ExecuteAsync(action);
-        }
-
-        /// <summary>
         /// Executes a delegate with the specified async policy.
         /// </summary>
         /// <param name="action">Action to execute</param>
@@ -152,25 +127,13 @@ namespace TesApi.Web.Management
         /// Executes a delegate with the specified async policy. 
         /// </summary>
         /// <param name="action">Action to execute</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>Result HttpResponse</returns>
-        public virtual async Task<HttpResponseMessage> ExecuteHttpRequestWithRetryAsync(Func<Task<HttpResponseMessage>> action)
+        public virtual async Task<HttpResponseMessage> ExecuteHttpRequestWithRetryAsync(Func<CancellationToken, Task<HttpResponseMessage>> action, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(action);
 
-            return await asyncHttpRetryPolicy.ExecuteAsync(action);
-        }
-
-        /// <summary>
-        /// Executes a delegate with the specified async retry policy and persisting the result in a cache. 
-        /// </summary>
-        /// <param name="cacheKey"></param>
-        /// <param name="action">Action to execute</param>
-        /// <returns></returns>
-        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<Task<TResult>> action)
-        {
-            ValidateArgs(cacheKey, action);
-
-            return await ExecuteWithCacheAsync(cacheKey, () => ExecuteWithRetryAsync(action));
+            return await asyncHttpRetryPolicy.ExecuteAsync(ct => action(ct), cancellationToken);
         }
 
         /// <summary>
@@ -185,21 +148,6 @@ namespace TesApi.Web.Management
             ValidateArgs(cacheKey, action);
 
             return await ExecuteWithCacheAsync(cacheKey, () => ExecuteWithRetryAsync(action, cancellationToken));
-        }
-
-        /// <summary>
-        ///  Executes a delegate with the specified async retry policy and persisting the result in a cache.
-        /// </summary>
-        /// <param name="cacheKey"></param>
-        /// <param name="action">Action to execute</param>
-        /// <param name="cachesExpires"></param>
-        /// <typeparam name="TResult"></typeparam>
-        /// <returns></returns>
-        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<Task<TResult>> action, DateTimeOffset cachesExpires)
-        {
-            ValidateArgs(cacheKey, action);
-
-            return await ExecuteWithCacheAsync(cacheKey, () => ExecuteWithRetryAsync(action), cachesExpires);
         }
 
         /// <summary>
@@ -223,8 +171,9 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <param name="cacheKey"></param>
         /// <param name="action"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public virtual async Task<HttpResponseMessage> ExecuteHttpRequestWithRetryAndCachingAsync(string cacheKey, Func<Task<HttpResponseMessage>> action)
+        public virtual async Task<HttpResponseMessage> ExecuteHttpRequestWithRetryAndCachingAsync(string cacheKey, Func<CancellationToken, Task<HttpResponseMessage>> action, CancellationToken cancellationToken)
         {
             ValidateArgs(cacheKey, action);
 
@@ -233,23 +182,13 @@ namespace TesApi.Web.Management
                 return response;
             }
 
-            response = await ExecuteHttpRequestWithRetryAsync(action);
+            response = await ExecuteHttpRequestWithRetryAsync(action, cancellationToken);
 
             response.EnsureSuccessStatusCode();
 
             appCache.Set(cacheKey, response);
 
             return response;
-        }
-
-        private static void ValidateArgs(string cacheKey, Func<Task> action)
-        {
-            ArgumentNullException.ThrowIfNull(action);
-
-            if (string.IsNullOrEmpty(cacheKey))
-            {
-                throw new ArgumentNullException(nameof(cacheKey), "Invalid cache key. The value can't be null or empty");
-            }
         }
 
         private static void ValidateArgs(string cacheKey, Func<CancellationToken, Task> action)

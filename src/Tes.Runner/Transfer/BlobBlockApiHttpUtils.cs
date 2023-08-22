@@ -93,12 +93,12 @@ public class BlobBlockApiHttpUtils
         return request;
     }
 
-    public async Task<HttpResponseMessage> ExecuteHttpRequestAsync(Func<HttpRequestMessage> requestFactory)
+    public async Task<HttpResponseMessage> ExecuteHttpRequestAsync(Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken = default)
     {
-        return await retryPolicy.ExecuteAsync(() => ExecuteHttpRequestImplAsync(requestFactory));
+        return await retryPolicy.ExecuteAsync(ct => ExecuteHttpRequestImplAsync(requestFactory, ct), cancellationToken);
     }
 
-    private async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request)
+    private async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request, CancellationToken cancellationToken)
     {
         HttpResponseMessage? response = null;
 
@@ -106,7 +106,7 @@ public class BlobBlockApiHttpUtils
         {
             try
             {
-                response = await httpClient.SendAsync(request());
+                response = await httpClient.SendAsync(request(), cancellationToken);
 
                 response.EnsureSuccessStatusCode();
             }
@@ -156,7 +156,7 @@ public class BlobBlockApiHttpUtils
     public async Task<int> ExecuteHttpRequestAndReadBodyResponseAsync(PipelineBuffer buffer,
         Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken = default)
     {
-        return await retryPolicy.ExecuteAsync(() => ExecuteHttpRequestAndReadBodyResponseImplAsync(buffer, requestFactory, cancellationToken));
+        return await retryPolicy.ExecuteAsync(ct => ExecuteHttpRequestAndReadBodyResponseImplAsync(buffer, requestFactory, ct), cancellationToken);
     }
 
     private static bool ContainsRetriableException(Exception? ex)
