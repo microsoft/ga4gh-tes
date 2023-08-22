@@ -17,7 +17,7 @@ namespace Tes.ApiClients
     {
         private static readonly HttpClient HttpClient = new();
         private readonly TokenCredential tokenCredential = null!;
-        private readonly CacheAndRetryHandler cacheAndRetryHandler = null!;
+        private readonly CachingRetryHandler cachingRetryHandler = null!;
         private readonly SHA256 sha256 = SHA256.Create();
         /// <summary>
         /// Logger instance
@@ -35,14 +35,14 @@ namespace Tes.ApiClients
         /// <summary>
         /// Constructor of base HttpApiClient
         /// </summary>
-        /// <param name="cacheAndRetryHandler"></param>
+        /// <param name="cachingRetryHandler"></param>
         /// <param name="logger"></param>
-        protected HttpApiClient(CacheAndRetryHandler cacheAndRetryHandler, ILogger logger)
+        protected HttpApiClient(CachingRetryHandler cachingRetryHandler, ILogger logger)
         {
-            ArgumentNullException.ThrowIfNull(cacheAndRetryHandler);
+            ArgumentNullException.ThrowIfNull(cachingRetryHandler);
             ArgumentNullException.ThrowIfNull(logger);
 
-            this.cacheAndRetryHandler = cacheAndRetryHandler;
+            this.cachingRetryHandler = cachingRetryHandler;
             this.Logger = logger;
         }
 
@@ -50,11 +50,11 @@ namespace Tes.ApiClients
         /// Constructor of base HttpApiClient
         /// </summary>
         /// <param name="tokenCredential"></param>
-        /// <param name="cacheAndRetryHandler"></param>
+        /// <param name="cachingRetryHandler"></param>
         /// <param name="tokenScope"></param>
         /// <param name="logger"></param>
         protected HttpApiClient(TokenCredential tokenCredential, string tokenScope,
-            CacheAndRetryHandler cacheAndRetryHandler, ILogger logger) : this(cacheAndRetryHandler, logger)
+            CachingRetryHandler cachingRetryHandler, ILogger logger) : this(cachingRetryHandler, logger)
         {
             ArgumentNullException.ThrowIfNull(tokenCredential);
             ArgumentException.ThrowIfNullOrEmpty(tokenScope);
@@ -78,7 +78,7 @@ namespace Tes.ApiClients
         /// <returns></returns>
         protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(
             Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
-            => await cacheAndRetryHandler.ExecuteWithRetryAsync(async ct =>
+            => await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
             {
                 var request = httpRequestFactory();
                 if (setAuthorizationHeader)
@@ -136,7 +136,7 @@ namespace Tes.ApiClients
         {
             var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader, cancellationToken);
 
-            return await cacheAndRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, async ct =>
+            return await cachingRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, async ct =>
             {
                 var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
 
@@ -153,7 +153,7 @@ namespace Tes.ApiClients
         /// <returns></returns>
         protected async Task<string> HttpGetRequestWithRetryPolicyAsync(Uri requestUrl,
             CancellationToken cancellationToken, bool setAuthorizationHeader = false)
-            => await cacheAndRetryHandler.ExecuteWithRetryAsync(async ct =>
+            => await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
             {
                 //request must be recreated in every retry.
                 var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);

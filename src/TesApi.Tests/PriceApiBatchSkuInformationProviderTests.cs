@@ -20,7 +20,7 @@ namespace TesApi.Tests
         private PriceApiClient pricingApiClient;
         private PriceApiBatchSkuInformationProvider provider;
         private IMemoryCache appCache;
-        private CacheAndRetryHandler cacheAndRetryHandler;
+        private CachingRetryHandler cachingRetryHandler;
         private Mock<IOptions<RetryPolicyOptions>> mockRetryOptions;
 
         [TestInitialize]
@@ -30,8 +30,8 @@ namespace TesApi.Tests
             mockRetryOptions = new Mock<IOptions<RetryPolicyOptions>>();
             mockRetryOptions.Setup(m => m.Value).Returns(new RetryPolicyOptions());
 
-            cacheAndRetryHandler = new CacheAndRetryHandler(appCache, mockRetryOptions.Object);
-            pricingApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
+            cachingRetryHandler = new CachingRetryHandler(appCache, mockRetryOptions.Object);
+            pricingApiClient = new PriceApiClient(cachingRetryHandler, new NullLogger<PriceApiClient>());
             provider = new PriceApiBatchSkuInformationProvider(pricingApiClient, new NullLogger<PriceApiBatchSkuInformationProvider>());
         }
 

@@ -5,7 +5,11 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Azure.Core;
+using Azure.Identity;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Tes.ApiClients.Models.Terra;
+using Tes.ApiClients.Options;
 using TesApi.Web.Management.Models.Terra;
 
 namespace Tes.ApiClients
@@ -16,17 +20,28 @@ namespace Tes.ApiClients
     public class TerraWsmApiClient : TerraApiClient
     {
         private const string WsmApiSegments = @"/api/workspaces/v1";
+        private static readonly IMemoryCache sharedMemoryCache = new MemoryCache(new MemoryCacheOptions());
 
         /// <summary>
         /// Constructor of TerraWsmApiClient
         /// </summary>
         /// <param name="apiUrl">WSM API host</param>
         /// <param name="tokenCredential"></param>
-        /// <param name="cacheAndRetryHandler"></param>
+        /// <param name="cachingRetryHandler"></param>
         /// <param name="logger"></param>
-        public TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraWsmApiClient> logger) : base(apiUrl, tokenCredential, cacheAndRetryHandler, logger)
+        public TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryHandler cachingRetryHandler,
+            ILogger<TerraWsmApiClient> logger) : base(apiUrl, tokenCredential, cachingRetryHandler, logger)
         {
 
+        }
+
+        public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl)
+        {
+            var retryPolicyOptions = new RetryPolicyOptions();
+            var cacheRetryHandler = new CachingRetryHandler(sharedMemoryCache,
+                 Microsoft.Extensions.Options.Options.Create(retryPolicyOptions));
+
+            return new TerraWsmApiClient(apiUrl, new DefaultAzureCredential(), cacheRetryHandler, ApiClientsLoggerFactory.Create<TerraWsmApiClient>());
         }
 
         /// <summary>

@@ -12,7 +12,7 @@ namespace Tes.ApiClients
     public abstract class TerraApiClient : HttpApiClient
     {
         private const string TokenScope = @"https://management.azure.com/.default";
-        protected readonly string ApiUrl;
+        protected readonly string ApiUrl = null!;
 
         /// <summary>
         /// Protected parameter-less constructor
@@ -24,13 +24,13 @@ namespace Tes.ApiClients
         /// </summary>
         /// <param name="apiUrl">API Host</param>
         /// <param name="tokenCredential"><see cref="TokenCredential"/></param>
-        /// <param name="cacheAndRetryHandler"><see cref="CacheAndRetryHandler"/></param>
+        /// <param name="cachingRetryHandler"><see cref="CachingRetryHandler"/></param>
         /// <param name="logger"><see cref="ILogger{TCategoryName}"/></param>
-        protected TerraApiClient(string apiUrl, TokenCredential tokenCredential, CacheAndRetryHandler cacheAndRetryHandler, ILogger logger) : base(tokenCredential, TokenScope, cacheAndRetryHandler, logger)
+        protected TerraApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryHandler cachingRetryHandler, ILogger logger) : base(tokenCredential, TokenScope, cachingRetryHandler, logger)
         {
             ArgumentException.ThrowIfNullOrEmpty(apiUrl);
             ArgumentNullException.ThrowIfNull(tokenCredential);
-            ArgumentNullException.ThrowIfNull(cacheAndRetryHandler);
+            ArgumentNullException.ThrowIfNull(cachingRetryHandler);
             ArgumentNullException.ThrowIfNull(logger);
 
             ApiUrl = apiUrl;

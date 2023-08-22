@@ -9,7 +9,7 @@ namespace Tes.Runner.Storage
 {
     public static class SasResolutionStrategyFactory
     {
-        public static ISasResolutionStrategy CreateSasResolutionStrategy(SasResolutionStrategy sasResolutionStrategy)
+        public static ISasResolutionStrategy CreateSasResolutionStrategy(SasResolutionStrategy sasResolutionStrategy, RuntimeOptions runtimeOptions)
         {
             switch (sasResolutionStrategy)
             {
@@ -19,6 +19,8 @@ namespace Tes.Runner.Storage
                     return new CloudProviderSchemeConverter();
                 case SasResolutionStrategy.AzureResourceManager:
                     return new ArmSasResolutionStrategy(u => new BlobServiceClient(u, new DefaultAzureCredential()));
+                case SasResolutionStrategy.TerraWsm:
+                    return new TerraSasResolutionStrategy(runtimeOptions.Terra!);
             }
 
             throw new NotImplementedException();

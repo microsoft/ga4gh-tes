@@ -12,7 +12,7 @@ namespace Tes.ApiClients.Tests
     {
         private TerraLandingZoneApiClient terraLandingZoneApiClient = null!;
         private Mock<TokenCredential> tokenCredential = null!;
-        private Mock<CacheAndRetryHandler> cacheAndRetryHandler = null!;
+        private Mock<CachingRetryHandler> cacheAndRetryHandler = null!;
         private TerraApiStubData terraApiStubData = null!;
 
         [TestInitialize]
@@ -20,7 +20,7 @@ namespace Tes.ApiClients.Tests
         {
             terraApiStubData = new TerraApiStubData();
             tokenCredential = new Mock<TokenCredential>();
-            cacheAndRetryHandler = new Mock<CacheAndRetryHandler>();
+            cacheAndRetryHandler = new Mock<CachingRetryHandler>();
             terraLandingZoneApiClient = new TerraLandingZoneApiClient(TerraApiStubData.LandingZoneApiHost, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
         }
 

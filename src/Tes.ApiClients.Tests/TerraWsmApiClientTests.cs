@@ -6,6 +6,7 @@ using System.Web;
 using Azure.Core;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using Tes.ApiClients.Models.Terra;
 using TesApi.Web.Management.Models.Terra;
 
 namespace Tes.ApiClients.Tests
@@ -15,7 +16,7 @@ namespace Tes.ApiClients.Tests
     {
         private TerraWsmApiClient terraWsmApiClient = null!;
         private Mock<TokenCredential> tokenCredential = null!;
-        private Mock<CacheAndRetryHandler> cacheAndRetryHandler = null!;
+        private Mock<CachingRetryHandler> cacheAndRetryHandler = null!;
         private TerraApiStubData terraApiStubData = null!;
 
         [TestInitialize]
@@ -23,7 +24,7 @@ namespace Tes.ApiClients.Tests
         {
             terraApiStubData = new TerraApiStubData();
             tokenCredential = new Mock<TokenCredential>();
-            cacheAndRetryHandler = new Mock<CacheAndRetryHandler>();
+            cacheAndRetryHandler = new Mock<CachingRetryHandler>();
             terraWsmApiClient = new TerraWsmApiClient(TerraApiStubData.WsmApiHost, tokenCredential.Object,
                 cacheAndRetryHandler.Object, NullLogger<TerraWsmApiClient>.Instance);
         }

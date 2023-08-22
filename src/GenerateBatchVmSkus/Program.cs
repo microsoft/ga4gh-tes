@@ -92,7 +92,7 @@ namespace TesUtils
             var appCache = new MemoryCache(new MemoryCacheOptions());
             var options = new Mock<IOptions<RetryPolicyOptions>>();
             options.Setup(o => o.Value).Returns(new RetryPolicyOptions());
-            var cacheAndRetryHandler = new CacheAndRetryHandler(appCache, options.Object);
+            var cacheAndRetryHandler = new CachingRetryHandler(appCache, options.Object);
             var priceApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
 
             static double ConvertMiBToGiB(int value) => Math.Round(value / 1024.0, 2);
