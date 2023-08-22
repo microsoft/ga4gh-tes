@@ -2176,8 +2176,10 @@ namespace TesDeployer
         private async Task ValidateVmAsync()
         {
             var computeSkus = (await generalRetryPolicy.ExecuteAsync(ct =>
-                    azureSubscriptionClient.ComputeSkus.ListbyRegionAndResourceTypeAsync(Region.Create(configuration.RegionName),
-                        ComputeResourceType.VirtualMachines, ct),
+                    azureSubscriptionClient.ComputeSkus.ListbyRegionAndResourceTypeAsync(
+                        Region.Create(configuration.RegionName),
+                        ComputeResourceType.VirtualMachines,
+                        ct),
                     cts.Token))
                 .Where(s => !s.Restrictions.Any())
                 .Select(s => s.Name.Value)
