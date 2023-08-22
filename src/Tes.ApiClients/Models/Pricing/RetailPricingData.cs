@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-namespace TesApi.Web.Management.Models.Pricing
+namespace Tes.ApiClients.Models.Pricing
 {
     /// <summary>
     /// A page of retail pricing data from the retail pricing API. 
@@ -11,23 +11,28 @@ namespace TesApi.Web.Management.Models.Pricing
         /// <summary>
         /// Billing currency.
         /// </summary>
-        public string BillingCurrency { get; set; }
+        public string BillingCurrency { get; set; } = null!;
+
         /// <summary>
         /// Customer entity id. 
         /// </summary>
-        public string CustomerEntityId { get; set; }
+        public string CustomerEntityId { get; set; } = null!;
+
         /// <summary>
         /// Customer entity type.
         /// </summary>
-        public string CustomerEntityType { get; set; }
+        public string CustomerEntityType { get; set; } = null!;
+
         /// <summary>
         /// List of items in the page. 
         /// </summary>
-        public PricingItem[] Items { get; set; }
+        public PricingItem[] Items { get; set; } = null!;
+
         /// <summary>
         /// Next page link. 
         /// </summary>
-        public string NextPageLink { get; set; }
+        public string NextPageLink { get; set; } = null!;
+
         /// <summary>
         /// Count of items. 
         /// </summary>
@@ -36,6 +41,6 @@ namespace TesApi.Web.Management.Models.Pricing
         /// <summary>
         /// Request link
         /// </summary>
-        public string RequestLink { get; set; }
+        public string RequestLink { get; set; } = null!;
     }
 }

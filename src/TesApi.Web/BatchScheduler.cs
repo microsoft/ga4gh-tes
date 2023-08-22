@@ -539,6 +539,7 @@ namespace TesApi.Web
                         preemptable: virtualMachineInfo.LowPriority,
                         nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                         containerConfiguration: containerMetadata.ContainerConfiguration,
+                        encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
                         cancellationToken: cancellationToken),
                     tesTaskId: tesTask.Id,
                     jobId: jobOrTaskId,
@@ -560,6 +561,7 @@ namespace TesApi.Web
                                 preemptable: virtualMachineInfo.LowPriority,
                                 nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                                 containerConfiguration: containerMetadata.ContainerConfiguration,
+                                encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
                                 cancellationToken: ct)),
                         cancellationToken: cancellationToken)
                         ).Pool;
@@ -1022,9 +1024,9 @@ namespace TesApi.Web
                 {
                     new()
                     {
-                        TargetUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, "start-task", cancellationToken),
+                        TargetUrl = AppendPathToUrl(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, string.Empty, cancellationToken), "start-task"),
                         Path = @"std*.txt",
-                        PathPrefix="%AZ_BATCH_NODE_STARTUP_DIR%/",
+                        PathPrefix = "%AZ_BATCH_NODE_STARTUP_DIR%/",
                         SasStrategy = SasResolutionStrategy.None,
                         FileType = FileType.File
                     }
@@ -1178,6 +1180,13 @@ namespace TesApi.Web
             }
 
             return cloudTask;
+
+            static string AppendPathToUrl(string url, string path)
+            {
+                var uri = new UriBuilder(url);
+                uri.Path = string.Concat(uri.Path.TrimEnd('/'), "/", path.TrimStart('/'));
+                return uri.Uri.ToString();
+            }
 
             static string BashWrapShellArgument(string argument)
                 => $"'{argument.Replace(@"'", @"'\''")}'";
@@ -1536,10 +1545,11 @@ namespace TesApi.Web
         /// <param name="preemptable"></param>
         /// <param name="nodeInfo"></param>
         /// <param name="containerConfiguration"></param>
+        /// <param name="encryptionAtHostSupported">VM supports encryption at host.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns><see cref="PoolSpecification"/></returns>
         /// <remarks>We use the PoolSpecification for both the namespace of all the constituent parts and for the fact that it allows us to configure shared and autopools using the same code.</remarks>
-        private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, ContainerConfiguration containerConfiguration, CancellationToken cancellationToken)
+        private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, ContainerConfiguration containerConfiguration, bool encryptionAtHostSupported, CancellationToken cancellationToken)
         {
             // Any changes to any properties set in this method will require corresponding changes to ConvertPoolSpecificationToModelsPool()
 
@@ -1553,6 +1563,13 @@ namespace TesApi.Web
             {
                 ContainerConfiguration = containerConfiguration
             };
+
+            if (encryptionAtHostSupported)
+            {
+                vmConfig.DiskEncryptionConfiguration = new DiskEncryptionConfiguration(
+                    targets: new List<DiskEncryptionTarget> { DiskEncryptionTarget.OsDisk, DiskEncryptionTarget.TemporaryDisk }
+                );
+            }
 
             var poolSpecification = new PoolSpecification
             {
@@ -1648,7 +1665,7 @@ namespace TesApi.Web
                 };
 
             static BatchModels.VirtualMachineConfiguration ConvertVirtualMachineConfiguration(VirtualMachineConfiguration virtualMachineConfiguration)
-                => virtualMachineConfiguration is null ? default : new(ConvertImageReference(virtualMachineConfiguration.ImageReference), virtualMachineConfiguration.NodeAgentSkuId, containerConfiguration: ConvertContainerConfiguration(virtualMachineConfiguration.ContainerConfiguration));
+                => virtualMachineConfiguration is null ? default : new(ConvertImageReference(virtualMachineConfiguration.ImageReference), virtualMachineConfiguration.NodeAgentSkuId, containerConfiguration: ConvertContainerConfiguration(virtualMachineConfiguration.ContainerConfiguration), diskEncryptionConfiguration: ConvertDiskEncryptionConfiguration(virtualMachineConfiguration.DiskEncryptionConfiguration));
 
             static BatchModels.ContainerConfiguration ConvertContainerConfiguration(ContainerConfiguration containerConfiguration)
                 => containerConfiguration is null ? default : new(containerConfiguration.ContainerImageNames, containerConfiguration.ContainerRegistries?.Select(ConvertContainerRegistry).ToList());
@@ -1691,6 +1708,12 @@ namespace TesApi.Web
 
             static BatchModels.NodeCommunicationMode? ConvertNodeCommunicationMode(NodeCommunicationMode? nodeCommunicationMode)
                 => (BatchModels.NodeCommunicationMode?)nodeCommunicationMode;
+
+            static BatchModels.DiskEncryptionConfiguration ConvertDiskEncryptionConfiguration(DiskEncryptionConfiguration diskEncryptionConfiguration)
+                => diskEncryptionConfiguration is null ? default : new(diskEncryptionConfiguration.Targets.Select(x => ConvertDiskEncryptionTarget(x)).ToList());
+
+            static BatchModels.DiskEncryptionTarget ConvertDiskEncryptionTarget(DiskEncryptionTarget? diskEncryptionTarget)
+                => (BatchModels.DiskEncryptionTarget)diskEncryptionTarget;
         }
 
         /// <summary>

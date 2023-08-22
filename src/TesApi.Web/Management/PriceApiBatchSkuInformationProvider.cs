@@ -10,8 +10,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Tes.ApiClients;
 using Tes.Models;
-using TesApi.Web.Management.Clients;
 
 namespace TesApi.Web.Management
 {
@@ -118,7 +118,8 @@ namespace TesApi.Web.Management
                 VmFamily = vmReference.VmFamily,
                 VmSize = vmReference.VmSize,
                 RegionsAvailable = vmReference.RegionsAvailable,
-                HyperVGenerations = vmReference.HyperVGenerations
+                HyperVGenerations = vmReference.HyperVGenerations,
+                EncryptionAtHostSupported = vmReference.EncryptionAtHostSupported
             };
 
         private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync(CancellationToken cancellationToken)

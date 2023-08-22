@@ -1,19 +1,14 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Linq;
-using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Extensions.Logging;
 
-namespace TesApi.Web.Management.Clients
+namespace Tes.ApiClients
 {
     /// <summary>
     /// A wrapper of the HttpClient that provides fined tuned caching and retry capabilities.
@@ -21,14 +16,14 @@ namespace TesApi.Web.Management.Clients
     public abstract class HttpApiClient
     {
         private static readonly HttpClient HttpClient = new();
-        private readonly TokenCredential tokenCredential;
-        private readonly CacheAndRetryHandler cacheAndRetryHandler;
+        private readonly TokenCredential tokenCredential = null!;
+        private readonly CacheAndRetryHandler cacheAndRetryHandler = null!;
         private readonly SHA256 sha256 = SHA256.Create();
         /// <summary>
         /// Logger instance
         /// </summary>
-        protected readonly ILogger Logger;
-        private readonly string tokenScope;
+        protected readonly ILogger Logger = null!;
+        private readonly string tokenScope = null!;
         private readonly SemaphoreSlim semaphore = new(1, 1);
         private AccessToken accessToken;
 
@@ -126,7 +121,7 @@ namespace TesApi.Web.Management.Clients
         {
             var content = await HttpGetRequestAsync(requestUrl, setAuthorizationHeader, cacheResults, cancellationToken);
 
-            return JsonSerializer.Deserialize<TResponse>(content);
+            return JsonSerializer.Deserialize<TResponse>(content)!;
         }
 
         /// <summary>
@@ -191,7 +186,7 @@ namespace TesApi.Web.Management.Clients
         /// <returns></returns>
         protected string AppendQueryStringParams(params string[] arguments)
         {
-            if (arguments is null || arguments.Length == 0)
+            if (arguments.Length == 0)
             {
                 return string.Empty;
             }
@@ -322,7 +317,7 @@ namespace TesApi.Web.Management.Clients
         {
             response.EnsureSuccessStatusCode();
 
-            return JsonSerializer.Deserialize<T>(await response.Content.ReadAsStringAsync(cancellationToken));
+            return JsonSerializer.Deserialize<T>(await response.Content.ReadAsStringAsync(cancellationToken))!;
         }
     }
 }

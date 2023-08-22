@@ -176,6 +176,21 @@ public class RunnerTestUtils
         }
     }
 
+    public static string GenerateRandomTestAzureStorageKey()
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        var length = 64;
+        var random = new Random();
+        var result = new StringBuilder(length);
+
+        for (int i = 0; i < length; i++)
+        {
+            result.Append(chars[random.Next(chars.Length)]);
+        }
+
+        return result.ToString();
+    }
+
     public const int MemBuffersCapacity = 20;
     public const int PipelineBufferCapacity = 20;
 }

@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Azure.Storage.Sas;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
@@ -10,6 +11,9 @@ namespace Tes.Runner.Storage;
 /// </summary>
 public class ResolutionPolicyHandler
 {
+    const BlobSasPermissions DownloadBlobSasPermissions = BlobSasPermissions.Read | BlobSasPermissions.List;
+    const BlobSasPermissions UploadBlobSasPermissions = BlobSasPermissions.Read | BlobSasPermissions.Write | BlobSasPermissions.Create | BlobSasPermissions.List;
+
     /// <summary>
     /// Applies SAS resolution strategy to task outputs.
     /// </summary>
@@ -31,7 +35,7 @@ public class ResolutionPolicyHandler
                 throw new ArgumentException("A task output is missing the path property. Please check the task definition.");
             }
 
-            list.Add(await CreateUploadInfoWithStrategyAsync(output));
+            list.Add(await CreateUploadInfoWithStrategyAsync(output, UploadBlobSasPermissions));
         }
 
         return list;
@@ -53,32 +57,35 @@ public class ResolutionPolicyHandler
 
         foreach (var input in tesTaskInputs)
         {
-            list.Add(await CreateDownloadInfoWithStrategyAsync(input));
+            list.Add(await CreateDownloadInfoWithStrategyAsync(input, DownloadBlobSasPermissions));
         }
 
         return list;
     }
 
-    private static async Task<DownloadInfo> CreateDownloadInfoWithStrategyAsync(FileInput input)
+    private static async Task<DownloadInfo> CreateDownloadInfoWithStrategyAsync(FileInput input,
+        BlobSasPermissions downloadBlobSasPermissions)
     {
         if (string.IsNullOrEmpty(input.Path))
         {
             throw new ArgumentException("A task input is missing the path property. Please check the task definition.");
         }
 
-        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy);
+        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy, downloadBlobSasPermissions);
 
         return new DownloadInfo(input.Path, uri);
     }
 
-    private static async Task<UploadInfo> CreateUploadInfoWithStrategyAsync(FileOutput output)
+    private static async Task<UploadInfo> CreateUploadInfoWithStrategyAsync(FileOutput output,
+        BlobSasPermissions uploadBlobSasPermissions)
     {
-        var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy);
+        var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy, uploadBlobSasPermissions);
 
         return new UploadInfo(output.Path!, uri);
     }
 
-    private static async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, SasResolutionStrategy? strategy)
+    private static async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, SasResolutionStrategy? strategy,
+        BlobSasPermissions blobSasPermissions)
     {
         ArgumentNullException.ThrowIfNull(strategy);
         ArgumentException.ThrowIfNullOrEmpty(sourceUrl);
@@ -86,6 +93,6 @@ public class ResolutionPolicyHandler
         var strategyImpl =
             SasResolutionStrategyFactory.CreateSasResolutionStrategy(strategy.Value);
 
-        return await strategyImpl.CreateSasTokenWithStrategyAsync(sourceUrl);
+        return await strategyImpl.CreateSasTokenWithStrategyAsync(sourceUrl, blobSasPermissions);
     }
 }

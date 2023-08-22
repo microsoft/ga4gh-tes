@@ -1,25 +1,20 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
-using TesApi.Web.Management;
-using TesApi.Web.Management.Configuration;
+using Tes.ApiClients.Options;
 
-namespace TesApi.Tests;
+namespace Tes.ApiClients.Tests;
 
-[TestClass]
+[TestClass, TestCategory("Unit")]
 public class CacheAndRetryHandlerTest
 {
-    private IMemoryCache appCache;
-    private CacheAndRetryHandler cacheAndRetryHandler;
-    private Mock<object> mockInstanceToRetry;
+    private IMemoryCache appCache = null!;
+    private CacheAndRetryHandler cacheAndRetryHandler = null!;
+    private Mock<object> mockInstanceToRetry = null!;
     private const int MaxRetryCount = 3;
 
     [TestInitialize]
@@ -27,7 +22,7 @@ public class CacheAndRetryHandlerTest
     {
         var mockOptions = new Mock<IOptions<RetryPolicyOptions>>();
         appCache = new MemoryCache(new MemoryCacheOptions());
-        mockInstanceToRetry = new();
+        mockInstanceToRetry = new Mock<object>();
         mockOptions.SetupGet(x => x.Value).Returns(new RetryPolicyOptions() { ExponentialBackOffExponent = 1, MaxRetryCount = MaxRetryCount });
         cacheAndRetryHandler = new(appCache, mockOptions.Object);
     }
@@ -35,7 +30,7 @@ public class CacheAndRetryHandlerTest
     [TestCleanup]
     public void Cleanup()
     {
-        appCache?.Dispose();
+        appCache.Dispose();
     }
 
     [TestMethod]
@@ -130,8 +125,8 @@ public class CacheAndRetryHandlerTest
         mockFactory.Verify(f => f.CreateResponseAsync(), Times.Once);
         Assert.AreEqual(first.StatusCode, statusCode);
         Assert.AreEqual(second.StatusCode, statusCode);
-        Assert.IsTrue(appCache.TryGetValue(cacheKey, out HttpResponseMessage cachedResponse));
-        Assert.AreEqual(first.StatusCode, cachedResponse.StatusCode);
+        Assert.IsTrue(appCache.TryGetValue(cacheKey, out HttpResponseMessage? cachedResponse));
+        Assert.AreEqual(first.StatusCode, cachedResponse!.StatusCode);
     }
 
     [TestMethod]

@@ -40,12 +40,12 @@ namespace TesDeployer
 
         // "master" is used despite not being a best practice: https://github.com/kubernetes-sigs/blob-csi-driver/issues/783
         private const string NginxIngressRepo = "https://kubernetes.github.io/ingress-nginx";
-        private const string NginxIngressVersion = "4.4.2";
+        private const string NginxIngressVersion = "4.7.1";
         private const string CertManagerRepo = "https://charts.jetstack.io";
-        private const string CertManagerVersion = "v1.8.0";
-        private const string AadPluginGithubReleaseVersion = "v1.8.13";
+        private const string CertManagerVersion = "v1.12.3";
+        private const string AadPluginGithubReleaseVersion = "v1.8.17";
         private const string AadPluginRepo = $"https://raw.githubusercontent.com/Azure/aad-pod-identity/{AadPluginGithubReleaseVersion}/charts";
-        private const string AadPluginVersion = "4.1.14";
+        private const string AadPluginVersion = "4.1.18";
 
         private Configuration configuration { get; set; }
         private AzureCredentials azureCredentials { get; set; }
@@ -131,20 +131,29 @@ namespace TesDeployer
                 status: {}
                 """));
 
-        public async Task DeployCoADependenciesAsync()
+        public async Task DeployCoADependenciesAsync(CancellationToken cToken)
         {
-            var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
+            var helmRepoList = await ExecHelmProcessAsync($"repo list", cToken, workingDirectory: null, throwOnNonZeroExitCode: false);
 
             if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("aad-pod-identity", StringComparison.OrdinalIgnoreCase))
             {
-                await ExecHelmProcessAsync($"repo add aad-pod-identity {AadPluginRepo}");
+                await ExecHelmProcessAsync($"repo add aad-pod-identity {AadPluginRepo}", cToken);
             }
 
-            await ExecHelmProcessAsync($"repo update");
-            await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig \"{kubeConfigPath}\"");
+            await ExecHelmProcessAsync($"repo update", cToken);
+            await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig \"{kubeConfigPath}\"", cToken);
         }
 
-        public async Task<IKubernetes> EnableIngress(string tesUsername, string tesPassword, IKubernetes client)
+        /// <summary>
+        /// Enable ingress for TES
+        /// See: https://cert-manager.io/docs/tutorials/acme/nginx-ingress/
+        /// </summary>
+        /// <param name="tesUsername"></param>
+        /// <param name="tesPassword"></param>
+        /// <param name="client"></param>
+        /// <param name="cToken"></param>
+        /// <returns></returns>
+        public async Task<IKubernetes> EnableIngress(string tesUsername, string tesPassword, IKubernetes client, CancellationToken cToken)
         {
             var certManagerRegistry = "quay.io";
             var certImageController = $"{certManagerRegistry}/jetstack/cert-manager-controller";
@@ -198,23 +207,23 @@ namespace TesDeployer
                 Type = "Opaque"
             }, configuration.AksCoANamespace);
 
-            var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
+            var helmRepoList = await ExecHelmProcessAsync($"repo list", cToken, workingDirectory: null, throwOnNonZeroExitCode: false);
 
             if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("ingress-nginx", StringComparison.OrdinalIgnoreCase))
             {
-                await ExecHelmProcessAsync($"repo add ingress-nginx {NginxIngressRepo}");
+                await ExecHelmProcessAsync($"repo add ingress-nginx {NginxIngressRepo}", cToken);
             }
 
             if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("jetstack", StringComparison.OrdinalIgnoreCase))
             {
-                await ExecHelmProcessAsync($"repo add jetstack {CertManagerRepo}");
+                await ExecHelmProcessAsync($"repo add jetstack {CertManagerRepo}", cToken);
             }
 
-            await ExecHelmProcessAsync($"repo update");
+            await ExecHelmProcessAsync($"repo update", cToken);
 
             var dnsAnnotation = $"--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-dns-label-name\"={AzureDnsLabelName}";
             var healthProbeAnnotation = "--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-load-balancer-health-probe-request-path\"=/healthz";
-            await ExecHelmProcessAsync($"install ingress-nginx ingress-nginx/ingress-nginx --namespace {configuration.AksCoANamespace} --kubeconfig \"{kubeConfigPath}\" --version {NginxIngressVersion} {healthProbeAnnotation} {dnsAnnotation}");
+            await ExecHelmProcessAsync($"install ingress-nginx ingress-nginx/ingress-nginx --namespace {configuration.AksCoANamespace} --kubeconfig \"{kubeConfigPath}\" --version {NginxIngressVersion} {healthProbeAnnotation} {dnsAnnotation}", cToken);
             await ExecHelmProcessAsync("install cert-manager jetstack/cert-manager " +
                     $"--namespace {configuration.AksCoANamespace} --kubeconfig \"{kubeConfigPath}\" " +
                     $"--version {CertManagerVersion} --set installCRDs=true " +
@@ -224,7 +233,7 @@ namespace TesDeployer
                     $"--set webhook.image.repository={certImageWebhook} " +
                     $"--set webhook.image.tag={CertManagerVersion} " +
                     $"--set cainjector.image.repository={certImageCainjector} " +
-                    $"--set cainjector.image.tag={CertManagerVersion}");
+                    $"--set cainjector.image.tag={CertManagerVersion}", cToken);
 
             await WaitForWorkloadAsync(client, "ingress-nginx-controller", configuration.AksCoANamespace, cts.Token);
             await WaitForWorkloadAsync(client, "cert-manager", configuration.AksCoANamespace, cts.Token);
@@ -235,11 +244,11 @@ namespace TesDeployer
             return client;
         }
 
-        public async Task DeployHelmChartToClusterAsync(IKubernetes kubernetesClient)
+        public async Task DeployHelmChartToClusterAsync(IKubernetes kubernetesClient, CancellationToken cToken)
         {
             // https://helm.sh/docs/helm/helm_upgrade/
             // The chart argument can be either: a chart reference('example/mariadb'), a path to a chart directory, a packaged chart, or a fully qualified URL
-            await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig \"{kubeConfigPath}\" --namespace {configuration.AksCoANamespace} --create-namespace",
+            await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig \"{kubeConfigPath}\" --namespace {configuration.AksCoANamespace} --create-namespace", cToken,
                 workingDirectory: workingDirectoryTemp);
             await WaitForWorkloadAsync(kubernetesClient, "tes", configuration.AksCoANamespace, cts.Token);
         }
@@ -534,7 +543,22 @@ namespace TesDeployer
             return tempCname.TrimEnd('-').ToLowerInvariant();
         }
 
-        private async Task<string> ExecHelmProcessAsync(string command, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
+        public Task<string> ExecKubectlProcessAsync(string command, CancellationToken cToken, string workingDirectory = null, bool throwOnNonZeroExitCode = true, bool appendKubeconfig = false)
+        {
+            if (appendKubeconfig)
+            {
+                command = $"{command} --kubeconfig \"{kubeConfigPath}\"";
+            }
+
+            return ExecProcessAsync(configuration.KubectlBinaryPath, "KUBE", command, cToken, workingDirectory, throwOnNonZeroExitCode);
+        }
+
+        private Task<string> ExecHelmProcessAsync(string command, CancellationToken cToken, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
+        {
+            return ExecProcessAsync(configuration.HelmBinaryPath, "HELM", command, cToken, workingDirectory, throwOnNonZeroExitCode);
+        }
+
+        private async Task<string> ExecProcessAsync(string binaryFullPath, string tag, string command, CancellationToken cToken, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
         {
             var outputStringBuilder = new StringBuilder();
 
@@ -542,7 +566,7 @@ namespace TesDeployer
             {
                 if (configuration.DebugLogging)
                 {
-                    ConsoleEx.WriteLine($"HELM: {outLine.Data}");
+                    ConsoleEx.WriteLine($"{tag}: {outLine.Data}");
                 }
 
                 outputStringBuilder.AppendLine(outLine.Data);
@@ -552,7 +576,7 @@ namespace TesDeployer
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
-            process.StartInfo.FileName = configuration.HelmBinaryPath;
+            process.StartInfo.FileName = binaryFullPath;
             process.StartInfo.Arguments = command;
             process.OutputDataReceived += new DataReceivedEventHandler(OutputHandler);
             process.ErrorDataReceived += new DataReceivedEventHandler(OutputHandler);
@@ -565,18 +589,18 @@ namespace TesDeployer
             process.Start();
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
-            await process.WaitForExitAsync();
+            await process.WaitForExitAsync(cToken);
             var output = outputStringBuilder.ToString();
 
             if (throwOnNonZeroExitCode && process.ExitCode != 0)
             {
                 foreach (var line in output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries))
                 {
-                    ConsoleEx.WriteLine($"HELM: {line}");
+                    ConsoleEx.WriteLine($"{tag}: {line}");
                 }
 
                 Debugger.Break();
-                throw new Exception($"HELM ExitCode = {process.ExitCode}");
+                throw new Exception($"{tag} ExitCode = {process.ExitCode}");
             }
 
             return output;

@@ -9,9 +9,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
+using Tes.ApiClients;
 using Tes.Models;
 using TesApi.Web;
-using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 using TesApi.Web.Options;
@@ -44,8 +44,7 @@ namespace TesApi.Tests
             batchSchedulingOptions = new BatchSchedulingOptions() { Prefix = Guid.NewGuid().ToString() };
             optionsMock.Setup(o => o.Value).Returns(terraOptions);
             azureProxyMock = new Mock<IAzureProxy>();
-            terraStorageAccessProvider = new TerraStorageAccessProvider(NullLogger<TerraStorageAccessProvider>.Instance,
-                optionsMock.Object, azureProxyMock.Object, wsmApiClientMock.Object, Options.Create(batchSchedulingOptions));
+            terraStorageAccessProvider = new TerraStorageAccessProvider(wsmApiClientMock.Object, azureProxyMock.Object, optionsMock.Object, Options.Create(batchSchedulingOptions), NullLogger<TerraStorageAccessProvider>.Instance);
         }
 
         [TestMethod]

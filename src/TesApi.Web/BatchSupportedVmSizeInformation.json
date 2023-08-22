@@ -3,7 +3,7 @@
     "VmSize": "Standard_A2_v2",
     "VmFamily": "standardAv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.087,
     "MemoryInGiB": 4,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 20,
@@ -53,13 +53,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_A2m_v2",
     "VmFamily": "standardAv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.124,
     "MemoryInGiB": 16,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 20,
@@ -109,13 +110,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_A4_v2",
     "VmFamily": "standardAv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.183,
     "MemoryInGiB": 8,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 40,
@@ -165,13 +167,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_A4m_v2",
     "VmFamily": "standardAv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.26,
     "MemoryInGiB": 32,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 40,
@@ -221,13 +224,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_A8_v2",
     "VmFamily": "standardAv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.383,
     "MemoryInGiB": 16,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 80,
@@ -277,13 +281,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_A8m_v2",
     "VmFamily": "standardAv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.546,
     "MemoryInGiB": 64,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 80,
@@ -333,13 +338,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D1_v2",
     "VmFamily": "standardDv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.0679,
     "MemoryInGiB": 3.5,
     "VCpusAvailable": 1,
     "ResourceDiskSizeInGiB": 50,
@@ -389,13 +395,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D11_v2",
     "VmFamily": "standardDv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.19,
     "MemoryInGiB": 14,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 100,
@@ -445,13 +452,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D12_v2",
     "VmFamily": "standardDv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.379,
     "MemoryInGiB": 28,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 200,
@@ -501,13 +509,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D13_v2",
     "VmFamily": "standardDv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.759,
     "MemoryInGiB": 56,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 400,
@@ -557,13 +566,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D14_v2",
     "VmFamily": "standardDv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.518,
     "MemoryInGiB": 112,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 800,
@@ -613,13 +623,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D15_v2",
     "VmFamily": "standardDv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.897,
     "MemoryInGiB": 140,
     "VCpusAvailable": 20,
     "ResourceDiskSizeInGiB": 1000,
@@ -669,13 +680,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D16_v3",
     "VmFamily": "standardDv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.96,
     "MemoryInGiB": 64,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 400,
@@ -725,13 +737,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D16a_v4",
     "VmFamily": "standardDAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.92,
     "MemoryInGiB": 64,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 400,
@@ -778,13 +791,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D16ads_v5",
     "VmFamily": "standardDADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1,
     "MemoryInGiB": 64,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 600,
@@ -830,7 +844,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D16as_v4",
@@ -883,13 +898,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D16d_v4",
     "VmFamily": "standardDDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.088,
     "MemoryInGiB": 64,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 600,
@@ -938,13 +954,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D16d_v5",
     "VmFamily": "standardDDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.088,
     "MemoryInGiB": 64,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 600,
@@ -993,13 +1010,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D16ds_v4",
     "VmFamily": "standardDDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.088,
     "MemoryInGiB": 64,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 600,
@@ -1048,13 +1066,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D16ds_v5",
     "VmFamily": "standardDDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.088,
     "MemoryInGiB": 64,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 600,
@@ -1103,7 +1122,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D16s_v3",
@@ -1160,13 +1180,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D2_v2",
     "VmFamily": "standardDv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.136,
     "MemoryInGiB": 7,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 100,
@@ -1216,13 +1237,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D2_v3",
     "VmFamily": "standardDv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.12,
     "MemoryInGiB": 8,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 50,
@@ -1272,13 +1294,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D2a_v4",
     "VmFamily": "standardDAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.115,
     "MemoryInGiB": 8,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 50,
@@ -1325,13 +1348,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D2ads_v5",
     "VmFamily": "standardDADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.125,
     "MemoryInGiB": 8,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 75,
@@ -1377,7 +1401,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D2as_v4",
@@ -1430,13 +1455,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D2d_v4",
     "VmFamily": "standardDDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.136,
     "MemoryInGiB": 8,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 75,
@@ -1485,13 +1511,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D2d_v5",
     "VmFamily": "standardDDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.136,
     "MemoryInGiB": 8,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 75,
@@ -1540,13 +1567,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D2ds_v4",
     "VmFamily": "standardDDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.136,
     "MemoryInGiB": 8,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 75,
@@ -1595,13 +1623,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D2ds_v5",
     "VmFamily": "standardDDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.136,
     "MemoryInGiB": 8,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 75,
@@ -1650,7 +1679,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D2s_v3",
@@ -1707,13 +1737,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D3_v2",
     "VmFamily": "standardDv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.272,
     "MemoryInGiB": 14,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 200,
@@ -1763,13 +1794,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D32_v3",
     "VmFamily": "standardDv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.92,
     "MemoryInGiB": 128,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 800,
@@ -1819,13 +1851,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D32a_v4",
     "VmFamily": "standardDAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.84,
     "MemoryInGiB": 128,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 800,
@@ -1872,13 +1905,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D32ads_v5",
     "VmFamily": "standardDADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2,
     "MemoryInGiB": 128,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 1200,
@@ -1924,7 +1958,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D32as_v4",
@@ -1977,13 +2012,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D32d_v4",
     "VmFamily": "standardDDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.176,
     "MemoryInGiB": 128,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 1200,
@@ -2032,13 +2068,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D32d_v5",
     "VmFamily": "standardDDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.176,
     "MemoryInGiB": 128,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 1200,
@@ -2087,13 +2124,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D32ds_v4",
     "VmFamily": "standardDDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.176,
     "MemoryInGiB": 128,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 1200,
@@ -2142,13 +2180,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D32ds_v5",
     "VmFamily": "standardDDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.176,
     "MemoryInGiB": 128,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 1200,
@@ -2197,7 +2236,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D32s_v3",
@@ -2254,13 +2294,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D4_v2",
     "VmFamily": "standardDv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.544,
     "MemoryInGiB": 28,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 400,
@@ -2310,13 +2351,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D4_v3",
     "VmFamily": "standardDv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.24,
     "MemoryInGiB": 16,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 100,
@@ -2366,13 +2408,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D48_v3",
     "VmFamily": "standardDv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.88,
     "MemoryInGiB": 192,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1200,
@@ -2422,13 +2465,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D48a_v4",
     "VmFamily": "standardDAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.76,
     "MemoryInGiB": 192,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1200,
@@ -2475,13 +2519,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D48ads_v5",
     "VmFamily": "standardDADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3,
     "MemoryInGiB": 192,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1800,
@@ -2527,7 +2572,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D48as_v4",
@@ -2580,13 +2626,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D48d_v4",
     "VmFamily": "standardDDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.264,
     "MemoryInGiB": 192,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1800,
@@ -2635,13 +2682,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D48d_v5",
     "VmFamily": "standardDDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.264,
     "MemoryInGiB": 192,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1800,
@@ -2690,13 +2738,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D48ds_v4",
     "VmFamily": "standardDDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.264,
     "MemoryInGiB": 192,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1800,
@@ -2745,13 +2794,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D48ds_v5",
     "VmFamily": "standardDDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.264,
     "MemoryInGiB": 192,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1800,
@@ -2800,7 +2850,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D48s_v3",
@@ -2857,13 +2908,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D4a_v4",
     "VmFamily": "standardDAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.23,
     "MemoryInGiB": 16,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 100,
@@ -2910,13 +2962,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D4ads_v5",
     "VmFamily": "standardDADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.25,
     "MemoryInGiB": 16,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 150,
@@ -2962,7 +3015,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D4as_v4",
@@ -3015,13 +3069,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D4d_v4",
     "VmFamily": "standardDDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.272,
     "MemoryInGiB": 16,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 150,
@@ -3070,13 +3125,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D4d_v5",
     "VmFamily": "standardDDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.272,
     "MemoryInGiB": 16,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 150,
@@ -3125,13 +3181,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D4ds_v4",
     "VmFamily": "standardDDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.272,
     "MemoryInGiB": 16,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 150,
@@ -3180,13 +3237,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D4ds_v5",
     "VmFamily": "standardDDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.272,
     "MemoryInGiB": 16,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 150,
@@ -3235,7 +3293,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D4s_v3",
@@ -3292,13 +3351,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D5_v2",
     "VmFamily": "standardDv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.087,
     "MemoryInGiB": 56,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 800,
@@ -3348,13 +3408,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D64_v3",
     "VmFamily": "standardDv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.84,
     "MemoryInGiB": 256,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 1600,
@@ -3404,13 +3465,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D64a_v4",
     "VmFamily": "standardDAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.68,
     "MemoryInGiB": 256,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 1600,
@@ -3457,13 +3519,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D64ads_v5",
     "VmFamily": "standardDADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4,
     "MemoryInGiB": 256,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2400,
@@ -3509,7 +3572,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D64as_v4",
@@ -3562,13 +3626,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D64d_v4",
     "VmFamily": "standardDDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.352,
     "MemoryInGiB": 256,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2400,
@@ -3617,13 +3682,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D64d_v5",
     "VmFamily": "standardDDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.352,
     "MemoryInGiB": 256,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2400,
@@ -3672,13 +3738,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D64ds_v4",
     "VmFamily": "standardDDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.352,
     "MemoryInGiB": 256,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2400,
@@ -3727,13 +3794,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D64ds_v5",
     "VmFamily": "standardDDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.352,
     "MemoryInGiB": 256,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2400,
@@ -3782,7 +3850,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D64s_v3",
@@ -3839,13 +3908,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D8_v3",
     "VmFamily": "standardDv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.48,
     "MemoryInGiB": 32,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 200,
@@ -3895,13 +3965,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_D8a_v4",
     "VmFamily": "standardDAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.46,
     "MemoryInGiB": 32,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 200,
@@ -3948,13 +4019,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D8ads_v5",
     "VmFamily": "standardDADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.5,
     "MemoryInGiB": 32,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 300,
@@ -4000,7 +4072,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D8as_v4",
@@ -4053,13 +4126,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D8d_v4",
     "VmFamily": "standardDDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.544,
     "MemoryInGiB": 32,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 300,
@@ -4108,13 +4182,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D8d_v5",
     "VmFamily": "standardDDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.544,
     "MemoryInGiB": 32,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 300,
@@ -4163,13 +4238,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D8ds_v4",
     "VmFamily": "standardDDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.544,
     "MemoryInGiB": 32,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 300,
@@ -4218,13 +4294,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D8ds_v5",
     "VmFamily": "standardDDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.544,
     "MemoryInGiB": 32,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 300,
@@ -4273,7 +4350,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D8s_v3",
@@ -4330,13 +4408,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D96a_v4",
     "VmFamily": "standardDAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 5.52,
     "MemoryInGiB": 384,
     "VCpusAvailable": 96,
     "ResourceDiskSizeInGiB": 2400,
@@ -4383,13 +4462,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D96ads_v5",
     "VmFamily": "standardDADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 6,
     "MemoryInGiB": 384,
     "VCpusAvailable": 96,
     "ResourceDiskSizeInGiB": 2400,
@@ -4434,7 +4514,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D96as_v4",
@@ -4487,13 +4568,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D96d_v5",
     "VmFamily": "standardDDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 6.528,
     "MemoryInGiB": 384,
     "VCpusAvailable": 96,
     "ResourceDiskSizeInGiB": 3600,
@@ -4542,13 +4624,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_D96ds_v5",
     "VmFamily": "standardDDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 6.528,
     "MemoryInGiB": 384,
     "VCpusAvailable": 96,
     "ResourceDiskSizeInGiB": 3600,
@@ -4597,7 +4680,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_DS1_v2",
@@ -4654,7 +4738,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_DS11_v2",
@@ -4711,7 +4796,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_DS12_v2",
@@ -4768,7 +4854,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_DS13_v2",
@@ -4825,7 +4912,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_DS14_v2",
@@ -4882,7 +4970,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_DS15_v2",
@@ -4939,7 +5028,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_DS2_v2",
@@ -4996,7 +5086,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_DS3_v2",
@@ -5053,7 +5144,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_DS4_v2",
@@ -5110,7 +5202,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_DS5_v2",
@@ -5167,13 +5260,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E16_v3",
     "VmFamily": "standardEv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.28,
     "MemoryInGiB": 128,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 400,
@@ -5223,13 +5317,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_E16a_v4",
     "VmFamily": "standardEAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.216,
     "MemoryInGiB": 128,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 400,
@@ -5276,13 +5371,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E16ads_v5",
     "VmFamily": "standardEADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.264,
     "MemoryInGiB": 128,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 600,
@@ -5327,7 +5423,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E16as_v4",
@@ -5380,13 +5477,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E16d_v4",
     "VmFamily": "standardEDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.384,
     "MemoryInGiB": 128,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 600,
@@ -5435,13 +5533,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E16d_v5",
     "VmFamily": "standardEDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.384,
     "MemoryInGiB": 128,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 600,
@@ -5490,13 +5589,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E16ds_v4",
     "VmFamily": "standardEDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.384,
     "MemoryInGiB": 128,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 600,
@@ -5545,13 +5645,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E16ds_v5",
     "VmFamily": "standardEDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.384,
     "MemoryInGiB": 128,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 600,
@@ -5600,7 +5701,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E16s_v3",
@@ -5657,13 +5759,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E2_v3",
     "VmFamily": "standardEv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.16,
     "MemoryInGiB": 16,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 50,
@@ -5713,13 +5816,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_E20a_v4",
     "VmFamily": "standardEAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.52,
     "MemoryInGiB": 160,
     "VCpusAvailable": 20,
     "ResourceDiskSizeInGiB": 500,
@@ -5764,13 +5868,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E20ads_v5",
     "VmFamily": "standardEADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.58,
     "MemoryInGiB": 160,
     "VCpusAvailable": 20,
     "ResourceDiskSizeInGiB": 750,
@@ -5815,7 +5920,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E20as_v4",
@@ -5866,13 +5972,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E20d_v4",
     "VmFamily": "standardEDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.73,
     "MemoryInGiB": 160,
     "VCpusAvailable": 20,
     "ResourceDiskSizeInGiB": 750,
@@ -5921,13 +6028,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E20d_v5",
     "VmFamily": "standardEDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.73,
     "MemoryInGiB": 160,
     "VCpusAvailable": 20,
     "ResourceDiskSizeInGiB": 750,
@@ -5976,13 +6084,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E20ds_v4",
     "VmFamily": "standardEDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.73,
     "MemoryInGiB": 160,
     "VCpusAvailable": 20,
     "ResourceDiskSizeInGiB": 750,
@@ -6031,13 +6140,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E20ds_v5",
     "VmFamily": "standardEDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.73,
     "MemoryInGiB": 160,
     "VCpusAvailable": 20,
     "ResourceDiskSizeInGiB": 750,
@@ -6086,13 +6196,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E2a_v4",
     "VmFamily": "standardEAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.152,
     "MemoryInGiB": 16,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 50,
@@ -6139,13 +6250,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E2ads_v5",
     "VmFamily": "standardEADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.158,
     "MemoryInGiB": 16,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 75,
@@ -6190,7 +6302,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E2as_v4",
@@ -6243,13 +6356,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E2d_v4",
     "VmFamily": "standardEDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.173,
     "MemoryInGiB": 16,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 75,
@@ -6298,13 +6412,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E2d_v5",
     "VmFamily": "standardEDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.173,
     "MemoryInGiB": 16,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 75,
@@ -6353,13 +6468,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E2ds_v4",
     "VmFamily": "standardEDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.173,
     "MemoryInGiB": 16,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 75,
@@ -6408,13 +6524,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E2ds_v5",
     "VmFamily": "standardEDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.173,
     "MemoryInGiB": 16,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 75,
@@ -6463,7 +6580,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E2s_v3",
@@ -6520,13 +6638,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E32_v3",
     "VmFamily": "standardEv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.56,
     "MemoryInGiB": 256,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 800,
@@ -6576,13 +6695,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_E32a_v4",
     "VmFamily": "standardEAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.432,
     "MemoryInGiB": 256,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 800,
@@ -6629,13 +6749,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E32ads_v5",
     "VmFamily": "standardEADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.528,
     "MemoryInGiB": 256,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 1200,
@@ -6680,7 +6801,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E32as_v4",
@@ -6733,13 +6855,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E32d_v4",
     "VmFamily": "standardEDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.768,
     "MemoryInGiB": 256,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 1200,
@@ -6788,13 +6911,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E32d_v5",
     "VmFamily": "standardEDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.768,
     "MemoryInGiB": 256,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 1200,
@@ -6843,13 +6967,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E32ds_v4",
     "VmFamily": "standardEDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.768,
     "MemoryInGiB": 256,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 1200,
@@ -6898,13 +7023,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E32ds_v5",
     "VmFamily": "standardEDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.768,
     "MemoryInGiB": 256,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 1200,
@@ -6953,7 +7079,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E32s_v3",
@@ -7010,13 +7137,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E4_v3",
     "VmFamily": "standardEv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.32,
     "MemoryInGiB": 32,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 100,
@@ -7066,13 +7194,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_E48_v3",
     "VmFamily": "standardEv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.647,
     "MemoryInGiB": 384,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1200,
@@ -7122,13 +7251,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_E48a_v4",
     "VmFamily": "standardEAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.648,
     "MemoryInGiB": 384,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1200,
@@ -7175,13 +7305,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E48ads_v5",
     "VmFamily": "standardEADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.792,
     "MemoryInGiB": 384,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1800,
@@ -7226,7 +7357,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E48as_v4",
@@ -7279,13 +7411,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E48d_v4",
     "VmFamily": "standardEDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.152,
     "MemoryInGiB": 384,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1800,
@@ -7334,13 +7467,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E48d_v5",
     "VmFamily": "standardEDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.152,
     "MemoryInGiB": 384,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1800,
@@ -7389,13 +7523,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E48ds_v4",
     "VmFamily": "standardEDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.152,
     "MemoryInGiB": 384,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1800,
@@ -7444,13 +7579,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E48ds_v5",
     "VmFamily": "standardEDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.152,
     "MemoryInGiB": 384,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 1800,
@@ -7499,7 +7635,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E48s_v3",
@@ -7556,13 +7693,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E4a_v4",
     "VmFamily": "standardEAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.304,
     "MemoryInGiB": 32,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 100,
@@ -7609,13 +7747,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E4ads_v5",
     "VmFamily": "standardEADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.316,
     "MemoryInGiB": 32,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 150,
@@ -7660,7 +7799,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E4as_v4",
@@ -7713,13 +7853,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E4d_v4",
     "VmFamily": "standardEDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.346,
     "MemoryInGiB": 32,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 150,
@@ -7768,13 +7909,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E4d_v5",
     "VmFamily": "standardEDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.346,
     "MemoryInGiB": 32,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 150,
@@ -7823,13 +7965,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E4ds_v4",
     "VmFamily": "standardEDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.346,
     "MemoryInGiB": 32,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 150,
@@ -7878,13 +8021,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E4ds_v5",
     "VmFamily": "standardEDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.346,
     "MemoryInGiB": 32,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 150,
@@ -7933,7 +8077,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E4s_v3",
@@ -7990,13 +8135,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E64_v3",
     "VmFamily": "standardEv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.376,
     "MemoryInGiB": 432,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 1600,
@@ -8046,13 +8192,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_E64a_v4",
     "VmFamily": "standardEAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.864,
     "MemoryInGiB": 512,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 1600,
@@ -8099,13 +8246,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E64ads_v5",
     "VmFamily": "standardEADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 5.056,
     "MemoryInGiB": 512,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2400,
@@ -8150,7 +8298,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E64as_v4",
@@ -8203,13 +8352,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E64d_v4",
     "VmFamily": "standardEDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 5.536,
     "MemoryInGiB": 504,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2400,
@@ -8258,13 +8408,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E64d_v5",
     "VmFamily": "standardEDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 5.536,
     "MemoryInGiB": 512,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2400,
@@ -8313,13 +8464,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E64ds_v4",
     "VmFamily": "standardEDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 5.536,
     "MemoryInGiB": 504,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2400,
@@ -8368,13 +8520,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E64ds_v5",
     "VmFamily": "standardEDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 5.536,
     "MemoryInGiB": 512,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2400,
@@ -8423,13 +8576,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E64i_v3",
     "VmFamily": "standardEIv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.376,
     "MemoryInGiB": 432,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 1600,
@@ -8468,11 +8622,11 @@
       "uaenorth",
       "uksouth",
       "ukwest",
-      "westcentralus",
       "westeurope",
       "westus",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_E64s_v3",
@@ -8529,13 +8683,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E8_v3",
     "VmFamily": "standardEv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.64,
     "MemoryInGiB": 64,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 200,
@@ -8585,13 +8740,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_E80ids_v4",
     "VmFamily": "standardXEIDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 6.92,
     "MemoryInGiB": 504,
     "VCpusAvailable": 80,
     "ResourceDiskSizeInGiB": 4260,
@@ -8640,13 +8796,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E8a_v4",
     "VmFamily": "standardEAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.608,
     "MemoryInGiB": 64,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 200,
@@ -8693,13 +8850,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E8ads_v5",
     "VmFamily": "standardEADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.632,
     "MemoryInGiB": 64,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 300,
@@ -8744,7 +8902,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E8as_v4",
@@ -8797,13 +8956,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E8d_v4",
     "VmFamily": "standardEDv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.692,
     "MemoryInGiB": 64,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 300,
@@ -8852,13 +9012,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E8d_v5",
     "VmFamily": "standardEDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.692,
     "MemoryInGiB": 64,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 300,
@@ -8907,13 +9068,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E8ds_v4",
     "VmFamily": "standardEDSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.692,
     "MemoryInGiB": 64,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 300,
@@ -8962,13 +9124,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E8ds_v5",
     "VmFamily": "standardEDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.692,
     "MemoryInGiB": 64,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 300,
@@ -9017,7 +9180,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E8s_v3",
@@ -9074,13 +9238,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E96a_v4",
     "VmFamily": "standardEAv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 7.296,
     "MemoryInGiB": 672,
     "VCpusAvailable": 96,
     "ResourceDiskSizeInGiB": 2400,
@@ -9127,13 +9292,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E96ads_v5",
     "VmFamily": "standardEADSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 7.584,
     "MemoryInGiB": 672,
     "VCpusAvailable": 96,
     "ResourceDiskSizeInGiB": 3600,
@@ -9178,7 +9344,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E96as_v4",
@@ -9231,13 +9398,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E96d_v5",
     "VmFamily": "standardEDv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 8.304,
     "MemoryInGiB": 672,
     "VCpusAvailable": 96,
     "ResourceDiskSizeInGiB": 3600,
@@ -9286,13 +9454,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_E96ds_v5",
     "VmFamily": "standardEDSv5Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 8.304,
     "MemoryInGiB": 672,
     "VCpusAvailable": 96,
     "ResourceDiskSizeInGiB": 3600,
@@ -9341,13 +9510,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_F16s_v2",
     "VmFamily": "standardFSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.776,
     "MemoryInGiB": 32,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 128,
@@ -9398,13 +9568,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_F2s_v2",
     "VmFamily": "standardFSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.097,
     "MemoryInGiB": 4,
     "VCpusAvailable": 2,
     "ResourceDiskSizeInGiB": 16,
@@ -9455,13 +9626,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_F32s_v2",
     "VmFamily": "standardFSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.552,
     "MemoryInGiB": 64,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 256,
@@ -9512,13 +9684,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_F48s_v2",
     "VmFamily": "standardFSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.328,
     "MemoryInGiB": 96,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 384,
@@ -9569,13 +9742,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_F4s_v2",
     "VmFamily": "standardFSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.194,
     "MemoryInGiB": 8,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 32,
@@ -9626,13 +9800,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_F64s_v2",
     "VmFamily": "standardFSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.104,
     "MemoryInGiB": 128,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 512,
@@ -9683,13 +9858,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_F72s_v2",
     "VmFamily": "standardFSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.492,
     "MemoryInGiB": 144,
     "VCpusAvailable": 72,
     "ResourceDiskSizeInGiB": 576,
@@ -9740,13 +9916,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_F8s_v2",
     "VmFamily": "standardFSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.388,
     "MemoryInGiB": 16,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 64,
@@ -9797,7 +9974,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_HB120-16rs_v2",
@@ -9824,7 +10002,8 @@
       "uaenorth",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_HB120-16rs_v3",
@@ -9848,7 +10027,8 @@
       "uksouth",
       "westeurope",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_HB120-32rs_v2",
@@ -9875,7 +10055,8 @@
       "uaenorth",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_HB120-32rs_v3",
@@ -9899,7 +10080,8 @@
       "uksouth",
       "westeurope",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_HB120-64rs_v2",
@@ -9926,7 +10108,8 @@
       "uaenorth",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_HB120-64rs_v3",
@@ -9950,7 +10133,8 @@
       "uksouth",
       "westeurope",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_HB120-96rs_v2",
@@ -9977,7 +10161,8 @@
       "uaenorth",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_HB120-96rs_v3",
@@ -10001,13 +10186,14 @@
       "uksouth",
       "westeurope",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_HB120rs_v2",
     "VmFamily": "standardHBrsv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.68,
     "MemoryInGiB": 456,
     "VCpusAvailable": 120,
     "ResourceDiskSizeInGiB": 480,
@@ -10028,13 +10214,14 @@
       "uaenorth",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_HB120rs_v3",
     "VmFamily": "standardHBv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.68,
     "MemoryInGiB": 448,
     "VCpusAvailable": 120,
     "ResourceDiskSizeInGiB": 480,
@@ -10052,13 +10239,14 @@
       "uksouth",
       "westeurope",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_HB60rs",
     "VmFamily": "standardHBSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.964,
     "MemoryInGiB": 228,
     "VCpusAvailable": 0,
     "ResourceDiskSizeInGiB": 700,
@@ -10071,13 +10259,14 @@
       "eastus",
       "southcentralus",
       "westeurope"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_HC44rs",
     "VmFamily": "standardHCSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.118,
     "MemoryInGiB": 352,
     "VCpusAvailable": 0,
     "ResourceDiskSizeInGiB": 700,
@@ -10098,13 +10287,14 @@
       "southeastasia",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_L16s_v2",
     "VmFamily": "standardLSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.488,
     "MemoryInGiB": 128,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 160,
@@ -10129,13 +10319,14 @@
       "westeurope",
       "westus",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_L32s_v2",
     "VmFamily": "standardLSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.976,
     "MemoryInGiB": 256,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 320,
@@ -10160,13 +10351,14 @@
       "westeurope",
       "westus",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_L48s_v2",
     "VmFamily": "standardLSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.464,
     "MemoryInGiB": 384,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 480,
@@ -10191,13 +10383,14 @@
       "westeurope",
       "westus",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_L64s_v2",
     "VmFamily": "standardLSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 5.952,
     "MemoryInGiB": 512,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 640,
@@ -10222,13 +10415,14 @@
       "westeurope",
       "westus",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_L80s_v2",
     "VmFamily": "standardLSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 7.44,
     "MemoryInGiB": 640,
     "VCpusAvailable": 80,
     "ResourceDiskSizeInGiB": 800,
@@ -10253,13 +10447,14 @@
       "westeurope",
       "westus",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_L8s_v2",
     "VmFamily": "standardLSv2Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.744,
     "MemoryInGiB": 64,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 80,
@@ -10284,7 +10479,8 @@
       "westeurope",
       "westus",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M128",
@@ -10336,7 +10532,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M128m",
@@ -10388,13 +10585,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M128ms",
     "VmFamily": "standardMSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 37.3632,
     "MemoryInGiB": 3800,
     "VCpusAvailable": 128,
     "ResourceDiskSizeInGiB": 4000,
@@ -10440,13 +10638,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M128s",
     "VmFamily": "standardMSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 18.673,
     "MemoryInGiB": 2000,
     "VCpusAvailable": 128,
     "ResourceDiskSizeInGiB": 4000,
@@ -10492,13 +10691,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M16ms",
     "VmFamily": "standardMSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.3022,
     "MemoryInGiB": 437.5,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 500,
@@ -10544,13 +10744,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M32ls",
     "VmFamily": "standardMSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.4476,
     "MemoryInGiB": 256,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 1000,
@@ -10596,13 +10797,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M32ms",
     "VmFamily": "standardMSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 8.6044,
     "MemoryInGiB": 875,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 1000,
@@ -10648,13 +10850,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M32ts",
     "VmFamily": "standardMSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.248,
     "MemoryInGiB": 192,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 1000,
@@ -10700,7 +10903,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M64",
@@ -10752,13 +10956,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M64ls",
     "VmFamily": "standardMSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 6.498,
     "MemoryInGiB": 512,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2000,
@@ -10804,7 +11009,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M64m",
@@ -10856,13 +11062,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M64ms",
     "VmFamily": "standardMSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 14.472,
     "MemoryInGiB": 1750,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2000,
@@ -10908,13 +11115,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M64s",
     "VmFamily": "standardMSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 9.337,
     "MemoryInGiB": 1024,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2048,
@@ -10960,13 +11168,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_M8ms",
     "VmFamily": "standardMSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.1511,
     "MemoryInGiB": 218.75,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 250,
@@ -11012,7 +11221,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NC12_Promo",
@@ -11036,13 +11246,14 @@
       "uksouth",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_NC12s_v3",
     "VmFamily": "standardNCSv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 7.646,
     "MemoryInGiB": 224,
     "VCpusAvailable": 12,
     "ResourceDiskSizeInGiB": 672,
@@ -11073,13 +11284,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NC16as_T4_v3",
     "VmFamily": "Standard NCASv3_T4 Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.505,
     "MemoryInGiB": 110,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 352,
@@ -11111,7 +11323,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NC24_Promo",
@@ -11135,7 +11348,8 @@
       "uksouth",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_NC24r_Promo",
@@ -11159,13 +11373,14 @@
       "uksouth",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_NC24rs_v3",
     "VmFamily": "standardNCSv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 16.821,
     "MemoryInGiB": 448,
     "VCpusAvailable": 24,
     "ResourceDiskSizeInGiB": 2948,
@@ -11196,13 +11411,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NC24s_v3",
     "VmFamily": "standardNCSv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 15.292,
     "MemoryInGiB": 448,
     "VCpusAvailable": 24,
     "ResourceDiskSizeInGiB": 1344,
@@ -11233,13 +11449,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NC4as_T4_v3",
     "VmFamily": "Standard NCASv3_T4 Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.658,
     "MemoryInGiB": 28,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 176,
@@ -11271,7 +11488,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NC6_Promo",
@@ -11295,13 +11513,14 @@
       "uksouth",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_NC64as_T4_v3",
     "VmFamily": "Standard NCASv3_T4 Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 5.44,
     "MemoryInGiB": 440,
     "VCpusAvailable": 64,
     "ResourceDiskSizeInGiB": 2816,
@@ -11333,13 +11552,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NC6s_v3",
     "VmFamily": "standardNCSv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 3.823,
     "MemoryInGiB": 112,
     "VCpusAvailable": 6,
     "ResourceDiskSizeInGiB": 336,
@@ -11370,13 +11590,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NC8as_T4_v3",
     "VmFamily": "Standard NCASv3_T4 Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.94,
     "MemoryInGiB": 56,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 352,
@@ -11408,13 +11629,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NP10s",
     "VmFamily": "standardNPSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.145,
     "MemoryInGiB": 168,
     "VCpusAvailable": 10,
     "ResourceDiskSizeInGiB": 736,
@@ -11428,13 +11650,14 @@
       "southeastasia",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NP20s",
     "VmFamily": "standardNPSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 4.29,
     "MemoryInGiB": 336,
     "VCpusAvailable": 20,
     "ResourceDiskSizeInGiB": 1474,
@@ -11449,13 +11672,14 @@
       "southeastasia",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NP40s",
     "VmFamily": "standardNPSFamily",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 8.58,
     "MemoryInGiB": 672,
     "VCpusAvailable": 40,
     "ResourceDiskSizeInGiB": 2948,
@@ -11470,7 +11694,8 @@
       "southeastasia",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NV12_Promo",
@@ -11497,13 +11722,14 @@
       "uksouth",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_NV12s_v3",
     "VmFamily": "standardNVSv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.426,
     "MemoryInGiB": 112,
     "VCpusAvailable": 12,
     "ResourceDiskSizeInGiB": 336,
@@ -11531,13 +11757,14 @@
       "westeurope",
       "westus",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NV16as_v4",
     "VmFamily": "standardNVSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 1.165,
     "MemoryInGiB": 56,
     "VCpusAvailable": 16,
     "ResourceDiskSizeInGiB": 352,
@@ -11566,7 +11793,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NV24_Promo",
@@ -11593,13 +11821,14 @@
       "uksouth",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_NV24s_v3",
     "VmFamily": "standardNVSv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.85,
     "MemoryInGiB": 224,
     "VCpusAvailable": 24,
     "ResourceDiskSizeInGiB": 672,
@@ -11627,13 +11856,14 @@
       "westeurope",
       "westus",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NV32as_v4",
     "VmFamily": "standardNVSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 2.33,
     "MemoryInGiB": 112,
     "VCpusAvailable": 32,
     "ResourceDiskSizeInGiB": 704,
@@ -11662,13 +11892,14 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NV48s_v3",
     "VmFamily": "standardNVSv3Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 5.7,
     "MemoryInGiB": 448,
     "VCpusAvailable": 48,
     "ResourceDiskSizeInGiB": 2948,
@@ -11696,13 +11927,14 @@
       "westeurope",
       "westus",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NV4as_v4",
     "VmFamily": "standardNVSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.291,
     "MemoryInGiB": 14,
     "VCpusAvailable": 4,
     "ResourceDiskSizeInGiB": 88,
@@ -11731,7 +11963,8 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NV6_Promo",
@@ -11758,13 +11991,14 @@
       "uksouth",
       "westeurope",
       "westus2"
-    ]
+    ],
+    "EncryptionAtHostSupported": false
   },
   {
     "VmSize": "Standard_NV8as_v4",
     "VmFamily": "standardNVSv4Family",
     "LowPriority": false,
-    "PricePerHour": null,
+    "PricePerHour": 0.582,
     "MemoryInGiB": 28,
     "VCpusAvailable": 8,
     "ResourceDiskSizeInGiB": 176,
@@ -11793,6 +12027,7 @@
       "westus",
       "westus2",
       "westus3"
-    ]
+    ],
+    "EncryptionAtHostSupported": true
   }
 ]
