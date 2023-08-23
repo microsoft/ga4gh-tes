@@ -23,6 +23,7 @@ using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
 using TesApi.Web.Storage;
+using ResourceFile = Microsoft.Azure.Batch.ResourceFile;
 
 namespace TesApi.Tests
 {
@@ -351,14 +352,22 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task BatchTaskResourcesIncludeDownloadAndUploadScripts()
         {
+            var expectedFiles = new List<string>
+            {
+                "batch_script",
+                "TesTask.json",
+                "starttask_uploadlogs.json",
+                "tRunner",
+            };
+
             (_, var cloudTask, _, _) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(true);
 
-            Assert.AreEqual(5, cloudTask.ResourceFiles.Count);
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("batch_script")));
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("upload_files_script")));
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("download_files_script")));
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("upload_metrics_script")));
-            Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals("tRunner")));
+            foreach (var file in expectedFiles)
+            {
+                Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals(file)));
+            }
+
+            Assert.AreEqual(expectedFiles.Count, cloudTask.ResourceFiles.Count);
         }
 
         private async Task AddBatchTaskHandlesExceptions(TesState newState, Func<AzureProxyReturnValues, (Action<IServiceCollection>, Action<Mock<IAzureProxy>>)> testArranger, Action<TesTask, IEnumerable<(LogLevel, Exception)>> resultValidator)
@@ -1469,6 +1478,24 @@ namespace TesApi.Tests
                 Assert.AreEqual("subnet1", poolNetworkConfiguration?.SubnetId);
             });
         }
+        [DataTestMethod]
+        [DataRow("https://blob.foo/cont/blob?sas=sas", "https://blob.foo/cont?sas=sas", "blob")]
+        [DataRow("https://blob.foo/cont?sas=sas", "https://blob.foo/cont?sas=sas", "")]
+        [DataRow("https://blob.foo/cont/?sas=sas", "https://blob.foo/cont?sas=sas", "")]
+        public async Task
+            CreateOutputFileDestinationInTesInternalLocationAsync_BlobOrContainerUrlProvided_OutputDestinationHasContainerUrlAndPath(string inputUrl, string expectedUrl, string expectedPath)
+        {
+            await using var serviceProvider = GetServiceProviderWithMockStorageProvider();
+            var batchScheduler = serviceProvider.GetT() as BatchScheduler;
+            serviceProvider.StorageAccessProvider.Setup(p => p.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(inputUrl);
+
+            var tesTask = GetTesTask();
+            var destination = await batchScheduler!.CreateOutputFileDestinationInTesInternalLocationAsync(tesTask, CancellationToken.None);
+
+            Assert.AreEqual(expectedUrl, destination.Container.ContainerUrl);
+            Assert.AreEqual(expectedPath, destination.Container.Path);
+        }
 
         private static async Task<(string FailureReason, string[] SystemLog)> ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(TesTask tesTask, AzureBatchJobAndTaskState? azureBatchJobAndTaskState = null)
         {
@@ -1678,15 +1705,15 @@ namespace TesApi.Tests
                 var config = Enumerable.Empty<(string Key, string Value)>()
                 .Append(("Storage:DefaultAccountName", "defaultstorageaccount"))
                 .Append(("BatchScheduling:Prefix", "hostname"))
-                //.Append(("BatchImageGen1:Offer", "ubuntu-server-container"))
-                //.Append(("BatchImageGen1:Publisher", "microsoft-azure-batch"))
-                //.Append(("BatchImageGen1:Sku", "20-04-lts"))
-                //.Append(("BatchImageGen1:Version", "latest"))
+                .Append(("BatchImageGen1:Offer", "ubuntu-server-container"))
+                .Append(("BatchImageGen1:Publisher", "microsoft-azure-batch"))
+                .Append(("BatchImageGen1:Sku", "20-04-lts"))
+                .Append(("BatchImageGen1:Version", "latest"))
                 .Append(("BatchImageGen1:NodeAgentSkuId", "batch.node.ubuntu 20.04"))
-                //.Append(("BatchImageGen2:Offer", "ubuntu-hpc"))
-                //.Append(("BatchImageGen2:Publisher", "microsoft-dsvm"))
-                //.Append(("BatchImageGen2:Sku", "2004"))
-                //.Append(("BatchImageGen2:Version", "latest"))
+                .Append(("BatchImageGen2:Offer", "ubuntu-hpc"))
+                .Append(("BatchImageGen2:Publisher", "microsoft-dsvm"))
+                .Append(("BatchImageGen2:Sku", "2004"))
+                .Append(("BatchImageGen2:Version", "latest"))
                 .Append(("BatchImageGen2:NodeAgentSkuId", "batch.node.ubuntu 20.04"));
                 if (autopool)
                 {
@@ -1698,7 +1725,7 @@ namespace TesApi.Tests
 
         private static IEnumerable<FileToDownload> GetFilesToDownload(Mock<IAzureProxy> azureProxy)
         {
-            var downloadFilesScriptContent = (string)azureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.UploadBlobAsync) && i.Arguments[0].ToString().Contains("/download_files_script"))?.Arguments[1];
+            var downloadFilesScriptContent = (string)azureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.UploadBlobAsync) && i.Arguments[0].ToString().Contains("/TesTask.json"))?.Arguments[1];
 
             if (string.IsNullOrEmpty(downloadFilesScriptContent))
             {
@@ -1717,6 +1744,20 @@ namespace TesApi.Tests
             var config = GetMockConfig(false)();
             return new(
                 wrapAzureProxy: true,
+                accountResourceInformation: new("defaultbatchaccount", "defaultresourcegroup", "defaultsubscription", "defaultregion"),
+                configuration: config,
+                azureProxy: GetMockAzureProxy(azureProxyReturn),
+                batchQuotaProvider: GetMockQuotaProvider(azureProxyReturn),
+                batchSkuInformationProvider: GetMockSkuInfoProvider(azureProxyReturn),
+                allowedVmSizesServiceSetup: GetMockAllowedVms(config));
+        }
+        private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProviderWithMockStorageProvider(AzureProxyReturnValues azureProxyReturn = default)
+        {
+            azureProxyReturn ??= AzureProxyReturnValues.Defaults;
+            var config = GetMockConfig(false)();
+            return new(
+                wrapAzureProxy: true,
+                mockStorageAccessProvider: true,
                 accountResourceInformation: new("defaultbatchaccount", "defaultresourcegroup", "defaultsubscription", "defaultregion"),
                 configuration: config,
                 azureProxy: GetMockAzureProxy(azureProxyReturn),

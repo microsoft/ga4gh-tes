@@ -1,43 +1,47 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading;
-using System.Threading.Tasks;
 using Azure.Core;
-using Microsoft.Azure.Management.Sql.Fluent;
+using Azure.Identity;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using TesApi.Web.Management.Configuration;
+using Tes.ApiClients.Models.Terra;
+using Tes.ApiClients.Options;
 using TesApi.Web.Management.Models.Terra;
 
-namespace TesApi.Web.Management.Clients
+namespace Tes.ApiClients
 {
     /// <summary>
     /// Terra Workspace Manager api client
     /// </summary>
     public class TerraWsmApiClient : TerraApiClient
     {
-        private const string WsmApiSegments = @"/api/workspaces/v1/";
-
-        private readonly string baseApiUrl;
+        private const string WsmApiSegments = @"/api/workspaces/v1";
+        private static readonly IMemoryCache sharedMemoryCache = new MemoryCache(new MemoryCacheOptions());
 
         /// <summary>
         /// Constructor of TerraWsmApiClient
         /// </summary>
+        /// <param name="apiUrl">WSM API host</param>
         /// <param name="tokenCredential"></param>
-        /// <param name="terraOptions"></param>
-        /// <param name="cacheAndRetryHandler"></param>
+        /// <param name="cachingRetryHandler"></param>
         /// <param name="logger"></param>
-        public TerraWsmApiClient(TokenCredential tokenCredential, IOptions<TerraOptions> terraOptions, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraWsmApiClient> logger) : base(tokenCredential, cacheAndRetryHandler, logger)
+        public TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryHandler cachingRetryHandler,
+            ILogger<TerraWsmApiClient> logger) : base(apiUrl, tokenCredential, cachingRetryHandler, logger)
         {
-            ArgumentException.ThrowIfNullOrEmpty(terraOptions.Value.WsmApiHost, nameof(terraOptions.Value.WsmApiHost));
 
-            this.baseApiUrl = terraOptions.Value.WsmApiHost.TrimEnd('/') + WsmApiSegments;
+        }
+
+        public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl)
+        {
+            var retryPolicyOptions = new RetryPolicyOptions();
+            var cacheRetryHandler = new CachingRetryHandler(sharedMemoryCache,
+                 Microsoft.Extensions.Options.Options.Create(retryPolicyOptions));
+
+            return new TerraWsmApiClient(apiUrl, new DefaultAzureCredential(), cacheRetryHandler, ApiClientsLoggerFactory.Create<TerraWsmApiClient>());
         }
 
         /// <summary>
@@ -104,7 +108,7 @@ namespace TesApi.Web.Management.Clients
         {
             ArgumentNullException.ThrowIfNull(apiCreateBatchPool);
 
-            HttpResponseMessage response = null;
+            HttpResponseMessage response = null!;
             try
             {
                 var uri = GetCreateBatchPoolUrl(workspaceId);
@@ -139,7 +143,7 @@ namespace TesApi.Web.Management.Clients
             ArgumentNullException.ThrowIfNull(workspaceId);
             ArgumentNullException.ThrowIfNull(wsmBatchPoolResourceId);
 
-            HttpResponseMessage response = null;
+            HttpResponseMessage response = null!;
             try
             {
                 var uri = GetDeleteBatchPoolUrl(workspaceId, wsmBatchPoolResourceId);
@@ -231,7 +235,7 @@ namespace TesApi.Web.Management.Clients
         private UriBuilder GetWsmUriBuilder(Guid workspaceId, string pathSegments)
         {
             //This is okay given the perf expectations of service  - no current need to optimize string allocations.
-            var apiRequestUrl = $"{baseApiUrl}{workspaceId}{pathSegments}";
+            var apiRequestUrl = $"{ApiUrl.TrimEnd('/')}{WsmApiSegments}/{workspaceId}{pathSegments}";
 
             var uriBuilder = new UriBuilder(apiRequestUrl);
 

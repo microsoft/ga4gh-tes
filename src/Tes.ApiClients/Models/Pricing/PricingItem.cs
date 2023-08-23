@@ -1,9 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-
-namespace TesApi.Web.Management.Models.Pricing
+namespace Tes.ApiClients.Models.Pricing
 {
     /// <summary>
     /// A pricing item.

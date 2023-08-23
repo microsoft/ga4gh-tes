@@ -60,11 +60,18 @@ The operations are defined in a TES task file using ``JSON``
         {
             "path": "<PATH>",
             "targetUrl": "<TARGET_URL>",
-            "sasStrategy": "None"
-            "pathPrefix": "<PATH_PREFIX>"
+            "sasStrategy": "None",
+            "pathPrefix": "<PATH_PREFIX>",
             "fileType": "<FILE_TYPE>"
         }
     ]
+    "runtimeOptions": {
+        "terraRuntimeOptions": {
+            "wsmApiHost":"<WSM_API_HOST>",
+            "landingZoneApiHost":"<LZ_API_HOST>",
+            "sasAllowedIpRange":""
+        }
+    }
 }
 ```
 
@@ -77,6 +84,7 @@ The following table describes the fields in the TES task file:
 | `commandsToExecute` | The list of commands to execute | Yes, only for default command (execution) |
 | `inputs` | The list of input files to download | No |
 | `outputs` | The list of output files to upload | No |
+| `runtimeOptions` | TES node runner runtime options | Yes, the structure is defined below |
 
 ### Inputs
 
@@ -143,4 +151,26 @@ The list of supported strategies are:
 
 **TODO**
 
+### Runtime Options
+
+The TES node runner has several runtime options that can be configured in the TES task file. 
+
+```json
+"runtimeOptions": {
+        "terraRuntimeOptions": {
+            "wsmApiHost":"<WSM_API_HOST>",
+            "landingZoneApiHost":"<LZ_API_HOST>",
+            "sasAllowedIpRange":""
+        }
+    }
+```
+
+The Terra runtime options are defined in the `runtimeOptions` property of the TES task file. 
+These are only required when running on Terra.
+
+| Terra Runtime Option | Description | Required |
+| --- | --- | --- |
+| `wsmApiHost` | The WSM API host | Yes |
+| `landingZoneApiHost` | The Landing Zone API host | Yes |
+| `sasAllowedIpRange` | The allowed IP range for SAS token resolution | No |
 

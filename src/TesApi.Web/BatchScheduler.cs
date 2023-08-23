@@ -54,9 +54,7 @@ namespace TesApi.Web
         private const string TesExecutionsPathPrefix = "/tes-internal";
         private const string CromwellScriptFileName = "script";
         private const string BatchScriptFileName = "batch_script";
-        private const string UploadFilesScriptFileName = "upload_files_script";
-        private const string DownloadFilesScriptFileName = "download_files_script";
-        private const string UploadMetricsScriptFileName = "upload_metrics_script";
+        private const string NodeTaskRunnerStartTaskFileName = "starttask_uploadlogs.json";
         private const string StartTaskScriptFilename = "start-task.sh";
         private const string DockerImageContainer = "dockerimages";
         private const string NodeTaskRunnerFilename = "tRunner";
@@ -358,7 +356,7 @@ namespace TesApi.Web
         {
             if (!enableBatchAutopool)
             {
-                await foreach (var cloudPool in GetCloudPools(cancellationToken))
+                await foreach (var cloudPool in GetCloudPools(cancellationToken).WithCancellation(cancellationToken))
                 {
                     try
                     {
@@ -545,6 +543,7 @@ namespace TesApi.Web
                         preemptable: virtualMachineInfo.LowPriority,
                         nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                         containerConfiguration: containerMetadata.ContainerConfiguration,
+                        encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
                         cancellationToken: cancellationToken),
                     tesTaskId: tesTask.Id,
                     jobId: jobOrTaskId,
@@ -566,6 +565,7 @@ namespace TesApi.Web
                                 preemptable: virtualMachineInfo.LowPriority,
                                 nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                                 containerConfiguration: containerMetadata.ContainerConfiguration,
+                                encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
                                 cancellationToken: ct)),
                         cancellationToken: cancellationToken)
                         ).Pool;
@@ -1022,19 +1022,27 @@ namespace TesApi.Web
                 }
             }
 
+            var uploadStartTaskFilesContent = new NodeTask
+            {
+                Outputs = new()
+                {
+                    new()
+                    {
+                        TargetUrl = AppendPathToUrl(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, string.Empty, cancellationToken), "start-task"),
+                        Path = @"std*.txt",
+                        PathPrefix = "%AZ_BATCH_NODE_STARTUP_DIR%/",
+                        SasStrategy = SasResolutionStrategy.None,
+                        FileType = FileType.File
+                    }
+                }
+            };
+
             var filesToDownload = await Task.WhenAll(
                 inputFiles
                 .Except(drsInputFiles) // do not attempt to download DRS input files since the cromwell-drs-localizer will
                 .Where(f => f?.Streamable == false) // Don't download files where localization_optional is set to true in WDL (corresponds to "Streamable" property being true on TesInput)
                 .Union(additionalInputFiles)
                 .Select(async f => await GetTesInputFileUrlAsync(f, task, queryStringsToRemoveFromLocalFilePaths, cancellationToken)));
-
-            var downloadFilesScriptContent = new NodeTask
-            {
-                MetricsFilename = metricsName,
-                InputsMetricsFormat = "FileDownloadSizeInBytes={Size}",
-                Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, Path = LocalizeLocalPath(f.Path), SasStrategy = SasResolutionStrategy.None }).ToList()
-            };
 
             var filesToUpload = Array.Empty<TesOutput>();
 
@@ -1051,12 +1059,16 @@ namespace TesApi.Web
                         }));
             }
 
-            // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
-            // Ignore any other missing files and directories. WDL tasks can have optional output files.
-            // Implementation: do not set Required to True (it defaults to False)
-            var uploadFilesScriptContent = new NodeTask
+            var nodeTaskRunnerContent = new NodeTask
             {
-                MetricsFilename = metricsName,
+                MetricsFilename = $"../{metricsName}",
+
+                InputsMetricsFormat = "FileDownloadSizeInBytes={Size}",
+                Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, Path = LocalizeLocalPath(f.Path), SasStrategy = SasResolutionStrategy.None }).ToList(),
+
+                // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
+                // Ignore any other missing files and directories. WDL tasks can have optional output files.
+                // Implementation: do not set Required to True (it defaults to False)
                 OutputsMetricsFormat = "FileUploadSizeInBytes={Size}",
                 Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, Path = LocalizeLocalPath(f.Path), FileType = ConvertFileType(f.Type), SasStrategy = SasResolutionStrategy.None, PathPrefix = f.PathPrefix }).ToList()
             };
@@ -1100,6 +1112,11 @@ namespace TesApi.Web
             {
                 sb.AppendLinuxLine($"(grep -q alpine /etc/os-release && apk add bash || :) && \\");  // Install bash if running on alpine (will be the case if running inside "docker" image)
             }
+
+            sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_DIR/{metricsName}; }} && \\");  // Function that appends key=value pair to metrics.txt file
+            sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
+            sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
+            sb.AppendLinuxLine($"(./{NodeTaskRunnerFilename} upload --file {NodeTaskRunnerStartTaskFileName} || :) && \\"); // Upload the start-task console spews
 
             var vmSize = task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
 
@@ -1171,41 +1188,28 @@ namespace TesApi.Web
                 sb.AppendLinuxLine($"write_ts DrsLocalizationEnd && \\");
             }
 
-            var uploadMetricsScriptSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, UploadMetricsScriptFileName, cancellationToken);
-            var metricsSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, metricsName, cancellationToken);
-            var uploadMetricsScriptContent = new NodeTask
-            {
-                Outputs = new List<FileOutput>() { new FileOutput { Path = metricsName, TargetUrl = metricsSasUrl, FileType = FileType.File, SasStrategy = SasResolutionStrategy.None } }
-            };
-
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
-            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} download --file {DownloadFilesScriptFileName} && \\");
+            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} download && \\");
             sb.AppendLinuxLine($"write_ts DownloadEnd && \\");
             sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
             sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR/wd && \\");
             sb.AppendLinuxLine($"write_ts ExecutorStart && \\");
-            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= {workdirOption}{executor.Image} {executor.Command[0]} {string.Join(" ", executor.Command.Skip(1).Select(BashWrapShellArgument))} && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= {workdirOption}{executor.Image} {string.Join(" ", executor.Command.Select(BashWrapShellArgument))} && \\");
             sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
             sb.AppendLinuxLine($"write_ts UploadStart && \\");
-            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {UploadFilesScriptFileName} && \\");
+            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload && \\");
             sb.AppendLinuxLine($"write_ts UploadEnd && \\");
             sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
-            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload --file {UploadMetricsScriptFileName}");
+            sb.AppendLinuxLine($"echo Task complete.");
 
-            var nodeTaskRunnerSasUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
-            var batchScriptSasUrl =
-                await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, BatchScriptFileName,
-                    cancellationToken);
-            var downloadFilesScriptUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, DownloadFilesScriptFileName, cancellationToken);
-            var uploadFilesScriptSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, UploadFilesScriptFileName, cancellationToken);
-
-            var tesInternalDirectorySasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobPath: string.Empty, cancellationToken);
-
-            await storageAccessProvider.UploadBlobAsync(new Uri(downloadFilesScriptUrl), SerializeNodeTask(downloadFilesScriptContent), cancellationToken);
-            await storageAccessProvider.UploadBlobAsync(new Uri(uploadFilesScriptSasUrl), SerializeNodeTask(uploadFilesScriptContent), cancellationToken);
-            await storageAccessProvider.UploadBlobAsync(new Uri(uploadMetricsScriptSasUrl), SerializeNodeTask(uploadMetricsScriptContent), cancellationToken);
-            await storageAccessProvider.UploadBlobAsync(new Uri(batchScriptSasUrl), sb.ToString(), cancellationToken);
+            var resourceFiles = new List<ResourceFile>
+            {
+                ResourceFile.FromUrl(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), NodeTaskRunnerFilename),
+                await UploadBlobAsync(NodeRunnerTaskInfoFilename, SerializeNodeTask(nodeTaskRunnerContent)),
+                await UploadBlobAsync(BatchScriptFileName, sb.ToString()),
+                await UploadBlobAsync(NodeTaskRunnerStartTaskFileName, SerializeNodeTask(uploadStartTaskFilesContent))
+            };
 
             var batchRunCommand = enableBatchAutopool
                 ? $"/bin/bash -c chmod u+x ./{NodeTaskRunnerFilename} && /bin/bash $AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
@@ -1213,21 +1217,14 @@ namespace TesApi.Web
 
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
+                ResourceFiles = resourceFiles,
                 UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
-                ResourceFiles = new List<ResourceFile>
-                {
-                    ResourceFile.FromUrl(nodeTaskRunnerSasUrl, NodeTaskRunnerFilename),
-                    ResourceFile.FromUrl(batchScriptSasUrl, BatchScriptFileName),
-                    ResourceFile.FromUrl(downloadFilesScriptUrl, DownloadFilesScriptFileName),
-                    ResourceFile.FromUrl(uploadFilesScriptSasUrl, UploadFilesScriptFileName),
-                    ResourceFile.FromUrl(uploadMetricsScriptSasUrl, UploadMetricsScriptFileName),
-                },
                 OutputFiles = new List<OutputFile>
                 {
                     new OutputFile(
-                        "../std*.txt",
-                        new OutputFileDestination(new(tesInternalDirectorySasUrl)),
-                        new OutputFileUploadOptions(OutputFileUploadCondition.TaskCompletion))
+                        "../*.txt",
+                        await CreateOutputFileDestinationInTesInternalLocationAsync(task, cancellationToken),
+                        new OutputFileUploadOptions(OutputFileUploadCondition.TaskCompletion)),
                 }
             };
 
@@ -1243,6 +1240,13 @@ namespace TesApi.Web
             }
 
             return cloudTask;
+
+            static string AppendPathToUrl(string url, string path)
+            {
+                var uri = new UriBuilder(url);
+                uri.Path = string.Concat(uri.Path.TrimEnd('/'), "/", path.TrimStart('/'));
+                return uri.Uri.ToString();
+            }
 
             static string BashWrapShellArgument(string argument)
                 => $"'{argument.Replace(@"'", @"'\''")}'";
@@ -1262,6 +1266,13 @@ namespace TesApi.Web
             static string SerializeNodeTask(NodeTask task)
                 => JsonConvert.SerializeObject(task, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore });
 
+            async ValueTask<ResourceFile> UploadBlobAsync(string fileName, string content)
+            {
+                var sasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, fileName, cancellationToken);
+                await storageAccessProvider.UploadBlobAsync(new Uri(sasUrl), content, cancellationToken); // SAS is used for creating here
+                return ResourceFile.FromUrl(sasUrl, fileName); // SAS is used for reading here
+            }
+
             string MungeBatchScript()
                 => string.Join("\n", taskRunScriptContent)
                     .Replace(@"{CleanupScriptLines}", string.Join("\n", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
@@ -1280,6 +1291,29 @@ namespace TesApi.Web
 
             static IEnumerable<string> MungeCleanupScriptForContainerConfig(IEnumerable<string> content)
                 => MungeCleanupScript(content.Where(line => !line.Contains(@"{TaskExecutor}")));
+        }
+
+        /// <summary>
+        /// Creates a OutputFileDestination in the TES internal blob storage location
+        /// </summary>
+        /// <param name="task"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task<OutputFileDestination> CreateOutputFileDestinationInTesInternalLocationAsync(TesTask task, CancellationToken cancellationToken)
+        {
+            var internalUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobPath: string.Empty,
+                cancellationToken);
+            var storageSegments = StorageAccountUrlSegments.Create(internalUrl);
+
+            var containerUrl = $"{storageSegments.BlobEndpoint}/{storageSegments.ContainerName}?{storageSegments.SasToken}";
+            var path = string.Empty;
+
+            if (!string.IsNullOrEmpty(storageSegments.BlobName))
+            {
+                path = storageSegments.BlobName;
+            }
+
+            return new OutputFileDestination(new OutputFileBlobContainerDestination(containerUrl, path));
         }
 
         /// <summary>
@@ -1351,39 +1385,73 @@ namespace TesApi.Web
         /// <param name="machineConfiguration">A <see cref="VirtualMachineConfiguration"/> describing the OS of the pool's nodes.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        /// <remarks>This method also mitigates errors associated with docker daemons that are not configured to place their filestsystem assets on the data drive. Errors attempting to do so are ignored.</remarks>
+        /// <remarks>This method also mitigates errors associated with docker daemons that are not configured to place their filesystem assets on the data drive.</remarks>
         private async Task<StartTask> StartTaskIfNeeded(VirtualMachineConfiguration machineConfiguration, CancellationToken cancellationToken)
         {
-            var installJq = machineConfiguration.NodeAgentSkuId switch
-            {
-                var s when s.StartsWith("batch.node.ubuntu ") => "sudo apt-get install -y jq",
-                var s when s.StartsWith("batch.node.centos ") => "sudo yum install epel-release -y && sudo yum update -y && sudo yum install jq -y",
-                _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message. ({machineConfiguration.NodeAgentSkuId})")
-            };
+            var globalStartTaskConfigured = !string.IsNullOrWhiteSpace(globalStartTaskPath);
 
-            var commandPart1 = @"/usr/bin/bash -c 'trap ""echo Error trapped; exit 0"" ERR; sudo touch tmp2.json && sudo cp /etc/docker/daemon.json tmp1.json && sudo chmod a+w tmp?.json && if fgrep -q ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")/docker"" tmp1.json; then ";
-            var commandPart2 = @" && jq \.\[\""data-root\""\]=\""""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")/docker""\"" tmp1.json >> tmp2.json && sudo mv tmp2.json /etc/docker/daemon.json && sudo systemctl restart docker; fi'";
-
-            var startTask = new StartTask
-            {
-                CommandLine = commandPart1 + installJq + commandPart2,
-                UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
-            };
-
-            if (!string.IsNullOrWhiteSpace(globalStartTaskPath))
-            {
-                var startTaskSasUrl = enableBatchAutopool
+            var startTaskSasUrl = globalStartTaskConfigured
+                ? enableBatchAutopool
                     ? await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, cancellationToken)
-                    : await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, cancellationToken, sasTokenDuration: BatchPoolService.RunInterval.Multiply(2).Add(poolLifetime).Add(TimeSpan.FromMinutes(15)));
+                    : await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, cancellationToken, sasTokenDuration: BatchPoolService.RunInterval.Multiply(2).Add(poolLifetime).Add(TimeSpan.FromMinutes(15)))
+                : default;
 
-                if (await azureProxy.BlobExistsAsync(new Uri(startTaskSasUrl), cancellationToken))
+            if (startTaskSasUrl is not null)
+            {
+                if (!await azureProxy.BlobExistsAsync(new Uri(startTaskSasUrl), cancellationToken))
+                {
+                    startTaskSasUrl = default;
+                    globalStartTaskConfigured = false;
+                }
+            }
+            else
+            {
+                globalStartTaskConfigured = false;
+            }
+
+            // https://learn.microsoft.com/azure/batch/batch-docker-container-workloads#linux-support
+            var dockerConfigured = machineConfiguration.ImageReference.Publisher.Equals("microsoft-azure-batch", StringComparison.InvariantCultureIgnoreCase)
+                && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.InvariantCultureIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.InvariantCultureIgnoreCase));
+
+            if (!dockerConfigured)
+            {
+                var commandLine = new StringBuilder();
+                commandLine.Append(@"/usr/bin/bash -c 'trap ""echo Error trapped; exit 0"" ERR; sudo touch tmp2.json && (sudo cp /etc/docker/daemon.json tmp1.json || sudo echo {} > tmp1.json) && sudo chmod a+w tmp?.json && if fgrep ""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker"" tmp1.json; then echo grep ""found docker path""; elif [ $? -eq 1 ]; then ");
+                commandLine.Append(machineConfiguration.NodeAgentSkuId switch
+                {
+                    var s when s.StartsWith("batch.node.ubuntu ") => "sudo apt-get install -y jq",
+                    var s when s.StartsWith("batch.node.centos ") => "sudo yum install epel-release -y && sudo yum update -y && sudo yum install jq -y",
+                    _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message: ({machineConfiguration.NodeAgentSkuId})")
+                });
+                commandLine.Append(@" && jq \.\[\""data-root\""\]=\""""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker""\"" tmp1.json >> tmp2.json && sudo cp tmp2.json /etc/docker/daemon.json && sudo chmod 644 /etc/docker/daemon.json && sudo systemctl restart docker && echo ""updated docker data-root""; else (echo ""grep failed"" || exit 1); fi'");
+
+                var startTask = new StartTask
+                {
+                    CommandLine = commandLine.ToString(),
+                    UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
+                };
+
+                if (globalStartTaskConfigured)
                 {
                     startTask.ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(startTaskSasUrl, StartTaskScriptFilename) };
                     startTask.CommandLine = $"({startTask.CommandLine}) && ./{StartTaskScriptFilename}";
                 }
-            }
 
-            return startTask;
+                return startTask;
+            }
+            else if (globalStartTaskConfigured)
+            {
+                return new StartTask
+                {
+                    CommandLine = $"./{StartTaskScriptFilename}",
+                    UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
+                    ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(startTaskSasUrl, StartTaskScriptFilename) }
+                };
+            }
+            else
+            {
+                return default;
+            }
         }
 
         /// <summary>
@@ -1537,10 +1605,11 @@ namespace TesApi.Web
         /// <param name="preemptable"></param>
         /// <param name="nodeInfo"></param>
         /// <param name="containerConfiguration"></param>
+        /// <param name="encryptionAtHostSupported">VM supports encryption at host.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns><see cref="PoolSpecification"/></returns>
         /// <remarks>We use the PoolSpecification for both the namespace of all the constituent parts and for the fact that it allows us to configure shared and autopools using the same code.</remarks>
-        private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, ContainerConfiguration containerConfiguration, CancellationToken cancellationToken)
+        private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, ContainerConfiguration containerConfiguration, bool encryptionAtHostSupported, CancellationToken cancellationToken)
         {
             // Any changes to any properties set in this method will require corresponding changes to ConvertPoolSpecificationToModelsPool()
 
@@ -1554,6 +1623,13 @@ namespace TesApi.Web
             {
                 ContainerConfiguration = containerConfiguration
             };
+
+            if (encryptionAtHostSupported)
+            {
+                vmConfig.DiskEncryptionConfiguration = new DiskEncryptionConfiguration(
+                    targets: new List<DiskEncryptionTarget> { DiskEncryptionTarget.OsDisk, DiskEncryptionTarget.TemporaryDisk }
+                );
+            }
 
             var poolSpecification = new PoolSpecification
             {
@@ -1649,7 +1725,7 @@ namespace TesApi.Web
                 };
 
             static BatchModels.VirtualMachineConfiguration ConvertVirtualMachineConfiguration(VirtualMachineConfiguration virtualMachineConfiguration)
-                => virtualMachineConfiguration is null ? default : new(ConvertImageReference(virtualMachineConfiguration.ImageReference), virtualMachineConfiguration.NodeAgentSkuId, containerConfiguration: ConvertContainerConfiguration(virtualMachineConfiguration.ContainerConfiguration));
+                => virtualMachineConfiguration is null ? default : new(ConvertImageReference(virtualMachineConfiguration.ImageReference), virtualMachineConfiguration.NodeAgentSkuId, containerConfiguration: ConvertContainerConfiguration(virtualMachineConfiguration.ContainerConfiguration), diskEncryptionConfiguration: ConvertDiskEncryptionConfiguration(virtualMachineConfiguration.DiskEncryptionConfiguration));
 
             static BatchModels.ContainerConfiguration ConvertContainerConfiguration(ContainerConfiguration containerConfiguration)
                 => containerConfiguration is null ? default : new(containerConfiguration.ContainerImageNames, containerConfiguration.ContainerRegistries?.Select(ConvertContainerRegistry).ToList());
@@ -1692,6 +1768,12 @@ namespace TesApi.Web
 
             static BatchModels.NodeCommunicationMode? ConvertNodeCommunicationMode(NodeCommunicationMode? nodeCommunicationMode)
                 => (BatchModels.NodeCommunicationMode?)nodeCommunicationMode;
+
+            static BatchModels.DiskEncryptionConfiguration ConvertDiskEncryptionConfiguration(DiskEncryptionConfiguration diskEncryptionConfiguration)
+                => diskEncryptionConfiguration is null ? default : new(diskEncryptionConfiguration.Targets.Select(x => ConvertDiskEncryptionTarget(x)).ToList());
+
+            static BatchModels.DiskEncryptionTarget ConvertDiskEncryptionTarget(DiskEncryptionTarget? diskEncryptionTarget)
+                => (BatchModels.DiskEncryptionTarget)diskEncryptionTarget;
         }
 
         /// <summary>

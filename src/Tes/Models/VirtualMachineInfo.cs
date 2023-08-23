@@ -69,5 +69,11 @@ namespace Tes.Models
         /// </summary>
         [TesTaskLogMetadataKey("vm_regions_available")]
         public IEnumerable<string> RegionsAvailable { get; set; }
+
+        /// <summary>
+        /// Host based encryption is supported.
+        /// </summary>
+        [TesTaskLogMetadataKey("encryption_at_host_supported")]
+        public bool EncryptionAtHostSupported { get; set; }
     }
 }

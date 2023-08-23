@@ -184,6 +184,7 @@ namespace Tes.Repository
             }
         }
 
+        // TODO: Consider wiring in cancellation
         private async Task WriteItemsAsync(IList<(T DbItem, WriteAction Action, TaskCompletionSource<T> TaskSource)> dbItems)
         {
             if (dbItems.Count == 0) { return; }
