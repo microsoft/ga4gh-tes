@@ -1,4 +1,7 @@
-﻿using Tes.Runner.Transfer;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
 {
@@ -13,8 +16,8 @@ namespace Tes.RunnerCLI.Commands
 
         public static string[] ToCommandArgs(string command, string fileOption, BlobPipelineOptions blobPipelineOptions)
         {
-            ArgumentException.ThrowIfNullOrEmpty(command, nameof(command));
-            ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
+            ArgumentException.ThrowIfNullOrEmpty(command);
+            ArgumentNullException.ThrowIfNull(blobPipelineOptions);
 
             var args = new List<string>()
             {
@@ -44,8 +47,6 @@ namespace Tes.RunnerCLI.Commands
                 ReadWriteBuffersCapacity: bufferCapacity,
                 MemoryBufferCapacity: bufferCapacity,
                 ApiVersion: apiVersion);
-
-            options = PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(options);
 
             return options;
         }

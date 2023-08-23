@@ -1,6 +1,11 @@
-﻿using Microsoft.Extensions.Logging;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Tes.Runner;
 using Tes.Runner.Docker;
+using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
@@ -25,12 +30,11 @@ namespace Tes.RunnerCLI.Commands
 
                 await ExecuteTransferAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options);
 
-                await ExecuteNodeContainerTaskAsync(file, dockerUri, options);
+                await ExecuteNodeContainerTaskAsync(file, dockerUri);
 
                 await ExecuteTransferAsSubProcessAsync(CommandFactory.UploadCommandName, file, options);
 
                 return SuccessExitCode;
-
             }
             catch (Exception e)
             {
@@ -40,11 +44,13 @@ namespace Tes.RunnerCLI.Commands
             }
         }
 
-        private static async Task ExecuteNodeContainerTaskAsync(FileInfo file, Uri dockerUri, BlobPipelineOptions options)
+        private static async Task ExecuteNodeContainerTaskAsync(FileInfo file, Uri dockerUri)
         {
             try
             {
-                var executor = new Executor(file.FullName, options);
+                var nodeTask = DeserializeNodeTask(file.FullName);
+
+                var executor = new Executor(nodeTask);
 
                 var result = await executor.ExecuteNodeContainerTaskAsync(new DockerExecutor(dockerUri));
 
@@ -53,11 +59,11 @@ namespace Tes.RunnerCLI.Commands
                     throw new InvalidOperationException("The container task failed to return results");
                 }
 
-                var logs = await result.ContainerResult.Logs.ReadOutputToEndAsync(CancellationToken.None);
+                var (stdout, stderr) = await result.ContainerResult.Logs.ReadOutputToEndAsync(CancellationToken.None);
 
                 Console.WriteLine($"Execution Status Code: {result.ContainerResult.StatusCode}. Error: {result.ContainerResult.Error}");
-                Console.WriteLine($"StdOutput: {logs.stdout}");
-                Console.WriteLine($"StdError: {logs.stderr}");
+                Console.WriteLine($"StdOutput: {stdout}");
+                Console.WriteLine($"StdError: {stderr}");
             }
             catch (Exception e)
             {
@@ -77,8 +83,6 @@ namespace Tes.RunnerCLI.Commands
                 MemoryBufferCapacity: bufferCapacity,
                 ApiVersion: apiVersion);
 
-            options = PipelineOptionsOptimizer.OptimizeOptionsIfApplicable(options);
-
             return options;
         }
 
@@ -93,7 +97,7 @@ namespace Tes.RunnerCLI.Commands
 
             Console.WriteLine("Starting upload operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.UploadOutputsAsync());
+            return await ExecuteTransferTaskAsync(file, exec => exec.UploadOutputsAsync(options));
         }
 
         private static void HandleResult(ProcessExecutionResult results, string command)
@@ -127,15 +131,16 @@ namespace Tes.RunnerCLI.Commands
 
             Console.WriteLine("Starting download operation.");
 
-            return await ExecuteTransferTaskAsync(file, options, (exec) => exec.DownloadInputsAsync());
+            return await ExecuteTransferTaskAsync(file, exec => exec.DownloadInputsAsync(options));
         }
 
-        private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, BlobPipelineOptions options, Func<Executor, Task<long>> transferOperation)
+        private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, Func<Executor, Task<long>> transferOperation)
         {
-
             try
             {
-                var executor = new Executor(taskDefinitionFile.FullName, options);
+                var nodeTask = DeserializeNodeTask(taskDefinitionFile.FullName);
+
+                var executor = new Executor(nodeTask);
 
                 var result = await transferOperation(executor);
 
@@ -148,6 +153,21 @@ namespace Tes.RunnerCLI.Commands
                 Console.WriteLine($"Failed to perform transfer. Error: {e.Message} Operation: {transferOperation.Method.Name}");
                 Logger.LogError(e, $"Failed to perform transfer. Operation: {transferOperation}");
                 return ErrorExitCode;
+            }
+        }
+
+        private static NodeTask DeserializeNodeTask(string tesNodeTaskFilePath)
+        {
+            try
+            {
+                var nodeTask = File.ReadAllText(tesNodeTaskFilePath);
+
+                return JsonSerializer.Deserialize<NodeTask>(nodeTask, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true }) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e, "Failed to deserialize task JSON file.");
+                throw;
             }
         }
     }

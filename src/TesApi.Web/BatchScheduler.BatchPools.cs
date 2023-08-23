@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -24,25 +27,25 @@ namespace TesApi.Web
 
         internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
-        private async Task<(string PoolKey, string DisplayName)> GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, CancellationToken cancellationToken)
+        private (string PoolKey, string DisplayName) GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, ContainerConfiguration containerConfiguration, CancellationToken cancellationToken)
         {
             var identityResourceId = tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true ? tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) : default;
             var executorImage = tesTask.Executors.First().Image;
-            string registryServer = null;
+            string containerImageNames = null;
 
-            if (!containerRegistryProvider.IsImagePublic(executorImage))
+            if (containerConfiguration?.ContainerImageNames?.Any() ?? false)
             {
-                registryServer = (await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage, cancellationToken))?.RegistryServer;
+                containerImageNames = string.Join(';', containerConfiguration.ContainerImageNames);
             }
 
             var label = string.IsNullOrWhiteSpace(batchPrefix) ? "<none>" : batchPrefix;
             var vmSize = virtualMachineInformation.VmSize ?? "<none>";
             var isPreemptable = virtualMachineInformation.LowPriority;
-            registryServer ??= "<none>";
+            containerImageNames ??= "<none>";
             identityResourceId ??= "<none>";
 
             // Generate hash of everything that differentiates this group of pools
-            var displayName = $"{label}:{vmSize}:{isPreemptable}:{registryServer}:{identityResourceId}";
+            var displayName = $"{label}:{vmSize}:{isPreemptable}:{containerImageNames}:{identityResourceId}";
             var hash = CommonUtilities.Base32.ConvertToBase32(SHA1.HashData(Encoding.UTF8.GetBytes(displayName))).TrimEnd('=').ToLowerInvariant(); // This becomes 32 chars
 
             // Build a PoolName that is of legal length, while exposing the most important metadata without requiring user to find DisplayName

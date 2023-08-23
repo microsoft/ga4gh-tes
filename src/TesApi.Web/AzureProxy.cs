@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -503,7 +502,17 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            var batchTasksToDelete = await batchClient.JobOperations.ListTasks(pool.PoolId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
+            List<CloudTask> batchTasksToDelete = default;
+
+            try
+            {
+                batchTasksToDelete = await batchClient.JobOperations.ListTasks(pool.PoolId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
+            }
+            catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException bee && "JobNotFound".Equals(bee.Body?.Code, StringComparison.InvariantCultureIgnoreCase))
+            {
+                logger.LogWarning("Job not found for TES task {TesTask}", tesTaskId);
+                return; // Task cannot exist if the job is not found.
+            }
 
             if (batchTasksToDelete.Count > 1)
             {
@@ -654,7 +663,7 @@ namespace TesApi.Web
                 var azureClient = await GetAzureManagementClientAsync(cancellationToken);
                 var storageAccount = await azureClient.WithSubscription(storageAccountInfo.SubscriptionId).StorageAccounts.GetByIdAsync(storageAccountInfo.Id);
 
-                return (await storageAccount.GetKeysAsync())[0].Value;
+                return (await storageAccount.GetKeysAsync(cancellationToken))[0].Value;
             }
             catch (Exception ex)
             {
@@ -665,34 +674,48 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task UploadBlobAsync(Uri blobAbsoluteUri, string content, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).UploadTextAsync(content);
+            => new CloudBlockBlob(blobAbsoluteUri).UploadTextAsync(content, null, null, null, null, cancellationToken);
 
         /// <inheritdoc/>
         public Task UploadBlobFromFileAsync(Uri blobAbsoluteUri, string filePath, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).UploadFromFileAsync(filePath);
+            => new CloudBlockBlob(blobAbsoluteUri).UploadFromFileAsync(filePath, null, null, null, cancellationToken);
 
         /// <inheritdoc/>
         public Task<string> DownloadBlobAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).DownloadTextAsync();
+            => new CloudBlockBlob(blobAbsoluteUri).DownloadTextAsync(null, null, null, null, cancellationToken);
 
         /// <inheritdoc/>
         public Task<bool> BlobExistsAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).ExistsAsync();
+            => new CloudBlockBlob(blobAbsoluteUri).ExistsAsync(null, null, cancellationToken);
 
         /// <inheritdoc/>
-        public async Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
+        public async Task<BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
+        {
+            var blob = new CloudBlockBlob(blobAbsoluteUri);
+
+            if (await blob.ExistsAsync(null, null, cancellationToken))
+            {
+                await blob.FetchAttributesAsync(null, null, null, cancellationToken);
+                return blob.Properties;
+            }
+
+            return default;
+        }
+
+        /// <inheritdoc/>
+        public async Task<IEnumerable<CloudBlob>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
         {
             var blob = new CloudBlockBlob(directoryUri);
             var directory = blob.Container.GetDirectoryReference(blob.Name);
 
             BlobContinuationToken continuationToken = null;
-            var results = new List<string>();
+            var results = new List<CloudBlob>();
 
             do
             {
-                var response = await directory.ListBlobsSegmentedAsync(useFlatBlobListing: true, blobListingDetails: BlobListingDetails.None, maxResults: null, currentToken: continuationToken, options: null, operationContext: null);
+                var response = await directory.ListBlobsSegmentedAsync(useFlatBlobListing: true, blobListingDetails: BlobListingDetails.None, maxResults: null, currentToken: continuationToken, options: null, operationContext: null, cancellationToken: cancellationToken);
                 continuationToken = response.ContinuationToken;
-                results.AddRange(response.Results.Cast<CloudBlob>().Select(b => b.Name));
+                results.AddRange(response.Results.OfType<CloudBlob>());
             }
             while (continuationToken is not null);
 

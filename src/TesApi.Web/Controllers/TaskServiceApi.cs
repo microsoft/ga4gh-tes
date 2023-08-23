@@ -88,7 +88,15 @@ namespace TesApi.Controllers
                     logger.LogInformation("Canceling task");
                     tesTask.IsCancelRequested = true;
                     tesTask.State = TesState.CANCELEDEnum;
-                    await repository.UpdateItemAsync(tesTask, cancellationToken);
+
+                    try
+                    {
+                        await repository.UpdateItemAsync(tesTask, cancellationToken);
+                    }
+                    catch (RepositoryCollisionException exc)
+                    {
+                        // TODO
+                    }
                 }
             }
             else
@@ -121,6 +129,22 @@ namespace TesApi.Controllers
             if (string.IsNullOrWhiteSpace(tesTask.Executors?.FirstOrDefault()?.Image))
             {
                 return BadRequest("Docker container image name is required.");
+            }
+
+            foreach (var input in tesTask.Inputs ?? Enumerable.Empty<TesInput>())
+            {
+                if (!input.Path.StartsWith('/'))
+                {
+                    return BadRequest("Input paths in the container must be absolute paths.");
+                }
+            }
+
+            foreach (var output in tesTask.Outputs ?? Enumerable.Empty<TesOutput>())
+            {
+                if (!output.Path.StartsWith('/'))
+                {
+                    return BadRequest("Output paths in the container must be absolute paths.");
+                }
             }
 
             tesTask.State = TesState.QUEUEDEnum;

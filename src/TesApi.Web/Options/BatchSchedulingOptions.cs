@@ -19,11 +19,6 @@ namespace TesApi.Web.Options
         public const double DefaultPoolRotationForcedDays = 30.0;
 
         /// <summary>
-        /// Disable flag (this instance only services the API and only accesses the TesTask repository)
-        /// </summary>
-        public bool Disable { get; set; } = false;
-
-        /// <summary>
         /// Use legacy Azure Batch Autopools implementation
         /// </summary>
         public bool UseLegacyAutopools { get; set; } = false;
