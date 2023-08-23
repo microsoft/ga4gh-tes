@@ -43,7 +43,7 @@ namespace TesApi.Tests
             wsmApiClientMock = new Mock<TerraWsmApiClient>();
             optionsMock = new Mock<IOptions<TerraOptions>>();
             terraOptions = terraApiStubData.GetTerraOptions();
-            batchSchedulingOptions = new BatchSchedulingOptions() { Prefix = @"workspace-services/cbas/terra-app-9580351d-61e7-4fb8-a05d-0ced9eaee117/fetch_sra_to_bam/1d137885-01df-4375-b034-d42b26037e99/call-Fetch_SRA_to_BAM/tes_task" };
+            batchSchedulingOptions = new BatchSchedulingOptions() { Prefix = Guid.NewGuid().ToString() };
             optionsMock.Setup(o => o.Value).Returns(terraOptions);
             azureProxyMock = new Mock<IAzureProxy>();
             terraStorageAccessProvider = new TerraStorageAccessProvider(wsmApiClientMock.Object, azureProxyMock.Object, optionsMock.Object, Options.Create(batchSchedulingOptions), NullLogger<TerraStorageAccessProvider>.Instance);
@@ -209,7 +209,7 @@ namespace TesApi.Tests
             var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
 
             Assert.IsNotNull(url);
-            Assert.AreNotEqual(capturedTokenApiParameters.SasBlobName[0], '/');
+            Assert.AreNotEqual('/', capturedTokenApiParameters.SasBlobName[0]);
         }
     }
 }
