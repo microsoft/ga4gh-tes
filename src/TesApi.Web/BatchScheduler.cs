@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
+using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
@@ -1118,14 +1119,6 @@ namespace TesApi.Web
                 sb.AppendLinuxLine($"write_ts CromwellDrsLocalizerPullEnd && \\");
             }
 
-            if (blobXferImageIsPublic)
-            {
-                sb.AppendLinuxLine($"write_ts BlobXferPullStart && \\");
-                sb.AppendLinuxLine($"docker pull --quiet {blobxferImageName} && \\");
-                sb.AppendLinuxLine($"write_ts BlobXferPullEnd && \\");
-            }
-
-
             if (this.cacheDockerImages)
             {
                 // Install dependencies jq, az cli, and update docker (https://docs.docker.com/engine/install/ubuntu/). 
@@ -1143,7 +1136,7 @@ namespace TesApi.Web
 
                 sb.AppendLinuxLine($"write_ts ExecutorPullStart && \\");
 
-                if (!executorImageIsPublic)
+                if (!isPublic.ExecutorImage)
                 {
                     var registry = await containerRegistryProvider.GetContainerRegistryInfoAsync(executor.Image, cancellationToken);
                     sb.AppendLinuxLine($"docker login -u {registry.Username} -p {registry.Password} {registry.RegistryServer} && \\");
