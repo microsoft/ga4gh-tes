@@ -33,15 +33,17 @@ namespace TesApi.Tests
         private Mock<IOptions<TerraOptions>> optionsMock;
         private TerraOptions terraOptions;
         private BatchSchedulingOptions batchSchedulingOptions;
+        private SasTokenApiParameters capturedTokenApiParameters = null!;
 
         [TestInitialize]
         public void SetUp()
         {
+            capturedTokenApiParameters = new SasTokenApiParameters("", 0, "", "");
             terraApiStubData = new TerraApiStubData();
             wsmApiClientMock = new Mock<TerraWsmApiClient>();
             optionsMock = new Mock<IOptions<TerraOptions>>();
             terraOptions = terraApiStubData.GetTerraOptions();
-            batchSchedulingOptions = new BatchSchedulingOptions() { Prefix = Guid.NewGuid().ToString() };
+            batchSchedulingOptions = new BatchSchedulingOptions() { Prefix = @"workspace-services/cbas/terra-app-9580351d-61e7-4fb8-a05d-0ced9eaee117/fetch_sra_to_bam/1d137885-01df-4375-b034-d42b26037e99/call-Fetch_SRA_to_BAM/tes_task" };
             optionsMock.Setup(o => o.Value).Returns(terraOptions);
             azureProxyMock = new Mock<IAzureProxy>();
             terraStorageAccessProvider = new TerraStorageAccessProvider(wsmApiClientMock.Object, azureProxyMock.Object, optionsMock.Object, Options.Create(batchSchedulingOptions), NullLogger<TerraStorageAccessProvider>.Instance);
@@ -80,7 +82,12 @@ namespace TesApi.Tests
             wsmApiClientMock.Setup(a => a.GetSasTokenAsync(
                     terraApiStubData.GetWorkspaceIdFromContainerName(WorkspaceStorageContainerName),
                     terraApiStubData.ContainerResourceId, It.IsAny<SasTokenApiParameters>(), It.IsAny<CancellationToken>()))
+                .Callback((Guid _, Guid _, SasTokenApiParameters apiParameters, CancellationToken _) =>
+                    {
+                        capturedTokenApiParameters = apiParameters;
+                    })
                 .ReturnsAsync(terraApiStubData.GetWsmSasTokenApiResponse());
+
             wsmApiClientMock.Setup(a =>
                     a.GetContainerResourcesAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(),
                         It.IsAny<CancellationToken>()))
@@ -181,6 +188,28 @@ namespace TesApi.Tests
             Assert.IsNotNull(url);
             var uri = new Uri(url);
             Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{internalPathPrefix}{expectedBlobName}", uri.AbsolutePath);
+        }
+
+        [TestMethod]
+        [DataRow("/script/foo.sh", "/prefix")]
+        [DataRow("script/foo.sh", "/prefix")]
+        [DataRow("/script/foo.sh", "prefix")]
+        [DataRow("script/foo.sh", "prefix")]
+        public async Task GetInternalTesTaskBlobUrlAsync_BlobPathAndInternalPathPrefixIsProvided_BlobNameDoesNotStartWithSlashWhenCallingWSM(
+            string blobName, string internalPrefix)
+        {
+
+            SetUpTerraApiClient();
+            var task = new TesTask { Name = "taskName", Id = Guid.NewGuid().ToString() };
+            task.Resources = new TesResources();
+            task.Resources.BackendParameters = new Dictionary<string, string>
+            {
+                { TesResources.SupportedBackendParameters.internal_path_prefix.ToString(), internalPrefix }
+            };
+            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
+
+            Assert.IsNotNull(url);
+            Assert.AreNotEqual(capturedTokenApiParameters.SasBlobName[0], '/');
         }
     }
 }

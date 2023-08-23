@@ -166,7 +166,7 @@ namespace TesApi.Web.Storage
 
             if (task.Resources != null && task.Resources.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix))
             {
-                internalPath = $"/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}";
+                internalPath = $"{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}";
             }
 
             if (!string.IsNullOrEmpty(blobPath))
