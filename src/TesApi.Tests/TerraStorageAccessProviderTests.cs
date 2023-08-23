@@ -195,8 +195,8 @@ namespace TesApi.Tests
         [DataRow("script/foo.sh", "/prefix")]
         [DataRow("/script/foo.sh", "prefix")]
         [DataRow("script/foo.sh", "prefix")]
-        public async Task GetInternalTesTaskBlobUrlAsync_BlobPathAndInternalPathPrefixIsProvided_BlobNameDoesNotStartWithSlashWhenCallingWSM(
-            string blobName, string internalPrefix)
+        public async Task GetInternalTesTaskBlobUrlAsync_BlobPathAndInternalPathPrefixAreProvided_BlobNameDoesNotStartWithSlashWhenCallingWSM(
+            string blobPath, string internalPrefix)
         {
 
             SetUpTerraApiClient();
@@ -206,7 +206,7 @@ namespace TesApi.Tests
             {
                 { TesResources.SupportedBackendParameters.internal_path_prefix.ToString(), internalPrefix }
             };
-            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
+            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobPath, CancellationToken.None);
 
             Assert.IsNotNull(url);
             Assert.AreNotEqual('/', capturedTokenApiParameters.SasBlobName[0]);
