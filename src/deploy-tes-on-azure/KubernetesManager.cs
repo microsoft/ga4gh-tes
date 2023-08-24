@@ -253,7 +253,8 @@ namespace TesDeployer
             await WaitForWorkloadAsync(kubernetesClient, "tes", configuration.AksCoANamespace, cToken);
         }
 
-        public static async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath, CancellationToken cToken)
+        // DO NOT MAKE THIS METHOD A STATIC. It depends on environmental state generated in this class's constructor
+        public async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath, CancellationToken cToken)
         {
             var templateText = await File.ReadAllTextAsync(valuesTemplatePath, cToken);
             var values = KubernetesYaml.Deserialize<HelmValues>(templateText);
