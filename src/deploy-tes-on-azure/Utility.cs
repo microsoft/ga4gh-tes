@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace TesDeployer
@@ -91,9 +92,10 @@ namespace TesDeployer
         /// and creates subdirectories
         /// </summary>
         /// <param name="outputBasePath">The base path to create the subdirectories and write the files</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation</param>
         /// <param name="pathComponentsRelativeToAppBase">The path components relative to the app base to write</param>
-        /// <returns></returns>
-        public static async Task WriteEmbeddedFilesAsync(string outputBasePath, params string[] pathComponentsRelativeToAppBase)
+        /// <returns>A <see cref="Task"/> that represents the lifetime of the asynchronous operation.</returns>
+        public static async Task WriteEmbeddedFilesAsync(string outputBasePath, CancellationToken cancellationToken, params string[] pathComponentsRelativeToAppBase)
         {
             var assembly = typeof(Deployer).Assembly;
             var resourceNames = assembly.GetManifestResourceNames();
@@ -105,7 +107,7 @@ namespace TesDeployer
 
             foreach (var file in resourceNames.Where(r => r.StartsWith(componentSubstring)))
             {
-                var content = (await new StreamReader(assembly.GetManifestResourceStream(file)).ReadToEndAsync()).Replace("\r\n", "\n");
+                var content = (await new StreamReader(assembly.GetManifestResourceStream(file)).ReadToEndAsync(cancellationToken)).Replace("\r\n", "\n");
                 var pathSeparatedByPeriods = file.Replace(componentSubstring, "").TrimStart('.');
                 var outputPath = Path.Join(outputBasePath, pathSeparatedByPeriods);
                 var lastPeriodBeforeFilename = pathSeparatedByPeriods.LastIndexOf('.', pathSeparatedByPeriods.LastIndexOf('.') - 1);
@@ -119,7 +121,7 @@ namespace TesDeployer
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
-                await File.WriteAllTextAsync(outputPath, content);
+                await File.WriteAllTextAsync(outputPath, content, cancellationToken);
             }
         }
 
