@@ -51,6 +51,22 @@ public class DefaultFileInfoProvider : IFileInfoProvider
         return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), "*", SearchOption.AllDirectories);
     }
 
+    public RootPathPair GetRootPathPair(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var root = Path.GetPathRoot(path);
+
+        if (string.IsNullOrEmpty(root))
+        {
+            throw new ArgumentException($"Path {path} does not have a root");
+        }
+
+        var relativePath = path.Substring(root.Length);
+
+        return new RootPathPair(root, relativePath);
+    }
+
     private FileInfo GetFileInfoOrThrowIfFileDoesNotExist(string fileName)
     {
         var expandedFilename = Environment.ExpandEnvironmentVariables(fileName);

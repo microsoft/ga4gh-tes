@@ -18,4 +18,10 @@ public interface IFileInfoProvider
     string[] GetFilesBySearchPattern(string path, string searchPattern);
 
     string[] GetAllFilesInDirectory(string path);
+
+    RootPathPair GetRootPathPair(string path);
+}
+
+public record RootPathPair(string Root, string RelativePath)
+{
 }

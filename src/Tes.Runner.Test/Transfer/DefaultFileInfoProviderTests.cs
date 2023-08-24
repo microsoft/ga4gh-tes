@@ -69,6 +69,31 @@ namespace Tes.Runner.Test.Transfer
             AssertAllTempFilesAreReturned(files);
         }
 
+
+        [TestMethod]
+        public void GetFilesBySearchPattern_SingleFileUseRootAsPathAndRemainingAsSearchPattern_ReturnsFile()
+        {
+            var targetFile = directoryInfo.GetFiles().First();
+            var rootFullName = targetFile.Directory!.Root.FullName;
+            var searchPattern = targetFile.FullName.Substring(rootFullName.Length);
+
+            var files = fileInfoProvider.GetFilesBySearchPattern(rootFullName, searchPattern);
+
+            Assert.AreEqual(1, files.Length);
+            Assert.AreEqual(targetFile.FullName, files[0]);
+        }
+
+        [TestMethod]
+        public void GetRootPathPair_SingleFile_RootAndRelativePathIsReturned()
+        {
+            var targetFile = directoryInfo.GetFiles().First();
+        
+            var rootPathPair = fileInfoProvider.GetRootPathPair(targetFile.FullName);
+
+            Assert.AreEqual(targetFile.Directory!.Root.Name, rootPathPair.Root);
+            Assert.AreEqual(targetFile.FullName.Substring(targetFile.Directory.Root.Name.Length), rootPathPair.RelativePath);
+        }
+        
         private static void AssertAllTempFilesAreReturned(string[] files)
         {
             //the setup creates 4 files with the same prefix

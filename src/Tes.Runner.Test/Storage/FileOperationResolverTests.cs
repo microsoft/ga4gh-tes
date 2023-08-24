@@ -17,7 +17,6 @@ namespace Tes.Runner.Test.Storage
         private FileOutput singleFileOutput = null!;
         private FileOutput directoryFileOutput = null!;
         private FileOutput patternFileOutput = null!;
-
         private FileInput singleFileInput = null!;
 
         [TestInitialize]
@@ -28,6 +27,8 @@ namespace Tes.Runner.Test.Storage
 
             fileInfoProvider.Setup(x => x.GetExpandedFileName(It.IsAny<string>())).Returns<string>(x => x);
             fileInfoProvider.Setup(x => x.FileExists(It.IsAny<string>())).Returns(true);
+            fileInfoProvider.Setup(x => x.GetRootPathPair(It.IsAny<string>()))
+                .Returns(()=> new RootPathPair("/","foo/bar" ));
 
             singleFileInput = new FileInput
             {
@@ -46,7 +47,7 @@ namespace Tes.Runner.Test.Storage
 
             directoryFileOutput = new FileOutput
             {
-                Path = "/root",
+                Path = "/foo/",
                 TargetUrl = "https://foo.bar/cont?sig=sasToken",
                 SasStrategy = SasResolutionStrategy.None,
                 FileType = FileType.Directory
@@ -57,7 +58,6 @@ namespace Tes.Runner.Test.Storage
                 Path = "/data/*.foo",
                 TargetUrl = "https://foo.bar/cont?sig=sasToken",
                 SasStrategy = SasResolutionStrategy.None,
-                PathPrefix = "/prefix",
                 FileType = FileType.File
             };
         }
@@ -72,6 +72,9 @@ namespace Tes.Runner.Test.Storage
                     singleFileOutput
                 }
             };
+
+            fileInfoProvider.Setup(x => x.GetFilesBySearchPattern(It.IsAny<string>(), It.IsAny<string>()))
+                .Returns(new List<string> { singleFileOutput.Path! }.ToArray);
 
             var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
             var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();

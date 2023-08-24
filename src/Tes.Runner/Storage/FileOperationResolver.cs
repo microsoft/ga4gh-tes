@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Rest;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
@@ -158,42 +159,22 @@ namespace Tes.Runner.Storage
 
         private IEnumerable<FileOutput> ExpandFileOutput(FileOutput output)
         {
-            //consider the output as a single file if the path prefix is not specified
-            if (string.IsNullOrEmpty(output.PathPrefix))
-            {
-                //outputs are optional, so if the file does not exist, we just skip it
-                if (fileInfoProvider.FileExists(output.Path!))
-                {
-                    yield return CreateExpandedFileOutput(output);
-                }
+            //break the given path into root and relative path, where the relative path is the search pattern
+            var rootPathPair = fileInfoProvider.GetRootPathPair(output.Path!);
 
-                yield break;
-            }
-
-            foreach (var file in fileInfoProvider.GetFilesBySearchPattern(output.PathPrefix!, output.Path!))
+            foreach (var file in fileInfoProvider.GetFilesBySearchPattern(rootPathPair.Root, rootPathPair.RelativePath))
             {
                 logger.LogInformation($"Adding file {file} to the output list");
-                yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, path: file, prefixToRemove: output.PathPrefix!);
+                var fileInfo = new FileInfo(file);
+                yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, path: fileInfo.Name, prefixToRemove: fileInfo.DirectoryName!);
             }
         }
-
-        private static FileOutput CreateExpandedFileOutput(FileOutput output)
-        {
-            return new FileOutput()
-            {
-                Path = Environment.ExpandEnvironmentVariables(output.Path!),
-                PathPrefix = output.PathPrefix,
-                TargetUrl = output.TargetUrl,
-                SasStrategy = output.SasStrategy,
-                FileType = FileType.File,
-            };
-        }
+        
         private static FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string path, string prefixToRemove)
         {
             return new FileOutput()
             {
                 Path = path,
-                PathPrefix = output.PathPrefix,
                 TargetUrl = ToCombinedTargetUrl(output.TargetUrl!, prefixToRemove, path),
                 SasStrategy = output.SasStrategy,
                 FileType = FileType.File,
