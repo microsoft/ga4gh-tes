@@ -1470,7 +1470,7 @@ namespace TesApi.Tests
 
             static Uri UriFromTesInput(TesInput input)
             {
-                if (Uri.IsWellFormedUriString(input.Url ,UriKind.Absolute))
+                if (Uri.IsWellFormedUriString(input.Url, UriKind.Absolute))
                 {
                     return new Uri(input.Url);
                 }
