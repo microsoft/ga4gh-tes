@@ -1064,14 +1064,14 @@ namespace TesDeployer
             {
                 // Is this our official prepository/image?
                 result = installed.StartsWith(defaultPath + ":")
-                        // Is the tag a version (without decorations)?
-                        && Version.TryParse(installedTag, out var version)
-                        // Is the image version the same as the installed version?
-                        && version.Equals(installedVersion)
-                    // Upgrade image
-                    ? false
-                    // Preserve configured image
-                    : null;
+                       // Is the tag a version (without decorations)?
+                       && Version.TryParse(installedTag, out var version)
+                       // Is the image version the same as the installed version?
+                       && version.Equals(installedVersion)
+                   // Upgrade image
+                   ? false
+                   // Preserve configured image
+                   : null;
             }
             catch (ArgumentException)
             {
@@ -1365,7 +1365,7 @@ namespace TesDeployer
 
         private async Task<IStorageAccount> GetExistingStorageAccountAsync(string storageAccountName)
         {
-            return await subscriptionIds.ToAsyncEnumerable().SelectAwaitWithCancellation(async (subscription, cancellationToken) => 
+            return await subscriptionIds.ToAsyncEnumerable().SelectAwaitWithCancellation(async (subscription, cancellationToken) =>
             {
                 try
                 {

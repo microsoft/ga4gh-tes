@@ -7,11 +7,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
+using CommonUtilities;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using CommonUtilities;
 
 namespace TesApi.Web
 {
