@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -1003,14 +1004,20 @@ namespace TesApi.Web
                 if (executionDirectoryUri is not null)
                 {
                     var blobsInExecutionDirectory = (await azureProxy.ListBlobsAsync(new Uri(executionDirectoryUri), cancellationToken)).ToList();
-                    var scriptFile = blobsInExecutionDirectory.FirstOrDefault(b => b.Name.EndsWith($"/{CromwellScriptFileName}"));
+                    var scriptBlob = blobsInExecutionDirectory.FirstOrDefault(b => b.Name.EndsWith($"/{CromwellScriptFileName}"));
+                    var commandScript = task.Inputs?.FirstOrDefault(IsCromwellCommandScript); // this should never be null because it's used to set isCromwell
 
-                    if (scriptFile is not null)
+                    if (scriptBlob is not null)
                     {
-                        blobsInExecutionDirectory.Remove(scriptFile);
-                        var cromwellExecutionDirectory = Path.GetDirectoryName(scriptFile.Name);
+                        blobsInExecutionDirectory.Remove(scriptBlob);
+                    }
+
+                    if (commandScript is not null)
+                    {
+                        var commandScriptPathParts = commandScript.Path.Split('/').ToList();
+                        var cromwellExecutionDirectory = string.Join('/', commandScriptPathParts.Take(commandScriptPathParts.Count - 1));
                         additionalInputFiles = await blobsInExecutionDirectory
-                            .Select(b => (Path: $"{cromwellExecutionDirectory}/{Path.GetFileName(b.Name)}", b.Uri))
+                            .Select(b => (Path: $"{cromwellExecutionDirectory}/{b.Name.Split('/').Last()}", b.Uri))
                             .ToAsyncEnumerable()
                             .SelectAwait(async b => new TesInput { Path = b.Path, Url = await storageAccessProvider.MapLocalPathToSasUrlAsync(b.Uri.AbsoluteUri, cancellationToken, getContainerSas: true), Name = Path.GetFileName(b.Path), Type = TesFileType.FILEEnum })
                             .ToListAsync(cancellationToken);
@@ -1037,7 +1044,7 @@ namespace TesApi.Web
                 inputFiles
                 .Except(drsInputFiles) // do not attempt to download DRS input files since the cromwell-drs-localizer will
                 .Where(f => f?.Streamable == false) // Don't download files where localization_optional is set to true in WDL (corresponds to "Streamable" property being true on TesInput)
-                .Union(additionalInputFiles)
+                .Union(additionalInputFiles, new TesInputPathEqualityComparer())
                 .Select(async f => await GetTesInputFileUrlAsync(f, task, queryStringsToRemoveFromLocalFilePaths, cancellationToken)));
 
             var filesToUpload = Array.Empty<TesOutput>();
@@ -2043,6 +2050,19 @@ namespace TesApi.Web
             public IEnumerable<string> SystemLogItems { get; set; }
             public PoolInformation Pool { get; set; }
             public string AlternateSystemLogItem { get; set; }
+        }
+
+        private class TesInputPathEqualityComparer : IEqualityComparer<TesInput>
+        {
+            public bool Equals(TesInput x, TesInput y)
+            {
+                return EqualityComparer<string>.Default.Equals(x.Path, y.Path);
+            }
+
+            public int GetHashCode([DisallowNull] TesInput obj)
+            {
+                return obj.Path.GetHashCode();
+            }
         }
     }
 }
