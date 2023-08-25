@@ -1017,7 +1017,7 @@ namespace TesApi.Web
                         var commandScriptPathParts = commandScript.Path.Split('/').ToList();
                         var cromwellExecutionDirectory = string.Join('/', commandScriptPathParts.Take(commandScriptPathParts.Count - 1));
                         additionalInputFiles = await blobsInExecutionDirectory
-                            .Select(b => (Path: $"{cromwellExecutionDirectory}/{b.Name.Split('/').Last()}", b.Uri))
+                            .Select(b => (Path: $"/{cromwellExecutionDirectory.TrimStart('/')}/{b.Name.Split('/').Last()}", b.Uri))
                             .ToAsyncEnumerable()
                             .SelectAwait(async b => new TesInput { Path = b.Path, Url = await storageAccessProvider.MapLocalPathToSasUrlAsync(b.Uri.AbsoluteUri, cancellationToken, getContainerSas: true), Name = Path.GetFileName(b.Path), Type = TesFileType.FILEEnum })
                             .ToListAsync(cancellationToken);
