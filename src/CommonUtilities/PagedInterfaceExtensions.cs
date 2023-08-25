@@ -136,28 +136,35 @@ namespace CommonUtilities
                 => new(_retryPolicy.ExecuteAsync(ct => _source.MoveNextAsync(ct).AsTask(), _cancellationToken));
         }
 
-        private sealed class PageEnumerator<T> : EnumeratorEnumerator<T, IPage<T>>
+        private sealed class PageEnumerator<T> : BasePagedEnumerator<T, IPage<T>>
         {
             public PageEnumerator(IPage<T> source, Func<string, CancellationToken, Task<IPage<T>?>> nextPageFunc, CancellationToken cancellationToken)
-                : base(source, s => s.GetEnumerator(), (s, ct) => nextPageFunc(s.NextPageLink, ct), cancellationToken)
-            { }
+                : base(source, s => s.GetEnumerator(), (s, ct) => NextPage(s, nextPageFunc, ct), cancellationToken)
+            {
+                ArgumentNullException.ThrowIfNull(source);
+            }
+
+            private static Task<IPage<T>?> NextPage(IPage<T> source, Func<string, CancellationToken, Task<IPage<T>?>> nextPageFunc, CancellationToken cancellationToken)
+                => string.IsNullOrEmpty(source.NextPageLink)
+                ? Task.FromResult<IPage<T>?>(default)
+                : nextPageFunc.Invoke(source.NextPageLink, cancellationToken);
         }
 
-        private sealed class PagedCollectionEnumerator<T> : EnumeratorEnumerator<T, IPagedCollection<T>>
+        private sealed class PagedCollectionEnumerator<T> : BasePagedEnumerator<T, IPagedCollection<T>>
         {
             public PagedCollectionEnumerator(IPagedCollection<T> source, CancellationToken cancellationToken)
                 : base(source, s => s.GetEnumerator(), (s, ct) => s.GetNextPageAsync(ct), cancellationToken)
             { }
         }
 
-        private abstract class EnumeratorEnumerator<TItem, TSource> : Enumerator<TItem, IEnumerator<TItem>>
+        private abstract class BasePagedEnumerator<TItem, TSource> : Enumerator<TItem, IEnumerator<TItem>>
         {
             protected TSource? _source;
 
             private readonly Func<TSource, IEnumerator<TItem>> _getEnumerator;
             private readonly Func<TSource, CancellationToken, Task<TSource?>> _getNext;
 
-            protected EnumeratorEnumerator(TSource source, Func<TSource, IEnumerator<TItem>> getEnumerator, Func<TSource, CancellationToken, Task<TSource?>> getNext, CancellationToken cancellationToken)
+            protected BasePagedEnumerator(TSource source, Func<TSource, IEnumerator<TItem>> getEnumerator, Func<TSource, CancellationToken, Task<TSource?>> getNext, CancellationToken cancellationToken)
                 : base(e => e.Current, cancellationToken)
             {
                 ArgumentNullException.ThrowIfNull(source);
@@ -228,13 +235,11 @@ namespace CommonUtilities
             }
 
             protected Enumerator(TEnumerator enumerator, Func<TEnumerator, TItem> getCurrent, CancellationToken cancellationToken)
+                : this(getCurrent, cancellationToken)
             {
                 ArgumentNullException.ThrowIfNull(enumerator);
-                ArgumentNullException.ThrowIfNull(getCurrent);
 
-                _getCurrent = getCurrent;
                 _enumerator = enumerator;
-                _cancellationToken = cancellationToken;
             }
 
             public TItem Current => _getCurrent(_enumerator ?? throw new ObjectDisposedException(GetType().FullName));
