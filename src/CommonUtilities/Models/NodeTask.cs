@@ -25,8 +25,6 @@ namespace Tes.Runner.Models
         public SasResolutionStrategy? SasStrategy { get; set; }
         public FileType? FileType { get; set; }
         public string? PathPrefix { get; set; }
-        public string? NodeWorkingDirectory { get; set; }
-
     }
 
     public class FileInput
