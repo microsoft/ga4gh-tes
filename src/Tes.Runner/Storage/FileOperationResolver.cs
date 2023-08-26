@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using Microsoft.Extensions.Logging;
-using Microsoft.Rest;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
@@ -73,7 +72,7 @@ namespace Tes.Runner.Storage
             {
                 SasStrategy = input.SasStrategy,
                 SourceUrl = input.SourceUrl,
-                Path = fileInfoProvider.GetExpandedFileName(input.Path!),
+                Path = ExpandAndAppendNodeWorkingDirectoryIfSet(input.NodeWorkingDirectory, input.Path!),
             };
         }
 
@@ -152,30 +151,57 @@ namespace Tes.Runner.Storage
         {
             foreach (var file in fileInfoProvider.GetAllFilesInDirectory(output.Path!))
             {
-                //remove the path from property (root directory) from the target url
-                yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, path: file, prefixToRemove: output.Path!);
+                yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, absoluteFilePath: file.AbsolutePath, relativePathToSearchPath: file.RelativePathToSearchPath);
             }
         }
 
         private IEnumerable<FileOutput> ExpandFileOutput(FileOutput output)
         {
+            var pathWithWorkingDirectory = ExpandAndAppendNodeWorkingDirectoryIfSet(output.NodeWorkingDirectory, output.Path!);
+
             //break the given path into root and relative path, where the relative path is the search pattern
-            var rootPathPair = fileInfoProvider.GetRootPathPair(output.Path!);
+            var rootPathPair = fileInfoProvider.GetRootPathPair(pathWithWorkingDirectory);
 
             foreach (var file in fileInfoProvider.GetFilesBySearchPattern(rootPathPair.Root, rootPathPair.RelativePath))
             {
-                logger.LogInformation($"Adding file {file} to the output list");
-                var fileInfo = new FileInfo(file);
-                yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, path: fileInfo.Name, prefixToRemove: fileInfo.DirectoryName!);
+                logger.LogInformation($"Adding file {file.RelativePathToSearchPath} to the output list");
+
+                //if the working directory is set, remove it from the resulting file. 
+                var pathToRemove = output.NodeWorkingDirectory ?? string.Empty;
+
+                yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, absoluteFilePath: file.AbsolutePath, relativePathToSearchPath: file.RelativePathToSearchPath);
             }
         }
-        
-        private static FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string path, string prefixToRemove)
+
+        public string ExpandAndAppendNodeWorkingDirectoryIfSet(string? nodeWorkingDirectory, string filePath)
+        {
+            if (!string.IsNullOrWhiteSpace(nodeWorkingDirectory))
+            {
+                //the path is assumed to be absolute
+                return fileInfoProvider.GetExpandedFileName($"{nodeWorkingDirectory.TrimEnd('/')}{filePath}");
+            }
+
+            return fileInfoProvider.GetExpandedFileName(filePath);
+        }
+
+        //
+        // private static FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string absoluteFilePath, string prefixToRemove)
+        // {
+        //     return new FileOutput()
+        //     {
+        //         Path = absoluteFilePath,
+        //         TargetUrl = ToCombinedTargetUrl(output.TargetUrl!, prefixToRemove, absoluteFilePath),
+        //         SasStrategy = output.SasStrategy,
+        //         FileType = FileType.File,
+        //     };
+        // }
+
+        private static FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string absoluteFilePath, string relativePathToSearchPath)
         {
             return new FileOutput()
             {
-                Path = path,
-                TargetUrl = ToCombinedTargetUrl(output.TargetUrl!, prefixToRemove, path),
+                Path = absoluteFilePath,
+                TargetUrl = ToCombinedTargetUrl(output.TargetUrl!, prefixToRemoveFromPath: string.Empty, relativePathToSearchPath),
                 SasStrategy = output.SasStrategy,
                 FileType = FileType.File,
             };

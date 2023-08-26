@@ -37,18 +37,40 @@ public class DefaultFileInfoProvider : IFileInfoProvider
     }
 
 
-    public string[] GetFilesBySearchPattern(string path, string searchPattern)
+    public List<FileResult> GetFilesBySearchPattern(string searchPath, string searchPattern)
     {
-        logger.LogInformation($"Searching for files in path: {path} with search pattern: {searchPattern}");
+        logger.LogInformation($"Searching for files in the search path: {searchPath} with search pattern: {searchPattern}");
 
-        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), Environment.ExpandEnvironmentVariables(searchPattern), SearchOption.AllDirectories);
+        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(searchPath), Environment.ExpandEnvironmentVariables(searchPattern), SearchOption.AllDirectories)
+            .Select(f => new FileResult(f, ToRelativePathToSearchPath(searchPath, f), searchPath))
+            .ToList();
     }
 
-    public string[] GetAllFilesInDirectory(string path)
+    private string ToRelativePathToSearchPath(string searchPath, string absolutePath)
     {
-        logger.LogInformation($"Getting all files in path: {path}");
 
-        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), "*", SearchOption.AllDirectories);
+        if (absolutePath.StartsWith(searchPath))
+        {
+            return absolutePath.Substring(searchPath.Length + 1);
+        }
+
+        return absolutePath;
+    }
+
+    public List<FileResult> GetAllFilesInDirectory(string path)
+    {
+        logger.LogInformation($"Getting all files in directory: {path}");
+
+        if (!Directory.Exists(path))
+        {
+            logger.LogWarning($"The directory provided does not exists: {path}. The output will be ignored.");
+
+            return new List<FileResult>();
+        }
+
+        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), "*", SearchOption.AllDirectories)
+            .Select(f => new FileResult(f, ToRelativePathToSearchPath(path, f), path))
+            .ToList();
     }
 
     public RootPathPair GetRootPathPair(string path)
