@@ -72,7 +72,7 @@ namespace Tes.Runner.Storage
             {
                 SasStrategy = input.SasStrategy,
                 SourceUrl = input.SourceUrl,
-                Path = ExpandAndAppendNodeWorkingDirectoryIfSet(input.NodeWorkingDirectory, input.Path!),
+                Path = fileInfoProvider.GetExpandedFileName(input.Path!),
             };
         }
 
@@ -157,17 +157,14 @@ namespace Tes.Runner.Storage
 
         private IEnumerable<FileOutput> ExpandFileOutput(FileOutput output)
         {
-            var pathWithWorkingDirectory = ExpandAndAppendNodeWorkingDirectoryIfSet(output.NodeWorkingDirectory, output.Path!);
+            var expandedPath = fileInfoProvider.GetExpandedFileName(output.Path!);
 
             //break the given path into root and relative path, where the relative path is the search pattern
-            var rootPathPair = fileInfoProvider.GetRootPathPair(pathWithWorkingDirectory);
+            var rootPathPair = fileInfoProvider.GetRootPathPair(expandedPath);
 
             foreach (var file in fileInfoProvider.GetFilesBySearchPattern(rootPathPair.Root, rootPathPair.RelativePath))
             {
                 logger.LogInformation($"Adding file {file.RelativePathToSearchPath} to the output list");
-
-                //if the working directory is set, remove it from the resulting file. 
-                var pathToRemove = output.NodeWorkingDirectory ?? string.Empty;
 
                 yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, absoluteFilePath: file.AbsolutePath, relativePathToSearchPath: file.RelativePathToSearchPath);
             }
@@ -183,18 +180,6 @@ namespace Tes.Runner.Storage
 
             return fileInfoProvider.GetExpandedFileName(filePath);
         }
-
-        //
-        // private static FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string absoluteFilePath, string prefixToRemove)
-        // {
-        //     return new FileOutput()
-        //     {
-        //         Path = absoluteFilePath,
-        //         TargetUrl = ToCombinedTargetUrl(output.TargetUrl!, prefixToRemove, absoluteFilePath),
-        //         SasStrategy = output.SasStrategy,
-        //         FileType = FileType.File,
-        //     };
-        // }
 
         private static FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string absoluteFilePath, string relativePathToSearchPath)
         {

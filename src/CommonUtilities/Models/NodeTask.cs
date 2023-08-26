@@ -34,8 +34,6 @@ namespace Tes.Runner.Models
         public string? Path { get; set; }
         public string? SourceUrl { get; set; }
         public SasResolutionStrategy? SasStrategy { get; set; }
-        public string? NodeWorkingDirectory { get; set; }
-
     }
 
     public class RuntimeOptions
