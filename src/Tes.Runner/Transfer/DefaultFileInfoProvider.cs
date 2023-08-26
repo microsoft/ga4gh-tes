@@ -42,16 +42,25 @@ public class DefaultFileInfoProvider : IFileInfoProvider
         logger.LogInformation($"Searching for files in the search path: {searchPath} with search pattern: {searchPattern}");
 
         return Directory.GetFiles(Environment.ExpandEnvironmentVariables(searchPath), Environment.ExpandEnvironmentVariables(searchPattern), SearchOption.AllDirectories)
-            .Select(f => new FileResult(f, ToRelativePathToSearchPath(searchPath, f), searchPath))
+            .Select(f => new FileResult(f, ToRelativePathToSearchPath(searchPath, searchPattern, f), searchPath))
             .ToList();
     }
 
-    private string ToRelativePathToSearchPath(string searchPath, string absolutePath)
+    private string ToRelativePathToSearchPath(string searchPath, string searchPattern, string absolutePath)
     {
+        var delimiter = "/";
 
-        if (absolutePath.StartsWith(searchPath))
+        if (searchPath.Equals("/", StringComparison.OrdinalIgnoreCase))
         {
-            return absolutePath.Substring(searchPath.Length + 1);
+            delimiter = string.Empty;
+        }
+        var prefixToRemove = Path.GetDirectoryName($"{searchPath}{delimiter}{searchPattern.TrimStart('/')}");
+
+        if (prefixToRemove != null && absolutePath.StartsWith(prefixToRemove))
+        {
+            logger.LogInformation($"Removing prefix: {prefixToRemove} from absolute path: {absolutePath}");
+
+            return absolutePath.Substring(prefixToRemove.Length + 1);
         }
 
         return absolutePath;
@@ -69,7 +78,7 @@ public class DefaultFileInfoProvider : IFileInfoProvider
         }
 
         return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), "*", SearchOption.AllDirectories)
-            .Select(f => new FileResult(f, ToRelativePathToSearchPath(path, f), path))
+            .Select(f => new FileResult(f, ToRelativePathToSearchPath(path, searchPattern: String.Empty, f), path))
             .ToList();
     }
 

@@ -1032,8 +1032,7 @@ namespace TesApi.Web
                     new()
                     {
                         TargetUrl = AppendPathToUrl(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, string.Empty, cancellationToken), "start-task"),
-                        Path = @"std*.txt",
-                        PathPrefix = "%AZ_BATCH_NODE_STARTUP_DIR%/",
+                        Path = "%AZ_BATCH_NODE_STARTUP_DIR%/std*.txt",
                         SasStrategy = SasResolutionStrategy.None,
                         FileType = FileType.File
                     }
@@ -1073,7 +1072,7 @@ namespace TesApi.Web
                 // Ignore any other missing files and directories. WDL tasks can have optional output files.
                 // Implementation: do not set Required to True (it defaults to False)
                 OutputsMetricsFormat = "FileUploadSizeInBytes={Size}",
-                Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, Path = LocalizeLocalPath(f.Path), FileType = ConvertFileType(f.Type), SasStrategy = SasResolutionStrategy.None, PathPrefix = f.PathPrefix }).ToList()
+                Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, Path = LocalizeLocalPath(f.Path), FileType = ConvertFileType(f.Type), SasStrategy = SasResolutionStrategy.None }).ToList()
             };
 
             var executor = task.Executors.First();
