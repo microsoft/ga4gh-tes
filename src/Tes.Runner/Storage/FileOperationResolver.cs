@@ -170,17 +170,6 @@ namespace Tes.Runner.Storage
             }
         }
 
-        public string ExpandAndAppendNodeWorkingDirectoryIfSet(string? nodeWorkingDirectory, string filePath)
-        {
-            if (!string.IsNullOrWhiteSpace(nodeWorkingDirectory))
-            {
-                //the path is assumed to be absolute
-                return fileInfoProvider.GetExpandedFileName($"{nodeWorkingDirectory.TrimEnd('/')}{filePath}");
-            }
-
-            return fileInfoProvider.GetExpandedFileName(filePath);
-        }
-
         private static FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string absoluteFilePath, string relativePathToSearchPath)
         {
             return new FileOutput()
