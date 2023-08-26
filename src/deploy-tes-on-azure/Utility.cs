@@ -108,7 +108,7 @@ namespace TesDeployer
             foreach (var file in resourceNames.Where(r => r.StartsWith(componentSubstring)))
             {
                 var content = (await new StreamReader(assembly.GetManifestResourceStream(file)).ReadToEndAsync(cancellationToken)).Replace("\r\n", "\n");
-                var pathSeparatedByPeriods = file.Replace(componentSubstring, "").TrimStart('.');
+                var pathSeparatedByPeriods = file.Replace(componentSubstring, string.Empty).TrimStart('.');
                 var outputPath = Path.Join(outputBasePath, pathSeparatedByPeriods);
                 var lastPeriodBeforeFilename = pathSeparatedByPeriods.LastIndexOf('.', pathSeparatedByPeriods.LastIndexOf('.') - 1);
 

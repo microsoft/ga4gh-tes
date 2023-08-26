@@ -57,7 +57,7 @@ using static Microsoft.Azure.Management.PostgreSQL.FlexibleServers.DatabasesOper
 using static Microsoft.Azure.Management.PostgreSQL.FlexibleServers.ServersOperationsExtensions;
 using static Microsoft.Azure.Management.PostgreSQL.ServersOperationsExtensions;
 using static Microsoft.Azure.Management.ResourceManager.Fluent.Core.RestClient;
-using Extensions = Microsoft.Azure.Management.ResourceManager.Fluent.Core.Extensions;
+//using Extensions = Microsoft.Azure.Management.ResourceManager.Fluent.Core.Extensions;
 using FlexibleServer = Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 using FlexibleServerModel = Microsoft.Azure.Management.PostgreSQL.FlexibleServers.Models;
 using IResource = Microsoft.Azure.Management.ResourceManager.Fluent.Core.IResource;
@@ -151,7 +151,7 @@ namespace TesDeployer
                     azureClient = GetAzureClient(azureCredentials);
                     armClient = new ArmClient(new AzureCliCredential());
                     azureSubscriptionClient = azureClient.WithSubscription(configuration.SubscriptionId);
-                    subscriptionIds = await (await azureClient.Subscriptions.ListAsync()).ToAsyncEnumerable().Select(s => s.SubscriptionId).ToListAsync(cts.Token);
+                    subscriptionIds = await (await azureClient.Subscriptions.ListAsync(cancellationToken: cts.Token)).ToAsyncEnumerable().Select(s => s.SubscriptionId).ToListAsync(cts.Token);
                     resourceManagerClient = GetResourceManagerClient(azureCredentials);
                     networkManagementClient = new Microsoft.Azure.Management.Network.NetworkManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
                     postgreSqlFlexManagementClient = new FlexibleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, LongRunningOperationRetryTimeout = 1200 };
@@ -859,45 +859,14 @@ namespace TesDeployer
                 ?? throw new ValidationException($"If AKS cluster name is provided, the cluster must already exist in region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
         }
 
-        private async Task<FlexibleServerModel.Server> GetExistingPostgresqlServiceAsync(string serverName)
+        private Task<FlexibleServerModel.Server> GetExistingPostgresqlServiceAsync(string serverName)
         {
-            var regex = new Regex(@"\s+", RegexOptions.Compiled);
-            return await subscriptionIds.ToAsyncEnumerable().SelectAwaitWithCancellation(async (subscription, cancellationToken) =>
-            {
-                try
-                {
-                    var client = new FlexibleServer.PostgreSQLManagementClient(tokenCredentials) { SubscriptionId = subscription };
-                    return (await client.Servers.ListAsync(cancellationToken)).ToAsyncEnumerable(client.Servers.ListNextAsync);
-                }
-                catch (Exception e)
-                {
-                    ConsoleEx.WriteLine(e.Message);
-                    return null;
-                }
-            })
-            .Where(a => a is not null)
-            .SelectMany(a => a)
-            .SingleOrDefaultAsync(a => a.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase) && regex.Replace(a.Location, string.Empty).Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase), cts.Token);
+            return GetExistingAzureResource(serverName, configuration.RegionName, this, ExistingPostgresqlServiceClient.GetClient, ExistingPostgresqlServiceClient.Predicate, e => ConsoleEx.WriteLine(e.Message));
         }
 
-        private async Task<ManagedCluster> GetExistingAKSClusterAsync(string aksClusterName)
+        private Task<ManagedCluster> GetExistingAKSClusterAsync(string aksClusterName)
         {
-            return await subscriptionIds.ToAsyncEnumerable().SelectAwaitWithCancellation(async (subscription, cancellationToken) =>
-            {
-                try
-                {
-                    var client = new ContainerServiceClient(tokenCredentials) { SubscriptionId = subscription };
-                    return (await client.ManagedClusters.ListAsync(cancellationToken)).ToAsyncEnumerable(client.ManagedClusters.ListNextAsync);
-                }
-                catch (Exception e)
-                {
-                    ConsoleEx.WriteLine(e.Message);
-                    return null;
-                }
-            })
-            .Where(a => a is not null)
-            .SelectMany(a => a)
-            .SingleOrDefaultAsync(a => a.Name.Equals(aksClusterName, StringComparison.OrdinalIgnoreCase) && a.Location.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase), cts.Token);
+            return GetExistingAzureResource(aksClusterName, configuration.RegionName, this, ExistingAKSClusterClient.GetClient, ExistingAKSClusterClient.Predicate, e => ConsoleEx.WriteLine(e.Message));
         }
 
         private async Task<ManagedCluster> ProvisionManagedClusterAsync(IResource resourceGroupObject, IIdentity managedIdentity, IGenericResource logAnalyticsWorkspace, INetwork virtualNetwork, string subnetName, bool privateNetworking)
@@ -1363,44 +1332,13 @@ namespace TesDeployer
                     .WithSku(StorageAccountSkuType.Standard_LRS)
                     .CreateAsync(cts.Token));
 
-        private async Task<IStorageAccount> GetExistingStorageAccountAsync(string storageAccountName)
-        {
-            return await subscriptionIds.ToAsyncEnumerable().SelectAwaitWithCancellation(async (subscription, cancellationToken) =>
-            {
-                try
-                {
-                    return (await azureClient.WithSubscription(subscription).StorageAccounts.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable();
-                }
-                catch (Exception)
-                {
-                    // Ignore exception if a user does not have the required role to list storage accounts in a subscription
-                    return null;
-                }
-            })
-            .Where(result => result is not null)
-            .SelectMany(a => a)
-            .SingleOrDefaultAsync(a => a.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase) && a.RegionName.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase), cts.Token);
-        }
+        private Task<IStorageAccount> GetExistingStorageAccountAsync(string storageAccountName)
+            => GetExistingAzureResource(storageAccountName, configuration.RegionName, this, ExistingStorageAccountClient.GetClient, ExistingStorageAccountClient.Predicate,
+                e => { }); // Ignore exception if a user does not have the required role to list storage accounts in a subscription
 
-        private async Task<BatchAccount> GetExistingBatchAccountAsync(string batchAccountName)
-        {
-            return await subscriptionIds.ToAsyncEnumerable().SelectAwaitWithCancellation(async (subscription, cancellationToken) =>
-            {
-                try
-                {
-                    var client = new BatchManagementClient(tokenCredentials) { SubscriptionId = subscription };
-                    return (await client.BatchAccount.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable(client.BatchAccount.ListNextAsync);
-                }
-                catch (Exception e)
-                {
-                    ConsoleEx.WriteLine(e.Message);
-                    return null;
-                }
-            })
-            .Where(a => a is not null)
-            .SelectMany(a => a)
-            .SingleOrDefaultAsync(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase) && a.Location.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase), cts.Token);
-        }
+        private Task<BatchAccount> GetExistingBatchAccountAsync(string batchAccountName)
+            => GetExistingAzureResource(batchAccountName, configuration.RegionName, this, ExistingBatchAccountClient.GetClient, ExistingBatchAccountClient.Predicate,
+                e => ConsoleEx.WriteLine(e.Message));
 
         private async Task CreateDefaultStorageContainersAsync(IStorageAccount storageAccount)
         {
@@ -1990,7 +1928,7 @@ namespace TesDeployer
                 throw new ValidationException($"{nameof(configuration.VnetResourceGroupName)}, {nameof(configuration.VnetName)} and {nameof(configuration.VmSubnetName)} are required when using an existing virtual network.");
             }
 
-            if (!(await azureSubscriptionClient.ResourceGroups.ListAsync(true)).Any(rg => rg.Name.Equals(configuration.VnetResourceGroupName, StringComparison.OrdinalIgnoreCase)))
+            if (!await (await azureSubscriptionClient.ResourceGroups.ListAsync(true, cts.Token)).ToAsyncEnumerable().AnyAsync(rg => rg.Name.Equals(configuration.VnetResourceGroupName, StringComparison.OrdinalIgnoreCase), cts.Token))
             {
                 throw new ValidationException($"Resource group '{configuration.VnetResourceGroupName}' does not exist.");
             }
@@ -2050,7 +1988,7 @@ namespace TesDeployer
         private async Task ValidateBatchAccountQuotaAsync()
         {
             var accountQuota = (await new BatchManagementClient(tokenCredentials) { SubscriptionId = configuration.SubscriptionId }.Location.GetQuotasAsync(configuration.RegionName)).AccountQuota;
-            var existingBatchAccountCount = (await new BatchManagementClient(tokenCredentials) { SubscriptionId = configuration.SubscriptionId }.BatchAccount.ListAsync()).AsEnumerable().Count(b => b.Location.Equals(configuration.RegionName));
+            var existingBatchAccountCount = (await new BatchManagementClient(tokenCredentials) { SubscriptionId = configuration.SubscriptionId }.BatchAccount.ListAsync(cts.Token)).AsEnumerable().Count(b => b.Location.Equals(configuration.RegionName));
 
             if (existingBatchAccountCount >= accountQuota)
             {
@@ -2069,7 +2007,7 @@ namespace TesDeployer
                     VirtualNetworkResource vnet = default;
                     var vnetCollection = coaRg.GetVirtualNetworks();
 
-                    await foreach (var net in vnetCollection)
+                    await foreach (var net in vnetCollection.WithCancellation(cts.Token))
                     {
                         if (vnet is null)
                         {
@@ -2143,15 +2081,15 @@ namespace TesDeployer
 
         //private async Task ValidateVmAsync()
         //{
-        //    var computeSkus = (await generalRetryPolicy.ExecuteAsync(cancellationToken =>
+        //    var computeSkus = await (await generalRetryPolicy.ExecuteAsync(cancellationToken =>
         //            azureSubscriptionClient.ComputeSkus.ListbyRegionAndResourceTypeAsync(
         //                Region.Create(configuration.RegionName),
         //                ComputeResourceType.VirtualMachines,
         //                cancellationToken),
-        //            cts.Token))
+        //            cts.Token)).ToAsyncEnumerable()
         //        .Where(s => !s.Restrictions.Any())
         //        .Select(s => s.Name.Value)
-        //        .ToList();
+        //        .ToListAsync(cts.Token);
 
         //    if (!computeSkus.Any())
         //    {
@@ -2418,6 +2356,130 @@ namespace TesDeployer
 
             await container.CreateIfNotExistsAsync(cancellationToken: token);
             await container.GetBlobClient(blobName).UploadAsync(BinaryData.FromString(content), true, token);
+        }
+
+        private async Task<Resource> GetExistingAzureResource<Resource>(string resourceName, string regionName, Deployer deployer, Func<string, Deployer, Client<Resource>> resourceClient, Func<Resource, string, string, bool> predicate, Action<Exception> skipPerSubscriptionFailures = default)
+        // if skipPerSubscriptionFailures is not set, failures will be thrown.
+        {
+            ArgumentException.ThrowIfNullOrEmpty(resourceName);
+            ArgumentException.ThrowIfNullOrEmpty(regionName);
+            ArgumentNullException.ThrowIfNull(deployer);
+            ArgumentNullException.ThrowIfNull(resourceClient);
+            ArgumentNullException.ThrowIfNull(predicate);
+
+            return await subscriptionIds.ToAsyncEnumerable().SelectAwaitWithCancellation(async (subscription, cancellationToken) =>
+            {
+                try
+                {
+                    var client = resourceClient(subscription, deployer);
+                    return true switch
+                    {
+                        var _true when client.ListPagedCollectionAsync is not null => (await client.ListPagedCollectionAsync(cancellationToken)).ToAsyncEnumerable(),
+                        _ => (await client.ListAsync(cancellationToken)).ToAsyncEnumerable(client.ListNextAsync),
+                    };
+                }
+                catch (Exception exception) when (skipPerSubscriptionFailures is not null)
+                {
+                    skipPerSubscriptionFailures(exception);
+                    return null;
+                }
+            })
+            .Where(resourceEnumeration => resourceEnumeration is not null)
+            .SelectMany(resourceEnumeration => resourceEnumeration)
+            .SingleOrDefaultAsync(resource => predicate(resource, resourceName, regionName), cts.Token);
+        }
+
+        private abstract class Client<Resource>
+        {
+            internal Func<CancellationToken, Task<Microsoft.Rest.Azure.IPage<Resource>>> ListAsync { get; }
+            internal Func<string, CancellationToken, Task<Microsoft.Rest.Azure.IPage<Resource>>> ListNextAsync { get; }
+            internal Func<CancellationToken, Task<IPagedCollection<Resource>>> ListPagedCollectionAsync { get; }
+
+            protected Client(Func<CancellationToken, Task<IPagedCollection<Resource>>> listAsync)
+            {
+                ArgumentNullException.ThrowIfNull(listAsync);
+
+                ListPagedCollectionAsync = listAsync;
+            }
+
+            protected Client(Func<CancellationToken, Task<Microsoft.Rest.Azure.IPage<Resource>>> listAsync, Func<string, CancellationToken, Task<Microsoft.Rest.Azure.IPage<Resource>>> listNextAsync)
+            {
+                ArgumentNullException.ThrowIfNull(listAsync);
+                ArgumentNullException.ThrowIfNull(listNextAsync);
+
+                ListAsync = listAsync;
+                ListNextAsync = listNextAsync;
+            }
+        }
+
+        private sealed class ExistingAKSClusterClient : Client<ManagedCluster>
+        {
+            internal static Func<ManagedCluster, string, string, bool> Predicate => (cluster, serverName, regionName)
+                => cluster.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase) && cluster.Location.Equals(regionName, StringComparison.OrdinalIgnoreCase);
+
+            internal static Client<ManagedCluster> GetClient(string subscription, Deployer deployer)
+            {
+                ArgumentException.ThrowIfNullOrEmpty(subscription);
+                ArgumentNullException.ThrowIfNull(deployer);
+
+                return new ExistingAKSClusterClient(new ContainerServiceClient(deployer.tokenCredentials) { SubscriptionId = subscription });
+            }
+
+            private ExistingAKSClusterClient(ContainerServiceClient client) : base(client.ManagedClusters.ListAsync, client.ManagedClusters.ListNextAsync)
+            { }
+        }
+
+        private sealed class ExistingPostgresqlServiceClient : Client<FlexibleServerModel.Server>
+        {
+            [System.Diagnostics.CodeAnalysis.SuppressMessage("GeneratedRegex", "SYSLIB1045:Convert to 'GeneratedRegexAttribute'.", Justification = "<Pending>")]
+            private static readonly Regex regex = new(@"\s+", RegexOptions.Compiled);
+            internal static Func<FlexibleServerModel.Server, string, string, bool> Predicate => (server, serverName, regionName)
+                => server.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase) && regex.Replace(server.Location, string.Empty).Equals(regionName, StringComparison.OrdinalIgnoreCase);
+
+            internal static Client<FlexibleServerModel.Server> GetClient(string subscription, Deployer deployer)
+            {
+                ArgumentException.ThrowIfNullOrEmpty(subscription);
+                ArgumentNullException.ThrowIfNull(deployer);
+
+                return new ExistingPostgresqlServiceClient(new FlexibleServer.PostgreSQLManagementClient(deployer.tokenCredentials) { SubscriptionId = subscription });
+            }
+
+            private ExistingPostgresqlServiceClient(FlexibleServer.PostgreSQLManagementClient client) : base(client.Servers.ListAsync, client.Servers.ListNextAsync)
+            { }
+        }
+
+        private sealed class ExistingBatchAccountClient : Client<BatchAccount>
+        {
+            internal static Func<BatchAccount, string, string, bool> Predicate => (batchAccount, batchAccountName, regionName)
+                => batchAccount.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase) && batchAccount.Location.Equals(regionName, StringComparison.OrdinalIgnoreCase);
+
+            internal static Client<BatchAccount> GetClient(string subscription, Deployer deployer)
+            {
+                ArgumentException.ThrowIfNullOrEmpty(subscription);
+                ArgumentNullException.ThrowIfNull(deployer);
+
+                return new ExistingBatchAccountClient(new BatchManagementClient(deployer.tokenCredentials) { SubscriptionId = subscription }.BatchAccount);
+            }
+
+            private ExistingBatchAccountClient(IBatchAccountOperations client) : base(client.ListAsync, client.ListNextAsync)
+            { }
+        }
+
+        private sealed class ExistingStorageAccountClient : Client<IStorageAccount>
+        {
+            internal static Func<IStorageAccount, string, string, bool> Predicate => (storageAccount, storageAccountName, regionName)
+                => storageAccount.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase) && storageAccount.RegionName.Equals(regionName, StringComparison.OrdinalIgnoreCase);
+
+            internal static Client<IStorageAccount> GetClient(string subscription, Deployer deployer)
+            {
+                ArgumentException.ThrowIfNullOrEmpty(subscription);
+                ArgumentNullException.ThrowIfNull(deployer);
+
+                return new ExistingStorageAccountClient(deployer.azureClient.WithSubscription(subscription).StorageAccounts);
+            }
+
+            private ExistingStorageAccountClient(IStorageAccounts client) : base(cancellationToken => client.ListAsync(cancellationToken: cancellationToken))
+            { }
         }
 
         private class ValidationException : Exception
