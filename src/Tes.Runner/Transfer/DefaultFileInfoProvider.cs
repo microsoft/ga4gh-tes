@@ -56,7 +56,7 @@ public class DefaultFileInfoProvider : IFileInfoProvider
         }
         var prefixToRemove = Path.GetDirectoryName($"{searchPath}{delimiter}{searchPattern.TrimStart('/')}");
 
-        if (prefixToRemove != null && absolutePath.StartsWith(prefixToRemove))
+        if (!string.IsNullOrWhiteSpace(prefixToRemove) && absolutePath.StartsWith(prefixToRemove))
         {
             logger.LogInformation($"Removing prefix: {prefixToRemove} from absolute path: {absolutePath}");
 
@@ -72,7 +72,7 @@ public class DefaultFileInfoProvider : IFileInfoProvider
 
         if (!Directory.Exists(path))
         {
-            logger.LogWarning($"The directory provided does not exists: {path}. The output will be ignored.");
+            logger.LogWarning($"The directory provided does not exist: {path}. The output will be ignored.");
 
             return new List<FileResult>();
         }
