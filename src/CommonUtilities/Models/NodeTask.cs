@@ -21,6 +21,7 @@ namespace Tes.Runner.Models
     public class FileOutput
     {
         public string? Path { get; set; }
+        public string? MountParentDirectory { get; set; }
         public string? TargetUrl { get; set; }
         public SasResolutionStrategy? SasStrategy { get; set; }
         public FileType? FileType { get; set; }
@@ -30,6 +31,7 @@ namespace Tes.Runner.Models
     public class FileInput
     {
         public string? Path { get; set; }
+        public string? MountParentDirectory { get; set; }
         public string? SourceUrl { get; set; }
         public SasResolutionStrategy? SasStrategy { get; set; }
     }

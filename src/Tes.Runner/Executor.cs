@@ -16,6 +16,7 @@ namespace Tes.Runner
         private readonly ILogger logger = PipelineLoggerFactory.Create<Executor>();
         private readonly NodeTask tesNodeTask;
         private readonly FileOperationResolver operationResolver;
+        private readonly VolumeBindingsGenerator volumeBindingsGenerator = new VolumeBindingsGenerator();
 
         public Executor(NodeTask tesNodeTask) : this(tesNodeTask, new FileOperationResolver(tesNodeTask))
         {
@@ -32,7 +33,9 @@ namespace Tes.Runner
 
         public async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(DockerExecutor dockerExecutor)
         {
-            var result = await dockerExecutor.RunOnContainerAsync(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute);
+            var bindings = volumeBindingsGenerator.GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs);
+
+            var result = await dockerExecutor.RunOnContainerAsync(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings);
 
             return new NodeTaskResult(result);
         }
