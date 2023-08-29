@@ -1,38 +1,27 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
-using TesApi.Web.Management;
-using TesApi.Web.Management.Clients;
-using TesApi.Web.Management.Configuration;
 
-namespace TesApi.Tests
+namespace Tes.ApiClients.Tests
 {
-    [TestClass]
+    [TestClass, TestCategory("Unit")]
     public class TerraLandingZoneApiClientTest
     {
-        private TerraLandingZoneApiClient terraLandingZoneApiClient;
-        private Mock<TokenCredential> tokenCredential;
-        private Mock<CacheAndRetryHandler> cacheAndRetryHandler;
-        private TerraApiStubData terraApiStubData;
+        private TerraLandingZoneApiClient terraLandingZoneApiClient = null!;
+        private Mock<TokenCredential> tokenCredential = null!;
+        private Mock<CachingRetryHandler> cacheAndRetryHandler = null!;
+        private TerraApiStubData terraApiStubData = null!;
 
         [TestInitialize]
         public void SetUp()
         {
-            terraApiStubData = new();
-            tokenCredential = new();
-            cacheAndRetryHandler = new();
-            var terraOptions = new Mock<IOptions<TerraOptions>>();
-            terraOptions.Setup(o => o.Value)
-                .Returns(terraApiStubData.GetTerraOptions());
-            terraLandingZoneApiClient = new(terraOptions.Object, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
+            terraApiStubData = new TerraApiStubData();
+            tokenCredential = new Mock<TokenCredential>();
+            cacheAndRetryHandler = new Mock<CachingRetryHandler>();
+            terraLandingZoneApiClient = new TerraLandingZoneApiClient(TerraApiStubData.LandingZoneApiHost, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
         }
 
         [TestMethod]
@@ -40,10 +29,10 @@ namespace TesApi.Tests
         {
             var body = terraApiStubData.GetResourceQuotaApiResponseInJson();
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
-                    It.IsAny<Func<System.Threading.CancellationToken, Task<string>>>(), It.IsAny<System.Threading.CancellationToken>()))
+                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(body);
 
-            var quota = await terraLandingZoneApiClient.GetResourceQuotaAsync(terraApiStubData.LandingZoneId, terraApiStubData.BatchAccountId, cacheResults: true, cancellationToken: System.Threading.CancellationToken.None);
+            var quota = await terraLandingZoneApiClient.GetResourceQuotaAsync(terraApiStubData.LandingZoneId, terraApiStubData.BatchAccountId, cacheResults: true, cancellationToken: CancellationToken.None);
 
             Assert.IsNotNull(quota);
             Assert.AreEqual(terraApiStubData.LandingZoneId, quota.LandingZoneId);
@@ -57,7 +46,7 @@ namespace TesApi.Tests
             Assert.AreEqual("standardLSv2Family", quota.QuotaValues.DedicatedCoreQuotaPerVmFamily.Keys.First());
             Assert.AreEqual(0, quota.QuotaValues.DedicatedCoreQuotaPerVmFamily.Values.First());
             tokenCredential.Verify(t => t.GetTokenAsync(It.IsAny<TokenRequestContext>(),
-                    It.IsAny<System.Threading.CancellationToken>()),
+                    It.IsAny<CancellationToken>()),
                 Times.Once);
         }
 
@@ -67,16 +56,16 @@ namespace TesApi.Tests
             var body = terraApiStubData.GetResourceApiResponseInJson();
 
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
-                    It.IsAny<Func<System.Threading.CancellationToken, Task<string>>>(), It.IsAny<System.Threading.CancellationToken>()))
+                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(body);
 
-            var resources = await terraLandingZoneApiClient.GetLandingZoneResourcesAsync(terraApiStubData.LandingZoneId, System.Threading.CancellationToken.None);
+            var resources = await terraLandingZoneApiClient.GetLandingZoneResourcesAsync(terraApiStubData.LandingZoneId, CancellationToken.None);
 
             Assert.IsNotNull(resources);
             Assert.AreEqual(terraApiStubData.LandingZoneId, resources.Id);
             Assert.AreEqual(5, resources.Resources.Length);
             tokenCredential.Verify(t => t.GetTokenAsync(It.IsAny<TokenRequestContext>(),
-                    It.IsAny<System.Threading.CancellationToken>()),
+                    It.IsAny<CancellationToken>()),
                 Times.Once);
 
         }

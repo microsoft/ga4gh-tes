@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Azure.Storage.Sas;
 using Tes.Runner.Storage;
 
 namespace Tes.Runner.Test.Storage
@@ -17,7 +18,7 @@ namespace Tes.Runner.Test.Storage
         {
             var provider = new CloudProviderSchemeConverter();
 
-            var result = await provider.CreateSasTokenWithStrategyAsync(sourceUri);
+            var result = await provider.CreateSasTokenWithStrategyAsync(sourceUri, BlobSasPermissions.All);
 
             Assert.IsNotNull(result);
             Assert.AreEqual(result.AbsoluteUri, new Uri(expectedUri).AbsoluteUri);

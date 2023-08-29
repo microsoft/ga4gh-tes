@@ -10,14 +10,14 @@ namespace Tes.Runner.Test
     [TestClass]
     public class ResolutionPolicyHandlerTests
     {
-#pragma warning disable CS8618
-        private ResolutionPolicyHandler resolutionPolicyHandler;
-#pragma warning restore CS8618
+        private ResolutionPolicyHandler resolutionPolicyHandler = null!;
+        private RuntimeOptions runtimeOptions = null!;
 
         [TestInitialize]
         public void SetUp()
         {
-            resolutionPolicyHandler = new ResolutionPolicyHandler();
+            runtimeOptions = new RuntimeOptions();
+            resolutionPolicyHandler = new ResolutionPolicyHandler(runtimeOptions);
         }
 
         [TestMethod]

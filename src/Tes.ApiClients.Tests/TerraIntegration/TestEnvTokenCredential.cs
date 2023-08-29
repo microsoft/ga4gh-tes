@@ -1,12 +1,9 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Azure.Core;
 
-namespace TesApi.Tests.Integration
+namespace Tes.ApiClients.Tests.TerraIntegration
 {
     internal class TestEnvTokenCredential : TokenCredential
     {

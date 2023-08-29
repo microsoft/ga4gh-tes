@@ -1,40 +1,28 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Azure.Core;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 
-namespace TesApi.Web.Management.Clients
+namespace Tes.ApiClients
 {
     /// <summary>
     /// Terra Landing Zone api client. 
     /// </summary>
     public class TerraLandingZoneApiClient : TerraApiClient
     {
-        private const string LandingZonesApiSegments = @"/api/landingzones/v1/azure/";
-
-        private readonly string baseApiUrl;
+        private const string LandingZonesApiSegments = @"/api/landingzones/v1/azure";
 
         /// <summary>
         /// Constructor of TerraLandingZoneApiClient
         /// </summary>
-        /// <param name="terraOptions"></param>
+        /// <param name="apiUrl"></param>
         /// <param name="tokenCredential"></param>
-        /// <param name="cacheAndRetryHandler"></param>
+        /// <param name="cachingRetryHandler"></param>
         /// <param name="logger"></param>
-        public TerraLandingZoneApiClient(IOptions<TerraOptions> terraOptions, TokenCredential tokenCredential, CacheAndRetryHandler cacheAndRetryHandler, ILogger<TerraLandingZoneApiClient> logger) : base(tokenCredential, cacheAndRetryHandler, logger)
+        public TerraLandingZoneApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryHandler cachingRetryHandler, ILogger<TerraLandingZoneApiClient> logger) : base(apiUrl, tokenCredential, cachingRetryHandler, logger)
         {
-            ArgumentException.ThrowIfNullOrEmpty(terraOptions.Value.LandingZoneApiHost, nameof(terraOptions.Value.LandingZoneApiHost));
-            ArgumentNullException.ThrowIfNull(tokenCredential);
-            ArgumentNullException.ThrowIfNull(cacheAndRetryHandler);
-
-            this.baseApiUrl = terraOptions.Value.LandingZoneApiHost.TrimEnd('/') + LandingZonesApiSegments;
         }
 
         /// <summary>
@@ -105,7 +93,7 @@ namespace TesApi.Web.Management.Clients
         private UriBuilder GetLandingZoneUriBuilder(Guid landingZoneId, string pathSegments)
         {
             //This is okay given the perf expectations of service  - no current need to optimize string allocations.
-            var apiRequestUrl = baseApiUrl + landingZoneId.ToString() + pathSegments;
+            var apiRequestUrl = $"{ApiUrl.TrimEnd('/')}{LandingZonesApiSegments}/{landingZoneId}{pathSegments}";
             var uriBuilder = new UriBuilder(apiRequestUrl);
             return uriBuilder;
         }

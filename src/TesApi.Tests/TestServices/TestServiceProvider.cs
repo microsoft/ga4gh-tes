@@ -13,11 +13,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Swashbuckle.AspNetCore.SwaggerGen;
+using Tes.ApiClients;
+using Tes.ApiClients.Options;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Web;
 using TesApi.Web.Management;
-using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
 using TesApi.Web.Storage;
@@ -79,7 +80,7 @@ namespace TesApi.Tests.TestServices
                         .AddTransient<ILogger<ConfigurationUtils>>(_ => NullLogger<ConfigurationUtils>.Instance)
                         .AddTransient<ILogger<PriceApiBatchSkuInformationProvider>>(_ => NullLogger<PriceApiBatchSkuInformationProvider>.Instance)
                         .AddSingleton<TestRepositoryStorage>()
-                        .AddSingleton<CacheAndRetryHandler>()
+                        .AddSingleton<CachingRetryHandler>()
                         .AddSingleton<PriceApiClient>()
                         .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                         .AddTransient<BatchPool>()

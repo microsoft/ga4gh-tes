@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-namespace TesApi.Web.Management.Models.Pricing
+namespace Tes.ApiClients.Models.Pricing
 {
     /// <summary>
     /// Sku information from the retail pricing API.

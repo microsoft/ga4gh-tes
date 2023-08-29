@@ -142,14 +142,14 @@ namespace TesApi.Web
 
             var credentials = new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken));
 
-            await foreach (var subscriptionId in subscriptionIds)
+            await foreach (var subscriptionId in subscriptionIds.WithCancellation(cancellationToken))
             {
                 try
                 {
                     var components = new ApplicationInsightsManagementClient(credentials) { SubscriptionId = subscriptionId }.Components;
                     var app = await (await components.ListAsync(cancellationToken))
                         .ToAsyncEnumerable(components.ListNextAsync)
-                        .FirstOrDefaultAsync(a => a.ApplicationId.Equals(appInsightsApplicationId, StringComparison.OrdinalIgnoreCase), cancellationToken: cancellationToken);
+                        .FirstOrDefaultAsync(a => a.ApplicationId.Equals(appInsightsApplicationId, StringComparison.OrdinalIgnoreCase), cancellationToken);
 
                     if (app is not null)
                     {
@@ -173,10 +173,11 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            var lastAttemptNumber = (await batchClient.JobOperations.ListJobs(jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken: cancellationToken))
+            var lastAttemptNumber = await batchClient.JobOperations.ListJobs(jobFilter)
+                .ToAsyncEnumerable()
                 .Select(j => int.Parse(j.Id.Split(BatchJobAttemptSeparator)[1]))
                 .OrderBy(a => a)
-                .LastOrDefault();
+                .LastOrDefaultAsync(cancellationToken);
 
             return $"{tesTaskId}{BatchJobAttemptSeparator}{lastAttemptNumber + 1}";
         }
@@ -321,7 +322,7 @@ namespace TesApi.Web
                     // Normally, we will only find one job. If we find more, we always want the latest one. Thus, we use ListJobs()
                     var jobInfos = await batchClient.JobOperations.ListJobs(jobOrTaskFilter).ToAsyncEnumerable()
                         .Select(j => new { Job = j, AttemptNumber = int.Parse(j.Id.Split(BatchJobAttemptSeparator)[1]) })
-                        .ToListAsync(cancellationToken: cancellationToken);
+                        .ToListAsync(cancellationToken);
 
                     if (!jobInfos.Any())
                     {
@@ -535,7 +536,7 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            return (await batchClient.JobOperations.ListJobs(filter).ToAsyncEnumerable().ToListAsync()).Select(c => c.Id);
+            return await batchClient.JobOperations.ListJobs(filter).ToAsyncEnumerable().Select(c => c.Id).ToListAsync(cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -547,12 +548,12 @@ namespace TesApi.Web
                 SelectClause = "id,poolInfo,onAllTasksComplete"
             };
 
-            var noActionTesjobs = (await batchClient.JobOperations.ListJobs(filter).ToAsyncEnumerable().ToListAsync(cancellationToken))
+            var noActionTesjobs = batchClient.JobOperations.ListJobs(filter).ToAsyncEnumerable()
                 .Where(j => j.PoolInformation?.AutoPoolSpecification?.AutoPoolIdPrefix == "TES" && j.OnAllTasksComplete == OnAllTasksComplete.NoAction);
 
-            var noActionTesjobsWithNoTasks = await noActionTesjobs.ToAsyncEnumerable().WhereAwait(async j => !(await j.ListTasks().ToListAsync(cancellationToken)).Any()).ToListAsync(cancellationToken);
+            var noActionTesjobsWithNoTasks = noActionTesjobs.WhereAwait(async j => !await j.ListTasks().ToAsyncEnumerable().AnyAsync(cancellationToken));
 
-            return noActionTesjobsWithNoTasks.Select(j => j.Id);
+            return await noActionTesjobsWithNoTasks.Select(j => j.Id).ToListAsync(cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -652,7 +653,7 @@ namespace TesApi.Web
                 .Select(s => s.SubscriptionId).SelectManyAwait(async (subscriptionId, ct) =>
                     (await azureClient.WithSubscription(subscriptionId).StorageAccounts.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable()
                     .Select(a => new StorageAccountInfo { Id = a.Id, Name = a.Name, SubscriptionId = subscriptionId, BlobEndpoint = a.EndPoints.Primary.Blob }))
-                .ToListAsync(cancellationToken: cancellationToken);
+                .ToListAsync(cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -661,7 +662,7 @@ namespace TesApi.Web
             try
             {
                 var azureClient = await GetAzureManagementClientAsync(cancellationToken);
-                var storageAccount = await azureClient.WithSubscription(storageAccountInfo.SubscriptionId).StorageAccounts.GetByIdAsync(storageAccountInfo.Id);
+                var storageAccount = await azureClient.WithSubscription(storageAccountInfo.SubscriptionId).StorageAccounts.GetByIdAsync(storageAccountInfo.Id, cancellationToken);
 
                 return (await storageAccount.GetKeysAsync(cancellationToken))[0].Value;
             }
@@ -787,12 +788,12 @@ namespace TesApi.Web
 
             var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
 
-            await foreach (var subId in subscriptionIds)
+            await foreach (var subId in subscriptionIds.WithCancellation(cancellationToken))
             {
                 var batchAccountOperations = new BatchManagementClient(tokenCredentials) { SubscriptionId = subId }.BatchAccount;
-                var batchAccount = await (await batchAccountOperations.ListAsync(cancellationToken: cancellationToken))
+                var batchAccount = await (await batchAccountOperations.ListAsync(cancellationToken))
                     .ToAsyncEnumerable(batchAccountOperations.ListNextAsync)
-                    .FirstOrDefaultAsync(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken: cancellationToken);
+                    .FirstOrDefaultAsync(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
 
                 if (batchAccount is not null)
                 {

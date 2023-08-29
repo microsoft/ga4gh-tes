@@ -28,12 +28,19 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CommonUtilities.Tests", "src\CommonUtilities.Tests\CommonUtilities.Tests.csproj", "{B4E82DE4-16F7-40D5-9619-702A7EECBE92}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GenerateBatchVmSkus", "src\GenerateBatchVmSkus\GenerateBatchVmSkus.csproj", "{23C29BA5-3A52-4356-9220-FC84FE32E43E}"
+	ProjectSection(ProjectDependencies) = postProject
+		{36B45D5B-0C96-4B26-B077-57C4D09DB799} = {36B45D5B-0C96-4B26-B077-57C4D09DB799}
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.Runner", "src\Tes.Runner\Tes.Runner.csproj", "{7CD31F61-DB85-43C7-BA2C-5C46732AB6E9}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.Runner.Test", "src\Tes.Runner.Test\Tes.Runner.Test.csproj", "{F47560D0-2C03-4FA5-95B8-B4833FD0CF5B}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.RunnerCLI", "src\Tes.RunnerCLI\Tes.RunnerCLI.csproj", "{D5DFB5A4-2E18-456A-9A29-5BD8C82DF250}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.ApiClients", "src\Tes.ApiClients\Tes.ApiClients.csproj", "{36B45D5B-0C96-4B26-B077-57C4D09DB799}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.ApiClients.Tests", "src\Tes.ApiClients.Tests\Tes.ApiClients.Tests.csproj", "{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -85,6 +92,14 @@ Global
 		{D5DFB5A4-2E18-456A-9A29-5BD8C82DF250}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D5DFB5A4-2E18-456A-9A29-5BD8C82DF250}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D5DFB5A4-2E18-456A-9A29-5BD8C82DF250}.Release|Any CPU.Build.0 = Release|Any CPU
+		{36B45D5B-0C96-4B26-B077-57C4D09DB799}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{36B45D5B-0C96-4B26-B077-57C4D09DB799}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{36B45D5B-0C96-4B26-B077-57C4D09DB799}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{36B45D5B-0C96-4B26-B077-57C4D09DB799}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

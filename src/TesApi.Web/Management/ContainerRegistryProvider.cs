@@ -10,6 +10,7 @@ using Microsoft.Azure.Management.ContainerRegistry.Fluent;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Tes.ApiClients;
 using TesApi.Web.Management.Configuration;
 
 namespace TesApi.Web.Management
@@ -34,11 +35,11 @@ namespace TesApi.Web.Management
         /// Provides resource information about the container registries the TES service has access.
         /// </summary>
         /// <param name="containerRegistryOptions"></param>
-        /// <param name="cacheAndRetryHandler"></param>
+        /// <param name="cachingRetryHandler"></param>
         /// <param name="logger"></param>
         /// <param name="azureManagementClientsFactory"></param>
-        public ContainerRegistryProvider(IOptions<ContainerRegistryOptions> containerRegistryOptions, CacheAndRetryHandler cacheAndRetryHandler, AzureManagementClientsFactory azureManagementClientsFactory, ILogger<ContainerRegistryProvider> logger)
-            : base(cacheAndRetryHandler, azureManagementClientsFactory, logger)
+        public ContainerRegistryProvider(IOptions<ContainerRegistryOptions> containerRegistryOptions, CachingRetryHandler cachingRetryHandler, AzureManagementClientsFactory azureManagementClientsFactory, ILogger<ContainerRegistryProvider> logger)
+            : base(cachingRetryHandler, azureManagementClientsFactory, logger)
         {
             ArgumentNullException.ThrowIfNull(containerRegistryOptions);
             ArgumentNullException.ThrowIfNull(containerRegistryOptions.Value);
@@ -64,7 +65,7 @@ namespace TesApi.Web.Management
                 return null;
             }
 
-            var containerRegistryInfo = CacheAndRetryHandler.AppCache.Get<ContainerRegistryInfo>($"{nameof(ContainerRegistryProvider)}:{imageName}");
+            var containerRegistryInfo = CachingRetryHandler.AppCache.Get<ContainerRegistryInfo>($"{nameof(ContainerRegistryProvider)}:{imageName}");
 
             if (containerRegistryInfo is not null)
             {
@@ -98,7 +99,7 @@ namespace TesApi.Web.Management
 
         private async Task<ContainerRegistryInfo> LookUpAndAddToCacheContainerRegistryInfoAsync(string imageName, CancellationToken cancellationToken)
         {
-            var repositories = await CacheAndRetryHandler.ExecuteWithRetryAsync(GetAccessibleContainerRegistriesAsync, cancellationToken: cancellationToken);
+            var repositories = await CachingRetryHandler.ExecuteWithRetryAsync(GetAccessibleContainerRegistriesAsync, cancellationToken: cancellationToken);
 
             var requestedRepo = repositories?.FirstOrDefault(reg =>
                 reg.RegistryServer.Equals(imageName.Split('/').FirstOrDefault(), StringComparison.OrdinalIgnoreCase));
@@ -106,7 +107,7 @@ namespace TesApi.Web.Management
             if (requestedRepo is not null)
             {
                 Logger.LogInformation($"Requested repository: {imageName} was found.");
-                CacheAndRetryHandler.AppCache.Set($"{nameof(ContainerRegistryProvider)}:{imageName}", requestedRepo, DateTimeOffset.UtcNow.AddHours(options.RegistryInfoCacheExpirationInHours));
+                CachingRetryHandler.AppCache.Set($"{nameof(ContainerRegistryProvider)}:{imageName}", requestedRepo, DateTimeOffset.UtcNow.AddHours(options.RegistryInfoCacheExpirationInHours));
             }
             else
             {

@@ -11,7 +11,7 @@ using Microsoft.Azure.Batch.Auth;
 using Microsoft.Azure.Management.Batch.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TesApi.Web.Management.Clients;
+using Tes.ApiClients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 
@@ -30,7 +30,6 @@ namespace TesApi.Web.Management.Batch
         private const string CloningInstructionsCloneNothing = "COPY_NOTHING";
         private const string AccessScopeSharedAccess = "SHARED_ACCESS";
         private const string UserManaged = "USER";
-        private readonly string tesBatchPoolName = Guid.NewGuid().ToString();
 
         private readonly TerraWsmApiClient terraWsmApiClient;
         private readonly IMapper mapper;

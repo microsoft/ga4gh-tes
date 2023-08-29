@@ -169,17 +169,6 @@ namespace TesApi.Web
                 => pool.IsAvailable;
         }
 
-        private async ValueTask<List<IBatchPool>> GetEmptyPools(CancellationToken cancellationToken)
-            => await batchPools.GetAllPools()
-                .ToAsyncEnumerable()
-                .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
-                .ToListAsync(cancellationToken);
-
-        /// <inheritdoc/>
-        public async ValueTask<IEnumerable<Task>> GetShutdownCandidatePools(CancellationToken cancellationToken)
-            => (await GetEmptyPools(cancellationToken))
-                .Select(pool => DeletePoolAsync(pool, cancellationToken));
-
         /// <inheritdoc/>
         public IEnumerable<IBatchPool> GetPools()
             => batchPools.GetAllPools();
@@ -197,7 +186,10 @@ namespace TesApi.Web
             {
                 if (!this.enableBatchAutopool)
                 {
-                    var pools = (await GetEmptyPools(cancellationToken))
+                    var pools = (await batchPools.GetAllPools()
+                            .ToAsyncEnumerable()
+                            .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
+                            .ToListAsync(cancellationToken))
                         .Where(p => !assignedPools.Contains(p.Pool.PoolId))
                         .OrderBy(p => p.GetAllocationStateTransitionTime(cancellationToken))
                         .Take(neededPools.Count)

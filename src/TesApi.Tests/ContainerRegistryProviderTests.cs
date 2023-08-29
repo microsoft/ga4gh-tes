@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
+using Tes.ApiClients;
 using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Configuration;
@@ -21,7 +22,7 @@ namespace TesApi.Tests
     {
         private ContainerRegistryProvider containerRegistryProvider;
         private ContainerRegistryOptions containerRegistryOptions;
-        private Mock<CacheAndRetryHandler> retryHandlerMock;
+        private Mock<CachingRetryHandler> retryHandlerMock;
         private Mock<IMemoryCache> appCacheMock;
         private Mock<IOptions<ContainerRegistryOptions>> containerRegistryOptionsMock;
         private Mock<ILogger<ContainerRegistryProvider>> loggerMock;
@@ -33,7 +34,7 @@ namespace TesApi.Tests
         public void Setup()
         {
             appCacheMock = new Mock<IMemoryCache>();
-            retryHandlerMock = new Mock<CacheAndRetryHandler>();
+            retryHandlerMock = new Mock<CachingRetryHandler>();
             retryHandlerMock.Setup(r => r.AppCache).Returns(appCacheMock.Object);
             clientFactoryMock = new Mock<AzureManagementClientsFactory>();
             containerRegistryOptionsMock = new Mock<IOptions<ContainerRegistryOptions>>();
@@ -80,7 +81,7 @@ namespace TesApi.Tests
             Assert.AreEqual(server, container.RegistryServer);
             appCacheMock.Verify(c => c.TryGetValue(It.Is<object>(v => $"{nameof(ContainerRegistryProvider)}:{image}".Equals(v)), out It.Ref<object>.IsAny), Times.Once());
             retryHandlerMock.Verify(r =>
-                r.ExecuteWithRetryAsync(It.IsAny<Func<Task<IEnumerable<ContainerRegistryInfo>>>>()), Times.Never);
+                r.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(), It.IsAny<System.Threading.CancellationToken>()), Times.Never);
         }
 
         [TestMethod]
@@ -100,7 +101,9 @@ namespace TesApi.Tests
             var server = "registry";
             var image = $"{server}_other/image";
             retryHandlerMock.Setup(r =>
-                    r.ExecuteWithRetryAsync(It.IsAny<Func<Task<IEnumerable<ContainerRegistryInfo>>>>()))
+                    r.ExecuteWithRetryAsync(
+                        It.IsAny<Func<System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(),
+                        It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(new List<ContainerRegistryInfo>()
                 {
                     new ContainerRegistryInfo() { RegistryServer = server }
