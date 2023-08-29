@@ -28,7 +28,7 @@ namespace Tes.Runner.Docker
 
             await PullImageAsync(imageName, tag);
 
-            // await ConfigureNetworkAsync();
+            await ConfigureNetworkAsync();
 
             var createResponse = await CreateContainerAsync(imageName, commandsToExecute, volumeBindings);
 
