@@ -53,6 +53,7 @@ The operations are defined in a TES task file using ``JSON``
         {
             "path": "<PATH>",
             "sourceUrl": "<SOURCE_URL>",
+            "mountParentDirectory" : "<MOUNT_PARENT_DIRECTORY>",
             "sasStrategy": "None",
         }
     ],
@@ -61,7 +62,7 @@ The operations are defined in a TES task file using ``JSON``
             "path": "<PATH>",
             "targetUrl": "<TARGET_URL>",
             "sasStrategy": "None",
-            "pathPrefix": "<PATH_PREFIX>",
+            "mountParentDirectory" : "<MOUNT_PARENT_DIRECTORY>",
             "fileType": "<FILE_TYPE>"
         }
     ]
@@ -92,9 +93,10 @@ The inputs are defined as a list of objects with the following fields:
 
 | Field | Description | Required |
 | --- | --- | --- |
-| `path` | The local path of the input file.  | Yes |
+| `path` | The local absolute path of the input file.  | Yes |
 | `sourceUrl` | The URL of the input file | Yes |
 | `sasStrategy` | The strategy to resolve the SAS token | Yes |
+| `mountParentDirectory` | The directory from which the children directories must be mapped as a volume in the Docker container | No |
 
 ### Outputs
 
@@ -102,11 +104,11 @@ The outputs are defined as a list of objects with the following fields:
 
 | Field | Description | Required |
 | --- | --- | --- |
-| `path` | The local path of the output file, directory or the search pattern if the `pathPrefix` is provided  | Yes |
+| `path` | The local absolute path of the output file, directory or the search pattern | Yes |
 | `targetUrl` | The URL of the output file | Yes |
 | `sasStrategy` | The strategy to resolve the SAS token | Yes |
-| `pathPrefix` | The prefix of the output file. If provided, the `path` is used as a search pattern. This value is not included in the target URL of the files. Ignored if the `fileType` is `Directory` | No |
 | `fileType` | `File` or `Directory`. If the value is `Directory` value in the `path` property must be a directory. All files in the directory structure are uploaded. | Yes |
+| `mountParentDirectory` | The directory from which the children directories must be mapped as a volume in the Docker container | No |
 
 ## Download and Upload
 
