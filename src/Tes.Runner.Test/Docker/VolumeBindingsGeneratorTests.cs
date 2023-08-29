@@ -24,6 +24,7 @@ namespace Tes.Runner.Test.Docker
 
         [DataTestMethod]
         [DataRow("/wkd/input/file.bam", "/wkd", "/wkd/input:/input")]
+        [DataRow("/wkd/dir1/input/file.bam", "/wkd/dir1", "/wkd/dir1/input:/input")]
         [DataRow("/wkd/input/file.bam", "/wkd/", "/wkd/input:/input")]
         public void GenerateVolumeBindings_SingleInputWithWorkingDir_SingleVolumeBinding(string path, string mountParent, string expected)
         {

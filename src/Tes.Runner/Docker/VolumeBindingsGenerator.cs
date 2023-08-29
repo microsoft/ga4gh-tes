@@ -66,19 +66,20 @@ namespace Tes.Runner.Docker
             }
 
             var expandedMountParentDirectory = fileInfoProvider.GetExpandedFileName(mountParentDirectory);
+            var expandedPath = fileInfoProvider.GetExpandedFileName(path);
 
-            if (!path.StartsWith(expandedMountParentDirectory))
+            if (!expandedPath.StartsWith(expandedMountParentDirectory))
             {
                 logger.LogWarning(
-                    $"The path value {path} does not contain the specified mount parent directory: {expandedMountParentDirectory}. No volume binding will be created for this file in the container.");
+                    $"The expanded path value {expandedPath} does not contain the specified mount parent directory: {expandedMountParentDirectory}. No volume binding will be created for this file in the container.");
                 return default;
             }
 
-            var targetDir = $"{path.Substring(expandedMountParentDirectory.Length).Split('/', StringSplitOptions.RemoveEmptyEntries)[0].TrimStart('/')}";
+            var targetDir = $"{expandedPath.Substring(expandedMountParentDirectory.Length).Split('/', StringSplitOptions.RemoveEmptyEntries)[0].TrimStart('/')}";
 
             var volBinding = $"{expandedMountParentDirectory.TrimEnd('/')}/{targetDir}:/{targetDir}";
 
-            logger.LogDebug($"Volume binding for {path} is {volBinding}");
+            logger.LogInformation($"Volume binding for {expandedPath} is {volBinding}");
 
             return volBinding;
         }
