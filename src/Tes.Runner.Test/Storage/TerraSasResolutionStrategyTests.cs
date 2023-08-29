@@ -2,8 +2,6 @@
 // Licensed under the MIT License.
 
 using Azure.Storage.Sas;
-using Microsoft.Azure.Management.BatchAI.Fluent.Models;
-using Microsoft.Azure.Management.Network.Fluent;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.ApiClients;
