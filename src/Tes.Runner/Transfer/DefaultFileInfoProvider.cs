@@ -24,7 +24,11 @@ public class DefaultFileInfoProvider : IFileInfoProvider
     {
         logger.LogInformation($"Expanding file name: {fileName}");
 
-        return Environment.ExpandEnvironmentVariables(fileName);
+        var expandedValue = Environment.ExpandEnvironmentVariables(fileName);
+
+        logger.LogInformation($"Expanded file name: {expandedValue}");
+
+        return expandedValue;
     }
 
     public bool FileExists(string fileName)
