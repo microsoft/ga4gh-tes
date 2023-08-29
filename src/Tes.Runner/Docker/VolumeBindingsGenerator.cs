@@ -74,9 +74,9 @@ namespace Tes.Runner.Docker
                 return default;
             }
 
-            var targetDir = $"{path.Substring(expandedMountParentDirectory.Length - 1).Split('/')[0].TrimStart('/')}";
+            var targetDir = $"{path.Substring(expandedMountParentDirectory.Length).Split('/', StringSplitOptions.RemoveEmptyEntries)[0].TrimStart('/')}";
 
-            var volBinding = $"{expandedMountParentDirectory}/{targetDir}:/{targetDir}";
+            var volBinding = $"{expandedMountParentDirectory.TrimEnd('/')}/{targetDir}:/{targetDir}";
 
             logger.LogDebug($"Volume binding for {path} is {volBinding}");
 
