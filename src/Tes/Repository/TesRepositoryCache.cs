@@ -15,8 +15,7 @@ namespace Tes.Repository
         /// <summary>
         /// A TesTask can run for 7 days, and hypothetically there could be weeks of queued tasks, so set a long default
         /// </summary>
-        /// 
-        private static TimeSpan defaultItemExpiration = TimeSpan.FromDays(30);
+        private static readonly TimeSpan defaultItemExpiration = TimeSpan.FromDays(30);
 
         private readonly IMemoryCache cache;
 
@@ -62,7 +61,7 @@ namespace Tes.Repository
         }
 
         /// <inheritdoc/>
-        public bool TryUpdate(string key, T task, TimeSpan expiration)
+        public bool TryUpdate(string key, T task, System.TimeSpan expiration)
         {
             if (expiration == default)
             {

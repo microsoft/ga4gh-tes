@@ -63,16 +63,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CommonUtilities\CommonUtilities.csproj" />
-
-    <ProjectReference Include="..\Tes.RunnerCLI\Tes.RunnerCLI.csproj"
-                      Targets="Publish"
-                      AdditionalProperties="PublishProfile=FolderProfile">
-      <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
-      <OutputItemType>None</OutputItemType>
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      <Private>False</Private>
-    </ProjectReference>
-
+    <ProjectReference Include="..\Tes.ApiClients\Tes.ApiClients.csproj" />
     <ProjectReference Include="..\Tes\Tes.csproj" />
   </ItemGroup>
 
@@ -81,73 +72,4 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
-
-  <UsingTask TaskName="GenerateMD5" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
-    <ParameterGroup>
-      <InputFile ParameterType="Microsoft.Build.Framework.ITaskItem" Required="true" />
-      <MD5Hash Output="true" />
-    </ParameterGroup>
-    <Task>
-      <!--<Reference Include="" />-->
-      <Using Namespace="System" />
-      <Using Namespace="System.IO" />
-      <Using Namespace="System.Security.Cryptography" />
-      <Using Namespace="Microsoft.Build.Framework" />
-      <Code Type="Fragment" Language="cs">
-        <![CDATA[
-            Log.LogMessage(MessageImportance.Normal, "Computing MD5 hash for {0}", InputFile.ItemSpec);
-            var md5spc = MD5.Create();
-            MD5Hash = Convert.ToBase64String(md5spc.ComputeHash(File.ReadAllBytes(InputFile.ItemSpec)));
-            Log.LogMessage(MessageImportance.Normal, "Computed MD5 hash is {0}", MD5Hash);
-        ]]>
-      </Code>
-    </Task>
-  </UsingTask>
-
-  <Target Name="__AssignPublishProperties" BeforeTargets="ResolveProjectReferences" AfterTargets="PrepareProjectReferences">
-    <ConvertToAbsolutePath Paths="$(OutputPath)scripts\">
-      <Output TaskParameter="AbsolutePaths" PropertyName="__TesRunnerPublishDir"/>
-    </ConvertToAbsolutePath>
-
-    <ItemGroup>
-      <__ProjectNotReferenced Include="@(_MSBuildProjectReferenceExistent)" Condition=" '%(Filename)' == 'Tes.RunnerCLI' "/>
-      <_MSBuildProjectReferenceExistent Remove="@(__ProjectNotReferenced)"/>
-      <_MSBuildProjectReferenceExistent Include="@(__ProjectNotReferenced)">
-        <Properties>%(__ProjectNotReferenced.AdditionalProperties);PublishDir=$(__TesRunnerPublishDir);%(__ProjectNotReferenced.SetConfiguration);%(__ProjectNotReferenced.SetPlatform);%(__ProjectNotReferenced.SetTargetFramework)</Properties>
-        <AdditionalProperties></AdditionalProperties>
-        <GlobalPropertiesToRemove>%(__ProjectNotReferenced.GlobalPropertiesToRemove);PublishSingleFile;PublishTrimmed;SelfContained</GlobalPropertiesToRemove>
-      </_MSBuildProjectReferenceExistent>
-    </ItemGroup>
-  </Target>
-
-  <Target Name="__GetPublishedProjectMD5Hash" AfterTargets="ResolveProjectReferences;AssignTargetPaths;__AdjustCopyToOutputDirectoryItemsOptimization">
-    <ItemGroup>
-      <__TRunnerMD5Hash Include="$(IntermediateOutputPath)TRunnerMD5Hash.txt" />
-      <__TRunnerFile Include="$(__TesRunnerPublishDir)tRunner" />
-    </ItemGroup>
-
-    <GenerateMD5 InputFile="%(FullPath)" Condition=" $([System.IO.File]::Exists('@(__TRunnerFile)')) ">
-      <Output TaskParameter="MD5Hash" PropertyName="__TRunnerMD5Hash" />
-    </GenerateMD5>
-
-    <WriteLinesToFile Lines="$(__TRunnerMD5Hash)" File="@(__TRunnerMD5Hash)" WriteOnlyWhenDifferent="true" Overwrite="true" />
-
-    <ItemGroup>
-      <FileWrites Include="@(__TRunnerMD5Hash)" />
-      <ContentWithTargetPath Include="@(__TRunnerMD5Hash->'%(FullPath)')">
-        <TargetPath>scripts\TRunnerMD5Hash.txt</TargetPath>
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </ContentWithTargetPath>
-    </ItemGroup>
-  </Target>
-
-  <Target Name="CopyNodeRunnerToPublishDir" BeforeTargets="ComputeResolvedFilesToPublishList">
-    <ItemGroup>
-      <ResolvedFileToPublish Include="$(__TesRunnerPublishDir)tRunner">
-        <RelativePath>scripts\tRunner</RelativePath>
-        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      </ResolvedFileToPublish>
-    </ItemGroup>
-  </Target>
-
 </Project>

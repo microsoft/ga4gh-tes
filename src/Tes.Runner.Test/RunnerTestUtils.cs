@@ -20,6 +20,30 @@ public class RunnerTestUtils
         return file;
     }
 
+    public static DirectoryInfo CreateTempFilesInDirectory(string dirStructure, string filePrefix)
+    {
+        var parentDirName = Guid.NewGuid().ToString();
+        var root = Directory.CreateDirectory($"{parentDirName}/{dirStructure}");
+
+        while (root.Parent != null)
+        {
+            var fileName = $"{root.FullName}/{filePrefix}{Guid.NewGuid()}.tmp";
+
+            using var fs = File.Create(fileName);
+
+            fs.Close();
+
+            if (root.Name.Equals(parentDirName, StringComparison.InvariantCultureIgnoreCase))
+            {
+                return root;
+            }
+
+            root = root.Parent;
+        }
+
+        throw new Exception("Could not find root directory");
+    }
+
     public static string CalculateMd5(string file)
     {
         using var md5 = MD5.Create();
@@ -51,11 +75,6 @@ public class RunnerTestUtils
             pipelineBuffers.Add(item);
         }
         return pipelineBuffers;
-    }
-    public static string AddRandomDataAndReturnMd5(byte[] data)
-    {
-        Random.NextBytes(data);
-        return CalculateMd5Hash(data);
     }
 
     public static string CalculateMd5Hash(byte[] data)
@@ -155,6 +174,21 @@ public class RunnerTestUtils
 
             await processedBuffer.Writer.WriteAsync(processedPart);
         }
+    }
+
+    public static string GenerateRandomTestAzureStorageKey()
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        var length = 64;
+        var random = new Random();
+        var result = new StringBuilder(length);
+
+        for (int i = 0; i < length; i++)
+        {
+            result.Append(chars[random.Next(chars.Length)]);
+        }
+
+        return result.ToString();
     }
 
     public const int MemBuffersCapacity = 20;

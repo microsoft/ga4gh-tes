@@ -19,7 +19,8 @@
       "description": "string",
       "url": "string",
       "path": "string",
-      "type": "FILE"
+      "type": "FILE",
+      "pathPrefix": "string"
     }
   ],
   "resources": {

@@ -16,6 +16,7 @@ using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.ContainerRegistry.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
+using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -24,6 +25,8 @@ using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
 using Polly;
 using Polly.Retry;
+using Tes.ApiClients;
+using Tes.ApiClients.Options;
 using Tes.Models;
 using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Configuration;
@@ -48,7 +51,7 @@ namespace TesApi.Web
         private const char BatchJobAttemptSeparator = '-';
         private readonly AsyncRetryPolicy batchRaceConditionJobNotFoundRetryPolicy;
         private readonly AsyncRetryPolicy batchNodeNotReadyRetryPolicy;
-        private readonly Management.CacheAndRetryHandler cacheAndRetryHandler;
+        private readonly CachingRetryHandler cachingRetryHandler;
 
         private readonly ILogger logger;
         private readonly BatchClient batchClient;
@@ -69,14 +72,14 @@ namespace TesApi.Web
         /// <param name="cacheAndRetryHandler"></param>
         /// <param name="logger">The logger</param>
         /// <exception cref="InvalidOperationException"></exception>
-        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, IBatchPoolManager batchPoolManager, IOptions<RetryPolicyOptions> retryPolicyOptions, Management.CacheAndRetryHandler cacheAndRetryHandler, ILogger<AzureProxy> logger)
+        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, IBatchPoolManager batchPoolManager, IOptions<RetryPolicyOptions> retryPolicyOptions, CachingRetryHandler cacheAndRetryHandler, ILogger<AzureProxy> logger)
         {
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(batchPoolManager);
             ArgumentNullException.ThrowIfNull(cacheAndRetryHandler);
 
-            this.cacheAndRetryHandler = cacheAndRetryHandler;
+            this.cachingRetryHandler = cacheAndRetryHandler;
             this.batchPoolManager = batchPoolManager;
 
             if (string.IsNullOrWhiteSpace(batchAccountOptions.Value.AccountName))
@@ -147,14 +150,14 @@ namespace TesApi.Web
 
             var credentials = new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken: cancellationToken));
 
-            await foreach (var subscriptionId in subscriptionIds)
+            await foreach (var subscriptionId in subscriptionIds.WithCancellation(cancellationToken))
             {
                 try
                 {
                     var components = new ApplicationInsightsManagementClient(credentials) { SubscriptionId = subscriptionId }.Components;
                     var app = await (await components.ListAsync(cancellationToken))
                         .ToAsyncEnumerable(components.ListNextAsync)
-                        .FirstOrDefaultAsync(a => a.ApplicationId.Equals(appInsightsApplicationId, StringComparison.OrdinalIgnoreCase), cancellationToken: cancellationToken);
+                        .FirstOrDefaultAsync(a => a.ApplicationId.Equals(appInsightsApplicationId, StringComparison.OrdinalIgnoreCase), cancellationToken);
 
                     if (app is not null)
                     {
@@ -178,10 +181,11 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            var lastAttemptNumber = (await batchClient.JobOperations.ListJobs(jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken: cancellationToken))
+            var lastAttemptNumber = await batchClient.JobOperations.ListJobs(jobFilter)
+                .ToAsyncEnumerable()
                 .Select(j => int.Parse(j.Id.Split(BatchJobAttemptSeparator)[1]))
                 .OrderBy(a => a)
-                .LastOrDefault();
+                .LastOrDefaultAsync(cancellationToken);
 
             return $"{tesTaskId}{BatchJobAttemptSeparator}{lastAttemptNumber + 1}";
         }
@@ -312,40 +316,40 @@ namespace TesApi.Web
 
             if (usingAutoPools)
             {
-                var jobsList = await cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
+                var jobsList = await cachingRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
                         batchClient.JobOperations.ListJobs(jobFilter).ToAsyncEnumerable(),
-                        cacheAndRetryHandler.RetryPolicy)
+                        cachingRetryHandler.RetryPolicy)
                     .Where(j => idStartsWith(j.Id, $"{{0}}{BatchJobAttemptSeparator}"))
                     .ToListAsync(cancellationToken);
 
                 var poolIds = jobsList.Select(j => j.ExecutionInformation?.PoolId).Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
 
-                pools = cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
+                pools = cachingRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
                         batchClient.PoolOperations.ListPools(poolFilter).ToAsyncEnumerable(),
-                        cacheAndRetryHandler.RetryPolicy)
+                        cachingRetryHandler.RetryPolicy)
                     .Where(p => poolIds.Contains(p.Id));
                 jobs = jobsList.ToAsyncEnumerable();
             }
             else
             {
-                jobs = cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
+                jobs = cachingRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
                         batchClient.JobOperations.ListJobs(jobFilter).ToAsyncEnumerable(),
-                        cacheAndRetryHandler.RetryPolicy)
+                        cachingRetryHandler.RetryPolicy)
                     .Where(j => idList.Contains(j.Id));
 
-                pools = cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
+                pools = cachingRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
                         batchClient.PoolOperations.ListPools(poolFilter).ToAsyncEnumerable(),
-                        cacheAndRetryHandler.RetryPolicy)
+                        cachingRetryHandler.RetryPolicy)
                     .Where(p => idList.Contains(p.Id));
             }
 
             return new(pools, jobs,
-                pool => cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
+                pool => cachingRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
                     batchClient.PoolOperations.ListComputeNodes(pool.Id, nodeFilter).ToAsyncEnumerable(),
-                    cacheAndRetryHandler.RetryPolicy),
-                job => cacheAndRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
+                    cachingRetryHandler.RetryPolicy),
+                job => cachingRetryHandler.AsyncRetryPolicy.ExecuteAsync(() =>
                     batchClient.JobOperations.ListTasks(job.Id, taskFilter).ToAsyncEnumerable(),
-                    cacheAndRetryHandler.RetryPolicy));
+                    cachingRetryHandler.RetryPolicy));
 
             //string CombineProperties(params string[] properties)
             //    => string.Join(',', new HashSet<string>(properties.SelectMany(s => s.Split(',')).Select(s => s.Trim())));
@@ -574,7 +578,7 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            return (await batchClient.JobOperations.ListJobs(filter).ToAsyncEnumerable().ToListAsync()).Select(c => c.Id);
+            return await batchClient.JobOperations.ListJobs(filter).ToAsyncEnumerable().Select(c => c.Id).ToListAsync(cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -586,12 +590,12 @@ namespace TesApi.Web
                 SelectClause = "id,poolInfo,onAllTasksComplete"
             };
 
-            var noActionTesjobs = (await batchClient.JobOperations.ListJobs(filter).ToAsyncEnumerable().ToListAsync(cancellationToken))
+            var noActionTesjobs = batchClient.JobOperations.ListJobs(filter).ToAsyncEnumerable()
                 .Where(j => j.PoolInformation?.AutoPoolSpecification?.AutoPoolIdPrefix == "TES" && j.OnAllTasksComplete == OnAllTasksComplete.NoAction);
 
-            var noActionTesjobsWithNoTasks = await noActionTesjobs.ToAsyncEnumerable().WhereAwait(async j => !(await j.ListTasks().ToListAsync(cancellationToken)).Any()).ToListAsync(cancellationToken);
+            var noActionTesjobsWithNoTasks = noActionTesjobs.WhereAwait(async j => !await j.ListTasks().ToAsyncEnumerable().AnyAsync(cancellationToken));
 
-            return noActionTesjobsWithNoTasks.Select(j => j.Id);
+            return await noActionTesjobsWithNoTasks.Select(j => j.Id).ToListAsync(cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -691,7 +695,7 @@ namespace TesApi.Web
                 .Select(s => s.SubscriptionId).SelectManyAwait(async (subscriptionId, ct) =>
                     (await azureClient.WithSubscription(subscriptionId).StorageAccounts.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable()
                     .Select(a => new StorageAccountInfo { Id = a.Id, Name = a.Name, SubscriptionId = subscriptionId, BlobEndpoint = a.EndPoints.Primary.Blob }))
-                .ToListAsync(cancellationToken: cancellationToken);
+                .ToListAsync(cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -742,19 +746,19 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<IEnumerable<string>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
+        public async Task<IEnumerable<CloudBlob>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
         {
             var blob = new CloudBlockBlob(directoryUri);
             var directory = blob.Container.GetDirectoryReference(blob.Name);
 
             BlobContinuationToken continuationToken = null;
-            var results = new List<string>();
+            var results = new List<CloudBlob>();
 
             do
             {
-                var response = await directory.ListBlobsSegmentedAsync(useFlatBlobListing: true, blobListingDetails: BlobListingDetails.None, maxResults: null, currentToken: continuationToken, options: null, operationContext: null);
+                var response = await directory.ListBlobsSegmentedAsync(useFlatBlobListing: true, blobListingDetails: BlobListingDetails.None, maxResults: null, currentToken: continuationToken, options: null, operationContext: null, cancellationToken: cancellationToken);
                 continuationToken = response.ContinuationToken;
-                results.AddRange(response.Results.Cast<CloudBlob>().Select(b => b.Name));
+                results.AddRange(response.Results.OfType<CloudBlob>());
             }
             while (continuationToken is not null);
 
@@ -826,12 +830,12 @@ namespace TesApi.Web
 
             var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
 
-            await foreach (var subId in subscriptionIds)
+            await foreach (var subId in subscriptionIds.WithCancellation(cancellationToken))
             {
                 var batchAccountOperations = new BatchManagementClient(tokenCredentials) { SubscriptionId = subId }.BatchAccount;
-                var batchAccount = await (await batchAccountOperations.ListAsync(cancellationToken: cancellationToken))
+                var batchAccount = await (await batchAccountOperations.ListAsync(cancellationToken))
                     .ToAsyncEnumerable(batchAccountOperations.ListNextAsync)
-                    .FirstOrDefaultAsync(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken: cancellationToken);
+                    .FirstOrDefaultAsync(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
 
                 if (batchAccount is not null)
                 {

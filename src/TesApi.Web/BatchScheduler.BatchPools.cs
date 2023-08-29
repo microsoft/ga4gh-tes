@@ -30,25 +30,25 @@ namespace TesApi.Web
         private readonly ConcurrentHashSet<string> neededPools = new();
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Nito.AsyncEx.PauseTokenSource> poolWaiters = new(StringComparer.OrdinalIgnoreCase);
 
-        private async Task<(string PoolKey, string DisplayName)> GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, CancellationToken cancellationToken)
+        private (string PoolKey, string DisplayName) GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, ContainerConfiguration containerConfiguration, CancellationToken cancellationToken)
         {
             var identityResourceId = tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true ? tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) : default;
             var executorImage = tesTask.Executors.First().Image;
-            string registryServer = null;
+            string containerImageNames = null;
 
-            if (!containerRegistryProvider.IsImagePublic(executorImage))
+            if (containerConfiguration?.ContainerImageNames?.Any() ?? false)
             {
-                registryServer = (await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage, cancellationToken))?.RegistryServer;
+                containerImageNames = string.Join(';', containerConfiguration.ContainerImageNames);
             }
 
             var label = string.IsNullOrWhiteSpace(batchPrefix) ? "<none>" : batchPrefix;
             var vmSize = virtualMachineInformation.VmSize ?? "<none>";
             var isPreemptable = virtualMachineInformation.LowPriority;
-            registryServer ??= "<none>";
+            containerImageNames ??= "<none>";
             identityResourceId ??= "<none>";
 
             // Generate hash of everything that differentiates this group of pools
-            var displayName = $"{label}:{vmSize}:{isPreemptable}:{registryServer}:{identityResourceId}";
+            var displayName = $"{label}:{vmSize}:{isPreemptable}:{containerImageNames}:{identityResourceId}";
             var hash = CommonUtilities.Base32.ConvertToBase32(SHA1.HashData(Encoding.UTF8.GetBytes(displayName))).TrimEnd('=').ToLowerInvariant(); // This becomes 32 chars
 
             // Build a PoolName that is of legal length, while exposing the most important metadata without requiring user to find DisplayName
@@ -204,17 +204,6 @@ namespace TesApi.Web
                 => pool.IsAvailable;
         }
 
-        private async ValueTask<List<IBatchPool>> GetEmptyPools(CancellationToken cancellationToken)
-            => await batchPools.GetAllPools()
-                .ToAsyncEnumerable()
-                .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
-                .ToListAsync(cancellationToken);
-
-        /// <inheritdoc/>
-        public async ValueTask<IEnumerable<Task>> GetShutdownCandidatePools(CancellationToken cancellationToken)
-            => (await GetEmptyPools(cancellationToken))
-                .Select(pool => DeletePoolAsync(pool, cancellationToken));
-
         /// <inheritdoc/>
         public IEnumerable<IBatchPool> GetPools()
             => batchPools.GetAllPools();
@@ -232,7 +221,10 @@ namespace TesApi.Web
             {
                 if (!this.enableBatchAutopool)
                 {
-                    var pools = (await GetEmptyPools(cancellationToken))
+                    var pools = (await batchPools.GetAllPools()
+                            .ToAsyncEnumerable()
+                            .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
+                            .ToListAsync(cancellationToken))
                         .Where(p => !assignedPools.Contains(p.Pool.PoolId))
                         .OrderBy(p => p.GetAllocationStateTransitionTime(cancellationToken))
                         .Take(neededPools.Count)

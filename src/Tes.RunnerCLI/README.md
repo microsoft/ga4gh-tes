@@ -51,21 +51,62 @@ The operations are defined in a TES task file using ``JSON``
     ],
     "inputs": [
         {
-            "fullFileName": "<LOCAL_PATH>",
+            "path": "<PATH>",
             "sourceUrl": "<SOURCE_URL>",
-            "sasStrategy": "None"
+            "sasStrategy": "None",
         }
     ],
     "outputs": [
         {
-            "fullFileName": "<LOCAL_PATH>",
+            "path": "<PATH>",
             "targetUrl": "<TARGET_URL>",
-            "sasStrategy": "None"
+            "sasStrategy": "None",
+            "pathPrefix": "<PATH_PREFIX>",
+            "fileType": "<FILE_TYPE>"
         }
     ]
+    "runtimeOptions": {
+        "terraRuntimeOptions": {
+            "wsmApiHost":"<WSM_API_HOST>",
+            "landingZoneApiHost":"<LZ_API_HOST>",
+            "sasAllowedIpRange":""
+        }
+    }
 }
 ```
 
+The following table describes the fields in the TES task file:
+
+| Field | Description | Required |
+| --- | --- | --- |
+| `imageTag` | The tag of the Docker image to use | Yes, only for default command (execution) |
+| `imageName` | The name of the Docker image to use | Yes, only for default command (execution) |
+| `commandsToExecute` | The list of commands to execute | Yes, only for default command (execution) |
+| `inputs` | The list of input files to download | No |
+| `outputs` | The list of output files to upload | No |
+| `runtimeOptions` | TES node runner runtime options | Yes, the structure is defined below |
+
+### Inputs
+
+The inputs are defined as a list of objects with the following fields:
+
+| Field | Description | Required |
+| --- | --- | --- |
+| `path` | The local path of the input file.  | Yes |
+| `sourceUrl` | The URL of the input file | Yes |
+| `sasStrategy` | The strategy to resolve the SAS token | Yes |
+
+### Outputs
+
+The outputs are defined as a list of objects with the following fields:
+
+| Field | Description | Required |
+| --- | --- | --- |
+| `path` | The local path of the output file, directory or the search pattern if the `pathPrefix` is provided  | Yes |
+| `targetUrl` | The URL of the output file | Yes |
+| `sasStrategy` | The strategy to resolve the SAS token | Yes |
+| `pathPrefix` | The prefix of the output file. If provided, the `path` is used as a search pattern. This value is not included in the target URL of the files. Ignored if the `fileType` is `Directory` | No |
+| `fileType` | `File` or `Directory`. If the value is `Directory` value in the `path` property must be a directory. All files in the directory structure are uploaded. | Yes |
 
 ## Download and Upload
 
@@ -110,4 +151,26 @@ The list of supported strategies are:
 
 **TODO**
 
+### Runtime Options
+
+The TES node runner has several runtime options that can be configured in the TES task file. 
+
+```json
+"runtimeOptions": {
+        "terraRuntimeOptions": {
+            "wsmApiHost":"<WSM_API_HOST>",
+            "landingZoneApiHost":"<LZ_API_HOST>",
+            "sasAllowedIpRange":""
+        }
+    }
+```
+
+The Terra runtime options are defined in the `runtimeOptions` property of the TES task file. 
+These are only required when running on Terra.
+
+| Terra Runtime Option | Description | Required |
+| --- | --- | --- |
+| `wsmApiHost` | The WSM API host | Yes |
+| `landingZoneApiHost` | The Landing Zone API host | Yes |
+| `sasAllowedIpRange` | The allowed IP range for SAS token resolution | No |
 

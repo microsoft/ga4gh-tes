@@ -26,13 +26,13 @@ namespace TesApi.Web.Management
         public static async Task<string> GetAppInsightsInstrumentationKeyAsync(string accountName, CancellationToken cancellationToken)
         {
             var azureClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(cancellationToken);
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync()).ToAsyncEnumerable().Select(s => s.SubscriptionId);
+            var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
 
             var credentials = new TokenCredentials(await GetAzureAccessTokenAsync());
 
-            await foreach (var subscriptionId in subscriptionIds)
+            await foreach (var subscriptionId in subscriptionIds.WithCancellation(cancellationToken))
             {
-                var app = (await new ApplicationInsightsManagementClient(credentials) { SubscriptionId = subscriptionId }.Components.ListAsync())
+                var app = (await new ApplicationInsightsManagementClient(credentials) { SubscriptionId = subscriptionId }.Components.ListAsync(cancellationToken))
                     .FirstOrDefault(a => a.ApplicationId.Equals(accountName, StringComparison.OrdinalIgnoreCase));
 
                 if (app is not null)
@@ -64,12 +64,12 @@ namespace TesApi.Web.Management
             var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken))
                 .ToAsyncEnumerable().Select(s => s.SubscriptionId);
 
-            await foreach (var subId in subscriptionIds)
+            await foreach (var subId in subscriptionIds.WithCancellation(cancellationToken))
             {
                 using var batchClient = new BatchManagementClient(tokenCredentials) { SubscriptionId = subId };
                 var batchAccountOperations = batchClient.BatchAccount;
 
-                var batchAccount = await (await batchAccountOperations.ListAsync(cancellationToken: cancellationToken))
+                var batchAccount = await (await batchAccountOperations.ListAsync(cancellationToken))
                     .ToAsyncEnumerable(batchAccountOperations.ListNextAsync)
                     .FirstOrDefaultAsync(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
 

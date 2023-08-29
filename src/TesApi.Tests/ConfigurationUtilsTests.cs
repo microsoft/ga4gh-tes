@@ -105,6 +105,7 @@ namespace TesApi.Tests
                 }
              };
 
+            azureProxy.Setup(a => a.BlobExistsAsync(It.IsAny<Uri>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(true));
             azureProxy.Setup(a => a.DownloadBlobAsync(It.IsAny<Uri>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(allowedVmSizesFileContent));
             azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount", It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(storageAccountInfos["defaultstorageaccount"]));
             azureProxy.Setup(a => a.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult("Key1"));

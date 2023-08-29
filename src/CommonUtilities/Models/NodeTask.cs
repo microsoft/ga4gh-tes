@@ -15,29 +15,43 @@ namespace Tes.Runner.Models
         public string? MetricsFilename { get; set; }
         public string? InputsMetricsFormat { get; set; }
         public string? OutputsMetricsFormat { get; set; }
+        public RuntimeOptions RuntimeOptions { get; set; } = null!;
     }
 
     public class FileOutput
     {
-        public string? FullFileName { get; set; }
+        public string? Path { get; set; }
         public string? TargetUrl { get; set; }
         public SasResolutionStrategy? SasStrategy { get; set; }
         public FileType? FileType { get; set; }
-        public bool? Required { get; set; }
+        public string? PathPrefix { get; set; }
     }
 
     public class FileInput
     {
-        public string? FullFileName { get; set; }
+        public string? Path { get; set; }
         public string? SourceUrl { get; set; }
         public SasResolutionStrategy? SasStrategy { get; set; }
+    }
+
+    public class RuntimeOptions
+    {
+        public TerraRuntimeOptions? Terra { get; set; }
+    }
+
+
+    public class TerraRuntimeOptions
+    {
+        public string? WsmApiHost { get; set; }
+        public string? LandingZoneApiHost { get; set; }
+        public string? SasAllowedIpRange { get; set; }
     }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum SasResolutionStrategy
     {
         None,
-        StorageAccountNameAndKey,
+        AzureResourceManager,
         TerraWsm,
         SchemeConverter,
     }

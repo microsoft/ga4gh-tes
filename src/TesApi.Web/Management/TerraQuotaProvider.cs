@@ -7,7 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
-using TesApi.Web.Management.Clients;
+using Tes.ApiClients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Quotas;
 using TesApi.Web.Management.Models.Terra;

@@ -9,6 +9,7 @@ using Azure.Core;
 using Azure.Identity;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -16,12 +17,13 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Serialization;
+using Tes.ApiClients;
+using Tes.ApiClients.Options;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Filters;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
-using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
 using TesApi.Web.Storage;
@@ -78,15 +80,15 @@ namespace TesApi.Web
                     .AddSingleton<AzureProxy>()
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
-                    .AddTransient<TerraWsmApiClient>()
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
                     .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
-                    .AddNewtonsoftJson(opts =>
-                    {
-                        opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                        opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
-                    }).Services
+                        .AddNewtonsoftJson(opts =>
+                        {
+                            opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                            opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
+                        })
+                    .Services
 
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
@@ -95,7 +97,7 @@ namespace TesApi.Web
 
                     .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
                     .AddSingleton<ContainerRegistryProvider>()
-                    .AddSingleton<CacheAndRetryHandler>()
+                    .AddSingleton<CachingRetryHandler>()
                     .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton<PriceApiClient>()
@@ -109,9 +111,9 @@ namespace TesApi.Web
 
                     .AddSwaggerGen(c =>
                     {
-                        c.SwaggerDoc("4.4.0", new()
+                        c.SwaggerDoc("4.5.0", new()
                         {
-                            Version = "4.4.0",
+                            Version = "4.5.0",
                             Title = "GA4GH Task Execution Service",
                             Description = "Task Execution Service (ASP.NET Core 7.0)",
                             Contact = new()
@@ -150,6 +152,7 @@ namespace TesApi.Web
 
             logger?.LogInformation("TES successfully configured dependent services in ConfigureServices(IServiceCollection services)");
 
+
             IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
             {
                 var terraOptions = services.GetService<IOptions<TerraOptions>>();
@@ -158,9 +161,9 @@ namespace TesApi.Web
 
                 if (!string.IsNullOrEmpty(terraOptions?.Value.LandingZoneApiHost))
                 {
-                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraLandingZoneApiClient>(services);
-
                     logger.LogInformation("Terra Landing Zone API Host is set. Using the Terra Quota Provider.");
+
+                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraLandingZoneApiClient>(services, terraOptions.Value.LandingZoneApiHost);
 
                     return new TerraQuotaProvider(terraApiClient, terraOptions);
                 }
@@ -180,7 +183,9 @@ namespace TesApi.Web
                 {
                     logger.LogInformation("Terra WSM API Host is set. Using Terra Batch Pool Manager");
 
-                    return ActivatorUtilities.CreateInstance<TerraBatchPoolManager>(services);
+                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, terraOptions.Value.WsmApiHost);
+
+                    return ActivatorUtilities.CreateInstance<TerraBatchPoolManager>(services, terraApiClient);
                 }
 
                 logger.LogInformation("Using default Batch Pool Manager.");
@@ -201,7 +206,9 @@ namespace TesApi.Web
 
                     ValidateRequiredOptionsForTerraStorageProvider(options.Value);
 
-                    return ActivatorUtilities.CreateInstance<TerraStorageAccessProvider>(services);
+                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, options.Value.WsmApiHost);
+
+                    return ActivatorUtilities.CreateInstance<TerraStorageAccessProvider>(services, terraApiClient);
                 }
 
                 logger.LogInformation("Using Default Storage Provider");
@@ -215,7 +222,7 @@ namespace TesApi.Web
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageAccountName, nameof(terraOptions.WorkspaceStorageAccountName));
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerName, nameof(terraOptions.WorkspaceStorageContainerName));
                 ArgumentException.ThrowIfNullOrEmpty(terraOptions.WorkspaceStorageContainerResourceId, nameof(terraOptions.WorkspaceStorageContainerResourceId));
-                ArgumentException.ThrowIfNullOrEmpty(terraOptions.LandingZoneApiHost, nameof(terraOptions.WsmApiHost));
+                ArgumentException.ThrowIfNullOrEmpty(terraOptions.WsmApiHost, nameof(terraOptions.WsmApiHost));
             }
 
             BatchAccountResourceInformation CreateBatchAccountResourceInformation(IServiceProvider services)
@@ -248,6 +255,7 @@ namespace TesApi.Web
             }
         }
 
+
         /// <summary>
         /// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         /// </summary>
@@ -269,7 +277,7 @@ namespace TesApi.Web
                 })
                 .UseSwaggerUI(c =>
                 {
-                    c.SwaggerEndpoint("/swagger/4.4.0/openapi.json", "Task Execution Service");
+                    c.SwaggerEndpoint("/swagger/4.5.0/openapi.json", "Task Execution Service");
                 })
 
                 .IfThenElse(hostingEnvironment.IsDevelopment(),

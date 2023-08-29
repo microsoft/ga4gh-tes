@@ -49,7 +49,7 @@ public class TerraOptions
     /// </summary>
     public string WorkspaceId { get; set; }
 
-    /// <summary>
+    /// <summary>`
     /// Sas token expiration in seconds
     /// </summary>
     public int SasTokenExpirationInSeconds { get; set; } = DefaultSasTokenExpirationInSeconds;

@@ -1,8 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Tes.Runner.Models;
-
 namespace Tes.Runner.Transfer
 {
     /// <summary>
@@ -34,9 +32,9 @@ namespace Tes.Runner.Transfer
         /// Creates new pipeline options with optimized values, if default values are provided
         /// </summary>
         /// <param name="options"><see cref="BlobPipelineOptions"/> to optimize</param>
-        /// <param name="taskOutputs">If provided, it will adjust the block size to accomodate the maximum file size of the output</param>
+        /// <param name="outputs">If provided, it will adjust the block size to accomodate the maximum file size of the output</param>
         /// <returns>An optimized instance of <see cref="BlobPipelineOptions"/>. If default values are not provided, returns original options</returns>
-        public BlobPipelineOptions Optimize(BlobPipelineOptions options, List<FileOutput>? taskOutputs = default)
+        public BlobPipelineOptions Optimize(BlobPipelineOptions options, List<UploadInfo>? outputs = default)
         {
 
             //only optimize if the transfer options are the default ones
@@ -44,9 +42,9 @@ namespace Tes.Runner.Transfer
             {
                 var blockSize = options.BlockSizeBytes;
 
-                if (taskOutputs?.Count > 0)
+                if (outputs?.Count > 0)
                 {
-                    blockSize = GetAdjustedBlockSizeInBytesForUploads(options.BlockSizeBytes, taskOutputs);
+                    blockSize = GetAdjustedBlockSizeInBytesForUploads(options.BlockSizeBytes, outputs);
                 }
 
                 return CreateOptimizedThreadingAndCapacityOptions(options, blockSize);
@@ -55,7 +53,7 @@ namespace Tes.Runner.Transfer
             return options;
         }
 
-        public static BlobPipelineOptions OptimizeOptionsIfApplicable(BlobPipelineOptions blobPipelineOptions, List<FileOutput>? taskOutputs)
+        public static BlobPipelineOptions OptimizeOptionsIfApplicable(BlobPipelineOptions blobPipelineOptions, List<UploadInfo>? outputs)
         {
             //optimization is only available for Linux
             //Windows supports an implementation of ISystemInfoProvider is required.
@@ -66,17 +64,17 @@ namespace Tes.Runner.Transfer
 
             var optimizer = new PipelineOptionsOptimizer(new LinuxSystemInfoProvider());
 
-            return optimizer.Optimize(blobPipelineOptions, taskOutputs);
+            return optimizer.Optimize(blobPipelineOptions, outputs);
         }
 
-        private int GetAdjustedBlockSizeInBytesForUploads(int currentBlockSizeInBytes, List<FileOutput> taskOutputs)
+        private int GetAdjustedBlockSizeInBytesForUploads(int currentBlockSizeInBytes, List<UploadInfo> outputs)
         {
 
             BlobSizeUtils.ValidateBlockSizeForUpload(currentBlockSizeInBytes);
 
-            foreach (var taskOutput in taskOutputs)
+            foreach (var output in outputs)
             {
-                var fileSize = fileInfoProvider.GetFileSize(taskOutput.FullFileName!);
+                var fileSize = fileInfoProvider.GetFileSize(output.FullFilePath);
 
                 if (fileSize / (double)currentBlockSizeInBytes > BlobSizeUtils.MaxBlobBlocksCount)
                 {
@@ -85,7 +83,7 @@ namespace Tes.Runner.Transfer
                     var newBlockSizeInBytes = (((int)minIncrementUnits - (BlobSizeUtils.DefaultBlockSizeBytes / BlobSizeUtils.BlockSizeIncrementUnitInBytes)) * BlobSizeUtils.BlockSizeIncrementUnitInBytes) + BlobSizeUtils.DefaultBlockSizeBytes;
 
                     //try again with the new value and see if it works for all outputs. 
-                    return GetAdjustedBlockSizeInBytesForUploads(newBlockSizeInBytes, taskOutputs);
+                    return GetAdjustedBlockSizeInBytesForUploads(newBlockSizeInBytes, outputs);
                 }
             }
 
