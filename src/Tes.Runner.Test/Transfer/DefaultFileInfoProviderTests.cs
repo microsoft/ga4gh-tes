@@ -66,13 +66,38 @@ namespace Tes.Runner.Test.Transfer
         {
             var files = fileInfoProvider.GetFilesBySearchPattern(directoryInfo.FullName, pattern);
 
-            AssertAllTempFilesAreReturned(files);
+            AssertCountOfFilesReturned(files);
         }
 
-        private static void AssertAllTempFilesAreReturned(string[] files)
+
+        [TestMethod]
+        public void GetFilesBySearchPattern_SingleFileUseRootAsPathAndRemainingAsSearchPattern_ReturnsFile()
+        {
+            var targetFile = directoryInfo.GetFiles().First();
+            var rootFullName = targetFile.Directory!.Root.FullName;
+            var searchPattern = targetFile.FullName.Substring(rootFullName.Length);
+
+            var files = fileInfoProvider.GetFilesBySearchPattern(rootFullName, searchPattern);
+
+            Assert.AreEqual(1, files.Count);
+            Assert.AreEqual(targetFile.FullName, files[0].AbsolutePath);
+        }
+
+        [TestMethod]
+        public void GetRootPathPair_SingleFile_RootAndRelativePathIsReturned()
+        {
+            var targetFile = directoryInfo.GetFiles().First();
+
+            var rootPathPair = fileInfoProvider.GetRootPathPair(targetFile.FullName);
+
+            Assert.AreEqual(targetFile.Directory!.Root.Name, rootPathPair.Root);
+            Assert.AreEqual(targetFile.FullName.Substring(targetFile.Directory.Root.Name.Length), rootPathPair.RelativePath);
+        }
+
+        private static void AssertCountOfFilesReturned(IEnumerable<Object> files)
         {
             //the setup creates 4 files with the same prefix
-            Assert.AreEqual(4, files.Length);
+            Assert.AreEqual(4, files.Count());
         }
 
         [TestMethod]
@@ -80,7 +105,7 @@ namespace Tes.Runner.Test.Transfer
         {
             var files = fileInfoProvider.GetAllFilesInDirectory(directoryInfo.FullName);
 
-            AssertAllTempFilesAreReturned(files);
+            AssertCountOfFilesReturned(files.AsEnumerable());
         }
     }
 }
