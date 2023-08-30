@@ -8,19 +8,55 @@ namespace Tes.RunnerCLI.Commands
 {
     public class ProcessLauncher
     {
+        private string standardOut = string.Empty;
+        private string standardError = string.Empty;
 
         public async Task<ProcessExecutionResult> LaunchProcessAndWaitAsync(string[] options)
         {
             var process = new Process();
+
+            SetupProcessStartInfo(options, process);
+
+            SetupErrorAndOutputReaders(process);
+
+            await StartAndWaitForExitAsync(process);
+
+            return new ProcessExecutionResult(standardOut, standardError, process.ExitCode);
+        }
+
+        private static async Task StartAndWaitForExitAsync(Process process)
+        {
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            await process.WaitForExitAsync();
+        }
+
+        private void SetupErrorAndOutputReaders(Process process)
+        {
+            standardOut = string.Empty;
+            standardError = string.Empty;
+            process.ErrorDataReceived += ProcessOnErrorDataReceived;
+            process.OutputDataReceived += ProcessOnOutputDataReceived;
+        }
+
+        private void ProcessOnOutputDataReceived(object sender, DataReceivedEventArgs e)
+        {
+            standardOut += e.Data;
+        }
+
+        private void ProcessOnErrorDataReceived(object sender, DataReceivedEventArgs e)
+        {
+            standardError += e.Data;
+        }
+
+        private void SetupProcessStartInfo(string[] options, Process process)
+        {
             process.StartInfo.FileName = GetExecutableFullPath();
             process.StartInfo.Arguments = ParseArguments(options);
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
-            process.Start();
-            await process.WaitForExitAsync();
-
-            return await ToProcessExecutionResultAsync(process);
         }
 
         private static string? GetExecutableFullPath()
@@ -41,14 +77,6 @@ namespace Tes.RunnerCLI.Commands
             }
 
             return string.Join(" ", argList.ToArray());
-        }
-
-        private async Task<ProcessExecutionResult> ToProcessExecutionResultAsync(Process process)
-        {
-            return new ProcessExecutionResult(
-                await process.StandardOutput.ReadToEndAsync(),
-                await process.StandardError.ReadToEndAsync(),
-                process.ExitCode);
         }
     }
 }
