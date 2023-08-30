@@ -7,6 +7,6 @@ namespace Tes.Runner.Storage
 {
     public interface IUrlTransformationStrategy
     {
-        Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions = default);
+        Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions);
     }
 }
