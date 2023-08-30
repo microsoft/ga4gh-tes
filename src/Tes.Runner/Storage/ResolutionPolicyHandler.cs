@@ -93,12 +93,12 @@ public class ResolutionPolicyHandler
     private async Task<UploadInfo> CreateUploadInfoWithStrategyAsync(FileOutput output,
         BlobSasPermissions uploadBlobSasPermissions)
     {
-        var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.SasStrategy, uploadBlobSasPermissions, runtimeOptions);
+        var uri = await ApplySasResolutionToUrlAsync(output.TargetUrl, output.TransformationStrategy, uploadBlobSasPermissions, runtimeOptions);
 
         return new UploadInfo(output.Path!, uri);
     }
 
-    private static async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, SasResolutionStrategy? strategy,
+    private static async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, TransformationStrategy? strategy,
         BlobSasPermissions blobSasPermissions, RuntimeOptions runtimeOptions)
     {
         ArgumentNullException.ThrowIfNull(strategy);
@@ -107,6 +107,6 @@ public class ResolutionPolicyHandler
         var strategyImpl =
             SasResolutionStrategyFactory.CreateSasResolutionStrategy(strategy.Value, runtimeOptions);
 
-        return await strategyImpl.CreateSasTokenWithStrategyAsync(sourceUrl, blobSasPermissions);
+        return await strategyImpl.TransformUrlWithStrategyAsync(sourceUrl, blobSasPermissions);
     }
 }

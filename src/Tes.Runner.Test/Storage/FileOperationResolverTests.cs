@@ -28,14 +28,14 @@ namespace Tes.Runner.Test.Storage
             {
                 Path = "/foo/bar",
                 SourceUrl = "https://foo.bar/cont?sig=sasToken",
-                SasStrategy = SasResolutionStrategy.None,
+                SasStrategy = TransformationStrategy.None,
             };
 
             singleFileOutput = new FileOutput
             {
                 Path = "/foo/bar",
                 TargetUrl = "https://foo.bar/cont/outputs?sig=sasToken",
-                SasStrategy = SasResolutionStrategy.None,
+                TransformationStrategy = TransformationStrategy.None,
                 FileType = FileType.File
             };
 
@@ -43,7 +43,7 @@ namespace Tes.Runner.Test.Storage
             {
                 Path = "/foo/",
                 TargetUrl = "https://foo.bar/cont?sig=sasToken",
-                SasStrategy = SasResolutionStrategy.None,
+                TransformationStrategy = TransformationStrategy.None,
                 FileType = FileType.Directory
             };
 
@@ -51,7 +51,7 @@ namespace Tes.Runner.Test.Storage
             {
                 Path = "/data/*",
                 TargetUrl = "https://foo.bar/cont?sig=sasToken",
-                SasStrategy = SasResolutionStrategy.None,
+                TransformationStrategy = TransformationStrategy.None,
                 FileType = FileType.File
             };
 

@@ -9,18 +9,18 @@ namespace Tes.Runner.Storage
 {
     public static class SasResolutionStrategyFactory
     {
-        public static ISasResolutionStrategy CreateSasResolutionStrategy(SasResolutionStrategy sasResolutionStrategy, RuntimeOptions runtimeOptions)
+        public static IUrlTransformationStrategy CreateSasResolutionStrategy(TransformationStrategy transformationStrategy, RuntimeOptions runtimeOptions)
         {
-            switch (sasResolutionStrategy)
+            switch (transformationStrategy)
             {
-                case SasResolutionStrategy.None:
-                    return new PassThroughSasResolutionStrategy();
-                case SasResolutionStrategy.SchemeConverter:
+                case TransformationStrategy.None:
+                    return new PassThroughUrlTransformationStrategy();
+                case TransformationStrategy.SchemeConverter:
                     return new CloudProviderSchemeConverter();
-                case SasResolutionStrategy.AzureResourceManager:
-                    return new ArmSasResolutionStrategy(u => new BlobServiceClient(u, new DefaultAzureCredential()));
-                case SasResolutionStrategy.TerraWsm:
-                    return new TerraSasResolutionStrategy(runtimeOptions.Terra!);
+                case TransformationStrategy.AzureResourceManager:
+                    return new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, new DefaultAzureCredential()));
+                case TransformationStrategy.TerraWsm:
+                    return new TerraUrlTransformationStrategy(runtimeOptions.Terra!);
             }
 
             throw new NotImplementedException();

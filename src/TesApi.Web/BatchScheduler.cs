@@ -1033,7 +1033,7 @@ namespace TesApi.Web
                     {
                         TargetUrl = AppendPathToUrl(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, string.Empty, cancellationToken), "start-task"),
                         Path = "%AZ_BATCH_NODE_STARTUP_DIR%/std*.txt",
-                        SasStrategy = SasResolutionStrategy.None,
+                        TransformationStrategy = TransformationStrategy.None,
                         FileType = FileType.File
                     }
                 }
@@ -1066,13 +1066,13 @@ namespace TesApi.Web
                 MetricsFilename = $"../{metricsName}",
 
                 InputsMetricsFormat = "FileDownloadSizeInBytes={Size}",
-                Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, Path = LocalizeLocalPath(f.Path), SasStrategy = SasResolutionStrategy.None }).ToList(),
+                Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, Path = LocalizeLocalPath(f.Path), SasStrategy = TransformationStrategy.None }).ToList(),
 
                 // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
                 // Ignore any other missing files and directories. WDL tasks can have optional output files.
                 // Implementation: do not set Required to True (it defaults to False)
                 OutputsMetricsFormat = "FileUploadSizeInBytes={Size}",
-                Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, Path = LocalizeLocalPath(f.Path), FileType = ConvertFileType(f.Type), SasStrategy = SasResolutionStrategy.None }).ToList()
+                Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, Path = LocalizeLocalPath(f.Path), FileType = ConvertFileType(f.Type), TransformationStrategy = TransformationStrategy.None }).ToList()
             };
 
             var executor = task.Executors.First();
