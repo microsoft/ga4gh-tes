@@ -3,13 +3,14 @@
 
 using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 
 namespace Tes.RunnerCLI.Commands
 {
     public class ProcessLauncher
     {
-        private string standardOut = string.Empty;
-        private string standardError = string.Empty;
+        private readonly StringBuilder standardOut = new StringBuilder();
+        private readonly StringBuilder standardError = new StringBuilder();
 
         public async Task<ProcessExecutionResult> LaunchProcessAndWaitAsync(string[] options)
         {
@@ -21,7 +22,7 @@ namespace Tes.RunnerCLI.Commands
 
             await StartAndWaitForExitAsync(process);
 
-            return new ProcessExecutionResult(standardOut, standardError, process.ExitCode);
+            return new ProcessExecutionResult(standardOut.ToString(), standardError.ToString(), process.ExitCode);
         }
 
         private static async Task StartAndWaitForExitAsync(Process process)
@@ -34,20 +35,23 @@ namespace Tes.RunnerCLI.Commands
 
         private void SetupErrorAndOutputReaders(Process process)
         {
-            standardOut = string.Empty;
-            standardError = string.Empty;
+            standardOut.Clear();
+            standardError.Clear();
             process.ErrorDataReceived += ProcessOnErrorDataReceived;
             process.OutputDataReceived += ProcessOnOutputDataReceived;
         }
 
         private void ProcessOnOutputDataReceived(object sender, DataReceivedEventArgs e)
         {
-            standardOut += e.Data;
+
+            standardOut.Append(e.Data);
+            standardOut.Append('\n');
         }
 
         private void ProcessOnErrorDataReceived(object sender, DataReceivedEventArgs e)
         {
-            standardError += e.Data;
+            standardError.Append(e.Data);
+            standardError.Append('\n');
         }
 
         private void SetupProcessStartInfo(string[] options, Process process)
