@@ -19,7 +19,7 @@ namespace Tes.Runner.Test.Storage
         {
             mockStrategy1 = new Mock<IUrlTransformationStrategy>();
             mockStrategy2 = new Mock<IUrlTransformationStrategy>();
-
+            
             strategy = new CombinedTransformationStrategy(
                 new List<IUrlTransformationStrategy>()
                 {
