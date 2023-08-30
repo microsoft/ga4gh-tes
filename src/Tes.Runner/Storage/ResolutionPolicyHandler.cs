@@ -105,7 +105,7 @@ public class ResolutionPolicyHandler
         ArgumentException.ThrowIfNullOrEmpty(sourceUrl);
 
         var strategyImpl =
-            SasResolutionStrategyFactory.CreateSasResolutionStrategy(strategy.Value, runtimeOptions);
+            UrlTransformationStrategyFactory.CreateStrategy(strategy.Value, runtimeOptions);
 
         return await strategyImpl.TransformUrlWithStrategyAsync(sourceUrl, blobSasPermissions);
     }

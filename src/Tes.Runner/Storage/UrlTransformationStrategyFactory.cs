@@ -7,9 +7,9 @@ using Tes.Runner.Models;
 
 namespace Tes.Runner.Storage
 {
-    public static class SasResolutionStrategyFactory
+    public static class UrlTransformationStrategyFactory
     {
-        public static IUrlTransformationStrategy CreateSasResolutionStrategy(TransformationStrategy transformationStrategy, RuntimeOptions runtimeOptions)
+        public static IUrlTransformationStrategy CreateStrategy(TransformationStrategy transformationStrategy, RuntimeOptions runtimeOptions)
         {
             switch (transformationStrategy)
             {
