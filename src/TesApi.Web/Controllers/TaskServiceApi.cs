@@ -436,7 +436,7 @@ namespace TesApi.Controllers
             return (tags, null);
         }
 
-        private static (FormattableString RawPredicate, Func<TesTask, bool> EFPredicate) GenerateSearchPredicates(TesState? state, string namePrefix, Dictionary<string, string> tags)
+        internal static (FormattableString RawPredicate, Func<TesTask, bool> EFPredicate) GenerateSearchPredicates(TesState? state, string namePrefix, Dictionary<string, string> tags)
         {
             Func<TesTask, bool> predicate = null;
 
@@ -459,19 +459,19 @@ namespace TesApi.Controllers
                 //AppendPredicate(predicate, t => t.Tags.ContainsKey(tag.Key));
                 if (isNotFirst)
                 {
-                    rawPredicate = AppendString(rawPredicate, new($"jsonb_path_match(\"Json\"->'Tags', '$[*] = '{tag.Key}') "));
+                    rawPredicate = AppendString(rawPredicate, new($"jsonb_path_match(\"json\"->'Tags', '$[*] = '{tag.Key}') "));
                 }
                 else
                 {
-                    rawPredicate = AppendString(rawPredicate, new($" AND jsonb_path_match(\"Json\"->'Tags', '$[*] = '{tag.Key}') "));
+                    rawPredicate = AppendString(rawPredicate, new($" AND jsonb_path_match(\"json\"->'Tags', '$[*] = '{tag.Key}') "));
                     isNotFirst = true;
                 }
             }
 
             foreach (var tag in tags.Where(t => !string.IsNullOrEmpty(t.Value)))
             {
-                predicate = AppendFunc(predicate, t => EF.Functions.JsonContains(t.Tags, $"{{\"{tag.Key}\", \"{tag.Value}\"}}"));
-                //rawPredicate = AppendString(rawPredicate, new($"\"Json\"->'Tags'->>'{tag.Key}' = \"{tag.Value}\""));
+                //predicate = AppendFunc(predicate, t => EF.Functions.JsonContains(t.Tags, $"{{\"{tag.Key}\", \"{tag.Value}\"}}"));
+                rawPredicate = AppendString(rawPredicate, new($"\"json\"->'Tags'->>'{tag.Key}' = {tag.Value}"));
             }
 
             return (rawPredicate, predicate);

@@ -49,6 +49,7 @@ namespace Tes.Repository
             CreateDbContext = createDbContext;
             using var dbContext = createDbContext();
             dbContext.Database.MigrateAsync().Wait();
+            //dbContext.TesTasks.ExecuteDeleteAsync().Wait(); // TODO: Delete Me PLEASE!
         }
 
         private async Task WarmCacheAsync(CancellationToken cancellationToken)
@@ -78,7 +79,7 @@ namespace Tes.Repository
                     })
                 .ExecuteAsync(async ct =>
                 {
-                    var activeTasksCount = (await InternalGetItemsAsync(ct, q => q.OrderBy(t => t.Json.CreationTime), predicate: task => TesTask.ActiveStates.Contains(task.State))).Count();
+                    var activeTasksCount = (await InternalGetItemsAsync(ct, q => q.OrderBy(t => t.Json.CreationTime), EFpredicate: task => TesTask.ActiveStates.Contains(task.State))).Count();
                     _logger?.LogInformation("Cache warmed successfully in {TotalSeconds} seconds. Added {TasksAddedCount} items to the cache.", $"{sw.Elapsed.TotalSeconds:n3}", $"{activeTasksCount:n0}");
                 }, cancellationToken);
         }
@@ -102,7 +103,7 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
         {
-            return (await InternalGetItemsAsync(cancellationToken, predicate: predicate));
+            return (await InternalGetItemsAsync(cancellationToken, EFpredicate: predicate));
         }
 
         /// <inheritdoc/>
@@ -138,7 +139,7 @@ namespace Tes.Repository
         }
 
         /// <inheritdoc/>
-        public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate, Expression<Func<TesTask, bool>> predicate)
+        public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate, Expression<Func<TesTask, bool>> EFpredicate)
         {
             var last = (CreationTime: DateTimeOffset.MinValue, Id: string.Empty);
 
@@ -169,7 +170,7 @@ namespace Tes.Repository
 
             // This "uglyness" should (hopefully) be fixed in EF8: https://github.com/dotnet/roslyn/issues/12897 reference https://github.com/dotnet/efcore/issues/26822 when we can compare last directly with a created per-item tuple
             //var results = (await InternalGetItemsAsync(predicate, cancellationToken, q => q.Where(t => t.Json.CreationTime > last.CreationTime || (t.Json.CreationTime == last.CreationTime && t.Json.Id.CompareTo(last.Id) > 0)).Take(pageSize))).ToList();
-            var results = (await InternalGetItemsAsync(cancellationToken, pagination: q => q.Where(t => t.Json.Id.CompareTo(last.Id) > 0).Take(pageSize), predicate: predicate, rawPredicate: rawPredicate)).ToList();
+            var results = (await InternalGetItemsAsync(cancellationToken, pagination: q => q.Where(t => t.Json.Id.CompareTo(last.Id) > 0).Take(pageSize), EFpredicate: EFpredicate, rawPredicate: rawPredicate)).ToList();
 
             return (GetContinuation(results.Count == pageSize ? results.LastOrDefault() : null), results);
 
@@ -210,17 +211,17 @@ namespace Tes.Repository
         /// <param name="cancellationToken"></param>
         /// <param name="orderBy"></param>
         /// <param name="pagination"></param>
-        /// <param name="predicate"></param>
+        /// <param name="EFpredicate"></param>
         /// <param name="rawPredicate"></param>
         /// <returns></returns>
-        private async Task<IEnumerable<TesTask>> InternalGetItemsAsync(CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default, Expression<Func<TesTask, bool>> predicate = default, FormattableString rawPredicate = default)
+        private async Task<IEnumerable<TesTask>> InternalGetItemsAsync(CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default, Expression<Func<TesTask, bool>> EFpredicate = default, FormattableString rawPredicate = default)
         {
             // It turns out, PostgreSQL doesn't handle EF's interpretation of ORDER BY more then one "column" in any resonable way, so we have to order by the only thing we have that is expected to be unique.
             //orderBy = pagination is null ? orderBy : q => q.OrderBy(t => t.Json.CreationTime).ThenBy(t => t.Json.Id);
             orderBy = pagination is null ? orderBy : q => q.OrderBy(t => t.Json.Id);
 
             using var dbContext = CreateDbContext();
-            return (await GetItemsAsync(dbContext.TesTasks, cancellationToken, orderBy, pagination, WhereTesTask(predicate), rawPredicate)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
+            return (await GetItemsAsync(dbContext.TesTasks, cancellationToken, orderBy, pagination, EFpredicate is null ? null : WhereTesTask(EFpredicate), rawPredicate)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
         }
 
         /// <summary>
@@ -230,6 +231,8 @@ namespace Tes.Repository
         /// <returns>A <see cref="Expression{Func{TesTaskDatabaseItem, bool}}"/></returns>
         private static Expression<Func<TesTaskDatabaseItem, bool>> WhereTesTask(Expression<Func<TesTask, bool>> predicate)
         {
+            ArgumentNullException.ThrowIfNull(predicate);
+
             return (Expression<Func<TesTaskDatabaseItem, bool>>)new ExpressionParameterSubstitute(predicate.Parameters[0], GetTask()).Visit(predicate);
 
             static Expression<Func<TesTaskDatabaseItem, TesTask>> GetTask() => item => item.Json;

@@ -84,27 +84,29 @@ namespace Tes.Repository
         /// <param name="cancellationToken"></param>
         /// <param name="orderBy"></param>
         /// <param name="pagination"></param>
-        /// <param name="predicate">The WHERE clause <see cref="Expression"/> for <typeparamref name="TDatabaseItem"/> selection in the query.</param>
-        /// <param name="rawPredicate"></param>
+        /// <param name="eFpredicate">The WHERE clause <see cref="Expression"/> for <typeparamref name="TDatabaseItem"/> selection in the query.</param>
+        /// <param name="rawPredicate">The WHERE clause for raw SQL for <typeparamref name="TDatabaseItem"/> selection in the query.</param>
         /// <returns></returns>
         /// <remarks>Ensure that the <see cref="DbContext"/> from which <paramref name="dbSet"/> comes isn't disposed until the entire query completes.</remarks>
-        protected async Task<IEnumerable<T>> GetItemsAsync(DbSet<T> dbSet, CancellationToken cancellationToken, Func<IQueryable<T>, IQueryable<T>> orderBy = default, Func<IQueryable<T>, IQueryable<T>> pagination = default, Expression<Func<T, bool>> predicate = default, FormattableString rawPredicate = default)
+        protected async Task<IEnumerable<T>> GetItemsAsync(DbSet<T> dbSet, CancellationToken cancellationToken, Func<IQueryable<T>, IQueryable<T>> orderBy = default, Func<IQueryable<T>, IQueryable<T>> pagination = default, Expression<Func<T, bool>> eFpredicate = default, FormattableString rawPredicate = default)
         {
             ArgumentNullException.ThrowIfNull(dbSet);
-            ArgumentNullException.ThrowIfNull(predicate);
+
             orderBy ??= q => q;
             pagination ??= q => q;
 
-            var sqlQuery1 = dbSet.EntityType.GetSqlQuery();
-
             var tableQuery = rawPredicate is null
                 ? dbSet.AsQueryable()
-                : dbSet.FromSql(new RependableFormattableString(dbSet.EntityType.GetSqlQuery() + " WHERE ", rawPredicate));
+                : dbSet.FromSql(new PrependableFormattableString($"SELECT *\r\nFROM {dbSet.EntityType.GetTableName()}\r\nWHERE ", rawPredicate));
+
+            tableQuery = eFpredicate is null
+                ? tableQuery
+                : tableQuery/*.AsExpandable()*/.Where(eFpredicate);
 
             // Search for items in the JSON
-            var query = pagination(orderBy(tableQuery/*.AsExpandable()*/.Where(predicate)));
+            var query = pagination(orderBy(tableQuery));
             var sqlQuery = query.ToQueryString();
-            System.Diagnostics.Debugger.Break();
+            //System.Diagnostics.Debugger.Break();
 
             return await _asyncPolicy.ExecuteAsync(ct => query.ToListAsync(ct), cancellationToken);
         }
@@ -298,12 +300,12 @@ namespace Tes.Repository
             GC.SuppressFinalize(this);
         }
 
-        private class RependableFormattableString : FormattableString
+        private class PrependableFormattableString : FormattableString
         {
             private readonly FormattableString source;
             private readonly string prefix;
 
-            public RependableFormattableString(string prefix, FormattableString formattableString)
+            public PrependableFormattableString(string prefix, FormattableString formattableString)
             {
                 ArgumentNullException.ThrowIfNull(formattableString);
                 ArgumentNullException.ThrowIfNullOrEmpty(prefix);
