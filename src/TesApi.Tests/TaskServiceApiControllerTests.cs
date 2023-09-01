@@ -352,7 +352,7 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            var result = await controller.ListTasks(null, 0, null, "BASIC", System.Threading.CancellationToken.None) as BadRequestObjectResult;
+            var result = await controller.ListTasks(null, null, Array.Empty<string>(), Array.Empty<string>(), 0, null, "BASIC", System.Threading.CancellationToken.None) as BadRequestObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(400, result.StatusCode);
@@ -370,12 +370,13 @@ namespace TesApi.Tests
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo
-                .GetItemsAsync(It.IsAny<Expression<Func<TesTask, bool>>>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
-                .ReturnsAsync((Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken, System.Threading.CancellationToken _1) =>
+                // string continuationToken, int pageSize, CancellationToken cancellationToken, Expression<Func<T, bool>> predicate
+                .GetItemsAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<System.Threading.CancellationToken>(), It.IsAny<FormattableString>(), It.IsAny<Expression<Func<TesTask, bool>>>()))
+                .ReturnsAsync((string continuationToken, int pageSize, System.Threading.CancellationToken _1, Expression<Func<TesTask, bool>> predicate, FormattableString _2) =>
                     (string.Empty, tesTasks.Where(i => predicate.Compile().Invoke(i)).Take(pageSize))));
             var controller = services.GetT();
 
-            var result = await controller.ListTasks(namePrefix, 1, null, "BASIC", System.Threading.CancellationToken.None) as JsonResult;
+            var result = await controller.ListTasks(namePrefix, null, Array.Empty<string>(), Array.Empty<string>(), 1, null, "BASIC", System.Threading.CancellationToken.None) as JsonResult;
             var listOfTesTasks = (TesListTasksResponse)result.Value;
 
             Assert.IsNotNull(result);

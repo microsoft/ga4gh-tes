@@ -47,17 +47,16 @@ namespace Tes.Repository
         /// <returns>The collection of retrieved items</returns>
         Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken);
 
-        Task<IEnumerable<T>> GetItemsByTagAsync(Dictionary<string, string> tags, CancellationToken cancellationToken);
-
         /// <summary>
         /// Reads a collection of items from the repository
         /// </summary>
-        /// <param name="predicate">The 'where' clause</param>
-        /// <param name="pageSize">The max number of items to retrieve</param>
-        /// <param name="continuationToken">A token to continue retrieving items if the max is returned</param>
+        /// <param name="continuationToken">A token to continue retrieving tasks if the max is returned.</param>
+        /// <param name="pageSize">The max number of tasks to retrieve.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="rawPredicate">Raw 'where' clause for cases where EF does not have translations.</param>
+        /// <param name="EFpredicate">The 'where' clause. It is appended if both <paramref name="rawPredicate"/> and this are provided.</param>
         /// <returns>A continuation token string, and the collection of retrieved items</returns>
-        Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken);
+        Task<(string, IEnumerable<T>)> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate = default, Expression<Func<T, bool>> EFpredicate = default);
 
         /// <summary>
         /// Update the item in the repository

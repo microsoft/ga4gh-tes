@@ -20,6 +20,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Swashbuckle.AspNetCore.Annotations;
@@ -69,7 +70,7 @@ namespace TesApi.Controllers
         [HttpPost]
         [Route("/v1/tasks/{id}:cancel")]
         [ValidateModelState]
-        [SwaggerOperation("CancelTask")]
+        [SwaggerOperation("CancelTask", "Cancel a task based on providing an exact task ID.")]
         [SwaggerResponse(statusCode: 200, type: typeof(object), description: "")]
         public virtual async Task<IActionResult> CancelTask([FromRoute][Required] string id, CancellationToken cancellationToken)
         {
@@ -117,7 +118,7 @@ namespace TesApi.Controllers
         [HttpPost]
         [Route("/v1/tasks")]
         [ValidateModelState]
-        [SwaggerOperation("CreateTask")]
+        [SwaggerOperation("CreateTask", "Create a new task. The user provides a Task document, which the server uses as a basis and adds additional fields.")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesCreateTaskResponse), description: "")]
         public virtual async Task<IActionResult> CreateTaskAsync([FromBody] TesTask tesTask, CancellationToken cancellationToken)
         {
@@ -159,10 +160,7 @@ namespace TesApi.Controllers
                 ?.Skip(2)
                 ?.FirstOrDefault();
 
-            if (tesTask.Tags == null)
-            {
-                tesTask.Tags = new Dictionary<string, string>();
-            }
+            tesTask.Tags ??= new Dictionary<string, string>();
 
             tesTask.Tags["workflow_id"] = tesTask.WorkflowId;
 
@@ -238,7 +236,7 @@ namespace TesApi.Controllers
         [HttpGet]
         [Route("/v1/service-info")]
         [ValidateModelState]
-        [SwaggerOperation("GetServiceInfo")]
+        [SwaggerOperation("GetServiceInfo", "Provides information about the service, this structure is based on the standardized GA4GH service info structure. In addition, this endpoint will also provide information about customized storage endpoints offered by the TES server.")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesServiceInfo), description: "")]
         public virtual IActionResult GetServiceInfo()
         {
@@ -264,10 +262,22 @@ namespace TesApi.Controllers
         [HttpGet]
         [Route("/v1/tasks/{id}")]
         [ValidateModelState]
-        [SwaggerOperation("GetTask")]
+        [SwaggerOperation("GetTask", "Get a single task, based on providing the exact task ID string.")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesTask), description: "")]
         public virtual async Task<IActionResult> GetTaskAsync([FromRoute][Required] string id, [FromQuery] string view, CancellationToken cancellationToken)
         {
+            TesView viewEnum;
+
+            try
+            {
+                viewEnum = ParseView(view);
+            }
+            catch (ArgumentOutOfRangeException exc)
+            {
+                logger.LogError(exc.Message);
+                return BadRequest(exc.Message);
+            }
+
             TesTask tesTask = null;
             var itemFound = await repository.TryGetItemAsync(id, cancellationToken, item => tesTask = item);
 
@@ -277,27 +287,40 @@ namespace TesApi.Controllers
             }
 
             await TryRemoveItemFromCacheAsync(tesTask, view, cancellationToken);
-            return TesJsonResult(tesTask, view);
+            return TesJsonResult(tesTask, viewEnum);
         }
 
         /// <summary>
         /// List tasks. TaskView is requested as such: \&quot;v1/tasks?view&#x3D;BASIC\&quot;
         /// </summary>
         /// <param name="namePrefix">OPTIONAL. Filter the list to include tasks where the name matches this prefix. If unspecified, no task name filtering is done.</param>
+        /// <param name="state">OPTIONAL. Filter tasks by state. If unspecified, no task state filtering is done.</param>
+        /// <param name="tagKeys">OPTIONAL. Array of tag_key (see spec)</param>
+        /// <param name="tagValues">OPTIONAL. Array of tag_value (see spec)</param>
         /// <param name="pageSize">OPTIONAL. Number of tasks to return in one page. Must be less than 2048. Defaults to 256.</param>
         /// <param name="pageToken">OPTIONAL. Page token is used to retrieve the next page of results. If unspecified, returns the first page of results. See ListTasksResponse.next_page_token</param>
         /// <param name="view">OPTIONAL. Affects the fields included in the returned Task messages. See TaskView below.   - MINIMAL: Task message will include ONLY the fields:   Task.Id   Task.State  - BASIC: Task message will include all fields EXCEPT:   Task.ExecutorLog.stdout   Task.ExecutorLog.stderr   Input.content   TaskLog.system_logs  - FULL: Task message includes all fields.</param>
-        /// <param name="tagKeys">OPTIONAL. Array of tag_key (see spec)</param>
-        /// <param name="tagValues">OPTIONAL. Array of tag_value (see spec)</param>
         /// <param name="cancellationToken">A<see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <response code="200"></response>
         [HttpGet]
         [Route("/v1/tasks")]
         [ValidateModelState]
-        [SwaggerOperation("ListTasks")]
+        [SwaggerOperation("ListTasks", "List tasks tracked by the TES server. This includes queued, active and completed tasks. How long completed tasks are stored by the system may be dependent on the underlying implementation.")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesListTasksResponse), description: "")]
-        public virtual async Task<IActionResult> ListTasks([FromQuery(Name = "name_prefix")] string namePrefix, [FromQuery(Name = "page_size")] long? pageSize, [FromQuery(Name = "page_token")] string pageToken, [FromQuery] string view, [FromQuery(Name = "tag_key")] string[] tagKeys, [FromQuery(Name = "tag_value")] string[] tagValues, CancellationToken cancellationToken)
+        public virtual async Task<IActionResult> ListTasks([FromQuery(Name = "name_prefix")] string namePrefix, [FromQuery] string state, [FromQuery(Name = "tag_key")] string[] tagKeys, [FromQuery(Name = "tag_value")] string[] tagValues, [FromQuery(Name = "page_size")] long? pageSize, [FromQuery(Name = "page_token")] string pageToken, [FromQuery] string view, CancellationToken cancellationToken)
         {
+            TesState? stateEnum;
+
+            try
+            {
+                stateEnum = string.IsNullOrEmpty(state) ? null : Enum.Parse<TesState>(state, true);
+            }
+            catch
+            {
+                logger.LogError($"Invalid state parameter value. If provided, it must be one of: {string.Join(", ", Enum.GetNames(typeof(TesState)))}");
+                return BadRequest($"Invalid state parameter value. If provided, it must be one of: {string.Join(", ", Enum.GetNames(typeof(TesState)))}");
+            }
+
             var decodedPageToken =
                 pageToken is not null ? Encoding.UTF8.GetString(Base64UrlTextEncoder.Decode(pageToken)) : null;
 
@@ -307,34 +330,173 @@ namespace TesApi.Controllers
                 return BadRequest("If provided, pageSize must be greater than 0 and less than 2048. Defaults to 256.");
             }
 
-            if (tagKeys?.Length != tagValues?.Length)
+            Dictionary<string, string> tags = null;
+
+            if (tagKeys is not null && tagKeys.Length > 0 || tagValues is not null && tagValues.Length > 0)
             {
-                return BadRequest("Mismatched tag_key and tag_value counts");
+                if (tagKeys?.Length > 0)
+                {
+                    var (zippedTags, error) = ParseZipedTagsFromQuery(tagKeys, tagValues);
+
+                    if (string.IsNullOrEmpty(error))
+                    {
+                        tags = zippedTags;
+                    }
+                    else if (tagKeys.Length == tagValues?.Length) // query possibly constructed using swagger - swagger cannot zip values
+                    {
+                        tags = tagKeys.Zip(tagValues, (key, value) => new { key, value })
+                            .ToDictionary(x => x.key, x => x.value ?? string.Empty);
+                    }
+                    else
+                    {
+                        return BadRequest(error);
+                    }
+                }
             }
 
-            // ?tag_key=foo1&tag_value=bar1&tag_key=foo2&tag_value=bar2
-            var tags = new Dictionary<string, string>();
+            var (rawPredicate, predicate) = GenerateSearchPredicates(stateEnum, namePrefix, tags);
+
+            TesView viewEnum;
+
+            try
+            {
+                viewEnum = ParseView(view);
+            }
+            catch (ArgumentOutOfRangeException exc)
+            {
+                logger.LogError(exc.Message);
+                return BadRequest(exc.Message);
+            }
+
             string nextPageToken = default;
             IEnumerable<TesTask> tasks = default;
 
-            if (tagKeys.Length > 0)
-            {
-                tags = tagKeys.Zip(tagValues, (key, value) => new { key, value })
-                    .ToDictionary(x => x.key, x => x.value);
-                (nextPageToken, tasks) = await repository.GetItemsByTagAsync(tags, cancellationToken); // TODO
-            }
-            else
-            {
-                (nextPageToken, tasks) = await repository.GetItemsAsync(
-                    t => string.IsNullOrWhiteSpace(namePrefix) || t.Name.StartsWith(namePrefix),
-                    pageSize.HasValue ? (int)pageSize : 256,
-                    decodedPageToken, cancellationToken);
-            }
+            (nextPageToken, tasks) = await repository.GetItemsAsync(
+                decodedPageToken,
+                pageSize.HasValue ? (int)pageSize : 256,
+                cancellationToken,
+                rawPredicate,
+                predicate is null ? null : t => predicate(t));
 
             var encodedNextPageToken = nextPageToken is not null ? Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(nextPageToken)) : null;
             var response = new TesListTasksResponse { Tasks = tasks.ToList(), NextPageToken = encodedNextPageToken };
 
-            return TesJsonResult(response, view);
+            return TesJsonResult(response, viewEnum);
+        }
+
+        // ?tag_key=foo1&tag_value=bar1&tag_key=foo2&tag_value=bar2
+        private (Dictionary<string, string> Tags, string Error) ParseZipedTagsFromQuery(string[] tagKeys, string[] tagValues)
+        {
+            var foundKeys = new Queue<string>(tagKeys);
+            var foundValues = new Queue<string>(tagValues);
+
+            var list = new List<(string Key, string Value)>();
+
+            //TODO: is there a better way to parse a query string that preserves the order of every item and performs any unencoding required?
+            foreach (var tagProperty in Request.QueryString.Value[1..].Split('&').Where(s => s.StartsWith("tag_", StringComparison.OrdinalIgnoreCase))) // TODO: is case significant?
+            {
+                var key = tagProperty.Split('=')[0];
+
+                if (key.Equals("tag_key", StringComparison.OrdinalIgnoreCase)) // TODO: is case significant?
+                {
+                    list.Add(new(foundKeys.Dequeue(), null));
+                }
+                else if (key.Equals("tag_value", StringComparison.OrdinalIgnoreCase)) // TODO: is case significant?
+                {
+                    if (!list.Any() || list[^1].Value is not null)
+                    {
+                        return (null, "Unmatched tag_value");
+                    }
+
+                    list[^1] = (list[^1].Key, foundValues.Dequeue());
+                }
+                //else
+                //{
+                // ignore unknown tag_* entry
+                //}
+            }
+
+            // Should never happen. This is catastrophic.
+            if (foundKeys.Count != 0 || foundValues.Count != 0)
+            {
+                throw new InvalidOperationException("There should not be more \"tag_key\" or \"tag_value\" properties than there are properties that start with \"tag_\""); // internal error, can't be the user
+            }
+
+            var tags = new Dictionary<string, string>();
+
+            foreach (var (Key, Value) in list)
+            {
+                if (tags.ContainsKey(Key))
+                {
+                    return (null, "Duplicated tag_key");
+                }
+
+                tags.Add(Key, Value ?? string.Empty);
+            }
+
+            return (tags, null);
+        }
+
+        private static (FormattableString RawPredicate, Func<TesTask, bool> EFPredicate) GenerateSearchPredicates(TesState? state, string namePrefix, Dictionary<string, string> tags)
+        {
+            Func<TesTask, bool> predicate = null;
+
+            if (!string.IsNullOrWhiteSpace(namePrefix))
+            {
+                AppendFunc(predicate, t => t.Name.StartsWith(namePrefix));
+            }
+
+            if (state is not null)
+            {
+                AppendFunc(predicate, t => t.State == state);
+            }
+
+            tags ??= new();
+            AppendableFormattableString rawPredicate = null;
+            var isNotFirst = false;
+
+            foreach (var tag in tags.Where(t => string.IsNullOrEmpty(t.Value)))
+            {
+                //AppendPredicate(predicate, t => t.Tags.ContainsKey(tag.Key));
+                if (isNotFirst)
+                {
+                    rawPredicate = AppendString(rawPredicate, new($"jsonb_path_match(\"Json\"->'Tags', '$[*] = '{tag.Key}') "));
+                }
+                else
+                {
+                    rawPredicate = AppendString(rawPredicate, new($" AND jsonb_path_match(\"Json\"->'Tags', '$[*] = '{tag.Key}') "));
+                    isNotFirst = true;
+                }
+            }
+
+            foreach (var tag in tags.Where(t => !string.IsNullOrEmpty(t.Value)))
+            {
+                AppendFunc(predicate, t => EF.Functions.JsonContains(t.Tags, $"{{\"{tag.Key}\", \"{tag.Value}\"}}"));
+                //rawPredicate = AppendString(rawPredicate, new($"\"Json\"->'Tags'->>'{tag.Key}' = \"{tag.Value}\""));
+            }
+
+            return (rawPredicate, predicate);
+
+            static Func<TesTask, bool> AppendFunc(Func<TesTask, bool> source, Func<TesTask, bool> additional)
+            {
+                return source is null
+                    ? additional
+                    : t => source(t) && additional(t);
+            }
+
+            static AppendableFormattableString AppendString(AppendableFormattableString source, AppendableFormattableString additional)
+            {
+                if (source is null)
+                {
+                    return additional;
+                }
+                else
+                {
+                    source.Append($" AND ");
+                    source.Append(additional);
+                    return source;
+                }
+            }
         }
 
         private async ValueTask<bool> TryRemoveItemFromCacheAsync(TesTask tesTask, string view, CancellationToken cancellationToken)
@@ -362,23 +524,94 @@ namespace TesApi.Controllers
             return false;
         }
 
-        private IActionResult TesJsonResult(object value, string view)
+        private static TesView ParseView(string view)
         {
-            TesView viewEnum;
-
             try
             {
-                viewEnum = string.IsNullOrEmpty(view) ? TesView.MINIMAL : Enum.Parse<TesView>(view, true);
+                return string.IsNullOrEmpty(view) ? TesView.MINIMAL : Enum.Parse<TesView>(view, true);
             }
             catch
             {
-                logger.LogError($"Invalid view parameter value. If provided, it must be one of: {string.Join(", ", Enum.GetNames(typeof(TesView)))}");
-                return BadRequest($"Invalid view parameter value. If provided, it must be one of: {string.Join(", ", Enum.GetNames(typeof(TesView)))}");
+                throw new ArgumentOutOfRangeException(nameof(view), $"Invalid view parameter value. If provided, it must be one of: {string.Join(", ", Enum.GetNames(typeof(TesView)))}");
+            }
+        }
+
+        private static IActionResult TesJsonResult(object value, TesView viewEnum)
+        {
+            return new JsonResult(value, TesJsonSerializerSettings[viewEnum]) { StatusCode = 200 };
+        }
+
+        private sealed class AppendableFormattableString : FormattableString
+        {
+            private readonly List<FormattableString> strings = new();
+
+            public AppendableFormattableString(FormattableString formattable)
+                => strings.Add(formattable);
+
+            internal void Append(FormattableString formattable)
+                => strings.Add(formattable);
+
+            public override int ArgumentCount => strings.Sum(s => s.ArgumentCount);
+
+            public override string Format => string.Join(string.Empty, strings.Select(MungeFormat));
+
+            private string MungeFormat(FormattableString formattable, int index)
+            {
+                var baseIndex = strings.Take(index).Sum(s => s.ArgumentCount);
+                var format = formattable.Format;
+
+                var parts = format.Split('{');
+                return string.Join('{', parts.Select(MungePart));
+
+                string MungePart(string format, int index)
+                {
+                    if (index == 0)
+                        return format;
+                    if (parts[index - 1].Length == 0 && format.Length == 0)
+                        return format;
+                    var end = format.IndexOfAny(new char[] { ',', ':', '}' });
+                    if (end == -1)
+                        return format;
+
+                    if (int.TryParse(format.AsSpan(0, end), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var item))
+                    {
+                        return string.Concat((item + baseIndex).ToString("D", System.Globalization.CultureInfo.InvariantCulture), format.AsSpan(end));
+                    }
+
+                    return format;
+                }
             }
 
-            var jsonResult = new JsonResult(value, TesJsonSerializerSettings[viewEnum]) { StatusCode = 200 };
+            public override object GetArgument(int index) // TODO: object is nullable
+            {
+                if (index >= ArgumentCount)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(index));
+                }
 
-            return jsonResult;
+                foreach (var s in strings)
+                {
+                    if (s.ArgumentCount < index)
+                    {
+                        index -= s.ArgumentCount;
+                        continue;
+                    }
+
+                    return s.GetArgument(index);
+                }
+
+                return null;
+            }
+
+            public override object[] GetArguments() // TODO: object is nullable
+            {
+                return strings.SelectMany(s => s.GetArguments()).ToArray();
+            }
+
+            public override string ToString(IFormatProvider formatProvider) // TODO: IFormatProvider is nullable
+            {
+                return string.Format(formatProvider, Format, GetArguments());
+            }
         }
 
         private enum TesView

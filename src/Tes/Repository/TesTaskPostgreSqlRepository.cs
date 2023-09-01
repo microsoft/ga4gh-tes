@@ -78,19 +78,13 @@ namespace Tes.Repository
                     })
                 .ExecuteAsync(async ct =>
                 {
-                    var activeTasksCount = (await InternalGetItemsAsync(task => TesTask.ActiveStates.Contains(task.State), ct, q => q.OrderBy(t => t.Json.CreationTime))).Count();
+                    var activeTasksCount = (await InternalGetItemsAsync(ct, q => q.OrderBy(t => t.Json.CreationTime), predicate: task => TesTask.ActiveStates.Contains(task.State))).Count();
                     _logger?.LogInformation("Cache warmed successfully in {TotalSeconds} seconds. Added {TasksAddedCount} items to the cache.", $"{sw.Elapsed.TotalSeconds:n3}", $"{activeTasksCount:n0}");
                 }, cancellationToken);
         }
 
 
-        /// <summary>
-        /// Get a TesTask by the TesTask.ID
-        /// </summary>
-        /// <param name="id">The TesTask's ID</param>
-        /// <param name="cancellationToken"></param>
-        /// <param name="onSuccess">Delegate to be invoked on success</param>
-        /// <returns></returns>
+        /// <inheritdoc/>
         public async Task<bool> TryGetItemAsync(string id, CancellationToken cancellationToken, Action<TesTask> onSuccess = null)
         {
             var item = await GetItemFromCacheOrDatabase(id, false, cancellationToken);
@@ -105,34 +99,13 @@ namespace Tes.Repository
             return true;
         }
 
-        /// <summary>
-        /// Get TesTask items
-        /// </summary>
-        /// <param name="predicate">Predicate to query the TesTasks</param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
+        /// <inheritdoc/>
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
         {
-            return (await InternalGetItemsAsync(predicate, cancellationToken));
+            return (await InternalGetItemsAsync(cancellationToken, predicate: predicate));
         }
 
-        /// <summary>
-        /// Get TesTask items
-        /// </summary>
-        /// <param name="predicate">Predicate to query the TesTasks</param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task<IEnumerable<TesTask>> GetItemsByTagAsync(Dictionary<string, string> tags, CancellationToken cancellationToken)
-        {
-            return (await InternalGetTesTasksByTagsRawAsync(tags, cancellationToken));
-        }
-
-        /// <summary>
-        /// Encapsulates a TesTask as JSON
-        /// </summary>
-        /// <param name="item">TesTask to store as JSON in the database</param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
+        /// <inheritdoc/>
         public async Task<TesTask> CreateItemAsync(TesTask task, CancellationToken cancellationToken)
         {
             var item = new TesTaskDatabaseItem { Json = task };
@@ -145,16 +118,10 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="item">TesTask to store as JSON in the database</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
         public async Task<List<TesTask>> CreateItemsAsync(List<TesTask> items, CancellationToken cancellationToken)
              => (await Task.WhenAll(items.Select(task => CreateItemAsync(task, cancellationToken)))).ToList();
 
-        /// <summary>
-        /// Base class searches within model, this method searches within the JSON
-        /// </summary>
-        /// <param name="tesTask"></param>
-        /// <returns></returns>
-        /// <param name="cancellationToken"></param>
+        /// <inheritdoc/>
         public async Task<TesTask> UpdateItemAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
             var item = await GetItemFromCacheOrDatabase(tesTask.Id, true, cancellationToken);
@@ -163,27 +130,15 @@ namespace Tes.Repository
             return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json;
         }
 
-        /// <summary>
-        /// Base class deletes by Item.Id, this method deletes by Item.Json.Id
-        /// </summary>
-        /// <param name="id">TesTask Id</param>
-        /// <returns></returns>
-        /// <param name="cancellationToken"></param>
+        /// <inheritdoc/>
         public async Task DeleteItemAsync(string id, CancellationToken cancellationToken)
         {
             _ = await AddUpdateOrRemoveItemInDbAsync(await GetItemFromCacheOrDatabase(id, true, cancellationToken), WriteAction.Delete, cancellationToken);
             _ = _cache?.TryRemove(id);
         }
 
-        /// <summary>
-        /// Identical to GetItemsAsync, paging is not supported. All items are returned
-        /// </summary>
-        /// <param name="predicate">Predicate to query the TesTasks</param>
-        /// <param name="pageSize"></param>
-        /// <param name="continuationToken"></param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken)
+        /// <inheritdoc/>
+        public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate, Expression<Func<TesTask, bool>> predicate)
         {
             var last = (CreationTime: DateTimeOffset.MinValue, Id: string.Empty);
 
@@ -214,7 +169,7 @@ namespace Tes.Repository
 
             // This "uglyness" should (hopefully) be fixed in EF8: https://github.com/dotnet/roslyn/issues/12897 reference https://github.com/dotnet/efcore/issues/26822 when we can compare last directly with a created per-item tuple
             //var results = (await InternalGetItemsAsync(predicate, cancellationToken, q => q.Where(t => t.Json.CreationTime > last.CreationTime || (t.Json.CreationTime == last.CreationTime && t.Json.Id.CompareTo(last.Id) > 0)).Take(pageSize))).ToList();
-            var results = (await InternalGetItemsAsync(predicate, cancellationToken, pagination: q => q.Where(t => t.Json.Id.CompareTo(last.Id) > 0).Take(pageSize))).ToList();
+            var results = (await InternalGetItemsAsync(cancellationToken, pagination: q => q.Where(t => t.Json.Id.CompareTo(last.Id) > 0).Take(pageSize), predicate: predicate, rawPredicate: rawPredicate)).ToList();
 
             return (GetContinuation(results.Count == pageSize ? results.LastOrDefault() : null), results);
 
@@ -249,29 +204,23 @@ namespace Tes.Repository
             return item;
         }
 
-        private async Task<IEnumerable<TesTask>> InternalGetTesTasksByTagsRawAsync(Dictionary<string, string> tags, CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default)
-        {
-            // TODO - orderby and pagination
-            using var dbContext = CreateDbContext();
-            return (await GetTesTaskDatabaseItemsByTagAsync(dbContext, tags, cancellationToken)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
-        }
-
         /// <summary>
         /// Stands up TesTask query, ensures that active tasks queried are maintained in the cache. Entry point for all non-single task SELECT queries in the repository.
         /// </summary>
-        /// <param name="predicate"></param>
         /// <param name="cancellationToken"></param>
         /// <param name="orderBy"></param>
         /// <param name="pagination"></param>
+        /// <param name="predicate"></param>
+        /// <param name="rawPredicate"></param>
         /// <returns></returns>
-        private async Task<IEnumerable<TesTask>> InternalGetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default)
+        private async Task<IEnumerable<TesTask>> InternalGetItemsAsync(CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default, Expression<Func<TesTask, bool>> predicate = default, FormattableString rawPredicate = default)
         {
             // It turns out, PostgreSQL doesn't handle EF's interpretation of ORDER BY more then one "column" in any resonable way, so we have to order by the only thing we have that is expected to be unique.
             //orderBy = pagination is null ? orderBy : q => q.OrderBy(t => t.Json.CreationTime).ThenBy(t => t.Json.Id);
             orderBy = pagination is null ? orderBy : q => q.OrderBy(t => t.Json.Id);
 
             using var dbContext = CreateDbContext();
-            return (await GetItemsAsync(dbContext.TesTasks, WhereTesTask(predicate), cancellationToken, orderBy, pagination)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
+            return (await GetItemsAsync(dbContext.TesTasks, cancellationToken, orderBy, pagination, WhereTesTask(predicate), rawPredicate)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
         }
 
         /// <summary>

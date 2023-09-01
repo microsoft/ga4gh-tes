@@ -175,13 +175,13 @@ namespace Tes.Repository.Tests
         {
             const int pageSize = 256;
 
-            var (continuation, items) = await repository.GetItemsAsync(c => c.Id != null, pageSize, null, CancellationToken.None);
+            var (continuation, items) = await repository.GetItemsAsync(null, pageSize, CancellationToken.None, null, c => c.Id != null);
             var itemsList = items.ToList();
             Assert.IsTrue(itemsList.Count <= pageSize);
 
             while (!string.IsNullOrWhiteSpace(continuation))
             {
-                (continuation, items) = await repository.GetItemsAsync(c => c.Id != null, pageSize, continuation, CancellationToken.None);
+                (continuation, items) = await repository.GetItemsAsync(continuation, pageSize, CancellationToken.None, null, c => c.Id != null);
                 itemsList.AddRange(items);
             }
 

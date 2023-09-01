@@ -11,6 +11,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using LinqKit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -80,68 +81,75 @@ namespace Tes.Repository
         /// Retrieves items from the database in a consistent fashion.
         /// </summary>
         /// <param name="dbSet">The <see cref="DbSet{TEntity}"/> of <typeparamref name="TDatabaseItem"/> to query.</param>
-        /// <param name="predicate">The WHERE clause <see cref="Expression"/> for <typeparamref name="TDatabaseItem"/> selection in the query.</param>
         /// <param name="cancellationToken"></param>
         /// <param name="orderBy"></param>
         /// <param name="pagination"></param>
+        /// <param name="predicate">The WHERE clause <see cref="Expression"/> for <typeparamref name="TDatabaseItem"/> selection in the query.</param>
+        /// <param name="rawPredicate"></param>
         /// <returns></returns>
         /// <remarks>Ensure that the <see cref="DbContext"/> from which <paramref name="dbSet"/> comes isn't disposed until the entire query completes.</remarks>
-        protected async Task<IEnumerable<T>> GetItemsAsync(DbSet<T> dbSet, Expression<Func<T, bool>> predicate, CancellationToken cancellationToken, Func<IQueryable<T>, IQueryable<T>> orderBy = default, Func<IQueryable<T>, IQueryable<T>> pagination = default)
+        protected async Task<IEnumerable<T>> GetItemsAsync(DbSet<T> dbSet, CancellationToken cancellationToken, Func<IQueryable<T>, IQueryable<T>> orderBy = default, Func<IQueryable<T>, IQueryable<T>> pagination = default, Expression<Func<T, bool>> predicate = default, FormattableString rawPredicate = default)
         {
             ArgumentNullException.ThrowIfNull(dbSet);
             ArgumentNullException.ThrowIfNull(predicate);
             orderBy ??= q => q;
             pagination ??= q => q;
 
+            var sqlQuery1 = dbSet.EntityType.GetSqlQuery();
+
+            var tableQuery = rawPredicate is null
+                ? dbSet.AsQueryable()
+                : dbSet.FromSql(new RependableFormattableString(dbSet.EntityType.GetSqlQuery() + " WHERE ", rawPredicate));
+
             // Search for items in the JSON
-            var query = pagination(orderBy(dbSet.Where(predicate)));
-            //var sqlQuery = query.ToQueryString();
-            //System.Diagnostics.Debugger.Break();
+            var query = pagination(orderBy(tableQuery/*.AsExpandable()*/.Where(predicate)));
+            var sqlQuery = query.ToQueryString();
+            System.Diagnostics.Debugger.Break();
 
             return await _asyncPolicy.ExecuteAsync(ct => query.ToListAsync(ct), cancellationToken);
         }
 
-        protected async Task<IEnumerable<TesTaskDatabaseItem>> GetTesTaskDatabaseItemsByTagAsync(
-            TesDbContext dbContext,
-            Dictionary<string, string> tags,
-            CancellationToken cancellationToken)
-        {
-            ArgumentNullException.ThrowIfNull(dbContext);
-            ArgumentNullException.ThrowIfNull(tags);
-            if (tags.Count == 0) throw new ArgumentOutOfRangeException("Must specify more than one tag");
+        //protected async Task<IEnumerable<TesTaskDatabaseItem>> GetTesTaskDatabaseItemsByTagAsync(
+        //    TesDbContext dbContext,
+        //    Dictionary<string, string> tags,
+        //    CancellationToken cancellationToken)
+        //{
+        //    ArgumentNullException.ThrowIfNull(dbContext);
+        //    ArgumentNullException.ThrowIfNull(tags);
+        //    if (tags.Count == 0) throw new ArgumentOutOfRangeException(nameof(tags), "Must specify more than one tag");
 
-            var sqlBuilder = new StringBuilder();
-            sqlBuilder.AppendLine("SELECT * FROM TesTasks WHERE ");
-            var tagConditions = tags.Select(kvp => $"\"Json\"->'Tags'->>'{kvp.Key}' = @p_{kvp.Key}");
-            sqlBuilder.AppendLine(string.Join(" AND ", tagConditions));
+        //    var sqlBuilder = new StringBuilder();
+        //    sqlBuilder.AppendLine("SELECT * FROM TesTasks WHERE ");
+        //    var tagConditions = tags.Select(kvp => $"\"Json\"->'Tags'->>'{kvp.Key}' = @p_{kvp.Key}");
+        //    sqlBuilder.AppendLine(string.Join(" AND ", tagConditions));
 
-            using var connection = dbContext.Database.GetDbConnection();
-            await connection.OpenAsync();
+        //    using var connection = dbContext.Database.GetDbConnection();
+        //    await connection.OpenAsync(cancellationToken);
 
-            using var command = connection.CreateCommand();
-            command.CommandText = sqlBuilder.ToString();
+        //    using var command = connection.CreateCommand();
+        //    command.CommandText = sqlBuilder.ToString();
 
-            foreach (var tag in tags)
-            {
-                command.Parameters.Add(new NpgsqlParameter($"p_{tag.Key}", tag.Value));
-            }
+        //    foreach (var tag in tags)
+        //    {
+        //        command.Parameters.Add(new NpgsqlParameter($"p_{tag.Key}", tag.Value));
+        //    }
 
-            var result = new List<TesTaskDatabaseItem>();
-            using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        //    var result = new List<TesTaskDatabaseItem>();
+        //    using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                var item = new TesTaskDatabaseItem
-                {
-                    Id = reader.IsDBNull(0) ? default : reader.GetInt64(0),
-                    Json = JsonSerializer.Deserialize<TesTask>(reader.IsDBNull(1) ? default : reader.GetString(1)),
-                };
+        //    while (await reader.ReadAsync(cancellationToken))
+        //    {
+        //        var item = new TesTaskDatabaseItem
+        //        {
+        //            Id = reader.IsDBNull(0) ? default : reader.GetInt64(0),
+        //            Json = JsonSerializer.Deserialize<TesTask>(reader.IsDBNull(1) ? default : reader.GetString(1)),
+        //        };
 
-                result.Add(item);
-            }
+        //        result.Add(item);
+        //    }
 
-            return result;
-        }
+        //    return result;
+        //}
 
         /// <summary>
         /// Adds entry into WriterWorker queue.
@@ -288,6 +296,40 @@ namespace Tes.Repository
             // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
             Dispose(disposing: true);
             GC.SuppressFinalize(this);
+        }
+
+        private class RependableFormattableString : FormattableString
+        {
+            private readonly FormattableString source;
+            private readonly string prefix;
+
+            public RependableFormattableString(string prefix, FormattableString formattableString)
+            {
+                ArgumentNullException.ThrowIfNull(formattableString);
+                ArgumentNullException.ThrowIfNullOrEmpty(prefix);
+
+                source = formattableString;
+                this.prefix = prefix;
+            }
+
+            public override int ArgumentCount => source.ArgumentCount;
+
+            public override string Format => prefix + source.Format;
+
+            public override object GetArgument(int index)
+            {
+                return source.GetArgument(index);
+            }
+
+            public override object[] GetArguments()
+            {
+                return source.GetArguments();
+            }
+
+            public override string ToString(IFormatProvider formatProvider)
+            {
+                return prefix + source.ToString(formatProvider);
+            }
         }
     }
 }
