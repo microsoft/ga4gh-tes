@@ -321,10 +321,9 @@ namespace TesApi.Controllers
                 return BadRequest($"Invalid state parameter value. If provided, it must be one of: {string.Join(", ", Enum.GetNames(typeof(TesState)))}");
             }
 
-            var decodedPageToken =
-                pageToken is not null ? Encoding.UTF8.GetString(Base64UrlTextEncoder.Decode(pageToken)) : null;
+            var decodedPageToken = pageToken is null ? null : Encoding.UTF8.GetString(Base64UrlTextEncoder.Decode(pageToken));
 
-            if (pageSize < 1 || pageSize > 2047)
+            if (pageSize.HasValue && (pageSize < 1 || pageSize > 2047))
             {
                 logger.LogError($"pageSize invalid {pageSize}");
                 return BadRequest("If provided, pageSize must be greater than 0 and less than 2048. Defaults to 256.");
@@ -378,7 +377,7 @@ namespace TesApi.Controllers
                 rawPredicate,
                 predicate is null ? null : t => predicate(t));
 
-            var encodedNextPageToken = nextPageToken is not null ? Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(nextPageToken)) : null;
+            var encodedNextPageToken = nextPageToken is null ? null : Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(nextPageToken));
             var response = new TesListTasksResponse { Tasks = tasks.ToList(), NextPageToken = encodedNextPageToken };
 
             return TesJsonResult(response, viewEnum);
@@ -443,12 +442,12 @@ namespace TesApi.Controllers
 
             if (!string.IsNullOrWhiteSpace(namePrefix))
             {
-                AppendFunc(predicate, t => t.Name.StartsWith(namePrefix));
+                predicate = AppendFunc(predicate, t => t.Name.StartsWith(namePrefix));
             }
 
             if (state is not null)
             {
-                AppendFunc(predicate, t => t.State == state);
+                predicate = AppendFunc(predicate, t => t.State == state);
             }
 
             tags ??= new();
@@ -471,7 +470,7 @@ namespace TesApi.Controllers
 
             foreach (var tag in tags.Where(t => !string.IsNullOrEmpty(t.Value)))
             {
-                AppendFunc(predicate, t => EF.Functions.JsonContains(t.Tags, $"{{\"{tag.Key}\", \"{tag.Value}\"}}"));
+                predicate = AppendFunc(predicate, t => EF.Functions.JsonContains(t.Tags, $"{{\"{tag.Key}\", \"{tag.Value}\"}}"));
                 //rawPredicate = AppendString(rawPredicate, new($"\"Json\"->'Tags'->>'{tag.Key}' = \"{tag.Value}\""));
             }
 

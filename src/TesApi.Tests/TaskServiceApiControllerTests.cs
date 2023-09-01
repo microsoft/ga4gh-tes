@@ -370,10 +370,10 @@ namespace TesApi.Tests
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo
-                // string continuationToken, int pageSize, CancellationToken cancellationToken, Expression<Func<T, bool>> predicate
+                // string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString predicate, Expression<Func<T, bool>> predicate
                 .GetItemsAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<System.Threading.CancellationToken>(), It.IsAny<FormattableString>(), It.IsAny<Expression<Func<TesTask, bool>>>()))
-                .ReturnsAsync((string continuationToken, int pageSize, System.Threading.CancellationToken _1, Expression<Func<TesTask, bool>> predicate, FormattableString _2) =>
-                    (string.Empty, tesTasks.Where(i => predicate.Compile().Invoke(i)).Take(pageSize))));
+                .ReturnsAsync((string _1, int pageSize, System.Threading.CancellationToken _2, FormattableString _3, Expression<Func<TesTask, bool>> predicate) =>
+                    ("continuation-token=1", tesTasks.Where(i => predicate.Compile().Invoke(i)).Take(pageSize))));
             var controller = services.GetT();
 
             var result = await controller.ListTasks(namePrefix, null, Array.Empty<string>(), Array.Empty<string>(), 1, null, "BASIC", System.Threading.CancellationToken.None) as JsonResult;
