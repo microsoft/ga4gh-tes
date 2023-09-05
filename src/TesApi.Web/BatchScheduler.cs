@@ -1119,11 +1119,11 @@ namespace TesApi.Web
 
             var nodeTaskRunnerUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
             var nodeTaskRunnerInfoUrl = await UploadBlobAsync(NodeRunnerTaskInfoFilename, SerializeNodeTask(nodeTaskRunnerContent));
-            var nodeBatchScriptUrl = await UploadBlobAsync(BatchScriptFileName, sb.ToString());
+            var nodeBatchScriptSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, BatchScriptFileName, cancellationToken);
             var nodeRunnerStartTaskUrl = await UploadBlobAsync(NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName, SerializeNodeTask(startTaskStdOutStdErrUploadNodeTaskContent));
-
+            
             sb.AppendLinuxLine($"write_ts DownloadRunnerScriptsStart && \\");
-            sb.AppendLinuxLine(CreateWgetCommand(nodeBatchScriptUrl, BatchScriptFileName) + " && \\");
+            sb.AppendLinuxLine(CreateWgetCommand(nodeBatchScriptSasUrl, BatchScriptFileName) + " && \\");
             sb.AppendLinuxLine(CreateWgetCommand(nodeRunnerStartTaskUrl, NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName) + " && \\");
             sb.AppendLinuxLine(CreateWgetCommand(nodeTaskRunnerInfoUrl, NodeRunnerTaskInfoFilename) + " && \\");
             sb.AppendLinuxLine(CreateWgetCommand(nodeTaskRunnerUrl, NodeTaskRunnerFilename, setExecutable: true) + " && \\");
@@ -1180,6 +1180,8 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
             sb.AppendLinuxLine($"echo Task complete.");
+
+            await storageAccessProvider.UploadBlobAsync(new Uri(nodeBatchScriptSasUrl), sb.ToString(), cancellationToken);
 
             var batchRunCommand = enableBatchAutopool
                 ? $"/bin/bash -c chmod u+x ./{NodeTaskRunnerFilename} && /bin/bash $AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
