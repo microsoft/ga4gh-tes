@@ -9,7 +9,7 @@ namespace Tes.Runner.Storage
     /// Transformation strategy that combines multiple strategies.
     /// Strategies are applied in the order they are provided.
     /// </summary>
-    public class CombinedTransformationStrategy: IUrlTransformationStrategy
+    public class CombinedTransformationStrategy : IUrlTransformationStrategy
     {
         private readonly List<IUrlTransformationStrategy> strategies;
 

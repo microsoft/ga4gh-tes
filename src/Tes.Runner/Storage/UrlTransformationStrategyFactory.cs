@@ -21,6 +21,18 @@ namespace Tes.Runner.Storage
                     return new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, new DefaultAzureCredential()));
                 case TransformationStrategy.TerraWsm:
                     return new TerraUrlTransformationStrategy(runtimeOptions.Terra!);
+                case TransformationStrategy.CombinedTerra:
+                    return new CombinedTransformationStrategy(new List<IUrlTransformationStrategy>
+                    {
+                        new CloudProviderSchemeConverter(),
+                        new TerraUrlTransformationStrategy(runtimeOptions.Terra!),
+                    });
+                case TransformationStrategy.CombinedAzureResourceManager:
+                    return new CombinedTransformationStrategy(new List<IUrlTransformationStrategy>
+                    {
+                        new CloudProviderSchemeConverter(),
+                        new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, new DefaultAzureCredential()))
+                    });
             }
 
             throw new NotImplementedException();

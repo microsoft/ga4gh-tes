@@ -55,6 +55,8 @@ namespace Tes.Runner.Models
         AzureResourceManager,
         TerraWsm,
         SchemeConverter,
+        CombinedTerra,
+        CombinedAzureResourceManager,
     }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]

@@ -19,7 +19,7 @@ namespace Tes.Runner.Test.Storage
         {
             mockStrategy1 = new Mock<IUrlTransformationStrategy>();
             mockStrategy2 = new Mock<IUrlTransformationStrategy>();
-            
+
             strategy = new CombinedTransformationStrategy(
                 new List<IUrlTransformationStrategy>()
                 {
@@ -32,12 +32,12 @@ namespace Tes.Runner.Test.Storage
         [TestMethod]
         public async Task CombinedTransformationStrategy_TwoStrategiesProvided_BothAreAppliedInOrder()
         {
-            var sourceUrl = "https://source.foo";
-            var firstTransformation = "https://first.foo";
-            var secondTransformation = "https://second.foo";
+            var sourceUrl = "https://source.foo/";
+            var firstTransformation = "https://first.foo/";
+            var secondTransformation = "https://second.foo/";
 
             mockStrategy1.Setup(s => s.TransformUrlWithStrategyAsync(sourceUrl, It.IsAny<BlobSasPermissions>()))
-                .ReturnsAsync(()=> new Uri(firstTransformation));
+                .ReturnsAsync(() => new Uri(firstTransformation));
             mockStrategy2.Setup(s => s.TransformUrlWithStrategyAsync(firstTransformation, It.IsAny<BlobSasPermissions>()))
                 .ReturnsAsync(() => new Uri(secondTransformation));
 
