@@ -9,6 +9,8 @@ namespace Tes.Repository
     using System.Diagnostics;
     using System.Linq;
     using System.Linq.Expressions;
+    using System.Reflection;
+    using System.Runtime.Serialization;
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.EntityFrameworkCore;
@@ -50,7 +52,7 @@ namespace Tes.Repository
             CreateDbContext = createDbContext;
             using var dbContext = createDbContext();
             dbContext.Database.MigrateAsync().Wait();
-            //dbContext.TesTasks.ExecuteDeleteAsync().Wait(); // TODO: Delete Me PLEASE!
+            dbContext.TesTasks.ExecuteDeleteAsync().Wait(); // TODO: Delete Me PLEASE!
         }
 
         private async Task WarmCacheAsync(CancellationToken cancellationToken)
@@ -97,7 +99,7 @@ namespace Tes.Repository
             }
 
             onSuccess?.Invoke(item.Json);
-            _ = EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState());
+            _ = EnsureActiveItemInCache<TesTask>(item, t => t.Json.Id, t => t.Json.IsActiveState());
             return true;
         }
 
@@ -112,7 +114,7 @@ namespace Tes.Repository
         {
             var item = new TesTaskDatabaseItem { Json = task };
             item = await AddUpdateOrRemoveItemInDbAsync(item, WriteAction.Add, cancellationToken);
-            return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json;
+            return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState(), CopyTesTask);
         }
 
         /// <summary>
@@ -129,7 +131,7 @@ namespace Tes.Repository
             var item = await GetItemFromCacheOrDatabase(tesTask.Id, true, cancellationToken);
             item.Json = tesTask;
             item = await AddUpdateOrRemoveItemInDbAsync(item, WriteAction.Update, cancellationToken);
-            return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json;
+            return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState(), CopyTesTask);
         }
 
         /// <inheritdoc/>
@@ -227,7 +229,7 @@ namespace Tes.Repository
             });
 
             using var dbContext = CreateDbContext();
-            return (await GetItemsAsync(dbContext.TesTasks, readerFunc, cancellationToken, orderBy, pagination, efPredicate is null ? null : WhereTesTask(efPredicate), rawPredicate)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
+            return (await GetItemsAsync(dbContext.TesTasks, readerFunc, cancellationToken, orderBy, pagination, efPredicate is null ? null : WhereTesTask(efPredicate), rawPredicate)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState(), CopyTesTask));
         }
 
         /// <summary>
@@ -244,10 +246,26 @@ namespace Tes.Repository
             static Expression<Func<TesTaskDatabaseItem, TesTask>> GetTask() => item => item.Json;
         }
 
+        private TesTask CopyTesTask(TesTaskDatabaseItem item)
+        {
+            using var stream = new System.IO.MemoryStream();
+            var serializer = new DataContractSerializer(typeof(TesTask));
+            serializer.WriteObject(stream, item.Json);
+            stream.Seek(0, System.IO.SeekOrigin.Begin);
+            return (TesTask)serializer.ReadObject(stream);
+        }
+
         /// <inheritdoc/>
         public ValueTask<bool> TryRemoveItemFromCacheAsync(TesTask item, CancellationToken _1)
         {
             return ValueTask.FromResult(_cache?.TryRemove(item.Id) ?? false);
+        }
+
+        /// <inheritdoc/>
+        public FormattableString JsonFormattableRawString(string property, FormattableString sql)
+        {
+            var column = typeof(TesTaskDatabaseItem).GetProperty(nameof(TesTaskDatabaseItem.Json))?.GetCustomAttribute<System.ComponentModel.DataAnnotations.Schema.ColumnAttribute>()?.Name ?? "json";
+            return new PrependableFormattableString($"\"{column}\"->'{property}'", sql);
         }
     }
 }

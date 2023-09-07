@@ -54,24 +54,25 @@ namespace Tes.Repository
         /// Adds item to cache if active and not already present or updates it if already present.
         /// </summary>
         /// <param name="item"><see cref="T"/> to add or update to the cache.</param>
-        /// <param name="getKey">Function to provide cache key from <see cref="T"/>.</param>
-        /// <param name="isActive">Predicate to determine if <see cref="T"/> is active.</param>
+        /// <param name="GetKey">Function to provide cache key from <see cref="T"/>.</param>
+        /// <param name="IsActive">Predicate to determine if <see cref="T"/> is active.</param>
+        /// <param name="GetResult">Converts (extracts and/or copies) the desired portion of <typeparamref name="T"/>.</param>
         /// <returns><paramref name="item"/> (for convenience in fluent/LINQ usage patterns).</returns>
-        protected T EnsureActiveItemInCache(T item, Func<T, string> getKey, Predicate<T> isActive)
+        protected TResult EnsureActiveItemInCache<TResult>(T item, Func<T, string> GetKey, Predicate<T> IsActive, Func<T, TResult> GetResult = default) where TResult : class
         {
             if (_cache is not null)
             {
-                if (_cache.TryGetValue(getKey(item), out _))
+                if (_cache.TryGetValue(GetKey(item), out _))
                 {
-                    _ = _cache.TryUpdate(getKey(item), item, isActive(item) ? default : defaultCompletedTaskCacheExpiration);
+                    _ = _cache.TryUpdate(GetKey(item), item, IsActive(item) ? default : defaultCompletedTaskCacheExpiration);
                 }
-                else if (isActive(item))
+                else if (IsActive(item))
                 {
-                    _ = _cache.TryAdd(getKey(item), item);
+                    _ = _cache.TryAdd(GetKey(item), item);
                 }
             }
 
-            return item;
+            return GetResult?.Invoke(item) ?? default;
         }
 
         /// <summary>
@@ -270,7 +271,7 @@ namespace Tes.Repository
             GC.SuppressFinalize(this);
         }
 
-        private class PrependableFormattableString : FormattableString
+        internal class PrependableFormattableString : FormattableString
         {
             private readonly FormattableString source;
             private readonly string prefix;

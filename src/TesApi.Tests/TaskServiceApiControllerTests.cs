@@ -248,7 +248,7 @@ namespace TesApi.Tests
                 .ReturnsAsync(false));
             var controller = services.GetT();
 
-            var result = await controller.CancelTask(tesTaskId, System.Threading.CancellationToken.None) as NotFoundObjectResult;
+            var result = await controller.CancelTaskAsync(tesTaskId, System.Threading.CancellationToken.None) as NotFoundObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(404, result.StatusCode);
@@ -265,7 +265,7 @@ namespace TesApi.Tests
                 .ReturnsAsync(true));
             var controller = services.GetT();
 
-            var result = await controller.CancelTask(tesTask.Id, System.Threading.CancellationToken.None) as ObjectResult;
+            var result = await controller.CancelTaskAsync(tesTask.Id, System.Threading.CancellationToken.None) as ObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(200, result.StatusCode);
@@ -352,7 +352,7 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            var result = await controller.ListTasks(null, null, Array.Empty<string>(), Array.Empty<string>(), 0, null, "BASIC", System.Threading.CancellationToken.None) as BadRequestObjectResult;
+            var result = await controller.ListTasksAsync(null, null, Array.Empty<string>(), Array.Empty<string>(), 0, null, "BASIC", System.Threading.CancellationToken.None) as BadRequestObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(400, result.StatusCode);
@@ -376,7 +376,7 @@ namespace TesApi.Tests
                     ("continuation-token=1", tesTasks.Where(i => predicate.Compile().Invoke(i)).Take(pageSize))));
             var controller = services.GetT();
 
-            var result = await controller.ListTasks(namePrefix, null, Array.Empty<string>(), Array.Empty<string>(), 1, null, "BASIC", System.Threading.CancellationToken.None) as JsonResult;
+            var result = await controller.ListTasksAsync(namePrefix, null, Array.Empty<string>(), Array.Empty<string>(), 1, null, "BASIC", System.Threading.CancellationToken.None) as JsonResult;
             var listOfTesTasks = (TesListTasksResponse)result.Value;
 
             Assert.IsNotNull(result);

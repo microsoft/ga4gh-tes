@@ -73,5 +73,11 @@ namespace Tes.Repository
         /// <param name="Item">The item to remove</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         ValueTask<bool> TryRemoveItemFromCacheAsync(T item, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Prepends the name of the <typeparamref name="T"/> property being accessed via a raw sql string.
+        /// </summary>
+        /// <returns>A string containing "json"->'<paramref name="property"/>' prepended to <paramref name="sql"/>.</returns>
+        FormattableString JsonFormattableRawString(string property, FormattableString sql);
     }
 }

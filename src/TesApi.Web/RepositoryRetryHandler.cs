@@ -71,5 +71,9 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public ValueTask<bool> TryRemoveItemFromCacheAsync(T item, CancellationToken cancellationToken)
             => _repository.TryRemoveItemFromCacheAsync(item, cancellationToken);
+
+        /// <inheritdoc/>
+        public FormattableString JsonFormattableRawString(string property, FormattableString sql)
+            => _repository.JsonFormattableRawString(property, sql);
     }
 }

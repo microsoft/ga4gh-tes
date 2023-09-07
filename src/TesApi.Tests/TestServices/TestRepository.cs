@@ -171,5 +171,10 @@ namespace TesApi.Tests.TestServices
         {
             throw new NotImplementedException();
         }
+
+        public FormattableString JsonFormattableRawString(string property, FormattableString sql)
+        {
+            return new PostgreSqlCachingRepository<T>.PrependableFormattableString("\"json\"->" + $"'{property}'", sql);
+        }
     }
 }

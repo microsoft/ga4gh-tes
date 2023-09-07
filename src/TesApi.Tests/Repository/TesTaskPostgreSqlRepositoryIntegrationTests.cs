@@ -13,11 +13,11 @@ using Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Rest;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
-using Tes.Models;
 using Tes.Utilities;
 using FlexibleServer = Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 
@@ -36,7 +36,7 @@ namespace Tes.Repository.Tests
     [TestClass]
     public class TesTaskPostgreSqlRepositoryIntegrationTests
     {
-        private static IRepository<TesTask> repository;
+        private static IRepository<Models.TesTask> repository;
         private static readonly string subscriptionId = "";
         private static readonly string regionName = "southcentralus";
         private static readonly string resourceGroupName = $"tes-test-{Guid.NewGuid().ToString().Substring(0, 8)}";
@@ -52,7 +52,7 @@ namespace Tes.Repository.Tests
             await PostgreSqlTestUtility.CreateTestDbAsync(
                 subscriptionId, regionName, resourceGroupName, postgreSqlServerName, postgreSqlDatabaseName, adminLogin, adminPw);
 
-            var options = new PostgreSqlOptions
+            var options = new Models.PostgreSqlOptions
             {
                 ServerName = postgreSqlServerName,
                 DatabaseName = postgreSqlDatabaseName,
@@ -60,7 +60,7 @@ namespace Tes.Repository.Tests
                 DatabaseUserPassword = adminPw
             };
 
-            var optionsMock = new Mock<IOptions<PostgreSqlOptions>>();
+            var optionsMock = new Mock<IOptions<Models.PostgreSqlOptions>>();
             optionsMock.Setup(x => x.Value).Returns(options);
             var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(optionsMock.Object);
             repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(connectionString));
@@ -173,6 +173,8 @@ namespace Tes.Repository.Tests
         [TestMethod]
         public async Task GetItemsTagsAsyncTest()
         {
+            var controller = new TesApi.Controllers.TaskServiceApiController(repository, Mock.Of<ILogger<TesApi.Controllers.TaskServiceApiController>>(), Mock.Of<TesApi.Web.IAzureProxy>());
+
             foreach (var testSpec in GetTestData())
             {
                 var createdItem = await repository.CreateItemAsync(new()
@@ -180,11 +182,11 @@ namespace Tes.Repository.Tests
                     Id = Guid.NewGuid().ToString(),
                     Description = Guid.NewGuid().ToString(),
                     CreationTime = DateTime.UtcNow,
-                    State = TesState.UNKNOWNEnum,
+                    State = Models.TesState.UNKNOWNEnum,
                     Tags = testSpec.Tags
                 }, CancellationToken.None);
 
-                var (raw, ef) = TesApi.Controllers.TaskServiceApiController.GenerateSearchPredicates(null, null, testSpec.Filter);
+                var (raw, ef) = controller.GenerateSearchPredicates(null, null, testSpec.Filter);
                 var (_, items) = await repository.GetItemsAsync(null, 2048, CancellationToken.None, raw, ef is null ? null : t => ef(t));
 
                 items = items.ToList(); // Enumerate received enumeration only once
@@ -207,43 +209,43 @@ namespace Tes.Repository.Tests
                 => new()
                 {
                     (
-                        new() { {"foo", "bar"} },
-                        new() { {"foo", "bar"} },
+                        new(StringComparer.Ordinal) { {"foo", "bar"} },
+                        new(StringComparer.Ordinal) { {"foo", "bar"} },
                         true
                     ),
                     (
-                        new() { {"foo", "bar"} },
-                        new() { {"foo", "bat" } },
+                        new(StringComparer.Ordinal) { {"foo", "bar"} },
+                        new(StringComparer.Ordinal) { {"foo", "bat" } },
                         false
                     ),
                     (
-                        new() { {"foo", ""} },
-                        new() { {"foo", ""} },
+                        new(StringComparer.Ordinal) { {"foo", ""} },
+                        new(StringComparer.Ordinal) { {"foo", ""} },
                         true
                     ),
                     (
-                        new() { {"foo", "bar"}, { "baz", "bat" } },
-                        new() { {"foo", "bar"}, { "baz", "bat" } },
+                        new(StringComparer.Ordinal) { {"foo", "bar"}, { "baz", "bat" } },
+                        new(StringComparer.Ordinal) { {"foo", "bar"}, { "baz", "bat" } },
                         true
                     ),
                     (
-                        new() { {"foo", "bar"} },
-                        new() { {"foo", "bar"}, { "baz", "bat" } },
+                        new(StringComparer.Ordinal) { {"foo", "bar"} },
+                        new(StringComparer.Ordinal) { {"foo", "bar"}, { "baz", "bat" } },
                         true
                     ),
                     (
-                        new() { {"foo", "bar"}, { "baz", "bat" } },
-                        new() { {"foo", "bar"} },
+                        new(StringComparer.Ordinal) { {"foo", "bar"}, { "baz", "bat" } },
+                        new(StringComparer.Ordinal) { {"foo", "bar"} },
                         false
                     ),
                     (
-                        new() { {"foo", ""} },
-                        new() { {"foo", "bar"} },
+                        new(StringComparer.Ordinal) { {"foo", ""} },
+                        new(StringComparer.Ordinal) { {"foo", "bar"} },
                         true
                     ),
                     (
-                        new() { {"foo", ""} },
-                        new() { },
+                        new(StringComparer.Ordinal) { {"foo", ""} },
+                        new(StringComparer.Ordinal) { },
                         false
                     ),
                 };

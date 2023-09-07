@@ -72,7 +72,7 @@ namespace TesApi.Controllers
         [ValidateModelState]
         [SwaggerOperation("CancelTask", "Cancel a task based on providing an exact task ID.")]
         [SwaggerResponse(statusCode: 200, type: typeof(object), description: "")]
-        public virtual async Task<IActionResult> CancelTask([FromRoute][Required] string id, CancellationToken cancellationToken)
+        public virtual async Task<IActionResult> CancelTaskAsync([FromRoute][Required] string id, CancellationToken cancellationToken)
         {
             TesTask tesTask = null;
 
@@ -160,7 +160,7 @@ namespace TesApi.Controllers
                 ?.Skip(2)
                 ?.FirstOrDefault();
 
-            tesTask.Tags ??= new Dictionary<string, string>();
+            tesTask.Tags ??= new Dictionary<string, string>(StringComparer.Ordinal); // case-sensitive is the default for Dictionary<string, T> as well as the default for JSON.
 
             tesTask.Tags["workflow_id"] = tesTask.WorkflowId;
 
@@ -307,7 +307,7 @@ namespace TesApi.Controllers
         [ValidateModelState]
         [SwaggerOperation("ListTasks", "List tasks tracked by the TES server. This includes queued, active and completed tasks. How long completed tasks are stored by the system may be dependent on the underlying implementation.")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesListTasksResponse), description: "")]
-        public virtual async Task<IActionResult> ListTasks([FromQuery(Name = "name_prefix")] string namePrefix, [FromQuery] string state, [FromQuery(Name = "tag_key")] string[] tagKeys, [FromQuery(Name = "tag_value")] string[] tagValues, [FromQuery(Name = "page_size")] long? pageSize, [FromQuery(Name = "page_token")] string pageToken, [FromQuery] string view, CancellationToken cancellationToken)
+        public virtual async Task<IActionResult> ListTasksAsync([FromQuery(Name = "name_prefix")] string namePrefix, [FromQuery] string state, [FromQuery(Name = "tag_key")] string[] tagKeys, [FromQuery(Name = "tag_value")] string[] tagValues, [FromQuery(Name = "page_size")] long? pageSize, [FromQuery(Name = "page_token")] string pageToken, [FromQuery] string view, CancellationToken cancellationToken)
         {
             TesState? stateEnum;
 
@@ -317,7 +317,7 @@ namespace TesApi.Controllers
             }
             catch
             {
-                logger.LogError($"Invalid state parameter value. If provided, it must be one of: {string.Join(", ", Enum.GetNames(typeof(TesState)))}");
+                logger.LogError(@"Invalid state parameter value. If provided, it must be one of: {StateAllowedValues}", string.Join(", ", Enum.GetNames(typeof(TesState))));
                 return BadRequest($"Invalid state parameter value. If provided, it must be one of: {string.Join(", ", Enum.GetNames(typeof(TesState)))}");
             }
 
@@ -325,31 +325,37 @@ namespace TesApi.Controllers
 
             if (pageSize.HasValue && (pageSize < 1 || pageSize > 2047))
             {
-                logger.LogError($"pageSize invalid {pageSize}");
+                logger.LogError(@"pageSize invalid {InvalidPageSize}", pageSize);
                 return BadRequest("If provided, pageSize must be greater than 0 and less than 2048. Defaults to 256.");
             }
 
-            Dictionary<string, string> tags = null;
+            IDictionary<string, string> tags = null;
 
             if (tagKeys is not null && tagKeys.Length > 0 || tagValues is not null && tagValues.Length > 0)
             {
                 if (tagKeys?.Length > 0)
                 {
-                    var (zippedTags, error) = ParseZipedTagsFromQuery(tagKeys, tagValues);
+                    var (zippedTags, error) = ParseZipedTagsFromQuery();
 
                     if (string.IsNullOrEmpty(error))
                     {
                         tags = zippedTags;
                     }
-                    else if (tagKeys.Length == tagValues?.Length) // query possibly constructed using swagger - swagger cannot zip values
+                    else if (tagKeys.Length == tagValues?.Length)
                     {
-                        tags = tagKeys.Zip(tagValues, (key, value) => new { key, value })
-                            .ToDictionary(x => x.key, x => x.value ?? string.Empty);
+                        logger.LogWarning("Using backup method to parse tag filters.");
+                        tags = tagKeys.Zip(tagValues, (Key, Value) => (Key, Value))
+                            .ToDictionary(x => x.Key, x => x.Value ?? string.Empty, StringComparer.Ordinal);
                     }
                     else
                     {
+                        logger.LogError(@"Parsing tag filters resulted in error: {TagFilterError}", error);
                         return BadRequest(error);
                     }
+                }
+                else
+                {
+                    logger.LogWarning("Ignoring tag_value query arguments found without tag_key query arguments.");
                 }
             }
 
@@ -384,44 +390,37 @@ namespace TesApi.Controllers
         }
 
         // ?tag_key=foo1&tag_value=bar1&tag_key=foo2&tag_value=bar2
-        private (Dictionary<string, string> Tags, string Error) ParseZipedTagsFromQuery(string[] tagKeys, string[] tagValues)
+        private (IDictionary<string, string> Tags, string Error) ParseZipedTagsFromQuery()
         {
-            var foundKeys = new Queue<string>(tagKeys);
-            var foundValues = new Queue<string>(tagValues);
+            // Per spec, every tag_value parameter must be preceded by exactly one corresponding tag_key parameter, and no tag_key parameter can be followed by more than one tag_value parameter.
+            // As a result, there can be a total number of tag_key parameters that are greater than the number of tag_value parameters. It's not legal for there to be more tag_value parameters.
 
             var list = new List<(string Key, string Value)>();
 
-            //TODO: is there a better way to parse a query string that preserves the order of every item and performs any unencoding required?
-            foreach (var tagProperty in Request.QueryString.Value[1..].Split('&').Where(s => s.StartsWith("tag_", StringComparison.OrdinalIgnoreCase))) // TODO: is case significant?
+            foreach (var encodedPair in new QueryStringEnumerable(Request.QueryString.Value))
             {
-                var key = tagProperty.Split('=')[0];
+                // Note: Microsoft's ASP.NET considers the names of items in the query string to be case insensitive, although the HTTP spec declares that they are normally considered to be case sensitive.
+                var name = new string(encodedPair.DecodeName().Span);
 
-                if (key.Equals("tag_key", StringComparison.OrdinalIgnoreCase)) // TODO: is case significant?
+                switch (name)
                 {
-                    list.Add(new(foundKeys.Dequeue(), null));
-                }
-                else if (key.Equals("tag_value", StringComparison.OrdinalIgnoreCase)) // TODO: is case significant?
-                {
-                    if (!list.Any() || list[^1].Value is not null)
-                    {
-                        return (null, "Unmatched tag_value");
-                    }
+                    case var x when "tag_key".Equals(x, StringComparison.OrdinalIgnoreCase):
+                        list.Add(new(new(encodedPair.DecodeValue().Span), null));
+                        break;
 
-                    list[^1] = (list[^1].Key, foundValues.Dequeue());
+                    case var x when "tag_value".Equals(x, StringComparison.OrdinalIgnoreCase):
+                        if (list.Count == 0 || list[^1].Value is not null)
+                        {
+                            return (null, "Unmatched tag_value");
+                        }
+
+                        list[^1] = (list[^1].Key, new(encodedPair.DecodeValue().Span));
+                        break;
                 }
-                //else
-                //{
-                // ignore unknown tag_* entry
-                //}
             }
 
-            // Should never happen. This is catastrophic.
-            if (foundKeys.Count != 0 || foundValues.Count != 0)
-            {
-                throw new InvalidOperationException("There should not be more \"tag_key\" or \"tag_value\" properties than there are properties that start with \"tag_\""); // internal error, can't be the user
-            }
-
-            var tags = new Dictionary<string, string>();
+            // TODO: should tag keys be case sensitive or case insensitive? I would argue for case sensitive, as that is the default for JSON.
+            var tags = new Dictionary<string, string>(StringComparer.Ordinal); // StringComparer.OrdinalIgnoreCase
 
             foreach (var (Key, Value) in list)
             {
@@ -436,45 +435,45 @@ namespace TesApi.Controllers
             return (tags, null);
         }
 
-        internal static (FormattableString RawPredicate, Func<TesTask, bool> EFPredicate) GenerateSearchPredicates(TesState? state, string namePrefix, Dictionary<string, string> tags)
+        internal (FormattableString RawPredicate, Func<TesTask, bool> EFPredicate) GenerateSearchPredicates(TesState? state, string namePrefix, IDictionary<string, string> tags)
         {
-            Func<TesTask, bool> predicate = null;
+            Func<TesTask, bool> efPredicate = null;
 
             if (!string.IsNullOrWhiteSpace(namePrefix))
             {
-                predicate = AppendFunc(predicate, t => t.Name.StartsWith(namePrefix));
+                efPredicate = AndFunc(efPredicate, t => t.Name.StartsWith(namePrefix));
             }
 
             if (state is not null)
             {
-                predicate = AppendFunc(predicate, t => t.State == state);
+                efPredicate = AndFunc(efPredicate, t => t.State == state);
             }
 
-            tags ??= new();
+            tags ??= new Dictionary<string, string>();
             AppendableFormattableString rawPredicate = null;
 
             foreach (var tag in tags)
             {
                 if (string.IsNullOrEmpty(tag.Value))
                 {
-                    rawPredicate = AppendString(rawPredicate, new($"\"json\"->'Tags' ? {tag.Key}"));
+                    rawPredicate = AndString(rawPredicate, new(repository.JsonFormattableRawString(nameof(TesTask.Tags), $" ? {tag.Key}")));
                 }
                 else
                 {
-                    rawPredicate = AppendString(rawPredicate, new($"\"json\"->'Tags'->>{tag.Key} = {tag.Value}"));
+                    rawPredicate = AndString(rawPredicate, new(repository.JsonFormattableRawString(nameof(TesTask.Tags), $"->>{tag.Key} = {tag.Value}")));
                 }
             }
 
-            return (rawPredicate, predicate);
+            return (rawPredicate, efPredicate);
 
-            static Func<TesTask, bool> AppendFunc(Func<TesTask, bool> source, Func<TesTask, bool> additional)
+            static Func<TesTask, bool> AndFunc(Func<TesTask, bool> source, Func<TesTask, bool> additional)
             {
                 return source is null
                     ? additional
                     : t => source(t) && additional(t);
             }
 
-            static AppendableFormattableString AppendString(AppendableFormattableString source, AppendableFormattableString additional)
+            static AppendableFormattableString AndString(AppendableFormattableString source, AppendableFormattableString additional)
             {
                 if (source is null)
                 {
