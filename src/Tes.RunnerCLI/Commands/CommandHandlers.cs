@@ -38,7 +38,6 @@ namespace Tes.RunnerCLI.Commands
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Failed to execute the task. Error: {e.Message}");
                 Logger.LogError(e, "Failed to execute the task");
                 return ErrorExitCode;
             }
@@ -61,9 +60,13 @@ namespace Tes.RunnerCLI.Commands
 
                 var (stdout, stderr) = await result.ContainerResult.Logs.ReadOutputToEndAsync(CancellationToken.None);
 
-                Console.WriteLine($"Execution Status Code: {result.ContainerResult.StatusCode}. Error: {result.ContainerResult.Error}");
-                Console.WriteLine($"StdOutput: {stdout}");
-                Console.WriteLine($"StdError: {stderr}");
+                Logger.LogInformation($"Docker container execution status code: {result.ContainerResult.StatusCode}");
+                Logger.LogInformation($"Docker container execution standard output: {stdout}");
+                Logger.LogInformation($"Docker container execution standard error: {stderr}");
+                if (!string.IsNullOrWhiteSpace(result.ContainerResult.Error))
+                {
+                    Logger.LogInformation($"Docker container result error: {result.ContainerResult.Error}");
+                }
             }
             catch (Exception e)
             {
@@ -95,7 +98,7 @@ namespace Tes.RunnerCLI.Commands
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-            Console.WriteLine("Starting upload operation.");
+            Logger.LogInformation("Starting upload operation as a sub-process.");
 
             return await ExecuteTransferTaskAsync(file, exec => exec.UploadOutputsAsync(options));
         }
@@ -108,7 +111,8 @@ namespace Tes.RunnerCLI.Commands
                     $"Task operation failed. Command: {command}. Exit Code: {results.ExitCode}{Environment.NewLine}Error: {results.StandardError}{Environment.NewLine}Output: {results.StandardOutput}");
             }
 
-            Console.WriteLine($"Result: {results.StandardOutput}");
+            Logger.LogInformation($"Result from executing command {command} as a sub-process: ");
+            Console.WriteLine($"{results.StandardOutput}"); //writing the result to the console to keep formatting
         }
 
         private static async Task ExecuteTransferAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
@@ -129,7 +133,7 @@ namespace Tes.RunnerCLI.Commands
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-            Console.WriteLine("Starting download operation.");
+            Logger.LogInformation("Starting download operation as a sub-process.");
 
             return await ExecuteTransferTaskAsync(file, exec => exec.DownloadInputsAsync(options));
         }
@@ -144,7 +148,7 @@ namespace Tes.RunnerCLI.Commands
 
                 var result = await transferOperation(executor);
 
-                Console.WriteLine($"Total bytes transfer: {result:n0}");
+                Logger.LogInformation($"Total bytes transferred: {result:n0}");
 
                 return SuccessExitCode;
             }
