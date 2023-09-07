@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using Azure.Storage.Sas;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.ApiClients;
 using Tes.ApiClients.Models.Terra;
@@ -13,7 +12,7 @@ using TesApi.Web.Management.Models.Terra;
 namespace Tes.Runner.Test.Storage
 {
     [TestClass, TestCategory("Unit")]
-    public class TerraSasResolutionStrategyTests
+    public class TerraUrlTransformationStrategyTests
     {
         private const string TerraWsmApiHostUrl = "https://terra-wsm-api-host-url";
 
@@ -24,11 +23,10 @@ namespace Tes.Runner.Test.Storage
 
         private const string StubSasToken =
             "sv=2022-08-22&ss=b&srt=sco&sp=rwdlacupx&se=2023-08-23T03:00:00Z&st=2022-08-22T19:31:04Z&spr=https&sig=XXXXXX";
-        private TerraSasResolutionStrategy resolutionStrategy;
-        private Mock<TerraWsmApiClient> mockTerraWsmApiClient;
-        private RuntimeOptions runtimeOptions;
-        private SasTokenApiParameters capturedSasTokenApiParameters;
-        private Guid captureWskId = Guid.Empty;
+        private TerraUrlTransformationStrategy transformationStrategy = null!;
+        private Mock<TerraWsmApiClient> mockTerraWsmApiClient = null!;
+        private RuntimeOptions runtimeOptions = null!;
+        private SasTokenApiParameters capturedSasTokenApiParameters = null!;
 
         [TestInitialize]
         public void SetUp()
@@ -36,9 +34,8 @@ namespace Tes.Runner.Test.Storage
             runtimeOptions = new RuntimeOptions() { Terra = new TerraRuntimeOptions() { WsmApiHost = TerraWsmApiHostUrl } };
             mockTerraWsmApiClient = new Mock<TerraWsmApiClient>();
             capturedSasTokenApiParameters = new SasTokenApiParameters("", 0, "", "");
-            captureWskId = Guid.Empty;
             SetupWsmClientWithAssumingSuccess();
-            resolutionStrategy = new TerraSasResolutionStrategy(runtimeOptions.Terra, mockTerraWsmApiClient.Object);
+            transformationStrategy = new TerraUrlTransformationStrategy(runtimeOptions.Terra, mockTerraWsmApiClient.Object);
         }
 
         private void SetupWsmClientWithAssumingSuccess()
@@ -51,11 +48,10 @@ namespace Tes.Runner.Test.Storage
                     Token = StubSasToken,
                     Url = $"{stubTerraBlobUrl}/{StubBlobName}?{StubSasToken}"
                 })
-                .Callback((Guid wksId, Guid resourceId, SasTokenApiParameters sasTokenParams,
-                    CancellationToken cancellationToken) =>
+                .Callback((Guid _1, Guid _2, SasTokenApiParameters sasTokenParams,
+                    CancellationToken _3) =>
                 {
                     capturedSasTokenApiParameters = sasTokenParams;
-                    captureWskId = wksId;
                 });
             mockTerraWsmApiClient
                 .Setup(w => w.GetContainerResourcesAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(),
@@ -91,11 +87,11 @@ namespace Tes.Runner.Test.Storage
         [DataRow(BlobSasPermissions.Delete, "d")]
         [DataRow(BlobSasPermissions.Add | BlobSasPermissions.Create | BlobSasPermissions.Read, "rw")]
         [DataRow(BlobSasPermissions.Add | BlobSasPermissions.Create | BlobSasPermissions.Read | BlobSasPermissions.Delete, "rwd")]
-        public async Task CreateSasTokenWithStrategyAsync_BlobPermissionsProvided_AreConvertedToWsmPermissions(BlobSasPermissions blobSasPermissions, string wsmPermissions)
+        public async Task TransformUrlWithStrategyAsync_BlobPermissionsProvided_AreConvertedToWsmPermissions(BlobSasPermissions blobSasPermissions, string wsmPermissions)
         {
             var sourceUrl = $"{stubTerraBlobUrl}/{StubBlobName}";
 
-            var sasUrl = await resolutionStrategy.CreateSasTokenWithStrategyAsync(sourceUrl, blobSasPermissions);
+            await transformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, blobSasPermissions);
 
             Assert.AreEqual(wsmPermissions, capturedSasTokenApiParameters.SasPermission);
         }
@@ -104,9 +100,9 @@ namespace Tes.Runner.Test.Storage
         [DataRow("https://foo.blob.core.windows.net/container")]
         [DataRow("https://foo.bar.net/container")]
         [DataRow("https://foo.bar.net")]
-        public async Task CreateSasTokenWithStrategyAsync_NonTerraStorageAccount_SourceUrlIsReturned(string sourceUrl)
+        public async Task TransformUrlWithStrategyAsync_NonTerraStorageAccount_SourceUrlIsReturned(string sourceUrl)
         {
-            var sasUrl = await resolutionStrategy.CreateSasTokenWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
+            var sasUrl = await transformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
 
             Assert.AreEqual(new Uri(sourceUrl).ToString(), sasUrl.ToString());
         }

@@ -32,9 +32,8 @@ namespace Tes.Runner.Test
                     },
                     new FileOutput()
                     {
-                        Path = "*.txt",
+                        Path = "/*.txt",
                         TargetUrl = "https://test.blob.core.windows.net/test/output2.txt",
-                        PathPrefix = "/mnt/data"
                     }
                 }
             };

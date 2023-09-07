@@ -53,6 +53,7 @@ The operations are defined in a TES task file using ``JSON``
         {
             "path": "<PATH>",
             "sourceUrl": "<SOURCE_URL>",
+            "mountParentDirectory" : "<MOUNT_PARENT_DIRECTORY>",
             "sasStrategy": "None",
         }
     ],
@@ -61,7 +62,7 @@ The operations are defined in a TES task file using ``JSON``
             "path": "<PATH>",
             "targetUrl": "<TARGET_URL>",
             "sasStrategy": "None",
-            "pathPrefix": "<PATH_PREFIX>",
+            "mountParentDirectory" : "<MOUNT_PARENT_DIRECTORY>",
             "fileType": "<FILE_TYPE>"
         }
     ]
@@ -92,9 +93,10 @@ The inputs are defined as a list of objects with the following fields:
 
 | Field | Description | Required |
 | --- | --- | --- |
-| `path` | The local path of the input file.  | Yes |
+| `path` | The local absolute path of the input file.  | Yes |
 | `sourceUrl` | The URL of the input file | Yes |
 | `sasStrategy` | The strategy to resolve the SAS token | Yes |
+| `mountParentDirectory` | The directory from which the children directories must be mapped as a volume in the Docker container | No |
 
 ### Outputs
 
@@ -102,11 +104,11 @@ The outputs are defined as a list of objects with the following fields:
 
 | Field | Description | Required |
 | --- | --- | --- |
-| `path` | The local path of the output file, directory or the search pattern if the `pathPrefix` is provided  | Yes |
+| `path` | The local absolute path of the output file, directory or the search pattern | Yes |
 | `targetUrl` | The URL of the output file | Yes |
 | `sasStrategy` | The strategy to resolve the SAS token | Yes |
-| `pathPrefix` | The prefix of the output file. If provided, the `path` is used as a search pattern. This value is not included in the target URL of the files. Ignored if the `fileType` is `Directory` | No |
 | `fileType` | `File` or `Directory`. If the value is `Directory` value in the `path` property must be a directory. All files in the directory structure are uploaded. | Yes |
+| `mountParentDirectory` | The directory from which the children directories must be mapped as a volume in the Docker container | No |
 
 ## Download and Upload
 
@@ -132,16 +134,18 @@ Options:
   -?, -h, --help                         Show help and usage information
 ```
 
-## SAS Token Resolution Strategy 
+## URL Transformation Strategies
 
-Downloads and uploads currently support only SAS tokens or public endpoints. For SAS tokens, the implementation has an extensibility framework to resolve the SAS tokens using different approaches (strategies). 
+The TES node runner supports different strategies to transform the URLs for inputs and output files. These transformations are required so the runner can download or upload files as required. 
+
+A transformation strategy is a way to resolve the SAS token for the input or output URL or convert a URI using an non HTTP scheme (e.g. s3://) to a valid HTTP URL.
 
 Strategies are implementations of:
 
 ```c#
-public interface ISasResolutionStrategy
+public interface IUrlTransformationStrategy
     {
-        Task<Uri> CreateSasTokenWithStrategyAsync(string sourceUrl);
+        Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl);
     }
 ```
 
@@ -149,7 +153,16 @@ For each input or output, an strategy implementation can be specified.
 
 The list of supported strategies are:
 
-**TODO**
+| Strategy | Description |
+| --- | --- |
+| `None` | No transformation is applied. The URL is used as is. |
+| `AzureResourceManager` | Generates a SAS token using the a user delegated key. Only applies if the URL provided is a Blob endpoint with the suffix: .blob.core.windows.net. |
+| `TerraWsm` | Generates a SAS token using Terra WSM. Only applies if the URL provided is a managed Terra storage account |
+| `SchemeConverter` | Converts URIs with the following schemes: `s3://` or `gs://` to valid HTTP URLs.|
+| `CombinedTerra` | Applies the `SchemaConverter` strategy and `TerraWsm`.|
+| `CombinedAzureResourceManager` | Applies the `SchemaConverter` strategy and `AzureResourceManager`.|
+        
+
 
 ### Runtime Options
 

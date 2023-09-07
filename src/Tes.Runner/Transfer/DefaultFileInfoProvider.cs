@@ -24,7 +24,11 @@ public class DefaultFileInfoProvider : IFileInfoProvider
     {
         logger.LogInformation($"Expanding file name: {fileName}");
 
-        return Environment.ExpandEnvironmentVariables(fileName);
+        var expandedValue = Environment.ExpandEnvironmentVariables(fileName);
+
+        logger.LogInformation($"Expanded file name: {expandedValue}");
+
+        return expandedValue;
     }
 
     public bool FileExists(string fileName)
@@ -37,18 +41,65 @@ public class DefaultFileInfoProvider : IFileInfoProvider
     }
 
 
-    public string[] GetFilesBySearchPattern(string path, string searchPattern)
+    public List<FileResult> GetFilesBySearchPattern(string searchPath, string searchPattern)
     {
-        logger.LogInformation($"Searching for files in path: {path} with search pattern: {searchPattern}");
+        logger.LogInformation($"Searching for files in the search path: {searchPath} with search pattern: {searchPattern}");
 
-        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), Environment.ExpandEnvironmentVariables(searchPattern), SearchOption.AllDirectories);
+        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(searchPath), Environment.ExpandEnvironmentVariables(searchPattern), SearchOption.AllDirectories)
+            .Select(f => new FileResult(f, ToRelativePathToSearchPath(searchPath, searchPattern, f), searchPath))
+            .ToList();
     }
 
-    public string[] GetAllFilesInDirectory(string path)
+    private string ToRelativePathToSearchPath(string searchPath, string searchPattern, string absolutePath)
     {
-        logger.LogInformation($"Getting all files in path: {path}");
+        var delimiter = "/";
 
-        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), "*", SearchOption.AllDirectories);
+        if (searchPath.Equals("/", StringComparison.OrdinalIgnoreCase))
+        {
+            delimiter = string.Empty;
+        }
+        var prefixToRemove = Path.GetDirectoryName($"{searchPath}{delimiter}{searchPattern.TrimStart('/')}");
+
+        if (!string.IsNullOrWhiteSpace(prefixToRemove) && absolutePath.StartsWith(prefixToRemove))
+        {
+            logger.LogInformation($"Removing prefix: {prefixToRemove} from absolute path: {absolutePath}");
+
+            return absolutePath.Substring(prefixToRemove.Length + 1);
+        }
+
+        return absolutePath;
+    }
+
+    public List<FileResult> GetAllFilesInDirectory(string path)
+    {
+        logger.LogInformation($"Getting all files in directory: {path}");
+
+        if (!Directory.Exists(path))
+        {
+            logger.LogWarning($"The directory provided does not exist: {path}. The output will be ignored.");
+
+            return new List<FileResult>();
+        }
+
+        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), "*", SearchOption.AllDirectories)
+            .Select(f => new FileResult(f, ToRelativePathToSearchPath(path, searchPattern: String.Empty, f), path))
+            .ToList();
+    }
+
+    public RootPathPair GetRootPathPair(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var root = Path.GetPathRoot(path);
+
+        if (string.IsNullOrEmpty(root))
+        {
+            throw new ArgumentException($"Path {path} does not have a root");
+        }
+
+        var relativePath = path.Substring(root.Length);
+
+        return new RootPathPair(root, relativePath);
     }
 
     private FileInfo GetFileInfoOrThrowIfFileDoesNotExist(string fileName)

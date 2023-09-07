@@ -21,17 +21,18 @@ namespace Tes.Runner.Models
     public class FileOutput
     {
         public string? Path { get; set; }
+        public string? MountParentDirectory { get; set; }
         public string? TargetUrl { get; set; }
-        public SasResolutionStrategy? SasStrategy { get; set; }
+        public TransformationStrategy? TransformationStrategy { get; set; }
         public FileType? FileType { get; set; }
-        public string? PathPrefix { get; set; }
     }
 
     public class FileInput
     {
         public string? Path { get; set; }
+        public string? MountParentDirectory { get; set; }
         public string? SourceUrl { get; set; }
-        public SasResolutionStrategy? SasStrategy { get; set; }
+        public TransformationStrategy? SasStrategy { get; set; }
     }
 
     public class RuntimeOptions
@@ -48,12 +49,14 @@ namespace Tes.Runner.Models
     }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
-    public enum SasResolutionStrategy
+    public enum TransformationStrategy
     {
         None,
         AzureResourceManager,
         TerraWsm,
         SchemeConverter,
+        CombinedTerra,
+        CombinedAzureResourceManager,
     }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
