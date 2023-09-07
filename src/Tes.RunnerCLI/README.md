@@ -134,16 +134,18 @@ Options:
   -?, -h, --help                         Show help and usage information
 ```
 
-## SAS Token Resolution Strategy 
+## URL Transformation Strategies
 
-Downloads and uploads currently support only SAS tokens or public endpoints. For SAS tokens, the implementation has an extensibility framework to resolve the SAS tokens using different approaches (strategies). 
+The TES node runner supports different strategies to transform the URLs for inputs and output files. These transformations are required so the runner can download or upload files as required. 
+
+A transformation strategy is a way to resolve the SAS token for the input or output URL or convert a URI using an non HTTP scheme (e.g. s3://) to a valid HTTP URL.
 
 Strategies are implementations of:
 
 ```c#
-public interface ISasResolutionStrategy
+public interface IUrlTransformationStrategy
     {
-        Task<Uri> CreateSasTokenWithStrategyAsync(string sourceUrl);
+        Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl);
     }
 ```
 
@@ -151,7 +153,16 @@ For each input or output, an strategy implementation can be specified.
 
 The list of supported strategies are:
 
-**TODO**
+| Strategy | Description |
+| --- | --- |
+| `None` | No transformation is applied. The URL is used as is. |
+| `AzureResourceManager` | Generates a SAS token using the a user delegated key. Only applies if the URL provided is a Blob endpoint with the suffix: .blob.core.windows.net. |
+| `TerraWsm` | Generates a SAS token using Terra WSM. Only applies if the URL provided is a managed Terra storage account |
+| `SchemeConverter` | Converts URIs with the following schemes: `s3://` or `gs://` to valid HTTP URLs.|
+| `CombinedTerra` | Applies the `SchemaConverter` strategy and `TerraWsm`.|
+| `CombinedAzureResourceManager` | Applies the `SchemaConverter` strategy and `AzureResourceManager`.|
+        
+
 
 ### Runtime Options
 
