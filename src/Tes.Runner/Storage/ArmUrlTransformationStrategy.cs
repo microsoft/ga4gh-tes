@@ -9,18 +9,18 @@ using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Storage
 {
-    public class ArmSasResolutionStrategy : ISasResolutionStrategy
+    public class ArmUrlTransformationStrategy : IUrlTransformationStrategy
     {
         const string StorageHostSuffix = ".blob.core.windows.net";
         private const int BlobSasTokenExpirationInHours = 24 * 7; //7 days which is the Azure Batch node runtime;
         const int UserDelegationKeyExpirationInHours = 1;
 
-        private readonly ILogger logger = PipelineLoggerFactory.Create<ArmSasResolutionStrategy>();
+        private readonly ILogger logger = PipelineLoggerFactory.Create<ArmUrlTransformationStrategy>();
         private readonly Dictionary<string, UserDelegationKey> userDelegationKeyDictionary;
         private readonly SemaphoreSlim semaphoreSlim = new SemaphoreSlim(1, 1);
         private readonly Func<Uri, BlobServiceClient> blobServiceClientFactory;
 
-        public ArmSasResolutionStrategy(Func<Uri, BlobServiceClient> blobServiceClientFactory)
+        public ArmUrlTransformationStrategy(Func<Uri, BlobServiceClient> blobServiceClientFactory)
         {
             ArgumentNullException.ThrowIfNull(blobServiceClientFactory);
 
@@ -28,7 +28,7 @@ namespace Tes.Runner.Storage
             userDelegationKeyDictionary = new Dictionary<string, UserDelegationKey>();
         }
 
-        public async Task<Uri> CreateSasTokenWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
+        public async Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
         {
             ArgumentNullException.ThrowIfNull(sourceUrl);
 

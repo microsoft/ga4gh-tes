@@ -137,7 +137,7 @@ namespace Tes.Runner.Storage
                 ArgumentNullException.ThrowIfNull(output);
                 ArgumentException.ThrowIfNullOrEmpty(output.Path, nameof(output.Path));
                 ArgumentException.ThrowIfNullOrEmpty(output.TargetUrl, nameof(output.TargetUrl));
-                ArgumentNullException.ThrowIfNull(output.SasStrategy, nameof(output.SasStrategy));
+                ArgumentNullException.ThrowIfNull(output.TransformationStrategy, nameof(output.TransformationStrategy));
                 ArgumentNullException.ThrowIfNull(output.FileType, nameof(output.FileType));
             }
             catch (Exception e)
@@ -176,7 +176,7 @@ namespace Tes.Runner.Storage
             {
                 Path = absoluteFilePath,
                 TargetUrl = ToCombinedTargetUrl(output.TargetUrl!, prefixToRemoveFromPath: string.Empty, relativePathToSearchPath),
-                SasStrategy = output.SasStrategy,
+                TransformationStrategy = output.TransformationStrategy,
                 FileType = FileType.File,
             };
         }
