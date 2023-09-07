@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 using System;
@@ -86,12 +86,12 @@ namespace Tes.Repository.Tests
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
                 Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            }, System.Threading.CancellationToken.None);
+            }, CancellationToken.None);
             Assert.IsNotNull(createdItem);
 
             Models.TesTask updatedAndRetrievedItem = null;
 
-            var isFound = await repository.TryGetItemAsync(id, System.Threading.CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
+            var isFound = await repository.TryGetItemAsync(id, CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
 
             Assert.IsNotNull(updatedAndRetrievedItem);
             Assert.IsTrue(isFound);
@@ -100,7 +100,7 @@ namespace Tes.Repository.Tests
         [TestMethod]
         public async Task GetItemsAsyncTest()
         {
-            var items = (await repository.GetItemsAsync(c => c.Id != null, System.Threading.CancellationToken.None)).ToList();
+            var items = (await repository.GetItemsAsync(c => c.Id != null, CancellationToken.None)).ToList();
 
             foreach (var item in items)
             {
@@ -140,19 +140,19 @@ namespace Tes.Repository.Tests
 
                 Assert.IsTrue(items.Select(i => i.Id).Distinct().Count() == itemCount);
 
-                await repository.CreateItemsAsync(items, System.Threading.CancellationToken.None);
+                await (repository as TesTaskPostgreSqlRepository).CreateItemsAsync(items, CancellationToken.None);
                 Console.WriteLine($"Total seconds to insert {items.Count} items: {sw.Elapsed.TotalSeconds:n2}s");
                 sw.Restart();
             }
 
             sw.Restart();
-            var runningTasks = (await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None)).ToList();
+            var runningTasks = (await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, CancellationToken.None)).ToList();
 
             // Ensure performance is decent
             Assert.IsTrue(sw.Elapsed.TotalSeconds < 20);
             Console.WriteLine($"Retrieved {runningTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
             sw.Restart();
-            var allOtherTasks = (await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None)).ToList();
+            var allOtherTasks = (await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, CancellationToken.None)).ToList();
             Console.WriteLine($"Retrieved {allOtherTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
             Console.WriteLine($"Total running tasks: {runningTasks.Count}");
             Console.WriteLine($"Total other tasks: {allOtherTasks.Count}");
@@ -171,17 +171,96 @@ namespace Tes.Repository.Tests
         }
 
         [TestMethod]
+        public async Task GetItemsTagsAsyncTest()
+        {
+            foreach (var testSpec in GetTestData())
+            {
+                var createdItem = await repository.CreateItemAsync(new()
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Description = Guid.NewGuid().ToString(),
+                    CreationTime = DateTime.UtcNow,
+                    State = TesState.UNKNOWNEnum,
+                    Tags = testSpec.Tags
+                }, CancellationToken.None);
+
+                var (raw, ef) = TesApi.Controllers.TaskServiceApiController.GenerateSearchPredicates(null, null, testSpec.Filter);
+                var (_, items) = await repository.GetItemsAsync(null, 2048, CancellationToken.None, raw, ef is null ? null : t => ef(t));
+
+                items = items.ToList(); // Enumerate received enumeration only once
+
+                if (testSpec.Match)
+                {
+                    Assert.AreEqual(1, items.Count());
+                    Assert.IsTrue(items.Select(t => t.Id).Contains(createdItem.Id));
+                }
+                else
+                {
+                    Assert.IsFalse(items.Select(t => t.Id).Contains(createdItem.Id));
+                    Assert.AreEqual(0, items.Count());
+                }
+
+                await repository.DeleteItemAsync(createdItem.Id, CancellationToken.None);
+            }
+
+            static List<(Dictionary<string, string> Filter, Dictionary<string, string> Tags, bool Match)> GetTestData()
+                => new()
+                {
+                    (
+                        new() { {"foo", "bar"} },
+                        new() { {"foo", "bar"} },
+                        true
+                    ),
+                    (
+                        new() { {"foo", "bar"} },
+                        new() { {"foo", "bat" } },
+                        false
+                    ),
+                    (
+                        new() { {"foo", ""} },
+                        new() { {"foo", ""} },
+                        true
+                    ),
+                    (
+                        new() { {"foo", "bar"}, { "baz", "bat" } },
+                        new() { {"foo", "bar"}, { "baz", "bat" } },
+                        true
+                    ),
+                    (
+                        new() { {"foo", "bar"} },
+                        new() { {"foo", "bar"}, { "baz", "bat" } },
+                        true
+                    ),
+                    (
+                        new() { {"foo", "bar"}, { "baz", "bat" } },
+                        new() { {"foo", "bar"} },
+                        false
+                    ),
+                    (
+                        new() { {"foo", ""} },
+                        new() { {"foo", "bar"} },
+                        true
+                    ),
+                    (
+                        new() { {"foo", ""} },
+                        new() { },
+                        false
+                    ),
+                };
+        }
+
+        [TestMethod]
         public async Task GetItemsContinuationAsyncTest()
         {
             const int pageSize = 256;
 
-            var (continuation, items) = await repository.GetItemsAsync(null, pageSize, CancellationToken.None, null, c => c.Id != null);
+            var (continuation, items) = await repository.GetItemsAsync(null, pageSize, CancellationToken.None);
             var itemsList = items.ToList();
             Assert.IsTrue(itemsList.Count <= pageSize);
 
             while (!string.IsNullOrWhiteSpace(continuation))
             {
-                (continuation, items) = await repository.GetItemsAsync(continuation, pageSize, CancellationToken.None, null, c => c.Id != null);
+                (continuation, items) = await repository.GetItemsAsync(continuation, pageSize, CancellationToken.None);
                 itemsList.AddRange(items);
             }
 
@@ -206,7 +285,7 @@ namespace Tes.Repository.Tests
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
                 Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            }, System.Threading.CancellationToken.None);
+            }, CancellationToken.None);
 
             Assert.IsNotNull(task);
         }
@@ -223,18 +302,18 @@ namespace Tes.Repository.Tests
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
                 Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            }, System.Threading.CancellationToken.None);
+            }, CancellationToken.None);
 
             Assert.IsTrue(createdItem.State != Models.TesState.COMPLETEEnum);
 
             createdItem.Description = description;
             createdItem.State = Models.TesState.COMPLETEEnum;
 
-            await repository.UpdateItemAsync(createdItem, System.Threading.CancellationToken.None);
+            await repository.UpdateItemAsync(createdItem, CancellationToken.None);
 
             Models.TesTask updatedAndRetrievedItem = null;
 
-            var isFound = await repository.TryGetItemAsync(id, System.Threading.CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
+            var isFound = await repository.TryGetItemAsync(id, CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
 
             Assert.IsTrue(isFound);
             Assert.IsTrue(updatedAndRetrievedItem.State == Models.TesState.COMPLETEEnum);
@@ -252,13 +331,13 @@ namespace Tes.Repository.Tests
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
                 Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            }, System.Threading.CancellationToken.None);
+            }, CancellationToken.None);
             Assert.IsNotNull(createdItem);
-            await repository.DeleteItemAsync(id, System.Threading.CancellationToken.None);
+            await repository.DeleteItemAsync(id, CancellationToken.None);
 
             Models.TesTask updatedAndRetrievedItem = null;
 
-            var isFound = await repository.TryGetItemAsync(id, System.Threading.CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
+            var isFound = await repository.TryGetItemAsync(id, CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
             Assert.IsNull(updatedAndRetrievedItem);
             Assert.IsFalse(isFound);
         }

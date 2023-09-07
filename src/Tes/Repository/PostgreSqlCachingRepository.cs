@@ -7,8 +7,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Linq.Expressions;
-using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using LinqKit;
@@ -16,7 +14,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using Polly;
-using Tes.Models;
 
 namespace Tes.Repository
 {
@@ -81,6 +78,7 @@ namespace Tes.Repository
         /// Retrieves items from the database in a consistent fashion.
         /// </summary>
         /// <param name="dbSet">The <see cref="DbSet{TEntity}"/> of <typeparamref name="TDatabaseItem"/> to query.</param>
+        /// <param name="readerFunc">The function that returns an item of type <typeparamref name="T"/> from the <see cref="System.Data.Common.DbDataReader"/>.</param>
         /// <param name="cancellationToken"></param>
         /// <param name="orderBy"></param>
         /// <param name="pagination"></param>
@@ -88,7 +86,7 @@ namespace Tes.Repository
         /// <param name="rawPredicate">The WHERE clause for raw SQL for <typeparamref name="TDatabaseItem"/> selection in the query.</param>
         /// <returns></returns>
         /// <remarks>Ensure that the <see cref="DbContext"/> from which <paramref name="dbSet"/> comes isn't disposed until the entire query completes.</remarks>
-        protected async Task<IEnumerable<T>> GetItemsAsync(DbSet<T> dbSet, CancellationToken cancellationToken, Func<IQueryable<T>, IQueryable<T>> orderBy = default, Func<IQueryable<T>, IQueryable<T>> pagination = default, Expression<Func<T, bool>> eFpredicate = default, FormattableString rawPredicate = default)
+        protected async Task<IEnumerable<T>> GetItemsAsync(DbSet<T> dbSet, Func<System.Data.Common.DbDataReader, T> readerFunc, CancellationToken cancellationToken, Func<IQueryable<T>, IQueryable<T>> orderBy = default, Func<IQueryable<T>, IQueryable<T>> pagination = default, Expression<Func<T, bool>> eFpredicate = default, FormattableString rawPredicate = default)
         {
             ArgumentNullException.ThrowIfNull(dbSet);
 
@@ -108,50 +106,22 @@ namespace Tes.Repository
             var sqlQuery = query.ToQueryString();
             //System.Diagnostics.Debugger.Break();
 
+            //using var test = query.CreateDbCommand();
+            //await test.Connection.OpenAsync(cancellationToken);
+            ////await test.PrepareAsync(cancellationToken);
+            //var result = new List<T>();
+            //using var reader = await test.ExecuteReaderAsync(cancellationToken);
+
+            //while (await reader.ReadAsync(cancellationToken))
+            //{
+            //    result.Add(readerFunc(reader));
+            //}
+
+            //await test.Connection.CloseAsync();
+            //return result;
+
             return await _asyncPolicy.ExecuteAsync(ct => query.ToListAsync(ct), cancellationToken);
         }
-
-        //protected async Task<IEnumerable<TesTaskDatabaseItem>> GetTesTaskDatabaseItemsByTagAsync(
-        //    TesDbContext dbContext,
-        //    Dictionary<string, string> tags,
-        //    CancellationToken cancellationToken)
-        //{
-        //    ArgumentNullException.ThrowIfNull(dbContext);
-        //    ArgumentNullException.ThrowIfNull(tags);
-        //    if (tags.Count == 0) throw new ArgumentOutOfRangeException(nameof(tags), "Must specify more than one tag");
-
-        //    var sqlBuilder = new StringBuilder();
-        //    sqlBuilder.AppendLine("SELECT * FROM TesTasks WHERE ");
-        //    var tagConditions = tags.Select(kvp => $"\"Json\"->'Tags'->>'{kvp.Key}' = @p_{kvp.Key}");
-        //    sqlBuilder.AppendLine(string.Join(" AND ", tagConditions));
-
-        //    using var connection = dbContext.Database.GetDbConnection();
-        //    await connection.OpenAsync(cancellationToken);
-
-        //    using var command = connection.CreateCommand();
-        //    command.CommandText = sqlBuilder.ToString();
-
-        //    foreach (var tag in tags)
-        //    {
-        //        command.Parameters.Add(new NpgsqlParameter($"p_{tag.Key}", tag.Value));
-        //    }
-
-        //    var result = new List<TesTaskDatabaseItem>();
-        //    using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
-        //    while (await reader.ReadAsync(cancellationToken))
-        //    {
-        //        var item = new TesTaskDatabaseItem
-        //        {
-        //            Id = reader.IsDBNull(0) ? default : reader.GetInt64(0),
-        //            Json = JsonSerializer.Deserialize<TesTask>(reader.IsDBNull(1) ? default : reader.GetString(1)),
-        //        };
-
-        //        result.Add(item);
-        //    }
-
-        //    return result;
-        //}
 
         /// <summary>
         /// Adds entry into WriterWorker queue.

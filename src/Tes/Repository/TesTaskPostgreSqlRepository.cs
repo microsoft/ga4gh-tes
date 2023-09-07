@@ -5,6 +5,7 @@ namespace Tes.Repository
 {
     using System;
     using System.Collections.Generic;
+    using System.Data.Common;
     using System.Diagnostics;
     using System.Linq;
     using System.Linq.Expressions;
@@ -79,7 +80,7 @@ namespace Tes.Repository
                     })
                 .ExecuteAsync(async ct =>
                 {
-                    var activeTasksCount = (await InternalGetItemsAsync(ct, q => q.OrderBy(t => t.Json.CreationTime), EFpredicate: task => TesTask.ActiveStates.Contains(task.State))).Count();
+                    var activeTasksCount = (await InternalGetItemsAsync(ct, q => q.OrderBy(t => t.Json.CreationTime), efPredicate: task => TesTask.ActiveStates.Contains(task.State))).Count();
                     _logger?.LogInformation("Cache warmed successfully in {TotalSeconds} seconds. Added {TasksAddedCount} items to the cache.", $"{sw.Elapsed.TotalSeconds:n3}", $"{activeTasksCount:n0}");
                 }, cancellationToken);
         }
@@ -103,7 +104,7 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
         {
-            return (await InternalGetItemsAsync(cancellationToken, EFpredicate: predicate));
+            return (await InternalGetItemsAsync(cancellationToken, efPredicate: predicate));
         }
 
         /// <inheritdoc/>
@@ -139,9 +140,9 @@ namespace Tes.Repository
         }
 
         /// <inheritdoc/>
-        public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate, Expression<Func<TesTask, bool>> EFpredicate)
+        public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate, Expression<Func<TesTask, bool>> efPredicate)
         {
-            var last = (CreationTime: DateTimeOffset.MinValue, Id: string.Empty);
+            var last = (CreationTime: DateTimeOffset.MinValue, Id: long.MinValue); // Temporary, we'd like to use the task Id but for now we're using the database table's Id. Since it's a bigint, this is the default value we'll use.
 
             if (continuationToken is not null)
             {
@@ -168,9 +169,12 @@ namespace Tes.Repository
                 }
             }
 
+            // As it turns out, PostgreSQL doesn't handle EF's interpretation of ORDER BY more then one "column" in any resonable way, so we will currently have to order by the only thing we have that is expected to be unique (unless we want to code it ourselves or if EF8 also fixes this.
+            //orderBy: q => q.OrderBy(t => t.Json.CreationTime).ThenBy(t => t.Json.Id);
+
             // This "uglyness" should (hopefully) be fixed in EF8: https://github.com/dotnet/roslyn/issues/12897 reference https://github.com/dotnet/efcore/issues/26822 when we can compare last directly with a created per-item tuple
             //var results = (await InternalGetItemsAsync(predicate, cancellationToken, q => q.Where(t => t.Json.CreationTime > last.CreationTime || (t.Json.CreationTime == last.CreationTime && t.Json.Id.CompareTo(last.Id) > 0)).Take(pageSize))).ToList();
-            var results = (await InternalGetItemsAsync(cancellationToken, pagination: q => q.Where(t => t.Json.Id.CompareTo(last.Id) > 0).Take(pageSize), EFpredicate: EFpredicate, rawPredicate: rawPredicate)).ToList();
+            var results = (await InternalGetItemsAsync(cancellationToken, pagination: q => q.Where(t => t.Id.CompareTo(last.Id) > 0).Take(pageSize), orderBy: q => q.OrderBy(t => t.Id), efPredicate: efPredicate, rawPredicate: rawPredicate)).ToList();
 
             return (GetContinuation(results.Count == pageSize ? results.LastOrDefault() : null), results);
 
@@ -211,17 +215,19 @@ namespace Tes.Repository
         /// <param name="cancellationToken"></param>
         /// <param name="orderBy"></param>
         /// <param name="pagination"></param>
-        /// <param name="EFpredicate"></param>
+        /// <param name="efPredicate"></param>
         /// <param name="rawPredicate"></param>
         /// <returns></returns>
-        private async Task<IEnumerable<TesTask>> InternalGetItemsAsync(CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default, Expression<Func<TesTask, bool>> EFpredicate = default, FormattableString rawPredicate = default)
+        private async Task<IEnumerable<TesTask>> InternalGetItemsAsync(CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default, Expression<Func<TesTask, bool>> efPredicate = default, FormattableString rawPredicate = default)
         {
-            // It turns out, PostgreSQL doesn't handle EF's interpretation of ORDER BY more then one "column" in any resonable way, so we have to order by the only thing we have that is expected to be unique.
-            //orderBy = pagination is null ? orderBy : q => q.OrderBy(t => t.Json.CreationTime).ThenBy(t => t.Json.Id);
-            orderBy = pagination is null ? orderBy : q => q.OrderBy(t => t.Json.Id);
+            var readerFunc = new Func<DbDataReader, TesTaskDatabaseItem>(reader => new TesTaskDatabaseItem
+            {
+                Id = reader.IsDBNull(0) ? default : reader.GetInt64(0),
+                Json = System.Text.Json.JsonSerializer.Deserialize<TesTask>(reader.IsDBNull(1) ? default : reader.GetString(1)),
+            });
 
             using var dbContext = CreateDbContext();
-            return (await GetItemsAsync(dbContext.TesTasks, cancellationToken, orderBy, pagination, EFpredicate is null ? null : WhereTesTask(EFpredicate), rawPredicate)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
+            return (await GetItemsAsync(dbContext.TesTasks, readerFunc, cancellationToken, orderBy, pagination, efPredicate is null ? null : WhereTesTask(efPredicate), rawPredicate)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
         }
 
         /// <summary>

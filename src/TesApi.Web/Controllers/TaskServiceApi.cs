@@ -452,26 +452,17 @@ namespace TesApi.Controllers
 
             tags ??= new();
             AppendableFormattableString rawPredicate = null;
-            var isNotFirst = false;
 
-            foreach (var tag in tags.Where(t => string.IsNullOrEmpty(t.Value)))
+            foreach (var tag in tags)
             {
-                //AppendPredicate(predicate, t => t.Tags.ContainsKey(tag.Key));
-                if (isNotFirst)
+                if (string.IsNullOrEmpty(tag.Value))
                 {
-                    rawPredicate = AppendString(rawPredicate, new($"jsonb_path_match(\"json\"->'Tags', '$[*] = '{tag.Key}') "));
+                    rawPredicate = AppendString(rawPredicate, new($"\"json\"->'Tags' ? {tag.Key}"));
                 }
                 else
                 {
-                    rawPredicate = AppendString(rawPredicate, new($" AND jsonb_path_match(\"json\"->'Tags', '$[*] = '{tag.Key}') "));
-                    isNotFirst = true;
+                    rawPredicate = AppendString(rawPredicate, new($"\"json\"->'Tags'->>{tag.Key} = {tag.Value}"));
                 }
-            }
-
-            foreach (var tag in tags.Where(t => !string.IsNullOrEmpty(t.Value)))
-            {
-                //predicate = AppendFunc(predicate, t => EF.Functions.JsonContains(t.Tags, $"{{\"{tag.Key}\", \"{tag.Value}\"}}"));
-                rawPredicate = AppendString(rawPredicate, new($"\"json\"->'Tags'->>'{tag.Key}' = {tag.Value}"));
             }
 
             return (rawPredicate, predicate);
