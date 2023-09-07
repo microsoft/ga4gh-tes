@@ -52,7 +52,6 @@ namespace Tes.Repository
             CreateDbContext = createDbContext;
             using var dbContext = createDbContext();
             dbContext.Database.MigrateAsync().Wait();
-            dbContext.TesTasks.ExecuteDeleteAsync().Wait(); // TODO: Delete Me PLEASE!
         }
 
         private async Task WarmCacheAsync(CancellationToken cancellationToken)
