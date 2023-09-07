@@ -48,8 +48,8 @@ namespace Tes.Runner.Test.Storage
                     Token = StubSasToken,
                     Url = $"{stubTerraBlobUrl}/{StubBlobName}?{StubSasToken}"
                 })
-                .Callback((Guid _, Guid _, SasTokenApiParameters sasTokenParams,
-                    CancellationToken _) =>
+                .Callback((Guid _1, Guid _2, SasTokenApiParameters sasTokenParams,
+                    CancellationToken _3) =>
                 {
                     capturedSasTokenApiParameters = sasTokenParams;
                 });
