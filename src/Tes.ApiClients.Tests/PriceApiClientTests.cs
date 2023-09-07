@@ -12,7 +12,6 @@ using Tes.ApiClients.Options;
 namespace Tes.ApiClients.Tests
 {
     [TestClass, TestCategory("Integration")]
-    [Ignore]
     public class PriceApiClientTests
     {
         private PriceApiClient pricingApiClient = null!;
