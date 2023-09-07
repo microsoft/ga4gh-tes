@@ -36,7 +36,7 @@ namespace Tes.Repository.Tests
     [TestClass]
     public class TesTaskPostgreSqlRepositoryIntegrationTests
     {
-        private static TesTaskPostgreSqlRepository repository;
+        private static IRepository<TesTask> repository;
         private static readonly string subscriptionId = "";
         private static readonly string regionName = "southcentralus";
         private static readonly string resourceGroupName = $"tes-test-{Guid.NewGuid().ToString().Substring(0, 8)}";
