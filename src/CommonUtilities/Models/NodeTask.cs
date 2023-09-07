@@ -7,6 +7,8 @@ namespace Tes.Runner.Models
 {
     public class NodeTask
     {
+        public string? Id { get; set; }
+        public string? WorkflowId { get; set; }
         public string? ImageTag { get; set; }
         public string? ImageName { get; set; }
         public List<string>? CommandsToExecute { get; set; }
