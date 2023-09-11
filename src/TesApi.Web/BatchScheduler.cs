@@ -493,11 +493,11 @@ namespace TesApi.Web
 
         /// <summary>
         /// Determines if the <see cref="Tes.Models.TesInput"/> file is a Cromwell command script
+        /// See https://github.com/broadinstitute/cromwell/blob/17efd599d541a096dc5704991daeaefdd794fefd/supportedBackends/tes/src/main/scala/cromwell/backend/impl/tes/TesTask.scala#L58
         /// </summary>
         /// <param name="inputFile"><see cref="Tes.Models.TesInput"/> file</param>
         /// <returns>True if the file is a Cromwell command script</returns>
         private static bool IsCromwellCommandScript(TesInput inputFile)
-            // See https://github.com/broadinstitute/cromwell/blob/17efd599d541a096dc5704991daeaefdd794fefd/supportedBackends/tes/src/main/scala/cromwell/backend/impl/tes/TesTask.scala#L58
             => (inputFile.Name?.Equals("commandScript") ?? false) && (inputFile.Description?.EndsWith(".commandScript") ?? false) && inputFile.Type == TesFileType.FILEEnum && inputFile.Path.EndsWith($"/{CromwellScriptFileName}");
 
         /// <summary>
@@ -962,18 +962,17 @@ namespace TesApi.Web
         /// <param name="combinedBatchTaskInfo">Current Azure Batch task info</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>True if the TES task was changed.</returns>
+        // When task is executed the following may be touched:
+        // tesTask.Log[].SystemLog
+        // tesTask.Log[].FailureReason
+        // tesTask.Log[].CromwellResultCode
+        // tesTask.Log[].BatchExecutionMetrics
+        // tesTask.Log[].EndTime
+        // tesTask.Log[].Log[].StdErr
+        // tesTask.Log[].Log[].ExitCode
+        // tesTask.Log[].Log[].StartTime
+        // tesTask.Log[].Log[].EndTime
         private ValueTask<bool> HandleTesTaskTransitionAsync(TesTask tesTask, CombinedBatchTaskInfo combinedBatchTaskInfo, CancellationToken cancellationToken)
-            // When task is executed the following may be touched:
-            // tesTask.Log[].SystemLog
-            // tesTask.Log[].FailureReason
-            // tesTask.Log[].CromwellResultCode
-            // tesTask.Log[].BatchExecutionMetrics
-            // tesTask.Log[].EndTime
-            // tesTask.Log[].Log[].StdErr
-            // tesTask.Log[].Log[].ExitCode
-            // tesTask.Log[].Log[].StartTime
-            // tesTask.Log[].Log[].EndTime
-
             => (tesTaskStateTransitions
                 .FirstOrDefault(m => (m.Condition is null || m.Condition(tesTask)) && (m.CurrentBatchTaskState is null || m.CurrentBatchTaskState == combinedBatchTaskInfo.BatchTaskState))
                 ?.ActionAsync(tesTask, combinedBatchTaskInfo, cancellationToken) ?? ValueTask.FromResult(false));
