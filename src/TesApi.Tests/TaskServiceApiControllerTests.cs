@@ -238,6 +238,47 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
+        [DataRow("IdWith@InvalidCharacter$", 400, "Invalid ID")]
+        [DataRow("abcde123_ca8e57a5-746f-4436-b864-808b0fbf0a64", 200, null)]
+        [DataRow("Valid-ID_123", 200, null)]
+        [DataRow("AnotherValidId", 200, null)]
+        public async Task CancelTaskAsync_ValidatesIdCorrectly(string testId, int expectedStatusCode, string expectedMessage)
+        {
+            TesTask mockTesTask = new TesTask { State = TesState.RUNNINGEnum };
+
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
+            {
+                r.Setup(repo => repo.TryGetItemAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<Action<TesTask>>()))
+                .Callback((string id, CancellationToken ct, Action<TesTask> action) => action(mockTesTask))
+                .ReturnsAsync(true);
+
+                // Mock UpdateItemAsync to throw a RepositoryCollisionException
+                r.Setup(repo => repo.UpdateItemAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockTesTask);
+            });
+
+            var controller = services.GetT();
+
+            // Act
+            var result = await controller.CancelTask(testId, CancellationToken.None);
+
+            // Assert
+            if (result is ObjectResult objectResult)
+            {
+                Assert.AreEqual(expectedStatusCode, objectResult.StatusCode);
+
+                if (expectedMessage != null)
+                {
+                    Assert.AreEqual(expectedMessage, objectResult.Value);
+                }
+            }
+            else
+            {
+                Assert.Fail("The action result is not of type ObjectResult");
+            }
+        }
+
+        [TestMethod]
         public async Task CancelTaskAsync_ReturnsConflict_ForRepositoryCollision()
         {
             var tesTaskId = "IdForCollisionTest";

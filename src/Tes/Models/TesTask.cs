@@ -111,6 +111,27 @@ namespace Tes.Models
         public DateTimeOffset? CreationTime { get; set; }
 
         /// <summary>
+        /// Creates a valid TES Task ID
+        /// </summary>
+        /// <returns>Valid TES task ID</returns>
+        public string CreateId()
+        {
+            var tesTaskIdPrefix = WorkflowId is not null && Guid.TryParse(WorkflowId, out _) ? $"{WorkflowId.Substring(0, 8)}_" : string.Empty;
+            return $"{tesTaskIdPrefix}{Guid.NewGuid():N}";
+        }
+
+        /// <summary>
+        /// Checks to ensure an ID contains valid characters and length
+        /// </summary>
+        /// <param name="id">TesTask ID</param>
+        /// <returns>True if valid, false if not</returns>
+        public static bool IsValidId(string id)
+        {
+            return (!id.Any(c => !(char.IsLetterOrDigit(c) || c == '_'))) 
+                && (id.Length == 32 || id.Length == 41);
+        }
+
+        /// <summary>
         /// Returns the string presentation of the object
         /// </summary>
         /// <returns>String presentation of the object</returns>
