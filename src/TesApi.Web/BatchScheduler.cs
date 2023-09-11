@@ -1206,7 +1206,7 @@ namespace TesApi.Web
                 var containerRunOptions = $"--rm -v /var/run/docker.sock:/var/run/docker.sock ";
                 cloudTask.ContainerSettings = new TaskContainerSettings(dockerInDockerImageName, containerRunOptions);
             }
-            
+
             return cloudTask;
 
             static string AppendPathToUrl(string url, string path)
@@ -1392,9 +1392,9 @@ namespace TesApi.Web
                     var s when s.StartsWith("batch.node.centos ") => "sudo yum install epel-release -y && sudo yum update -y && sudo yum install -y jq wget",
                     _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message: ({machineConfiguration.NodeAgentSkuId})")
                 });
-                
+
                 commandLine.Append(@" && jq \.\[\""data-root\""\]=\""""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker""\"" tmp1.json >> tmp2.json && sudo cp tmp2.json /etc/docker/daemon.json && sudo chmod 644 /etc/docker/daemon.json && sudo systemctl restart docker && echo ""updated docker data-root""; else (echo ""grep failed"" || exit 1); fi'");
-                
+
                 var startTask = new StartTask
                 {
                     CommandLine = commandLine.ToString(),
