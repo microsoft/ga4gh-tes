@@ -1123,7 +1123,6 @@ namespace TesApi.Web
             var nodeRunnerStartTaskUrl = await UploadBlobAsync(NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName, SerializeNodeTask(startTaskStdOutStdErrUploadNodeTaskContent));
             
             sb.AppendLinuxLine($"write_ts DownloadRunnerScriptsStart && \\");
-            sb.AppendLinuxLine(CreateWgetCommand(nodeBatchScriptSasUrl, BatchScriptFileName) + " && \\");
             sb.AppendLinuxLine(CreateWgetCommand(nodeRunnerStartTaskUrl, NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName) + " && \\");
             sb.AppendLinuxLine(CreateWgetCommand(nodeTaskRunnerInfoUrl, NodeRunnerTaskInfoFilename) + " && \\");
             sb.AppendLinuxLine(CreateWgetCommand(nodeTaskRunnerUrl, NodeTaskRunnerFilename, setExecutable: true) + " && \\");
@@ -1184,8 +1183,8 @@ namespace TesApi.Web
             await storageAccessProvider.UploadBlobAsync(new Uri(nodeBatchScriptSasUrl), sb.ToString(), cancellationToken);
 
             var batchRunCommand = enableBatchAutopool
-                ? $"/bin/bash -c chmod u+x ./{NodeTaskRunnerFilename} && /bin/bash $AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
-                : $"/bin/bash -c \"{MungeBatchScript()}\"";
+                ? $"/bin/bash -c {CreateWgetCommand(nodeBatchScriptSasUrl, BatchScriptFileName, setExecutable: true)} && ./{BatchScriptFileName}"
+                : $"/bin/bash -c {CreateWgetCommand(nodeBatchScriptSasUrl, BatchScriptFileName, setExecutable: true)} && \"{MungeBatchScript()}\"";
 
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
@@ -1209,7 +1208,7 @@ namespace TesApi.Web
                 var containerRunOptions = $"--rm -v /var/run/docker.sock:/var/run/docker.sock ";
                 cloudTask.ContainerSettings = new TaskContainerSettings(dockerInDockerImageName, containerRunOptions);
             }
-
+            
             return cloudTask;
 
             static string AppendPathToUrl(string url, string path)
