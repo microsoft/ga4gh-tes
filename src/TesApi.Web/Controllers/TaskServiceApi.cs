@@ -95,7 +95,7 @@ namespace TesApi.Controllers
                     }
                     catch (RepositoryCollisionException exc)
                     {
-                        logger.LogError(exc, $"RepositoryCollisionException in CancelTask for {id}");
+                        logger.LogError(exc, $"RepositoryCollisionException in CancelTask for {(Guid.TryParse(id, out var result) ? $"{id}" : "REMOVED")}");
                         return Conflict(new { message = "The task could not be updated due to a conflict with the current state; please retry." });
                     }
                 }
