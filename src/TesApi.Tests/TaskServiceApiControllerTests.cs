@@ -5,11 +5,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
+using Tes.Repository;
 using TesApi.Controllers;
 
 namespace TesApi.Tests
@@ -232,6 +235,34 @@ namespace TesApi.Tests
 
             Assert.AreEqual(41, tesTask.Id.Length); // First eight characters of Cromwell's job id + underscore + GUID without dashes
             Assert.IsTrue(tesTask.Id.StartsWith(cromwellWorkflowId[..8] + "_"));
+        }
+
+        [TestMethod]
+        public async Task CancelTaskAsync_ReturnsConflict_ForRepositoryCollision()
+        {
+            var tesTaskId = "IdForCollisionTest";
+            TesTask mockTesTask = new TesTask { State = TesState.RUNNINGEnum };
+
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
+            {
+                // Mock TryGetItemAsync to return true and provide a TesTask object
+                r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<CancellationToken>(), It.IsAny<Action<TesTask>>()))
+                .Callback((string id, CancellationToken ct, Action<TesTask> action) => action(mockTesTask))
+                .ReturnsAsync(true);
+
+                // Mock UpdateItemAsync to throw a RepositoryCollisionException
+                r.Setup(repo => repo.UpdateItemAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new RepositoryCollisionException());
+            });
+
+            var controller = services.GetT();
+
+            // Act
+            var result = await controller.CancelTask(tesTaskId, CancellationToken.None) as ConflictObjectResult;
+
+            // Assert
+            Assert.IsNotNull(result);
+            Assert.AreEqual(409, result.StatusCode);
         }
 
         [TestMethod]
