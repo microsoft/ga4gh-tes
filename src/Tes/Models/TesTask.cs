@@ -127,8 +127,7 @@ namespace Tes.Models
         /// <returns>True if valid, false if not</returns>
         public static bool IsValidId(string id)
         {
-            return (!id.Any(c => !(char.IsLetterOrDigit(c) || c == '_'))) 
-                && (id.Length == 32 || id.Length == 41);
+            return (id.Length == 32 || id.Length == 41) && !id.Any(c => !(char.IsLetterOrDigit(c) || c == '_'));
         }
 
         /// <summary>
