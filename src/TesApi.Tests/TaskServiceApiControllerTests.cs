@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.VisualStudio.TestPlatform.ObjectModel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
@@ -239,9 +240,8 @@ namespace TesApi.Tests
 
         [TestMethod]
         [DataRow("IdWith@InvalidCharacter$", 400, "Invalid ID")]
-        [DataRow("abcde123_ca8e57a5-746f-4436-b864-808b0fbf0a64", 200, null)]
-        [DataRow("Valid-ID_123", 200, null)]
-        [DataRow("AnotherValidId", 200, null)]
+        [DataRow("abcde123_ca8e57a5746f4436b864808b0fbf0a64", 200, null)]
+        [DataRow("ca8e57a5746f4436b864808b0fbf0a64", 200, null)]
         public async Task CancelTaskAsync_ValidatesIdCorrectly(string testId, int expectedStatusCode, string expectedMessage)
         {
             TesTask mockTesTask = new TesTask { State = TesState.RUNNINGEnum };
@@ -281,8 +281,8 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CancelTaskAsync_ReturnsConflict_ForRepositoryCollision()
         {
-            var tesTaskId = "IdForCollisionTest";
             TesTask mockTesTask = new TesTask { State = TesState.RUNNINGEnum };
+            var tesTaskId = mockTesTask.CreateId();
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
             {
@@ -307,29 +307,10 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        public async Task CancelTaskAsync_ReturnsBadRequest_ForInvalidId()
-        {
-            var tesTaskId = "IdDoesNotExist";
-
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
-                r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
-                .Callback<string, System.Threading.CancellationToken, Action<TesTask>>((id, _1, action) =>
-                {
-                    action(null);
-                })
-                .ReturnsAsync(false));
-            var controller = services.GetT();
-
-            var result = await controller.CancelTask(tesTaskId, System.Threading.CancellationToken.None) as NotFoundObjectResult;
-
-            Assert.IsNotNull(result);
-            Assert.AreEqual(404, result.StatusCode);
-        }
-
-        [TestMethod]
         public async Task CancelTaskAsync_ReturnsEmptyObject()
         {
-            var tesTask = new TesTask() { Id = "testTaskId", State = TesState.QUEUEDEnum };
+            var tesTask = new TesTask() { State = TesState.QUEUEDEnum };
+            tesTask.Id = tesTask.CreateId();
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
@@ -358,9 +339,9 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        public async Task GetTaskAsync_ReturnsNotFound_ForInvalidId()
+        public async Task GetTaskAsync_ReturnsNotFound_ForValidId()
         {
-            var tesTaskId = "IdDoesNotExist";
+            var tesTaskId = new TesTask().CreateId();
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
@@ -377,6 +358,7 @@ namespace TesApi.Tests
         public async Task GetTaskAsync_ReturnsBadRequest_ForInvalidViewValue()
         {
             var tesTask = new TesTask();
+            tesTask.Id = tesTask.CreateId();
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
@@ -400,6 +382,7 @@ namespace TesApi.Tests
             {
                 State = TesState.RUNNINGEnum
             };
+            tesTask.Id = tesTask.CreateId();
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
