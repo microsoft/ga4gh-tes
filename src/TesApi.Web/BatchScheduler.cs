@@ -1248,8 +1248,6 @@ namespace TesApi.Web
                 return sasUrl;
             }
 
-            // {CreateWgetCommand(nodeBatchScriptSasUrl, BatchScriptFileName, setExecutable: true)}
-
             string MungeBatchTaskCommandLine()
                 => string.Join("\n", taskRunScriptContent)
                     .Replace(@"{CleanupScriptLines}", string.Join("\n", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
