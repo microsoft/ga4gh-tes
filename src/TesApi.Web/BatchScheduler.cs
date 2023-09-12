@@ -347,17 +347,17 @@ namespace TesApi.Web
         /// <summary>
         /// Creates a wget command to robustly download a file
         /// </summary>
-        /// <param name="url">URL to download</param>
-        /// <param name="localFilePath">Filename for the output file</param>
+        /// <param name="urlToDownload">URL to download</param>
+        /// <param name="localFilePathDownloadLocation">Filename for the output file</param>
         /// <param name="setExecutable">Whether the file should be made executable or not</param>
         /// <returns></returns>
-        private string CreateWgetCommand(string url, string localFilePath, bool setExecutable = false)
+        private string CreateWgetDownloadCommand(string urlToDownload, string localFilePathDownloadLocation, bool setExecutable = false)
         {
-            string command = $"wget --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePath} '{url}'";
+            string command = $"wget --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload}'";
 
             if (setExecutable)
             {
-                command += $" && chmod +x {localFilePath}";
+                command += $" && chmod +x {localFilePathDownloadLocation}";
             }
 
             return command;
@@ -1121,9 +1121,9 @@ namespace TesApi.Web
             var nodeBatchScriptSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, BatchScriptFileName, cancellationToken);
             var nodeRunnerStartTaskUrl = await UploadBlobAsync(NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName, SerializeNodeTask(startTaskStdOutStdErrUploadNodeTaskContent));
             sb.AppendLinuxLine($"write_ts DownloadRunnerScriptsStart && \\");
-            sb.AppendLinuxLine(CreateWgetCommand(nodeRunnerStartTaskUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName}") + " && \\");
-            sb.AppendLinuxLine(CreateWgetCommand(nodeTaskRunnerInfoUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeRunnerTaskInfoFilename}") + " && \\");
-            sb.AppendLinuxLine(CreateWgetCommand(nodeTaskRunnerUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename}", setExecutable: true) + " && \\");
+            sb.AppendLinuxLine(CreateWgetDownloadCommand(nodeRunnerStartTaskUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName}") + " && \\");
+            sb.AppendLinuxLine(CreateWgetDownloadCommand(nodeTaskRunnerInfoUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeRunnerTaskInfoFilename}") + " && \\");
+            sb.AppendLinuxLine(CreateWgetDownloadCommand(nodeTaskRunnerUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename}", setExecutable: true) + " && \\");
             sb.AppendLinuxLine($"write_ts DownloadRunnerScriptsEnd && \\");
 
             sb.AppendLinuxLine($"($AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename} upload --file $AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName} || :) && \\"); // Upload the start-task console spews
@@ -1181,7 +1181,7 @@ namespace TesApi.Web
             await storageAccessProvider.UploadBlobAsync(new Uri(nodeBatchScriptSasUrl), sb.ToString(), cancellationToken);
 
             var batchRunCommand = enableBatchAutopool
-                ? $"/bin/bash -c {CreateWgetCommand(nodeBatchScriptSasUrl, $"AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)} && AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
+                ? $"/bin/bash -c {CreateWgetDownloadCommand(nodeBatchScriptSasUrl, $"AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)} && AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
                 : $"/bin/bash -c \"{MungeBatchTaskCommandLine()}\"";
 
             // Replace any URL query strings with the word REMOVED
@@ -1251,7 +1251,7 @@ namespace TesApi.Web
             string MungeBatchTaskCommandLine()
                 => string.Join("\n", taskRunScriptContent)
                     .Replace(@"{CleanupScriptLines}", string.Join("\n", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
-                    .Replace(@"{GetBatchScriptFile}", $"{CreateWgetCommand(nodeBatchScriptSasUrl, $"AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)}")
+                    .Replace(@"{GetBatchScriptFile}", $"{CreateWgetDownloadCommand(nodeBatchScriptSasUrl, $"AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)}")
                     .Replace(@"{BatchScriptPath}", $"$AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}")
                     .Replace(@"{TaskExecutor}", executor.Image)
                     .Replace(@"{ExecutionPathPrefix}", "wd")
@@ -1411,7 +1411,7 @@ namespace TesApi.Web
 
                 if (globalStartTaskConfigured)
                 {
-                    startTask.CommandLine = $"({startTask.CommandLine} && {CreateWgetCommand(startTaskSasUrl, StartTaskScriptFilename, setExecutable: true)}) && ./{StartTaskScriptFilename}";
+                    startTask.CommandLine = $"({startTask.CommandLine} && {CreateWgetDownloadCommand(startTaskSasUrl, StartTaskScriptFilename, setExecutable: true)}) && ./{StartTaskScriptFilename}";
                 }
 
                 return startTask;
