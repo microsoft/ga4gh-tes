@@ -350,7 +350,7 @@ namespace TesApi.Web
         /// <param name="urlToDownload">URL to download</param>
         /// <param name="localFilePathDownloadLocation">Filename for the output file</param>
         /// <param name="setExecutable">Whether the file should be made executable or not</param>
-        /// <returns></returns>
+        /// <returns>The command to execute</returns>
         private string CreateWgetDownloadCommand(string urlToDownload, string localFilePathDownloadLocation, bool setExecutable = false)
         {
             string command = $"wget --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload}'";
