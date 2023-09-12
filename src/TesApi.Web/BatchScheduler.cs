@@ -1050,7 +1050,7 @@ namespace TesApi.Web
                     new()
                     {
                         TargetUrl = AppendPathToUrl(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, string.Empty, cancellationToken), "start-task"),
-                        Path = "%AZ_BATCH_NODE_STARTUP_DIR%/std*.txt",
+                        Path = "%AZ_BATCH_NODE_STARTUP_DIR%/std*.txt", // .NET Core requires Windows-style even on Linux
                         SasStrategy = SasResolutionStrategy.None,
                         FileType = FileType.File
                     }
@@ -1181,7 +1181,7 @@ namespace TesApi.Web
             await storageAccessProvider.UploadBlobAsync(new Uri(nodeBatchScriptSasUrl), sb.ToString(), cancellationToken);
 
             var batchRunCommand = enableBatchAutopool
-                ? $"/bin/bash -c {CreateWgetCommand(nodeBatchScriptSasUrl, $"AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)} && ./{BatchScriptFileName}"
+                ? $"/bin/bash -c {CreateWgetCommand(nodeBatchScriptSasUrl, $"AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)} && AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
                 : $"/bin/bash -c \"{MungeBatchTaskCommandLine()}\"";
 
             // Replace any URL query strings with the word REMOVED
