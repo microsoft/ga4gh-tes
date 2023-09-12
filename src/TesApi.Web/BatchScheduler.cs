@@ -1184,6 +1184,13 @@ namespace TesApi.Web
                 ? $"/bin/bash -c {CreateWgetCommand(nodeBatchScriptSasUrl, BatchScriptFileName, setExecutable: true)} && ./{BatchScriptFileName}"
                 : $"/bin/bash -c {CreateWgetCommand(nodeBatchScriptSasUrl, BatchScriptFileName, setExecutable: true)} && \"{MungeBatchScript()}\"";
 
+            // Replace any URL query strings with the word REMOVED
+            const string pattern = @"(https?:\/\/[^?\s]+)\?[^?\s]*";
+            const string replacement = "$1?REMOVED";
+            string sanitizedLogEntry = Regex.Replace(batchRunCommand, pattern, replacement);
+
+            logger.LogInformation("CloudTask.CommandLine (sanitized): " + sanitizedLogEntry);
+
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
                 UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
