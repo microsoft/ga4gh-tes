@@ -353,7 +353,7 @@ namespace TesApi.Web
         /// <returns></returns>
         private string CreateWgetCommand(string url, string localFilePath, bool setExecutable = false)
         {
-            string command = $"wget --https-only --timeout=20 --waitretry=1 --tries=5 --retry-connrefused --continue -O {localFilePath} '{url}'";
+            string command = $"wget --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePath} '{url}'";
 
             if (setExecutable)
             {
