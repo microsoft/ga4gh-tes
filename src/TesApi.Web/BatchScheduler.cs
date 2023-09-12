@@ -353,11 +353,11 @@ namespace TesApi.Web
         /// <returns></returns>
         private string CreateWgetCommand(string url, string localFilename, bool setExecutable = false)
         {
-            string command = $"wget --https-only --timeout=20 --waitretry=1 --tries=5 --retry-connrefused --continue -O '{localFilename}' '{url}'";
+            string command = $"wget --https-only --timeout=20 --waitretry=1 --tries=5 --retry-connrefused --continue -O $AZ_BATCH_TASK_WORKING_DIR/{localFilename} '{url}'";
 
             if (setExecutable)
             {
-                command += $" && chmod +x {localFilename}";
+                command += $" && chmod +x $AZ_BATCH_TASK_WORKING_DIR/{localFilename}";
             }
 
             return command;
@@ -1126,7 +1126,7 @@ namespace TesApi.Web
             sb.AppendLinuxLine(CreateWgetCommand(nodeTaskRunnerUrl, NodeTaskRunnerFilename, setExecutable: true) + " && \\");
             sb.AppendLinuxLine($"write_ts DownloadRunnerScriptsEnd && \\");
 
-            sb.AppendLinuxLine($"(./{NodeTaskRunnerFilename} upload --file {NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName} || :) && \\"); // Upload the start-task console spews
+            sb.AppendLinuxLine($"($AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename} upload --file $AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName} || :) && \\"); // Upload the start-task console spews
 
             var vmSize = task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
 
@@ -1164,7 +1164,7 @@ namespace TesApi.Web
             }
 
             sb.AppendLinuxLine($"write_ts DownloadStart && \\");
-            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} download && \\");
+            sb.AppendLinuxLine($"$AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename} download -f $AZ_BATCH_TASK_WORKING_DIR/{NodeRunnerTaskInfoFilename} && \\");
             sb.AppendLinuxLine($"write_ts DownloadEnd && \\");
             sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
             sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR/wd && \\");
@@ -1172,7 +1172,7 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= {workdirOption}{executor.Image} {string.Join(" ", executor.Command.Select(BashWrapShellArgument))} && \\");
             sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
             sb.AppendLinuxLine($"write_ts UploadStart && \\");
-            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} upload && \\");
+            sb.AppendLinuxLine($"$AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename} upload -f $AZ_BATCH_TASK_WORKING_DIR/{NodeRunnerTaskInfoFilename} && \\");
             sb.AppendLinuxLine($"write_ts UploadEnd && \\");
             sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
@@ -1182,7 +1182,7 @@ namespace TesApi.Web
 
             var batchRunCommand = enableBatchAutopool
                 ? $"/bin/bash -c {CreateWgetCommand(nodeBatchScriptSasUrl, BatchScriptFileName, setExecutable: true)} && ./{BatchScriptFileName}"
-                : $"/bin/bash -c {CreateWgetCommand(nodeBatchScriptSasUrl, BatchScriptFileName, setExecutable: true)} && \"{MungeBatchScript()}\"";
+                : $"/bin/bash -c \"{MungeBatchTaskCommandLine()}\"";
 
             // Replace any URL query strings with the word REMOVED
             const string pattern = @"(https?:\/\/[^?\s]+)\?[^?\s]*";
@@ -1248,9 +1248,12 @@ namespace TesApi.Web
                 return sasUrl;
             }
 
-            string MungeBatchScript()
+            // {CreateWgetCommand(nodeBatchScriptSasUrl, BatchScriptFileName, setExecutable: true)}
+
+            string MungeBatchTaskCommandLine()
                 => string.Join("\n", taskRunScriptContent)
                     .Replace(@"{CleanupScriptLines}", string.Join("\n", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
+                    .Replace(@"{GetBatchScriptFile}", $"{CreateWgetCommand(nodeBatchScriptSasUrl, BatchScriptFileName, setExecutable: true)}")
                     .Replace(@"{BatchScriptPath}", $"$AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}")
                     .Replace(@"{TaskExecutor}", executor.Image)
                     .Replace(@"{ExecutionPathPrefix}", "wd")
