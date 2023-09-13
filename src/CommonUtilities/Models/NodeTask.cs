@@ -11,6 +11,7 @@ namespace Tes.Runner.Models
         public string? WorkflowId { get; set; }
         public string? ImageTag { get; set; }
         public string? ImageName { get; set; }
+        public string? ContainerWorkDir { get; set; }
         public List<string>? CommandsToExecute { get; set; }
         public List<FileInput>? Inputs { get; set; }
         public List<FileOutput>? Outputs { get; set; }
@@ -34,7 +35,7 @@ namespace Tes.Runner.Models
         public string? Path { get; set; }
         public string? MountParentDirectory { get; set; }
         public string? SourceUrl { get; set; }
-        public TransformationStrategy? SasStrategy { get; set; }
+        public TransformationStrategy? TransformationStrategy { get; set; }
     }
 
     public class RuntimeOptions

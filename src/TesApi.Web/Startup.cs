@@ -25,6 +25,7 @@ using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
+using TesApi.Web.Runner;
 using TesApi.Web.Storage;
 
 namespace TesApi.Web
@@ -107,6 +108,7 @@ namespace TesApi.Web
                     .AddSingleton<ConfigurationUtils>()
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
                     .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
+                    .AddSingleton<TesTaskToNodeTaskConverter>()
 
                     .AddSwaggerGen(c =>
                     {

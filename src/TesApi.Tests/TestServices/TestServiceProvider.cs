@@ -21,6 +21,7 @@ using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
+using TesApi.Web.Runner;
 using TesApi.Web.Storage;
 
 namespace TesApi.Tests.TestServices
@@ -79,6 +80,7 @@ namespace TesApi.Tests.TestServices
                         .AddTransient<ILogger<BatchQuotaVerifier>>(_ => NullLogger<BatchQuotaVerifier>.Instance)
                         .AddTransient<ILogger<ConfigurationUtils>>(_ => NullLogger<ConfigurationUtils>.Instance)
                         .AddTransient<ILogger<PriceApiBatchSkuInformationProvider>>(_ => NullLogger<PriceApiBatchSkuInformationProvider>.Instance)
+                        .AddTransient<ILogger<TesTaskToNodeTaskConverter>>(_ => NullLogger<TesTaskToNodeTaskConverter>.Instance)
                         .AddSingleton<TestRepositoryStorage>()
                         .AddSingleton<CachingRetryHandler>()
                         .AddSingleton<PriceApiClient>()
@@ -87,6 +89,7 @@ namespace TesApi.Tests.TestServices
                         .AddSingleton<IBatchScheduler, BatchScheduler>()
                         .AddSingleton(s => GetArmBatchQuotaProvider(s, armBatchQuotaProvider)) //added so config utils gets the arm implementation, to be removed once config utils is refactored.
                         .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
+                        .AddSingleton<TesTaskToNodeTaskConverter>()
                         .IfThenElse(additionalActions is null, s => { }, s => additionalActions(s))
                     .BuildServiceProvider();
 

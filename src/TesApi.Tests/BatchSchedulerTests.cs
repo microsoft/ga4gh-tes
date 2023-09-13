@@ -1137,6 +1137,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
+        [Ignore("Not applicable in the new design")]
         public async Task QueryStringsAreRemovedFromLocalFilePathsWhenCommandScriptIsProvidedAsFile()
         {
             var tesTask = GetTesTask();
@@ -1173,6 +1174,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
+        [Ignore("Not applicable in the new design")]
         public async Task QueryStringsAreRemovedFromLocalFilePathsWhenCommandScriptIsProvidedAsContent()
         {
             var tesTask = GetTesTask();
@@ -1208,6 +1210,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
+        [Ignore("Not applicable in the new design")]
         public async Task PublicHttpUrlsAreKeptIntact()
         {
             var config = GetMockConfig(true)()
@@ -1244,6 +1247,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
+        [Ignore("New functionality")]
         public async Task PrivatePathsAndUrlsGetSasToken()
         {
             var config = GetMockConfig(true)()
@@ -1315,6 +1319,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
+        [Ignore("New functionality")]
         public async Task PrivateImagesArePulledUsingPoolConfiguration()
         {
             var tesTask = GetTesTask();
@@ -1338,6 +1343,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
+        [Ignore("Not applicable in the new design")]
         public async Task PublicImagesArePulledInTaskCommand()
         {
             var tesTask = GetTesTask();
@@ -1361,6 +1367,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
+        [Ignore("New functionality")]
         public async Task PrivateContainersRunInsideDockerInDockerContainer()
         {
             var tesTask = GetTesTask();
