@@ -58,7 +58,6 @@ namespace Tes.Runner.Test.Storage
             fileInfoProvider = new Mock<IFileInfoProvider>();
 
             fileInfoProvider.Setup(x => x.GetExpandedFileName(It.IsAny<string>())).Returns<string>(f => f);
-            //fileInfoProvider.Setup(x => x.FileExists(It.IsAny<string>())).Returns(true);
             fileInfoProvider.Setup(x => x.GetRootPathPair("/foo/bar"))
                 .Returns(() => new RootPathPair("/", "foo/bar"));
             fileInfoProvider.Setup(x => x.GetRootPathPair("/data/*"))
