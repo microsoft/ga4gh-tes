@@ -20,7 +20,7 @@ namespace Tes.Runner.Docker
                 .CreateClient();
         }
 
-        public async Task<ContainerExecutionResult> RunOnContainerAsync(string? imageName, string? tag, List<string>? commandsToExecute, List<string>? volumeBindings)
+        public async Task<ContainerExecutionResult> RunOnContainerAsync(string? imageName, string? tag, List<string>? commandsToExecute, List<string>? volumeBindings, string? workingDir)
         {
             ArgumentException.ThrowIfNullOrEmpty(imageName);
             ArgumentException.ThrowIfNullOrEmpty(tag);
@@ -30,7 +30,7 @@ namespace Tes.Runner.Docker
 
             await ConfigureNetworkAsync();
 
-            var createResponse = await CreateContainerAsync(imageName, commandsToExecute, volumeBindings);
+            var createResponse = await CreateContainerAsync(imageName, commandsToExecute, volumeBindings, workingDir);
 
             var logs = await StartContainerWithStreamingOutput(createResponse);
 
@@ -61,7 +61,7 @@ namespace Tes.Runner.Docker
                 });
         }
 
-        private async Task<CreateContainerResponse> CreateContainerAsync(string imageName, List<string> commandsToExecute, List<string>? volumeBindings)
+        private async Task<CreateContainerResponse> CreateContainerAsync(string imageName, List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir)
         {
             var createResponse = await dockerClient.Containers.CreateContainerAsync(
                 new CreateContainerParameters
@@ -70,7 +70,7 @@ namespace Tes.Runner.Docker
                     Entrypoint = commandsToExecute,
                     AttachStdout = true,
                     AttachStderr = true,
-                    WorkingDir = "/",
+                    WorkingDir = workingDir,
                     HostConfig = new HostConfig
                     {
                         Binds = volumeBindings
