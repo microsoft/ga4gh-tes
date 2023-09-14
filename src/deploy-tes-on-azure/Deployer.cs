@@ -1634,21 +1634,27 @@ namespace TesDeployer
                 $"Creating virtual network and subnets: {configuration.VnetName}...",
                 async () =>
                 {
+                    var defaultNsg = await CreateNetworkSecurityGroupAsync(resourceGroup, $"{configuration.VnetName}-default-nsg");
+
                     var vnetDefinition = azureSubscriptionClient.Networks
                         .Define(configuration.VnetName)
                         .WithRegion(configuration.RegionName)
                         .WithExistingResourceGroup(resourceGroup)
                         .WithAddressSpace(configuration.VnetAddressSpace)
                         .DefineSubnet(configuration.VmSubnetName)
-                        .WithAddressPrefix(configuration.VmSubnetAddressSpace).Attach();
+                        .WithAddressPrefix(configuration.VmSubnetAddressSpace)
+                        .WithExistingNetworkSecurityGroup(defaultNsg)
+                        .Attach();
 
                     vnetDefinition = vnetDefinition.DefineSubnet(configuration.PostgreSqlSubnetName)
                         .WithAddressPrefix(configuration.PostgreSqlSubnetAddressSpace)
+                        .WithExistingNetworkSecurityGroup(defaultNsg)
                         .WithDelegation("Microsoft.DBforPostgreSQL/flexibleServers")
                         .Attach();
 
                     vnetDefinition = vnetDefinition.DefineSubnet(configuration.BatchSubnetName)
                         .WithAddressPrefix(configuration.BatchNodesSubnetAddressSpace)
+                        .WithExistingNetworkSecurityGroup(defaultNsg)
                         .Attach();
 
                     var vnet = await vnetDefinition.CreateAsync();
@@ -1667,34 +1673,13 @@ namespace TesDeployer
                         batchSubnet);
                 });
 
-        //private Task<INetworkSecurityGroup> CreateNetworkSecurityGroupAsync(IResourceGroup resourceGroup, string networkSecurityGroupName)
-        //{
-        //    const int SshAllowedPort = 22;
-        //    const int SshDefaultPriority = 300;
-
-        //    return Execute(
-        //        $"Creating Network Security Group: {networkSecurityGroupName}...",
-        //        () => azureSubscriptionClient.NetworkSecurityGroups.Define(networkSecurityGroupName)
-        //            .WithRegion(configuration.RegionName)
-        //            .WithExistingResourceGroup(resourceGroup)
-        //            .DefineRule(SshNsgRuleName)
-        //            .AllowInbound()
-        //            .FromAnyAddress()
-        //            .FromAnyPort()
-        //            .ToAnyAddress()
-        //            .ToPort(SshAllowedPort)
-        //            .WithProtocol(Microsoft.Azure.Management.Network.Fluent.Models.SecurityRuleProtocol.Tcp)
-        //            .WithPriority(SshDefaultPriority)
-        //            .Attach()
-        //            .CreateAsync(cts.Token)
-        //    );
-        //}
-
-        //private Task<INetworkInterface> AssociateNicWithNetworkSecurityGroupAsync(INetworkInterface networkInterface, INetworkSecurityGroup networkSecurityGroup)
-        //    => Execute(
-        //        $"Associating VM NIC with Network Security Group {networkSecurityGroup.Name}...",
-        //        () => networkInterface.Update().WithExistingNetworkSecurityGroup(networkSecurityGroup).ApplyAsync()
-        //    );
+        private Task<INetworkSecurityGroup> CreateNetworkSecurityGroupAsync(IResourceGroup resourceGroup, string networkSecurityGroupName)
+        {
+            return azureSubscriptionClient.NetworkSecurityGroups.Define(networkSecurityGroupName)
+                    .WithRegion(configuration.RegionName)
+                    .WithExistingResourceGroup(resourceGroup)
+                    .CreateAsync(cts.Token);
+        }
 
         private Task<IPrivateDnsZone> CreatePrivateDnsZoneAsync(INetwork virtualNetwork, string name, string title)
             => Execute(
