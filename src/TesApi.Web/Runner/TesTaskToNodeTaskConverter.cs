@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.Models;
@@ -105,7 +107,7 @@ namespace TesApi.Web.Runner
             ArgumentNullException.ThrowIfNull(nodeTask);
             ArgumentException.ThrowIfNullOrEmpty(pathParentDirectory);
 
-            var distinctInputs = inputs.Where(tesInput => nodeTask.Inputs != null && nodeTask.Inputs.Any(nodeInput => nodeInput.Path != null && nodeInput.Path.Equals(tesInput.Path, StringComparison.OrdinalIgnoreCase)))
+            var distinctInputs = inputs.Where(tesInput => nodeTask.Inputs != null && !nodeTask.Inputs.Any(nodeInput => nodeInput.Path != null && nodeInput.Path.Equals(tesInput.Path, StringComparison.OrdinalIgnoreCase)))
                                                     .ToList();
 
             var builder = new NodeTaskBuilder(nodeTask);
@@ -129,7 +131,7 @@ namespace TesApi.Web.Runner
             ArgumentNullException.ThrowIfNull(nodeTask);
             ArgumentException.ThrowIfNullOrEmpty(pathParentDirectory);
 
-            var tesOutputs = outputs.Where(tesOutput => nodeTask.Outputs != null && nodeTask.Outputs.Any(nodeOutput => nodeOutput.Path != null && nodeOutput.Path.Equals(tesOutput.Path, StringComparison.OrdinalIgnoreCase)))
+            var tesOutputs = outputs.Where(tesOutput => nodeTask.Outputs != null && !nodeTask.Outputs.Any(nodeOutput => nodeOutput.Path != null && nodeOutput.Path.Equals(tesOutput.Path, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
 
             var builder = new NodeTaskBuilder(nodeTask);
@@ -165,7 +167,6 @@ namespace TesApi.Web.Runner
                     AppendParentDirectoryIfSet(input.Path, pathParentDirectory), input.Url,
                     containerMountParentDirectory);
             });
-
         }
 
         private FileType? ToNodeTaskFileType(TesFileType outputType)
