@@ -72,17 +72,19 @@ public class DefaultFileInfoProvider : IFileInfoProvider
 
     public List<FileResult> GetAllFilesInDirectory(string path)
     {
-        logger.LogInformation($"Getting all files in directory: {path}");
+        var expandedPath = Environment.ExpandEnvironmentVariables(path);
 
-        if (!Directory.Exists(path))
+        logger.LogInformation($"Getting all files in directory: {expandedPath}");
+
+        if (!Directory.Exists(expandedPath))
         {
-            logger.LogWarning($"The directory provided does not exist: {path}. The output will be ignored.");
+            logger.LogWarning($"The directory provided does not exist: {expandedPath}. The output will be ignored.");
 
             return new List<FileResult>();
         }
 
-        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), "*", SearchOption.AllDirectories)
-            .Select(f => new FileResult(f, ToRelativePathToSearchPath(path, searchPattern: String.Empty, f), path))
+        return Directory.GetFiles(expandedPath, "*", SearchOption.AllDirectories)
+            .Select(f => new FileResult(f, ToRelativePathToSearchPath(expandedPath, searchPattern: String.Empty, f), expandedPath))
             .ToList();
     }
 
