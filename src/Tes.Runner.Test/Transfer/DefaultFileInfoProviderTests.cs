@@ -107,5 +107,31 @@ namespace Tes.Runner.Test.Transfer
 
             AssertCountOfFilesReturned(files.AsEnumerable());
         }
+
+        [TestMethod]
+        public void GetAllFilesInDirectoryTest_DirectoryPathIsProvidedWithAndWithoutEndingSlash_AllFilesAreReturned()
+        {
+            var directoryNameWithoutEndingSlash = directoryInfo.FullName.TrimEnd(Path.DirectorySeparatorChar);
+            var directoryNameWithEndingSlash = $"{directoryNameWithoutEndingSlash}{Path.DirectorySeparatorChar}";
+
+            var files = fileInfoProvider.GetAllFilesInDirectory(directoryNameWithoutEndingSlash);
+
+            AssertCountOfFilesReturned(files.AsEnumerable());
+
+            files = fileInfoProvider.GetAllFilesInDirectory(directoryNameWithEndingSlash);
+
+            AssertCountOfFilesReturned(files.AsEnumerable());
+        }
+
+        [TestMethod]
+        public void GetAllFilesInDirectoryTest_DirectoryPathContainsAnEnvVariable_AllFilesAreReturned()
+        {
+            Environment.SetEnvironmentVariable("TEST_PATH", directoryInfo.FullName);
+            var directoryNameAsEnvVar = "%TEST_PATH%";
+
+            var files = fileInfoProvider.GetAllFilesInDirectory(directoryNameAsEnvVar);
+
+            AssertCountOfFilesReturned(files.AsEnumerable());
+        }
     }
 }

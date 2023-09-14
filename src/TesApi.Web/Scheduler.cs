@@ -203,7 +203,7 @@ namespace TesApi.Web
                 }
                 catch (RepositoryCollisionException exc)
                 {
-                    // TODO
+                    logger.LogError(exc, $"RepositoryCollisionException in OrchestrateTesTasksOnBatch");
                 }
                 // TODO catch EF / postgres exception?
                 //catch (Microsoft.Azure.Cosmos.CosmosException exc)

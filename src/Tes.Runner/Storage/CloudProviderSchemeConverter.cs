@@ -5,12 +5,12 @@ using Azure.Storage.Sas;
 
 namespace Tes.Runner.Storage
 {
-    public class CloudProviderSchemeConverter : ISasResolutionStrategy
+    public class CloudProviderSchemeConverter : IUrlTransformationStrategy
     {
         private const string GcpHost = "storage.googleapis.com";
         private const string AwsSuffix = ".s3.amazonaws.com";
 
-        public Task<Uri> CreateSasTokenWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
+        public Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
         {
             var sourceUri = new Uri(sourceUrl);
 

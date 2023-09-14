@@ -13,16 +13,16 @@ using TesApi.Web.Management.Models.Terra;
 
 namespace Tes.Runner.Storage
 {
-    public class TerraSasResolutionStrategy : ISasResolutionStrategy
+    public class TerraUrlTransformationStrategy : IUrlTransformationStrategy
     {
         private const int MaxNumberOfContainerResources = 10000;
         private const int TokenExpirationInSeconds = 3600 * 24 * 7; //7 days, max Azure Batch node runtime. 
         private readonly TerraWsmApiClient terraWsmApiClient;
         private readonly TerraRuntimeOptions terraRuntimeOptions;
         private const string LzStorageAccountNamePattern = "lz[0-9a-f]*";
-        private readonly ILogger<TerraSasResolutionStrategy> logger = PipelineLoggerFactory.Create<TerraSasResolutionStrategy>();
+        private readonly ILogger<TerraUrlTransformationStrategy> logger = PipelineLoggerFactory.Create<TerraUrlTransformationStrategy>();
 
-        public TerraSasResolutionStrategy(TerraRuntimeOptions terraRuntimeOptions)
+        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions)
         {
             ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
             ArgumentException.ThrowIfNullOrEmpty(terraRuntimeOptions.WsmApiHost, nameof(terraRuntimeOptions.WsmApiHost));
@@ -32,7 +32,7 @@ namespace Tes.Runner.Storage
         }
 
 
-        public TerraSasResolutionStrategy(TerraRuntimeOptions terraRuntimeOptions, TerraWsmApiClient terraWsmApiClient)
+        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TerraWsmApiClient terraWsmApiClient)
         {
             ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
             ArgumentNullException.ThrowIfNull(terraWsmApiClient);
@@ -41,7 +41,7 @@ namespace Tes.Runner.Storage
             this.terraRuntimeOptions = terraRuntimeOptions;
         }
 
-        public async Task<Uri> CreateSasTokenWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
+        public async Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
         {
             var blobUriBuilder = ToBlobUriBuilder(sourceUrl);
 

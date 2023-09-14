@@ -10,10 +10,10 @@ using Tes.Runner.Storage;
 namespace Tes.Runner.Test.Storage
 {
     [TestClass, TestCategory("Unit")]
-    public class ArmSasResolutionStrategyTests
+    public class ArmUrlTransformationStrategyTests
     {
         private Mock<BlobServiceClient> mockBlobServiceClient = null!;
-        private ArmSasResolutionStrategy armSasResolutionStrategy = null!;
+        private ArmUrlTransformationStrategy armUrlTransformationStrategy = null!;
         private UserDelegationKey userDelegationKey = null!;
         const string StorageAccountName = "foo";
 
@@ -21,7 +21,7 @@ namespace Tes.Runner.Test.Storage
         public void SetUp()
         {
             mockBlobServiceClient = new Mock<BlobServiceClient>();
-            armSasResolutionStrategy = new ArmSasResolutionStrategy(_ => mockBlobServiceClient.Object);
+            armUrlTransformationStrategy = new ArmUrlTransformationStrategy(_ => mockBlobServiceClient.Object);
             userDelegationKey = BlobsModelFactory.UserDelegationKey(Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow.AddHours(1), "SIGNED_SERVICE", "V1_0", RunnerTestUtils.GenerateRandomTestAzureStorageKey());
             mockBlobServiceClient.Setup(c => c.GetUserDelegationKeyAsync(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
@@ -33,9 +33,9 @@ namespace Tes.Runner.Test.Storage
         [DataRow($"https://{StorageAccountName}.blob.core.windows.net")]
         [DataRow($"https://{StorageAccountName}.blob.core.windows.net/cont")]
         [DataRow($"https://{StorageAccountName}.blob.core.windows.net/cont/blob")]
-        public async Task CreateSasTokenWithStrategyAsync_ValidBlobStorageUrl_SasTokenIsGenerated(string sourceUrl)
+        public async Task TransformUrlWithStrategyAsync_ValidBlobStorageUrl_SasTokenIsGenerated(string sourceUrl)
         {
-            var sasTokenUrl = await armSasResolutionStrategy.CreateSasTokenWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
+            var sasTokenUrl = await armUrlTransformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
 
             Assert.IsNotNull(sasTokenUrl);
             var blobUri = new Uri(sourceUrl);
@@ -47,9 +47,9 @@ namespace Tes.Runner.Test.Storage
         [DataRow($"https://storage.core.windows.net")]
         [DataRow($"https://foo.bar/cont")]
         [DataRow($"s3://foo.s3.bar")]
-        public async Task CreateSasTokenWithStrategyAsync_InvalidBlobStorageUrl_UrlIsReturnAsIs(string sourceUrl)
+        public async Task TransformUrlWithStrategyAsync_InvalidBlobStorageUrl_UrlIsReturnAsIs(string sourceUrl)
         {
-            var transformedUrl = await armSasResolutionStrategy.CreateSasTokenWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
+            var transformedUrl = await armUrlTransformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
 
             Assert.IsNotNull(transformedUrl);
             var blobUri = new Uri(sourceUrl);
@@ -57,12 +57,12 @@ namespace Tes.Runner.Test.Storage
         }
 
         [TestMethod]
-        public async Task CreateSasTokenWithStrategyAsyncTest_CallTwiceForSameStorageAccount_CachesKey()
+        public async Task TransformUrlWithStrategyAsync_CallTwiceForSameStorageAccount_CachesKey()
         {
             var sourceUrl = $"https://{StorageAccountName}.blob.core.windows.net";
 
-            var sasTokenUrl1 = await armSasResolutionStrategy.CreateSasTokenWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
-            var sasTokenUrl2 = await armSasResolutionStrategy.CreateSasTokenWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
+            var sasTokenUrl1 = await armUrlTransformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
+            var sasTokenUrl2 = await armUrlTransformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
 
 
             Assert.IsNotNull(sasTokenUrl1);
