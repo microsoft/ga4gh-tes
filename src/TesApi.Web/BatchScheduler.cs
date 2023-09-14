@@ -966,78 +966,74 @@ namespace TesApi.Web
                 .FirstOrDefault(m => (m.Condition is null || m.Condition(tesTask)) && (m.CurrentBatchTaskState is null || m.CurrentBatchTaskState == combinedBatchTaskInfo.BatchTaskState))
                 ?.ActionAsync(tesTask, combinedBatchTaskInfo, cancellationToken) ?? ValueTask.FromResult(false));
 
-        private async Task<List<TesInput>> RemoveDuplicatesAndAddAdditionalInputsAsync(TesTask task, bool isCromwell, string cromwellExecutionDirectoryUrl, CancellationToken cancellationToken)
-        {
+        // private async Task<List<TesInput>> RemoveDuplicatesAndAddAdditionalInputsAsync(TesTask task, bool isCromwell, string cromwellExecutionDirectoryUrl, CancellationToken cancellationToken)
+        // {
+        //
+        //     //Remove duplicate inputs.
+        //     //TODO: This is carried over from the previous implementation. We should review if this is indeed needed. A duplicate input is not allowed in TES, so an exception may be more appropriate.
+        //     var inputFiles = task.Inputs?.Distinct().ToList() ?? new List<TesInput>();
+        //
+        //     //drs inputs won't be supported initially when execution is handled via the runner.
+        //     var hasDrsInputs = inputFiles.Any(f => f?.Url?.StartsWith("drs://", StringComparison.OrdinalIgnoreCase) == true);
+        //     if (hasDrsInputs)
+        //     {
+        //         throw new InvalidOperationException("DRS inputs are not supported.");
+        //     }
+        //
+        //     var additionalInputFiles = await AddExistingBlobsInCromwellStorageLocationsAsInputFiles(task, cromwellExecutionDirectoryUrl, cancellationToken);
+        //
+        //     return inputFiles.Concat(additionalInputFiles).ToList();
+        // }
 
-            //Remove duplicate inputs.
-            //TODO: This is carried over from the previous implementation. We should review if this is indeed needed. A duplicate input is not allowed in TES, so an exception may be more appropriate.
-            var inputFiles = task.Inputs?.Distinct().ToList() ?? new List<TesInput>();
-
-            //drs inputs won't be supported initially when execution is handled via the runner.
-            var hasDrsInputs = inputFiles.Any(f => f?.Url?.StartsWith("drs://", StringComparison.OrdinalIgnoreCase) == true);
-            if (hasDrsInputs)
-            {
-                throw new InvalidOperationException("DRS inputs are not supported.");
-            }
-
-            var additionalInputFiles = await GetAdditionalInputFilesIfCromwellAsync(task, isCromwell, cromwellExecutionDirectoryUrl, cancellationToken);
-
-            return inputFiles.Concat(additionalInputFiles).ToList();
-        }
-
-        private async Task<List<TesInput>> GetAdditionalInputFilesIfCromwellAsync(TesTask task, bool isCromwell,
-            string cromwellExecutionDirectoryUrl, CancellationToken cancellationToken)
+        private async Task<List<TesInput>> AddExistingBlobsInCromwellStorageLocationsAsInputFiles(TesTask task,
+            string cromwellExecutionDirectoryUrl, string taskParentDirectory, CancellationToken cancellationToken)
         {
             var additionalInputFiles = new List<TesInput>();
 
-            // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
-            // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
-            // TODO: Verify whether this workaround is still needed.
-            if (isCromwell)
+
+            if (!Uri.TryCreate(cromwellExecutionDirectoryUrl, UriKind.Absolute, out _))
             {
-                if (!Uri.TryCreate(cromwellExecutionDirectoryUrl, UriKind.Absolute, out _))
+                cromwellExecutionDirectoryUrl = $"/{cromwellExecutionDirectoryUrl}";
+            }
+
+            var executionDirectoryUri = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectoryUrl,
+                cancellationToken, getContainerSas: true);
+            if (executionDirectoryUri is not null)
+            {
+                var blobsInExecutionDirectory =
+                    (await azureProxy.ListBlobsAsync(new Uri(executionDirectoryUri), cancellationToken)).ToList();
+                var scriptBlob =
+                    blobsInExecutionDirectory.FirstOrDefault(b => b.Name.EndsWith($"/{CromwellScriptFileName}"));
+                var commandScript =
+                    task.Inputs?.FirstOrDefault(
+                        IsCromwellCommandScript); // this should never be null because it's used to set isCromwell
+
+                if (scriptBlob is not null)
                 {
-                    cromwellExecutionDirectoryUrl = $"/{cromwellExecutionDirectoryUrl}";
+                    blobsInExecutionDirectory.Remove(scriptBlob);
                 }
 
-                var executionDirectoryUri = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectoryUrl,
-                    cancellationToken, getContainerSas: true);
-                if (executionDirectoryUri is not null)
+                if (commandScript is not null)
                 {
-                    var blobsInExecutionDirectory =
-                        (await azureProxy.ListBlobsAsync(new Uri(executionDirectoryUri), cancellationToken)).ToList();
-                    var scriptBlob =
-                        blobsInExecutionDirectory.FirstOrDefault(b => b.Name.EndsWith($"/{CromwellScriptFileName}"));
-                    var commandScript =
-                        task.Inputs?.FirstOrDefault(
-                            IsCromwellCommandScript); // this should never be null because it's used to set isCromwell
-
-                    if (scriptBlob is not null)
-                    {
-                        blobsInExecutionDirectory.Remove(scriptBlob);
-                    }
-
-                    if (commandScript is not null)
-                    {
-                        var commandScriptPathParts = commandScript.Path.Split('/').ToList();
-                        var cromwellExecutionDirectory =
-                            string.Join('/', commandScriptPathParts.Take(commandScriptPathParts.Count - 1));
-                        additionalInputFiles = await blobsInExecutionDirectory
-                            .Select(b => (Path: $"/{cromwellExecutionDirectory.TrimStart('/')}/{b.Name.Split('/').Last()}",
-                                b.Uri))
-                            .ToAsyncEnumerable()
-                            .SelectAwait(async b => new TesInput
-                            {
-                                Path = b.Path,
-                                Url = await storageAccessProvider.MapLocalPathToSasUrlAsync(b.Uri.AbsoluteUri,
-                                    cancellationToken, getContainerSas: true),
-                                Name = Path.GetFileName(b.Path),
-                                Type = TesFileType.FILEEnum
-                            })
-                            .ToListAsync(cancellationToken);
-                    }
+                    var commandScriptPathParts = commandScript.Path.Split('/').ToList();
+                    var cromwellExecutionDirectory =
+                        string.Join('/', commandScriptPathParts.Take(commandScriptPathParts.Count - 1));
+                    additionalInputFiles = await blobsInExecutionDirectory
+                        .Select(b => (Path: $"{taskParentDirectory.TrimStart()}/{cromwellExecutionDirectory.TrimStart('/')}/{b.Name.Split('/').Last()}",
+                            b.Uri))
+                        .ToAsyncEnumerable()
+                        .SelectAwait(async b => new TesInput
+                        {
+                            Path = b.Path,
+                            Url = await storageAccessProvider.MapLocalPathToSasUrlAsync(b.Uri.AbsoluteUri,
+                                cancellationToken, getContainerSas: true),
+                            Name = Path.GetFileName(b.Path),
+                            Type = TesFileType.FILEEnum
+                        })
+                        .ToListAsync(cancellationToken);
                 }
             }
+
 
             return additionalInputFiles;
         }
@@ -1052,6 +1048,8 @@ namespace TesApi.Web
         /// <returns>Job preparation and main Batch tasks</returns>
         private async Task<CloudTask> ConvertTesTaskToBatchTaskAsync(string taskId, TesTask task, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) isPublic, CancellationToken cancellationToken)
         {
+            ValidateTesTask(task);
+
             var metricsName = "metrics.txt";
             var poolHasContainerConfig = !(isPublic.ExecutorImage && isPublic.DockerInDockerImage && isPublic.CromwellDrsImage);
             var taskParentDirectory = "%AZ_BATCH_TASK_WORKING_DIR%";
@@ -1060,11 +1058,17 @@ namespace TesApi.Web
             var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
             var isCromwell = cromwellExecutionDirectoryUrl is not null;
 
-            var additionalInputs = await GetAdditionalInputFilesIfCromwellAsync(task, isCromwell, cromwellExecutionDirectoryUrl, cancellationToken);
-
             var nodeTesTask = tesTaskToNodeTaskConverter.ToNodeTask(task, taskParentDirectory, mountParentDirectory, metricsName);
 
-            nodeTesTask = tesTaskToNodeTaskConverter.AddAdditionalInputsIfNotSet(additionalInputs, nodeTesTask, taskParentDirectory, mountParentDirectory);
+            // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
+            // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
+            // TODO: Verify whether this workaround is still needed.
+            if (isCromwell)
+            {
+                var additionalInputs = await AddExistingBlobsInCromwellStorageLocationsAsInputFiles(task, cromwellExecutionDirectoryUrl, taskParentDirectory, cancellationToken);
+
+                nodeTesTask = tesTaskToNodeTaskConverter.AddAdditionalInputsIfNotSet(additionalInputs, nodeTesTask, taskParentDirectory, mountParentDirectory);
+            }
 
 
             // var poolHasContainerConfig = !(isPublic.ExecutorImage && isPublic.DockerInDockerImage && isPublic.CromwellDrsImage);
@@ -1344,6 +1348,36 @@ namespace TesApi.Web
 
             static IEnumerable<string> MungeCleanupScriptForContainerConfig(IEnumerable<string> content)
                 => MungeCleanupScript(content.Where(line => !line.Contains(@"{TaskExecutor}")));
+        }
+
+        private void ValidateTesTask(TesTask task)
+        {
+            ArgumentNullException.ThrowIfNull(task);
+
+            task.Inputs?.ForEach(ValidateTesTaskInput);
+        }
+
+        private void ValidateTesTaskInput(TesInput inputFile)
+        {
+            if (string.IsNullOrWhiteSpace(inputFile.Path) || !inputFile.Path.StartsWith("/"))
+            {
+                throw new TesException("InvalidInputFilePath", $"Unsupported input path '{inputFile.Path}'. Must start with '/'.");
+            }
+
+            if (inputFile.Url is not null && inputFile.Content is not null)
+            {
+                throw new TesException("InvalidInputFilePath", "Input Url and Content cannot be both set");
+            }
+
+            if (inputFile.Url is null && inputFile.Content is null)
+            {
+                throw new TesException("InvalidInputFilePath", "One of Input Url or Content must be set");
+            }
+
+            if (inputFile.Type == TesFileType.DIRECTORYEnum)
+            {
+                throw new TesException("InvalidInputFilePath", "Directory input is not supported.");
+            }
         }
 
         /// <summary>

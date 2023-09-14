@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using Tes.Models;
 using Tes.Runner.Models;
 
 namespace TesApi.Web.Runner
@@ -89,7 +90,6 @@ namespace TesApi.Web.Runner
         public NodeTaskBuilder WithInputUsingCombinedTransformationStrategy(string path, string sourceUrl, string mountParentDirectory)
         {
             ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
-            //ArgumentException.ThrowIfNullOrEmpty(sourceUrl, nameof(sourceUrl));
 
             nodeTask.Inputs ??= new List<FileInput>();
 

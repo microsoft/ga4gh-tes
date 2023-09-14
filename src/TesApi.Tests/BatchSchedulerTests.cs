@@ -1114,6 +1114,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
+        [Ignore("Not applicable in the new design")]
         public async Task TesInputFileTypeMustNotBeDirectory()
         {
             var tesTask = GetTesTask();
@@ -1247,7 +1248,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        [Ignore("New functionality")]
+        [Ignore("Not applicable in new design.")]
         public async Task PrivatePathsAndUrlsGetSasToken()
         {
             var config = GetMockConfig(true)()
@@ -1319,7 +1320,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        [Ignore("New functionality")]
+        [Ignore("Not applicable in the new design")]
         public async Task PrivateImagesArePulledUsingPoolConfiguration()
         {
             var tesTask = GetTesTask();
@@ -1367,7 +1368,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        [Ignore("New functionality")]
+        [Ignore("Not applicable in the new design")]
         public async Task PrivateContainersRunInsideDockerInDockerContainer()
         {
             var tesTask = GetTesTask();
@@ -1446,7 +1447,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                var inputFileUrl = filesToDownload.SingleOrDefault(f => f.LocalPath.EndsWith(fileName) && f.StorageUrl.Contains("?sv="))?.StorageUrl;
+                var inputFileUrl = filesToDownload.SingleOrDefault(f => f.LocalPath.EndsWith(fileName))?.StorageUrl;
                 Assert.IsNotNull(inputFileUrl);
                 Assert.AreEqual(2, filesToDownload.Length);
             });
