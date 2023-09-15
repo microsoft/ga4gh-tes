@@ -3,14 +3,16 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.Models;
 using Tes.Runner.Models;
 using TesApi.Web.Management.Configuration;
+using TesApi.Web.Storage;
 
 namespace TesApi.Web.Runner
 {
@@ -41,7 +43,9 @@ namespace TesApi.Web.Runner
         /// <param name="pathParentDirectory">Parent directory in the execution compute node. This value will be appended to the path in all inputs and outputs</param>
         /// <param name="containerMountParentDirectory">Parent directory from which a mount in the container is created.</param>
         /// <param name="metricsFile">Metrics filename</param>
-        public NodeTask ToNodeTask(TesTask task, string pathParentDirectory, string containerMountParentDirectory, string metricsFile)
+        /// <param name="storageAccessProvider"></param>
+        /// <param name="cancellationToken"></param>
+        public async Task<NodeTask> ToNodeTaskAsync(TesTask task, string pathParentDirectory, string containerMountParentDirectory, string metricsFile, IStorageAccessProvider storageAccessProvider, CancellationToken cancellationToken)
         {
 
             ArgumentNullException.ThrowIfNull(task);
@@ -74,7 +78,9 @@ namespace TesApi.Web.Runner
                 {
                     logger.LogInformation($"Mapping {task.Inputs.Count} inputs");
 
-                    MapInputs(task.Inputs, pathParentDirectory, containerMountParentDirectory, builder);
+                    var inputs = await PrepareInputsForMappingAsync(task, storageAccessProvider, cancellationToken);
+
+                    MapInputs(inputs, pathParentDirectory, containerMountParentDirectory, builder);
                 }
 
                 if (task.Outputs is not null)
@@ -91,6 +97,111 @@ namespace TesApi.Web.Runner
                 logger.LogError(e, "Failed to convert the TES task to a Node Task");
                 throw;
             }
+        }
+
+        private async Task<List<TesInput>> PrepareInputsForMappingAsync(TesTask tesTask,
+            IStorageAccessProvider storageAccessProvider, CancellationToken cancellationToken)
+        {
+            var inputs = new List<TesInput>();
+            if (tesTask.Inputs is null)
+            {
+                return inputs;
+            }
+
+            foreach (var input in tesTask.Inputs)
+            {
+                var preparedInput = await PrepareContentInputAsync(tesTask, input, storageAccessProvider, cancellationToken);
+
+                if (preparedInput != null)
+                {
+                    inputs.Add(preparedInput);
+                    continue;
+                }
+
+                preparedInput = await PrepareLocalFileInputAsync(tesTask, input, storageAccessProvider, cancellationToken);
+
+                if (preparedInput != null)
+                {
+                    inputs.Add(preparedInput);
+                    continue;
+                }
+
+                inputs.Add(input);
+            }
+            return inputs;
+        }
+
+        private async Task<TesInput?> PrepareLocalFileInputAsync(TesTask tesTask, TesInput input,
+            IStorageAccessProvider storageAccessProvider, CancellationToken cancellationToken)
+        {
+            if (TryGetCromwellTmpFilePath(input.Url, out var localPath))
+            {
+                logger.LogInformation($"The input is a local file. Uploading its content to the internal storage location. Input URI: {input?.Url}. Local path: {localPath} ");
+
+                var content = await File.ReadAllTextAsync(localPath, cancellationToken);
+
+                return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, content, storageAccessProvider, cancellationToken);
+            }
+
+            return default;
+        }
+
+        private async Task<TesInput> UploadContentAndCreateTesInputAsync(TesTask tesTask, string inputPath,
+            string content,
+            IStorageAccessProvider storageAccessProvider, CancellationToken cancellationToken)
+        {
+            var inputFileUrl =
+                await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, Guid.NewGuid().ToString(),
+                    cancellationToken);
+
+            //return the URL without the SAS token, the runner will add it using the transformation strategy
+            await storageAccessProvider.UploadBlobAsync(new Uri(inputFileUrl), content, cancellationToken);
+
+            var inputUrl = RemoveQueryStringFromUrl(inputFileUrl);
+
+            logger.LogInformation($"Successfully content as a new blob at: {inputUrl}");
+
+            return new TesInput
+            {
+                Path = inputPath,
+                Url = inputUrl,
+                Type = TesFileType.FILEEnum,
+            };
+        }
+
+        /// <summary>
+        /// Verifies existence and translates local file URLs to absolute paths (e.g. file:///tmp/cwl_temp_dir_8026387118450035757/args.py becomes /tmp/cwl_temp_dir_8026387118450035757/args.py)
+        /// Only considering files in /cromwell-tmp because that is the only local directory mapped from Cromwell container
+        /// </summary>
+        /// <param name="fileUri">File URI</param>
+        /// <param name="localPath">Local path</param>
+        /// <returns></returns>
+        private bool TryGetCromwellTmpFilePath(string fileUri, out string localPath)
+        {
+            localPath = Uri.TryCreate(fileUri, UriKind.Absolute, out var uri)
+                        && uri.IsFile
+                        && uri.AbsolutePath.StartsWith("/cromwell-tmp/") ? uri.AbsolutePath : null;
+
+            return localPath is not null;
+        }
+
+        private async Task<TesInput?> PrepareContentInputAsync(TesTask tesTask, TesInput input, IStorageAccessProvider storageAccessProvider, CancellationToken cancellationToken)
+        {
+
+            if (String.IsNullOrWhiteSpace(input?.Content))
+            {
+                return default;
+            }
+
+            logger.LogInformation($"The input is content. Uploading its content to the internal storage location. Input path:{input?.Path}");
+
+            return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, input.Content, storageAccessProvider, cancellationToken);
+        }
+
+        private static string RemoveQueryStringFromUrl(string url)
+        {
+            var uri = new Uri(url);
+            return uri.GetLeftPart(UriPartial.Path);
         }
 
         /// <summary>
