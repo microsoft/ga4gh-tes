@@ -17,7 +17,7 @@ namespace Tes.Repository
 {
     public abstract class PostgreSqlCachingRepository<T> : IDisposable where T : class
     {
-        private readonly TimeSpan _writerWaitTime = TimeSpan.FromSeconds(1);
+        private readonly TimeSpan _writerWaitTime = TimeSpan.FromMilliseconds(50);
         private readonly int _batchSize = 1000;
         private static readonly TimeSpan defaultCompletedTaskCacheExpiration = TimeSpan.FromDays(1);
 
@@ -44,7 +44,7 @@ namespace Tes.Repository
 
             _writerWorker.WorkerSupportsCancellation = true;
             _writerWorker.RunWorkerCompleted += WriterWorkerCompleted;
-            _writerWorker.DoWork += WriterWorkerProc;
+            _writerWorker.DoWork += WriterWorkerProcAsync;
             _writerWorker.RunWorkerAsync();
         }
 
@@ -144,43 +144,48 @@ namespace Tes.Repository
             }
         }
 
-
-        private void WriterWorkerProc(object _1, DoWorkEventArgs _2)
+        private async void WriterWorkerProcAsync(object _1, DoWorkEventArgs _2)
         {
             while (!_writerWorker.CancellationPending)
             {
-                var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
+                List<(T, WriteAction, TaskCompletionSource<T>)> list = null;
 
-                while (_itemsToWrite.TryDequeue(out var itemToWrite))
+                while (!_writerWorker.CancellationPending)
                 {
-                    list.Add(itemToWrite);
-                }
+                    if (_itemsToWrite.TryDequeue(out var itemToWrite))
+                    {
+                        if (list == null)
+                        {
+                            list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
+                        }
 
-                while (list.Count > 0)
-                {
+                        list.Add(itemToWrite);
+                        continue;
+                    }
+
+                    while (list?.Count > 0)
+                    {
+                        try
+                        {
+                            var work = list.Take(_batchSize).ToList();
+                            list = list.Except(work).ToList();
+                            await WriteItemsAsync(work);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogError(ex, "Repository writer worker: WriteItemsAsync failed: {Message}.", ex.Message);
+                        }
+
+                        list = null;
+                    }
+
                     if (_writerWorker.CancellationPending)
                     {
-                        break;
+                        return;
                     }
 
-                    try
-                    {
-                        var work = list.Take(_batchSize).ToList();
-                        list = list.Except(work).ToList();
-                        WriteItemsAsync(work).Wait();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogError(ex, "Repository writer worker: WriteItemsAsync failed: {Message}.", ex.Message);
-                    }
+                    await Task.Delay(_writerWaitTime);
                 }
-
-                if (_writerWorker.CancellationPending)
-                {
-                    continue;
-                }
-
-                Thread.Sleep(_writerWaitTime);
             }
         }
 
