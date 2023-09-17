@@ -146,11 +146,11 @@ namespace Tes.Repository
 
         private async void WriterWorkerProcAsync(object _1, DoWorkEventArgs _2)
         {
+            var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
+
             while (!_writerWorker.CancellationPending)
             {
-                var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
-
-                while (!_writerWorker.CancellationPending)
+                while (true)
                 {
                     if (_itemsToWrite.TryDequeue(out var itemToWrite))
                     {
@@ -172,12 +172,15 @@ namespace Tes.Repository
                         }            
                     }
 
-                    if (_writerWorker.CancellationPending)
+                    if (_writerWorker.CancellationPending && _itemsToWrite.Count == 0)
                     {
                         return;
                     }
 
-                    await Task.Delay(_writerWaitTime);
+                    if (_itemsToWrite.Count == 0)
+                    {
+                        await Task.Delay(_writerWaitTime);
+                    }
                 }
             }
         }
