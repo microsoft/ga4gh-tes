@@ -148,39 +148,38 @@ namespace Tes.Repository
         {
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
-            while (!_writerWorker.CancellationPending)
+            while (true)
             {
-                while (true)
+                if (_itemsToWrite.TryDequeue(out var itemToWrite))
                 {
-                    if (_itemsToWrite.TryDequeue(out var itemToWrite))
-                    {
-                        list.Add(itemToWrite);
-                        continue;
-                    }
+                    list.Add(itemToWrite);
+                    continue;
+                }
 
-                    while (list.Count > 0)
+                while (list.Count > 0)
+                {
+                    try
                     {
-                        try
-                        {
-                            var work = list.Take(_batchSize).ToList();
-                            list = list.Except(work).ToList();
-                            await WriteItemsAsync(work);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger?.LogError(ex, "Repository writer worker: WriteItemsAsync failed: {Message}.", ex.Message);
-                        }            
+                        var work = list.Take(_batchSize).ToList();
+                        list = list.Except(work).ToList();
+                        await WriteItemsAsync(work);
                     }
-
-                    if (_writerWorker.CancellationPending && _itemsToWrite.Count == 0)
+                    catch (Exception ex)
                     {
+                        _logger?.LogError(ex, "Repository writer worker: WriteItemsAsync failed: {Message}.", ex.Message);
+                    }
+                }
+
+                if (_itemsToWrite.Count == 0)
+                {
+                    if (_writerWorker.CancellationPending)
+                    {
+                        // Cancellation is pending and all items have been written
                         return;
                     }
 
-                    if (_itemsToWrite.Count == 0)
-                    {
-                        await Task.Delay(_writerWaitTime);
-                    }
+                    // Only wait if the queue is empty
+                    await Task.Delay(_writerWaitTime);
                 }
             }
         }
