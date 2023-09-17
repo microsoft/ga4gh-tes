@@ -178,7 +178,7 @@ namespace Tes.Repository
                         return;
                     }
 
-                    // Only wait if the queue is empty
+                    // Only delay if the queue is empty
                     await Task.Delay(_writerWaitTime);
                 }
             }
