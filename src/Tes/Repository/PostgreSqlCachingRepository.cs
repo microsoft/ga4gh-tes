@@ -148,22 +148,17 @@ namespace Tes.Repository
         {
             while (!_writerWorker.CancellationPending)
             {
-                List<(T, WriteAction, TaskCompletionSource<T>)> list = null;
+                var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
                 while (!_writerWorker.CancellationPending)
                 {
                     if (_itemsToWrite.TryDequeue(out var itemToWrite))
                     {
-                        if (list == null)
-                        {
-                            list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
-                        }
-
                         list.Add(itemToWrite);
                         continue;
                     }
 
-                    while (list?.Count > 0)
+                    while (list.Count > 0)
                     {
                         try
                         {
@@ -174,9 +169,7 @@ namespace Tes.Repository
                         catch (Exception ex)
                         {
                             _logger?.LogError(ex, "Repository writer worker: WriteItemsAsync failed: {Message}.", ex.Message);
-                        }
-
-                        list = null;
+                        }            
                     }
 
                     if (_writerWorker.CancellationPending)
