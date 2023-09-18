@@ -42,7 +42,7 @@ namespace Tes.Repository
             _logger = logger;
             _cache = cache;
 
-            // The only "normal" exit for _writerWorkerTask is "cancelled". Anything else should bring down the house because it means that this repository will no longer write to the database!
+            // The only "normal" exit for _writerWorkerTask is "cancelled". Anything else should force the process to exit because it means that this repository will no longer write to the database!
             _writerWorkerTask = Task.Run(() => WriterWorkerAsync(_writerWorkerCancellationTokenSource.Token))
                 .ContinueWith(async task =>
                 {
@@ -57,7 +57,7 @@ namespace Tes.Repository
                     }
 
                     await Task.Delay(50); // Give the logger time to flush.
-                    throw new System.Diagnostics.UnreachableException("Repository WriterWorkerAsync unexpectedly ended."); // Bring the house down, as this will become an unhandled exception.
+                    throw new System.Diagnostics.UnreachableException("Repository WriterWorkerAsync unexpectedly ended."); // Force the process to exit via this being an unhandled exception.
                 },
                 TaskContinuationOptions.NotOnCanceled);
         }
@@ -156,8 +156,10 @@ namespace Tes.Repository
         {
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
-            while (!cancellationToken.IsCancellationRequested)
+            while (true)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (_itemsToWrite.TryDequeue(out var itemToWrite))
                 {
                     list.Add(itemToWrite);
@@ -184,6 +186,7 @@ namespace Tes.Repository
         {
             if (dbItems.Count == 0) { return; }
 
+            cancellationToken.ThrowIfCancellationRequested();
             using var dbContext = CreateDbContext();
 
             // Manually set entity state to avoid potential NPG PostgreSql bug
