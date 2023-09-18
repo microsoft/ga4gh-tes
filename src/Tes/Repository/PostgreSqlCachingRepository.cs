@@ -150,20 +150,18 @@ namespace Tes.Repository
                         continue;
                     }
                 }
-                else
+
+                if (list.Count == 0)
                 {
-                    if (list.Count == 0)
+                    if (_writerWorkerCancellationTokenSource.IsCancellationRequested)
                     {
-                        if (_writerWorkerCancellationTokenSource.IsCancellationRequested)
-                        {
-                            // This class is being disposed and all items have been written
-                            return;
-                        }
-
-
-                        // Only delay if the queue is empty
-                        await Task.Delay(_writerWaitTime);
+                        // This class is being disposed and all items have been written
+                        return;
                     }
+
+                    // Only delay if the queue is empty
+                    await Task.Delay(_writerWaitTime);
+                    continue;
                 }
 
                 try
