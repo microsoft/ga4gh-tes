@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
@@ -25,10 +24,10 @@ namespace Tes.Repository
             .Handle<Npgsql.NpgsqlException>(e => e.IsTransient)
             .WaitAndRetryAsync(10, i => TimeSpan.FromSeconds(Math.Pow(2, i)));
 
-        private readonly ConcurrentQueue<(T, WriteAction, TaskCompletionSource<T>)> _itemsToWrite = new();
-        private readonly ConcurrentDictionary<T, object> _updatingItems = new();
-        private readonly CancellationTokenSource _writerWorkerCancellationTokenSource = new CancellationTokenSource();
-        private readonly Task _writerWorkerTask = null;
+        private readonly ConcurrentQueue<(T, WriteAction, TaskCompletionSource<T>)> _itemsToWrite = new(); // Current _writerWorkerTask work queue
+        private readonly ConcurrentDictionary<T, object> _updatingItems = new(); // Collection of all pending items to be written.
+        private readonly CancellationTokenSource _writerWorkerCancellationTokenSource = new();
+        private readonly Task _writerWorkerTask;
 
         protected enum WriteAction { Add, Update, Delete }
 
@@ -42,7 +41,25 @@ namespace Tes.Repository
         {
             _logger = logger;
             _cache = cache;
-            _writerWorkerTask = Task.Run(() => WriterWorkerAsync(_writerWorkerCancellationTokenSource.Token));
+
+            // The only "normal" exit for _writerWorkerTask is "cancelled". Anything else should bring down the house because it means that this repository will no longer write to the database!
+            _writerWorkerTask = Task.Run(() => WriterWorkerAsync(_writerWorkerCancellationTokenSource.Token))
+                .ContinueWith(async task =>
+                {
+                    switch (task.Status)
+                    {
+                        case TaskStatus.Faulted:
+                            _logger.LogCritical("Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
+                            break;
+                        case TaskStatus.RanToCompletion:
+                            _logger.LogCritical("Repository WriterWorkerAsync unexpectedly completed.");
+                            break;
+                    }
+
+                    await Task.Delay(50); // Give the logger time to flush.
+                    throw new System.Diagnostics.UnreachableException("Repository WriterWorkerAsync unexpectedly ended."); // Bring the house down, as this will become an unhandled exception.
+                },
+                TaskContinuationOptions.NotOnCanceled);
         }
 
         /// <summary>
@@ -91,7 +108,7 @@ namespace Tes.Repository
             //var sqlQuery = query.ToQueryString();
             //System.Diagnostics.Debugger.Break();
 
-            return await _asyncPolicy.ExecuteAsync(ct => query.ToListAsync(ct), cancellationToken);
+            return await _asyncPolicy.ExecuteAsync(query.ToListAsync, cancellationToken);
         }
 
         /// <summary>
@@ -135,7 +152,7 @@ namespace Tes.Repository
         /// <summary>
         /// Continuously writes items to the database
         /// </summary>
-        private async Task WriterWorkerAsync(CancellationToken cancellationToken)
+        private async ValueTask WriterWorkerAsync(CancellationToken cancellationToken)
         {
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
@@ -153,32 +170,17 @@ namespace Tes.Repository
 
                 if (list.Count == 0)
                 {
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        // This class is being disposed and all items have been written
-                        return;
-                    }
-
                     // Wait, because the queue is empty
                     await Task.Delay(_writerWaitTime, cancellationToken);
                     continue;
                 }
 
-                try
-                {
-                    await WriteItemsAsync(list);
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogError(ex, "Repository WriterWorkerAsync: WriteItemsAsync failed: {Message}.", ex.Message);
-                }
-
+                await WriteItemsAsync(list, cancellationToken);
                 list.Clear();
             }
         }
 
-        // TODO: Consider wiring in cancellation
-        private async Task WriteItemsAsync(IList<(T DbItem, WriteAction Action, TaskCompletionSource<T> TaskSource)> dbItems)
+        private async ValueTask WriteItemsAsync(IList<(T DbItem, WriteAction Action, TaskCompletionSource<T> TaskSource)> dbItems, CancellationToken cancellationToken)
         {
             if (dbItems.Count == 0) { return; }
 
@@ -189,13 +191,15 @@ namespace Tes.Repository
 
             try
             {
-                dbContext.AddRange(dbItems.Where(e => WriteAction.Add.Equals(e.Action)).Select(e => e.DbItem));
                 dbContext.RemoveRange(dbItems.Where(e => WriteAction.Delete.Equals(e.Action)).Select(e => e.DbItem));
                 dbContext.UpdateRange(dbItems.Where(e => WriteAction.Update.Equals(e.Action)).Select(e => e.DbItem));
-                await _asyncPolicy.ExecuteAsync(() => dbContext.SaveChangesAsync());
+                dbContext.AddRange(dbItems.Where(e => WriteAction.Add.Equals(e.Action)).Select(e => e.DbItem));
+                await _asyncPolicy.ExecuteAsync(dbContext.SaveChangesAsync, cancellationToken);
             }
             catch (Exception ex)
             {
+                // It doesn't matter which item the failure was for, we will fail all items in this round.
+                // TODO: are there exceptions Postgre will send us that will tell us which item(s) failed?
                 FailAll(dbItems.Select(e => e.TaskSource), ex);
                 return;
             }
