@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
@@ -143,22 +144,23 @@ namespace Tes.Repository
                 if (_itemsToWrite.TryDequeue(out var itemToWrite))
                 {
                     list.Add(itemToWrite);
-                    continue;
+                    
+                    if (list.Count < _batchSize)
+                    {
+                        continue;
+                    }
                 }
 
-                while (list.Count > 0)
+                try
                 {
-                    try
-                    {
-                        var work = list.Take(_batchSize).ToList();
-                        list.RemoveAll(work.Contains);
-                        await WriteItemsAsync(work);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogError(ex, "Repository writer worker: WriteItemsAsync failed: {Message}.", ex.Message);
-                    }
+                    await WriteItemsAsync(list);
                 }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Repository writer worker: WriteItemsAsync failed: {Message}.", ex.Message);
+                }
+
+                list.Clear();
 
                 if (_itemsToWrite.Count == 0)
                 {
