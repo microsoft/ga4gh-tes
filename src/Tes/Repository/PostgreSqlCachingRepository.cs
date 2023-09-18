@@ -26,8 +26,8 @@ namespace Tes.Repository
 
         private readonly ConcurrentQueue<(T, WriteAction, TaskCompletionSource<T>)> _itemsToWrite = new();
         private readonly ConcurrentDictionary<T, object> _updatingItems = new();
-        private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
-        private readonly Task _writerWorkerProcAsyncTask = null;
+        private readonly CancellationTokenSource _writerWorkerCancellationTokenSource = new CancellationTokenSource();
+        private readonly Task _writerWorkerTask = null;
 
         protected enum WriteAction { Add, Update, Delete }
 
@@ -41,7 +41,7 @@ namespace Tes.Repository
         {
             _logger = logger;
             _cache = cache;
-            _writerWorkerProcAsyncTask = Task.Run(WriterWorkerProcessAsync);
+            _writerWorkerTask = Task.Run(WriterWorkerAsync);
         }
 
         /// <summary>
@@ -134,7 +134,7 @@ namespace Tes.Repository
         /// <summary>
         /// Continuously writes items to the database
         /// </summary>
-        private async Task WriterWorkerProcessAsync()
+        private async Task WriterWorkerAsync()
         {
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
@@ -162,7 +162,7 @@ namespace Tes.Repository
 
                 if (_itemsToWrite.Count == 0)
                 {
-                    if (_cancellationTokenSource.IsCancellationRequested)
+                    if (_writerWorkerCancellationTokenSource.IsCancellationRequested)
                     {
                         // Cancellation has been requested pending and all items have been written
                         return;
@@ -209,8 +209,8 @@ namespace Tes.Repository
             {
                 if (disposing)
                 {
-                    _cancellationTokenSource.Cancel();
-                    _writerWorkerProcAsyncTask.Wait();
+                    _writerWorkerCancellationTokenSource.Cancel();
+                    _writerWorkerTask.Wait();
                 }
 
                 // TODO: free unmanaged resources (unmanaged objects) and override finalizer
