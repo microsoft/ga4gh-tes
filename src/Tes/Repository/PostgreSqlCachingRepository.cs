@@ -144,10 +144,25 @@ namespace Tes.Repository
                 if (_itemsToWrite.TryDequeue(out var itemToWrite))
                 {
                     list.Add(itemToWrite);
-                    
+
                     if (list.Count < _batchSize)
                     {
                         continue;
+                    }
+                }
+                else
+                {
+                    if (list.Count == 0)
+                    {
+                        if (_writerWorkerCancellationTokenSource.IsCancellationRequested)
+                        {
+                            // This class is being disposed and all items have been written
+                            return;
+                        }
+
+
+                        // Only delay if the queue is empty
+                        await Task.Delay(_writerWaitTime);
                     }
                 }
 
@@ -157,22 +172,10 @@ namespace Tes.Repository
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogError(ex, "Repository writer worker: WriteItemsAsync failed: {Message}.", ex.Message);
+                    _logger?.LogError(ex, "Repository WriterWorkerAsync: WriteItemsAsync failed: {Message}.", ex.Message);
                 }
 
                 list.Clear();
-
-                if (_itemsToWrite.Count == 0)
-                {
-                    if (_writerWorkerCancellationTokenSource.IsCancellationRequested)
-                    {
-                        // This class is being disposed and all items have been written
-                        return;
-                    }
-
-                    // Only delay if the queue is empty
-                    await Task.Delay(_writerWaitTime);
-                }
             }
         }
 
