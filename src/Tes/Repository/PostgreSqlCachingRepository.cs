@@ -164,7 +164,7 @@ namespace Tes.Repository
                 {
                     if (_writerWorkerCancellationTokenSource.IsCancellationRequested)
                     {
-                        // Cancellation has been requested pending and all items have been written
+                        // This class is being disposed and all items have been written
                         return;
                     }
 
