@@ -161,7 +161,7 @@ namespace Tes.Repository
                     try
                     {
                         var work = list.Take(_batchSize).ToList();
-                        list = list.Except(work).ToList();
+                        list.RemoveAll(work.Contains);
                         await WriteItemsAsync(work);
                     }
                     catch (Exception ex)
