@@ -139,7 +139,7 @@ namespace Tes.Repository
         {
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
-            while (true)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 if (_itemsToWrite.TryDequeue(out var itemToWrite))
                 {
