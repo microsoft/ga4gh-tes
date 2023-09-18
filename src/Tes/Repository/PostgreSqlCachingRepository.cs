@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
@@ -27,7 +26,8 @@ namespace Tes.Repository
 
         private readonly ConcurrentQueue<(T, WriteAction, TaskCompletionSource<T>)> _itemsToWrite = new();
         private readonly ConcurrentDictionary<T, object> _updatingItems = new();
-        private readonly BackgroundWorker _writerWorker = new();
+        private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+        private readonly Task _writerWorkerProcAsyncTask = null;
 
         protected enum WriteAction { Add, Update, Delete }
 
@@ -41,11 +41,7 @@ namespace Tes.Repository
         {
             _logger = logger;
             _cache = cache;
-
-            _writerWorker.WorkerSupportsCancellation = true;
-            _writerWorker.RunWorkerCompleted += WriterWorkerCompleted;
-            _writerWorker.DoWork += WriterWorkerProcAsync;
-            _writerWorker.RunWorkerAsync();
+            _writerWorkerProcAsyncTask = Task.Run(WriterWorkerProcessAsync);
         }
 
         /// <summary>
@@ -135,16 +131,10 @@ namespace Tes.Repository
             }
         }
 
-        private void WriterWorkerCompleted(object _1, RunWorkerCompletedEventArgs e)
-        {
-            if (e.Error is not null)
-            {
-                _logger?.LogCritical(e.Error, "Repository writer worker failed. Restarting worker.");
-                _writerWorker.RunWorkerAsync();
-            }
-        }
-
-        private async void WriterWorkerProcAsync(object _1, DoWorkEventArgs _2)
+        /// <summary>
+        /// Continuously writes items to the database
+        /// </summary>
+        private async Task WriterWorkerProcessAsync()
         {
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
@@ -172,9 +162,9 @@ namespace Tes.Repository
 
                 if (_itemsToWrite.Count == 0)
                 {
-                    if (_writerWorker.CancellationPending)
+                    if (_cancellationTokenSource.IsCancellationRequested)
                     {
-                        // Cancellation is pending and all items have been written
+                        // Cancellation has been requested pending and all items have been written
                         return;
                     }
 
@@ -219,9 +209,8 @@ namespace Tes.Repository
             {
                 if (disposing)
                 {
-                    _writerWorker.CancelAsync();
-                    while (_writerWorker.IsBusy) { Thread.Sleep(10); } // Wait for background thread to exit
-                    _writerWorker.Dispose();
+                    _cancellationTokenSource.Cancel();
+                    _writerWorkerProcAsyncTask.Wait();
                 }
 
                 // TODO: free unmanaged resources (unmanaged objects) and override finalizer
