@@ -42,7 +42,7 @@ namespace Tes.Repository
         {
             _logger = logger;
             _cache = cache;
-            _writerWorkerTask = Task.Run(WriterWorkerAsync);
+            _writerWorkerTask = Task.Run(() => WriterWorkerAsync(_writerWorkerCancellationTokenSource.Token));
         }
 
         /// <summary>
@@ -135,7 +135,7 @@ namespace Tes.Repository
         /// <summary>
         /// Continuously writes items to the database
         /// </summary>
-        private async Task WriterWorkerAsync()
+        private async Task WriterWorkerAsync(CancellationToken cancellationToken)
         {
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
@@ -153,14 +153,14 @@ namespace Tes.Repository
 
                 if (list.Count == 0)
                 {
-                    if (_writerWorkerCancellationTokenSource.IsCancellationRequested)
+                    if (cancellationToken.IsCancellationRequested)
                     {
                         // This class is being disposed and all items have been written
                         return;
                     }
 
                     // Wait, because the queue is empty
-                    await Task.Delay(_writerWaitTime);
+                    await Task.Delay(_writerWaitTime, cancellationToken);
                     continue;
                 }
 
