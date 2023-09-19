@@ -997,7 +997,6 @@ namespace TesApi.Web
             var nodeStartUpParentDirectory = "%AZ_BATCH_NODE_STARTUP_DIR%";
             var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
             var isCromwell = cromwellExecutionDirectoryUrl is not null;
-            var executor = task.Executors.First();
 
             var nodeTesTask = await tesTaskToNodeTaskConverter.ToNodeTaskAsync(task, taskParentDirectory, mountParentDirectory, metricsName, storageAccessProvider, cancellationToken);
 
@@ -1017,7 +1016,6 @@ namespace TesApi.Web
 
             nodeTesTask = tesTaskToNodeTaskConverter.AddOutput(nodeTesTask, "std*.txt", internalTesTaskUrl, nodeStartUpParentDirectory);
 
-
             var sb = new StringBuilder();
 
             if (isPublic.DockerInDockerImage)
@@ -1036,7 +1034,7 @@ namespace TesApi.Web
             sb.AppendLinuxLine(CreateWgetDownloadCommand(nodeTaskRunnerUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename}", setExecutable: true) + " && \\");
             sb.AppendLinuxLine($"write_ts DownloadRunnerScriptsEnd && \\");
 
-            sb.AppendLinuxLine($"($AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename} --file $AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName} || :) && \\"); // Upload the start-task console spews
+            sb.AppendLinuxLine($"($AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename} || :) && \\");
 
             var vmSize = task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
 
@@ -1070,16 +1068,16 @@ namespace TesApi.Web
                 }
             };
 
-            if (poolHasContainerConfig)
-            {
-                // If the executor image is private, and in order to run multiple containers in the main task, the image has to be downloaded via pool ContainerConfiguration.
-                // This also requires that the main task runs inside a container. So we run the "docker" container that in turn runs other containers.
-                // If the executor image is public, there is no need for pool ContainerConfiguration and task can run normally, without being wrapped in a docker container.
-                // Volume mapping for docker.sock below allows the docker client in the container to access host's docker daemon.
-                // Remark: Batch provides "-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR" for us.
-                var containerRunOptions = $"--rm -v /var/run/docker.sock:/var/run/docker.sock ";
-                cloudTask.ContainerSettings = new TaskContainerSettings(dockerInDockerImageName, containerRunOptions);
-            }
+            // if (poolHasContainerConfig)
+            // {
+            //     // If the executor image is private, and in order to run multiple containers in the main task, the image has to be downloaded via pool ContainerConfiguration.
+            //     // This also requires that the main task runs inside a container. So we run the "docker" container that in turn runs other containers.
+            //     // If the executor image is public, there is no need for pool ContainerConfiguration and task can run normally, without being wrapped in a docker container.
+            //     // Volume mapping for docker.sock below allows the docker client in the container to access host's docker daemon.
+            //     // Remark: Batch provides "-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR" for us.
+            //     var containerRunOptions = $"--rm -v /var/run/docker.sock:/var/run/docker.sock ";
+            //     cloudTask.ContainerSettings = new TaskContainerSettings(dockerInDockerImageName, containerRunOptions);
+            // }
 
             return cloudTask;
 
@@ -1098,7 +1096,7 @@ namespace TesApi.Web
                     .Replace(@"{CleanupScriptLines}", string.Join("\n", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
                     .Replace(@"{GetBatchScriptFile}", $"{CreateWgetDownloadCommand(nodeBatchScriptSasUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)}")
                     .Replace(@"{BatchScriptPath}", $"$AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}")
-                    .Replace(@"{TaskExecutor}", executor.Image)
+                    //.Replace(@"{TaskExecutor}", executor.Image)
                     .Replace(@"{ExecutionPathPrefix}", "wd")
                     .Replace("\"", "\\\"");
 
