@@ -229,25 +229,25 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
-        /// Adds additional outputs a NodeTask if they are not already included in the node task. Outputs are compared using the path property. 
+        /// Adds an output to a NodeTask. 
         /// </summary>
-        /// <param name="outputs">Additional outputs to add to the node task</param>
         /// <param name="nodeTask">Node task</param>
+        /// <param name="targetUrl"></param>
         /// <param name="pathParentDirectory">Parent directory in the execution compute node. This value will be appended to the path in all outputs</param>
         /// <param name="mountParentDirectory">Parent directory from which a mount in the container is created. If not set, the path won't be mounted in container</param>
-        public NodeTask AddAdditionalOutputsIfNotSet(List<TesOutput> outputs, NodeTask nodeTask,
+        /// <param name="path"></param>
+        public NodeTask AddOutput(NodeTask nodeTask,
+            string path, string targetUrl,
             string pathParentDirectory, string mountParentDirectory = default)
         {
-            ArgumentNullException.ThrowIfNull(outputs);
             ArgumentNullException.ThrowIfNull(nodeTask);
-            ArgumentException.ThrowIfNullOrEmpty(pathParentDirectory);
-
-            var tesOutputs = outputs.Where(tesOutput => nodeTask.Outputs != null && !nodeTask.Outputs.Any(nodeOutput => nodeOutput.Path != null && nodeOutput.Path.Equals(tesOutput.Path, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
+            ArgumentException.ThrowIfNullOrEmpty(pathParentDirectory, nameof(pathParentDirectory));
+            ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
+            ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
 
             var builder = new NodeTaskBuilder(nodeTask);
 
-            MapOutputs(tesOutputs, pathParentDirectory, mountParentDirectory, builder);
+            builder.WithOutputUsingCombinedTransformationStrategy(path, targetUrl, FileType.File, mountParentDirectory);
 
             return builder.Build();
         }

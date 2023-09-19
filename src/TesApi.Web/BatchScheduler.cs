@@ -10,7 +10,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
@@ -112,7 +111,6 @@ namespace TesApi.Web
         /// <param name="containerRegistryProvider">Container registry information <see cref="ContainerRegistryProvider"/></param>
         /// <param name="poolFactory">Batch pool factory <see cref="IBatchPoolFactory"/></param>
         /// <param name="allowedVmSizesService">Service to get allowed vm sizes.</param>
-        /// <param name="tesTaskToNodeTaskConverter"><see cref="TesTaskToNodeTaskConverter"/></param>
         public BatchScheduler(
             ILogger<BatchScheduler> logger,
             IOptions<Options.BatchImageGeneration1Options> batchGen1Options,
@@ -128,7 +126,8 @@ namespace TesApi.Web
             IBatchSkuInformationProvider skuInformationProvider,
             ContainerRegistryProvider containerRegistryProvider,
             IBatchPoolFactory poolFactory,
-            IAllowedVmSizesService allowedVmSizesService, TesTaskToNodeTaskConverter tesTaskToNodeTaskConverter)
+            IAllowedVmSizesService allowedVmSizesService,
+            TesTaskToNodeTaskConverter tesTaskToNodeTaskConverter)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(azureProxy);
@@ -137,6 +136,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(skuInformationProvider);
             ArgumentNullException.ThrowIfNull(containerRegistryProvider);
             ArgumentNullException.ThrowIfNull(poolFactory);
+            ArgumentNullException.ThrowIfNull(tesTaskToNodeTaskConverter);
 
             this.logger = logger;
             this.azureProxy = azureProxy;
@@ -983,27 +983,138 @@ namespace TesApi.Web
                 .FirstOrDefault(m => (m.Condition is null || m.Condition(tesTask)) && (m.CurrentBatchTaskState is null || m.CurrentBatchTaskState == combinedBatchTaskInfo.BatchTaskState))
                 ?.ActionAsync(tesTask, combinedBatchTaskInfo, cancellationToken) ?? ValueTask.FromResult(false));
 
-        // private async Task<List<TesInput>> RemoveDuplicatesAndAddAdditionalInputsAsync(TesTask task, bool isCromwell, string cromwellExecutionDirectoryUrl, CancellationToken cancellationToken)
-        // {
-        //
-        //     //Remove duplicate inputs.
-        //     //TODO: This is carried over from the previous implementation. We should review if this is indeed needed. A duplicate input is not allowed in TES, so an exception may be more appropriate.
-        //     var inputFiles = task.Inputs?.Distinct().ToList() ?? new List<TesInput>();
-        //
-        //     //drs inputs won't be supported initially when execution is handled via the runner.
-        //     var hasDrsInputs = inputFiles.Any(f => f?.Url?.StartsWith("drs://", StringComparison.OrdinalIgnoreCase) == true);
-        //     if (hasDrsInputs)
-        //     {
-        //         throw new InvalidOperationException("DRS inputs are not supported.");
-        //     }
-        //
-        //     var additionalInputFiles = await AddExistingBlobsInCromwellStorageLocationsAsInputFiles(task, cromwellExecutionDirectoryUrl, cancellationToken);
-        //
-        //     return inputFiles.Concat(additionalInputFiles).ToList();
-        // }
+        private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task,
+            (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) isPublic,
+            CancellationToken cancellationToken)
+        {
+            ValidateTesTask(task);
+
+            var metricsName = "metrics.txt";
+            var poolHasContainerConfig = !(isPublic.ExecutorImage && isPublic.DockerInDockerImage && isPublic.CromwellDrsImage);
+            var taskParentDirectory = "%AZ_BATCH_TASK_WORKING_DIR%";
+            var mountParentDirectory = "%AZ_BATCH_TASK_WORKING_DIR%";
+            var nodeStartUpParentDirectory = "%AZ_BATCH_NODE_STARTUP_DIR%";
+            var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
+            var isCromwell = cromwellExecutionDirectoryUrl is not null;
+            var executor = task.Executors.First();
+
+            var nodeTesTask = await tesTaskToNodeTaskConverter.ToNodeTaskAsync(task, taskParentDirectory, mountParentDirectory, metricsName, storageAccessProvider, cancellationToken);
+
+            // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
+            // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
+            // TODO: Verify whether this workaround is still needed.
+            if (isCromwell)
+            {
+                var additionalInputs = await AddExistingBlobsInCromwellStorageLocationsAsInputFiles(task, cromwellExecutionDirectoryUrl, taskParentDirectory, cancellationToken);
+
+                nodeTesTask = tesTaskToNodeTaskConverter.AddAdditionalInputsIfNotSet(additionalInputs, nodeTesTask, taskParentDirectory, mountParentDirectory);
+            }
+
+            var internalTesTaskUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, string.Empty, cancellationToken);
+
+            internalTesTaskUrl = new Uri(internalTesTaskUrl).GetLeftPart(UriPartial.Path);
+
+            nodeTesTask = tesTaskToNodeTaskConverter.AddOutput(nodeTesTask, "std*.txt", internalTesTaskUrl, nodeStartUpParentDirectory);
+
+
+            var sb = new StringBuilder();
+
+            if (isPublic.DockerInDockerImage)
+            {
+                sb.AppendLinuxLine($"(grep -q alpine /etc/os-release && apk add bash wget || :) && \\");  // Install bash if running on alpine (will be the case if running inside "docker" image)
+            }
+
+            sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_DIR/{metricsName}; }} && \\");  // Function that appends key=value pair to metrics.txt file
+            sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
+
+            var nodeTaskRunnerUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
+            var nodeTaskRunnerInfoUrl = await UploadBlobAsync(NodeRunnerTaskInfoFilename, SerializeNodeTask(nodeTesTask));
+            var nodeBatchScriptSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, BatchScriptFileName, cancellationToken);
+            sb.AppendLinuxLine($"write_ts DownloadRunnerScriptsStart && \\");
+            sb.AppendLinuxLine(CreateWgetDownloadCommand(nodeTaskRunnerInfoUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeRunnerTaskInfoFilename}") + " && \\");
+            sb.AppendLinuxLine(CreateWgetDownloadCommand(nodeTaskRunnerUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename}", setExecutable: true) + " && \\");
+            sb.AppendLinuxLine($"write_ts DownloadRunnerScriptsEnd && \\");
+
+            sb.AppendLinuxLine($"($AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename} --file $AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName} || :) && \\"); // Upload the start-task console spews
+
+            var vmSize = task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
+
+
+            sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
+            sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
+            sb.AppendLinuxLine($"echo Task complete.");
+
+            await storageAccessProvider.UploadBlobAsync(new Uri(nodeBatchScriptSasUrl), sb.ToString(), cancellationToken);
+
+            var batchRunCommand = enableBatchAutopool
+                ? $"/bin/bash -c {CreateWgetDownloadCommand(nodeBatchScriptSasUrl, $"AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)} && AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
+                : $"/bin/bash -c \"{MungeBatchTaskCommandLine()}\"";
+
+            // Replace any URL query strings with the word REMOVED
+            const string pattern = @"(https?:\/\/[^?\s]+)\?[^?\s]*";
+            const string replacement = "$1?REMOVED";
+            string sanitizedLogEntry = Regex.Replace(batchRunCommand, pattern, replacement);
+
+            logger.LogInformation("CloudTask.CommandLine (sanitized): " + sanitizedLogEntry);
+
+            var cloudTask = new CloudTask(taskId, batchRunCommand)
+            {
+                UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
+                OutputFiles = new List<OutputFile>
+                {
+                    new OutputFile(
+                        "../*.txt",
+                        await CreateOutputFileDestinationInTesInternalLocationAsync(task, cancellationToken),
+                        new OutputFileUploadOptions(OutputFileUploadCondition.TaskCompletion)),
+                }
+            };
+
+            if (poolHasContainerConfig)
+            {
+                // If the executor image is private, and in order to run multiple containers in the main task, the image has to be downloaded via pool ContainerConfiguration.
+                // This also requires that the main task runs inside a container. So we run the "docker" container that in turn runs other containers.
+                // If the executor image is public, there is no need for pool ContainerConfiguration and task can run normally, without being wrapped in a docker container.
+                // Volume mapping for docker.sock below allows the docker client in the container to access host's docker daemon.
+                // Remark: Batch provides "-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR" for us.
+                var containerRunOptions = $"--rm -v /var/run/docker.sock:/var/run/docker.sock ";
+                cloudTask.ContainerSettings = new TaskContainerSettings(dockerInDockerImageName, containerRunOptions);
+            }
+
+            return cloudTask;
+
+            static string SerializeNodeTask(NodeTask task)
+                => JsonConvert.SerializeObject(task, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore });
+
+            async ValueTask<string> UploadBlobAsync(string fileName, string content)
+            {
+                var sasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, fileName, cancellationToken);
+                await storageAccessProvider.UploadBlobAsync(new Uri(sasUrl), content, cancellationToken);
+                return sasUrl;
+            }
+
+            string MungeBatchTaskCommandLine()
+                => string.Join("\n", taskRunScriptContent)
+                    .Replace(@"{CleanupScriptLines}", string.Join("\n", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
+                    .Replace(@"{GetBatchScriptFile}", $"{CreateWgetDownloadCommand(nodeBatchScriptSasUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)}")
+                    .Replace(@"{BatchScriptPath}", $"$AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}")
+                    .Replace(@"{TaskExecutor}", executor.Image)
+                    .Replace(@"{ExecutionPathPrefix}", "wd")
+                    .Replace("\"", "\\\"");
+
+            static IEnumerable<string> MungeCleanupScript(IEnumerable<string> content)
+            {
+                return content.Select((line, index) => $"echo '{line}' {Redirect(index)} ../clean-executor.sh");
+
+                static string Redirect(int index)
+                    => index == 0 ? ">" : ">>";
+            }
+
+            static IEnumerable<string> MungeCleanupScriptForContainerConfig(IEnumerable<string> content)
+                => MungeCleanupScript(content.Where(line => !line.Contains(@"{TaskExecutor}")));
+        }
 
         private async Task<List<TesInput>> AddExistingBlobsInCromwellStorageLocationsAsInputFiles(TesTask task,
-            string cromwellExecutionDirectoryUrl, string taskParentDirectory, CancellationToken cancellationToken)
+        string cromwellExecutionDirectoryUrl, string taskParentDirectory, CancellationToken cancellationToken)
         {
             var additionalInputFiles = new List<TesInput>();
 
@@ -1055,6 +1166,36 @@ namespace TesApi.Web
             return additionalInputFiles;
         }
 
+        private void ValidateTesTask(TesTask task)
+        {
+            ArgumentNullException.ThrowIfNull(task);
+
+            task.Inputs?.ForEach(input => ValidateTesTaskInput(input, task));
+        }
+
+        private void ValidateTesTaskInput(TesInput inputFile, TesTask tesTask)
+        {
+            if (string.IsNullOrWhiteSpace(inputFile.Path) || !inputFile.Path.StartsWith("/"))
+            {
+                throw new TesException("InvalidInputFilePath", $"Unsupported input path '{inputFile.Path}' for task Id {tesTask.Id}. Must start with '/'.");
+            }
+
+            if (inputFile.Url is not null && inputFile.Content is not null)
+            {
+                throw new TesException("InvalidInputFilePath", "Input Url and Content cannot be both set");
+            }
+
+            if (inputFile.Url is null && inputFile.Content is null)
+            {
+                throw new TesException("InvalidInputFilePath", "One of Input Url or Content must be set");
+            }
+
+            if (inputFile.Type == TesFileType.DIRECTORYEnum)
+            {
+                throw new TesException("InvalidInputFilePath", "Directory input is not supported.");
+            }
+        }
+
         /// <summary>
         /// Returns job preparation and main Batch tasks that represents the given <see cref="TesTask"/>
         /// </summary>
@@ -1065,45 +1206,198 @@ namespace TesApi.Web
         /// <returns>Job preparation and main Batch tasks</returns>
         private async Task<CloudTask> ConvertTesTaskToBatchTaskAsync(string taskId, TesTask task, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) isPublic, CancellationToken cancellationToken)
         {
-            ValidateTesTask(task);
-
-            var metricsName = "metrics.txt";
             var poolHasContainerConfig = !(isPublic.ExecutorImage && isPublic.DockerInDockerImage && isPublic.CromwellDrsImage);
-            var taskParentDirectory = "%AZ_BATCH_TASK_WORKING_DIR%";
-            var mountParentDirectory = "%AZ_BATCH_TASK_WORKING_DIR%";
             var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
             var isCromwell = cromwellExecutionDirectoryUrl is not null;
 
-            var nodeTesTask = await tesTaskToNodeTaskConverter.ToNodeTaskAsync(task, taskParentDirectory, mountParentDirectory, metricsName, storageAccessProvider, cancellationToken);
+            var queryStringsToRemoveFromLocalFilePaths = task.Inputs?
+                .Select(i => i.Path)
+                .Concat(task.Outputs?.Select(o => o.Path) ?? new List<string>())
+                .Where(p => p is not null)
+                .Select(p => queryStringRegex.Match(p).Groups[1].Value)
+                .Where(qs => !string.IsNullOrEmpty(qs))
+                .ToList() ?? new List<string>();
 
+            var inputFiles = task.Inputs?.Distinct().ToList() ?? new List<TesInput>();
+
+            var drsInputFiles = inputFiles
+                .Where(f => f?.Url?.StartsWith("drs://", StringComparison.OrdinalIgnoreCase) == true)
+                .ToList();
+
+            var metricsName = "metrics.txt";
+
+            var additionalInputFiles = new List<TesInput>();
             // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
             // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
             // TODO: Verify whether this workaround is still needed.
             if (isCromwell)
             {
-                var additionalInputs = await AddExistingBlobsInCromwellStorageLocationsAsInputFiles(task, cromwellExecutionDirectoryUrl, taskParentDirectory, cancellationToken);
+                if (!Uri.TryCreate(cromwellExecutionDirectoryUrl, UriKind.Absolute, out _))
+                {
+                    cromwellExecutionDirectoryUrl = $"/{cromwellExecutionDirectoryUrl}";
+                }
 
-                nodeTesTask = tesTaskToNodeTaskConverter.AddAdditionalInputsIfNotSet(additionalInputs, nodeTesTask, taskParentDirectory, mountParentDirectory);
+                var executionDirectoryUri = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectoryUrl, cancellationToken, getContainerSas: true);
+                if (executionDirectoryUri is not null)
+                {
+                    var blobsInExecutionDirectory = (await azureProxy.ListBlobsAsync(new Uri(executionDirectoryUri), cancellationToken)).ToList();
+                    var scriptBlob = blobsInExecutionDirectory.FirstOrDefault(b => b.Name.EndsWith($"/{CromwellScriptFileName}"));
+                    var commandScript = task.Inputs?.FirstOrDefault(IsCromwellCommandScript); // this should never be null because it's used to set isCromwell
+
+                    if (scriptBlob is not null)
+                    {
+                        blobsInExecutionDirectory.Remove(scriptBlob);
+                    }
+
+                    if (commandScript is not null)
+                    {
+                        var commandScriptPathParts = commandScript.Path.Split('/').ToList();
+                        var cromwellExecutionDirectory = string.Join('/', commandScriptPathParts.Take(commandScriptPathParts.Count - 1));
+                        additionalInputFiles = await blobsInExecutionDirectory
+                            .Select(b => (Path: $"/{cromwellExecutionDirectory.TrimStart('/')}/{b.Name.Split('/').Last()}", b.Uri))
+                            .ToAsyncEnumerable()
+                            .SelectAwait(async b => new TesInput { Path = b.Path, Url = await storageAccessProvider.MapLocalPathToSasUrlAsync(b.Uri.AbsoluteUri, cancellationToken, getContainerSas: true), Name = Path.GetFileName(b.Path), Type = TesFileType.FILEEnum })
+                            .ToListAsync(cancellationToken);
+                    }
+                }
             }
 
-            var sb = new StringBuilder();
+            var startTaskStdOutStdErrUploadNodeTaskContent = new NodeTask
+            {
+                Outputs = new()
+                {
+                    new()
+                    {
+                        TargetUrl = AppendPathToUrl(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, string.Empty, cancellationToken), "start-task"),
+                        Path = "%AZ_BATCH_NODE_STARTUP_DIR%/std*.txt",
+                        TransformationStrategy = TransformationStrategy.None,
+                        FileType = FileType.File
+                    }
+                }
+            };
+
+            var filesToDownload = await Task.WhenAll(
+                inputFiles
+                .Except(drsInputFiles) // do not attempt to download DRS input files since the cromwell-drs-localizer will
+                .Where(f => f?.Streamable == false) // Don't download files where localization_optional is set to true in WDL (corresponds to "Streamable" property being true on TesInput)
+                .Union(additionalInputFiles, new TesInputPathEqualityComparer())
+                .Select(async f => await GetTesInputFileUrlAsync(f, task, queryStringsToRemoveFromLocalFilePaths, cancellationToken)));
+
+            var filesToUpload = Array.Empty<TesOutput>();
+
+            if (task.Outputs?.Count > 0)
+            {
+                filesToUpload = await Task.WhenAll(
+                task.Outputs?.Select(async f =>
+                        new TesOutput
+                        {
+                            Path = f.Path,
+                            Url = await storageAccessProvider.MapLocalPathToSasUrlAsync(f.Url, cancellationToken, getContainerSas: true) ?? throw new TesException("InvalidOutputFilePath", $"Unsupported output URL '{f.Url}' for task Id {taskId}. Must start with 'http', '{CromwellPathPrefix}' or use '/accountName/containerName/blobName' pattern where TES service has Contributor access to the storage account."),
+                            Name = f.Name,
+                            Type = f.Type
+                        }));
+            }
+
+            var nodeTaskRunnerContent = new NodeTask
+            {
+                MetricsFilename = $"../{metricsName}",
+
+                InputsMetricsFormat = "FileDownloadSizeInBytes={Size}",
+                Inputs = filesToDownload.Select(f => new FileInput { SourceUrl = f.Url, Path = LocalizeLocalPath(f.Path), TransformationStrategy = TransformationStrategy.None }).ToList(),
+
+                // Ignore missing stdout/stderr files. CWL workflows have an issue where if the stdout/stderr are redirected, they are still listed in the TES outputs
+                // Ignore any other missing files and directories. WDL tasks can have optional output files.
+                // Implementation: do not set Required to True (it defaults to False)
+                OutputsMetricsFormat = "FileUploadSizeInBytes={Size}",
+                Outputs = filesToUpload.Select(f => new FileOutput { TargetUrl = f.Url, Path = LocalizeLocalPath(f.Path), FileType = ConvertFileType(f.Type), TransformationStrategy = TransformationStrategy.None }).ToList()
+            };
+
             var executor = task.Executors.First();
+
+            var volumeMountsOption = String.Join(" ", inputFiles
+                .Union(additionalInputFiles)
+                .Select(f => f.Path)
+                .Concat(filesToUpload.Select(f => f.Path))
+                .Select(p => p.Split("/", StringSplitOptions.RemoveEmptyEntries)[0])
+                .Distinct(StringComparer.Ordinal)
+                .Select(s => $"-v $AZ_BATCH_TASK_WORKING_DIR/wd/{s}:/{s}"));
+
+            var workdirOption = string.IsNullOrWhiteSpace(executor.Workdir) ? string.Empty : $"--workdir {executor.Workdir} ";
+
+            var sb = new StringBuilder();
 
             if (isPublic.DockerInDockerImage)
             {
                 sb.AppendLinuxLine($"(grep -q alpine /etc/os-release && apk add bash wget || :) && \\");  // Install bash if running on alpine (will be the case if running inside "docker" image)
             }
 
-            sb.AppendLinuxLine($"./{NodeTaskRunnerFilename} && \\");
+            sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_DIR/{metricsName}; }} && \\");  // Function that appends key=value pair to metrics.txt file
+            sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
+            sb.AppendLinuxLine($"mkdir -p $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
+
+            var nodeTaskRunnerUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
+            var nodeTaskRunnerInfoUrl = await UploadBlobAsync(NodeRunnerTaskInfoFilename, SerializeNodeTask(nodeTaskRunnerContent));
+            var nodeBatchScriptSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, BatchScriptFileName, cancellationToken);
+            var nodeRunnerStartTaskUrl = await UploadBlobAsync(NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName, SerializeNodeTask(startTaskStdOutStdErrUploadNodeTaskContent));
+            sb.AppendLinuxLine($"write_ts DownloadRunnerScriptsStart && \\");
+            sb.AppendLinuxLine(CreateWgetDownloadCommand(nodeRunnerStartTaskUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName}") + " && \\");
+            sb.AppendLinuxLine(CreateWgetDownloadCommand(nodeTaskRunnerInfoUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeRunnerTaskInfoFilename}") + " && \\");
+            sb.AppendLinuxLine(CreateWgetDownloadCommand(nodeTaskRunnerUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename}", setExecutable: true) + " && \\");
+            sb.AppendLinuxLine($"write_ts DownloadRunnerScriptsEnd && \\");
+
+            sb.AppendLinuxLine($"($AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename} upload --file $AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerTaskInfoToUploadStartTaskLogsFileName} || :) && \\"); // Upload the start-task console spews
+
+            var vmSize = task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
+
+            if (drsInputFiles.Count > 0 && task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true)
+            {
+                sb.AppendLinuxLine($"write_ts CromwellDrsLocalizerPullStart && \\");
+                sb.AppendLinuxLine($"docker pull --quiet {cromwellDrsLocalizerImageName} && \\");
+                sb.AppendLinuxLine($"write_ts CromwellDrsLocalizerPullEnd && \\");
+            }
+
+            if (isPublic.ExecutorImage)
+            {
+                // Private executor images are pulled via pool ContainerConfiguration
+                sb.AppendLinuxLine($"write_ts ExecutorPullStart && docker pull --quiet {executor.Image} && write_ts ExecutorPullEnd && \\");
+            }
+
+            // The remainder of the script downloads the inputs, runs the main executor container, and uploads the outputs, including the metrics.txt file
+            // After task completion, metrics file is downloaded and used to populate the BatchNodeMetrics object
+            sb.AppendLinuxLine($"write_kv ExecutorImageSizeInBytes $(docker inspect {executor.Image} | grep \\\"Size\\\" | grep -Po '(?i)\\\"Size\\\":\\K([^,]*)') && \\");
+
+            if (drsInputFiles.Count > 0)
+            {
+                // resolve DRS input files with Cromwell DRS Localizer Docker image
+                sb.AppendLinuxLine($"write_ts DrsLocalizationStart && \\");
+
+                foreach (var drsInputFile in drsInputFiles)
+                {
+                    var drsUrl = drsInputFile.Url;
+                    var localizedFilePath = drsInputFile.Path;
+                    var drsLocalizationCommand = $"docker run --rm {volumeMountsOption} -e MARTHA_URL=\"{marthaUrl}\" {cromwellDrsLocalizerImageName} {drsUrl} {localizedFilePath} --access-token-strategy azure{(!string.IsNullOrWhiteSpace(marthaKeyVaultName) ? " --vault-name " + marthaKeyVaultName : string.Empty)}{(!string.IsNullOrWhiteSpace(marthaSecretName) ? " --secret-name " + marthaSecretName : string.Empty)} && \\";
+                    sb.AppendLinuxLine(drsLocalizationCommand);
+                }
+
+                sb.AppendLinuxLine($"write_ts DrsLocalizationEnd && \\");
+            }
+
+            sb.AppendLinuxLine($"write_ts DownloadStart && \\");
+            sb.AppendLinuxLine($"$AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename} download -f $AZ_BATCH_TASK_WORKING_DIR/{NodeRunnerTaskInfoFilename} && \\");
+            sb.AppendLinuxLine($"write_ts DownloadEnd && \\");
+            sb.AppendLinuxLine($"chmod -R o+rwx $AZ_BATCH_TASK_WORKING_DIR/wd && \\");
+            sb.AppendLinuxLine($"export TES_TASK_WD=$AZ_BATCH_TASK_WORKING_DIR/wd && \\");
+            sb.AppendLinuxLine($"write_ts ExecutorStart && \\");
+            sb.AppendLinuxLine($"docker run --rm {volumeMountsOption} --entrypoint= {workdirOption}{executor.Image} {string.Join(" ", executor.Command.Select(BashWrapShellArgument))} && \\");
+            sb.AppendLinuxLine($"write_ts ExecutorEnd && \\");
+            sb.AppendLinuxLine($"write_ts UploadStart && \\");
+            sb.AppendLinuxLine($"$AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename} upload -f $AZ_BATCH_TASK_WORKING_DIR/{NodeRunnerTaskInfoFilename} && \\");
+            sb.AppendLinuxLine($"write_ts UploadEnd && \\");
+            sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
+            sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
             sb.AppendLinuxLine($"echo Task complete.");
 
-            var resourceFiles = new List<ResourceFile>
-            {
-                ResourceFile.FromUrl(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), NodeTaskRunnerFilename),
-                await UploadBlobAsync(NodeRunnerTaskInfoFilename, SerializeNodeTask(nodeTaskRunnerContent)),
-                await UploadBlobAsync(BatchScriptFileName, sb.ToString()),
-                await UploadBlobAsync(NodeTaskRunnerStartTaskFileName, SerializeNodeTask(uploadStartTaskFilesContent))
-            };
+            await storageAccessProvider.UploadBlobAsync(new Uri(nodeBatchScriptSasUrl), sb.ToString(), cancellationToken);
 
             var batchRunCommand = enableBatchAutopool
                 ? $"/bin/bash -c {CreateWgetDownloadCommand(nodeBatchScriptSasUrl, $"AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)} && AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
@@ -1128,7 +1422,40 @@ namespace TesApi.Web
                 }
             };
 
+            if (poolHasContainerConfig)
+            {
+                // If the executor image is private, and in order to run multiple containers in the main task, the image has to be downloaded via pool ContainerConfiguration.
+                // This also requires that the main task runs inside a container. So we run the "docker" container that in turn runs other containers.
+                // If the executor image is public, there is no need for pool ContainerConfiguration and task can run normally, without being wrapped in a docker container.
+                // Volume mapping for docker.sock below allows the docker client in the container to access host's docker daemon.
+                // Remark: Batch provides "-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR" for us.
+                var containerRunOptions = $"--rm -v /var/run/docker.sock:/var/run/docker.sock ";
+                cloudTask.ContainerSettings = new TaskContainerSettings(dockerInDockerImageName, containerRunOptions);
+            }
+
             return cloudTask;
+
+            static string AppendPathToUrl(string url, string path)
+            {
+                var uri = new UriBuilder(url);
+                uri.Path = string.Concat(uri.Path.TrimEnd('/'), "/", path.TrimStart('/'));
+                return uri.Uri.ToString();
+            }
+
+            static string BashWrapShellArgument(string argument)
+                => $"'{argument.Replace(@"'", @"'\''")}'";
+
+            static FileType ConvertFileType(TesFileType tesFileType)
+                => tesFileType switch
+                {
+                    TesFileType.FILEEnum => FileType.File,
+                    TesFileType.DIRECTORYEnum => FileType.Directory,
+                    _ => throw new ArgumentOutOfRangeException(nameof(tesFileType)),
+                };
+
+            // Yes, this looks "Windowsy", while all our executors run on Linux. Environment.ExpandEnvironmentVariables requires environment variables to be delimited by '%' no matter the platform.
+            static string LocalizeLocalPath(string path)
+                => $"%AZ_BATCH_TASK_WORKING_DIR%/wd{path}";
 
             static string SerializeNodeTask(NodeTask task)
                 => JsonConvert.SerializeObject(task, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore });
@@ -1159,36 +1486,6 @@ namespace TesApi.Web
 
             static IEnumerable<string> MungeCleanupScriptForContainerConfig(IEnumerable<string> content)
                 => MungeCleanupScript(content.Where(line => !line.Contains(@"{TaskExecutor}")));
-        }
-
-        private void ValidateTesTask(TesTask task)
-        {
-            ArgumentNullException.ThrowIfNull(task);
-
-            task.Inputs?.ForEach(input => ValidateTesTaskInput(input, task));
-        }
-
-        private void ValidateTesTaskInput(TesInput inputFile, TesTask tesTask)
-        {
-            if (string.IsNullOrWhiteSpace(inputFile.Path) || !inputFile.Path.StartsWith("/"))
-            {
-                throw new TesException("InvalidInputFilePath", $"Unsupported input path '{inputFile.Path}' for task Id {tesTask.Id}. Must start with '/'.");
-            }
-
-            if (inputFile.Url is not null && inputFile.Content is not null)
-            {
-                throw new TesException("InvalidInputFilePath", "Input Url and Content cannot be both set");
-            }
-
-            if (inputFile.Url is null && inputFile.Content is null)
-            {
-                throw new TesException("InvalidInputFilePath", "One of Input Url or Content must be set");
-            }
-
-            if (inputFile.Type == TesFileType.DIRECTORYEnum)
-            {
-                throw new TesException("InvalidInputFilePath", "Directory input is not supported.");
-            }
         }
 
         /// <summary>
