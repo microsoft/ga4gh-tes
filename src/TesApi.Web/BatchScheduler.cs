@@ -595,7 +595,8 @@ namespace TesApi.Web
                 }
 
                 tesTask.PoolId = poolInformation.PoolId;
-                var cloudTask = await ConvertTesTaskToBatchTaskAsync(enableBatchAutopool ? tesTask.Id : jobOrTaskId, tesTask, containerMetadata.IsPublic, cancellationToken);
+                //var cloudTask = await ConvertTesTaskToBatchTaskAsync(enableBatchAutopool ? tesTask.Id : jobOrTaskId, tesTask, containerMetadata.IsPublic, cancellationToken);
+                var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(enableBatchAutopool ? tesTask.Id : jobOrTaskId, tesTask, containerMetadata.IsPublic, cancellationToken);
                 logger.LogInformation($"Creating batch task for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
 
                 if (enableBatchAutopool)
