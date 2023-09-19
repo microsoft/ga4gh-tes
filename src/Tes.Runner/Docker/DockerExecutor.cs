@@ -30,7 +30,7 @@ namespace Tes.Runner.Docker
 
             await ConfigureNetworkAsync();
 
-            var createResponse = await CreateContainerAsync(imageName, commandsToExecute, volumeBindings, workingDir);
+            var createResponse = await CreateContainerAsync(imageName, tag, commandsToExecute, volumeBindings, workingDir);
 
             var logs = await StartContainerWithStreamingOutput(createResponse);
 
@@ -61,12 +61,13 @@ namespace Tes.Runner.Docker
                 });
         }
 
-        private async Task<CreateContainerResponse> CreateContainerAsync(string imageName, List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir)
+        private async Task<CreateContainerResponse> CreateContainerAsync(string imageName, string imageTag,
+            List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir)
         {
             var createResponse = await dockerClient.Containers.CreateContainerAsync(
                 new CreateContainerParameters
                 {
-                    Image = imageName,
+                    Image = ToImageNameWithTag(imageName, imageTag),
                     Entrypoint = commandsToExecute,
                     AttachStdout = true,
                     AttachStderr = true,
@@ -77,6 +78,16 @@ namespace Tes.Runner.Docker
                     }
                 });
             return createResponse;
+        }
+
+        private static string ToImageNameWithTag(string imageName, string imageTag)
+        {
+            if (string.IsNullOrWhiteSpace(imageTag))
+            {
+                return imageName;
+            }
+
+            return $"{imageName}:{imageTag}";
         }
 
         private async Task PullImageAsync(string imageName, string tag, AuthConfig? authConfig = null)
