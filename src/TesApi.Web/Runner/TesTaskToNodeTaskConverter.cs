@@ -254,7 +254,7 @@ namespace TesApi.Web.Runner
 
         private static string EscapeBashArgument(string arg)
         {
-            return $"'{arg.Replace(@"'", @"'\''")}'";
+            return $"{arg.Replace(@"'", @"'\''")}";
         }
 
 
