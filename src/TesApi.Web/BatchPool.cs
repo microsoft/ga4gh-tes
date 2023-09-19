@@ -118,35 +118,50 @@ namespace TesApi.Web
                     if (!_resizeErrorsRetrieved)
                     {
                         ResizeErrors.Clear();
-                        var pool = await _azureProxy.GetBatchPoolAsync(Pool.PoolId, cancellationToken, new ODATADetailLevel { SelectClause = "resizeErrors" });
+                        var pool = await _azureProxy.GetBatchPoolAsync(Pool.PoolId, cancellationToken, new ODATADetailLevel { SelectClause = "id,allocationStateTransitionTime,autoScaleFormula,autoScaleRun,resizeErrors" });
 
-                        foreach (var error in pool.ResizeErrors ?? Enumerable.Empty<ResizeError>())
+                        if (pool.AutoScaleRun?.Timestamp < DateTime.UtcNow - (5 * AutoScaleEvaluationInterval)) // It takes some cycles to reset autoscale, so give batch some time to catch up on it's own.
                         {
-                            switch (error.Code)
+                            _resetAutoScalingRequired |= true;
+                        }
+                        else
+                        {
+                            foreach (var error in pool.ResizeErrors ?? Enumerable.Empty<ResizeError>())
                             {
-                                // Errors to ignore
-                                case PoolResizeErrorCodes.RemoveNodesFailed:
-                                case PoolResizeErrorCodes.AccountCoreQuotaReached:
-                                case PoolResizeErrorCodes.AccountLowPriorityCoreQuotaReached:
-                                case PoolResizeErrorCodes.CommunicationEnabledPoolReachedMaxVMCount:
-                                case PoolResizeErrorCodes.AccountSpotCoreQuotaReached:
-                                case PoolResizeErrorCodes.AllocationTimedOut:
-                                    break;
+                                switch (error.Code)
+                                {
+                                    // Errors to ignore
+                                    case PoolResizeErrorCodes.RemoveNodesFailed:
+                                    case PoolResizeErrorCodes.CommunicationEnabledPoolReachedMaxVMCount:
+                                    case PoolResizeErrorCodes.AccountSpotCoreQuotaReached:
+                                    case PoolResizeErrorCodes.AllocationTimedOut:
+                                        break;
 
-                                // Errors to force autoscale to be reset
-                                case PoolResizeErrorCodes.ResizeStopped:
-                                    _resetAutoScalingRequired |= true;
-                                    break;
+                                    // Errors that sometimes require mitigation
+                                    case PoolResizeErrorCodes.AccountCoreQuotaReached:
+                                    case PoolResizeErrorCodes.AccountLowPriorityCoreQuotaReached:
+                                        if (pool.AllocationStateTransitionTime < DateTime.UtcNow - (10 * AutoScaleEvaluationInterval) &&
+                                            (await pool.EvaluateAutoScaleAsync(pool.AutoScaleFormula, cancellationToken: cancellationToken))?.Error is not null)
+                                        {
+                                            _resetAutoScalingRequired |= true;
+                                        }
+                                        break;
 
-                                // Errors to both force resetting autoscale and fail tasks
-                                case PoolResizeErrorCodes.AllocationFailed:
-                                    _resetAutoScalingRequired |= true;
-                                    goto default;
+                                    // Errors to force autoscale to be reset
+                                    case PoolResizeErrorCodes.ResizeStopped:
+                                        _resetAutoScalingRequired |= true;
+                                        break;
 
-                                // Errors to fail tasks should be directed here
-                                default:
-                                    ResizeErrors.Enqueue(error);
-                                    break;
+                                    // Errors to both force resetting autoscale and fail tasks
+                                    case PoolResizeErrorCodes.AllocationFailed:
+                                        _resetAutoScalingRequired |= true;
+                                        goto default;
+
+                                    // Errors to fail tasks should be directed here
+                                    default:
+                                        ResizeErrors.Enqueue(error);
+                                        break;
+                                }
                             }
                         }
 
