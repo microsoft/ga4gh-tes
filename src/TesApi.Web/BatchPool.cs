@@ -120,7 +120,7 @@ namespace TesApi.Web
                         ResizeErrors.Clear();
                         var pool = await _azureProxy.GetBatchPoolAsync(Pool.PoolId, cancellationToken, new ODATADetailLevel { SelectClause = "id,allocationStateTransitionTime,autoScaleFormula,autoScaleRun,resizeErrors" });
 
-                        if (pool.AutoScaleRun?.Timestamp < DateTime.UtcNow - (5 * AutoScaleEvaluationInterval)) // It takes some cycles to reset autoscale, so give batch some time to catch up on it's own.
+                        if (pool.AutoScaleRun?.Timestamp < DateTime.UtcNow - (5 * AutoScaleEvaluationInterval)) // It takes some cycles to reset autoscale, so give batch some time to catch up on its own.
                         {
                             _resetAutoScalingRequired |= true;
                         }
