@@ -21,6 +21,19 @@ namespace TesApi.Web.Runner
     /// </summary>
     public class TesTaskToNodeTaskConverter
     {
+        /// <summary>
+        /// Batch Task working directory environment variable
+        /// </summary>
+        public const string BatchTaskWorkingDirEnvVar = "%AZ_BATCH_TASK_WORKING_DIR%";
+        /// <summary>
+        /// Batch Node start-up directory environment variable
+        /// </summary>
+        public const string BatchNodeStartupDirEnvVar = "%AZ_BATCH_NODE_STARTUP_DIR%";
+
+        private readonly string pathParentDirectory = BatchTaskWorkingDirEnvVar;
+        private readonly string containerMountParentDirectory = BatchTaskWorkingDirEnvVar;
+        private readonly IStorageAccessProvider storageAccessProvider;
+
         private readonly TerraOptions terraOptions;
         private readonly ILogger<TesTaskToNodeTaskConverter> logger;
 
@@ -29,28 +42,30 @@ namespace TesApi.Web.Runner
         /// Constructor of TesTaskToNodeTaskConverter
         /// </summary>
         /// <param name="terraOptions"></param>
+        /// <param name="storageAccessProvider"></param>
         /// <param name="logger"></param>
-        public TesTaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, ILogger<TesTaskToNodeTaskConverter> logger)
+        public TesTaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, ILogger<TesTaskToNodeTaskConverter> logger)
         {
-            this.terraOptions = terraOptions?.Value;
+            ArgumentNullException.ThrowIfNull(terraOptions);
+            ArgumentNullException.ThrowIfNull(storageAccessProvider);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            this.terraOptions = terraOptions.Value;
             this.logger = logger;
+            this.storageAccessProvider = storageAccessProvider;
         }
 
         /// <summary>
         /// Converts TesTask to a new NodeTask
         /// </summary>
         /// <param name="task">Node task</param>
-        /// <param name="pathParentDirectory">Parent directory in the execution compute node. This value will be appended to the path in all inputs and outputs</param>
-        /// <param name="containerMountParentDirectory">Parent directory from which a mount in the container is created.</param>
         /// <param name="metricsFile">Metrics filename</param>
-        /// <param name="storageAccessProvider"></param>
+        /// <param name="additionalInputs"></param>
         /// <param name="cancellationToken"></param>
-        public async Task<NodeTask> ToNodeTaskAsync(TesTask task, string pathParentDirectory, string containerMountParentDirectory, string metricsFile, IStorageAccessProvider storageAccessProvider, CancellationToken cancellationToken)
+        public async Task<NodeTask> ToNodeTaskAsync(TesTask task, string metricsFile,
+            IList<TesInput> additionalInputs, CancellationToken cancellationToken)
         {
-
             ArgumentNullException.ThrowIfNull(task);
-            ArgumentException.ThrowIfNullOrEmpty(pathParentDirectory, nameof(pathParentDirectory));
-            ArgumentException.ThrowIfNullOrEmpty(containerMountParentDirectory, nameof(containerMountParentDirectory));
 
             try
             {
@@ -65,8 +80,6 @@ namespace TesApi.Web.Runner
                     .WithContainerImage(executor.Image)
                     .WithMetricsFile(metricsFile);
 
-
-
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {
                     logger.LogInformation("Setting up Terra as the runtime environment for the runner");
@@ -74,21 +87,9 @@ namespace TesApi.Web.Runner
                         terraOptions.SasAllowedIpRange);
                 }
 
-                if (task.Inputs is not null)
-                {
-                    logger.LogInformation($"Mapping {task.Inputs.Count} inputs");
+                await BuildInputsAsync(task, builder, additionalInputs, cancellationToken);
 
-                    var inputs = await PrepareInputsForMappingAsync(task, storageAccessProvider, cancellationToken);
-
-                    MapInputs(inputs, pathParentDirectory, containerMountParentDirectory, builder);
-                }
-
-                if (task.Outputs is not null)
-                {
-                    logger.LogInformation($"Mapping {task.Outputs.Count} outputs");
-
-                    MapOutputs(task.Outputs, pathParentDirectory, containerMountParentDirectory, builder);
-                }
+                BuildOutputs(task, builder);
 
                 return builder.Build();
             }
@@ -99,8 +100,39 @@ namespace TesApi.Web.Runner
             }
         }
 
-        private async Task<List<TesInput>> PrepareInputsForMappingAsync(TesTask tesTask,
-            IStorageAccessProvider storageAccessProvider, CancellationToken cancellationToken)
+        private void BuildOutputs(TesTask task, NodeTaskBuilder builder)
+        {
+            if (task.Outputs is not null)
+            {
+                logger.LogInformation($"Mapping {task.Outputs.Count} outputs");
+
+                MapOutputs(task.Outputs, pathParentDirectory, containerMountParentDirectory, builder);
+            }
+        }
+
+        private async Task BuildInputsAsync(TesTask task, NodeTaskBuilder builder, IList<TesInput> additionalInputs,
+            CancellationToken cancellationToken)
+        {
+            if (task.Inputs is not null)
+            {
+                logger.LogInformation($"Mapping {task.Inputs.Count} inputs");
+
+                var inputs = await PrepareLocalAndContentInputsForMappingAsync(task, cancellationToken);
+
+                //add additional inputs if not already set
+                var distinctAdditionalInputs = additionalInputs
+                    .Where(additionalInput => !inputs.Any(input =>
+                        input.Path != null && input.Path.Equals(additionalInput.Path, StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+
+                inputs.AddRange(distinctAdditionalInputs);
+
+                MapInputs(inputs, pathParentDirectory, containerMountParentDirectory, builder);
+            }
+        }
+
+        private async Task<List<TesInput>> PrepareLocalAndContentInputsForMappingAsync(TesTask tesTask,
+            CancellationToken cancellationToken)
         {
             var inputs = new List<TesInput>();
             if (tesTask.Inputs is null)
@@ -110,7 +142,7 @@ namespace TesApi.Web.Runner
 
             foreach (var input in tesTask.Inputs)
             {
-                var preparedInput = await PrepareContentInputAsync(tesTask, input, storageAccessProvider, cancellationToken);
+                var preparedInput = await PrepareContentInputAsync(tesTask, input, cancellationToken);
 
                 if (preparedInput != null)
                 {
@@ -118,7 +150,7 @@ namespace TesApi.Web.Runner
                     continue;
                 }
 
-                preparedInput = await PrepareLocalFileInputAsync(tesTask, input, storageAccessProvider, cancellationToken);
+                preparedInput = await PrepareLocalFileInputAsync(tesTask, input, cancellationToken);
 
                 if (preparedInput != null)
                 {
@@ -131,16 +163,16 @@ namespace TesApi.Web.Runner
             return inputs;
         }
 
-        private async Task<TesInput?> PrepareLocalFileInputAsync(TesTask tesTask, TesInput input,
-            IStorageAccessProvider storageAccessProvider, CancellationToken cancellationToken)
+        private async Task<TesInput> PrepareLocalFileInputAsync(TesTask tesTask, TesInput input,
+            CancellationToken cancellationToken)
         {
             if (TryGetCromwellTmpFilePath(input.Url, out var localPath))
             {
-                logger.LogInformation($"The input is a local file. Uploading its content to the internal storage location. Input URI: {input?.Url}. Local path: {localPath} ");
+                logger.LogInformation($"The input is a local file. Uploading its content to the internal storage location. Input URI: {input.Url}. Local path: {localPath} ");
 
                 var content = await File.ReadAllTextAsync(localPath, cancellationToken);
 
-                return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, content, storageAccessProvider, cancellationToken);
+                return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, content, cancellationToken);
             }
 
             return default;
@@ -148,7 +180,7 @@ namespace TesApi.Web.Runner
 
         private async Task<TesInput> UploadContentAndCreateTesInputAsync(TesTask tesTask, string inputPath,
             string content,
-            IStorageAccessProvider storageAccessProvider, CancellationToken cancellationToken)
+            CancellationToken cancellationToken)
         {
             var inputFileUrl =
                 await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, Guid.NewGuid().ToString(),
@@ -159,7 +191,7 @@ namespace TesApi.Web.Runner
 
             var inputUrl = RemoveQueryStringFromUrl(inputFileUrl);
 
-            logger.LogInformation($"Successfully content as a new blob at: {inputUrl}");
+            logger.LogInformation($"Successfully uploaded content input as a new blob at: {inputUrl}");
 
             return new TesInput
             {
@@ -185,7 +217,8 @@ namespace TesApi.Web.Runner
             return localPath is not null;
         }
 
-        private async Task<TesInput?> PrepareContentInputAsync(TesTask tesTask, TesInput input, IStorageAccessProvider storageAccessProvider, CancellationToken cancellationToken)
+        private async Task<TesInput> PrepareContentInputAsync(TesTask tesTask, TesInput input,
+            CancellationToken cancellationToken)
         {
 
             if (String.IsNullOrWhiteSpace(input?.Content))
@@ -193,9 +226,9 @@ namespace TesApi.Web.Runner
                 return default;
             }
 
-            logger.LogInformation($"The input is content. Uploading its content to the internal storage location. Input path:{input?.Path}");
+            logger.LogInformation($"The input is content. Uploading its content to the internal storage location. Input path:{input.Path}");
 
-            return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, input.Content, storageAccessProvider, cancellationToken);
+            return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, input.Content, cancellationToken);
         }
 
         private static string RemoveQueryStringFromUrl(string url)
@@ -204,61 +237,13 @@ namespace TesApi.Web.Runner
             return uri.GetLeftPart(UriPartial.Path);
         }
 
-        /// <summary>
-        /// Adds additional inputs a NodeTask if they are not already included in the node task. Inputs are compared using the path property. 
-        /// </summary>
-        /// <param name="inputs">Additional inputs to add to the node task</param>
-        /// <param name="nodeTask">Node task</param>
-        /// <param name="pathParentDirectory">Parent directory in the execution compute node. This value will be appended to the path in all inputs</param>
-        /// <param name="mountParentDirectory">Parent directory from which a mount in the container is created. If not set, the path won't be mounted in container</param>
-        public NodeTask AddAdditionalInputsIfNotSet(List<TesInput> inputs, NodeTask nodeTask, string pathParentDirectory,
-            string mountParentDirectory = default)
-        {
-            ArgumentNullException.ThrowIfNull(inputs);
-            ArgumentNullException.ThrowIfNull(nodeTask);
-            ArgumentException.ThrowIfNullOrEmpty(pathParentDirectory);
-
-            var distinctInputs = inputs.Where(tesInput => nodeTask.Inputs != null && !nodeTask.Inputs.Any(nodeInput => nodeInput.Path != null && nodeInput.Path.Equals(tesInput.Path, StringComparison.OrdinalIgnoreCase)))
-                                                    .ToList();
-
-            var builder = new NodeTaskBuilder(nodeTask);
-
-            MapInputs(distinctInputs, pathParentDirectory, mountParentDirectory, builder);
-
-            return builder.Build();
-        }
-
-        /// <summary>
-        /// Adds an output to a NodeTask. 
-        /// </summary>
-        /// <param name="nodeTask">Node task</param>
-        /// <param name="targetUrl"></param>
-        /// <param name="pathParentDirectory">Parent directory in the execution compute node. This value will be appended to the path in all outputs</param>
-        /// <param name="mountParentDirectory">Parent directory from which a mount in the container is created. If not set, the path won't be mounted in container</param>
-        /// <param name="path"></param>
-        public NodeTask AddOutput(NodeTask nodeTask,
-            string path, string targetUrl,
-            string pathParentDirectory, string mountParentDirectory = default)
-        {
-            ArgumentNullException.ThrowIfNull(nodeTask);
-            ArgumentException.ThrowIfNullOrEmpty(pathParentDirectory, nameof(pathParentDirectory));
-            ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
-            ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
-
-            var builder = new NodeTaskBuilder(nodeTask);
-
-            builder.WithOutputUsingCombinedTransformationStrategy(path, targetUrl, FileType.File, mountParentDirectory);
-
-            return builder.Build();
-        }
-
         private static string EscapeBashArgument(string arg)
         {
             return $"{arg.Replace(@"'", @"'\''")}";
         }
 
 
-        private void MapOutputs(List<TesOutput> outputs, string pathParentDirectory, string containerMountParentDirectory,
+        private static void MapOutputs(List<TesOutput> outputs, string pathParentDirectory, string containerMountParentDirectory,
             NodeTaskBuilder builder)
         {
             outputs?.ForEach(output =>
@@ -269,7 +254,7 @@ namespace TesApi.Web.Runner
             });
         }
 
-        private void MapInputs(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
+        private static void MapInputs(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
             NodeTaskBuilder builder)
         {
             inputs?.ForEach(input =>
@@ -280,7 +265,7 @@ namespace TesApi.Web.Runner
             });
         }
 
-        private FileType? ToNodeTaskFileType(TesFileType outputType)
+        private static FileType? ToNodeTaskFileType(TesFileType outputType)
         {
             return outputType switch
             {
@@ -290,7 +275,7 @@ namespace TesApi.Web.Runner
             };
         }
 
-        private string AppendParentDirectoryIfSet(string inputPath, string pathParentDirectory)
+        private static string AppendParentDirectoryIfSet(string inputPath, string pathParentDirectory)
         {
             if (!string.IsNullOrWhiteSpace(pathParentDirectory))
             {

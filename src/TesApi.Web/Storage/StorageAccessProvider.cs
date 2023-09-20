@@ -107,6 +107,9 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <inheritdoc />
     public abstract Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);
 
+    /// <inheritdoc />
+    public abstract string GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath);
+
     /// <summary>
     /// Tries to parse the input into a Http Url. 
     /// </summary>

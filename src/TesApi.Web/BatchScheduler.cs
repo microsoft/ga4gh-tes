@@ -982,23 +982,17 @@ namespace TesApi.Web
             var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
             var isCromwell = cromwellExecutionDirectoryUrl is not null;
 
-            var nodeTesTask = await tesTaskToNodeTaskConverter.ToNodeTaskAsync(task, taskParentDirectory, mountParentDirectory, metricsName, storageAccessProvider, cancellationToken);
 
             // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
             // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
             // TODO: Verify whether this workaround is still needed.
+            var additionalInputs = new List<TesInput>();
             if (isCromwell)
             {
-                var additionalInputs = await AddExistingBlobsInCromwellStorageLocationsAsInputFiles(task, cromwellExecutionDirectoryUrl, taskParentDirectory, cancellationToken);
-
-                nodeTesTask = tesTaskToNodeTaskConverter.AddAdditionalInputsIfNotSet(additionalInputs, nodeTesTask, taskParentDirectory, mountParentDirectory);
+                additionalInputs = await AddExistingBlobsInCromwellStorageLocationsAsInputFiles(task, cromwellExecutionDirectoryUrl, cancellationToken);
             }
 
-            var internalTesTaskUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, string.Empty, cancellationToken);
-
-            internalTesTaskUrl = new Uri(internalTesTaskUrl).GetLeftPart(UriPartial.Path);
-
-            nodeTesTask = tesTaskToNodeTaskConverter.AddOutput(nodeTesTask, "std*.txt", internalTesTaskUrl, nodeStartUpParentDirectory);
+            var nodeTesTask = await tesTaskToNodeTaskConverter.ToNodeTaskAsync(task, metricsName, additionalInputs, cancellationToken);
 
             var sb = new StringBuilder();
 
@@ -1052,17 +1046,6 @@ namespace TesApi.Web
                 }
             };
 
-            // if (poolHasContainerConfig)
-            // {
-            //     // If the executor image is private, and in order to run multiple containers in the main task, the image has to be downloaded via pool ContainerConfiguration.
-            //     // This also requires that the main task runs inside a container. So we run the "docker" container that in turn runs other containers.
-            //     // If the executor image is public, there is no need for pool ContainerConfiguration and task can run normally, without being wrapped in a docker container.
-            //     // Volume mapping for docker.sock below allows the docker client in the container to access host's docker daemon.
-            //     // Remark: Batch provides "-v $AZ_BATCH_NODE_ROOT_DIR:$AZ_BATCH_NODE_ROOT_DIR" for us.
-            //     var containerRunOptions = $"--rm -v /var/run/docker.sock:/var/run/docker.sock ";
-            //     cloudTask.ContainerSettings = new TaskContainerSettings(dockerInDockerImageName, containerRunOptions);
-            // }
-
             return cloudTask;
 
             static string SerializeNodeTask(NodeTask task)
@@ -1097,7 +1080,7 @@ namespace TesApi.Web
         }
 
         private async Task<List<TesInput>> AddExistingBlobsInCromwellStorageLocationsAsInputFiles(TesTask task,
-        string cromwellExecutionDirectoryUrl, string taskParentDirectory, CancellationToken cancellationToken)
+            string cromwellExecutionDirectoryUrl, CancellationToken cancellationToken)
         {
             var additionalInputFiles = new List<TesInput>();
 
@@ -1130,7 +1113,7 @@ namespace TesApi.Web
                     var cromwellExecutionDirectory =
                         string.Join('/', commandScriptPathParts.Take(commandScriptPathParts.Count - 1));
                     additionalInputFiles = await blobsInExecutionDirectory
-                        .Select(b => (Path: $"{taskParentDirectory.TrimStart()}/{cromwellExecutionDirectory.TrimStart('/')}/{b.Name.Split('/').Last()}",
+                        .Select(b => (Path: $"/{cromwellExecutionDirectory.TrimStart('/')}/{b.Name.Split('/').Last()}",
                             b.Uri))
                         .ToAsyncEnumerable()
                         .SelectAwait(async b => new TesInput
