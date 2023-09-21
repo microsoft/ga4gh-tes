@@ -22,13 +22,11 @@ namespace TesApi.Web.Runner
     public class TesTaskToNodeTaskConverter
     {
         /// <summary>
-        /// Batch Task working directory environment variable
+        /// Metrics file name
         /// </summary>
-        public const string BatchTaskWorkingDirEnvVar = "%AZ_BATCH_TASK_WORKING_DIR%";
-        /// <summary>
-        /// Batch Node start-up directory environment variable
-        /// </summary>
-        public const string BatchNodeStartupDirEnvVar = "%AZ_BATCH_NODE_STARTUP_DIR%";
+        public const string MetricsFileName = "metric.txt";
+        private const string BatchTaskWorkingDirEnvVar = "%AZ_BATCH_TASK_WORKING_DIR%";
+        private const string BatchNodeStartupDirEnvVar = "%AZ_BATCH_NODE_STARTUP_DIR%";
 
         private readonly string pathParentDirectory = BatchTaskWorkingDirEnvVar;
         private readonly string containerMountParentDirectory = BatchTaskWorkingDirEnvVar;
@@ -59,10 +57,9 @@ namespace TesApi.Web.Runner
         /// Converts TesTask to a new NodeTask
         /// </summary>
         /// <param name="task">Node task</param>
-        /// <param name="metricsFile">Metrics filename</param>
         /// <param name="additionalInputs"></param>
         /// <param name="cancellationToken"></param>
-        public async Task<NodeTask> ToNodeTaskAsync(TesTask task, string metricsFile,
+        public async Task<NodeTask> ToNodeTaskAsync(TesTask task,
             IList<TesInput> additionalInputs, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(task);
@@ -78,7 +75,7 @@ namespace TesApi.Web.Runner
                     .WithWorkflowId(task.WorkflowId)
                     .WithContainerCommands(executor.Command.Select(EscapeBashArgument).ToList())
                     .WithContainerImage(executor.Image)
-                    .WithMetricsFile(metricsFile);
+                    .WithMetricsFile(MetricsFileName);
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {

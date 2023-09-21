@@ -990,11 +990,7 @@ namespace TesApi.Web
         {
             ValidateTesTask(task);
 
-            var metricsName = "metrics.txt";
             var poolHasContainerConfig = !(isPublic.ExecutorImage && isPublic.DockerInDockerImage && isPublic.CromwellDrsImage);
-            var taskParentDirectory = "%AZ_BATCH_TASK_WORKING_DIR%";
-            var mountParentDirectory = "%AZ_BATCH_TASK_WORKING_DIR%";
-            var nodeStartUpParentDirectory = "%AZ_BATCH_NODE_STARTUP_DIR%";
             var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
             var isCromwell = cromwellExecutionDirectoryUrl is not null;
 
@@ -1008,39 +1004,32 @@ namespace TesApi.Web
                 additionalInputs = await AddExistingBlobsInCromwellStorageLocationsAsInputFiles(task, cromwellExecutionDirectoryUrl, cancellationToken);
             }
 
-            var nodeTesTask = await tesTaskToNodeTaskConverter.ToNodeTaskAsync(task, metricsName, additionalInputs, cancellationToken);
-
-            var sb = new StringBuilder();
-
-            if (isPublic.DockerInDockerImage)
-            {
-                sb.AppendLinuxLine($"(grep -q alpine /etc/os-release && apk add bash wget || :) && \\");  // Install bash if running on alpine (will be the case if running inside "docker" image)
-            }
-
-            sb.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> $AZ_BATCH_TASK_DIR/{metricsName}; }} && \\");  // Function that appends key=value pair to metrics.txt file
-            sb.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
+            var nodeTask = await tesTaskToNodeTaskConverter.ToNodeTaskAsync(task, additionalInputs, cancellationToken);
+            var nodeTaskUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, NodeRunnerTaskInfoFilename, cancellationToken);
+            await storageAccessProvider.UploadBlobAsync(new Uri(nodeTaskUrl), SerializeNodeTask(nodeTask), cancellationToken);
 
             var nodeTaskRunnerUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
-            var nodeTaskRunnerInfoUrl = await UploadBlobAsync(NodeRunnerTaskInfoFilename, SerializeNodeTask(nodeTesTask));
-            var nodeBatchScriptSasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, BatchScriptFileName, cancellationToken);
-            sb.AppendLinuxLine($"write_ts DownloadRunnerScriptsStart && \\");
-            sb.AppendLinuxLine(CreateWgetDownloadCommand(nodeTaskRunnerInfoUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeRunnerTaskInfoFilename}") + " && \\");
-            sb.AppendLinuxLine(CreateWgetDownloadCommand(nodeTaskRunnerUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename}", setExecutable: true) + " && \\");
-            sb.AppendLinuxLine($"write_ts DownloadRunnerScriptsEnd && \\");
+            var batchNodeScriptBuilder = new BatchNodeScriptBuilder();
 
-            sb.AppendLinuxLine($"($AZ_BATCH_TASK_WORKING_DIR/{NodeTaskRunnerFilename} || :) && \\");
+            //TODO: Revise if this assumption is correct given the new runtime model. This logic is carried over from previous implementation
+            if (isPublic.DockerInDockerImage)
+            {
+                batchNodeScriptBuilder.WithAlpineWgetInstallation();
+            }
 
-            var vmSize = task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
+            var batchNodeScript = batchNodeScriptBuilder.WithMetrics()
+                .WithRunnerFilesDownloadUsingWget(nodeTaskRunnerUrl, nodeTaskUrl)
+                .WithExecuteRunner()
+                .WithLocalRuntimeSystemInformation()
+                .Build();
 
+            var batchNodeScriptUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, BatchScriptFileName, cancellationToken);
 
-            sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
-            sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
-            sb.AppendLinuxLine($"echo Task complete.");
-
-            await storageAccessProvider.UploadBlobAsync(new Uri(nodeBatchScriptSasUrl), sb.ToString(), cancellationToken);
+            await storageAccessProvider.UploadBlobAsync(new Uri(batchNodeScriptUrl), batchNodeScript, cancellationToken);
+            await storageAccessProvider.UploadBlobAsync(new Uri(nodeTaskUrl), SerializeNodeTask(nodeTask), cancellationToken);
 
             var batchRunCommand = enableBatchAutopool
-                ? $"/bin/bash -c {CreateWgetDownloadCommand(nodeBatchScriptSasUrl, $"AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)} && AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
+                ? $"/bin/bash -c {CreateWgetDownloadCommand(batchNodeScriptUrl, $"AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)} && AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
                 : $"/bin/bash -c \"{MungeBatchTaskCommandLine()}\"";
 
             // Replace any URL query strings with the word REMOVED
@@ -1067,19 +1056,11 @@ namespace TesApi.Web
             static string SerializeNodeTask(NodeTask task)
                 => JsonConvert.SerializeObject(task, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore });
 
-            async ValueTask<string> UploadBlobAsync(string fileName, string content)
-            {
-                var sasUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, fileName, cancellationToken);
-                await storageAccessProvider.UploadBlobAsync(new Uri(sasUrl), content, cancellationToken);
-                return sasUrl;
-            }
-
             string MungeBatchTaskCommandLine()
                 => string.Join("\n", taskRunScriptContent)
                     .Replace(@"{CleanupScriptLines}", string.Join("\n", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
-                    .Replace(@"{GetBatchScriptFile}", $"{CreateWgetDownloadCommand(nodeBatchScriptSasUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)}")
+                    .Replace(@"{GetBatchScriptFile}", $"{CreateWgetDownloadCommand(batchNodeScriptUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)}")
                     .Replace(@"{BatchScriptPath}", $"$AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}")
-                    //.Replace(@"{TaskExecutor}", executor.Image)
                     .Replace(@"{ExecutionPathPrefix}", "wd")
                     .Replace("\"", "\\\"");
 
