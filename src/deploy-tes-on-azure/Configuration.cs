@@ -52,7 +52,7 @@ namespace TesDeployer
         public bool ManualHelmDeployment { get; set; }
         public string HelmBinaryPath { get; set; } = OperatingSystem.IsWindows() ? @"C:\ProgramData\chocolatey\bin\helm.exe" : "/usr/local/bin/helm";
         public string KubectlBinaryPath { get; set; } = OperatingSystem.IsWindows() ? @"C:\ProgramData\chocolatey\bin\kubectl.exe" : "/usr/local/bin/kubectl";
-        public int AksPoolSize { get; set; } = 2;
+        public int AksPoolSize { get; set; } = 1;
         public bool? CrossSubscriptionAKSDeployment { get; set; } = null;
         public bool Silent { get; set; }
         public bool DeleteResourceGroupOnFailure { get; set; }
