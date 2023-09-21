@@ -74,8 +74,8 @@ namespace TesApi.Web
                 batchScript.AppendLinuxLine("write_ts DownloadRunnerFileStart && \\");
             }
 
-            batchScript.AppendLinuxLine(CreateWgetDownloadCommand(runnerBinaryUrl, $"{BatchTaskDirEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true));
-            batchScript.AppendLinuxLine(CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{BatchTaskDirEnvVar}/{NodeRunnerTaskInfoFilename}", setExecutable: false));
+            batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerBinaryUrl, $"{BatchTaskDirEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)} && \\");
+            batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{BatchTaskDirEnvVar}/{NodeRunnerTaskInfoFilename}", setExecutable: false)} && \\");
 
             if (useMetricsFile)
             {

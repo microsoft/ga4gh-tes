@@ -117,9 +117,7 @@ namespace TesApi.Web.Runner
                 .WithLocalRuntimeSystemInformation()
                 .Build();
 
-            var batchNodeScriptUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, BatchScriptFileName, cancellationToken);
-
-            await storageAccessProvider.UploadBlobAsync(new Uri(batchNodeScriptUrl), batchNodeScript, cancellationToken);
+            var batchNodeScriptUrl = await UploadContentAsBlobToInternalTesLocationAsync(tesTask, batchNodeScript, BatchScriptFileName, cancellationToken);
 
             logger.LogInformation($"Successfully created and uploaded Batch script for Task ID: {tesTask.Id}");
 
@@ -139,7 +137,7 @@ namespace TesApi.Web.Runner
                     DefaultValueHandling = DefaultValueHandling.Ignore
                 });
 
-            var nodeTaskUrl = await UploadContentAsBlobToInternalTesLocationAsync(tesTask, nodeTaskContent, cancellationToken);
+            var nodeTaskUrl = await UploadContentAsBlobToInternalTesLocationAsync(tesTask, nodeTaskContent, NodeTaskFilename, cancellationToken);
 
             logger.LogInformation($"Successfully created and uploaded node task definition file for Task ID: {tesTask.Id}");
 
@@ -147,13 +145,13 @@ namespace TesApi.Web.Runner
         }
 
         private async Task<string> UploadContentAsBlobToInternalTesLocationAsync(TesTask tesTask,
-            string nodeTaskContent, CancellationToken cancellationToken)
+            string content, string fileName, CancellationToken cancellationToken)
         {
-            var nodeTaskUrl =
-                await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, NodeTaskFilename, cancellationToken);
+            var blobUrl =
+                await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, fileName, cancellationToken);
 
-            await storageAccessProvider.UploadBlobAsync(new Uri(nodeTaskUrl), nodeTaskContent, cancellationToken);
-            return nodeTaskUrl;
+            await storageAccessProvider.UploadBlobAsync(new Uri(blobUrl), content, cancellationToken);
+            return blobUrl;
         }
     }
 
