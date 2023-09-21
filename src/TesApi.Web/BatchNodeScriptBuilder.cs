@@ -96,7 +96,7 @@ namespace TesApi.Web
                 batchScript.AppendLinuxLine("write_ts ExecuteNodeTesTaskStart && \\");
             }
 
-            batchScript.AppendLinuxLine($"({BatchTaskDirEnvVar}/{NodeTaskRunnerFilename} || :) && \\");
+            batchScript.AppendLinuxLine($"{BatchTaskDirEnvVar}/{NodeTaskRunnerFilename} -f {BatchTaskDirEnvVar}/{NodeRunnerTaskInfoFilename} && \\");
 
             if (useMetricsFile)
             {
