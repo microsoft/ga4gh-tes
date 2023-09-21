@@ -13,9 +13,16 @@ namespace TesApi.Web
     /// </summary>
     public class BatchNodeScriptBuilder
     {
+        /// <summary>
+        /// Name of the environment variable that contains the path to the task directory
+        /// </summary>
+        public const string BatchTaskDirEnvVarName = "AZ_BATCH_TASK_DIR";
+
+        private const string BatchTaskDirEnvVar = $"${BatchTaskDirEnvVarName}";
+
         private const string NodeTaskRunnerFilename = "tRunner";
         private const string NodeRunnerTaskInfoFilename = "TesTask.json";
-        private const string AzBatchTaskDirEnvVar = "$AZ_BATCH_TASK_DIR";
+
         private readonly StringBuilder batchScript;
         private bool useMetricsFile;
 
@@ -45,7 +52,7 @@ namespace TesApi.Web
         public BatchNodeScriptBuilder WithMetrics()
         {
             useMetricsFile = true;
-            batchScript.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> {AzBatchTaskDirEnvVar}/{TesTaskToNodeTaskConverter.MetricsFileName}; }} && \\");  // Function that appends key=value pair to metrics.txt file
+            batchScript.AppendLinuxLine($"write_kv() {{ echo \"$1=$2\" >> {BatchTaskDirEnvVar}/{TaskToNodeTaskConverter.MetricsFileName}; }} && \\");  // Function that appends key=value pair to metrics.txt file
             batchScript.AppendLinuxLine($"write_ts() {{ write_kv $1 $(date -Iseconds); }} && \\");    // Function that appends key=<current datetime> to metrics.txt file
 
             return this;
@@ -67,8 +74,8 @@ namespace TesApi.Web
                 batchScript.AppendLinuxLine("write_ts DownloadRunnerFileStart && \\");
             }
 
-            batchScript.AppendLinuxLine(CreateWgetDownloadCommand(runnerBinaryUrl, $"{AzBatchTaskDirEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true));
-            batchScript.AppendLinuxLine(CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{AzBatchTaskDirEnvVar}/{NodeRunnerTaskInfoFilename}", setExecutable: false));
+            batchScript.AppendLinuxLine(CreateWgetDownloadCommand(runnerBinaryUrl, $"{BatchTaskDirEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true));
+            batchScript.AppendLinuxLine(CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{BatchTaskDirEnvVar}/{NodeRunnerTaskInfoFilename}", setExecutable: false));
 
             if (useMetricsFile)
             {
@@ -89,7 +96,7 @@ namespace TesApi.Web
                 batchScript.AppendLinuxLine("write_ts ExecuteNodeTesTaskStart && \\");
             }
 
-            batchScript.AppendLinuxLine($"({AzBatchTaskDirEnvVar}/{NodeTaskRunnerFilename} || :) && \\");
+            batchScript.AppendLinuxLine($"({BatchTaskDirEnvVar}/{NodeTaskRunnerFilename} || :) && \\");
 
             if (useMetricsFile)
             {
@@ -107,7 +114,7 @@ namespace TesApi.Web
         {
             if (useMetricsFile)
             {
-                batchScript.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k {AzBatchTaskDirEnvVar} | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> {AzBatchTaskDirEnvVar}/{TesTaskToNodeTaskConverter.MetricsFileName} && echo DiskUsedInKiB=${{disk[2]}} >> {AzBatchTaskDirEnvVar}/{TesTaskToNodeTaskConverter.MetricsFileName}' && \\");
+                batchScript.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k {BatchTaskDirEnvVar} | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> {BatchTaskDirEnvVar}/{TaskToNodeTaskConverter.MetricsFileName} && echo DiskUsedInKiB=${{disk[2]}} >> {BatchTaskDirEnvVar}/{TaskToNodeTaskConverter.MetricsFileName}' && \\");
                 batchScript.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
             }
 
@@ -133,7 +140,7 @@ namespace TesApi.Web
         /// <param name="localFilePathDownloadLocation">Filename for the output file</param>
         /// <param name="setExecutable">Whether the file should be made executable or not</param>
         /// <returns>The command to execute</returns>
-        private string CreateWgetDownloadCommand(string urlToDownload, string localFilePathDownloadLocation, bool setExecutable = false)
+        public static string CreateWgetDownloadCommand(string urlToDownload, string localFilePathDownloadLocation, bool setExecutable = false)
         {
             string command = $"wget --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload}'";
 

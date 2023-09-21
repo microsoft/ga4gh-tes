@@ -41,6 +41,14 @@ namespace Tes.Runner.Models
     public class RuntimeOptions
     {
         public TerraRuntimeOptions? Terra { get; set; }
+
+        public DockerCleanUpOptions DockerCleanUp { get; set; }
+    }
+
+    public class DockerCleanUpOptions
+    {
+        public bool ExecuteRmi { get; set; }
+        public bool ExecutePrune { get; set; }
     }
 
 
