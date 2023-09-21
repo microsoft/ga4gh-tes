@@ -73,7 +73,7 @@ namespace TesApi.Web
         private readonly string[] taskRunScriptContent;
         private readonly string[] taskCleanupScriptContent;
         private readonly IAllowedVmSizesService allowedVmSizesService;
-        private readonly TesTaskToNodeTaskConverter tesTaskToNodeTaskConverter;
+        private readonly TaskExecutionScriptingManager taskExecutionScriptingManager;
 
         private HashSet<string> onlyLogBatchTaskStateOnce = new();
 
@@ -95,6 +95,7 @@ namespace TesApi.Web
         /// <param name="containerRegistryProvider">Container registry information <see cref="ContainerRegistryProvider"/></param>
         /// <param name="poolFactory">Batch pool factory <see cref="IBatchPoolFactory"/></param>
         /// <param name="allowedVmSizesService">Service to get allowed vm sizes.</param>
+        /// <param name="taskExecutionScriptingManager"><see cref="taskExecutionScriptingManager"/></param>
         public BatchScheduler(
             ILogger<BatchScheduler> logger,
             IOptions<Options.BatchImageGeneration1Options> batchGen1Options,
@@ -111,7 +112,7 @@ namespace TesApi.Web
             ContainerRegistryProvider containerRegistryProvider,
             IBatchPoolFactory poolFactory,
             IAllowedVmSizesService allowedVmSizesService,
-            TesTaskToNodeTaskConverter tesTaskToNodeTaskConverter)
+            TaskExecutionScriptingManager taskExecutionScriptingManager)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(azureProxy);
@@ -120,7 +121,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(skuInformationProvider);
             ArgumentNullException.ThrowIfNull(containerRegistryProvider);
             ArgumentNullException.ThrowIfNull(poolFactory);
-            ArgumentNullException.ThrowIfNull(tesTaskToNodeTaskConverter);
+            ArgumentNullException.ThrowIfNull(taskExecutionScriptingManager);
 
             this.logger = logger;
             this.azureProxy = azureProxy;
@@ -145,7 +146,7 @@ namespace TesApi.Web
             this.globalStartTaskPath = StandardizeStartTaskPath(batchNodesOptions.Value.GlobalStartTask, this.defaultStorageAccountName);
             this.globalManagedIdentity = batchNodesOptions.Value.GlobalManagedIdentity;
             this.allowedVmSizesService = allowedVmSizesService;
-            this.tesTaskToNodeTaskConverter = tesTaskToNodeTaskConverter;
+            this.taskExecutionScriptingManager = taskExecutionScriptingManager;
 
             if (!this.enableBatchAutopool)
             {
@@ -988,40 +989,14 @@ namespace TesApi.Web
                 additionalInputs = await AddExistingBlobsInCromwellStorageLocationsAsInputFiles(task, cromwellExecutionDirectoryUrl, cancellationToken);
             }
 
-            var nodeTask = await tesTaskToNodeTaskConverter.ToNodeTaskAsync(task, additionalInputs, cancellationToken);
-            var nodeTaskUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, NodeRunnerTaskInfoFilename, cancellationToken);
-            await storageAccessProvider.UploadBlobAsync(new Uri(nodeTaskUrl), SerializeNodeTask(nodeTask), cancellationToken);
+            // TODO: Confirm if the mapping here is correct. This is a carry over from the previous implementation. 
+            var containerCleanupOptions = new RuntimeContainerCleanupOptions(
+                ExecuteDockerRmi: !poolHasContainerConfig,
+                ExecuteDockerPrune: enableBatchAutopool);
 
-            var nodeTaskRunnerUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
-            var batchNodeScriptBuilder = new BatchNodeScriptBuilder();
+            var assets = await taskExecutionScriptingManager.PrepareScriptingAssetsAsync(task, additionalInputs, installWgetIfRunningOnAlpine: isPublic.DockerInDockerImage, containerCleanupOptions, cancellationToken);
 
-            //TODO: Revise if this assumption is correct given the new runtime model. This logic is carried over from previous implementation
-            if (isPublic.DockerInDockerImage)
-            {
-                batchNodeScriptBuilder.WithAlpineWgetInstallation();
-            }
-
-            var batchNodeScript = batchNodeScriptBuilder.WithMetrics()
-                .WithRunnerFilesDownloadUsingWget(nodeTaskRunnerUrl, nodeTaskUrl)
-                .WithExecuteRunner()
-                .WithLocalRuntimeSystemInformation()
-                .Build();
-
-            var batchNodeScriptUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, BatchScriptFileName, cancellationToken);
-
-            await storageAccessProvider.UploadBlobAsync(new Uri(batchNodeScriptUrl), batchNodeScript, cancellationToken);
-            await storageAccessProvider.UploadBlobAsync(new Uri(nodeTaskUrl), SerializeNodeTask(nodeTask), cancellationToken);
-
-            var batchRunCommand = enableBatchAutopool
-                ? $"/bin/bash -c {CreateWgetDownloadCommand(batchNodeScriptUrl, $"AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)} && AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
-                : $"/bin/bash -c \"{MungeBatchTaskCommandLine()}\"";
-
-            // Replace any URL query strings with the word REMOVED
-            const string pattern = @"(https?:\/\/[^?\s]+)\?[^?\s]*";
-            const string replacement = "$1?REMOVED";
-            string sanitizedLogEntry = Regex.Replace(batchRunCommand, pattern, replacement);
-
-            logger.LogInformation("CloudTask.CommandLine (sanitized): " + sanitizedLogEntry);
+            var batchRunCommand = taskExecutionScriptingManager.ParseBatchRunCommand(assets);
 
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
@@ -1036,28 +1011,6 @@ namespace TesApi.Web
             };
 
             return cloudTask;
-
-            static string SerializeNodeTask(NodeTask task)
-                => JsonConvert.SerializeObject(task, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore });
-
-            string MungeBatchTaskCommandLine()
-                => string.Join("\n", taskRunScriptContent)
-                    .Replace(@"{CleanupScriptLines}", string.Join("\n", poolHasContainerConfig ? MungeCleanupScriptForContainerConfig(taskCleanupScriptContent) : MungeCleanupScript(taskCleanupScriptContent)))
-                    .Replace(@"{GetBatchScriptFile}", $"{CreateWgetDownloadCommand(batchNodeScriptUrl, $"$AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)}")
-                    .Replace(@"{BatchScriptPath}", $"$AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}")
-                    .Replace(@"{ExecutionPathPrefix}", "wd")
-                    .Replace("\"", "\\\"");
-
-            static IEnumerable<string> MungeCleanupScript(IEnumerable<string> content)
-            {
-                return content.Select((line, index) => $"echo '{line}' {Redirect(index)} ../clean-executor.sh");
-
-                static string Redirect(int index)
-                    => index == 0 ? ">" : ">>";
-            }
-
-            static IEnumerable<string> MungeCleanupScriptForContainerConfig(IEnumerable<string> content)
-                => MungeCleanupScript(content.Where(line => !line.Contains(@"{TaskExecutor}")));
         }
 
         private async Task<List<TesInput>> AddExistingBlobsInCromwellStorageLocationsAsInputFiles(TesTask task,

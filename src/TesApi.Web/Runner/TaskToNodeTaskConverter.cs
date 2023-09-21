@@ -17,9 +17,11 @@ using TesApi.Web.Storage;
 namespace TesApi.Web.Runner
 {
     /// <summary>
-    /// Handles the creation of a NodeTask from a TesTask
+    /// Handles the creation of a NodeTask from a TesTask. This class also handles the creation of the NodeTask's inputs and outputs. With the following key functionality:
+    /// 1 .- Handles content inputs by creating them as blobs in storage and setting the NodeTasks' inputs to the blobs' URLs.
+    /// 2 .- Handles local file paths in inputs when Cromwell is using the local filesystem with a blob FUSE driver.
     /// </summary>
-    public class TesTaskToNodeTaskConverter
+    public class TaskToNodeTaskConverter
     {
         /// <summary>
         /// Metrics file name
@@ -33,16 +35,16 @@ namespace TesApi.Web.Runner
         private readonly IStorageAccessProvider storageAccessProvider;
 
         private readonly TerraOptions terraOptions;
-        private readonly ILogger<TesTaskToNodeTaskConverter> logger;
+        private readonly ILogger<TaskToNodeTaskConverter> logger;
 
 
         /// <summary>
-        /// Constructor of TesTaskToNodeTaskConverter
+        /// Constructor of TaskToNodeTaskConverter
         /// </summary>
         /// <param name="terraOptions"></param>
         /// <param name="storageAccessProvider"></param>
         /// <param name="logger"></param>
-        public TesTaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, ILogger<TesTaskToNodeTaskConverter> logger)
+        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, ILogger<TaskToNodeTaskConverter> logger)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
@@ -58,9 +60,11 @@ namespace TesApi.Web.Runner
         /// </summary>
         /// <param name="task">Node task</param>
         /// <param name="additionalInputs"></param>
+        /// <param name="containerCleanupOptions"></param>
         /// <param name="cancellationToken"></param>
         public async Task<NodeTask> ToNodeTaskAsync(TesTask task,
-            IList<TesInput> additionalInputs, CancellationToken cancellationToken)
+            IList<TesInput> additionalInputs, RuntimeContainerCleanupOptions containerCleanupOptions,
+            CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(task);
 
@@ -74,6 +78,7 @@ namespace TesApi.Web.Runner
                 builder.WithId(task.Id)
                     .WithWorkflowId(task.WorkflowId)
                     .WithContainerCommands(executor.Command.Select(EscapeBashArgument).ToList())
+                    .WithDockerCleanUpOptions(containerCleanupOptions)
                     .WithContainerImage(executor.Image)
                     .WithMetricsFile(MetricsFileName);
 
@@ -283,4 +288,11 @@ namespace TesApi.Web.Runner
             return inputPath;
         }
     }
+
+    /// <summary>
+    /// Docker clean up options for the Node runner. 
+    /// </summary>
+    /// <param name="ExecuteDockerRmi"></param>
+    /// <param name="ExecuteDockerPrune"></param>
+    public record RuntimeContainerCleanupOptions(bool ExecuteDockerRmi, bool ExecuteDockerPrune);
 }

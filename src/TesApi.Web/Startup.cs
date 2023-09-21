@@ -110,7 +110,9 @@ namespace TesApi.Web
                     .AddSingleton<ConfigurationUtils>()
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
                     .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
-                    .AddSingleton<TesTaskToNodeTaskConverter>()
+                    .AddSingleton<TaskToNodeTaskConverter>()
+                    .AddSingleton<TaskExecutionScriptingManager>()
+                    .AddTransient<BatchNodeScriptBuilder>()
 
                     .AddSwaggerGen(c =>
                     {
