@@ -60,7 +60,7 @@ namespace Tes.Runner.Docker
         {
             if (string.IsNullOrEmpty(mountParentDirectory))
             {
-                logger.LogWarning(
+                logger.LogDebug(
                     $"The file {path} does not have a mount parent directory defined in the task definition. No volume binding will be created for this file in the container.");
                 return default;
             }
