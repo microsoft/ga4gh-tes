@@ -127,6 +127,8 @@ namespace TesApi.Web
         /// <returns></returns>
         public string Build()
         {
+            batchScript.AppendLinuxLine("echo Task complete");
+
             var builtScript = batchScript.ToString();
             batchScript.Clear();
 
