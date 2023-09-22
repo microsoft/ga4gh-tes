@@ -98,7 +98,7 @@ namespace Tes.RunnerCLI.Commands
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-            Logger.LogInformation("Starting upload operation as a sub-process.");
+            Logger.LogInformation("Starting upload operation.");
 
             return await ExecuteTransferTaskAsync(file, exec => exec.UploadOutputsAsync(options));
         }
@@ -111,7 +111,6 @@ namespace Tes.RunnerCLI.Commands
                     $"Task operation failed. Command: {command}. Exit Code: {results.ExitCode}{Environment.NewLine}Error: {results.StandardError}{Environment.NewLine}Output: {results.StandardOutput}");
             }
 
-            Logger.LogInformation($"Result from executing command {command} as a sub-process: ");
             Console.WriteLine($"{results.StandardOutput}"); //writing the result to the console to keep formatting
         }
 
@@ -133,7 +132,7 @@ namespace Tes.RunnerCLI.Commands
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-            Logger.LogInformation("Starting download operation as a sub-process.");
+            Logger.LogInformation("Starting download operation.");
 
             return await ExecuteTransferTaskAsync(file, exec => exec.DownloadInputsAsync(options));
         }
