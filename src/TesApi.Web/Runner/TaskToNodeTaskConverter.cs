@@ -26,7 +26,7 @@ namespace TesApi.Web.Runner
         /// <summary>
         /// Metrics file name
         /// </summary>
-        public const string MetricsFileName = "metric.txt";
+        public const string MetricsFileName = "metrics.txt";
         private const string BatchTaskWorkingDirEnvVar = "%AZ_BATCH_TASK_WORKING_DIR%";
         private const string BatchNodeStartupDirEnvVar = "%AZ_BATCH_NODE_STARTUP_DIR%";
 
