@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
 using Tes.Extensions;
+using CommonUtilities;
 using Tes.Models;
 using Tes.Repository;
 
@@ -138,7 +139,7 @@ namespace TesApi.Web
                             batchScheduler.ClearBatchLogState();
 
                             // Release early; the Try/Finally block will have no effect
-                            processExistingTasksLock.Release();
+                            processExistingTasksLock.TryRelease();
                         }
 
                         await Task.Delay(runInterval, stoppingToken);
@@ -161,16 +162,8 @@ namespace TesApi.Web
                         finally
                         {
                             // Allow existing tasks to resume
-
-                            if (processNewTasksLock.CurrentCount == 0)
-                            {
-                                processNewTasksLock.Release();
-                            }
-
-                            if (processExistingTasksLock.CurrentCount == 0)
-                            {
-                                processExistingTasksLock.Release();
-                            }
+                            processNewTasksLock.TryRelease();
+                            processExistingTasksLock.TryRelease();
                         }
                     }
                     else
@@ -193,9 +186,9 @@ namespace TesApi.Web
                 }
                 finally
                 {
-                    if (areExistingTesTasks && processExistingTasksLock.CurrentCount == 0)
+                    if (areExistingTesTasks)
                     {
-                        processExistingTasksLock.Release();
+                        processExistingTasksLock.TryRelease();
                     }
                 }
 
