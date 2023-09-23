@@ -283,6 +283,8 @@ namespace TesApi.Web
 
             while (!stoppingToken.IsCancellationRequested)
             {
+                bool newTaskCompletionsFound = false;
+
                 // Prioritize processing completed tasks, then terminal state tasks, then randomize order within each state to prevent head-of-line blocking
                 foreach (var tesTask in tesTasks.OrderByDescending(t => completedTesTaskIds.Contains(t.Id)).ThenBy(t => t.State).ThenBy(t => random.Next()))
                 {
@@ -296,6 +298,7 @@ namespace TesApi.Web
                     {
                         // New task completions found, stop processing existing tasks
                         // Force loop to restart so that new task completions are processed
+                        newTaskCompletionsFound = true;
                         break;
                     }
 
@@ -321,6 +324,12 @@ namespace TesApi.Web
                     {
                         pools.Add(tesTask.PoolId);
                     }
+                }
+
+                if (newTaskCompletionsFound)
+                {
+                    // Force loop to restart so that new task completions are processed
+                    continue;
                 }
 
                 // The while loop is only to handle the task completion case
