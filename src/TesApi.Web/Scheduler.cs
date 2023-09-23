@@ -293,7 +293,7 @@ namespace TesApi.Web
                 bool newTaskCompletionsFound = false;
 
                 // Prioritize processing completed tasks, then terminal state tasks, then randomize order within each state to prevent head-of-line blocking
-                foreach (var tesTask in tesTasks.OrderByDescending(t => completedTesTaskIds.Contains(t.Id)).ThenBy(t => t.State).ThenBy(t => random.Next()))
+                foreach (var tesTask in tesTasks.OrderBy(t => completedTesTaskIds.Contains(t.Id)).ThenByDescending(t => t.State).ThenBy(t => random.Next()))
                 {
                     if (areExistingTesTasks && processNewTasksLock.CurrentCount == 0)
                     {
@@ -315,6 +315,7 @@ namespace TesApi.Web
 
                         if (completedTesTaskIds.Contains(tesTask.Id))
                         {
+                            // TODO remove from TesTasks so we don't process again?
                             await DeleteTesTaskCompletionByIdIfExistsAsync(tesTask.Id, stoppingToken);
 
                             // Don't remove it from completedTesTaskIds or else the collection modified exception will get thrown
