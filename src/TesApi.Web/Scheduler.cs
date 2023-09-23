@@ -279,38 +279,52 @@ namespace TesApi.Web
         private async Task ProcessTesTasks(List<TesTask> tesTasks, bool areExistingTesTasks, CancellationToken stoppingToken)
         {
             var pools = new HashSet<string>();
+            int completedTesTaskIdsCount = completedTesTaskIds.Count;
 
-            // Prioritize processing completed tasks, then terminal state tasks, then randomize order within each state to prevent head-of-line blocking
-            foreach (var tesTask in tesTasks.OrderByDescending(t => completedTesTaskIds.Contains(t.Id)).ThenBy(t => t.State).ThenBy(t => random.Next()))
+            while (!stoppingToken.IsCancellationRequested)
             {
-                if (areExistingTesTasks && processNewTasksLock.CurrentCount == 0)
+                // Prioritize processing completed tasks, then terminal state tasks, then randomize order within each state to prevent head-of-line blocking
+                foreach (var tesTask in tesTasks.OrderByDescending(t => completedTesTaskIds.Contains(t.Id)).ThenBy(t => t.State).ThenBy(t => random.Next()))
                 {
-                    // New tasks found, stop processing existing tasks
-                    break;
-                }
-
-                try
-                {
-                    await ProcessTesTask(tesTask, stoppingToken);
-
-                    if (completedTesTaskIds.Contains(tesTask.Id))
+                    if (areExistingTesTasks && processNewTasksLock.CurrentCount == 0)
                     {
-                        await DeleteTesTaskCompletionByIdIfExistsAsync(tesTask.Id, stoppingToken);
+                        // New tasks found, stop processing existing tasks
+                        return;
+                    }
+
+                    if (completedTesTaskIds.Count > completedTesTaskIdsCount)
+                    {
+                        // New task completions found, stop processing existing tasks
+                        // Force loop to restart so that new task completions are processed
+                        break;
+                    }
+
+                    try
+                    {
+                        await ProcessTesTask(tesTask, stoppingToken);
+
+                        if (completedTesTaskIds.Contains(tesTask.Id))
+                        {
+                            await DeleteTesTaskCompletionByIdIfExistsAsync(tesTask.Id, stoppingToken);
+                        }
+                    }
+                    catch (RepositoryCollisionException exc)
+                    {
+                        logger.LogError(exc, $"RepositoryCollisionException in OrchestrateTesTasksOnBatch");
+                    }
+                    catch (Exception exc)
+                    {
+                        logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(tesTask.PoolId) && (TesState.QUEUEDEnum == tesTask.State || TesState.RUNNINGEnum == tesTask.State))
+                    {
+                        pools.Add(tesTask.PoolId);
                     }
                 }
-                catch (RepositoryCollisionException exc)
-                {
-                    logger.LogError(exc, $"RepositoryCollisionException in OrchestrateTesTasksOnBatch");
-                }
-                catch (Exception exc)
-                {
-                    logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
-                }
 
-                if (!string.IsNullOrWhiteSpace(tesTask.PoolId) && (TesState.QUEUEDEnum == tesTask.State || TesState.RUNNINGEnum == tesTask.State))
-                {
-                    pools.Add(tesTask.PoolId);
-                }
+                // The while loop is only to handle the task completion case
+                break;
             }
 
             if (areExistingTesTasks && batchScheduler.NeedPoolFlush)
