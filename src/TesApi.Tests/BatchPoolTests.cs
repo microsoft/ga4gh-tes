@@ -311,7 +311,7 @@ namespace TesApi.Tests
                         if (azureProxyReturnValues.PoolStateExists(poolId))
                         {
                             var state = azureProxyReturnValues.GetBatchPoolImpl(poolId);
-                            return new(state.AllocationStateTransitionTime, state.AutoScaleEnabled, state.TargetLowPriorityComputeNodes, state.CurrentLowPriorityComputeNodes, state.TargetDedicatedComputeNodes, state.CurrentDedicatedComputeNodes) { AllocationState = state.AllocationState};
+                            return new(state.AllocationStateTransitionTime, state.AutoScaleEnabled, state.TargetLowPriorityComputeNodes, state.CurrentLowPriorityComputeNodes, state.TargetDedicatedComputeNodes, state.CurrentDedicatedComputeNodes) { AllocationState = state.AllocationState };
                         }
                         else
                         {
