@@ -41,7 +41,7 @@ namespace TesApi.Tests
         {
             var tesTaskList = new List<TesTask>
             {
-                new TesTask { State = TesState.QUEUEDEnum, CreationTime = DateTime.Now }
+                new TesTask { State = TesState.QUEUEDEnum, CreationTime = DateTime.UtcNow }
             };
             mockRepository.Setup(r => r.GetItemsAsync(It.IsAny<Expression<Func<TesTask, bool>>>(), It.IsAny<CancellationToken>()))
                           .Returns(Task.FromResult(tesTaskList as IEnumerable<TesTask>));
@@ -66,7 +66,7 @@ namespace TesApi.Tests
         {
             var tesTaskList = new List<TesTask>
             {
-                new TesTask { State = TesState.QUEUEDEnum, CreationTime = DateTime.Now }
+                new TesTask { State = TesState.QUEUEDEnum, CreationTime = DateTime.UtcNow }
             };
             mockRepository.Setup(r => r.GetItemsAsync(It.IsAny<Expression<Func<TesTask, bool>>>(), It.IsAny<CancellationToken>()))
                           .Returns(Task.FromResult(tesTaskList as IEnumerable<TesTask>));
