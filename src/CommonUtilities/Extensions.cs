@@ -13,7 +13,7 @@ namespace CommonUtilities
         /// </summary>
         /// <param name="semaphore">The SemaphoreSlim</param>
         /// <returns>True if successful, false otherwise</returns>
-        public static bool TryRelease(this SemaphoreSlim semaphore)
+        public static bool TryReleaseIfInUse(this SemaphoreSlim semaphore)
         {
             if (semaphore.CurrentCount == 0)
             {

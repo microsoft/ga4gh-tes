@@ -139,7 +139,7 @@ namespace TesApi.Web
                             batchScheduler.ClearBatchLogState();
 
                             // Release early; the Try/Finally block will have no effect
-                            processExistingTasksLock.TryRelease();
+                            processExistingTasksLock.TryReleaseIfInUse();
                         }
 
                         await Task.Delay(runInterval, stoppingToken);
@@ -162,8 +162,8 @@ namespace TesApi.Web
                         finally
                         {
                             // Allow existing tasks to resume
-                            processNewTasksLock.TryRelease();
-                            processExistingTasksLock.TryRelease();
+                            processNewTasksLock.TryReleaseIfInUse();
+                            processExistingTasksLock.TryReleaseIfInUse();
                         }
                     }
                     else
@@ -188,7 +188,7 @@ namespace TesApi.Web
                 {
                     if (areExistingTesTasks)
                     {
-                        processExistingTasksLock.TryRelease();
+                        processExistingTasksLock.TryReleaseIfInUse();
                     }
                 }
 
