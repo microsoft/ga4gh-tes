@@ -35,6 +35,7 @@ namespace Tes.Repository.Tests
     /// </summary>
     [Ignore]
     [TestClass]
+    [TestCategory("Integration")]
     public class TesTaskPostgreSqlRepositoryIntegrationTests
     {
         private static IRepository<Models.TesTask> repository;

@@ -5,9 +5,9 @@ using Azure.Storage.Sas;
 
 namespace Tes.Runner.Storage
 {
-    public class PassThroughSasResolutionStrategy : ISasResolutionStrategy
+    public class PassThroughUrlTransformationStrategy : IUrlTransformationStrategy
     {
-        public Task<Uri> CreateSasTokenWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
+        public Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
         {
             ArgumentException.ThrowIfNullOrEmpty(sourceUrl);
 

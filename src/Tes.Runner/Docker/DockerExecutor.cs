@@ -20,7 +20,7 @@ namespace Tes.Runner.Docker
                 .CreateClient();
         }
 
-        public async Task<ContainerExecutionResult> RunOnContainerAsync(string? imageName, string? tag, List<string>? commandsToExecute)
+        public async Task<ContainerExecutionResult> RunOnContainerAsync(string? imageName, string? tag, List<string>? commandsToExecute, List<string>? volumeBindings)
         {
             ArgumentException.ThrowIfNullOrEmpty(imageName);
             ArgumentException.ThrowIfNullOrEmpty(tag);
@@ -30,7 +30,7 @@ namespace Tes.Runner.Docker
 
             await ConfigureNetworkAsync();
 
-            var createResponse = await CreateContainerAsync(imageName, commandsToExecute);
+            var createResponse = await CreateContainerAsync(imageName, commandsToExecute, volumeBindings);
 
             var logs = await StartContainerWithStreamingOutput(createResponse);
 
@@ -61,7 +61,7 @@ namespace Tes.Runner.Docker
                 });
         }
 
-        private async Task<CreateContainerResponse> CreateContainerAsync(string imageName, List<string> commandsToExecute)
+        private async Task<CreateContainerResponse> CreateContainerAsync(string imageName, List<string> commandsToExecute, List<string>? volumeBindings)
         {
             var createResponse = await dockerClient.Containers.CreateContainerAsync(
                 new CreateContainerParameters
@@ -70,7 +70,11 @@ namespace Tes.Runner.Docker
                     Entrypoint = commandsToExecute,
                     AttachStdout = true,
                     AttachStderr = true,
-                    WorkingDir = "/"
+                    WorkingDir = "/",
+                    HostConfig = new HostConfig
+                    {
+                        Binds = volumeBindings
+                    }
                 });
             return createResponse;
         }

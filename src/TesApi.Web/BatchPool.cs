@@ -116,7 +116,7 @@ namespace TesApi.Web
                 LastAllocationStateTransitionToSteady = poolAllocationState.AllocationStateTransitionTime;
             }
 
-            return isAllocationStateSteady && (LastAllocationRequestSent ?? Creation) <= poolAllocationState.AllocationStateTransitionTime;
+            return isAllocationStateSteady && (LastAllocationRequestSent ?? Creation) <= (poolAllocationState.AllocationStateTransitionTime ?? Creation);
         }
 
         private void MarkAllocationStateDirty(AzureBatchPoolAllocationState poolAllocationState)
@@ -131,47 +131,65 @@ namespace TesApi.Web
 
             if (_scalingMode == ScalingMode.AutoScaleEnabled)
             {
-                if (!IsAllocationStateSteady(poolAllocationState))
+                if (IsAllocationStateSteady(poolAllocationState))
+                {
+                    if (!_resizeErrorsRetrieved)
+                    {
+                        ResizeErrors.Clear();
+                        var pool = await _azureProxy.GetBatchPoolAsync(Pool.PoolId, cancellationToken, new ODATADetailLevel { SelectClause = "id,allocationStateTransitionTime,autoScaleFormula,autoScaleRun,resizeErrors" });
+
+                        if (pool.AutoScaleRun?.Timestamp < DateTime.UtcNow - (5 * AutoScaleEvaluationInterval)) // It takes some cycles to reset autoscale, so give batch some time to catch up on its own.
+                        {
+                            _resetAutoScalingRequired |= true;
+                        }
+                        else
+                        {
+                            foreach (var error in pool.ResizeErrors ?? Enumerable.Empty<ResizeError>())
+                            {
+                                switch (error.Code)
+                                {
+                                    // Errors to ignore
+                                    case PoolResizeErrorCodes.RemoveNodesFailed:
+                                    case PoolResizeErrorCodes.CommunicationEnabledPoolReachedMaxVMCount:
+                                    case PoolResizeErrorCodes.AccountSpotCoreQuotaReached:
+                                    case PoolResizeErrorCodes.AllocationTimedOut:
+                                        break;
+
+                                    // Errors that sometimes require mitigation
+                                    case PoolResizeErrorCodes.AccountCoreQuotaReached:
+                                    case PoolResizeErrorCodes.AccountLowPriorityCoreQuotaReached:
+                                        if (pool.AllocationStateTransitionTime < DateTime.UtcNow - (10 * AutoScaleEvaluationInterval) &&
+                                            (await pool.EvaluateAutoScaleAsync(pool.AutoScaleFormula, cancellationToken: cancellationToken))?.Error is not null)
+                                        {
+                                            _resetAutoScalingRequired |= true;
+                                        }
+                                        break;
+
+                                    // Errors to force autoscale to be reset
+                                    case PoolResizeErrorCodes.ResizeStopped:
+                                        _resetAutoScalingRequired |= true;
+                                        break;
+
+                                    // Errors to both force resetting autoscale and fail tasks
+                                    case PoolResizeErrorCodes.AllocationFailed:
+                                        _resetAutoScalingRequired |= true;
+                                        goto default;
+
+                                    // Errors to fail tasks should be directed here
+                                    default:
+                                        ResizeErrors.Enqueue(error);
+                                        break;
+                                }
+                            }
+                        }
+
+                        _resizeErrorsRetrieved = true;
+                    }
+                }
+                else
                 {
                     _resetAutoScalingRequired = false;
                     _resizeErrorsRetrieved = false;
-                }
-                else if (!_resizeErrorsRetrieved)
-                {
-                    ResizeErrors.Clear();
-                    var pool = await _azureProxy.GetBatchPoolAsync(Pool.PoolId, cancellationToken, new ODATADetailLevel { SelectClause = "resizeErrors" });
-
-                    foreach (var error in pool.ResizeErrors ?? Enumerable.Empty<ResizeError>())
-                    {
-                        switch (error.Code)
-                        {
-                            // Errors to ignore
-                            case PoolResizeErrorCodes.RemoveNodesFailed:
-                            case PoolResizeErrorCodes.AccountCoreQuotaReached:
-                            case PoolResizeErrorCodes.AccountLowPriorityCoreQuotaReached:
-                            case PoolResizeErrorCodes.CommunicationEnabledPoolReachedMaxVMCount:
-                            case PoolResizeErrorCodes.AccountSpotCoreQuotaReached:
-                            case PoolResizeErrorCodes.AllocationTimedOut:
-                                break;
-
-                            // Errors to force autoscale to be reset
-                            case PoolResizeErrorCodes.ResizeStopped:
-                                _resetAutoScalingRequired |= true;
-                                break;
-
-                            // Errors to both force resetting autoscale and fail tasks
-                            case PoolResizeErrorCodes.AllocationFailed:
-                                _resetAutoScalingRequired |= true;
-                                goto default;
-
-                            // Errors to fail tasks should be directed here
-                            default:
-                                ResizeErrors.Enqueue(error);
-                                break;
-                        }
-                    }
-
-                    _resizeErrorsRetrieved = true;
                 }
             }
         }

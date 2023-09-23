@@ -8,9 +8,12 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.VisualStudio.TestPlatform.ObjectModel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
+using Tes.Repository;
 using TesApi.Controllers;
 
 namespace TesApi.Tests
@@ -236,29 +239,78 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        public async Task CancelTaskAsync_ReturnsBadRequest_ForInvalidId()
+        [DataRow("IdWith@InvalidCharacter$", 400, "Invalid ID")]
+        [DataRow("abcde123_ca8e57a5746f4436b864808b0fbf0a64", 200, null)]
+        [DataRow("ca8e57a5746f4436b864808b0fbf0a64", 200, null)]
+        public async Task CancelTaskAsync_ValidatesIdCorrectly(string testId, int expectedStatusCode, string expectedMessage)
         {
-            var tesTaskId = "IdDoesNotExist";
+            TesTask mockTesTask = new TesTask { State = TesState.RUNNINGEnum };
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
-                r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
-                .Callback<string, System.Threading.CancellationToken, Action<TesTask>>((id, _1, action) =>
-                {
-                    action(null);
-                })
-                .ReturnsAsync(false));
+            {
+                r.Setup(repo => repo.TryGetItemAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<Action<TesTask>>()))
+                .Callback((string id, CancellationToken ct, Action<TesTask> action) => action(mockTesTask))
+                .ReturnsAsync(true);
+
+                // Mock UpdateItemAsync to throw a RepositoryCollisionException
+                r.Setup(repo => repo.UpdateItemAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockTesTask);
+            });
+
             var controller = services.GetT();
 
-            var result = await controller.CancelTask(tesTaskId, System.Threading.CancellationToken.None) as NotFoundObjectResult;
+            // Act
+            var result = await controller.CancelTask(testId, CancellationToken.None);
 
+            // Assert
+            if (result is ObjectResult objectResult)
+            {
+                Assert.AreEqual(expectedStatusCode, objectResult.StatusCode);
+
+                if (expectedMessage != null)
+                {
+                    Assert.AreEqual(expectedMessage, objectResult.Value);
+                }
+            }
+            else
+            {
+                Assert.Fail("The action result is not of type ObjectResult");
+            }
+        }
+
+        [TestMethod]
+        public async Task CancelTaskAsync_ReturnsConflict_ForRepositoryCollision()
+        {
+            TesTask mockTesTask = new TesTask { State = TesState.RUNNINGEnum };
+            var tesTaskId = mockTesTask.CreateId();
+
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
+            {
+                // Mock TryGetItemAsync to return true and provide a TesTask object
+                r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<CancellationToken>(), It.IsAny<Action<TesTask>>()))
+                .Callback((string id, CancellationToken ct, Action<TesTask> action) => action(mockTesTask))
+                .ReturnsAsync(true);
+
+                // Mock UpdateItemAsync to throw a RepositoryCollisionException
+                r.Setup(repo => repo.UpdateItemAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new RepositoryCollisionException());
+            });
+
+            var controller = services.GetT();
+
+            // Act
+            var result = await controller.CancelTask(tesTaskId, CancellationToken.None) as ConflictObjectResult;
+
+            // Assert
             Assert.IsNotNull(result);
-            Assert.AreEqual(404, result.StatusCode);
+            Assert.AreEqual(409, result.StatusCode);
         }
 
         [TestMethod]
         public async Task CancelTaskAsync_ReturnsEmptyObject()
         {
-            var tesTask = new TesTask() { Id = "testTaskId", State = TesState.QUEUEDEnum };
+            var tesTask = new TesTask() { State = TesState.QUEUEDEnum };
+            tesTask.Id = tesTask.CreateId();
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
@@ -287,9 +339,9 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        public async Task GetTaskAsync_ReturnsNotFound_ForInvalidId()
+        public async Task GetTaskAsync_ReturnsNotFound_ForValidId()
         {
-            var tesTaskId = "IdDoesNotExist";
+            var tesTaskId = new TesTask().CreateId();
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
@@ -306,6 +358,7 @@ namespace TesApi.Tests
         public async Task GetTaskAsync_ReturnsBadRequest_ForInvalidViewValue()
         {
             var tesTask = new TesTask();
+            tesTask.Id = tesTask.CreateId();
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))
@@ -329,6 +382,7 @@ namespace TesApi.Tests
             {
                 State = TesState.RUNNINGEnum
             };
+            tesTask.Id = tesTask.CreateId();
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo.TryGetItemAsync(tesTask.Id, It.IsAny<System.Threading.CancellationToken>(), It.IsAny<Action<TesTask>>()))

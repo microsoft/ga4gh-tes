@@ -351,27 +351,6 @@ namespace TesApi.Tests
             Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 1, RamGb = 1, Preemptible = false }, azureProxyReturnValues));
         }
 
-        [TestMethod]
-        public async Task BatchTaskResourcesIncludeDownloadAndUploadScripts()
-        {
-            var expectedFiles = new List<string>
-            {
-                "batch_script",
-                "TesTask.json",
-                "starttask_uploadlogs.json",
-                "tRunner",
-            };
-
-            (_, var cloudTask, _, _) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(true);
-
-            foreach (var file in expectedFiles)
-            {
-                Assert.IsTrue(cloudTask.ResourceFiles.Any(f => f.FilePath.Equals(file)));
-            }
-
-            Assert.AreEqual(expectedFiles.Count, cloudTask.ResourceFiles.Count);
-        }
-
         private async Task AddBatchTaskHandlesExceptions(TesState newState, Func<AzureProxyReturnValues, (Action<IServiceCollection>, Action<Mock<IAzureProxy>>)> testArranger, Action<TesTask, IEnumerable<(LogLevel, Exception)>> resultValidator)
         {
             var logger = new Mock<ILogger<BatchScheduler>>();
