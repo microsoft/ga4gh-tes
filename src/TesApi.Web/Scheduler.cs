@@ -256,6 +256,7 @@ namespace TesApi.Web
 
                     if (newCompletedTesTaskIds.Except(this.completedTesTaskIds).Any())
                     {
+                        // At least one new task completion was found
                         lastNewTaskCompleteFoundDate = DateTime.UtcNow;
                     }
 
