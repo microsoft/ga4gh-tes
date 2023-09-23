@@ -66,14 +66,14 @@ namespace TesApi.Web
         /// <returns>A System.Threading.Tasks.Task that represents the long running operations.</returns>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var result = await tesRunnerUploadRetryPolicy.ExecuteAndCaptureAsync(t => UploadTesRunnerAsync(stoppingToken), stoppingToken);
+            var uploadTesRunnerResult = await tesRunnerUploadRetryPolicy.ExecuteAndCaptureAsync(t => UploadTesRunnerAsync(stoppingToken), stoppingToken);
 
-            if (result.Outcome == OutcomeType.Failure)
+            if (uploadTesRunnerResult.Outcome == OutcomeType.Failure)
             {
                 const string msg = "Could not upload the TES runner to Azure Storage. Does this container have access to the default storage account or workspace storage account?";
-                logger.LogCritical(msg, result.FinalException);
+                logger.LogCritical(msg, uploadTesRunnerResult.FinalException);
                 applicationLifetime.StopApplication();
-                throw new Exception(msg, result.FinalException);
+                throw new Exception(msg, uploadTesRunnerResult.FinalException);
             }
 
             logger.LogInformation("Scheduler started.");
