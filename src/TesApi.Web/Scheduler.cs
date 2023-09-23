@@ -33,7 +33,7 @@ namespace TesApi.Web
         private readonly SemaphoreSlim processExistingTasksLock = new SemaphoreSlim(1, 1);
         private readonly Random random = new Random(Guid.NewGuid().GetHashCode());
         private readonly AsyncRetryPolicy tesRunnerUploadRetryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(12, attempt => TimeSpan.FromSeconds(5));
-        private readonly IHostApplicationLifetime _applicationLifetime;
+        private readonly IHostApplicationLifetime applicationLifetime;
 
         /// <summary>
         /// Default constructor
@@ -47,7 +47,7 @@ namespace TesApi.Web
             this.repository = repository;
             this.batchScheduler = batchScheduler;
             this.logger = logger;
-            this._applicationLifetime = applicationLifetime;
+            this.applicationLifetime = applicationLifetime;
         }
 
         /// <inheritdoc />
@@ -70,7 +70,7 @@ namespace TesApi.Web
             {
                 const string msg = "Could not upload the TES runner to Azure Storage. Does this container have access to the default storage account or workspace storage account?";
                 logger.LogCritical(msg, result.FinalException);
-                _applicationLifetime.StopApplication();
+                applicationLifetime.StopApplication();
                 throw new Exception(msg, result.FinalException);
             }
 
