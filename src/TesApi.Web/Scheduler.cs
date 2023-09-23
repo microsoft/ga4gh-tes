@@ -28,6 +28,7 @@ namespace TesApi.Web
         private readonly TimeSpan runInterval = TimeSpan.FromSeconds(1);
         private readonly SemaphoreSlim processNewTasksLock = new SemaphoreSlim(1, 1);
         private readonly SemaphoreSlim processExistingTasksLock = new SemaphoreSlim(1, 1);
+        private readonly Random random = new Random(Guid.NewGuid().GetHashCode());
 
         /// <summary>
         /// Default constructor
@@ -171,8 +172,9 @@ namespace TesApi.Web
         private async Task ProcessTesTasks(List<TesTask> tesTasks, bool areExistingTesTasks, CancellationToken stoppingToken)
         {
             var pools = new HashSet<string>();
-
-            foreach (var tesTask in tesTasks)
+            
+            // Prioritize processing terminal state tasks, then randomize order within each state to prevent head-of-line blocking
+            foreach (var tesTask in tesTasks.OrderByDescending(t => t.State).ThenBy(t => random.Next()))
             {
                 if (areExistingTesTasks && processNewTasksLock.CurrentCount == 0)
                 {
