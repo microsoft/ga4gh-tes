@@ -8,12 +8,12 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
+using CommonUtilities;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
 using Tes.Extensions;
-using CommonUtilities;
 using Tes.Models;
 using Tes.Repository;
 
