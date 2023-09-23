@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
@@ -27,7 +28,7 @@ namespace TesApi.Web
         private readonly IRepository<TesTask> repository;
         private readonly IBatchScheduler batchScheduler;
         private readonly ILogger<Scheduler> logger;
-        private readonly TimeSpan runInterval = TimeSpan.FromSeconds(1);
+        private readonly TimeSpan runInterval = TimeSpan.FromSeconds(4);
         private readonly SemaphoreSlim processNewTasksLock = new SemaphoreSlim(1, 1);
         private readonly SemaphoreSlim processExistingTasksLock = new SemaphoreSlim(1, 1);
         private readonly Random random = new Random(Guid.NewGuid().GetHashCode());
@@ -110,6 +111,7 @@ namespace TesApi.Web
         private async Task ProcessTesTasksContinuouslyAsync(Expression<Func<TesTask, bool>> predicate, bool areExistingTesTasks, CancellationToken stoppingToken)
         {
             var tesTasks = new List<TesTask>();
+            var sw = Stopwatch.StartNew();
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -121,6 +123,8 @@ namespace TesApi.Web
                         await processExistingTasksLock.WaitAsync(stoppingToken);
                     }
 
+                    sw.Restart();
+                    
                     tesTasks = (await repository.GetItemsAsync(
                         predicate: predicate,
                         cancellationToken: stoppingToken))
@@ -165,6 +169,8 @@ namespace TesApi.Web
                         // Existing tasks
                         await ProcessTesTasks(tesTasks, areExistingTesTasks, stoppingToken);
                     }
+
+                    logger.LogInformation($"Processed {tesTasks.Count} {(areExistingTesTasks ? "existing" : "new")} TES tasks in {sw.Elapsed.TotalSeconds:n1}s; {sw.Elapsed.TotalSeconds / tesTasks.Count:n1} seconds per task");
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
