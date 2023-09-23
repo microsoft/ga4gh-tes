@@ -28,7 +28,6 @@ namespace TesApi.Web.Runner
         /// </summary>
         public const string MetricsFileName = "metrics.txt";
         private const string BatchTaskWorkingDirEnvVar = "%AZ_BATCH_TASK_WORKING_DIR%";
-        private const string BatchNodeStartupDirEnvVar = "%AZ_BATCH_NODE_STARTUP_DIR%";
 
         private readonly string pathParentDirectory = BatchTaskWorkingDirEnvVar;
         private readonly string containerMountParentDirectory = BatchTaskWorkingDirEnvVar;
@@ -56,13 +55,18 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
+        /// Parameter-less constructor for mocking
+        /// </summary>
+        protected TaskToNodeTaskConverter() { }
+
+        /// <summary>
         /// Converts TesTask to a new NodeTask
         /// </summary>
         /// <param name="task">Node task</param>
         /// <param name="additionalInputs"></param>
         /// <param name="containerCleanupOptions"></param>
         /// <param name="cancellationToken"></param>
-        public async Task<NodeTask> ToNodeTaskAsync(TesTask task,
+        public virtual async Task<NodeTask> ToNodeTaskAsync(TesTask task,
             IList<TesInput> additionalInputs, RuntimeContainerCleanupOptions containerCleanupOptions,
             CancellationToken cancellationToken)
         {
