@@ -174,11 +174,13 @@ namespace TesApi.Web
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
+                    logger.LogInformation($"ProcessTesTasksContinuouslyAsync for {(areExistingTesTasks ? "existing" : "new")} tasks cancelled.");
                     break;
                 }
                 catch (Exception exc)
                 {
                     logger.LogError(exc, exc.Message);
+                    await Task.Delay(runInterval, stoppingToken);
                 }
                 finally
                 {
