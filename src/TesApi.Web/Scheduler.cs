@@ -146,7 +146,6 @@ namespace TesApi.Web
                     {
                         // Existing tasks
                         await ProcessTesTasks(tesTasks, areExistingTesTasks, stoppingToken);
- 
                     }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
