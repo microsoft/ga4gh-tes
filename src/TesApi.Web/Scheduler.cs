@@ -33,6 +33,7 @@ namespace TesApi.Web
         private readonly SemaphoreSlim processExistingTasksLock = new SemaphoreSlim(1, 1);
         private readonly Random random = new Random(Guid.NewGuid().GetHashCode());
         private readonly AsyncRetryPolicy tesRunnerUploadRetryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(12, attempt => TimeSpan.FromSeconds(5));
+        private readonly IHostApplicationLifetime _applicationLifetime;
 
         /// <summary>
         /// Default constructor
@@ -40,11 +41,13 @@ namespace TesApi.Web
         /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler">The batch scheduler implementation</param>
         /// <param name="logger">The logger instance</param>
-        public Scheduler(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
+        /// <param name="applicationLifetime">The application lifetime instance</param>
+        public Scheduler(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger, IHostApplicationLifetime applicationLifetime)
         {
             this.repository = repository;
             this.batchScheduler = batchScheduler;
             this.logger = logger;
+            this._applicationLifetime = applicationLifetime;
         }
 
         /// <inheritdoc />
@@ -65,7 +68,10 @@ namespace TesApi.Web
 
             if (result.Outcome == OutcomeType.Failure)
             {
-                throw new Exception("Could not upload the TES runner to Azure Storage. Does this container have access to the default storage account or workspace storage account?", result.FinalException);
+                const string msg = "Could not upload the TES runner to Azure Storage. Does this container have access to the default storage account or workspace storage account?";
+                logger.LogCritical(msg, result.FinalException);
+                _applicationLifetime.StopApplication();
+                throw new Exception(msg, result.FinalException);
             }
 
             logger.LogInformation("Scheduler started.");
