@@ -161,8 +161,16 @@ namespace TesApi.Web
                         finally
                         {
                             // Allow existing tasks to resume
-                            processNewTasksLock.Release();
-                            processExistingTasksLock.Release();
+
+                            if (processNewTasksLock.CurrentCount == 0)
+                            {
+                                processNewTasksLock.Release();
+                            }
+
+                            if (processExistingTasksLock.CurrentCount == 0)
+                            {
+                                processExistingTasksLock.Release();
+                            }
                         }
                     }
                     else
