@@ -9,6 +9,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Polly;
+using Polly.Retry;
+using Tes.ApiClients.Options;
 using Tes.Extensions;
 using Tes.Models;
 using Tes.Repository;
@@ -29,6 +32,7 @@ namespace TesApi.Web
         private readonly SemaphoreSlim processNewTasksLock = new SemaphoreSlim(1, 1);
         private readonly SemaphoreSlim processExistingTasksLock = new SemaphoreSlim(1, 1);
         private readonly Random random = new Random(Guid.NewGuid().GetHashCode());
+        private readonly AsyncRetryPolicy tesRunnerUploadRetryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(12, attempt => TimeSpan.FromSeconds(5));
 
         /// <summary>
         /// Default constructor
@@ -57,7 +61,7 @@ namespace TesApi.Web
         /// <returns>A System.Threading.Tasks.Task that represents the long running operations.</returns>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await UploadTesRunnerAsync(stoppingToken);
+            await tesRunnerUploadRetryPolicy.ExecuteAsync(t => UploadTesRunnerAsync(stoppingToken), stoppingToken);
             logger.LogInformation("Scheduler started.");
 
             await Task.WhenAll(
