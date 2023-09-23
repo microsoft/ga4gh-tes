@@ -254,6 +254,8 @@ namespace TesApi.Web
                         newCompletedTesTaskIds.Add(tesTaskCompletionMessage.Id);
                     }
 
+                    // TODO - we will get completion messages before the CloudTask is complete; how should we handle ?
+
                     if (newCompletedTesTaskIds.Except(this.completedTesTaskIds).Any())
                     {
                         // At least one new task completion was found
