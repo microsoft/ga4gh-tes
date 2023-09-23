@@ -58,8 +58,9 @@ namespace TesApi.Web
             {
                 services
                     .AddLogging()
+                    .AddSingleton<IRetryPolicyProvider, RetryPolicyProvider>()
                     .AddApplicationInsightsTelemetry(configuration)
-
+                    
                     .Configure<BatchAccountOptions>(configuration.GetSection(BatchAccountOptions.SectionName))
                     .Configure<PostgreSqlOptions>(configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
                     .Configure<RetryPolicyOptions>(configuration.GetSection(RetryPolicyOptions.SectionName))

@@ -32,7 +32,7 @@ namespace TesApi.Web
         private readonly SemaphoreSlim processNewTasksLock = new SemaphoreSlim(1, 1);
         private readonly SemaphoreSlim processExistingTasksLock = new SemaphoreSlim(1, 1);
         private readonly Random random = new Random(Guid.NewGuid().GetHashCode());
-        private readonly AsyncRetryPolicy tesRunnerUploadRetryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(12, attempt => TimeSpan.FromSeconds(5));
+        private readonly AsyncRetryPolicy tesRunnerUploadRetryPolicy;
         private readonly IHostApplicationLifetime applicationLifetime;
 
         /// <summary>
@@ -41,12 +41,14 @@ namespace TesApi.Web
         /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler">The batch scheduler implementation</param>
         /// <param name="logger">The logger instance</param>
+        /// <param name="retryPolicyProvider">The retry policy provider</param>
         /// <param name="applicationLifetime">The application lifetime instance</param>
-        public Scheduler(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger, IHostApplicationLifetime applicationLifetime)
+        public Scheduler(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger, IRetryPolicyProvider retryPolicyProvider, IHostApplicationLifetime applicationLifetime)
         {
             this.repository = repository;
             this.batchScheduler = batchScheduler;
             this.logger = logger;
+            this.tesRunnerUploadRetryPolicy = retryPolicyProvider.CreateDefaultCriticalServiceRetryPolicy();
             this.applicationLifetime = applicationLifetime;
         }
 
