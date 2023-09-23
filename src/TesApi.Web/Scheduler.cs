@@ -40,6 +40,7 @@ namespace TesApi.Web
         private readonly IHostApplicationLifetime applicationLifetime;
         private readonly IStorageAccessProvider storageAccessProvider;
         private List<string> completedTesTaskIds = new List<string>();
+        private DateTime lastNewTaskCompleteFoundDate = DateTime.UtcNow;
 
         /// <summary>
         /// Default constructor
@@ -242,7 +243,7 @@ namespace TesApi.Web
                     var container = blobServiceClient.GetBlobContainerClient(storageSegments.ContainerName);
                     var virtualDirectory = storageSegments.BlobName + "/";
                     var enumerator = container.GetBlobsAsync(prefix: virtualDirectory).GetAsyncEnumerator();
-                    var completedTesTaskIds = new List<string>();
+                    var newCompletedTesTaskIds = new List<string>();
 
                     while (await enumerator.MoveNextAsync())
                     {
@@ -250,15 +251,20 @@ namespace TesApi.Web
                         var blobName = enumerator.Current.Name;
                         var json = (await container.GetBlobClient(blobName).DownloadContentAsync(stoppingToken)).Value.Content.ToString();
                         var tesTaskCompletionMessage = JsonConvert.DeserializeObject<TesTaskCompletionMessage>(json);
-                        completedTesTaskIds.Add(tesTaskCompletionMessage.Id);
+                        newCompletedTesTaskIds.Add(tesTaskCompletionMessage.Id);
+                    }
+
+                    if (newCompletedTesTaskIds.Except(this.completedTesTaskIds).Any())
+                    {
+                        lastNewTaskCompleteFoundDate = DateTime.UtcNow;
                     }
 
                     // Set class-level object so that it can be used by the existing task processor thread
-                    this.completedTesTaskIds = completedTesTaskIds;
+                    this.completedTesTaskIds = newCompletedTesTaskIds;
 
-                    if (completedTesTaskIds.Count > 0)
+                    if (newCompletedTesTaskIds.Count > 0)
                     {
-                        logger.LogInformation($"{completedTesTaskIds.Count} TES task completions downloaded in {sw.Elapsed.TotalSeconds:n1}s; {sw.Elapsed.TotalSeconds / completedTesTaskIds.Count:n1} seconds per task completion");
+                        logger.LogInformation($"{newCompletedTesTaskIds.Count} TES task completions downloaded in {sw.Elapsed.TotalSeconds:n1}s; {sw.Elapsed.TotalSeconds / newCompletedTesTaskIds.Count:n1} seconds per task completion");
                     }
 
                     await Task.Delay(runInterval, stoppingToken);                    
@@ -279,7 +285,7 @@ namespace TesApi.Web
         private async Task ProcessTesTasks(List<TesTask> tesTasks, bool areExistingTesTasks, CancellationToken stoppingToken)
         {
             var pools = new HashSet<string>();
-            int completedTesTaskIdsCount = completedTesTaskIds.Count;
+            var localLastNewTaskCompleteFoundDate = this.lastNewTaskCompleteFoundDate;
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -294,7 +300,7 @@ namespace TesApi.Web
                         return;
                     }
 
-                    if (completedTesTaskIds.Count > completedTesTaskIdsCount)
+                    if (this.lastNewTaskCompleteFoundDate > localLastNewTaskCompleteFoundDate)
                     {
                         // New task completions found, stop processing existing tasks
                         // Force loop to restart so that new task completions are processed
