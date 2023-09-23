@@ -124,7 +124,7 @@ namespace TesApi.Web
                     }
 
                     sw.Restart();
-                    
+
                     tesTasks = (await repository.GetItemsAsync(
                         predicate: predicate,
                         cancellationToken: stoppingToken))
@@ -197,7 +197,7 @@ namespace TesApi.Web
         private async Task ProcessTesTasks(List<TesTask> tesTasks, bool areExistingTesTasks, CancellationToken stoppingToken)
         {
             var pools = new HashSet<string>();
-            
+
             // Prioritize processing terminal state tasks, then randomize order within each state to prevent head-of-line blocking
             foreach (var tesTask in tesTasks.OrderByDescending(t => t.State).ThenBy(t => random.Next()))
             {
