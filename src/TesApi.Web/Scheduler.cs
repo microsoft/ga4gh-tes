@@ -11,7 +11,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
-using Tes.ApiClients.Options;
 using Tes.Extensions;
 using Tes.Models;
 using Tes.Repository;
