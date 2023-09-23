@@ -1,9 +1,9 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Polly.Retry;
-using Polly;
 using System;
+using Polly;
+using Polly.Retry;
 
 namespace TesApi.Web
 {
