@@ -150,17 +150,17 @@ namespace TesApi.Web
                         // New tasks
                         try
                         {
-                            // Signal to existing tasks to pause processing
+                            // Signal to existing task thread to pause processing
                             await processNewTasksLock.WaitAsync(stoppingToken);
 
-                            // Wait until existing tasks are done processing and block them
+                            // Wait until existing tasks thread is done processing, then block it from resuming
                             await processExistingTasksLock.WaitAsync(stoppingToken);
 
                             await ProcessTesTasks(tesTasks, areExistingTesTasks, stoppingToken);
                         }
                         finally
                         {
-                            // Allow existing tasks to resume
+                            // Allow existing tasks thead to resume processing
                             _ = processNewTasksLock.TryReleaseIfInUse();
                             _ = processExistingTasksLock.TryReleaseIfInUse();
                         }
