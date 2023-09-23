@@ -125,7 +125,7 @@ namespace TesApi.Web
         /// Builds the Batch command script
         /// </summary>
         /// <returns></returns>
-        public string Build()
+        public virtual string Build()
         {
             batchScript.AppendLinuxLine("echo Task complete");
 

@@ -975,21 +975,10 @@ namespace TesApi.Web
         {
             ValidateTesTask(task);
 
-            var poolHasContainerConfig = !(isPublic.ExecutorImage && isPublic.DockerInDockerImage && isPublic.CromwellDrsImage);
-            var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
-            var isCromwell = cromwellExecutionDirectoryUrl is not null;
-
-
-            // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
-            // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
-            // TODO: Verify whether this workaround is still needed.
-            var additionalInputs = new List<TesInput>();
-            if (isCromwell)
-            {
-                additionalInputs = await AddExistingBlobsInCromwellStorageLocationsAsInputFiles(task, cromwellExecutionDirectoryUrl, cancellationToken);
-            }
+            var additionalInputs = await GetAdditionalInputsAsync(task, cancellationToken);
 
             // TODO: Confirm if the mapping here is correct. This is a carry over from the previous implementation. 
+            var poolHasContainerConfig = !(isPublic.ExecutorImage && isPublic.DockerInDockerImage && isPublic.CromwellDrsImage);
             var containerCleanupOptions = new RuntimeContainerCleanupOptions(
                 ExecuteDockerRmi: !poolHasContainerConfig,
                 ExecuteDockerPrune: enableBatchAutopool);
@@ -1013,7 +1002,27 @@ namespace TesApi.Web
             return cloudTask;
         }
 
-        private async Task<List<TesInput>> AddExistingBlobsInCromwellStorageLocationsAsInputFiles(TesTask task,
+        private async Task<List<TesInput>> GetAdditionalInputsAsync(TesTask task, CancellationToken cancellationToken)
+        {
+            var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
+            var isCromwell = cromwellExecutionDirectoryUrl is not null;
+
+
+            // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
+            // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
+            // TODO: Verify whether this workaround is still needed.
+            var additionalInputs = new List<TesInput>();
+            if (isCromwell)
+            {
+                additionalInputs =
+                    await GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(task, cromwellExecutionDirectoryUrl,
+                        cancellationToken);
+            }
+
+            return additionalInputs;
+        }
+
+        private async Task<List<TesInput>> GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(TesTask task,
             string cromwellExecutionDirectoryUrl, CancellationToken cancellationToken)
         {
             var additionalInputFiles = new List<TesInput>();
