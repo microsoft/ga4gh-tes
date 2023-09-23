@@ -8,14 +8,17 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Storage.Blobs;
 using CommonUtilities;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using Polly;
 using Polly.Retry;
 using Tes.Extensions;
 using Tes.Models;
 using Tes.Repository;
+using TesApi.Web.Storage;
 
 namespace TesApi.Web
 {
@@ -35,6 +38,8 @@ namespace TesApi.Web
         private readonly Random random = new Random(Guid.NewGuid().GetHashCode());
         private readonly AsyncRetryPolicy tesRunnerUploadRetryPolicy;
         private readonly IHostApplicationLifetime applicationLifetime;
+        private readonly IStorageAccessProvider storageAccessProvider;
+        private List<string> completedTesTaskIds = new List<string>();
 
         /// <summary>
         /// Default constructor
@@ -44,11 +49,12 @@ namespace TesApi.Web
         /// <param name="logger">The logger instance</param>
         /// <param name="retryPolicyProvider">The retry policy provider</param>
         /// <param name="applicationLifetime">The application lifetime instance</param>
-        public Scheduler(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger, IRetryPolicyProvider retryPolicyProvider, IHostApplicationLifetime applicationLifetime)
+        public Scheduler(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger, IStorageAccessProvider storageAccessProvider, IRetryPolicyProvider retryPolicyProvider, IHostApplicationLifetime applicationLifetime)
         {
             this.repository = repository;
             this.batchScheduler = batchScheduler;
             this.logger = logger;
+            this.storageAccessProvider = storageAccessProvider;
             this.tesRunnerUploadRetryPolicy = retryPolicyProvider.CreateDefaultCriticalServiceRetryPolicy();
             this.applicationLifetime = applicationLifetime;
         }
@@ -91,6 +97,10 @@ namespace TesApi.Web
             logger.LogInformation("Scheduler started.");
 
             await Task.WhenAll(
+                Task.Run(async () =>
+                {
+                    await ProcessTesTaskCompletionsContinuouslyAsync(stoppingToken);
+                }),
                 Task.Run(async () =>
                 {
                     await ProcessTesTasksContinuouslyAsync(t => t.State == TesState.QUEUEDEnum, areExistingTesTasks: false, stoppingToken);
@@ -204,12 +214,74 @@ namespace TesApi.Web
             }
         }
 
+        private async Task DeleteTesTaskCompletionByIdIfExistsAsync(string tesTaskId, CancellationToken stoppingToken)
+        {
+            var blobUri = new Uri(await storageAccessProvider.GetInternalTesBlobUrlAsync("task-completions", stoppingToken));
+            var storageSegments = StorageAccountUrlSegments.Create(blobUri.ToString());
+            var blobServiceClient = new BlobServiceClient(blobUri);
+            var container = blobServiceClient.GetBlobContainerClient(storageSegments.ContainerName);
+            var virtualDirectory = storageSegments.BlobName + "/";
+            var blobName = $"{virtualDirectory}{tesTaskId}.json";
+            await container.DeleteBlobIfExistsAsync(blobName, default, default, stoppingToken);
+        }
+
+        private async Task ProcessTesTaskCompletionsContinuouslyAsync(CancellationToken stoppingToken)
+        {
+            var sw = Stopwatch.StartNew();
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try
+                {
+                    sw.Restart();
+
+                    // TODO - this should return a container token
+                    var blobUri = new Uri(await storageAccessProvider.GetInternalTesBlobUrlAsync("task-completions", stoppingToken));
+                    var storageSegments = StorageAccountUrlSegments.Create(blobUri.ToString());
+                    var blobServiceClient = new BlobServiceClient(blobUri);
+                    var container = blobServiceClient.GetBlobContainerClient(storageSegments.ContainerName);
+                    var virtualDirectory = storageSegments.BlobName + "/";
+                    var enumerator = container.GetBlobsAsync(prefix: virtualDirectory).GetAsyncEnumerator();
+                    var completedTesTaskIds = new List<string>();
+
+                    while (await enumerator.MoveNextAsync())
+                    {
+                        // example: tasks-completions/12345678_12345678123456781234567812345678.json
+                        var blobName = enumerator.Current.Name;
+                        var json = (await container.GetBlobClient(blobName).DownloadContentAsync(stoppingToken)).Value.Content.ToString();
+                        var tesTaskCompletionMessage = JsonConvert.DeserializeObject<TesTaskCompletionMessage>(json);
+                        completedTesTaskIds.Add(tesTaskCompletionMessage.Id);
+                    }
+
+                    // Set class-level object so that it can be used by the existing task processor thread
+                    this.completedTesTaskIds = completedTesTaskIds;
+
+                    if (completedTesTaskIds.Count > 0)
+                    {
+                        logger.LogInformation($"{completedTesTaskIds.Count} TES task completions downloaded in {sw.Elapsed.TotalSeconds:n1}s; {sw.Elapsed.TotalSeconds / completedTesTaskIds.Count:n1} seconds per task completion");
+                    }
+
+                    await Task.Delay(runInterval, stoppingToken);                    
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    logger.LogInformation($"ProcessTesTaskCompletionsContinuouslyAsync tasks cancelled.");
+                    break;
+                }
+                catch (Exception exc)
+                {
+                    logger.LogError(exc, exc.Message);
+                    await Task.Delay(runInterval, stoppingToken);
+                }
+            }
+        }
+
         private async Task ProcessTesTasks(List<TesTask> tesTasks, bool areExistingTesTasks, CancellationToken stoppingToken)
         {
             var pools = new HashSet<string>();
 
-            // Prioritize processing terminal state tasks, then randomize order within each state to prevent head-of-line blocking
-            foreach (var tesTask in tesTasks.OrderByDescending(t => t.State).ThenBy(t => random.Next()))
+            // Prioritize processing completed tasks, then terminal state tasks, then randomize order within each state to prevent head-of-line blocking
+            foreach (var tesTask in tesTasks.OrderByDescending(t => completedTesTaskIds.Contains(t.Id)).ThenBy(t => t.State).ThenBy(t => random.Next()))
             {
                 if (areExistingTesTasks && processNewTasksLock.CurrentCount == 0)
                 {
@@ -220,6 +292,11 @@ namespace TesApi.Web
                 try
                 {
                     await ProcessTesTask(tesTask, stoppingToken);
+
+                    if (completedTesTaskIds.Contains(tesTask.Id))
+                    {
+                        await DeleteTesTaskCompletionByIdIfExistsAsync(tesTask.Id, stoppingToken);
+                    }
                 }
                 catch (RepositoryCollisionException exc)
                 {

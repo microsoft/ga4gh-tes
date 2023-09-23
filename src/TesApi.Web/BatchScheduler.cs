@@ -363,6 +363,29 @@ namespace TesApi.Web
             return command;
         }
 
+        /// <summary>
+        /// Generates a JSON string for a given TesTask ID.
+        /// </summary>
+        /// <param name="tesTaskId">The TesTask ID.</param>
+        /// <returns>JSON string representing the TesTask completion message.</returns>
+        private string GenerateTesTaskCompletionMessageJson(string tesTaskId)
+        {
+            var message = new TesTaskCompletionMessage { Id = tesTaskId };
+            return JsonConvert.SerializeObject(message);
+        }
+
+        /// <summary>
+        /// Creates a wget command to robustly upload JSON content to an Azure Block Blob using a given SAS token URL.
+        /// </summary>
+        /// <param name="blobUrlWithSasToken">The URL to the Azure Block Blob with a SAS token.</param>
+        /// <param name="jsonContent">The JSON content to upload.</param>
+        /// <returns>wget command string for uploading to Azure Block Blob.</returns>
+        private string CreateWgetAzureBlobUploadCommand(string blobUrlWithSasToken, string jsonContent)
+        {
+            string command = $"--method=PUT --body-data='{jsonContent}' --header='x-ms-blob-type: BlockBlob' --header='Content-Type: application/json' --no-verbose --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused {blobUrlWithSasToken}";
+            return $"echo '{jsonContent}' | wget {command}";
+        }
+
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudPool> GetCloudPools(CancellationToken cancellationToken)
             => azureProxy.GetActivePoolsAsync(batchPrefix);
@@ -1176,6 +1199,10 @@ namespace TesApi.Web
             sb.AppendLinuxLine($"write_ts UploadEnd && \\");
             sb.AppendLinuxLine($"/bin/bash -c 'disk=( `df -k $AZ_BATCH_TASK_WORKING_DIR | tail -1` ) && echo DiskSizeInKiB=${{disk[1]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt && echo DiskUsedInKiB=${{disk[2]}} >> $AZ_BATCH_TASK_WORKING_DIR/metrics.txt' && \\");
             sb.AppendLinuxLine($"write_kv VmCpuModelName \"$(cat /proc/cpuinfo | grep -m1 name | cut -f 2 -d ':' | xargs)\" && \\");
+
+            // TODO - fix this path to match Scheduler.cs: DeleteTesTaskCompletionByIdIfExistsAsync
+            var taskCompletionSasUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync($"task-completions/{task.Id}.json", cancellationToken);
+            sb.AppendLinuxLine(CreateWgetAzureBlobUploadCommand(taskCompletionSasUrl, GenerateTesTaskCompletionMessageJson(task.Id)) + " && \\");
             sb.AppendLinuxLine($"echo Task complete.");
 
             await storageAccessProvider.UploadBlobAsync(new Uri(nodeBatchScriptSasUrl), sb.ToString(), cancellationToken);

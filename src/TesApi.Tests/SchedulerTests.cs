@@ -10,6 +10,7 @@ using Moq;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Web;
+using TesApi.Web.Storage;
 
 namespace TesApi.Tests
 {
@@ -21,6 +22,7 @@ namespace TesApi.Tests
         private Mock<ILogger<Scheduler>> mockLogger;
         private IRetryPolicyProvider retryPolicyProvider;
         private Mock<IHostApplicationLifetime> mockApplicationLifetime;
+        private Mock<IStorageAccessProvider> mockStorageAccessProvider;
         private CancellationTokenSource cts;
         private Scheduler scheduler;
 
@@ -32,8 +34,10 @@ namespace TesApi.Tests
             mockLogger = new Mock<ILogger<Scheduler>>();
             retryPolicyProvider = new RetryPolicyProvider();
             mockApplicationLifetime = new Mock<IHostApplicationLifetime>();
+            mockStorageAccessProvider = new Mock<IStorageAccessProvider>();
+            
             cts = new CancellationTokenSource();
-            scheduler = new Scheduler(mockRepository.Object, mockBatchScheduler.Object, mockLogger.Object, retryPolicyProvider, mockApplicationLifetime.Object);
+            scheduler = new Scheduler(mockRepository.Object, mockBatchScheduler.Object, mockLogger.Object, mockStorageAccessProvider.Object, retryPolicyProvider, mockApplicationLifetime.Object);
         }
 
         [TestMethod]
