@@ -316,6 +316,9 @@ namespace TesApi.Web
                         if (completedTesTaskIds.Contains(tesTask.Id))
                         {
                             await DeleteTesTaskCompletionByIdIfExistsAsync(tesTask.Id, stoppingToken);
+
+                            // Don't remove it from completedTesTaskIds or else the collection modified exception will get thrown
+                            // It will automatically be removed when the next batch of task completions is downloaded
                         }
                     }
                     catch (RepositoryCollisionException exc)
