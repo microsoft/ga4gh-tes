@@ -61,6 +61,17 @@ namespace TesApi.Web
         }
 
         /// <summary>
+        /// Helper method for tests to execute the main thread
+        /// </summary>
+        /// <param name="ct">Cancellation token</param>
+        /// <returns>A task</returns>
+        [Obsolete("This method is for testing purposes only and should not be used in production code.")]
+        internal Task ExecuteForTestAsync(CancellationToken ct)
+        {
+            return ExecuteAsync(ct);
+        }
+
+        /// <summary>
         /// The main thread that continuously schedules TES tasks in the batch system
         /// </summary>
         /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
