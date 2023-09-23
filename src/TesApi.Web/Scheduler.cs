@@ -119,7 +119,7 @@ namespace TesApi.Web
                 {
                     if (areExistingTesTasks)
                     {
-                        // New tasks are being processed, wait
+                        // New tasks are being processed on the other thread, wait til they are done then acquire a lock
                         await processExistingTasksLock.WaitAsync(stoppingToken);
                     }
 
@@ -136,10 +136,11 @@ namespace TesApi.Web
                         if (areExistingTesTasks)
                         {
                             batchScheduler.ClearBatchLogState();
+
+                            // Release early; the Try/Finally block will have no effect
+                            processExistingTasksLock.Release();
                         }
 
-                        // Release early; the Try/Finally block will have no effect
-                        processExistingTasksLock.Release();
                         await Task.Delay(runInterval, stoppingToken);
                         continue;
                     }
