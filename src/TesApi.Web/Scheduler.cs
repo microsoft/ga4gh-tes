@@ -111,7 +111,6 @@ namespace TesApi.Web
 
         private async Task ProcessTesTasksContinuouslyAsync(Expression<Func<TesTask, bool>> predicate, bool areExistingTesTasks, CancellationToken stoppingToken)
         {
-            var tesTasks = new List<TesTask>();
             var sw = Stopwatch.StartNew();
 
             while (!stoppingToken.IsCancellationRequested)
@@ -126,7 +125,7 @@ namespace TesApi.Web
 
                     sw.Restart();
 
-                    tesTasks = (await repository.GetItemsAsync(
+                    var tesTasks = (await repository.GetItemsAsync(
                         predicate: predicate,
                         cancellationToken: stoppingToken))
                         .OrderBy(t => t.CreationTime)
@@ -191,8 +190,6 @@ namespace TesApi.Web
                         _ = processExistingTasksLock.TryReleaseIfInUse();
                     }
                 }
-
-                tesTasks.Clear();
             }
         }
 
