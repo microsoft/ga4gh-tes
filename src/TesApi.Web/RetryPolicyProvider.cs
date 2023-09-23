@@ -13,7 +13,7 @@ namespace TesApi.Web
     public interface IRetryPolicyProvider
     {
         /// <summary>
-        /// Creates a default retry policy for critical services that retries 12 times with a 5 second delay between each retry.
+        /// Creates a default retry policy for critical services
         /// </summary>
         /// <returns>An async retry policy</returns>
         AsyncRetryPolicy CreateDefaultCriticalServiceRetryPolicy();
@@ -22,7 +22,10 @@ namespace TesApi.Web
     /// <inheritdoc />
     public class RetryPolicyProvider : IRetryPolicyProvider
     {
-        /// <inheritdoc />
+        /// <summary>
+        /// Creates a default retry policy for critical services that retries 12 times with a 5 second delay between each retry.
+        /// </summary>
+        /// <returns>An async retry policy</returns>
         public AsyncRetryPolicy CreateDefaultCriticalServiceRetryPolicy()
         {
             return Policy.Handle<Exception>().WaitAndRetryAsync(12, attempt => TimeSpan.FromSeconds(5));
