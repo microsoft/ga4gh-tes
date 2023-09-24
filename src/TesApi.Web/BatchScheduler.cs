@@ -983,7 +983,7 @@ namespace TesApi.Web
                 ExecuteDockerRmi: !poolHasContainerConfig,
                 ExecuteDockerPrune: enableBatchAutopool);
 
-            var assets = await taskExecutionScriptingManager.PrepareScriptingAssetsAsync(task, additionalInputs, installWgetIfRunningOnAlpine: isPublic.DockerInDockerImage, containerCleanupOptions, cancellationToken);
+            var assets = await taskExecutionScriptingManager.PrepareBatchScriptAsync(task, additionalInputs, installWgetIfRunningOnAlpine: isPublic.DockerInDockerImage, containerCleanupOptions, cancellationToken);
 
             var batchRunCommand = taskExecutionScriptingManager.ParseBatchRunCommand(assets);
 

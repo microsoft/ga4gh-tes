@@ -56,7 +56,7 @@ namespace TesApi.Web.Runner
         /// <param name="containerCleanupOptions"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task<ScriptingAssetsInfo> PrepareScriptingAssetsAsync(TesTask tesTask, List<TesInput> additionalInputs,
+        public async Task<BatchScriptAssetsInfo> PrepareBatchScriptAsync(TesTask tesTask, List<TesInput> additionalInputs,
             bool installWgetIfRunningOnAlpine, RuntimeContainerCleanupOptions containerCleanupOptions, CancellationToken cancellationToken)
         {
             try
@@ -65,7 +65,7 @@ namespace TesApi.Web.Runner
 
                 var batchScriptUrl = await CreateAndUploadBatchScriptAsync(tesTask, nodeTaskUrl, installWgetIfRunningOnAlpine, cancellationToken);
 
-                return new ScriptingAssetsInfo(batchScriptUrl, nodeTaskUrl, BatchScriptFileName);
+                return new BatchScriptAssetsInfo(batchScriptUrl, nodeTaskUrl, BatchScriptFileName);
             }
             catch (Exception e)
             {
@@ -78,11 +78,11 @@ namespace TesApi.Web.Runner
         /// <summary>
         /// Creates the run command the Batch node must run to execute the task
         /// </summary>
-        /// <param name="scriptingAssets"></param>
+        /// <param name="batchScriptAssets"></param>
         /// <returns></returns>
-        public string ParseBatchRunCommand(ScriptingAssetsInfo scriptingAssets)
+        public string ParseBatchRunCommand(BatchScriptAssetsInfo batchScriptAssets)
         {
-            var batchRunCommand = $"/bin/bash -c \"{BatchNodeScriptBuilder.CreateWgetDownloadCommand(scriptingAssets.BatchScriptUrl, $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptingAssets.BatchScriptFileName}", setExecutable: true)} && ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptingAssets.BatchScriptFileName}\"";
+            var batchRunCommand = $"/bin/bash -c \"{BatchNodeScriptBuilder.CreateWgetDownloadCommand(batchScriptAssets.BatchScriptUrl, $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{batchScriptAssets.BatchScriptFileName}", setExecutable: true)} && ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{batchScriptAssets.BatchScriptFileName}\"";
 
             // Replace any URL query strings with the word REMOVED
             var sanitizedLogEntry = RemoveQueryStringsFromText(batchRunCommand);
@@ -161,5 +161,5 @@ namespace TesApi.Web.Runner
     /// <param name="BatchScriptUrl"></param>
     /// <param name="NodeTaskUrl"></param>
     /// <param name="BatchScriptFileName"></param>
-    public record ScriptingAssetsInfo(string BatchScriptUrl, string NodeTaskUrl, string BatchScriptFileName);
+    public record BatchScriptAssetsInfo(string BatchScriptUrl, string NodeTaskUrl, string BatchScriptFileName);
 }

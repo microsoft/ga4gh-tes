@@ -68,7 +68,7 @@ namespace TesApi.Tests.Runner
             var scriptName = "batch_script";
             var scriptUrl = $"https://foo.bar/{scriptName}";
             var nodeTaskUrl = $"https://foo.bar/{scriptName}";
-            var scriptAssets = new ScriptingAssetsInfo(scriptUrl, nodeTaskUrl, scriptName);
+            var scriptAssets = new BatchScriptAssetsInfo(scriptUrl, nodeTaskUrl, scriptName);
 
             var expectedCommand = $"/bin/bash -c \"wget {WgetOptions} -O ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} '{scriptUrl}' && chmod +x ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} && ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName}\"";
 
@@ -78,10 +78,10 @@ namespace TesApi.Tests.Runner
         }
 
         [TestMethod]
-        public async Task PrepareScriptingAssets_ValidTask_CreatesAndUploadsExpectedAssetsToInternalStorageLocation()
+        public async Task PrepareBatchScript_ValidTask_CreatesAndUploadsExpectedAssetsToInternalStorageLocation()
         {
 
-            var assets = await taskExecutionScriptingManager.PrepareScriptingAssetsAsync(tesTask,
+            var assets = await taskExecutionScriptingManager.PrepareBatchScriptAsync(tesTask,
                 new List<TesInput>(),
                 false,
                 new RuntimeContainerCleanupOptions(false, false), CancellationToken.None);

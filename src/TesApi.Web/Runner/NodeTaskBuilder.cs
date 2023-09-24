@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using Tes.Models;
 using Tes.Runner.Models;
 
 namespace TesApi.Web.Runner

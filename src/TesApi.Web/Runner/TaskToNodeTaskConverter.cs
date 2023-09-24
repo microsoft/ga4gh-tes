@@ -27,7 +27,10 @@ namespace TesApi.Web.Runner
         /// Metrics file name
         /// </summary>
         public const string MetricsFileName = "metrics.txt";
-        private const string BatchTaskWorkingDirEnvVar = "%AZ_BATCH_TASK_WORKING_DIR%";
+        /// <summary>
+        /// Batch task working directory environment variable
+        /// </summary>
+        public const string BatchTaskWorkingDirEnvVar = "%AZ_BATCH_TASK_WORKING_DIR%";
 
         private readonly string pathParentDirectory = BatchTaskWorkingDirEnvVar;
         private readonly string containerMountParentDirectory = BatchTaskWorkingDirEnvVar;
@@ -119,19 +122,22 @@ namespace TesApi.Web.Runner
         private async Task BuildInputsAsync(TesTask task, NodeTaskBuilder builder, IList<TesInput> additionalInputs,
             CancellationToken cancellationToken)
         {
-            if (task.Inputs is not null)
+            if (task.Inputs is not null || additionalInputs is not null)
             {
-                logger.LogInformation($"Mapping {task.Inputs.Count} inputs");
+                logger.LogInformation($"Mapping inputs");
 
                 var inputs = await PrepareLocalAndContentInputsForMappingAsync(task, cancellationToken);
 
                 //add additional inputs if not already set
-                var distinctAdditionalInputs = additionalInputs
+                var distinctAdditionalInputs = additionalInputs?
                     .Where(additionalInput => !inputs.Any(input =>
                         input.Path != null && input.Path.Equals(additionalInput.Path, StringComparison.OrdinalIgnoreCase)))
                     .ToList();
 
-                inputs.AddRange(distinctAdditionalInputs);
+                if (distinctAdditionalInputs != null)
+                {
+                    inputs.AddRange(distinctAdditionalInputs);
+                }
 
                 MapInputs(inputs, pathParentDirectory, containerMountParentDirectory, builder);
             }

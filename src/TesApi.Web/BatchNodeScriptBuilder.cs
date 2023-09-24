@@ -20,8 +20,14 @@ namespace TesApi.Web
 
         private const string BatchTaskDirEnvVar = $"${BatchTaskDirEnvVarName}";
 
-        private const string NodeTaskRunnerFilename = "tRunner";
-        private const string NodeRunnerTaskInfoFilename = "TesTask.json";
+        /// <summary>
+        /// Name of the TES runner binary file
+        /// </summary>
+        public const string NodeTaskRunnerFilename = "tRunner";
+        /// <summary>
+        /// Name of the TES runner task definition file
+        /// </summary>
+        public const string NodeRunnerTaskDefinitionFilename = "TesTask.json";
 
         private readonly StringBuilder batchScript;
         private bool useMetricsFile;
@@ -75,7 +81,7 @@ namespace TesApi.Web
             }
 
             batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerBinaryUrl, $"{BatchTaskDirEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)} && \\");
-            batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{BatchTaskDirEnvVar}/{NodeRunnerTaskInfoFilename}", setExecutable: false)} && \\");
+            batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{BatchTaskDirEnvVar}/{NodeRunnerTaskDefinitionFilename}", setExecutable: false)} && \\");
 
             if (useMetricsFile)
             {
@@ -96,7 +102,7 @@ namespace TesApi.Web
                 batchScript.AppendLinuxLine("write_ts ExecuteNodeTesTaskStart && \\");
             }
 
-            batchScript.AppendLinuxLine($"{BatchTaskDirEnvVar}/{NodeTaskRunnerFilename} -f {BatchTaskDirEnvVar}/{NodeRunnerTaskInfoFilename} && \\");
+            batchScript.AppendLinuxLine($"{BatchTaskDirEnvVar}/{NodeTaskRunnerFilename} -f {BatchTaskDirEnvVar}/{NodeRunnerTaskDefinitionFilename} && \\");
 
             if (useMetricsFile)
             {
@@ -144,6 +150,11 @@ namespace TesApi.Web
         /// <returns>The command to execute</returns>
         public static string CreateWgetDownloadCommand(string urlToDownload, string localFilePathDownloadLocation, bool setExecutable = false)
         {
+            if (!Uri.TryCreate(urlToDownload, UriKind.Absolute, out var _))
+            {
+                throw new ArgumentException($"Invalid URL: {urlToDownload}", nameof(urlToDownload));
+            }
+
             string command = $"wget --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload}'";
 
             if (setExecutable)
