@@ -243,6 +243,11 @@ namespace TesApi.Web
                     var queuedTasks = taskItemDictionary.Where((x, y) => x.Value.State == TaskQueueItemState.Queued).ToList();
                     // 4.  TODO Get PoolID from?  Add CloudTasks as needed to each pool (including creating pools and jobs)
                     //  TODOSet to INITIALIZED for each task
+
+                    // 5.  TODO get queued tasks from DB that have never been scheduled, and add to queues
+                    // Query for tasks that are QUEUED and have no PoolId
+                    // TesState.Queued = workflow engine created the task
+                    // TesState.Initialized = task queue item processor created CloudTasks for it
                 }
                 catch (Exception exc)
                 {
