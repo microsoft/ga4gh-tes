@@ -27,7 +27,6 @@ namespace TesApi.Web
     public class TaskQueueItemProcessor : BackgroundService, ITaskQueueItemProcessor
     {
         private readonly TimeSpan runInterval = TimeSpan.FromSeconds(4);
-        public bool IsInitialized { get; set; }
         private readonly ILogger<TaskQueueItemsApiController> logger;
         private readonly IRetryPolicyProvider retryPolicyProvider;
         private readonly TaskCompletionSource<bool> initializationTcs = new TaskCompletionSource<bool>();
@@ -112,7 +111,7 @@ namespace TesApi.Web
 
         public async Task UpdateTaskQueueItemAsync(TaskQueueItemBasic item, CancellationToken cancellationToken)
         {
-            if (!IsInitialized)
+            if (!initializationTcs.Task.IsCompletedSuccessfully)
             {
                 throw new InvalidOperationException("TaskQueueItemProcessor is not initialized.");
             }
@@ -141,7 +140,7 @@ namespace TesApi.Web
 
         public bool TryDequeue(string poolId, out TaskQueueItemFull item)
         {
-            if (!IsInitialized)
+            if (!initializationTcs.Task.IsCompletedSuccessfully)
             {
                 throw new InvalidOperationException("TaskQueueItemProcessor is not initialized.");
             }
@@ -160,7 +159,7 @@ namespace TesApi.Web
 
         public bool ContainsKey(string id)
         {
-            if (!IsInitialized)
+            if (!initializationTcs.Task.IsCompletedSuccessfully)
             {
                 throw new InvalidOperationException("TaskQueueItemProcessor is not initialized.");
             }
