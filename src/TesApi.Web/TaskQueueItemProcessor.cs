@@ -198,6 +198,7 @@ namespace TesApi.Web
                     {
                         // TODO check Storage Account to see if it exited gracefully with executor error (but TES was down)
                         // TODO if it did NOT exit gracefully, requeue it, but after 3 tries, permanently fail with SYSTEM ERROR
+                        logger.LogError("Task {TesTaskId} either unresponsive or failed with SYSTEM_ERROR", node.Value.TesTask.Id);
                         taskItemDictionary.TryRemove(node.Key, out _);
                         // Queue a new item
                         var taskQueueItem = TaskQueueItemFull.CreateNew(node.Value.TesTask);
@@ -218,16 +219,31 @@ namespace TesApi.Web
                     }
 
                     // Process failed tasks (reported by clients as EXECUTORERROREnum)
-                    var executorErrorTasks = taskItemDictionary.Where((x, y) => x.Value.State == TaskQueueItemState.Failed).ToList();
+                    var completeTasks = taskItemDictionary.Where((x, y) => x.Value.State == TaskQueueItemState.Failed || x.Value.State == TaskQueueItemState.Complete).ToList();
 
-                    foreach (var task in executorErrorTasks)
+                    foreach (var task in completeTasks)
                     {
-                        // TODO add more details to update as needed
-                        await repository.UpdateStateAndTaskQueueItemIdAsync(task.Value.TesTask.Id, TesState.EXECUTORERROREnum, null, stoppingToken);
+                        switch (task.Value.State)
+                        {
+                            case TaskQueueItemState.Complete:
+                                logger.LogInformation("Task {TesTaskId} completed successfully", task.Value.TesTask.Id);
+                                await repository.UpdateStateAndTaskQueueItemIdAsync(task.Value.TesTask.Id, TesState.COMPLETEEnum, null, stoppingToken);
+                                break;
+                            case TaskQueueItemState.Failed:
+                                logger.LogError("Task {TesTaskId} failed", task.Value.TesTask.Id);
+                                // TODO add more details to update as needed
+                                await repository.UpdateStateAndTaskQueueItemIdAsync(task.Value.TesTask.Id, TesState.EXECUTORERROREnum, null, stoppingToken);
+                                break;
+                            default:
+                                throw new Exception($"Unexpected TaskQueueItemState {task.Value.State}");
+                        }
+
                         taskItemDictionary.TryRemove(task.Key, out _);
                     }
 
-                    // 4.  Add CloudTasks as needed (including creating pools and jobs)
+                    var queuedTasks = taskItemDictionary.Where((x, y) => x.Value.State == TaskQueueItemState.Queued).ToList();
+                    // 4.  TODO Get PoolID from?  Add CloudTasks as needed to each pool (including creating pools and jobs)
+                    //  TODOSet to INITIALIZED for each task
                 }
                 catch (Exception exc)
                 {
