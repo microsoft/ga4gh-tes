@@ -53,6 +53,12 @@ namespace Tes.Models
         public string PoolId { get; set; }
 
         /// <summary>
+        /// Assigned Azure Batch PoolId
+        /// </summary>
+        [DataMember(Name = "task_queue_item_id")]
+        public string TaskQueueItemId { get; set; }
+
+        /// <summary>
         /// Overall reason of the task failure, populated when task execution ends in EXECUTOR_ERROR or SYSTEM_ERROR, for example "DiskFull".
         /// </summary>
         [IgnoreDataMember]

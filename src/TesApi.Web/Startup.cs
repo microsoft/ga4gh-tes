@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Threading.Tasks;
 using Azure.Core;
 using Azure.Identity;
 using Microsoft.AspNetCore.Builder;
@@ -58,6 +59,7 @@ namespace TesApi.Web
             {
                 services
                     .AddLogging()
+                    .AddSingleton<IRetryPolicyProvider, RetryPolicyProvider>()
                     .AddApplicationInsightsTelemetry(configuration)
 
                     .Configure<BatchAccountOptions>(configuration.GetSection(BatchAccountOptions.SectionName))
@@ -134,12 +136,15 @@ namespace TesApi.Web
                     })
 
                     // Order is important for hosted services
+                    .AddHostedService<TaskQueueItemProcessor>()
                     .AddHostedService(sp => (AllowedVmSizesService)sp.GetRequiredService(typeof(IAllowedVmSizesService)))
                     .AddHostedService<BatchPoolService>()
                     .AddHostedService<Scheduler>()
                     .AddHostedService<DeleteCompletedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedAutoPoolsHostedService>();
+
+
                 //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
             }
             catch (Exception exc)
@@ -259,8 +264,16 @@ namespace TesApi.Web
         /// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         /// </summary>
         /// <param name="app">An Microsoft.AspNetCore.Builder.IApplicationBuilder for the app to configure.</param>
-        public void Configure(IApplicationBuilder app)
-            => app.UseRouting()
+        /// <param name="serviceProvider">The service provider</param>
+        public async Task Configure(IApplicationBuilder app, IServiceProvider serviceProvider)
+        {
+            var taskQueueItemProcessor = serviceProvider.GetRequiredService<TaskQueueItemProcessor>();
+
+            // This will throw an exception if initialization is not successful, which will cause the service to fail to start (expected)
+            // TODO - ensure other critical services follow this pattern
+            await taskQueueItemProcessor.EnsureInitializedAsync();
+
+            app.UseRouting()
                 .UseEndpoints(endpoints =>
                 {
                     endpoints.MapControllers();
@@ -290,6 +303,7 @@ namespace TesApi.Web
                         var r = s.UseHsts();
                         logger.LogInformation("Configuring for Production environment");
                     });
+        }
     }
 
     internal static class BooleanMethodSelectorExtensions

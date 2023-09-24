@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
-using Tes.Repository;
 using TesApi.Web;
 
 namespace TesApi.Controllers
@@ -13,7 +12,6 @@ namespace TesApi.Controllers
     /// </summary>
     public class TaskQueueItemsApiController : ControllerBase
     {
-        private readonly IRepository<TesTask> repository;
         private readonly ILogger<TaskQueueItemsApiController> logger;
         private readonly ITaskQueueItemProcessor processor;
 
@@ -22,9 +20,8 @@ namespace TesApi.Controllers
         /// </summary>
         /// <param name="repository">The main TaskQueueItem database repository</param>
         /// <param name="logger">The logger instance</param>
-        public TaskQueueItemsApiController(IRepository<TesTask> repository, ILogger<TaskQueueItemsApiController> logger, ITaskQueueItemProcessor taskQueueItemProcessor)
+        public TaskQueueItemsApiController(ILogger<TaskQueueItemsApiController> logger, ITaskQueueItemProcessor taskQueueItemProcessor, IRetryPolicyProvider retryPolicyProvider)
         {
-            this.repository = repository;
             this.logger = logger;
             this.processor = taskQueueItemProcessor;
         }
@@ -32,34 +29,46 @@ namespace TesApi.Controllers
         /// <summary>
         /// Acquire lock for a TaskQueueItem.
         /// </summary>
+        /// <param name="poolId">The ID of the pool.</param>
         /// <param name="cancellationToken">A CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         [HttpPost]
-        [Route("/taskqueueitems/acquire-lock")]
-        public virtual async Task<IActionResult> AcquireLock(CancellationToken cancellationToken)
+        [Route("/taskqueueitems/acquire-lock/{poolId}")]
+        public virtual async Task<IActionResult> AcquireLock(string poolId, CancellationToken cancellationToken)
         {
-            return NoContent();
-            // Logic for acquiring lock for a TaskQueueItem.
-            if (false)
+            if (string.IsNullOrEmpty(poolId))
+            {
+                return BadRequest("PoolId is required.");
+            }
+
+            TaskQueueItemFull item;
+
+            if (!processor.TryDequeue(poolId, out item))
             {
                 return NoContent();
             }
 
-            return StatusCode(200, new object()); // Assuming successful lock acquisition.
+            this.logger.LogInformation("Acquired lock for TaskQueueItem {TaskQueueItemId}, TesTask {TesTaskId}", item.Id, item.TesTask.Id);
+            return Ok(item);
         }
 
-        /// <summary>
-        /// Update a TaskQueueItem.
-        /// </summary>
-        /// <param name="item">The TaskQueueItem to update.</param>
-        /// <param name="cancellationToken">A CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+
         [HttpPatch]
-        [Route("/taskqueueitems")]
-        public virtual async Task<IActionResult> UpdateTaskQueueItem([FromBody] TaskQueueItem item, CancellationToken cancellationToken)
+        [Route("/taskqueueitems/{id}")]
+        public virtual async Task<IActionResult> UpdateTaskQueueItem([FromRoute] string id, [FromBody] TaskQueueItemBasic item, CancellationToken cancellationToken)
         {
-            // Logic for updating a TaskQueueItem.
-            // This is a placeholder, you should implement the logic based on your requirements.
-            this.processor.UpdateTaskQueueItem("", item);
-            return StatusCode(200, new object()); // Assuming successful update.
+            if (id != item.Id)
+            {
+                return BadRequest("ID in the URL does not match ID in the request body.");
+            }
+
+            if (!processor.ContainsKey(id))
+            {
+                // Doesn't exist, or, a rogue node that had previously stopped sending a ping and lost its lock
+                return NotFound();
+            }
+
+            await this.processor.UpdateTaskQueueItemAsync(item, cancellationToken);
+            return Ok();
         }
     }
 }

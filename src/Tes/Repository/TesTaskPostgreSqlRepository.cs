@@ -273,5 +273,15 @@ namespace Tes.Repository
         {
             return ValueTask.FromResult(_cache?.TryRemove(item.Id) ?? false);
         }
+
+        public Task<TesTask> UpdateStateAndTaskQueueItemIdAsync(string tesTaskId, TesState state, string taskQueueItemId, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task UpdateItemsAsync(List<TesTask> itemsToUpdate, CancellationToken stoppingToken)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
