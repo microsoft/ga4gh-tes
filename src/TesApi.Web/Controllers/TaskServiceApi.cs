@@ -39,7 +39,6 @@ namespace TesApi.Controllers
         private readonly IRepository<TesTask> repository;
         private readonly ILogger<TaskServiceApiController> logger;
         private readonly IAzureProxy azureProxy;
-        private readonly TaskQueueItemProcessor taskQueueItemProcessor;
 
         private static readonly Dictionary<TesView, JsonSerializerSettings> TesJsonSerializerSettings = new()
         {
@@ -54,12 +53,11 @@ namespace TesApi.Controllers
         /// <param name="repository">The main <see cref="TesTask"/> database repository</param>
         /// <param name="logger">The logger instance</param>
         /// <param name="azureProxy">The Azure Proxy instance</param>
-        public TaskServiceApiController(IRepository<TesTask> repository, ILogger<TaskServiceApiController> logger, IAzureProxy azureProxy, TaskQueueItemProcessor taskQueueItemProcessor)
+        public TaskServiceApiController(IRepository<TesTask> repository, ILogger<TaskServiceApiController> logger, IAzureProxy azureProxy)
         {
             this.repository = repository;
             this.logger = logger;
             this.azureProxy = azureProxy;
-            this.taskQueueItemProcessor = taskQueueItemProcessor;
         }
 
         /// <summary>
