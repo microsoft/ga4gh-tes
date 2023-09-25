@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net7.0</TargetFramework>
@@ -22,6 +22,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Tes.RunnerCLI\Tes.RunnerCLI.csproj" />
     <ProjectReference Include="..\Tes.Runner\Tes.Runner.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Events\" />
   </ItemGroup>
 
 </Project>

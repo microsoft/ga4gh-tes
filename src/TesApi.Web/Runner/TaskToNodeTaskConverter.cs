@@ -19,7 +19,7 @@ using FileType = Tes.Runner.Models.FileType;
 namespace TesApi.Web.Runner
 {
     /// <summary>
-    /// Handles the creation of a NodeTask from a TesTask. This class also handles the creation of the NodeTask's inputs and outputs. With the following key functionality:
+    /// Handles the creation of a NodeTask from a TesTask. Creation of the NodeTask's inputs and outputs has the following key functionality:
     /// 1 .- Handles content inputs by creating them as blobs in storage and setting the NodeTasks' inputs to the blobs' URLs.
     /// 2 .- Handles local file paths in inputs when Cromwell is using the local filesystem with a blob FUSE driver.
     /// </summary>
