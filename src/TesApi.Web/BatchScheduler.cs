@@ -1140,7 +1140,7 @@ namespace TesApi.Web
             if (isPublic.ExecutorImage)
             {
                 // Private executor images are pulled via pool ContainerConfiguration
-                sb.AppendLinuxLine($"write_ts ExecutorPullStart && for i in {{1..5}}; do docker pull --quiet {executor.Image} && break || (echo \\\"Retrying (\\$i)...\\\"; sleep 2); done && write_ts ExecutorPullEnd && \\");
+                sb.AppendLinuxLine($@"write_ts ExecutorPullStart && for i in {{1..5}}; do docker pull --quiet {executor.Image} && break || (echo ""Retrying ($i)...""); sleep 2); done && write_ts ExecutorPullEnd && \");
             }
 
             // The remainder of the script downloads the inputs, runs the main executor container, and uploads the outputs, including the metrics.txt file
