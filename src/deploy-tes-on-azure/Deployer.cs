@@ -468,7 +468,7 @@ namespace TesDeployer
                             await CreateDefaultStorageContainersAsync(storageAccount);
                             await WritePersonalizedFilesToStorageAccountAsync(storageAccount, managedIdentity.Name);
                             await AssignVmAsContributorToStorageAccountAsync(managedIdentity, storageAccount);
-                            await AssignVmAsDataReaderToStorageAccountAsync(managedIdentity, storageAccount);
+                            await AssignVmAsDataContributorToStorageAccountAsync(managedIdentity, storageAccount);
                             await AssignManagedIdOperatorToResourceAsync(managedIdentity, resourceGroup);
                             await AssignMIAsNetworkContributorToResourceAsync(managedIdentity, resourceGroup);
                         });
@@ -1327,13 +1327,13 @@ namespace TesDeployer
                     cts.Token));
         }
 
-        private Task AssignVmAsDataReaderToStorageAccountAsync(IIdentity managedIdentity, IStorageAccount storageAccount)
+        private Task AssignVmAsDataContributorToStorageAccountAsync(IIdentity managedIdentity, IStorageAccount storageAccount)
         {
-            // https://docs.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#storage-blob-data-reader
-            var roleDefinitionId = $"/subscriptions/{configuration.SubscriptionId}/providers/Microsoft.Authorization/roleDefinitions/2a2b9908-6ea1-4ae2-8e65-a410df84e7d1";
+            // https://docs.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#storage-blob-data-contributor
+            var roleDefinitionId = $"/subscriptions/{configuration.SubscriptionId}/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe";
 
             return Execute(
-                $"Assigning Storage Blob Data Reader role for user-managed identity to Storage Account resource scope...",
+                $"Assigning Storage Blob Data Contributor role for user-managed identity to Storage Account resource scope...",
                 () => roleAssignmentHashConflictRetryPolicy.ExecuteAsync(
                     ct => azureSubscriptionClient.AccessManagement.RoleAssignments
                         .Define(Guid.NewGuid().ToString())
