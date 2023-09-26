@@ -23,7 +23,7 @@ namespace TesApi.Tests
         {
             var url = "https://foo.bar";
             var local = "/local";
-            var expectedCommand = $"wget --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {local} '{url}'";
+            var expectedCommand = $"wget --https-only --no-verbose --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {local} '{url}'";
 
             var result = BatchNodeScriptBuilder.CreateWgetDownloadCommand(url, "/local");
 
