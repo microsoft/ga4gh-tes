@@ -52,18 +52,17 @@ namespace TesApi.Web.Runner
         /// </summary>
         /// <param name="tesTask"></param>
         /// <param name="additionalInputs"></param>
-        /// <param name="installWgetIfRunningOnAlpine"></param>
         /// <param name="containerCleanupOptions"></param>
+        /// <param name="defaultStorageAccountName"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task<BatchScriptAssetsInfo> PrepareBatchScriptAsync(TesTask tesTask, List<TesInput> additionalInputs,
-            bool installWgetIfRunningOnAlpine, RuntimeContainerCleanupOptions containerCleanupOptions, CancellationToken cancellationToken)
+        public async Task<BatchScriptAssetsInfo> PrepareBatchScriptAsync(TesTask tesTask, List<TesInput> additionalInputs, RuntimeContainerCleanupOptions containerCleanupOptions, string defaultStorageAccountName, CancellationToken cancellationToken)
         {
             try
             {
-                var nodeTaskUrl = await CreateAndUploadNodeTaskAsync(tesTask, additionalInputs, containerCleanupOptions, cancellationToken);
+                var nodeTaskUrl = await CreateAndUploadNodeTaskAsync(tesTask, additionalInputs, containerCleanupOptions, defaultStorageAccountName, cancellationToken);
 
-                var batchScriptUrl = await CreateAndUploadBatchScriptAsync(tesTask, nodeTaskUrl, installWgetIfRunningOnAlpine, cancellationToken);
+                var batchScriptUrl = await CreateAndUploadBatchScriptAsync(tesTask, nodeTaskUrl, cancellationToken);
 
                 return new BatchScriptAssetsInfo(batchScriptUrl, nodeTaskUrl, BatchScriptFileName);
             }
@@ -100,18 +99,15 @@ namespace TesApi.Web.Runner
             return sanitizedLogEntry;
         }
 
-        private async Task<string> CreateAndUploadBatchScriptAsync(TesTask tesTask, string nodeTaskUrl, bool installWgetIfRunningOnAlpine, CancellationToken cancellationToken)
+        private async Task<string> CreateAndUploadBatchScriptAsync(TesTask tesTask, string nodeTaskUrl, CancellationToken cancellationToken)
         {
             logger.LogInformation($"Creating and uploading Batch script for Task ID: {tesTask.Id}");
 
-            if (installWgetIfRunningOnAlpine)
-            {
-                batchNodeScriptBuilder.WithAlpineWgetInstallation();
-            }
-
             var nodeTaskRunnerUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
 
-            var batchNodeScript = batchNodeScriptBuilder.WithMetrics()
+            var batchNodeScript = batchNodeScriptBuilder
+                .WithAlpineWgetInstallation()
+                .WithMetrics()
                 .WithRunnerFilesDownloadUsingWget(nodeTaskRunnerUrl, nodeTaskUrl)
                 .WithExecuteRunner()
                 .WithLocalRuntimeSystemInformation()
@@ -124,11 +120,11 @@ namespace TesApi.Web.Runner
             return batchNodeScriptUrl;
         }
 
-        private async Task<string> CreateAndUploadNodeTaskAsync(TesTask tesTask, List<TesInput> additionalInputs, RuntimeContainerCleanupOptions containerCleanupOptions, CancellationToken cancellationToken)
+        private async Task<string> CreateAndUploadNodeTaskAsync(TesTask tesTask, List<TesInput> additionalInputs, RuntimeContainerCleanupOptions containerCleanupOptions, string defaultStorageAccount, CancellationToken cancellationToken)
         {
             logger.LogInformation($"Creating and uploading node task definition file for Task ID: {tesTask.Id}");
 
-            var nodeTask = await taskToNodeConverter.ToNodeTaskAsync(tesTask, additionalInputs, containerCleanupOptions, cancellationToken);
+            var nodeTask = await taskToNodeConverter.ToNodeTaskAsync(tesTask, additionalInputs, containerCleanupOptions, defaultStorageAccount, cancellationToken);
 
             var nodeTaskContent = JsonConvert.SerializeObject(nodeTask,
                 new JsonSerializerSettings
