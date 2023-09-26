@@ -977,13 +977,12 @@ namespace TesApi.Web
 
             var additionalInputs = await GetAdditionalInputsAsync(task, cancellationToken);
 
-            // TODO: Confirm if the mapping here is correct. This is a carry over from the previous implementation. 
-            var poolHasContainerConfig = !(isPublic.ExecutorImage && isPublic.DockerInDockerImage && isPublic.CromwellDrsImage);
-            var containerCleanupOptions = new RuntimeContainerCleanupOptions(
-                ExecuteDockerRmi: !poolHasContainerConfig,
-                ExecuteDockerPrune: enableBatchAutopool);
 
-            var assets = await taskExecutionScriptingManager.PrepareBatchScriptAsync(task, additionalInputs, installWgetIfRunningOnAlpine: isPublic.DockerInDockerImage, containerCleanupOptions, cancellationToken);
+            var containerCleanupOptions = new RuntimeContainerCleanupOptions(
+                ExecuteDockerRmi: true,
+                ExecuteDockerPrune: true);
+
+            var assets = await taskExecutionScriptingManager.PrepareBatchScriptAsync(task, additionalInputs, containerCleanupOptions, defaultStorageAccountName, cancellationToken);
 
             var batchRunCommand = taskExecutionScriptingManager.ParseBatchRunCommand(assets);
 

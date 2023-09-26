@@ -155,7 +155,7 @@ namespace TesApi.Web
                 throw new ArgumentException($"Invalid URL: {urlToDownload}", nameof(urlToDownload));
             }
 
-            string command = $"wget --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload}'";
+            string command = $"wget --https-only --no-verbose --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload}'";
 
             if (setExecutable)
             {

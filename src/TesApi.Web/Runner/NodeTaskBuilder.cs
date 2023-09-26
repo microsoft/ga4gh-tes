@@ -22,8 +22,6 @@ namespace TesApi.Web.Runner
         public NodeTaskBuilder()
         {
             nodeTask = new NodeTask();
-
-            SetDefaultValues();
         }
 
         /// <summary>
@@ -33,11 +31,6 @@ namespace TesApi.Web.Runner
         public NodeTaskBuilder(NodeTask nodeTask)
         {
             this.nodeTask = nodeTask;
-        }
-
-        private void SetDefaultValues()
-        {
-            nodeTask.ContainerWorkDir = "/";
         }
 
         /// <summary>

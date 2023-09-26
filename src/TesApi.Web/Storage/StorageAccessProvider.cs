@@ -17,7 +17,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <summary>
     /// Cromwell path prefix
     /// </summary>
-    protected const string CromwellPathPrefix = "/cromwell-executions/";
+    public const string CromwellPathPrefix = "/cromwell-executions/";
 
     /// <summary>
     /// TES path for internal execution files

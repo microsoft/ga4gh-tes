@@ -29,7 +29,7 @@ namespace TesApi.Tests.Runner
         private Mock<TaskToNodeTaskConverter> taskToNodeTaskConverterMock;
         private Mock<IStorageAccessProvider> storageAccessProviderMock;
         private Mock<BatchNodeScriptBuilder> batchNodeScriptBuilderMock;
-        private const string WgetOptions = "--https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue";
+        private const string WgetOptions = "--https-only --no-verbose --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue";
         private const string AssetUrl = "http://foo.bar/bar";
         private TesTask tesTask;
         private NodeTask nodeTask;
@@ -53,7 +53,7 @@ namespace TesApi.Tests.Runner
 
             taskToNodeTaskConverterMock = new Mock<TaskToNodeTaskConverter>();
             taskToNodeTaskConverterMock.Setup(x => x.ToNodeTaskAsync(It.IsAny<TesTask>(),
-                It.IsAny<IList<TesInput>>(), It.IsAny<RuntimeContainerCleanupOptions>(), It.IsAny<CancellationToken>()))
+                It.IsAny<IList<TesInput>>(), It.IsAny<RuntimeContainerCleanupOptions>(), It.IsAny<String>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(nodeTask);
 
             batchNodeScriptBuilderMock = new Mock<BatchNodeScriptBuilder>();
@@ -83,15 +83,15 @@ namespace TesApi.Tests.Runner
 
             var assets = await taskExecutionScriptingManager.PrepareBatchScriptAsync(tesTask,
                 new List<TesInput>(),
-                false,
-                new RuntimeContainerCleanupOptions(false, false), CancellationToken.None);
+                new RuntimeContainerCleanupOptions(false, false),
+                defaultStorageAccountName: default, CancellationToken.None);
 
             Assert.IsNotNull(assets);
 
             //creates a node task definition:
             taskToNodeTaskConverterMock.Verify(c => c.ToNodeTaskAsync(It.IsAny<TesTask>(),
                     It.IsAny<IList<TesInput>>(), It.IsAny<RuntimeContainerCleanupOptions>(),
-                    It.IsAny<CancellationToken>()),
+                    It.IsAny<string>(), It.IsAny<CancellationToken>()),
                 Times.Once);
 
             //creates the script
