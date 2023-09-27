@@ -12,7 +12,9 @@ using Tes.Extensions;
 using Tes.Models;
 using Tes.Runner.Models;
 using TesApi.Web.Management.Configuration;
+using TesApi.Web.Options;
 using TesApi.Web.Storage;
+using FileType = Tes.Runner.Models.FileType;
 
 namespace TesApi.Web.Runner
 {
@@ -32,31 +34,32 @@ namespace TesApi.Web.Runner
         /// </summary>
         public const string BatchTaskWorkingDirEnvVar = "%AZ_BATCH_TASK_WORKING_DIR%";
 
-        private const string BlobEndpointHostNameSuffix = ".blob.core.windows.net";
-
         private readonly string pathParentDirectory = BatchTaskWorkingDirEnvVar;
         private readonly string containerMountParentDirectory = BatchTaskWorkingDirEnvVar;
         private readonly IStorageAccessProvider storageAccessProvider;
 
         private readonly TerraOptions terraOptions;
         private readonly ILogger<TaskToNodeTaskConverter> logger;
-
+        private readonly IList<ExternalStorageContainerInfo> externalStorageContainers;
 
         /// <summary>
         /// Constructor of TaskToNodeTaskConverter
         /// </summary>
         /// <param name="terraOptions"></param>
         /// <param name="storageAccessProvider"></param>
+        /// <param name="storageOptions"></param>
         /// <param name="logger"></param>
-        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, ILogger<TaskToNodeTaskConverter> logger)
+        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, IOptions<StorageOptions> storageOptions, ILogger<TaskToNodeTaskConverter> logger)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
+            ArgumentNullException.ThrowIfNull(storageOptions);
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(logger);
 
             this.terraOptions = terraOptions.Value;
             this.logger = logger;
             this.storageAccessProvider = storageAccessProvider;
+            externalStorageContainers = StorageUrlUtils.GetExternalStorageContainerInfos(storageOptions.Value);
         }
 
         /// <summary>
@@ -135,7 +138,7 @@ namespace TesApi.Web.Runner
 
             foreach (var output in task.Outputs)
             {
-                var preparedOutput = PrepareLocalFileOutput(output, defaultStorageAccount);
+                var preparedOutput = PrepareLocalOrLocalCromwellFileOutput(output, defaultStorageAccount);
 
                 if (preparedOutput != null)
                 {
@@ -149,16 +152,16 @@ namespace TesApi.Web.Runner
             return outputs;
         }
 
-        private TesOutput PrepareLocalFileOutput(TesOutput output, string defaultStorageAccount)
+        private TesOutput PrepareLocalOrLocalCromwellFileOutput(TesOutput output, string defaultStorageAccount)
         {
-            if (IsLocalAbsolutePath(output.Url))
+            if (StorageUrlUtils.IsLocalAbsolutePath(output.Url))
             {
                 return new TesOutput()
                 {
                     Name = output.Name,
                     Description = output.Description,
                     Path = output.Path,
-                    Url = ConvertLocalPathToUrl(output.Url, defaultStorageAccount),
+                    Url = StorageUrlUtils.ConvertLocalPathOrCromwellLocalPathToUrl(output.Url, defaultStorageAccount),
                     Type = output.Type
                 };
             }
@@ -173,7 +176,7 @@ namespace TesApi.Web.Runner
             {
                 logger.LogInformation($"Mapping inputs");
 
-                var inputs = await PrepareLocalAndContentInputsForMappingAsync(task, defaultStorageAccount, cancellationToken);
+                var inputs = await PrepareInputsForMappingAsync(task, defaultStorageAccount, cancellationToken);
 
                 //add additional inputs if not already set
                 var distinctAdditionalInputs = additionalInputs?
@@ -190,7 +193,7 @@ namespace TesApi.Web.Runner
             }
         }
 
-        private async Task<List<TesInput>> PrepareLocalAndContentInputsForMappingAsync(TesTask tesTask, string defaultStorageAccountName,
+        private async Task<List<TesInput>> PrepareInputsForMappingAsync(TesTask tesTask, string defaultStorageAccountName,
             CancellationToken cancellationToken)
         {
             var inputs = new List<TesInput>();
@@ -209,7 +212,15 @@ namespace TesApi.Web.Runner
                     continue;
                 }
 
-                preparedInput = PrepareLocalFileInput(input, defaultStorageAccountName);
+                preparedInput = PrepareLocalOrLocalCromwellFileInput(input, defaultStorageAccountName);
+
+                if (preparedInput != null)
+                {
+                    inputs.Add(preparedInput);
+                    continue;
+                }
+
+                preparedInput = PrepareExternalStorageAccountInput(input);
 
                 if (preparedInput != null)
                 {
@@ -222,56 +233,52 @@ namespace TesApi.Web.Runner
             return inputs;
         }
 
-        private TesInput PrepareLocalFileInput(TesInput input, string defaultStorageAccountName)
+        private TesInput PrepareExternalStorageAccountInput(TesInput input)
+        {
+
+            if (!StorageUrlUtils.IsValidAzureStorageAccountUri(input.Url))
+            {
+                return default;
+            }
+
+            var blobUrl = new BlobUriBuilder(new Uri(input.Url));
+
+            var configuredExternalStorage = externalStorageContainers.FirstOrDefault(e => e.AccountName.Equals(blobUrl.AccountName, StringComparison.OrdinalIgnoreCase));
+
+            if (configuredExternalStorage is null)
+            {
+                return default;
+            }
+
+            blobUrl.Query = StorageUrlUtils.SetOrAddSasTokenToQueryString(blobUrl.Query, configuredExternalStorage.SasToken);
+
+            return new TesInput
+            {
+                Name = input.Name,
+                Description = input.Description,
+                Path = input.Path,
+                Type = input.Type,
+                Url = blobUrl.ToUri().ToString(),
+            };
+        }
+
+        private TesInput PrepareLocalOrLocalCromwellFileInput(TesInput input, string defaultStorageAccountName)
         {
             //When Cromwell runs in local mode with a Blob FUSE drive, the URL property may contain an absolute path.
             //The path must be converted to a URL. For Terra this scenario doesn't apply. 
-            if (IsLocalAbsolutePath(input.Url))
+            if (StorageUrlUtils.IsLocalAbsolutePath(input.Url))
             {
                 return new TesInput()
                 {
                     Name = input.Name,
                     Description = input.Description,
                     Path = input.Path,
-                    Url = ConvertLocalPathToUrl(input.Url, defaultStorageAccountName),
+                    Url = StorageUrlUtils.ConvertLocalPathOrCromwellLocalPathToUrl(input.Url, defaultStorageAccountName),
                     Type = input.Type
                 };
             }
 
             return default;
-        }
-
-        private bool IsLocalAbsolutePath(string urlValue)
-        {
-            if (string.IsNullOrWhiteSpace(urlValue))
-            {
-                return false;
-            }
-
-            return urlValue.StartsWith("/");
-        }
-
-        private string ConvertLocalPathToUrl(string uriValue, string defaultStorageAccountName)
-        {
-            if (string.IsNullOrWhiteSpace(defaultStorageAccountName))
-            {
-                throw new ArgumentException(
-                    "The provided path can't be converted to a URL. The default storage account is not set");
-            }
-
-            //check if the path is a known cromwell path, and append the default storage account name as it would be missing
-            var pathToConvert = uriValue;
-            if (uriValue.StartsWith(StorageAccessProvider.CromwellPathPrefix))
-            {
-                pathToConvert = $"/{defaultStorageAccountName}/{uriValue.TrimStart('/')}";
-            }
-
-            if (StorageAccountUrlSegments.TryCreate(pathToConvert, out var result))
-            {
-                return $"https://{result.AccountName}{BlobEndpointHostNameSuffix}/{result.ContainerName}/{result.BlobName}";
-            }
-
-            throw new InvalidOperationException($"The value provided can't be converted to URL. Value: {uriValue}");
         }
 
         private async Task<TesInput> UploadContentAndCreateTesInputAsync(TesTask tesTask, string inputPath,
@@ -285,7 +292,7 @@ namespace TesApi.Web.Runner
             //return the URL without the SAS token, the runner will add it using the transformation strategy
             await storageAccessProvider.UploadBlobAsync(new Uri(inputFileUrl), content, cancellationToken);
 
-            var inputUrl = RemoveQueryStringFromUrl(inputFileUrl);
+            var inputUrl = StorageUrlUtils.RemoveQueryStringFromUrl(inputFileUrl);
 
             logger.LogInformation($"Successfully uploaded content input as a new blob at: {inputUrl}");
 
@@ -309,12 +316,6 @@ namespace TesApi.Web.Runner
             logger.LogInformation($"The input is content. Uploading its content to the internal storage location. Input path:{input.Path}");
 
             return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, input.Content, cancellationToken);
-        }
-
-        private static string RemoveQueryStringFromUrl(string url)
-        {
-            var uri = new Uri(url);
-            return uri.GetLeftPart(UriPartial.Path);
         }
 
         private static string EscapeBashArgument(string arg)
