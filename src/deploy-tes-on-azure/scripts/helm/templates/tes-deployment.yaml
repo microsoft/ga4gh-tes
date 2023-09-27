@@ -64,8 +64,6 @@ spec:
               value: {{ .Values.config.batchNodes.globalManagedIdentity }}
             - name: BatchScheduling__UsePreemptibleVmsOnly
               value: {{ .Values.config.batchScheduling.usePreemptibleVmsOnly | quote}}
-            - name: BatchScheduling__UseLegacyAutopools
-              value: {{ .Values.config.batchScheduling.useLegacyAutopools | quote }}
             - name: BatchScheduling__PoolRotationForcedDays
               value: {{ .Values.config.batchScheduling.poolRotationForcedDays | quote }}
             - name: BatchScheduling__Prefix

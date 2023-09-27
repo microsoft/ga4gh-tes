@@ -114,11 +114,6 @@ namespace TesApi.Web
 
         internal async Task<IBatchPool> GetOrAddPoolAsync(string key, bool isPreemptable, ModelPoolFactory modelPoolFactory, CancellationToken cancellationToken)
         {
-            if (enableBatchAutopool)
-            {
-                return default;
-            }
-
             ArgumentNullException.ThrowIfNull(modelPoolFactory);
             var keyLength = key?.Length ?? 0;
             if (keyLength > PoolKeyLength || keyLength < 1)
@@ -184,22 +179,19 @@ namespace TesApi.Web
 
             try
             {
-                if (!this.enableBatchAutopool)
-                {
-                    var pools = (await batchPools.GetAllPools()
-                            .ToAsyncEnumerable()
-                            .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
-                            .ToListAsync(cancellationToken))
-                        .Where(p => !assignedPools.Contains(p.Pool.PoolId))
-                        .OrderBy(p => p.GetAllocationStateTransitionTime(cancellationToken))
-                        .Take(neededPools.Count)
-                        .ToList();
+                var pools = (await batchPools.GetAllPools()
+                        .ToAsyncEnumerable()
+                        .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
+                        .ToListAsync(cancellationToken))
+                    .Where(p => !assignedPools.Contains(p.Pool.PoolId))
+                    .OrderBy(p => p.GetAllocationStateTransitionTime(cancellationToken))
+                    .Take(neededPools.Count)
+                    .ToList();
 
-                    foreach (var pool in pools)
-                    {
-                        await DeletePoolAsync(pool, cancellationToken);
-                        _ = RemovePoolFromList(pool);
-                    }
+                foreach (var pool in pools)
+                {
+                    await DeletePoolAsync(pool, cancellationToken);
+                    _ = RemovePoolFromList(pool);
                 }
             }
             finally

@@ -19,23 +19,6 @@ namespace TesApi.Web
     public interface IAzureProxy
     {
         /// <summary>
-        /// Gets a new Azure Batch job id to schedule another task
-        /// </summary>
-        /// <param name="tesTaskId">The unique TES task ID</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>The next logical, new Azure Batch job ID</returns>
-        Task<string> GetNextBatchJobIdAsync(string tesTaskId, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Creates a new Azure Batch job for Autopools
-        /// </summary>
-        /// <param name="jobId"></param>
-        /// <param name="cloudTask"></param>
-        /// <param name="poolInformation"></param>
-        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
-        Task CreateAutoPoolModeBatchJobAsync(string jobId, CloudTask cloudTask, PoolInformation poolInformation, CancellationToken cancellationToken);
-
-        /// <summary>
         /// Creates a new Azure Batch job for <see cref="IBatchPool"/>
         /// </summary>
         /// <param name="poolInformation"></param>
@@ -78,10 +61,9 @@ namespace TesApi.Web
         /// Gets the combined state of Azure Batch job, task and pool that corresponds to the given TES task
         /// </summary>
         /// <param name="tesTask">The TES task</param>
-        /// <param name="usingAutoPools"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>Job state information</returns>
-        Task<AzureBatchJobAndTaskState> GetBatchJobAndTaskStateAsync(TesTask tesTask, bool usingAutoPools, CancellationToken cancellationToken);
+        Task<AzureBatchJobAndTaskState> GetBatchJobAndTaskStateAsync(TesTask tesTask, CancellationToken cancellationToken);
 
         /// <summary>
         /// Deletes an Azure Batch job for Autopools

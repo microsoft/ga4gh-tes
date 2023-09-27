@@ -20,7 +20,6 @@ namespace TesApi.Web
     {
         private readonly IBatchScheduler _batchScheduler;
         private readonly ILogger _logger;
-        private readonly bool _isDisabled;
 
         /// <summary>
         /// Interval between each call to <see cref="IBatchPool.ServicePoolAsync(CancellationToken)"/>.
@@ -30,26 +29,13 @@ namespace TesApi.Web
         /// <summary>
         /// Default constructor
         /// </summary>
-        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/></param>
         /// <param name="batchScheduler"></param>
         /// <param name="logger"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public BatchPoolService(IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IBatchScheduler batchScheduler, ILogger<BatchPoolService> logger)
+        public BatchPoolService(IBatchScheduler batchScheduler, ILogger<BatchPoolService> logger)
         {
             _batchScheduler = batchScheduler ?? throw new ArgumentNullException(nameof(batchScheduler));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _isDisabled = batchSchedulingOptions.Value.UseLegacyAutopools;
-        }
-
-        /// <inheritdoc />
-        public override Task StartAsync(CancellationToken cancellationToken)
-        {
-            if (_isDisabled)
-            {
-                return Task.CompletedTask;
-            }
-
-            return base.StartAsync(cancellationToken);
         }
 
         /// <inheritdoc />

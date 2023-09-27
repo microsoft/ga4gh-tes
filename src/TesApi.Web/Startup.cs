@@ -136,10 +136,7 @@ namespace TesApi.Web
                     // Order is important for hosted services
                     .AddHostedService(sp => (AllowedVmSizesService)sp.GetRequiredService(typeof(IAllowedVmSizesService)))
                     .AddHostedService<BatchPoolService>()
-                    .AddHostedService<Scheduler>()
-                    .AddHostedService<DeleteCompletedBatchJobsHostedService>()
-                    .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
-                    .AddHostedService<DeleteOrphanedAutoPoolsHostedService>();
+                    .AddHostedService<Scheduler>();
                 //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
             }
             catch (Exception exc)

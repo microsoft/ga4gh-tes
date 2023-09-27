@@ -71,7 +71,6 @@ namespace TesApi.Web
         private readonly bool usePreemptibleVmsOnly;
         private readonly string batchNodesSubnetId;
         private readonly bool disableBatchNodesPublicIpAddress;
-        private readonly bool enableBatchAutopool;
         private readonly TimeSpan poolLifetime;
         private readonly BatchNodeInfo gen2BatchNodeInfo;
         private readonly BatchNodeInfo gen1BatchNodeInfo;
@@ -147,8 +146,7 @@ namespace TesApi.Web
             this.cromwellDrsLocalizerImageName = marthaOptions.Value.CromwellDrsLocalizer;
             if (string.IsNullOrWhiteSpace(this.cromwellDrsLocalizerImageName)) { this.cromwellDrsLocalizerImageName = Options.MarthaOptions.DefaultCromwellDrsLocalizer; }
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
-            this.enableBatchAutopool = batchSchedulingOptions.Value.UseLegacyAutopools;
-            this.poolLifetime = this.enableBatchAutopool ? TimeSpan.Zero : TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.PoolRotationForcedDays);
+            this.poolLifetime = TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.PoolRotationForcedDays);
             this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
             this.marthaUrl = marthaOptions.Value.Url;
             this.marthaKeyVaultName = marthaOptions.Value.KeyVaultName;
@@ -157,14 +155,11 @@ namespace TesApi.Web
             this.globalManagedIdentity = batchNodesOptions.Value.GlobalManagedIdentity;
             this.allowedVmSizesService = allowedVmSizesService;
 
-            if (!this.enableBatchAutopool)
-            {
-                _batchPoolFactory = poolFactory;
-                batchPrefix = batchSchedulingOptions.Value.Prefix;
-                logger.LogInformation("BatchPrefix: {BatchPrefix}", batchPrefix);
-                taskRunScriptContent = File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh"));
-                taskCleanupScriptContent = File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/clean-executor.sh"));
-            }
+            _batchPoolFactory = poolFactory;
+            batchPrefix = batchSchedulingOptions.Value.Prefix;
+            logger.LogInformation("BatchPrefix: {BatchPrefix}", batchPrefix);
+            taskRunScriptContent = File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh"));
+            taskCleanupScriptContent = File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/clean-executor.sh"));
 
             this.gen2BatchNodeInfo = new BatchNodeInfo
             {
@@ -242,7 +237,7 @@ namespace TesApi.Web
 
             async Task DeleteBatchJobAndSetTaskStateAsync(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await DeleteBatchJobOrTaskAsync(tesTask, batchInfo.Pool, cancellationToken);
+                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
                 await azureProxy.DeleteBatchPoolIfExistsAsync(tesTask.Id, cancellationToken);
                 SetTaskStateAndLog(tesTask, newTaskState, batchInfo);
             }
@@ -263,29 +258,23 @@ namespace TesApi.Web
 
             async Task CancelTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await DeleteBatchJobOrTaskAsync(tesTask, batchInfo.Pool, cancellationToken);
+                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
                 await azureProxy.DeleteBatchPoolIfExistsAsync(tesTask.Id, cancellationToken);
                 tesTask.IsCancelRequested = false;
             }
 
             Task HandlePreemptedNodeAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                if (enableBatchAutopool)
-                {
-                    return DeleteBatchJobAndRequeueTaskAsync(tesTask, batchInfo, cancellationToken);
-                }
-                else
-                {
-                    logger.LogInformation("The TesTask {TesTask}'s node was preempted. It will be automatically rescheduled.", tesTask.Id);
-                    return Task.FromResult(false);
-                }
+                logger.LogInformation("The TesTask {TesTask}'s node was preempted. It will be automatically rescheduled.", tesTask.Id);
+                tesTask.State = TesState.INITIALIZINGEnum;
+                return Task.FromResult(false);
             }
 
             tesTaskStateTransitions = new List<TesTaskStateTransition>()
             {
                 new TesTaskStateTransition(tesTaskCancellationRequested, batchTaskState: null, alternateSystemLogItem: null, CancelTaskAsync),
                 new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.JobNotFound, alternateSystemLogItem: null, (tesTask, _, ct) => AddBatchTaskAsync(tesTask, ct)),
-                new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.MissingBatchTask, alternateSystemLogItem: null, (tesTask, batchInfo, ct) => enableBatchAutopool ? DeleteBatchJobAndRequeueTaskAsync(tesTask, batchInfo, ct) : AddBatchTaskAsync(tesTask, ct)),
+                new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.MissingBatchTask, alternateSystemLogItem: null, (tesTask, batchInfo, ct) => AddBatchTaskAsync(tesTask, ct)),
                 new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.Initializing, alternateSystemLogItem: null, (tesTask, _) => tesTask.State = TesState.INITIALIZINGEnum),
                 new TesTaskStateTransition(tesTaskIsQueuedOrInitializing, BatchTaskState.NodeAllocationFailed, alternateSystemLogItem: null, DeleteBatchJobAndRequeueTaskAsync),
                 new TesTaskStateTransition(tesTaskIsQueuedOrInitializing, BatchTaskState.Running, alternateSystemLogItem: null, (tesTask, _) => tesTask.State = TesState.RUNNINGEnum),
@@ -301,9 +290,6 @@ namespace TesApi.Web
             };
         }
 
-        private Task DeleteBatchJobOrTaskAsync(TesTask tesTask, PoolInformation poolInformation, CancellationToken cancellationToken)
-            => enableBatchAutopool ? azureProxy.DeleteBatchJobAsync(tesTask.Id, cancellationToken) : poolInformation is null || poolInformation.PoolId is null ? WarnWhenUnableToFindPoolToDeleteTask(tesTask) : azureProxy.DeleteBatchTaskAsync(tesTask.Id, poolInformation, cancellationToken);
-
         private Task WarnWhenUnableToFindPoolToDeleteTask(TesTask tesTask)
         {
             logger.LogWarning("Unable to delete batch task for task {TesTask} because of missing pool/job information.", tesTask.Id);
@@ -317,25 +303,12 @@ namespace TesApi.Web
 
             try
             {
-                await DeleteBatchJobOrTaskAsync(tesTask, batchInfo.Pool, cancellationToken);
+                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
             }
             catch (Exception exc)
             {
                 logger.LogError(exc, $"Exception deleting batch task or job with tesTask.Id: {tesTask?.Id}");
                 batchDeletionExceptions.Add(exc);
-            }
-
-            if (enableBatchAutopool)
-            {
-                try
-                {
-                    await azureProxy.DeleteBatchPoolIfExistsAsync(tesTask.Id, cancellationToken);
-                }
-                catch (Exception exc)
-                {
-                    logger.LogError(exc, $"Exception deleting batch pool with tesTask.Id: {tesTask?.Id}");
-                    batchDeletionExceptions.Add(exc);
-                }
             }
 
             if (batchDeletionExceptions.Any())
@@ -370,19 +343,16 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async Task LoadExistingPoolsAsync(CancellationToken cancellationToken)
         {
-            if (!enableBatchAutopool)
+            await foreach (var cloudPool in GetCloudPools(cancellationToken).WithCancellation(cancellationToken))
             {
-                await foreach (var cloudPool in GetCloudPools(cancellationToken).WithCancellation(cancellationToken))
+                try
                 {
-                    try
-                    {
-                        var batchPool = _batchPoolFactory.CreateNew();
-                        await batchPool.AssignPoolAsync(cloudPool, cancellationToken);
-                    }
-                    catch (Exception exc)
-                    {
-                        logger.LogError(exc, "When retrieving previously created batch pools and jobs, there were one or more failures when trying to access batch pool {PoolId} or its associated job.", cloudPool.Id);
-                    }
+                    var batchPool = _batchPoolFactory.CreateNew();
+                    await batchPool.AssignPoolAsync(cloudPool, cancellationToken);
+                }
+                catch (Exception exc)
+                {
+                    logger.LogError(exc, "When retrieving previously created batch pools and jobs, there were one or more failures when trying to access batch pool {PoolId} or its associated job.", cloudPool.Id);
                 }
             }
         }
@@ -530,8 +500,8 @@ namespace TesApi.Web
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
 
                 var containerMetadata = await GetContainerConfigurationIfNeededAsync(tesTask, cancellationToken);
-                (poolKey, var displayName) = enableBatchAutopool ? default : GetPoolKey(tesTask, virtualMachineInfo, containerMetadata.ContainerConfiguration, cancellationToken);
-                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: enableBatchAutopool || !IsPoolAvailable(poolKey), needCoresUtilizationQuotaCheck: enableBatchAutopool, cancellationToken: cancellationToken);
+                (poolKey, var displayName) = GetPoolKey(tesTask, virtualMachineInfo, containerMetadata.ContainerConfiguration, cancellationToken);
+                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: !IsPoolAvailable(poolKey), cancellationToken: cancellationToken);
 
                 var tesTaskLog = tesTask.AddTesTaskLog();
                 tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
@@ -548,58 +518,30 @@ namespace TesApi.Web
                 }
 
                 var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2");
-                string jobOrTaskId = default;
-                if (enableBatchAutopool)
-                {
-                    jobOrTaskId = await azureProxy.GetNextBatchJobIdAsync(tesTask.Id, cancellationToken);
-                    poolInformation = await CreateAutoPoolModePoolInformation(
-                        poolSpecification: await GetPoolSpecification(
-                        vmSize: virtualMachineInfo.VmSize,
-                        autoscaled: false,
-                        preemptable: virtualMachineInfo.LowPriority,
-                        nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                        containerConfiguration: containerMetadata.ContainerConfiguration,
-                        encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
-                        cancellationToken: cancellationToken),
-                    tesTaskId: tesTask.Id,
-                    jobId: jobOrTaskId,
-                    cancellationToken: cancellationToken,
-                    identityResourceIds: identities);
-                }
-                else
-                {
-                    poolInformation = (await GetOrAddPoolAsync(
-                        key: poolKey,
-                        isPreemptable: virtualMachineInfo.LowPriority,
-                        modelPoolFactory: async (id, ct) => ConvertPoolSpecificationToModelsPool(
-                            name: id,
-                            displayName: displayName,
-                            poolIdentity: GetBatchPoolIdentity(identities.ToArray()),
-                            pool: await GetPoolSpecification(
-                                vmSize: virtualMachineInfo.VmSize,
-                                autoscaled: true,
-                                preemptable: virtualMachineInfo.LowPriority,
-                                nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                                containerConfiguration: containerMetadata.ContainerConfiguration,
-                                encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
-                                cancellationToken: ct)),
-                        cancellationToken: cancellationToken)
-                        ).Pool;
-                    jobOrTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
-                }
+                poolInformation = (await GetOrAddPoolAsync(
+                    key: poolKey,
+                    isPreemptable: virtualMachineInfo.LowPriority,
+                    modelPoolFactory: async (id, ct) => ConvertPoolSpecificationToModelsPool(
+                        name: id,
+                        displayName: displayName,
+                        poolIdentity: GetBatchPoolIdentity(identities.ToArray()),
+                        pool: await GetPoolSpecification(
+                            vmSize: virtualMachineInfo.VmSize,
+                            autoscaled: true,
+                            preemptable: virtualMachineInfo.LowPriority,
+                            nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
+                            containerConfiguration: containerMetadata.ContainerConfiguration,
+                            encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
+                            cancellationToken: ct)),
+                    cancellationToken: cancellationToken)
+                    ).Pool;
 
+                var jobOrTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
                 tesTask.PoolId = poolInformation.PoolId;
-                var cloudTask = await ConvertTesTaskToBatchTaskAsync(enableBatchAutopool ? tesTask.Id : jobOrTaskId, tesTask, containerMetadata.IsPublic, cancellationToken);
-                logger.LogInformation($"Creating batch task for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
+                var cloudTask = await ConvertTesTaskToBatchTaskAsync(jobOrTaskId, tesTask, containerMetadata.IsPublic, cancellationToken);
 
-                if (enableBatchAutopool)
-                {
-                    await azureProxy.CreateAutoPoolModeBatchJobAsync(jobOrTaskId, cloudTask, poolInformation, cancellationToken);
-                }
-                else
-                {
-                    await azureProxy.AddBatchTaskAsync(tesTask.Id, cloudTask, poolInformation, cancellationToken);
-                }
+                logger.LogInformation($"Creating batch task for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
+                await azureProxy.AddBatchTaskAsync(tesTask.Id, cloudTask, poolInformation, cancellationToken);
 
                 tesTaskLog.StartTime = DateTimeOffset.UtcNow;
                 tesTask.State = TesState.INITIALIZINGEnum;
@@ -615,13 +557,6 @@ namespace TesApi.Web
             catch (Exception exception)
             {
                 HandleException(exception);
-            }
-            finally
-            {
-                if (enableBatchAutopool && poolInformation?.AutoPoolSpecification is not null)
-                {
-                    await azureProxy.DeleteBatchPoolIfExistsAsync(tesTask.Id, cancellationToken);
-                }
             }
 
             void HandleException(Exception exception)
@@ -718,12 +653,7 @@ namespace TesApi.Web
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1826:Do not use Enumerable methods on indexable collections", Justification = "FirstOrDefault() is straightforward, the alternative is less clear.")]
         private async ValueTask<CombinedBatchTaskInfo> GetBatchTaskStateAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
-            var azureBatchJobAndTaskState = await azureProxy.GetBatchJobAndTaskStateAsync(tesTask, enableBatchAutopool, cancellationToken);
-
-            if (enableBatchAutopool)
-            {
-                tesTask.PoolId ??= azureBatchJobAndTaskState.Pool?.PoolId;
-            }
+            var azureBatchJobAndTaskState = await azureProxy.GetBatchJobAndTaskStateAsync(tesTask, cancellationToken);
 
             if (azureBatchJobAndTaskState.Pool?.PoolId is null)
             {
@@ -771,29 +701,22 @@ namespace TesApi.Web
             // Because a ComputeTask is not assigned to the compute node while the StartTask is running, IAzureProxy.GetBatchJobAndTaskStateAsync() does not see start task failures. Deal with that here.
             if (azureBatchJobAndTaskState.NodeState is null && azureBatchJobAndTaskState.JobState == JobState.Active && azureBatchJobAndTaskState.TaskState == TaskState.Active && !string.IsNullOrWhiteSpace(azureBatchJobAndTaskState.Pool?.PoolId))
             {
-                if (enableBatchAutopool)
+                /*
+                 * Priority order for assigning errors to TesTasks in shared-pool mode:
+                 * 1. Node error found in GetBatchJobAndTaskStateAsync()
+                 * 2. StartTask failure
+                 * 3. NodeAllocation failure
+                 */
+                if (TryGetPool(azureBatchJobAndTaskState.Pool.PoolId, out var pool))
                 {
-                    _ = ProcessStartTaskFailure((await azureProxy.ListComputeNodesAsync(azureBatchJobAndTaskState.Pool.PoolId, new ODATADetailLevel { FilterClause = "state eq 'starttaskfailed'", SelectClause = "id,startTaskInfo" }).FirstOrDefaultAsync(cancellationToken: cancellationToken))?.StartTaskInformation?.FailureInformation);
-                }
-                else
-                {
-                    /*
-                     * Priority order for assigning errors to TesTasks in shared-pool mode:
-                     * 1. Node error found in GetBatchJobAndTaskStateAsync()
-                     * 2. StartTask failure
-                     * 3. NodeAllocation failure
-                     */
-                    if (TryGetPool(azureBatchJobAndTaskState.Pool.PoolId, out var pool))
+                    if (!string.IsNullOrWhiteSpace(azureBatchJobAndTaskState.NodeErrorCode) || !ProcessStartTaskFailure(pool.PopNextStartTaskFailure()))
                     {
-                        if (!string.IsNullOrWhiteSpace(azureBatchJobAndTaskState.NodeErrorCode) || !ProcessStartTaskFailure(pool.PopNextStartTaskFailure()))
+                        var resizeError = pool.PopNextResizeError();
+                        if (resizeError is not null)
                         {
-                            var resizeError = pool.PopNextResizeError();
-                            if (resizeError is not null)
-                            {
-                                azureBatchJobAndTaskState.NodeAllocationFailed = true;
-                                azureBatchJobAndTaskState.NodeErrorCode = resizeError.Code;
-                                azureBatchJobAndTaskState.NodeErrorDetails = Enumerable.Repeat(resizeError.Message, string.IsNullOrWhiteSpace(resizeError.Message) ? 1 : 0).Concat(resizeError.Values?.Select(d => d.Value) ?? Enumerable.Empty<string>());
-                            }
+                            azureBatchJobAndTaskState.NodeAllocationFailed = true;
+                            azureBatchJobAndTaskState.NodeErrorCode = resizeError.Code;
+                            azureBatchJobAndTaskState.NodeErrorDetails = Enumerable.Repeat(resizeError.Message, string.IsNullOrWhiteSpace(resizeError.Message) ? 1 : 0).Concat(resizeError.Values?.Select(d => d.Value) ?? Enumerable.Empty<string>());
                         }
                     }
                 }
@@ -1180,9 +1103,7 @@ namespace TesApi.Web
 
             await storageAccessProvider.UploadBlobAsync(new Uri(nodeBatchScriptSasUrl), sb.ToString(), cancellationToken);
 
-            var batchRunCommand = enableBatchAutopool
-                ? $"/bin/bash -c {CreateWgetDownloadCommand(nodeBatchScriptSasUrl, $"AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}", setExecutable: true)} && AZ_BATCH_TASK_WORKING_DIR/{BatchScriptFileName}"
-                : $"/bin/bash -c \"{MungeBatchTaskCommandLine()}\"";
+            var batchRunCommand = $"/bin/bash -c \"{MungeBatchTaskCommandLine()}\"";
 
             // Replace any URL query strings with the word REMOVED
             const string pattern = @"(https?:\/\/[^?\s]+)\?[^?\s]*";
@@ -1367,9 +1288,7 @@ namespace TesApi.Web
             var globalStartTaskConfigured = !string.IsNullOrWhiteSpace(globalStartTaskPath);
 
             var startTaskSasUrl = globalStartTaskConfigured
-                ? enableBatchAutopool
-                    ? await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, cancellationToken)
-                    : await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, cancellationToken, sasTokenDuration: BatchPoolService.RunInterval.Multiply(2).Add(poolLifetime).Add(TimeSpan.FromMinutes(15)))
+                ? await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, cancellationToken, sasTokenDuration: BatchPoolService.RunInterval.Multiply(2).Add(poolLifetime).Add(TimeSpan.FromMinutes(15)))
                 : default;
 
             if (startTaskSasUrl is not null)
@@ -1511,59 +1430,6 @@ namespace TesApi.Web
                                         identityReference: r.IdentityReference is null ? null : new() { ResourceId = r.IdentityReference.ResourceId }))
                                     .ToList()
             }, (executorImageIsPublic, dockerInDockerIsPublic, cromwellDrsIsPublic));
-        }
-
-        /// <summary>
-        /// Constructs either an <see cref="AutoPoolSpecification"/> or a new pool in the batch account ready for a job to be attached.
-        /// </summary>
-        /// <param name="poolSpecification"></param>
-        /// <param name="tesTaskId"></param>
-        /// <param name="jobId"></param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="identityResourceIds"></param>
-        /// <remarks>If <paramref name="identityResourceIds"/> is provided, <paramref name="jobId"/> must also be provided.<br/>This method does not support autscaled pools.</remarks>
-        /// <returns>An <see cref="PoolInformation"/></returns>
-        private async Task<PoolInformation> CreateAutoPoolModePoolInformation(PoolSpecification poolSpecification, string tesTaskId, string jobId, CancellationToken cancellationToken, IEnumerable<string> identityResourceIds = null)
-        {
-            var identities = identityResourceIds?.ToArray() ?? Array.Empty<string>();
-            var isAutoPool = !identities.Any();
-
-            if (isAutoPool)
-            {
-                logger.LogInformation($"TES task: {tesTaskId} creating Auto Pool using VM size {poolSpecification.VirtualMachineSize}");
-            }
-            else
-            {
-                logger.LogInformation($"TES task: {tesTaskId} creating Manual Batch Pool using VM size {poolSpecification.VirtualMachineSize}");
-            }
-
-            // By default, the pool will have the same name/ID as the job if the identity is provided, otherwise we return an actual autopool.
-            return isAutoPool
-                ? new()
-                {
-                    AutoPoolSpecification = new()
-                    {
-                        AutoPoolIdPrefix = "TES",
-                        PoolLifetimeOption = PoolLifetimeOption.Job,
-                        PoolSpecification = poolSpecification,
-                        KeepAlive = false
-                    }
-                }
-                : await azureProxy.CreateBatchPoolAsync(
-                    ConvertPoolSpecificationToModelsPool(
-                        $"TES_{jobId}",
-                        jobId,
-                        GetBatchPoolIdentity(identities),
-                        poolSpecification),
-                    IsPreemptable(), cancellationToken);
-
-            bool IsPreemptable()
-                => true switch
-                {
-                    _ when poolSpecification.TargetDedicatedComputeNodes > 0 => false,
-                    _ when poolSpecification.TargetLowPriorityComputeNodes > 0 => true,
-                    _ => throw new ArgumentException("Unable to determine if pool will host a low priority compute node.", nameof(poolSpecification)),
-                };
         }
 
         /// <summary>
