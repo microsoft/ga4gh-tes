@@ -397,6 +397,39 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
+        public async Task TerminateBatchTaskAsync(string tesTaskId, PoolInformation pool, CancellationToken cancellationToken)
+        {
+            var jobFilter = new ODATADetailLevel
+            {
+                FilterClause = $"startswith(id,'{tesTaskId}{BatchJobAttemptSeparator}')",
+                SelectClause = "id"
+            };
+
+            List<CloudTask> batchTasksToDelete = default;
+
+            try
+            {
+                batchTasksToDelete = await batchClient.JobOperations.ListTasks(pool.PoolId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
+            }
+            catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException bee && "JobNotFound".Equals(bee.Body?.Code, StringComparison.InvariantCultureIgnoreCase))
+            {
+                logger.LogWarning("Job not found for TES task {TesTask}", tesTaskId);
+                return; // Task cannot exist if the job is not found.
+            }
+
+            if (batchTasksToDelete.Count > 1)
+            {
+                logger.LogWarning("Found more than one active task for TES task {TesTask}", tesTaskId);
+            }
+
+            foreach (var task in batchTasksToDelete)
+            {
+                logger.LogInformation("Terminating task {BatchTask}", task.Id);
+                await batchNodeNotReadyRetryPolicy.ExecuteAsync(ct => task.TerminateAsync(cancellationToken: ct), cancellationToken);
+            }
+        }
+
+        /// <inheritdoc/>
         public async Task DeleteBatchTaskAsync(string tesTaskId, PoolInformation pool, CancellationToken cancellationToken)
         {
             var jobFilter = new ODATADetailLevel
@@ -496,42 +529,6 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken = default)
             => batchPoolManager.DeleteBatchPoolAsync(poolId, cancellationToken: cancellationToken);
-
-        /// <inheritdoc/>
-        public async Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                var poolFilter = new ODATADetailLevel
-                {
-                    FilterClause = $"startswith(id,'{poolId}') and state ne 'deleting'",
-                    SelectClause = "id"
-                };
-
-                var poolsToDelete = await batchClient.PoolOperations.ListPools(poolFilter).ToListAsync(cancellationToken);
-
-                foreach (var pool in poolsToDelete)
-                {
-                    logger.LogInformation($"Pool ID: {pool.Id} Pool State: {pool?.State} deleting...");
-                    await batchClient.PoolOperations.DeletePoolAsync(pool.Id, cancellationToken: cancellationToken);
-                }
-            }
-            catch (Exception exc)
-            {
-                var batchErrorCode = (exc as BatchException)?.RequestInformation?.BatchError?.Code;
-
-                if (batchErrorCode?.Trim().Equals("PoolBeingDeleted", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    // Do not throw if it's a deletion race condition
-                    // Docs: https://learn.microsoft.com/en-us/rest/api/batchservice/Pool/Delete?tabs=HTTP
-
-                    return;
-                }
-
-                logger.LogError(exc, $"Pool ID: {poolId} exception while attempting to delete the pool.  Batch error code: {batchErrorCode}");
-                throw;
-            }
-        }
 
         /// <inheritdoc/>
         public Task<CloudPool> GetBatchPoolAsync(string poolId, CancellationToken cancellationToken = default, DetailLevel detailLevel = default)

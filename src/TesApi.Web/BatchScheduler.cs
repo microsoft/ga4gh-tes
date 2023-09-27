@@ -185,7 +185,8 @@ namespace TesApi.Web
             static bool tesTaskIsInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
             static bool tesTaskIsQueuedOrInitializing(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum || tesTask.State == TesState.INITIALIZINGEnum;
             static bool tesTaskIsQueued(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum;
-            static bool tesTaskCancellationRequested(TesTask tesTask) => tesTask.State == TesState.CANCELEDEnum && tesTask.IsCancelRequested;
+            static bool tesTaskCancellationRequested(TesTask tesTask) => tesTask.State == TesState.CANCELINGEnum;
+            //static bool tesTaskDeletionReady(TesTask tesTask) => tesTask.IsTaskDeletionRequired;
 
             static void SetTaskStateAndLog(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo)
             {
@@ -219,26 +220,25 @@ namespace TesApi.Web
 
             async Task SetTaskCompleted(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await DeleteBatchTaskAndOrJobAndOrPoolIfExists(azureProxy, tesTask, batchInfo, cancellationToken);
+                await TerminateBatchTaskAsync(tesTask, batchInfo, cancellationToken);
                 SetTaskStateAndLog(tesTask, TesState.COMPLETEEnum, batchInfo);
             }
 
             async Task SetTaskExecutorError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await DeleteBatchTaskAndOrJobAndOrPoolIfExists(azureProxy, tesTask, batchInfo, cancellationToken);
+                await TerminateBatchTaskAsync(tesTask, batchInfo, cancellationToken);
                 SetTaskStateAndLog(tesTask, TesState.EXECUTORERROREnum, batchInfo);
             }
 
             async Task SetTaskSystemError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await DeleteBatchTaskAndOrJobAndOrPoolIfExists(azureProxy, tesTask, batchInfo, cancellationToken);
+                await TerminateBatchTaskAsync(tesTask, batchInfo, cancellationToken);
                 SetTaskStateAndLog(tesTask, TesState.SYSTEMERROREnum, batchInfo);
             }
 
             async Task DeleteBatchJobAndSetTaskStateAsync(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
-                await azureProxy.DeleteBatchPoolIfExistsAsync(tesTask.Id, cancellationToken);
+                await TerminateBatchTaskAsync(tesTask, batchInfo, cancellationToken);
                 SetTaskStateAndLog(tesTask, newTaskState, batchInfo);
             }
 
@@ -256,11 +256,10 @@ namespace TesApi.Web
                 return DeleteBatchJobAndSetTaskExecutorErrorAsync(tesTask, batchInfo, cancellationToken);
             }
 
-            async Task CancelTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
+            Task CancelTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
-                await azureProxy.DeleteBatchPoolIfExistsAsync(tesTask.Id, cancellationToken);
-                tesTask.IsCancelRequested = false;
+                tesTask.State = TesState.CANCELEDEnum;
+                return TerminateBatchTaskAsync(tesTask, batchInfo, cancellationToken);
             }
 
             Task HandlePreemptedNodeAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
@@ -272,6 +271,7 @@ namespace TesApi.Web
 
             tesTaskStateTransitions = new List<TesTaskStateTransition>()
             {
+                //new TesTaskStateTransition(tesTaskDeletionReady, batchTaskState: null, alternateSystemLogItem: null, DeleteCancelledTaskAsync),
                 new TesTaskStateTransition(tesTaskCancellationRequested, batchTaskState: null, alternateSystemLogItem: null, CancelTaskAsync),
                 new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.JobNotFound, alternateSystemLogItem: null, (tesTask, _, ct) => AddBatchTaskAsync(tesTask, ct)),
                 new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.MissingBatchTask, alternateSystemLogItem: null, (tesTask, batchInfo, ct) => AddBatchTaskAsync(tesTask, ct)),
@@ -290,6 +290,12 @@ namespace TesApi.Web
             };
         }
 
+        //private async Task DeleteCancelledTaskAsync(TesTask task, CombinedBatchTaskInfo info, CancellationToken token)
+        //{
+        //    // TODO: check if task is old enough to delete.
+        //    await azureProxy.DeleteBatchTaskAsync(task.Id, info.Pool, token);
+        //}
+
         private Task WarnWhenUnableToFindPoolToDeleteTask(TesTask tesTask)
         {
             logger.LogWarning("Unable to delete batch task for task {TesTask} because of missing pool/job information.", tesTask.Id);
@@ -297,23 +303,17 @@ namespace TesApi.Web
             return Task.CompletedTask;
         }
 
-        private async Task DeleteBatchTaskAndOrJobAndOrPoolIfExists(IAzureProxy azureProxy, TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
+        private async Task TerminateBatchTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
         {
-            var batchDeletionExceptions = new List<Exception>();
-
             try
             {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
+                await azureProxy.TerminateBatchTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
+                //tesTask.IsTaskDeletionRequired = true;
             }
             catch (Exception exc)
             {
-                logger.LogError(exc, $"Exception deleting batch task or job with tesTask.Id: {tesTask?.Id}");
-                batchDeletionExceptions.Add(exc);
-            }
-
-            if (batchDeletionExceptions.Any())
-            {
-                throw new AggregateException(batchDeletionExceptions);
+                logger.LogError(exc, "Exception deleting batch task with tesTask.Id: {TesTaskId}", tesTask?.Id);
+                throw;
             }
         }
 

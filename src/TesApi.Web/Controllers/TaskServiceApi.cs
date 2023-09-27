@@ -84,15 +84,16 @@ namespace TesApi.Controllers
             {
                 if (tesTask.State == TesState.COMPLETEEnum ||
                     tesTask.State == TesState.EXECUTORERROREnum ||
-                    tesTask.State == TesState.SYSTEMERROREnum)
+                    tesTask.State == TesState.SYSTEMERROREnum ||
+                    tesTask.State == TesState.PREEMPTEDEnum ||
+                    tesTask.State == TesState.CANCELINGEnum)
                 {
-                    logger.LogInformation($"Task {id} cannot be canceled because it is in {tesTask.State} state.");
+                    logger.LogInformation("Task {TesTaskId} cannot be canceled because it is in {TesTaskState} state.", id, tesTask.State);
                 }
                 else if (tesTask.State != TesState.CANCELEDEnum)
                 {
                     logger.LogInformation("Canceling task");
-                    tesTask.IsCancelRequested = true;
-                    tesTask.State = TesState.CANCELEDEnum;
+                    tesTask.State = TesState.CANCELINGEnum;
 
                     try
                     {
@@ -100,7 +101,7 @@ namespace TesApi.Controllers
                     }
                     catch (RepositoryCollisionException exc)
                     {
-                        logger.LogError(exc, $"RepositoryCollisionException in CancelTask for {id}");
+                        logger.LogError(exc, "RepositoryCollisionException in CancelTask for {TesTaskId}", id);
                         return Conflict(new { message = "The task could not be updated due to a conflict with the current state; please retry." });
                     }
                 }

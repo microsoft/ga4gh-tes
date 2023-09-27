@@ -15,23 +15,20 @@ namespace Tes.Models
         private static readonly Regex CromwellTaskInstanceNameRegex = new("(.*):[^:]*:[^:]*");
         private static readonly Regex CromwellShardRegex = new(".*:([^:]*):[^:]*");
         private static readonly Regex CromwellAttemptRegex = new(".*:([^:]*)");
-        public static readonly List<TesState> ActiveStates = new List<TesState> {
+
+        public static readonly List<TesState> ActiveStates = new() {
             TesState.QUEUEDEnum,
             TesState.RUNNINGEnum,
             TesState.PAUSEDEnum,
-            TesState.INITIALIZINGEnum};
+            TesState.INITIALIZINGEnum,
+            TesState.CANCELINGEnum
+        };
 
         /// <summary>
         /// Number of retries attempted
         /// </summary>
         [DataMember(Name = "error_count")]
         public int ErrorCount { get; set; }
-
-        /// <summary>
-        /// Boolean of whether cancellation was requested
-        /// </summary>
-        [DataMember(Name = "is_cancel_requested")]
-        public bool IsCancelRequested { get; set; }
 
         /// <summary>
         /// Date + time the task was completed, in RFC 3339 format. This is set by the system, not the client.

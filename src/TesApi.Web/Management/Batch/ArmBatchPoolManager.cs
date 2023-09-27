@@ -5,6 +5,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
+using Microsoft.Azure.Batch.Common;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.Batch.Models;
 using Microsoft.Extensions.Logging;
@@ -76,9 +77,19 @@ namespace TesApi.Web.Management.Batch
                     $"Successfully deleted pool with the id/name:{poolId} in Batch account:{azureClientsFactory.BatchAccountInformation.Name}");
 
             }
-            catch (Exception e)
+            catch (Exception exc)
             {
-                logger.LogError(e, $"Error trying to delete pool named {poolId}");
+                var batchErrorCode = (exc as BatchException)?.RequestInformation?.BatchError?.Code;
+
+                if (batchErrorCode?.Trim().Equals("PoolBeingDeleted", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    // Do not throw if it's a deletion race condition
+                    // Docs: https://learn.microsoft.com/en-us/rest/api/batchservice/Pool/Delete?tabs=HTTP
+
+                    return;
+                }
+
+                logger.LogError(exc, "Error trying to delete pool named {PoolId}", poolId);
 
                 throw;
             }

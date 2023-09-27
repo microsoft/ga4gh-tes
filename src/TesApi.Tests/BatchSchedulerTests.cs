@@ -868,7 +868,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task TaskGetsCancelled()
         {
-            var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELEDEnum, IsCancelRequested = true };
+            var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELINGEnum };
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
             azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskActive;
@@ -884,8 +884,7 @@ namespace TesApi.Tests
             GuardAssertsWithTesTask(tesTask, () =>
             {
                 Assert.AreEqual(TesState.CANCELEDEnum, tesTask.State);
-                Assert.IsFalse(tesTask.IsCancelRequested);
-                azureProxy.Verify(i => i.DeleteBatchTaskAsync(tesTask.Id, It.IsAny<PoolInformation>(), It.IsAny<System.Threading.CancellationToken>()));
+                azureProxy.Verify(i => i.TerminateBatchTaskAsync(tesTask.Id, It.IsAny<PoolInformation>(), It.IsAny<System.Threading.CancellationToken>()));
             });
         }
 
@@ -1664,10 +1663,6 @@ namespace TesApi.Tests
                 azureProxy.Setup(a => a.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()))
                     .Returns((Pool p, bool _1, System.Threading.CancellationToken _2) => Task.FromResult(azureProxyReturnValues.CreateBatchPoolImpl(p)));
 
-                azureProxy.Setup(a => a.DeleteBatchPoolIfExistsAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Callback<string, System.Threading.CancellationToken>((poolId, cancellationToken) => azureProxyReturnValues.AzureProxyDeleteBatchPoolIfExistsImpl(poolId, cancellationToken))
-                    .Returns(Task.CompletedTask);
-
                 azureProxy.Setup(a => a.GetFullAllocationStateAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.AzureProxyGetFullAllocationState?.Invoke() ?? (null, null, null, null, null, null)));
 
@@ -1870,12 +1865,6 @@ namespace TesApi.Tests
             }
 
             private readonly Dictionary<string, IList<Microsoft.Azure.Batch.MetadataItem>> poolMetadata = new();
-
-            internal void AzureProxyDeleteBatchPoolIfExistsImpl(string poolId, System.Threading.CancellationToken cancellationToken)
-            {
-                _ = poolMetadata.Remove(poolId);
-                AzureProxyDeleteBatchPoolIfExists(poolId, cancellationToken);
-            }
 
             internal void AzureProxyDeleteBatchPoolImpl(string poolId, System.Threading.CancellationToken cancellationToken)
             {

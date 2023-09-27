@@ -73,6 +73,14 @@ namespace TesApi.Web
         Task DeleteBatchJobAsync(string taskId, CancellationToken cancellationToken);
 
         /// <summary>
+        /// Terminates an Azure Batch task
+        /// </summary>
+        /// <param name="taskId">The unique TES task ID</param>
+        /// <param name="poolInformation"></param>
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        Task TerminateBatchTaskAsync(string taskId, PoolInformation poolInformation, CancellationToken cancellationToken);
+
+        /// <summary>
         /// Deletes an Azure Batch task
         /// </summary>
         /// <param name="taskId">The unique TES task ID</param>
@@ -202,11 +210,6 @@ namespace TesApi.Web
         /// <param name="poolId">The id of the pool.</param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Deletes the specified pool if it exists
-        /// </summary>
-        Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Retrieves the specified pool

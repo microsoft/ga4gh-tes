@@ -94,6 +94,9 @@ namespace TesApi.Web
         public Task DeleteBatchJobAsync(string taskId, CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchJobAsync(taskId, ct), cancellationToken);
 
         /// <inheritdoc/>
+        public Task TerminateBatchTaskAsync(string taskId, PoolInformation poolInformation, CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.TerminateBatchTaskAsync(taskId, poolInformation, ct), cancellationToken);
+
+        /// <inheritdoc/>
         public Task DeleteBatchTaskAsync(string taskId, PoolInformation poolInformation, CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchTaskAsync(taskId, poolInformation, ct), cancellationToken);
 
         /// <inheritdoc/>
@@ -202,10 +205,6 @@ namespace TesApi.Web
                 return new() { PoolId = poolInfo.Name };
             }
         }
-
-        /// <inheritdoc/>
-        public Task DeleteBatchPoolIfExistsAsync(string poolId, CancellationToken cancellationToken)
-            => azureProxy.DeleteBatchPoolIfExistsAsync(poolId, cancellationToken);
 
         /// <inheritdoc/>
         public Task<(AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken)
