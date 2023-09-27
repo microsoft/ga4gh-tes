@@ -552,6 +552,7 @@ namespace TesDeployer
 
                     var maxPerFamilyQuota = batchAccount.DedicatedCoreQuotaPerVMFamilyEnforced ? batchAccount.DedicatedCoreQuotaPerVMFamily.Select(q => q.CoreQuota).Where(q => 0 != q) : Enumerable.Repeat(batchAccount.DedicatedCoreQuota ?? 0, 1);
                     var isBatchQuotaAvailable = batchAccount.LowPriorityCoreQuota > 0 || (batchAccount.DedicatedCoreQuota > 0 && maxPerFamilyQuota.Append(0).Max() > 0);
+                    var isBatchPoolQuotaAvailable = batchAccount.PoolQuota > 0;
 
                     int exitCode;
 
@@ -566,7 +567,27 @@ namespace TesDeployer
                         ConsoleEx.WriteLine($"TES credentials file written to: {credentialsPath}");
                     }
 
-                    if (isBatchQuotaAvailable)
+                    if (!isBatchQuotaAvailable || !isBatchPoolQuotaAvailable)
+                    {
+                        if (!configuration.SkipTestWorkflow)
+                        {
+                            ConsoleEx.WriteLine("Could not run the test task.", ConsoleColor.Yellow);
+                        }
+
+                        string quotaMessage = !isBatchQuotaAvailable ? "core" : "";
+
+                        if (!isBatchPoolQuotaAvailable)
+                        {
+                            quotaMessage = string.IsNullOrEmpty(quotaMessage) ? "pool" : "core and pool";
+                        }
+
+                        string batchAccountName = configuration.BatchAccountName;
+                        ConsoleEx.WriteLine($"Deployment was successful, but Batch account {batchAccountName} does not have sufficient {quotaMessage} quota to run workflows.", ConsoleColor.Yellow);
+                        ConsoleEx.WriteLine($"Request Batch {quotaMessage} quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
+                        ConsoleEx.WriteLine("After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
+                        exitCode = 2;
+                    }
+                    else
                     {
                         if (configuration.SkipTestWorkflow)
                         {
@@ -599,24 +620,10 @@ namespace TesDeployer
                             {
                                 tokenSource.Cancel();
                             }
-
                         }
-                    }
-                    else
-                    {
-                        if (!configuration.SkipTestWorkflow)
-                        {
-                            ConsoleEx.WriteLine($"Could not run the test task.", ConsoleColor.Yellow);
-                        }
-
-                        ConsoleEx.WriteLine($"Deployment was successful, but Batch account {configuration.BatchAccountName} does not have sufficient core quota to run workflows.", ConsoleColor.Yellow);
-                        ConsoleEx.WriteLine($"Request Batch core quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
-                        ConsoleEx.WriteLine($"After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
-                        exitCode = 2;
                     }
 
                     ConsoleEx.WriteLine($"Completed in {mainTimer.Elapsed.TotalMinutes:n1} minutes.");
-
                     return exitCode;
                 }
                 finally
