@@ -31,6 +31,12 @@ namespace Tes.Models
         public int ErrorCount { get; set; }
 
         /// <summary>
+        /// Boolean of whether deletion after termination is required.
+        /// </summary>
+        [DataMember(Name = "is_delete_required")]
+        public bool IsTaskDeletionRequired { get; set; }
+
+        /// <summary>
         /// Date + time the task was completed, in RFC 3339 format. This is set by the system, not the client.
         /// </summary>
         /// <value>Date + time the task was completed, in RFC 3339 format. This is set by the system, not the client.</value>
@@ -85,9 +91,13 @@ namespace Tes.Models
         [IgnoreDataMember]
         public int? CromwellAttempt => this.Description == null ? null : (int.TryParse(CromwellAttemptRegex.Match(this.Description).Groups[1].Value, out var result) ? result : null);
 
+        /// <summary>
+        /// True if task should be kept in the cache.
+        /// </summary>
+        /// <returns></returns>
         public bool IsActiveState()
         {
-            return ActiveStates.Contains(this.State);
+            return ActiveStates.Contains(this.State) || IsTaskDeletionRequired;
         }
     }
 }

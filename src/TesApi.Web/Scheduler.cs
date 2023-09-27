@@ -103,7 +103,7 @@ namespace TesApi.Web
             var pools = new HashSet<string>();
 
             var tesTasks = (await repository.GetItemsAsync(
-                    predicate: t => t.State == TesState.QUEUEDEnum || t.State == TesState.CANCELINGEnum,
+                    predicate: t => t.State == TesState.QUEUEDEnum || t.State == TesState.CANCELINGEnum || t.IsTaskDeletionRequired,
                     cancellationToken: stoppingToken))
                 .OrderBy(t => t.CreationTime)
                 .ToList();

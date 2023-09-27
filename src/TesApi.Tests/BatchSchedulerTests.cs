@@ -884,7 +884,31 @@ namespace TesApi.Tests
             GuardAssertsWithTesTask(tesTask, () =>
             {
                 Assert.AreEqual(TesState.CANCELEDEnum, tesTask.State);
+                Assert.IsTrue(tesTask.IsTaskDeletionRequired);
                 azureProxy.Verify(i => i.TerminateBatchTaskAsync(tesTask.Id, It.IsAny<PoolInformation>(), It.IsAny<System.Threading.CancellationToken>()));
+            });
+        }
+
+        [TestMethod]
+        public async Task CancelledTaskGetsDeleted()
+        {
+            var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELEDEnum, IsTaskDeletionRequired = true };
+
+            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
+            azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskActive;
+            Mock<IAzureProxy> azureProxy = default;
+            var azureProxySetter = new Action<Mock<IAzureProxy>>(mock =>
+            {
+                GetMockAzureProxy(azureProxyReturnValues)(mock);
+                azureProxy = mock;
+            });
+
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, azureProxyReturnValues);
+
+            GuardAssertsWithTesTask(tesTask, () =>
+            {
+                Assert.IsFalse(tesTask.IsTaskDeletionRequired);
+                azureProxy.Verify(i => i.DeleteBatchTaskAsync(tesTask.Id, It.IsAny<PoolInformation>(), It.IsAny<System.Threading.CancellationToken>()));
             });
         }
 
@@ -1580,11 +1604,9 @@ namespace TesApi.Tests
         private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProvider(IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, Action<Mock<IBatchQuotaProvider>> quotaProvider, Action<Mock<IBatchSkuInformationProvider>> skuInfoProvider, Action<Mock<ContainerRegistryProvider>> containerRegistryProviderSetup, Action<Mock<IAllowedVmSizesService>> allowedVmSizesServiceSetup, Action<IServiceCollection> additionalActions = default)
             => new(wrapAzureProxy: true, configuration: configuration, azureProxy: azureProxy, batchQuotaProvider: quotaProvider, batchSkuInformationProvider: skuInfoProvider, accountResourceInformation: GetNewBatchResourceInfo(), containerRegistryProviderSetup: containerRegistryProviderSetup, allowedVmSizesServiceSetup: allowedVmSizesServiceSetup, additionalActions: additionalActions);
 
-        // TODO: Are these tests still valid?
         private static async Task<TesState> GetNewTesTaskStateAsync(TesTask tesTask, AzureProxyReturnValues azureProxyReturnValues)
         {
-            //_ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
-            var test = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
+            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
 
             return tesTask.State;
         }
