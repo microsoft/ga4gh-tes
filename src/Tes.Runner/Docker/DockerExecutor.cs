@@ -23,7 +23,6 @@ namespace Tes.Runner.Docker
         public async Task<ContainerExecutionResult> RunOnContainerAsync(string? imageName, string? tag, List<string>? commandsToExecute, List<string>? volumeBindings, string? workingDir)
         {
             ArgumentException.ThrowIfNullOrEmpty(imageName);
-            ArgumentException.ThrowIfNullOrEmpty(tag);
             ArgumentNullException.ThrowIfNull(commandsToExecute);
 
             await PullImageAsync(imageName, tag);
@@ -61,26 +60,30 @@ namespace Tes.Runner.Docker
                 });
         }
 
-        private async Task<CreateContainerResponse> CreateContainerAsync(string imageName, string imageTag,
+        private async Task<CreateContainerResponse> CreateContainerAsync(string imageName, string? imageTag,
             List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir)
         {
+            var imageWithTag = ToImageNameWithTag(imageName, imageTag);
+            logger.LogInformation($"Creating container with image name: {imageWithTag}");
+
             var createResponse = await dockerClient.Containers.CreateContainerAsync(
                 new CreateContainerParameters
                 {
-                    Image = ToImageNameWithTag(imageName, imageTag),
-                    Entrypoint = commandsToExecute,
+                    Image = imageWithTag,
+                    Cmd = commandsToExecute,
                     AttachStdout = true,
                     AttachStderr = true,
                     WorkingDir = workingDir,
                     HostConfig = new HostConfig
                     {
+                        AutoRemove = true,
                         Binds = volumeBindings
                     }
                 });
             return createResponse;
         }
 
-        private static string ToImageNameWithTag(string imageName, string imageTag)
+        private static string ToImageNameWithTag(string imageName, string? imageTag)
         {
             if (string.IsNullOrWhiteSpace(imageTag))
             {
@@ -90,8 +93,10 @@ namespace Tes.Runner.Docker
             return $"{imageName}:{imageTag}";
         }
 
-        private async Task PullImageAsync(string imageName, string tag, AuthConfig? authConfig = null)
+        private async Task PullImageAsync(string imageName, string? tag, AuthConfig? authConfig = null)
         {
+            logger.LogInformation($"Pulling image name: {imageName} image tag: {tag}");
+
             await dockerClient.Images.CreateImageAsync(
                 new ImagesCreateParameters()
                 {
@@ -99,7 +104,7 @@ namespace Tes.Runner.Docker
                     Tag = tag
                 },
                 authConfig,
-                new Progress<JSONMessage>(message => logger.LogInformation(message.Status)));
+                new Progress<JSONMessage>(message => logger.LogDebug(message.Status)));
         }
 
         /// <summary>

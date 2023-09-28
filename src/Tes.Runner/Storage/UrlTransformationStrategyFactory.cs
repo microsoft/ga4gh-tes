@@ -4,12 +4,16 @@
 using Azure.Core;
 using Azure.Identity;
 using Azure.Storage.Blobs;
+using Microsoft.Extensions.Logging;
 using Tes.Runner.Models;
+using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Storage
 {
     public static class UrlTransformationStrategyFactory
     {
+        private static readonly ILogger Logger = PipelineLoggerFactory.Create(nameof(UrlTransformationStrategyFactory));
+
         public static IUrlTransformationStrategy CreateStrategy(TransformationStrategy transformationStrategy, RuntimeOptions runtimeOptions)
         {
             switch (transformationStrategy)
@@ -41,10 +45,15 @@ namespace Tes.Runner.Storage
 
         public static TokenCredential GeTokenCredential(RuntimeOptions runtimeOptions)
         {
-            if (!string.IsNullOrWhiteSpace(runtimeOptions.NodeManagedIdentityClientId))
+
+            if (!string.IsNullOrWhiteSpace(runtimeOptions.NodeManagedIdentityResourceId))
             {
-                return new ManagedIdentityCredential(clientId: runtimeOptions.NodeManagedIdentityClientId);
+                Logger.LogInformation($"Token credentials with Managed Identity and resource ID: {runtimeOptions.NodeManagedIdentityResourceId}");
+
+                return new ManagedIdentityCredential(new ResourceIdentifier(runtimeOptions.NodeManagedIdentityResourceId));
             }
+
+            Logger.LogInformation("Token credentials with DefaultAzureCredential");
 
             return new DefaultAzureCredential();
         }
