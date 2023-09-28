@@ -12,7 +12,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
-using Microsoft.Azure.Management.ApplicationInsights.Management;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
@@ -219,25 +218,25 @@ namespace TesApi.Web
 
             async Task SetTaskCompleted(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
+                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
                 SetTaskStateAndLog(tesTask, TesState.COMPLETEEnum, batchInfo);
             }
 
             async Task SetTaskExecutorError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
+                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
                 SetTaskStateAndLog(tesTask, TesState.EXECUTORERROREnum, batchInfo);
             }
 
             async Task SetTaskSystemError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
+                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
                 SetTaskStateAndLog(tesTask, TesState.SYSTEMERROREnum, batchInfo);
             }
 
             async Task DeleteBatchJobAndSetTaskStateAsync(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
+                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
                 SetTaskStateAndLog(tesTask, newTaskState, batchInfo);
             }
 
@@ -253,11 +252,6 @@ namespace TesApi.Web
             {
                 batchInfo.SystemLogItems ??= Enumerable.Empty<string>().Append(alternateSystemLogItem);
                 return DeleteBatchJobAndSetTaskExecutorErrorAsync(tesTask, batchInfo, cancellationToken);
-            }
-
-            Task CancelTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
-            {
-                return TerminateBatchTaskAsync(tesTask, batchInfo, cancellationToken);
             }
 
             Task HandlePreemptedNodeAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
@@ -288,21 +282,32 @@ namespace TesApi.Web
             //};
         }
 
-        private async Task DeleteCancelledTaskAsync(TesTask task, CombinedBatchTaskInfo info, CancellationToken token)
+        private async Task<bool> DeleteCancelledTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
-            // TODO: check if task is old enough to delete.
-            await azureProxy.DeleteBatchTaskAsync(task.Id, info.Pool, token);
-            task.IsTaskDeletionRequired = false;
+            // https://learn.microsoft.com/azure/batch/best-practices#manage-task-lifetime
+            var mins10 = TimeSpan.FromMinutes(10);
+            var now = DateTimeOffset.UtcNow;
+
+            if (!tesTask.Logs.Any(l => now - l.StartTime > mins10))
+            {
+                return false;
+            }
+
+            await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
+            tesTask.IsTaskDeletionRequired = false;
+            return true;
         }
 
-        private async Task TerminateBatchTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
+        private async Task<bool> TerminateBatchTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
             try
             {
-                await azureProxy.TerminateBatchTaskAsync(tesTask.Id, batchInfo.Pool, cancellationToken);
+                await azureProxy.TerminateBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
                 tesTask.IsTaskDeletionRequired = true;
                 tesTask.State = TesState.CANCELEDEnum;
+                return true;
             }
+            //TODO: catch exception returned if the task as already completed.
             catch (Exception exc)
             {
                 logger.LogError(exc, "Exception terminating batch task with tesTask.Id: {TesTaskId}", tesTask?.Id);
@@ -385,21 +390,49 @@ namespace TesApi.Web
         //}
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCompletedTesTasksAsync(IEnumerable<TesTask> tesTask, CloudTask[] cloudTask, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCompletedTesTasksAsync(IEnumerable<TesTask> tesTasks, CloudTask[] cloudTask, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             yield break;
         }
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCancelledTesTasksAsync(IEnumerable<TesTask> tesTask, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCancelledTesTasksAsync(IEnumerable<TesTask> tesTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            yield break;
+            foreach (var task in tesTasks)
+            {
+                Task<bool> result;
+
+                try
+                {
+                    result = Task.FromResult(await TerminateBatchTaskAsync(task, cancellationToken));
+                }
+                catch (Exception ex)
+                {
+                    result = Task.FromException<bool>(ex);
+                }
+
+                yield return (task, result);
+            }
         }
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessTerminatedTesTasksAsync(IEnumerable<TesTask> tesTask, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessTerminatedTesTasksAsync(IEnumerable<TesTask> tesTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            yield break;
+            foreach (var task in tesTasks)
+            {
+                Task<bool> result;
+
+                try
+                {
+                    result = Task.FromResult(await DeleteCancelledTaskAsync(task, cancellationToken));
+                }
+                catch (Exception ex)
+                {
+                    result = Task.FromException<bool>(ex);
+                }
+
+                yield return (task, result);
+            }
         }
 
 
@@ -529,13 +562,11 @@ namespace TesApi.Web
             }
 
             var neededPoolCounts = taskMetadataByPools.ToDictionary(t => t.Key, t => t.Value.Count);
-            tesTasks = tasks.ToArray();
 
-            foreach (var tesTask in tesTasks)
+            foreach (var (tesTask, virtualMachineInfo, containerMetadata, displayName) in taskMetadataByPools.Values.SelectMany(e => e).Where(m => tasks.Contains(m.TesTask)))
             {
                 Task<bool> quickResult = default;
                 var poolKey = poolKeyByTasks[tesTask.Id];
-                var (_, virtualMachineInfo, containerMetadata, displayName) = taskMetadataByPools[poolKey].Single(t => t.TesTask.Id == tesTask.Id);
 
                 try
                 {
@@ -1171,6 +1202,7 @@ namespace TesApi.Web
 
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
+                Constraints = new(maxWallClockTime: poolLifetime, retentionTime: TimeSpan.Zero, maxTaskRetryCount: 0),
                 UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
                 OutputFiles = new List<OutputFile>
                 {

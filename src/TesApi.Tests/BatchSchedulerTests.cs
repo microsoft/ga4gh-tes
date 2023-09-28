@@ -885,14 +885,14 @@ namespace TesApi.Tests
             {
                 Assert.AreEqual(TesState.CANCELEDEnum, tesTask.State);
                 Assert.IsTrue(tesTask.IsTaskDeletionRequired);
-                azureProxy.Verify(i => i.TerminateBatchTaskAsync(tesTask.Id, It.IsAny<PoolInformation>(), It.IsAny<System.Threading.CancellationToken>()));
+                azureProxy.Verify(i => i.TerminateBatchTaskAsync(tesTask.Id, It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()));
             });
         }
 
         [TestMethod]
         public async Task CancelledTaskGetsDeleted()
         {
-            var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELEDEnum, IsTaskDeletionRequired = true };
+            var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELEDEnum, IsTaskDeletionRequired = true, Logs = new() { new() { StartTime = DateTimeOffset.UtcNow - TimeSpan.FromMinutes(11) } } };
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
             azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskActive;
@@ -908,7 +908,7 @@ namespace TesApi.Tests
             GuardAssertsWithTesTask(tesTask, () =>
             {
                 Assert.IsFalse(tesTask.IsTaskDeletionRequired);
-                azureProxy.Verify(i => i.DeleteBatchTaskAsync(tesTask.Id, It.IsAny<PoolInformation>(), It.IsAny<System.Threading.CancellationToken>()));
+                azureProxy.Verify(i => i.DeleteBatchTaskAsync(tesTask.Id, It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()));
             });
         }
 

@@ -397,7 +397,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task TerminateBatchTaskAsync(string tesTaskId, PoolInformation pool, CancellationToken cancellationToken)
+        public async Task TerminateBatchTaskAsync(string tesTaskId, string jobId, CancellationToken cancellationToken)
         {
             var jobFilter = new ODATADetailLevel
             {
@@ -409,7 +409,7 @@ namespace TesApi.Web
 
             try
             {
-                batchTasksToDelete = await batchClient.JobOperations.ListTasks(pool.PoolId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
+                batchTasksToDelete = await batchClient.JobOperations.ListTasks(jobId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
             }
             catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException bee && "JobNotFound".Equals(bee.Body?.Code, StringComparison.InvariantCultureIgnoreCase))
             {
@@ -430,7 +430,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task DeleteBatchTaskAsync(string tesTaskId, PoolInformation pool, CancellationToken cancellationToken)
+        public async Task DeleteBatchTaskAsync(string tesTaskId, string jobId, CancellationToken cancellationToken)
         {
             var jobFilter = new ODATADetailLevel
             {
@@ -442,7 +442,7 @@ namespace TesApi.Web
 
             try
             {
-                batchTasksToDelete = await batchClient.JobOperations.ListTasks(pool.PoolId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
+                batchTasksToDelete = await batchClient.JobOperations.ListTasks(jobId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
             }
             catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException bee && "JobNotFound".Equals(bee.Body?.Code, StringComparison.InvariantCultureIgnoreCase))
             {

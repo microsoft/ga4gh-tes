@@ -38,35 +38,35 @@ namespace TesApi.Web
         /// <summary>
         /// Schedule queued <see cref="TesTask"/>s on a batch system
         /// </summary>
-        /// <param name="tesTask"><see cref="TesTask"/>s to schedule on the batch system.</param>
+        /// <param name="tesTasks"><see cref="TesTask"/>s to schedule on the batch system.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
-        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessQueuedTesTasksAsync(TesTask[] tesTask, CancellationToken cancellationToken);
+        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, CancellationToken cancellationToken);
 
         /// <summary>
         /// Finalize completed <see cref="TesTask"/>s on a batch system
         /// </summary>
-        /// <param name="tesTask"><see cref="TesTask"/>s to schedule on the batch system.</param>
+        /// <param name="tesTasks"><see cref="TesTask"/>s to schedule on the batch system.</param>
         /// <param name="cloudTask"><see cref="CloudTask"/>s corresponding to each <seealso cref="TesTask"/>.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
-        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCompletedTesTasksAsync(IEnumerable<TesTask> tesTask, CloudTask[] cloudTask, CancellationToken cancellationToken);
+        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCompletedTesTasksAsync(IEnumerable<TesTask> tesTasks, CloudTask[] cloudTask, CancellationToken cancellationToken);
 
         /// <summary>
         /// Terminate cancelled <see cref="TesTask"/>s on a batch system
         /// </summary>
-        /// <param name="tesTask"><see cref="TesTask"/>s to schedule on the batch system.</param>
+        /// <param name="tesTasks"><see cref="TesTask"/>s to schedule on the batch system.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
-        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCancelledTesTasksAsync(IEnumerable<TesTask> tesTask, CancellationToken cancellationToken);
+        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCancelledTesTasksAsync(IEnumerable<TesTask> tesTasks, CancellationToken cancellationToken);
 
         /// <summary>
         /// Delete terminated <see cref="TesTask"/>s on a batch system
         /// </summary>
-        /// <param name="tesTask"><see cref="TesTask"/>s to schedule on the batch system.</param>
+        /// <param name="tesTasks"><see cref="TesTask"/>s to schedule on the batch system.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
-        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessTerminatedTesTasksAsync(IEnumerable<TesTask> tesTask, CancellationToken cancellationToken);
+        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessTerminatedTesTasksAsync(IEnumerable<TesTask> tesTasks, CancellationToken cancellationToken);
 
         //TODO: Add other task update methods here.
 
