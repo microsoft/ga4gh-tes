@@ -5,7 +5,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Azure.Core;
-using Azure.Identity;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Tes.ApiClients.Models.Terra;
@@ -35,13 +34,13 @@ namespace Tes.ApiClients
 
         }
 
-        public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl)
+        public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl, TokenCredential tokenCredential)
         {
             var retryPolicyOptions = new RetryPolicyOptions();
             var cacheRetryHandler = new CachingRetryHandler(sharedMemoryCache,
                  Microsoft.Extensions.Options.Options.Create(retryPolicyOptions));
 
-            return new TerraWsmApiClient(apiUrl, new DefaultAzureCredential(), cacheRetryHandler, ApiClientsLoggerFactory.Create<TerraWsmApiClient>());
+            return new TerraWsmApiClient(apiUrl, tokenCredential, cacheRetryHandler, ApiClientsLoggerFactory.Create<TerraWsmApiClient>());
         }
 
         /// <summary>

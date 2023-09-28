@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Text.RegularExpressions;
+using Azure.Core;
 using Azure.Storage.Blobs;
 using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
@@ -22,12 +23,12 @@ namespace Tes.Runner.Storage
         private const string LzStorageAccountNamePattern = "lz[0-9a-f]*";
         private readonly ILogger<TerraUrlTransformationStrategy> logger = PipelineLoggerFactory.Create<TerraUrlTransformationStrategy>();
 
-        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions)
+        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential)
         {
             ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
             ArgumentException.ThrowIfNullOrEmpty(terraRuntimeOptions.WsmApiHost, nameof(terraRuntimeOptions.WsmApiHost));
 
-            terraWsmApiClient = TerraWsmApiClient.CreateTerraWsmApiClient(terraRuntimeOptions.WsmApiHost);
+            terraWsmApiClient = TerraWsmApiClient.CreateTerraWsmApiClient(terraRuntimeOptions.WsmApiHost, tokenCredential);
             this.terraRuntimeOptions = terraRuntimeOptions;
         }
 
