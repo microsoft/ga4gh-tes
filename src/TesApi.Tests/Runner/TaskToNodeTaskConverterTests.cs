@@ -15,6 +15,7 @@ using Moq;
 using Newtonsoft.Json;
 using Tes.Models;
 using TesApi.Web.Management.Configuration;
+using TesApi.Web.Options;
 using TesApi.Web.Runner;
 using TesApi.Web.Storage;
 
@@ -30,20 +31,29 @@ namespace TesApi.Tests.Runner
         private TaskToNodeTaskConverter taskToNodeTaskConverter;
         private readonly TesTask tesTask = GetTestTesTask();
         private TerraOptions terraOptions;
+        private StorageOptions storageOptions;
+
+        private const string SasToken = "sv=2019-12-12&ss=bfqt&srt=sco&spr=https&st=2023-09-27T17%3A32%3A57Z&se=2023-09-28T17%3A32%3A57Z&sp=rwdlacupx&sig=SIGNATURE";
         const string DefaultStorageAccountName = "default";
         const string InternalBlobUrl = "http://foo.bar/tes-internal";
-        const string InternalBlobUrlWithSas = $"{InternalBlobUrl}?qs=sig";
+        const string InternalBlobUrlWithSas = $"{InternalBlobUrl}?{SasToken}";
+
+        private const string ExternalStorageContainer =
+            $"https://external{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont";
+        private const string ExternalStorageContainerWithSas =
+            $"{ExternalStorageContainer}?{SasToken}";
 
         [TestInitialize]
         public void SetUp()
         {
             terraOptions = new TerraOptions();
+            storageOptions = new StorageOptions() { ExternalStorageContainers = ExternalStorageContainerWithSas };
             storageAccessProviderMock = new Mock<IStorageAccessProvider>();
             storageAccessProviderMock.Setup(x =>
                                    x.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(InternalBlobUrlWithSas);
 
-            taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), storageAccessProviderMock.Object, new NullLogger<TaskToNodeTaskConverter>());
+            taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), storageAccessProviderMock.Object, Options.Create(storageOptions), new NullLogger<TaskToNodeTaskConverter>());
         }
         [TestMethod]
         public async Task ToNodeTaskAsync_TesTaskWithContentInputs_ContentInputsAreUploadedAndSetInTaskDefinition()
@@ -75,6 +85,30 @@ namespace TesApi.Tests.Runner
             {
                 Assert.IsTrue(output.Path!.StartsWith(TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar));
             }
+        }
+
+        [TestMethod]
+        public async Task ToNodeTaskAsync_ExternalStorageInputsProvided_NodeTesTaskContainsUrlsWithSasTokens()
+        {
+
+            tesTask.Inputs = new List<TesInput>
+            {
+                new TesInput()
+                {
+                    Path = "/input/file1",
+                    Url = $"{ExternalStorageContainer}/blob"
+                }
+            };
+
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, additionalInputs: null, new RuntimeContainerCleanupOptions(false, false), DefaultStorageAccountName, CancellationToken.None);
+
+            Assert.IsNotNull(nodeTask);
+
+            var url = new BlobUriBuilder(new Uri(nodeTask.Inputs![0].SourceUrl!));
+
+            Assert.IsNotNull(url);
+            Assert.AreEqual($"?{SasToken}", url.ToUri().Query);
+            Assert.AreEqual("blob", url.BlobName);
         }
 
         [TestMethod]
