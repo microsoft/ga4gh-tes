@@ -149,5 +149,13 @@ namespace TesApi.Tests.Runner
 
             Assert.AreEqual("metrics.txt", metricsFile);
         }
+
+        [TestMethod]
+        public void WithNodeManagedIdentity_Called_ClientIdIsSet()
+        {
+            nodeTaskBuilder.WithNodeManagedIdentity("clientId");
+            var nodeTask = nodeTaskBuilder.Build();
+            Assert.AreEqual("clientId", nodeTask.RuntimeOptions.NodeManagedIdentityClientId);
+        }
     }
 }

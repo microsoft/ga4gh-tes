@@ -6,9 +6,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Tes.Extensions;
 using Tes.Models;
 using Tes.Runner.Models;
 using TesApi.Web.Management.Configuration;
@@ -86,6 +86,7 @@ namespace TesApi.Web.Runner
                 var executor = task.Executors.First();
 
                 builder.WithId(task.Id)
+                    .WithNodeManagedIdentity(task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity))
                     .WithWorkflowId(task.WorkflowId)
                     .WithContainerCommands(executor.Command.Select(EscapeBashArgument).ToList())
                     .WithDockerCleanUpOptions(containerCleanupOptions)

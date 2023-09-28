@@ -985,14 +985,12 @@ namespace TesApi.Web
                 .FirstOrDefault(m => (m.Condition is null || m.Condition(tesTask)) && (m.CurrentBatchTaskState is null || m.CurrentBatchTaskState == combinedBatchTaskInfo.BatchTaskState))
                 ?.ActionAsync(tesTask, combinedBatchTaskInfo, cancellationToken) ?? ValueTask.FromResult(false));
 
-        private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task,
-            (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) isPublic,
+        private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) isPublic,
             CancellationToken cancellationToken)
         {
             ValidateTesTask(task);
 
-            var additionalInputs = await GetAdditionalInputsAsync(task, cancellationToken);
-
+            var additionalInputs = await GetAdditionalCromwellInputsAsync(task, cancellationToken);
 
             var containerCleanupOptions = new RuntimeContainerCleanupOptions(
                 ExecuteDockerRmi: true,
@@ -1017,7 +1015,7 @@ namespace TesApi.Web
             return cloudTask;
         }
 
-        private async Task<List<TesInput>> GetAdditionalInputsAsync(TesTask task, CancellationToken cancellationToken)
+        private async Task<List<TesInput>> GetAdditionalCromwellInputsAsync(TesTask task, CancellationToken cancellationToken)
         {
             var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
             var isCromwell = cromwellExecutionDirectoryUrl is not null;

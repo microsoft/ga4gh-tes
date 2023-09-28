@@ -263,5 +263,17 @@ namespace TesApi.Web.Runner
 
             return this;
         }
+
+        /// <summary>
+        /// Sets managed identity for the node task
+        /// </summary>
+        /// <param name="clientId"></param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithNodeManagedIdentity(string clientId)
+        {
+            nodeTask.RuntimeOptions = nodeTask.RuntimeOptions ?? new RuntimeOptions();
+            nodeTask.RuntimeOptions.NodeManagedIdentityClientId = clientId;
+            return this;
+        }
     }
 }
