@@ -154,7 +154,14 @@ namespace TesApi.Web.Runner
         /// <returns></returns>
         public NodeTaskBuilder WithContainerImage(string image)
         {
-            ArgumentNullException.ThrowIfNull(image);
+            ArgumentException.ThrowIfNullOrEmpty(image);
+
+            //check if the image name is a digest
+            if (image.Contains("@"))
+            {
+                nodeTask.ImageName = image;
+                return this;
+            }
 
             var splitByTag = image.Split(':');
 
@@ -267,12 +274,12 @@ namespace TesApi.Web.Runner
         /// <summary>
         /// Sets managed identity for the node task
         /// </summary>
-        /// <param name="clientId"></param>
+        /// <param name="resourceId"></param>
         /// <returns></returns>
-        public NodeTaskBuilder WithNodeManagedIdentity(string clientId)
+        public NodeTaskBuilder WithResourceIdManagedIdentity(string resourceId)
         {
-            nodeTask.RuntimeOptions = nodeTask.RuntimeOptions ?? new RuntimeOptions();
-            nodeTask.RuntimeOptions.NodeManagedIdentityClientId = clientId;
+            nodeTask.RuntimeOptions ??= new RuntimeOptions();
+            nodeTask.RuntimeOptions.NodeManagedIdentityResourceId = resourceId;
             return this;
         }
     }

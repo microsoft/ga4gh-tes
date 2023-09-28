@@ -90,7 +90,7 @@ namespace TesApi.Web.Runner
                 var executor = task.Executors.First();
 
                 builder.WithId(task.Id)
-                    .WithNodeManagedIdentity(task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity))
+                    .WithResourceIdManagedIdentity(task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity))
                     .WithWorkflowId(task.WorkflowId)
                     .WithContainerCommands(executor.Command.Select(EscapeBashArgument).ToList())
                     .WithDockerCleanUpOptions(containerCleanupOptions)

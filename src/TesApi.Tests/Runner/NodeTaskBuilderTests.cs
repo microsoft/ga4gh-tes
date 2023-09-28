@@ -113,7 +113,8 @@ namespace TesApi.Tests.Runner
 
         [TestMethod]
         [DataRow("foo:bar", "foo", "bar")]
-        [DataRow("foo", "foo", "")]
+        [DataRow("foo:bar", "foo", "bar")]
+        [DataRow("broadinstitute/gatk@sha256:f80d33060cb4872d29b9a248b193d267f838b1a636c5a6120aaa45b08a1f09e9", "broadinstitute/gatk@sha256:f80d33060cb4872d29b9a248b193d267f838b1a636c5a6120aaa45b08a1f09e9", null)]
         public void WithContainerImageTest_ImageInfoIsProvided_ImageInfoIsSet(string imageInfo, string expectedImage, string expectedTag)
         {
             nodeTaskBuilder.WithContainerImage(imageInfo);
@@ -151,11 +152,11 @@ namespace TesApi.Tests.Runner
         }
 
         [TestMethod]
-        public void WithNodeManagedIdentity_Called_ClientIdIsSet()
+        public void WithResourceIdManagedIdentity_Called_ResourceIdIsSet()
         {
-            nodeTaskBuilder.WithNodeManagedIdentity("clientId");
+            nodeTaskBuilder.WithResourceIdManagedIdentity("resourceId");
             var nodeTask = nodeTaskBuilder.Build();
-            Assert.AreEqual("clientId", nodeTask.RuntimeOptions.NodeManagedIdentityClientId);
+            Assert.AreEqual("resourceId", nodeTask.RuntimeOptions.NodeManagedIdentityResourceId);
         }
     }
 }
