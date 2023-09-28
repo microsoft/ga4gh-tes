@@ -296,7 +296,7 @@ namespace TesApi.Web
                 await batchScheduler.FlushPoolsAsync(pools, stoppingToken);
             }
 
-            //logger.LogDebug("OrchestrateTesTasksOnBatch for {TaskCount} tasks completed in {TotalSeconds} seconds.", tesTasks.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
+            logger.LogDebug("OrchestrateTesTasksOnBatch for {TaskCount} tasks completed in {TotalSeconds} seconds.", tesTasks.Length, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
         }
     }
 }
