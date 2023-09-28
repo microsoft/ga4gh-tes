@@ -66,11 +66,73 @@ namespace TesApi.Web
 
             logger.LogInformation("Scheduler started.");
 
+            await Task.WhenAll(ExecuteCancelledTesTasksOnBatch(stoppingToken), ExecuteQueuedTesTasksOnBatch(stoppingToken), ExecuteTerminatedTesTasksOnBatch(stoppingToken));
+
+            logger.LogInformation("Scheduler gracefully stopped.");
+        }
+
+        /// <summary>
+        /// Retrieves all queued TES tasks from the database, performs an action in the batch system, and updates the resultant state
+        /// </summary>
+        /// <returns></returns>
+        private async Task ExecuteQueuedTesTasksOnBatch(CancellationToken stoppingToken)
+        {
+            await ExecuteTesTasksOnBatch(
+                async () => (await repository.GetItemsAsync(
+                    predicate: t => t.State == TesState.QUEUEDEnum,
+                    cancellationToken: stoppingToken))
+                    .OrderBy(t => t.CreationTime)
+                    .ToAsyncEnumerable(),
+
+                tasks => batchScheduler.ProcessQueuedTesTasksAsync(tasks, stoppingToken),
+                stoppingToken);
+        }
+
+        /// <summary>
+        /// Retrieves all cancelled TES tasks from the database, performs an action in the batch system, and updates the resultant state
+        /// </summary>
+        /// <returns></returns>
+        private async Task ExecuteCancelledTesTasksOnBatch(CancellationToken stoppingToken)
+        {
+            await ExecuteTesTasksOnBatch(
+                async () => (await repository.GetItemsAsync(
+                    predicate: t => t.State == TesState.CANCELINGEnum,
+                    cancellationToken: stoppingToken))
+                    .OrderBy(t => t.CreationTime)
+                    .ToAsyncEnumerable(),
+
+                tasks => batchScheduler.ProcessCancelledTesTasksAsync(tasks, stoppingToken),
+                stoppingToken);
+        }
+
+        /// <summary>
+        /// Retrieves all terminated TES tasks from the database, performs an action in the batch system, and updates the resultant state
+        /// </summary>
+        /// <returns></returns>
+        private async Task ExecuteTerminatedTesTasksOnBatch(CancellationToken stoppingToken)
+        {
+            await ExecuteTesTasksOnBatch(
+                async () => (await repository.GetItemsAsync(
+                    predicate: t => t.IsTaskDeletionRequired,
+                    cancellationToken: stoppingToken))
+                    .OrderBy(t => t.CreationTime)
+                    .ToAsyncEnumerable(),
+
+                tasks => batchScheduler.ProcessTerminatedTesTasksAsync(tasks, stoppingToken),
+                stoppingToken);
+        }
+
+        /// <summary>
+        /// Retrieves provided actionable TES tasks from the database, performs an action in the batch system, and updates the resultant state
+        /// </summary>
+        /// <returns></returns>
+        private async ValueTask ExecuteTesTasksOnBatch(Func<ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter, Func<TesTask[], IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)>> tesTaskProcessor, CancellationToken stoppingToken)
+        {
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    await OrchestrateTesTasksOnBatch(stoppingToken);
+                    await OrchestrateTesTasksOnBatch(tesTaskGetter, tesTaskProcessor, stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -90,40 +152,32 @@ namespace TesApi.Web
                     break;
                 }
             }
-
-            logger.LogInformation("Scheduler gracefully stopped.");
         }
 
         /// <summary>
-        /// Retrieves all actionable TES tasks from the database, performs an action in the batch system, and updates the resultant state
+        /// Retrieves provided actionable TES tasks from the database, performs an action in the batch system, and updates the resultant state
         /// </summary>
         /// <returns></returns>
-        private async ValueTask OrchestrateTesTasksOnBatch(CancellationToken stoppingToken)
+        private async ValueTask OrchestrateTesTasksOnBatch(Func<ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter, Func<TesTask[], IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)>> tesTaskProcessor, CancellationToken stoppingToken)
         {
             var pools = new HashSet<string>();
+            var tesTasks = await (await tesTaskGetter()).ToArrayAsync(stoppingToken);
 
-            var tesTasks = (await repository.GetItemsAsync(
-                    predicate: t => t.State == TesState.QUEUEDEnum || t.State == TesState.CANCELINGEnum || t.IsTaskDeletionRequired,
-                    cancellationToken: stoppingToken))
-                .OrderBy(t => t.CreationTime)
-                .ToList();
-
-            if (0 == tesTasks.Count)
+            if (0 == tesTasks.Length)
             {
-                batchScheduler.ClearBatchLogState();
                 return;
             }
 
             var startTime = DateTime.UtcNow;
 
-            foreach (var tesTask in tesTasks)
+            await foreach (var (tesTask, waitableResult) in tesTaskProcessor(tesTasks).WithCancellation(stoppingToken))
             {
                 try
                 {
                     var isModified = false;
                     try
                     {
-                        isModified = await batchScheduler.ProcessTesTaskAsync(tesTask, stoppingToken);
+                        isModified = await waitableResult;
                     }
                     catch (Exception exc)
                     {
@@ -201,6 +255,8 @@ namespace TesApi.Web
                 catch (RepositoryCollisionException exc)
                 {
                     logger.LogError(exc, $"RepositoryCollisionException in OrchestrateTesTasksOnBatch");
+                    //TODO: retrieve fresh task if possible and add logs to the task in a similar way to the commanted out code block below.
+                    //Also: consider doing the same in the other place(s) this exception is caught.
                 }
                 // TODO catch EF / postgres exception?
                 //catch (Microsoft.Azure.Cosmos.CosmosException exc)
@@ -240,7 +296,7 @@ namespace TesApi.Web
                 await batchScheduler.FlushPoolsAsync(pools, stoppingToken);
             }
 
-            logger.LogDebug("OrchestrateTesTasksOnBatch for {TaskCount} tasks completed in {TotalSeconds} seconds.", tesTasks.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
+            //logger.LogDebug("OrchestrateTesTasksOnBatch for {TaskCount} tasks completed in {TotalSeconds} seconds.", tesTasks.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
         }
     }
 }

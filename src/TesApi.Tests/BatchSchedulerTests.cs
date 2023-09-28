@@ -607,7 +607,7 @@ namespace TesApi.Tests
                 GetMockAllowedVms(config));
             var batchScheduler = serviceProvider.GetT();
 
-            await batchScheduler.ProcessTesTaskAsync(tesTask, System.Threading.CancellationToken.None);
+            await foreach (var _ in batchScheduler.ProcessQueuedTesTasksAsync(new[] { tesTask }, System.Threading.CancellationToken.None));
 
             var createBatchPoolAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateBatchPoolAsync));
             var addBatchTaskAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.AddBatchTaskAsync));
@@ -921,18 +921,18 @@ namespace TesApi.Tests
                 BlobXferPullStart=2020-10-08T02:30:39+00:00
                 BlobXferPullEnd=2020-10-08T02:31:39+00:00
                 ExecutorPullStart=2020-10-08T02:32:39+00:00
-                ExecutorPullEnd=2020-10-08T02:34:39+00:00
                 ExecutorImageSizeInBytes=3000000000
+                ExecutorPullEnd=2020-10-08T02:34:39+00:00
                 DownloadStart=2020-10-08T02:35:39+00:00
+                FileDownloadSizeInBytes=2000000000
                 DownloadEnd=2020-10-08T02:38:39+00:00
                 ExecutorStart=2020-10-08T02:39:39+00:00
                 ExecutorEnd=2020-10-08T02:43:39+00:00
                 UploadStart=2020-10-08T02:44:39+00:00
+                FileUploadSizeInBytes=4000000000
                 UploadEnd=2020-10-08T02:49:39+00:00
                 DiskSizeInKiB=8000000
-                DiskUsedInKiB=1000000
-                FileDownloadSizeInBytes=2000000000
-                FileUploadSizeInBytes=4000000000".Replace(" ", string.Empty);
+                DiskUsedInKiB=1000000".Replace(" ", string.Empty);
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
             azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskCompletedSuccessfully;
@@ -1532,7 +1532,15 @@ namespace TesApi.Tests
             var batchScheduler = serviceProvider.GetT();
             serviceProviderActions?.Invoke(serviceProvider);
 
-            await batchScheduler.ProcessTesTaskAsync(tesTask, System.Threading.CancellationToken.None);
+            await foreach (var _ in tesTask.State switch
+            {
+                TesState.CANCELINGEnum => batchScheduler.ProcessCancelledTesTasksAsync(new[] { tesTask }, System.Threading.CancellationToken.None),
+                TesState.QUEUEDEnum => batchScheduler.ProcessQueuedTesTasksAsync(new[] { tesTask }, System.Threading.CancellationToken.None),
+                TesState.COMPLETEEnum => batchScheduler.ProcessCompletedTesTasksAsync(new[] { tesTask }, new[] { new CloudTask(tesTask.Id, "") }, System.Threading.CancellationToken.None),
+                TesState.EXECUTORERROREnum => batchScheduler.ProcessCompletedTesTasksAsync(new[] { tesTask }, new[] { new CloudTask(tesTask.Id, "") }, System.Threading.CancellationToken.None),
+                TesState.SYSTEMERROREnum => batchScheduler.ProcessCompletedTesTasksAsync(new[] { tesTask }, new[] { new CloudTask(tesTask.Id, "") }, System.Threading.CancellationToken.None),
+                _ => batchScheduler.ProcessTerminatedTesTasksAsync(new[] { tesTask }, System.Threading.CancellationToken.None),
+            }) { }
 
             var createBatchPoolAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateBatchPoolAsync));
             var addBatchTaskAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.AddBatchTaskAsync));

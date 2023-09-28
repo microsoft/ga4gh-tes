@@ -36,12 +36,39 @@ namespace TesApi.Web
         Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken);
 
         /// <summary>
-        /// Iteratively schedule a <see cref="TesTask"/> on a batch system until completion or failure
+        /// Schedule queued <see cref="TesTask"/>s on a batch system
         /// </summary>
-        /// <param name="tesTask"><see cref="TesTask"/> to schedule on the batch system</param>
+        /// <param name="tesTask"><see cref="TesTask"/>s to schedule on the batch system.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>Whether the <see cref="TesTask"/> was modified.</returns>
-        ValueTask<bool> ProcessTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken);
+        /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
+        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessQueuedTesTasksAsync(TesTask[] tesTask, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Finalize completed <see cref="TesTask"/>s on a batch system
+        /// </summary>
+        /// <param name="tesTask"><see cref="TesTask"/>s to schedule on the batch system.</param>
+        /// <param name="cloudTask"><see cref="CloudTask"/>s corresponding to each <seealso cref="TesTask"/>.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
+        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCompletedTesTasksAsync(IEnumerable<TesTask> tesTask, CloudTask[] cloudTask, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Terminate cancelled <see cref="TesTask"/>s on a batch system
+        /// </summary>
+        /// <param name="tesTask"><see cref="TesTask"/>s to schedule on the batch system.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
+        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCancelledTesTasksAsync(IEnumerable<TesTask> tesTask, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Delete terminated <see cref="TesTask"/>s on a batch system
+        /// </summary>
+        /// <param name="tesTask"><see cref="TesTask"/>s to schedule on the batch system.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
+        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessTerminatedTesTasksAsync(IEnumerable<TesTask> tesTask, CancellationToken cancellationToken);
+
+        //TODO: Add other task update methods here.
 
         /// <summary>
         /// Adds <see cref="IBatchPool"/> to the managed batch pools.
@@ -77,11 +104,6 @@ namespace TesApi.Web
         /// <param name="pool">Pool to remove.</param>
         /// <returns></returns>
         bool RemovePoolFromList(IBatchPool pool);
-
-        /// <summary>
-        /// Garbage collects the old batch task state log hashset
-        /// </summary>
-        void ClearBatchLogState();
 
         /// <summary>
         /// Flushes empty pools to accomodate pool quota limits.
