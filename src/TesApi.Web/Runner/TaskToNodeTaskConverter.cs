@@ -211,7 +211,7 @@ namespace TesApi.Web.Runner
                     continue;
                 }
 
-                preparedInput = PrepareLocalOrLocalCromwellFileInput(input, defaultStorageAccountName);
+                preparedInput = PrepareLocalFileInput(input, defaultStorageAccountName);
 
                 if (preparedInput != null)
                 {
@@ -238,6 +238,16 @@ namespace TesApi.Web.Runner
             return inputs;
         }
 
+        private string GetSasTokenFromExternalStorageAccountIfSet(string storageAccount) { 
+            var configuredExternalStorage = externalStorageContainers.FirstOrDefault(e => e.AccountName.Equals(storageAccount, StringComparison.OrdinalIgnoreCase));
+            return configuredExternalStorage is null ? string.Empty : configuredExternalStorage.SasToken;
+        }
+
+        /// <summary>
+        /// This method will prepare an external storage account if provided as Azure storage URL
+        /// </summary>
+        /// <param name="input"></param>
+        /// <returns></returns>
         private TesInput PrepareExternalStorageAccountInput(TesInput input)
         {
 
@@ -246,21 +256,7 @@ namespace TesApi.Web.Runner
                 return default;
             }
 
-            var blobUrl = new BlobUriBuilder(new Uri(input.Url));
-
-            logger.LogInformation($"Configured external storage accounts {string.Join(',', externalStorageContainers.Select(e => e.AccountName))}");
-
-            logger.LogInformation($"Checking if input {input.Path} is an external storage account input. Account name: {blobUrl.AccountName}");
-
-            var configuredExternalStorage = externalStorageContainers.FirstOrDefault(e => e.AccountName.Equals(blobUrl.AccountName, StringComparison.OrdinalIgnoreCase));
-
-            if (configuredExternalStorage is null)
-            {
-                logger.LogInformation($"Input {input.Path} is not an external storage account input");
-                return default;
-            }
-
-            blobUrl.Query = StorageUrlUtils.SetOrAddSasTokenToQueryString(blobUrl.Query, configuredExternalStorage.SasToken);
+            var blobUrl = AppendSasTokenIfExternalAccount(input.Url);
 
             return new TesInput
             {
@@ -268,22 +264,46 @@ namespace TesApi.Web.Runner
                 Description = input.Description,
                 Path = input.Path,
                 Type = input.Type,
-                Url = blobUrl.ToUri().ToString(),
+                Url = blobUrl,
             };
         }
 
-        private TesInput PrepareLocalOrLocalCromwellFileInput(TesInput input, string defaultStorageAccountName)
+        private string AppendSasTokenIfExternalAccount(string url)
+        {
+            var blobUrl = new BlobUriBuilder(new Uri(url));
+
+            var sasToken = GetSasTokenFromExternalStorageAccountIfSet(blobUrl.AccountName);
+
+            blobUrl.Query = StorageUrlUtils.SetOrAddSasTokenToQueryString(blobUrl.Query, sasToken);
+
+            return blobUrl.ToUri().ToString();
+        }
+
+        /// <summary>
+        /// This method converts a local path /storageaccount/cont/file to the corresponding Azure Storage URL.
+        /// If the path is a Cromwell local path, the default storage account name is used to construct the URL.
+        /// If the path is a local path, the storage account name is extracted from the path.
+        /// If the storage account is a configured external storage account, the SAS token from the configuration is added to the URL.
+        /// </summary>
+        /// <param name="input"></param>
+        /// <param name="defaultStorageAccountName"></param>
+        /// <returns></returns>
+        private TesInput PrepareLocalFileInput(TesInput input, string defaultStorageAccountName)
         {
             //When Cromwell runs in local mode with a Blob FUSE drive, the URL property may contain an absolute path.
             //The path must be converted to a URL. For Terra this scenario doesn't apply. 
             if (StorageUrlUtils.IsLocalAbsolutePath(input.Url))
             {
+                var convertedUrl = StorageUrlUtils.ConvertLocalPathOrCromwellLocalPathToUrl(input.Url, defaultStorageAccountName);
+
+                var blobUrl = AppendSasTokenIfExternalAccount(convertedUrl);
+
                 return new TesInput()
                 {
                     Name = input.Name,
                     Description = input.Description,
                     Path = input.Path,
-                    Url = StorageUrlUtils.ConvertLocalPathOrCromwellLocalPathToUrl(input.Url, defaultStorageAccountName),
+                    Url = blobUrl,
                     Type = input.Type
                 };
             }

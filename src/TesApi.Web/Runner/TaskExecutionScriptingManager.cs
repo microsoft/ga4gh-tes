@@ -57,8 +57,7 @@ namespace TesApi.Web.Runner
         {
             try
             {
-
-                await UploadServerTesTask(tesTask, cancellationToken);
+                await TryUploadServerTesTask(tesTask, cancellationToken);
 
                 var nodeTaskUrl = await CreateAndUploadNodeTaskAsync(tesTask, nodeTaskConversionOptions, cancellationToken);
 
@@ -74,7 +73,7 @@ namespace TesApi.Web.Runner
             }
         }
 
-        private async Task UploadServerTesTask(TesTask tesTask, CancellationToken cancellationToken)
+        private async Task TryUploadServerTesTask(TesTask tesTask, CancellationToken cancellationToken)
         {
             try
             {
@@ -90,10 +89,10 @@ namespace TesApi.Web.Runner
             }
             catch (Exception e)
             {
+                //we are not bubbling up the exception as it is not critical for the execution of the task
+                // and just in case the task may have values that are not serializable. We can revisit this assumption later and throw
                 logger.LogError(e,
                     "Failed to upload the server TesTask to the internal Tes location");
-                //TODO: remove this catch and let the exception bubble up to the caller
-                //throw
             }
         }
 

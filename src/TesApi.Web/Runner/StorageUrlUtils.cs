@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Azure.Storage.Blobs;
 using TesApi.Web.Options;
 using TesApi.Web.Storage;
 
@@ -22,6 +23,7 @@ namespace TesApi.Web.Runner
         /// <summary>
         /// Converts a local path with the format /storageAccount/container/blobName to an Azure storage URL.
         /// Uses the value provided cromwellStorageAccountName storage account if the path starts with <see cref="StorageAccessProvider.CromwellPathPrefix"/>.  
+        /// Appends the SAS token if provided.
         /// </summary>
         /// <param name="uriValue"></param>
         /// <param name="cromwellStorageAccountName"></param>
@@ -58,7 +60,7 @@ namespace TesApi.Web.Runner
                         $"The value provided can't be converted to URL. The container name is missing. Value: {uriValue}");
                 }
 
-                return $"https://{result.AccountName}{BlobEndpointHostNameSuffix}/{result.ContainerName}/{result.BlobName}";
+                return $"https://{result.AccountName}{BlobEndpointHostNameSuffix}/{result.ContainerName}/{result.BlobName}";        
             }
 
             throw new InvalidOperationException($"The value provided can't be converted to URL. Value: {uriValue}");
@@ -119,6 +121,12 @@ namespace TesApi.Web.Runner
         public static string SetOrAddSasTokenToQueryString(string existingQueryString,
             string sasToken)
         {
+
+            if (string.IsNullOrWhiteSpace(sasToken))
+            {
+                return existingQueryString;
+            }
+
             var blobQuery = existingQueryString;
 
             if (string.IsNullOrWhiteSpace(blobQuery))
