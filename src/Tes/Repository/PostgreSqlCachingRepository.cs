@@ -28,6 +28,7 @@ namespace Tes.Repository
         private readonly ConcurrentDictionary<T, object> _updatingItems = new(); // Collection of all pending items to be written.
         private readonly CancellationTokenSource _writerWorkerCancellationTokenSource = new();
         private readonly Task _writerWorkerTask;
+        private readonly Guid tempGuid = new Guid();
 
         protected enum WriteAction { Add, Update, Delete }
 
@@ -41,7 +42,7 @@ namespace Tes.Repository
         {
             _logger = logger;
             _cache = cache;
-
+            _logger.LogInformation($"PostgreSqlCachingRepository constructor start {tempGuid}");
             // The only "normal" exit for _writerWorkerTask is "cancelled". Anything else should force the process to exit because it means that this repository will no longer write to the database!
             _writerWorkerTask = Task.Run(() => WriterWorkerAsync(_writerWorkerCancellationTokenSource.Token))
                 .ContinueWith(async task =>
@@ -60,6 +61,8 @@ namespace Tes.Repository
                     throw new System.Diagnostics.UnreachableException("Repository WriterWorkerAsync unexpectedly ended."); // Force the process to exit via this being an unhandled exception.
                 },
                 TaskContinuationOptions.NotOnCanceled);
+
+            _logger.LogInformation($"PostgreSqlCachingRepository constructor end {tempGuid}");
         }
 
         /// <summary>
@@ -154,6 +157,7 @@ namespace Tes.Repository
         /// </summary>
         private async ValueTask WriterWorkerAsync(CancellationToken cancellationToken)
         {
+            _logger.LogInformation("WriterWorkerAsync running...");
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
             while (true)
@@ -219,6 +223,7 @@ namespace Tes.Repository
             {
                 if (disposing)
                 {
+                    _logger?.LogInformation($"PostgreSqlCachingRepository disposing... _writerWorkerCancellationTokenSource will be cancelled.  tempGuid: {tempGuid}");
                     _writerWorkerCancellationTokenSource.Cancel();
                     _writerWorkerTask.Wait();
                 }
