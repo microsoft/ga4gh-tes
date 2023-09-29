@@ -60,6 +60,7 @@ namespace Tes.Repository
                         }
 
                         await Task.Delay(50); // Give the logger time to flush.
+                        _logger.LogCritical("Throwing UnreachableException in PostgreSqlCachingRepository");
                         throw new System.Diagnostics.UnreachableException("Repository WriterWorkerAsync unexpectedly ended."); // Force the process to exit via this being an unhandled exception.
                     },
                     TaskContinuationOptions.NotOnCanceled);
