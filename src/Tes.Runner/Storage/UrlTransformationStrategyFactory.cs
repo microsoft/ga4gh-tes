@@ -1,18 +1,15 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Azure.Core;
-using Azure.Identity;
 using Azure.Storage.Blobs;
-using Microsoft.Extensions.Logging;
+using Tes.Runner.Authentication;
 using Tes.Runner.Models;
-using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Storage
 {
     public static class UrlTransformationStrategyFactory
     {
-        private static readonly ILogger Logger = PipelineLoggerFactory.Create(nameof(UrlTransformationStrategyFactory));
+        private static readonly CredentialsManager TokenCredentialsManager = new CredentialsManager();
 
         public static IUrlTransformationStrategy CreateStrategy(TransformationStrategy transformationStrategy, RuntimeOptions runtimeOptions)
         {
@@ -23,39 +20,24 @@ namespace Tes.Runner.Storage
                 case TransformationStrategy.SchemeConverter:
                     return new CloudProviderSchemeConverter();
                 case TransformationStrategy.AzureResourceManager:
-                    return new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, GeTokenCredential(runtimeOptions)));
+                    return new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, TokenCredentialsManager.GetTokenCredential(runtimeOptions)));
                 case TransformationStrategy.TerraWsm:
-                    return new TerraUrlTransformationStrategy(runtimeOptions.Terra!, GeTokenCredential(runtimeOptions));
+                    return new TerraUrlTransformationStrategy(runtimeOptions.Terra!, TokenCredentialsManager.GetTokenCredential(runtimeOptions));
                 case TransformationStrategy.CombinedTerra:
                     return new CombinedTransformationStrategy(new List<IUrlTransformationStrategy>
                     {
                         new CloudProviderSchemeConverter(),
-                        new TerraUrlTransformationStrategy(runtimeOptions.Terra!, GeTokenCredential(runtimeOptions)),
+                        new TerraUrlTransformationStrategy(runtimeOptions.Terra!, TokenCredentialsManager.GetTokenCredential(runtimeOptions)),
                     });
                 case TransformationStrategy.CombinedAzureResourceManager:
                     return new CombinedTransformationStrategy(new List<IUrlTransformationStrategy>
                     {
                         new CloudProviderSchemeConverter(),
-                        new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, GeTokenCredential(runtimeOptions)))
+                        new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, TokenCredentialsManager.GetTokenCredential(runtimeOptions)))
                     });
             }
 
             throw new NotImplementedException();
-        }
-
-        public static TokenCredential GeTokenCredential(RuntimeOptions runtimeOptions)
-        {
-
-            if (!string.IsNullOrWhiteSpace(runtimeOptions.NodeManagedIdentityResourceId))
-            {
-                Logger.LogInformation($"Token credentials with Managed Identity and resource ID: {runtimeOptions.NodeManagedIdentityResourceId}");
-
-                return new ManagedIdentityCredential(new ResourceIdentifier(runtimeOptions.NodeManagedIdentityResourceId));
-            }
-
-            Logger.LogInformation("Token credentials with DefaultAzureCredential");
-
-            return new DefaultAzureCredential();
         }
     }
 }
