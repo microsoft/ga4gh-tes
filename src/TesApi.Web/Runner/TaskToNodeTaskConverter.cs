@@ -199,10 +199,14 @@ namespace TesApi.Web.Runner
 
             foreach (var input in tesTask.Inputs)
             {
+                logger.LogInformation($"Preparing input {input.Path}");
+
                 var preparedInput = await PrepareContentInputAsync(tesTask, input, cancellationToken);
 
                 if (preparedInput != null)
                 {
+                    logger.LogInformation($"Input {input.Path} is a content input");
+
                     inputs.Add(preparedInput);
                     continue;
                 }
@@ -211,6 +215,8 @@ namespace TesApi.Web.Runner
 
                 if (preparedInput != null)
                 {
+                    logger.LogInformation($"Input {input.Path} is a local input");
+
                     inputs.Add(preparedInput);
                     continue;
                 }
@@ -219,9 +225,13 @@ namespace TesApi.Web.Runner
 
                 if (preparedInput != null)
                 {
+                    logger.LogInformation($"Input {input.Path} is an external storage account input");
+
                     inputs.Add(preparedInput);
                     continue;
                 }
+
+                logger.LogInformation($"Input {input.Path} is a regular input");
 
                 inputs.Add(input);
             }
@@ -238,10 +248,15 @@ namespace TesApi.Web.Runner
 
             var blobUrl = new BlobUriBuilder(new Uri(input.Url));
 
+            logger.LogInformation($"Configured external storage accounts {externalStorageContainers.Select(e => e.AccountName).Join(',')}");
+
+            logger.LogInformation($"Checking if input {input.Path} is an external storage account input. Account name: {blobUrl.AccountName}");
+
             var configuredExternalStorage = externalStorageContainers.FirstOrDefault(e => e.AccountName.Equals(blobUrl.AccountName, StringComparison.OrdinalIgnoreCase));
 
             if (configuredExternalStorage is null)
             {
+                logger.LogInformation($"Input {input.Path} is not an external storage account input");
                 return default;
             }
 
