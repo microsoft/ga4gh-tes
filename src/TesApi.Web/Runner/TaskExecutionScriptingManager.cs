@@ -57,6 +57,9 @@ namespace TesApi.Web.Runner
         {
             try
             {
+
+                await UploadServerTesTask(tesTask, cancellationToken);
+
                 var nodeTaskUrl = await CreateAndUploadNodeTaskAsync(tesTask, nodeTaskConversionOptions, cancellationToken);
 
                 var batchScriptUrl = await CreateAndUploadBatchScriptAsync(tesTask, nodeTaskUrl, cancellationToken);
@@ -68,6 +71,29 @@ namespace TesApi.Web.Runner
                 logger.LogError(e,
                     "Failed to perform the preparation steps for the execution of the task on the Batch node");
                 throw;
+            }
+        }
+
+        private async Task UploadServerTesTask(TesTask tesTask, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var severTesTaskContent = JsonConvert.SerializeObject(tesTask,
+                    new JsonSerializerSettings
+                    {
+                        NullValueHandling = NullValueHandling.Ignore,
+                        DefaultValueHandling = DefaultValueHandling.Ignore
+                    });
+
+                await UploadContentAsBlobToInternalTesLocationAsync(tesTask, severTesTaskContent, "ServerTesTask.json",
+                    cancellationToken);
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e,
+                    "Failed to upload the server TesTask to the internal Tes location");
+                //TODO: remove this catch and let the exception bubble up to the caller
+                //throw
             }
         }
 
