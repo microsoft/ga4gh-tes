@@ -4,6 +4,9 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Tes.ApiClients;
+using Tes.ApiClients.Options;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Docker
@@ -13,6 +16,7 @@ namespace Tes.Runner.Docker
         private readonly IDockerClient dockerClient;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
         private readonly NetworkUtility networkUtility = new NetworkUtility();
+        private readonly RetryHandler retryHandler = new RetryHandler(Options.Create(new RetryPolicyOptions()));
 
         public DockerExecutor(Uri dockerHost)
         {
@@ -25,7 +29,7 @@ namespace Tes.Runner.Docker
             ArgumentException.ThrowIfNullOrEmpty(imageName);
             ArgumentNullException.ThrowIfNull(commandsToExecute);
 
-            await PullImageAsync(imageName, tag);
+            await PullImageWithRetriesAsync(imageName, tag);
 
             await ConfigureNetworkAsync();
 
@@ -93,18 +97,17 @@ namespace Tes.Runner.Docker
             return $"{imageName}:{imageTag}";
         }
 
-        private async Task PullImageAsync(string imageName, string? tag, AuthConfig? authConfig = null)
+        private async Task PullImageWithRetriesAsync(string imageName, string? tag, AuthConfig? authConfig = null)
         {
             logger.LogInformation($"Pulling image name: {imageName} image tag: {tag}");
 
-            await dockerClient.Images.CreateImageAsync(
-                new ImagesCreateParameters()
-                {
-                    FromImage = imageName,
-                    Tag = tag
-                },
-                authConfig,
-                new Progress<JSONMessage>(message => logger.LogDebug(message.Status)));
+            await retryHandler.AsyncRetryPolicy.ExecuteAsync(async () =>
+            {
+                await dockerClient.Images.CreateImageAsync(
+                    new ImagesCreateParameters() { FromImage = imageName, Tag = tag },
+                    authConfig,
+                    new Progress<JSONMessage>(message => logger.LogDebug(message.Status)));
+            });
         }
 
         /// <summary>

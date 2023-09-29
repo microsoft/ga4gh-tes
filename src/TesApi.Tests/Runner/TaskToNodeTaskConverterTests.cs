@@ -37,6 +37,8 @@ namespace TesApi.Tests.Runner
         const string DefaultStorageAccountName = "default";
         const string InternalBlobUrl = "http://foo.bar/tes-internal";
         const string InternalBlobUrlWithSas = $"{InternalBlobUrl}?{SasToken}";
+        const string ManagedIdentityResourceId = "resourceId";
+
 
         private const string ExternalStorageContainer =
             $"https://external{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont";
@@ -59,7 +61,8 @@ namespace TesApi.Tests.Runner
         public async Task ToNodeTaskAsync_TesTaskWithContentInputs_ContentInputsAreUploadedAndSetInTaskDefinition()
         {
             var contentInput = tesTask.Inputs.Find(i => !string.IsNullOrWhiteSpace(i.Content));
-            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, additionalInputs: null, new RuntimeContainerCleanupOptions(false, false), DefaultStorageAccountName, CancellationToken.None);
+            var options = OptionsWithoutAdditionalInputs();
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
 
             Assert.IsNotNull(nodeTask);
 
@@ -73,7 +76,8 @@ namespace TesApi.Tests.Runner
         public async Task
             ToNodeTaskAsync_TesTaskWithInputsAndOutputs_AllInputsAndOutputsArePrefixedWithBatchTaskWorkingDir()
         {
-            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, additionalInputs: null, new RuntimeContainerCleanupOptions(false, false), DefaultStorageAccountName, CancellationToken.None);
+            var options = OptionsWithoutAdditionalInputs();
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             // Verify that all inputs and outputs are prefixed with the batch task working dir
             foreach (var input in nodeTask.Inputs!)
@@ -100,7 +104,9 @@ namespace TesApi.Tests.Runner
                 }
             };
 
-            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, additionalInputs: null, new RuntimeContainerCleanupOptions(false, false), DefaultStorageAccountName, CancellationToken.None);
+            var options = OptionsWithoutAdditionalInputs();
+
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
 
             Assert.IsNotNull(nodeTask);
 
@@ -111,19 +117,20 @@ namespace TesApi.Tests.Runner
             Assert.AreEqual("blob", url.BlobName);
         }
 
+
         [TestMethod]
         public async Task ToNodeTaskAsync_AdditionalInputsProvided_NodeTesTaskContainsTheAdditionalInputs()
         {
-            var additionalInputs = CreateAdditionalInputs();
+            var options = OptionsWithAdditionalInputs();
 
-            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, additionalInputs, new RuntimeContainerCleanupOptions(false, false), DefaultStorageAccountName, CancellationToken.None);
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
 
             Assert.IsNotNull(nodeTask);
 
             //verify the additional inputs are added to the node task
-            var expectedPath = $"{TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar}{additionalInputs[0].Path}";
+            var expectedPath = $"{TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar}{options.AdditionalInputs[0].Path}";
             Assert.IsTrue(nodeTask.Inputs!.Any(i => i.Path!.Equals(expectedPath, StringComparison.OrdinalIgnoreCase)));
-            expectedPath = $"{TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar}{additionalInputs[1].Path}";
+            expectedPath = $"{TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar}{options.AdditionalInputs[1].Path}";
             Assert.IsTrue(nodeTask.Inputs!.Any(i => i.Path!.Equals(expectedPath, StringComparison.OrdinalIgnoreCase)));
         }
 
@@ -134,7 +141,8 @@ namespace TesApi.Tests.Runner
             var task = GetTestTesTask();
             task.Inputs = null;
             task.Outputs = null;
-            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(task, additionalInputs: null, new RuntimeContainerCleanupOptions(false, false), defaultStorageAccountName: default, CancellationToken.None);
+            var options = OptionsWithoutAdditionalInputs();
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(task, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
             Assert.IsNull(nodeTask.Outputs);
@@ -147,8 +155,8 @@ namespace TesApi.Tests.Runner
             var task = GetTestTesTask();
             task.Inputs = null;
             task.Outputs = null;
-            var additionalInputs = CreateAdditionalInputs();
-            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(task, additionalInputs, new RuntimeContainerCleanupOptions(false, false), defaultStorageAccountName: default, CancellationToken.None);
+            var options = OptionsWithAdditionalInputs();
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(task, options, CancellationToken.None);
 
             Assert.IsNotNull(nodeTask);
             Assert.AreEqual(2, nodeTask.Inputs!.Count);
@@ -162,7 +170,8 @@ namespace TesApi.Tests.Runner
             var task = GetTestTesTask();
             task.Inputs = null;
             task.Outputs = null;
-            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(task, additionalInputs: null, new RuntimeContainerCleanupOptions(false, false), defaultStorageAccountName: default, CancellationToken.None);
+            var options = OptionsWithoutAdditionalInputs();
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(task, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
             Assert.IsNull(nodeTask.Outputs);
@@ -171,22 +180,23 @@ namespace TesApi.Tests.Runner
         [TestMethod]
         public async Task ToNodeTaskAsync_AdditionalInputsContainsAnExistingInput_OnlyDistinctAdditionalInputsAreAdded()
         {
-            var additionalInputs = CreateAdditionalInputs();
-            additionalInputs[0].Path = tesTask.Inputs.First().Path;
+            var options = OptionsWithAdditionalInputs();
+            options.AdditionalInputs[0].Path = tesTask.Inputs.First().Path;
 
-            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, additionalInputs, new RuntimeContainerCleanupOptions(false, false), DefaultStorageAccountName, CancellationToken.None);
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
 
             //verify that only one additional inputs is added to the node task
             Assert.AreEqual(tesTask.Inputs.Count + 1, nodeTask.Inputs!.Count);
-            var expectedPath = $"{TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar}{additionalInputs[1].Path}";
+            var expectedPath = $"{TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar}{options.AdditionalInputs[1].Path}";
             Assert.IsTrue(nodeTask.Inputs!.Any(i => i.Path!.Equals(expectedPath, StringComparison.OrdinalIgnoreCase)));
         }
 
         [TestMethod]
         public async Task ToNodeTaskAsync_InputUrlIsALocalPath_UrlIsConverted()
         {
-            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, additionalInputs: null, new RuntimeContainerCleanupOptions(false, false), DefaultStorageAccountName, CancellationToken.None);
+            var options = OptionsWithoutAdditionalInputs();
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
 
             Assert.IsNotNull(nodeTask);
             //first input in the task has a url with the the format: /storageaccount/container
@@ -208,7 +218,9 @@ namespace TesApi.Tests.Runner
                 }
             };
 
-            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, additionalInputs: null, new RuntimeContainerCleanupOptions(false, false), DefaultStorageAccountName, CancellationToken.None);
+            var options = OptionsWithoutAdditionalInputs();
+
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
 
             Assert.IsNotNull(nodeTask);
             var url = new BlobUriBuilder(new Uri(nodeTask.Inputs![0].SourceUrl!));
@@ -217,9 +229,9 @@ namespace TesApi.Tests.Runner
             Assert.AreEqual("cromwell-executions", url.BlobContainerName);
         }
 
-        private static TesInput[] CreateAdditionalInputs()
+        private static NodeTaskConversionOptions OptionsWithAdditionalInputs()
         {
-            return new[]
+            var inputs = new[]
             {
                 new TesInput
                 {
@@ -236,6 +248,16 @@ namespace TesApi.Tests.Runner
                     Url = "http://foo.bar/additionalInput2"
                 }
             };
+
+            return new NodeTaskConversionOptions(AdditionalInputs: inputs,
+                DefaultStorageAccountName: DefaultStorageAccountName,
+                NodeManagedIdentityResourceId: ManagedIdentityResourceId);
+        }
+        private static NodeTaskConversionOptions OptionsWithoutAdditionalInputs()
+        {
+            return new NodeTaskConversionOptions(AdditionalInputs: null,
+                DefaultStorageAccountName: DefaultStorageAccountName,
+                NodeManagedIdentityResourceId: ManagedIdentityResourceId);
         }
 
         private static TesTask GetTestTesTask()

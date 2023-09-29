@@ -42,7 +42,6 @@ namespace Tes.Runner.Models
     {
         public TerraRuntimeOptions? Terra { get; set; }
 
-        public DockerCleanUpOptions DockerCleanUp { get; set; }
         public string? NodeManagedIdentityResourceId { get; set; }
     }
 

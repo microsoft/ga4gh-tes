@@ -974,13 +974,9 @@ namespace TesApi.Web
         {
             ValidateTesTask(task);
 
-            var additionalInputs = await GetAdditionalCromwellInputsAsync(task, cancellationToken);
+            var nodeTaskCreationOptions = await GetNodeTaskConversionOptionsAsync(task, cancellationToken);
 
-            var containerCleanupOptions = new RuntimeContainerCleanupOptions(
-                ExecuteDockerRmi: true,
-                ExecuteDockerPrune: true);
-
-            var assets = await taskExecutionScriptingManager.PrepareBatchScriptAsync(task, additionalInputs, containerCleanupOptions, defaultStorageAccountName, cancellationToken);
+            var assets = await taskExecutionScriptingManager.PrepareBatchScriptAsync(task, nodeTaskCreationOptions, cancellationToken);
 
             var batchRunCommand = taskExecutionScriptingManager.ParseBatchRunCommand(assets);
 
@@ -997,6 +993,30 @@ namespace TesApi.Web
             };
 
             return cloudTask;
+        }
+
+        private async Task<NodeTaskConversionOptions> GetNodeTaskConversionOptionsAsync(TesTask task, CancellationToken cancellationToken)
+        {
+            var nodeTaskCreationOptions = new NodeTaskConversionOptions(
+                DefaultStorageAccountName: defaultStorageAccountName,
+                AdditionalInputs: await GetAdditionalCromwellInputsAsync(task, cancellationToken),
+                NodeManagedIdentityResourceId: GetNodeManagedIdentityResourceId(task)
+            );
+            return nodeTaskCreationOptions;
+        }
+
+        private string GetNodeManagedIdentityResourceId(TesTask task)
+        {
+            var resourceId =
+                task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters
+                    .workflow_execution_identity);
+
+            if (!string.IsNullOrEmpty(resourceId))
+            {
+                return resourceId;
+            }
+
+            return globalManagedIdentity;
         }
 
         private async Task<List<TesInput>> GetAdditionalCromwellInputsAsync(TesTask task, CancellationToken cancellationToken)

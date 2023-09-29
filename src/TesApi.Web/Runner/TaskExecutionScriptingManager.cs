@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -51,16 +50,14 @@ namespace TesApi.Web.Runner
         /// Prepares the runtime scripting assets required for the execution of a TES task in a Batch node using the TES runner. 
         /// </summary>
         /// <param name="tesTask"></param>
-        /// <param name="additionalInputs"></param>
-        /// <param name="containerCleanupOptions"></param>
-        /// <param name="defaultStorageAccountName"></param>
+        /// <param name="nodeTaskConversionOptions"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task<BatchScriptAssetsInfo> PrepareBatchScriptAsync(TesTask tesTask, List<TesInput> additionalInputs, RuntimeContainerCleanupOptions containerCleanupOptions, string defaultStorageAccountName, CancellationToken cancellationToken)
+        public async Task<BatchScriptAssetsInfo> PrepareBatchScriptAsync(TesTask tesTask, NodeTaskConversionOptions nodeTaskConversionOptions, CancellationToken cancellationToken)
         {
             try
             {
-                var nodeTaskUrl = await CreateAndUploadNodeTaskAsync(tesTask, additionalInputs, containerCleanupOptions, defaultStorageAccountName, cancellationToken);
+                var nodeTaskUrl = await CreateAndUploadNodeTaskAsync(tesTask, nodeTaskConversionOptions, cancellationToken);
 
                 var batchScriptUrl = await CreateAndUploadBatchScriptAsync(tesTask, nodeTaskUrl, cancellationToken);
 
@@ -120,11 +117,11 @@ namespace TesApi.Web.Runner
             return batchNodeScriptUrl;
         }
 
-        private async Task<string> CreateAndUploadNodeTaskAsync(TesTask tesTask, List<TesInput> additionalInputs, RuntimeContainerCleanupOptions containerCleanupOptions, string defaultStorageAccount, CancellationToken cancellationToken)
+        private async Task<string> CreateAndUploadNodeTaskAsync(TesTask tesTask, NodeTaskConversionOptions nodeTaskConversionOptions, CancellationToken cancellationToken)
         {
             logger.LogInformation($"Creating and uploading node task definition file for Task ID: {tesTask.Id}");
 
-            var nodeTask = await taskToNodeConverter.ToNodeTaskAsync(tesTask, additionalInputs, containerCleanupOptions, defaultStorageAccount, cancellationToken);
+            var nodeTask = await taskToNodeConverter.ToNodeTaskAsync(tesTask, nodeTaskConversionOptions, cancellationToken);
 
             var nodeTaskContent = JsonConvert.SerializeObject(nodeTask,
                 new JsonSerializerSettings
