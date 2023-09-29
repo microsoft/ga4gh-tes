@@ -248,7 +248,7 @@ namespace TesApi.Web.Runner
 
             var blobUrl = new BlobUriBuilder(new Uri(input.Url));
 
-            logger.LogInformation($"Configured external storage accounts {externalStorageContainers.Select(e => e.AccountName).Join(',')}");
+            logger.LogInformation($"Configured external storage accounts {string.Join(',', externalStorageContainers.Select(e => e.AccountName))}");
 
             logger.LogInformation($"Checking if input {input.Path} is an external storage account input. Account name: {blobUrl.AccountName}");
 
