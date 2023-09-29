@@ -238,7 +238,8 @@ namespace TesApi.Web.Runner
             return inputs;
         }
 
-        private string GetSasTokenFromExternalStorageAccountIfSet(string storageAccount) { 
+        private string GetSasTokenFromExternalStorageAccountIfSet(string storageAccount)
+        {
             var configuredExternalStorage = externalStorageContainers.FirstOrDefault(e => e.AccountName.Equals(storageAccount, StringComparison.OrdinalIgnoreCase));
             return configuredExternalStorage is null ? string.Empty : configuredExternalStorage.SasToken;
         }

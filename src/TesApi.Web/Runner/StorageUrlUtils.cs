@@ -60,7 +60,7 @@ namespace TesApi.Web.Runner
                         $"The value provided can't be converted to URL. The container name is missing. Value: {uriValue}");
                 }
 
-                return $"https://{result.AccountName}{BlobEndpointHostNameSuffix}/{result.ContainerName}/{result.BlobName}";        
+                return $"https://{result.AccountName}{BlobEndpointHostNameSuffix}/{result.ContainerName}/{result.BlobName}";
             }
 
             throw new InvalidOperationException($"The value provided can't be converted to URL. Value: {uriValue}");

@@ -249,7 +249,7 @@ namespace TesApi.Tests.Runner
             var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
 
             Assert.IsNotNull(nodeTask);
-            
+
             var url = new BlobUriBuilder(new Uri(nodeTask.Inputs![0].SourceUrl!));
 
             Assert.IsNotNull(url);
