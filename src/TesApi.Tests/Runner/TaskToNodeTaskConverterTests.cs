@@ -40,9 +40,10 @@ namespace TesApi.Tests.Runner
         const string ManagedIdentityResourceId = "resourceId";
 
 
-        private const string ExternalStorageContainer =
-            $"https://external{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont";
-        private const string ExternalStorageContainerWithSas =
+        const string ExternalStorageAccountName = "external";
+        const string ExternalStorageContainer =
+            $"https://{ExternalStorageAccountName}{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont";
+        const string ExternalStorageContainerWithSas =
             $"{ExternalStorageContainer}?{SasToken}";
 
         [TestInitialize]
@@ -227,6 +228,34 @@ namespace TesApi.Tests.Runner
             Assert.IsNotNull(url);
             Assert.AreEqual(DefaultStorageAccountName, url.AccountName);
             Assert.AreEqual("cromwell-executions", url.BlobContainerName);
+        }
+
+        [TestMethod]
+        public async Task ToNodeTaskAsync_InputUrlIsAExternalLocalPath_UrlIsConvertedUsesExternalAccountSas()
+        {
+            tesTask.Inputs = new List<TesInput>
+            {
+                new TesInput()
+                {
+                    Name = "local input",
+                    Path = $"/{ExternalStorageAccountName}/cont/file",
+                    Url = $"/{ExternalStorageAccountName}/cont/file",
+                    Type = TesFileType.FILEEnum
+                }
+            };
+
+            var options = OptionsWithoutAdditionalInputs();
+
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
+
+            Assert.IsNotNull(nodeTask);
+            
+            var url = new BlobUriBuilder(new Uri(nodeTask.Inputs![0].SourceUrl!));
+
+            Assert.IsNotNull(url);
+            Assert.AreEqual(ExternalStorageAccountName, url.AccountName);
+            Assert.AreEqual($"?{SasToken}", url.ToUri().Query);
+            Assert.AreEqual("file", url.BlobName);
         }
 
         private static NodeTaskConversionOptions OptionsWithAdditionalInputs()
