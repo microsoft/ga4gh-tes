@@ -639,6 +639,7 @@ namespace TesApi.Web
                                 vmSize: virtualMachineInfo.VmSize,
                                 autoscaled: true,
                                 preemptable: virtualMachineInfo.LowPriority,
+                                neededPoolCounts[poolKey],
                                 nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                                 containerConfiguration: containerMetadata.ContainerConfiguration,
                                 encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
@@ -1577,13 +1578,14 @@ namespace TesApi.Web
         /// <param name="vmSize"></param>
         /// <param name="autoscaled"></param>
         /// <param name="preemptable"></param>
+        /// <param name="initialTarget"></param>
         /// <param name="nodeInfo"></param>
         /// <param name="containerConfiguration"></param>
         /// <param name="encryptionAtHostSupported">VM supports encryption at host.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns><see cref="PoolSpecification"/></returns>
         /// <remarks>We use the PoolSpecification for both the namespace of all the constituent parts and for the fact that it allows us to configure shared and autopools using the same code.</remarks>
-        private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, ContainerConfiguration containerConfiguration, bool encryptionAtHostSupported, CancellationToken cancellationToken)
+        private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, int initialTarget, BatchNodeInfo nodeInfo, ContainerConfiguration containerConfiguration, bool encryptionAtHostSupported, CancellationToken cancellationToken)
         {
             // Any changes to any properties set in this method will require corresponding changes to ConvertPoolSpecificationToModelsPool()
 
@@ -1618,13 +1620,13 @@ namespace TesApi.Web
             {
                 poolSpecification.AutoScaleEnabled = true;
                 poolSpecification.AutoScaleEvaluationInterval = BatchPool.AutoScaleEvaluationInterval;
-                poolSpecification.AutoScaleFormula = BatchPool.AutoPoolFormula(preemptable, 1);
+                poolSpecification.AutoScaleFormula = BatchPool.AutoPoolFormula(preemptable, initialTarget);
             }
             else
             {
                 poolSpecification.AutoScaleEnabled = false;
-                poolSpecification.TargetLowPriorityComputeNodes = preemptable == true ? 1 : 0;
-                poolSpecification.TargetDedicatedComputeNodes = preemptable == false ? 1 : 0;
+                poolSpecification.TargetLowPriorityComputeNodes = preemptable == true ? initialTarget : 0;
+                poolSpecification.TargetDedicatedComputeNodes = preemptable == false ? initialTarget : 0;
             }
 
             if (!string.IsNullOrEmpty(batchNodesSubnetId))
