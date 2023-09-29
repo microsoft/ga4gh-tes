@@ -40,29 +40,37 @@ namespace Tes.Repository
 
         protected PostgreSqlCachingRepository(ILogger logger = default, ICache<T> cache = default)
         {
-            _logger = logger;
-            _cache = cache;
-            _logger.LogInformation($"PostgreSqlCachingRepository constructor start {tempGuid}");
-            // The only "normal" exit for _writerWorkerTask is "cancelled". Anything else should force the process to exit because it means that this repository will no longer write to the database!
-            _writerWorkerTask = Task.Run(() => WriterWorkerAsync(_writerWorkerCancellationTokenSource.Token))
-                .ContinueWith(async task =>
-                {
-                    switch (task.Status)
+            try
+            {
+                _logger = logger;
+                _cache = cache;
+                _logger.LogInformation($"PostgreSqlCachingRepository constructor start {tempGuid}");
+                // The only "normal" exit for _writerWorkerTask is "cancelled". Anything else should force the process to exit because it means that this repository will no longer write to the database!
+                _writerWorkerTask = Task.Run(() => WriterWorkerAsync(_writerWorkerCancellationTokenSource.Token))
+                    .ContinueWith(async task =>
                     {
-                        case TaskStatus.Faulted:
-                            _logger.LogCritical("Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
-                            break;
-                        case TaskStatus.RanToCompletion:
-                            _logger.LogCritical("Repository WriterWorkerAsync unexpectedly completed.");
-                            break;
-                    }
+                        switch (task.Status)
+                        {
+                            case TaskStatus.Faulted:
+                                _logger.LogCritical("Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
+                                break;
+                            case TaskStatus.RanToCompletion:
+                                _logger.LogCritical("Repository WriterWorkerAsync unexpectedly completed.");
+                                break;
+                        }
 
-                    await Task.Delay(50); // Give the logger time to flush.
-                    throw new System.Diagnostics.UnreachableException("Repository WriterWorkerAsync unexpectedly ended."); // Force the process to exit via this being an unhandled exception.
-                },
-                TaskContinuationOptions.NotOnCanceled);
+                        await Task.Delay(50); // Give the logger time to flush.
+                        throw new System.Diagnostics.UnreachableException("Repository WriterWorkerAsync unexpectedly ended."); // Force the process to exit via this being an unhandled exception.
+                    },
+                    TaskContinuationOptions.NotOnCanceled);
 
-            _logger.LogInformation($"PostgreSqlCachingRepository constructor end {tempGuid}");
+                _logger.LogInformation($"PostgreSqlCachingRepository constructor end {tempGuid}");
+            }
+            catch (Exception exc)
+            {
+                _logger.LogCritical(exc, $"PostgreSqlCachingRepository threw an exception in the constructor");
+                throw;
+            }
         }
 
         /// <summary>
