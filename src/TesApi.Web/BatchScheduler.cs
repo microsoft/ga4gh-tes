@@ -186,87 +186,83 @@ namespace TesApi.Web
             //static bool tesTaskCancellationRequested(TesTask tesTask) => tesTask.State == TesState.CANCELINGEnum;
             //static bool tesTaskDeletionReady(TesTask tesTask) => tesTask.IsTaskDeletionRequired;
 
-            static void SetTaskStateAndLog(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo)
-            {
-                tesTask.State = newTaskState;
+            //static void SetTaskStateAndLog(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo)
+            //{
+            //    tesTask.State = newTaskState;
 
-                var tesTaskLog = tesTask.GetOrAddTesTaskLog();
-                var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog();
+            //    var tesTaskLog = tesTask.GetOrAddTesTaskLog();
+            //    var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog();
 
-                tesTaskLog.BatchNodeMetrics = batchInfo.BatchNodeMetrics;
-                tesTaskLog.CromwellResultCode = batchInfo.CromwellRcCode;
-                tesTaskLog.EndTime = DateTime.UtcNow;
-                tesTaskExecutorLog.StartTime = batchInfo.BatchTaskStartTime;
-                tesTaskExecutorLog.EndTime = batchInfo.BatchTaskEndTime;
-                tesTaskExecutorLog.ExitCode = batchInfo.BatchTaskExitCode;
+            //    tesTaskLog.BatchNodeMetrics = batchInfo.BatchNodeMetrics;
+            //    tesTaskLog.CromwellResultCode = batchInfo.CromwellRcCode;
+            //    tesTaskLog.EndTime = DateTime.UtcNow;
+            //    tesTaskExecutorLog.StartTime = batchInfo.BatchTaskStartTime;
+            //    tesTaskExecutorLog.EndTime = batchInfo.BatchTaskEndTime;
+            //    tesTaskExecutorLog.ExitCode = batchInfo.BatchTaskExitCode;
 
-                // Only accurate when the task completes successfully, otherwise it's the Batch time as reported from Batch
-                // TODO this could get large; why?
-                //var timefromCoAScriptCompletionToBatchTaskDetectedComplete = tesTaskLog.EndTime - tesTaskExecutorLog.EndTime;
+            //    // Only accurate when the task completes successfully, otherwise it's the Batch time as reported from Batch
+            //    // TODO this could get large; why?
+            //    //var timefromCoAScriptCompletionToBatchTaskDetectedComplete = tesTaskLog.EndTime - tesTaskExecutorLog.EndTime;
 
-                tesTask.SetFailureReason(batchInfo.FailureReason);
+            //    tesTask.SetFailureReason(batchInfo.FailureReason);
 
-                if (batchInfo.SystemLogItems is not null)
-                {
-                    tesTask.AddToSystemLog(batchInfo.SystemLogItems);
-                }
-                else if (!string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem))
-                {
-                    tesTask.AddToSystemLog(new[] { batchInfo.AlternateSystemLogItem });
-                }
-            }
+            //    if (batchInfo.SystemLogItems is not null)
+            //    {
+            //        tesTask.AddToSystemLog(batchInfo.SystemLogItems);
+            //    }
+            //    else if (!string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem))
+            //    {
+            //        tesTask.AddToSystemLog(new[] { batchInfo.AlternateSystemLogItem });
+            //    }
+            //}
 
-            async Task SetTaskCompleted(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
-            {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
-                SetTaskStateAndLog(tesTask, TesState.COMPLETEEnum, batchInfo);
-            }
+            //async Task SetTaskCompleted(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
+            //{
+            //    await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
+            //    SetTaskStateAndLog(tesTask, TesState.COMPLETEEnum, batchInfo);
+            //}
 
-            async Task SetTaskExecutorError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
-            {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
-                SetTaskStateAndLog(tesTask, TesState.EXECUTORERROREnum, batchInfo);
-            }
+            //async Task SetTaskExecutorError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
+            //{
+            //    await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
+            //    SetTaskStateAndLog(tesTask, TesState.EXECUTORERROREnum, batchInfo);
+            //}
 
-            async Task SetTaskSystemError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
-            {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
-                SetTaskStateAndLog(tesTask, TesState.SYSTEMERROREnum, batchInfo);
-            }
+            //async Task SetTaskSystemError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
+            //{
+            //    await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
+            //    SetTaskStateAndLog(tesTask, TesState.SYSTEMERROREnum, batchInfo);
+            //}
 
-            async Task DeleteBatchJobAndSetTaskStateAsync(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
-            {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
-                SetTaskStateAndLog(tesTask, newTaskState, batchInfo);
-            }
+            //async Task DeleteBatchJobAndSetTaskStateAsync(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
+            //{
+            //    await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
+            //    SetTaskStateAndLog(tesTask, newTaskState, batchInfo);
+            //}
 
-            Task DeleteBatchJobAndSetTaskExecutorErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken) => DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.EXECUTORERROREnum, batchInfo, cancellationToken);
-            Task DeleteBatchJobAndSetTaskSystemErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken) => DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.SYSTEMERROREnum, batchInfo, cancellationToken);
+            //Task DeleteBatchJobAndSetTaskExecutorErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken) => DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.EXECUTORERROREnum, batchInfo, cancellationToken);
+            //Task DeleteBatchJobAndSetTaskSystemErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken) => DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.SYSTEMERROREnum, batchInfo, cancellationToken);
 
-            Task DeleteBatchJobAndRequeueTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
-                => ++tesTask.ErrorCount > 3
-                    ? AddSystemLogAndDeleteBatchJobAndSetTaskExecutorErrorAsync(tesTask, batchInfo, "System Error: Retry count exceeded.", cancellationToken)
-                    : DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.QUEUEDEnum, batchInfo, cancellationToken);
+            //Task DeleteBatchJobAndRequeueTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
+            //    => ++tesTask.ErrorCount > 3
+            //        ? AddSystemLogAndDeleteBatchJobAndSetTaskExecutorErrorAsync(tesTask, batchInfo, "System Error: Retry count exceeded.", cancellationToken)
+            //        : DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.QUEUEDEnum, batchInfo, cancellationToken);
 
-            Task AddSystemLogAndDeleteBatchJobAndSetTaskExecutorErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, string alternateSystemLogItem, CancellationToken cancellationToken)
-            {
-                batchInfo.SystemLogItems ??= Enumerable.Empty<string>().Append(alternateSystemLogItem);
-                return DeleteBatchJobAndSetTaskExecutorErrorAsync(tesTask, batchInfo, cancellationToken);
-            }
+            //Task AddSystemLogAndDeleteBatchJobAndSetTaskExecutorErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, string alternateSystemLogItem, CancellationToken cancellationToken)
+            //{
+            //    batchInfo.SystemLogItems ??= Enumerable.Empty<string>().Append(alternateSystemLogItem);
+            //    return DeleteBatchJobAndSetTaskExecutorErrorAsync(tesTask, batchInfo, cancellationToken);
+            //}
 
-            Task HandlePreemptedNodeAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
-            {
-                logger.LogInformation("The TesTask {TesTask}'s node was preempted. It will be automatically rescheduled.", tesTask.Id);
-                tesTask.State = TesState.INITIALIZINGEnum;
-                return Task.FromResult(false);
-            }
+            //Task HandlePreemptedNodeAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
+            //{
+            //    logger.LogInformation("The TesTask {TesTask}'s node was preempted. It will be automatically rescheduled.", tesTask.Id);
+            //    tesTask.State = TesState.INITIALIZINGEnum;
+            //    return Task.FromResult(false);
+            //}
 
             //tesTaskStateTransitions = new List<TesTaskStateTransition>()
             //{
-            //    new TesTaskStateTransition(tesTaskDeletionReady, batchTaskState: null, alternateSystemLogItem: null, DeleteCancelledTaskAsync),
-            //    new TesTaskStateTransition(tesTaskCancellationRequested, batchTaskState: null, alternateSystemLogItem: null, CancelTaskAsync),
-            //    new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.JobNotFound, alternateSystemLogItem: null, (tesTask, _, ct) => AddBatchTaskAsync(tesTask, ct)),
-            //    new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.MissingBatchTask, alternateSystemLogItem: null, (tesTask, batchInfo, ct) => AddBatchTaskAsync(tesTask, ct)),
             //    new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.Initializing, alternateSystemLogItem: null, (tesTask, _) => tesTask.State = TesState.INITIALIZINGEnum),
             //    new TesTaskStateTransition(tesTaskIsQueuedOrInitializing, BatchTaskState.NodeAllocationFailed, alternateSystemLogItem: null, DeleteBatchJobAndRequeueTaskAsync),
             //    new TesTaskStateTransition(tesTaskIsQueuedOrInitializing, BatchTaskState.Running, alternateSystemLogItem: null, (tesTask, _) => tesTask.State = TesState.RUNNINGEnum),
@@ -366,33 +362,79 @@ namespace TesApi.Web
             }
         }
 
-        ///// <summary>
-        ///// Iteratively manages execution of a <see cref="TesTask"/> on Azure Batch until completion or failure
-        ///// </summary>
-        ///// <param name="tesTask">The <see cref="TesTask"/></param>
-        ///// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        ///// <returns>True if the TES task needs to be persisted.</returns>
-        //public async ValueTask<bool> ProcessTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
-        //{
-        //    var combinedBatchTaskInfo = await GetBatchTaskStateAsync(tesTask, cancellationToken);
-        //    const string template = "TES task: {TesTask} TES task state: {TesTaskState} BatchTaskState: {BatchTaskState}";
-        //    var msg = string.Format(ConvertTemplateToFormat(template), tesTask.Id, tesTask.State.ToString(), combinedBatchTaskInfo.BatchTaskState.ToString());
-
-        //    if (onlyLogBatchTaskStateOnce.Add(msg))
-        //    {
-        //        logger.LogInformation(template, tesTask.Id, tesTask.State.ToString(), combinedBatchTaskInfo.BatchTaskState.ToString());
-        //    }
-
-        //    return await HandleTesTaskTransitionAsync(tesTask, combinedBatchTaskInfo, cancellationToken);
-
-        //    static string ConvertTemplateToFormat(string template)
-        //        => string.Join(null, template.Split('{', '}').Select((s, i) => (s, i)).Select(t => t.i % 2 == 0 ? t.s : $"{{{t.i / 2}}}"));
-        //}
-
         /// <inheritdoc/>
-        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCompletedTesTasksAsync(IEnumerable<TesTask> tesTasks, CloudTask[] cloudTask, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCompletedTesTasksAsync(IEnumerable<TesTask> tesTasks, CloudTask[] cloudTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            yield break;
+            ArgumentNullException.ThrowIfNull(tesTasks);
+            ArgumentNullException.ThrowIfNull(cloudTasks);
+
+            foreach (var (cloudTask, tesTask) in cloudTasks.Zip(tesTasks))
+            {
+                // Skip if this task was previously updated.
+                if (tesTask.State != TesState.COMPLETEEnum && tesTask.State != TesState.SYSTEMERROREnum && tesTask.State != TesState.EXECUTORERROREnum)
+                {
+                    try
+                    {
+                        await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, @"Failure when deleting cloud task for TES task: {TesTask} Exception: {ExceptionType}: {ExceptionMessage}", tesTask.Id, ex.GetType().FullName, ex.Message);
+                        tesTask.IsTaskDeletionRequired = true;
+                    }
+
+                    if (cloudTask.ExecutionInformation.ExitCode != 0 || cloudTask.ExecutionInformation.FailureInformation is not null)
+                    {
+                        await SetTaskStateAndLog(tesTask, TesState.EXECUTORERROREnum, cloudTask);
+                    }
+                    else
+                    {
+                        await SetTaskStateAndLog(tesTask, TesState.COMPLETEEnum, cloudTask);
+                    }
+
+                    yield return (tesTask, Task.FromResult(true));
+                }
+            }
+
+            async ValueTask SetTaskStateAndLog(TesTask tesTask, TesState newTaskState, CloudTask cloudTask)
+            {
+                var metrics = newTaskState == TesState.COMPLETEEnum
+                    ? await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask, cancellationToken)
+                    : default;
+
+                tesTask.State = newTaskState;
+
+                var tesTaskLog = tesTask.GetOrAddTesTaskLog();
+                var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog();
+
+                tesTaskLog.BatchNodeMetrics = metrics.BatchNodeMetrics;
+                tesTaskLog.CromwellResultCode = metrics.CromwellRcCode;
+                tesTaskLog.EndTime = DateTime.UtcNow;
+                tesTaskExecutorLog.StartTime = metrics.TaskStartTime ?? cloudTask.ExecutionInformation?.StartTime;
+                tesTaskExecutorLog.EndTime = metrics.TaskEndTime ?? cloudTask.ExecutionInformation?.EndTime;
+                tesTaskExecutorLog.ExitCode = cloudTask.ExecutionInformation?.ExitCode;
+
+                // Only accurate when the task completes successfully, otherwise it's the Batch time as reported from Batch
+                // TODO this could get large; why?
+                //var timefromCoAScriptCompletionToBatchTaskDetectedComplete = tesTaskLog.EndTime - tesTaskExecutorLog.EndTime;
+
+                tesTask.SetFailureReason(cloudTask.ExecutionInformation?.FailureInformation?.Code);
+
+                var systemLogItems = newTaskState == TesState.COMPLETEEnum
+                    ? default
+                    : Enumerable.Empty<string>()
+                                .Append($"Batch task ExitCode: {cloudTask.ExecutionInformation?.ExitCode}, Failure message: {cloudTask.ExecutionInformation?.FailureInformation?.Message}")
+                                .Concat(cloudTask.ExecutionInformation?.FailureInformation?.Details?.Select(d => $"{d.Name}: {d.Value}") ?? Enumerable.Empty<string>());
+
+                if (systemLogItems is not null)
+                {
+                    tesTask.AddToSystemLog(systemLogItems);
+                }
+                else if (newTaskState != TesState.COMPLETEEnum)
+                {
+                    tesTask.AddToSystemLog(new[] { "Please open an issue. There should have been an error reported here." });
+                }
+            }
         }
 
         /// <inheritdoc/>
@@ -732,239 +774,239 @@ namespace TesApi.Web
             }
         }
 
-        /// <summary>
-        /// Gets the current state of the Azure Batch task
-        /// </summary>
-        /// <param name="tesTask"><see cref="TesTask"/></param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>A higher-level abstraction of the current state of the Azure Batch task</returns>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1826:Do not use Enumerable methods on indexable collections", Justification = "FirstOrDefault() is straightforward, the alternative is less clear.")]
-        private async ValueTask<CombinedBatchTaskInfo> GetBatchTaskStateAsync(TesTask tesTask, CancellationToken cancellationToken)
-        {
-            var azureBatchJobAndTaskState = await azureProxy.GetBatchJobAndTaskStateAsync(tesTask, cancellationToken);
+        ///// <summary>
+        ///// Gets the current state of the Azure Batch task
+        ///// </summary>
+        ///// <param name="tesTask"><see cref="TesTask"/></param>
+        ///// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        ///// <returns>A higher-level abstraction of the current state of the Azure Batch task</returns>
+        //[System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1826:Do not use Enumerable methods on indexable collections", Justification = "FirstOrDefault() is straightforward, the alternative is less clear.")]
+        //private async ValueTask<CombinedBatchTaskInfo> GetBatchTaskStateAsync(TesTask tesTask, CloudTask cloudTask, CancellationToken cancellationToken)
+        //{
+        //    var azureBatchJobAndTaskState = await azureProxy.GetBatchJobAndTaskStateAsync(tesTask, cancellationToken);
 
-            if (azureBatchJobAndTaskState.Pool?.PoolId is null)
-            {
-                azureBatchJobAndTaskState.Pool = tesTask.PoolId is null ? default : new() { PoolId = tesTask.PoolId };
-            }
+        //    if (azureBatchJobAndTaskState.Pool?.PoolId is null)
+        //    {
+        //        azureBatchJobAndTaskState.Pool = tesTask.PoolId is null ? default : new() { PoolId = tesTask.PoolId };
+        //    }
 
-            static IEnumerable<string> ConvertNodeErrorsToSystemLogItems(AzureBatchJobAndTaskState azureBatchJobAndTaskState)
-            {
-                var systemLogItems = new List<string>();
+        //    static IEnumerable<string> ConvertNodeErrorsToSystemLogItems(AzureBatchJobAndTaskState azureBatchJobAndTaskState)
+        //    {
+        //        var systemLogItems = new List<string>();
 
-                if (azureBatchJobAndTaskState.NodeErrorCode is not null)
-                {
-                    systemLogItems.Add(azureBatchJobAndTaskState.NodeErrorCode);
-                }
+        //        if (azureBatchJobAndTaskState.NodeErrorCode is not null)
+        //        {
+        //            systemLogItems.Add(azureBatchJobAndTaskState.NodeErrorCode);
+        //        }
 
-                if (azureBatchJobAndTaskState.NodeErrorDetails is not null)
-                {
-                    systemLogItems.AddRange(azureBatchJobAndTaskState.NodeErrorDetails);
-                }
+        //        if (azureBatchJobAndTaskState.NodeErrorDetails is not null)
+        //        {
+        //            systemLogItems.AddRange(azureBatchJobAndTaskState.NodeErrorDetails);
+        //        }
 
-                return systemLogItems;
-            }
+        //        return systemLogItems;
+        //    }
 
-            if (azureBatchJobAndTaskState.ActiveJobWithMissingAutoPool)
-            {
-                logger.LogWarning("Found active job without auto pool for TES task {TesTask}. Deleting the job and requeuing the task. BatchJobInfo: {BatchJobInfo}", tesTask.Id, JsonConvert.SerializeObject(azureBatchJobAndTaskState));
-                return new CombinedBatchTaskInfo
-                {
-                    BatchTaskState = BatchTaskState.ActiveJobWithMissingAutoPool,
-                    FailureReason = BatchTaskState.ActiveJobWithMissingAutoPool.ToString(),
-                    Pool = azureBatchJobAndTaskState.Pool
-                };
-            }
+        //    if (azureBatchJobAndTaskState.ActiveJobWithMissingAutoPool)
+        //    {
+        //        logger.LogWarning("Found active job without auto pool for TES task {TesTask}. Deleting the job and requeuing the task. BatchJobInfo: {BatchJobInfo}", tesTask.Id, JsonConvert.SerializeObject(azureBatchJobAndTaskState));
+        //        return new CombinedBatchTaskInfo
+        //        {
+        //            BatchTaskState = BatchTaskState.ActiveJobWithMissingAutoPool,
+        //            FailureReason = BatchTaskState.ActiveJobWithMissingAutoPool.ToString(),
+        //            Pool = azureBatchJobAndTaskState.Pool
+        //        };
+        //    }
 
-            if (azureBatchJobAndTaskState.MoreThanOneActiveJobOrTaskFound)
-            {
-                return new CombinedBatchTaskInfo
-                {
-                    BatchTaskState = BatchTaskState.MoreThanOneActiveJobOrTaskFound,
-                    FailureReason = BatchTaskState.MoreThanOneActiveJobOrTaskFound.ToString(),
-                    Pool = azureBatchJobAndTaskState.Pool
-                };
-            }
+        //    if (azureBatchJobAndTaskState.MoreThanOneActiveJobOrTaskFound)
+        //    {
+        //        return new CombinedBatchTaskInfo
+        //        {
+        //            BatchTaskState = BatchTaskState.MoreThanOneActiveJobOrTaskFound,
+        //            FailureReason = BatchTaskState.MoreThanOneActiveJobOrTaskFound.ToString(),
+        //            Pool = azureBatchJobAndTaskState.Pool
+        //        };
+        //    }
 
-            // Because a ComputeTask is not assigned to the compute node while the StartTask is running, IAzureProxy.GetBatchJobAndTaskStateAsync() does not see start task failures. Deal with that here.
-            if (azureBatchJobAndTaskState.NodeState is null && azureBatchJobAndTaskState.JobState == JobState.Active && azureBatchJobAndTaskState.TaskState == TaskState.Active && !string.IsNullOrWhiteSpace(azureBatchJobAndTaskState.Pool?.PoolId))
-            {
-                /*
-                 * Priority order for assigning errors to TesTasks in shared-pool mode:
-                 * 1. Node error found in GetBatchJobAndTaskStateAsync()
-                 * 2. StartTask failure
-                 * 3. NodeAllocation failure
-                 */
-                if (TryGetPool(azureBatchJobAndTaskState.Pool.PoolId, out var pool))
-                {
-                    if (!string.IsNullOrWhiteSpace(azureBatchJobAndTaskState.NodeErrorCode) || !ProcessStartTaskFailure(pool.PopNextStartTaskFailure()))
-                    {
-                        var resizeError = pool.PopNextResizeError();
-                        if (resizeError is not null)
-                        {
-                            azureBatchJobAndTaskState.NodeAllocationFailed = true;
-                            azureBatchJobAndTaskState.NodeErrorCode = resizeError.Code;
-                            azureBatchJobAndTaskState.NodeErrorDetails = Enumerable.Repeat(resizeError.Message, string.IsNullOrWhiteSpace(resizeError.Message) ? 1 : 0).Concat(resizeError.Values?.Select(d => d.Value) ?? Enumerable.Empty<string>());
-                        }
-                    }
-                }
+        //    // Because a ComputeTask is not assigned to the compute node while the StartTask is running, IAzureProxy.GetBatchJobAndTaskStateAsync() does not see start task failures. Deal with that here.
+        //    if (azureBatchJobAndTaskState.NodeState is null && azureBatchJobAndTaskState.JobState == JobState.Active && azureBatchJobAndTaskState.TaskState == TaskState.Active && !string.IsNullOrWhiteSpace(azureBatchJobAndTaskState.Pool?.PoolId))
+        //    {
+        //        /*
+        //         * Priority order for assigning errors to TesTasks in shared-pool mode:
+        //         * 1. Node error found in GetBatchJobAndTaskStateAsync()
+        //         * 2. StartTask failure
+        //         * 3. NodeAllocation failure
+        //         */
+        //        if (TryGetPool(azureBatchJobAndTaskState.Pool.PoolId, out var pool))
+        //        {
+        //            if (!string.IsNullOrWhiteSpace(azureBatchJobAndTaskState.NodeErrorCode) || !ProcessStartTaskFailure(pool.PopNextStartTaskFailure()))
+        //            {
+        //                var resizeError = pool.PopNextResizeError();
+        //                if (resizeError is not null)
+        //                {
+        //                    azureBatchJobAndTaskState.NodeAllocationFailed = true;
+        //                    azureBatchJobAndTaskState.NodeErrorCode = resizeError.Code;
+        //                    azureBatchJobAndTaskState.NodeErrorDetails = Enumerable.Repeat(resizeError.Message, string.IsNullOrWhiteSpace(resizeError.Message) ? 1 : 0).Concat(resizeError.Values?.Select(d => d.Value) ?? Enumerable.Empty<string>());
+        //                }
+        //            }
+        //        }
 
-                bool ProcessStartTaskFailure(TaskFailureInformation failureInformation)
-                {
-                    if (failureInformation is not null)
-                    {
-                        azureBatchJobAndTaskState.NodeState = ComputeNodeState.StartTaskFailed;
-                        azureBatchJobAndTaskState.NodeErrorCode = failureInformation.Code;
-                        azureBatchJobAndTaskState.NodeErrorDetails = failureInformation.Details?.Select(d => d.Value);
-                    }
+        //        bool ProcessStartTaskFailure(TaskFailureInformation failureInformation)
+        //        {
+        //            if (failureInformation is not null)
+        //            {
+        //                azureBatchJobAndTaskState.NodeState = ComputeNodeState.StartTaskFailed;
+        //                azureBatchJobAndTaskState.NodeErrorCode = failureInformation.Code;
+        //                azureBatchJobAndTaskState.NodeErrorDetails = failureInformation.Details?.Select(d => d.Value);
+        //            }
 
-                    return failureInformation is not null;
-                }
-            }
+        //            return failureInformation is not null;
+        //        }
+        //    }
 
-            if (TaskFailureInformationCodes.DiskFull.Equals(azureBatchJobAndTaskState.NodeErrorCode, StringComparison.OrdinalIgnoreCase))
-            {
-                azureBatchJobAndTaskState.NodeErrorDetails = (azureBatchJobAndTaskState.NodeErrorDetails ?? Enumerable.Empty<string>())
-                    .Append($"Compute Node Error: {TaskFailureInformationCodes.DiskFull} Id: {azureBatchJobAndTaskState.NodeId}");
-            }
+        //    if (TaskFailureInformationCodes.DiskFull.Equals(azureBatchJobAndTaskState.NodeErrorCode, StringComparison.OrdinalIgnoreCase))
+        //    {
+        //        azureBatchJobAndTaskState.NodeErrorDetails = (azureBatchJobAndTaskState.NodeErrorDetails ?? Enumerable.Empty<string>())
+        //            .Append($"Compute Node Error: {TaskFailureInformationCodes.DiskFull} Id: {azureBatchJobAndTaskState.NodeId}");
+        //    }
 
-            switch (azureBatchJobAndTaskState.JobState)
-            {
-                case null:
-                case JobState.Deleting:
-                    return new CombinedBatchTaskInfo
-                    {
-                        BatchTaskState = BatchTaskState.JobNotFound,
-                        FailureReason = BatchTaskState.JobNotFound.ToString(),
-                        Pool = azureBatchJobAndTaskState.Pool
-                    };
-                case JobState.Active:
-                    {
-                        if (azureBatchJobAndTaskState.NodeAllocationFailed)
-                        {
-                            return new CombinedBatchTaskInfo
-                            {
-                                BatchTaskState = BatchTaskState.NodeAllocationFailed,
-                                FailureReason = BatchTaskState.NodeAllocationFailed.ToString(),
-                                SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
-                                Pool = azureBatchJobAndTaskState.Pool
-                            };
-                        }
+        //    switch (azureBatchJobAndTaskState.JobState)
+        //    {
+        //        case null:
+        //        case JobState.Deleting:
+        //            return new CombinedBatchTaskInfo
+        //            {
+        //                BatchTaskState = BatchTaskState.JobNotFound,
+        //                FailureReason = BatchTaskState.JobNotFound.ToString(),
+        //                Pool = azureBatchJobAndTaskState.Pool
+        //            };
+        //        case JobState.Active:
+        //            {
+        //                if (azureBatchJobAndTaskState.NodeAllocationFailed)
+        //                {
+        //                    return new CombinedBatchTaskInfo
+        //                    {
+        //                        BatchTaskState = BatchTaskState.NodeAllocationFailed,
+        //                        FailureReason = BatchTaskState.NodeAllocationFailed.ToString(),
+        //                        SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
+        //                        Pool = azureBatchJobAndTaskState.Pool
+        //                    };
+        //                }
 
-                        if (azureBatchJobAndTaskState.NodeState == ComputeNodeState.Unusable)
-                        {
-                            return new CombinedBatchTaskInfo
-                            {
-                                BatchTaskState = BatchTaskState.NodeUnusable,
-                                FailureReason = BatchTaskState.NodeUnusable.ToString(),
-                                SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
-                                Pool = azureBatchJobAndTaskState.Pool
-                            };
-                        }
+        //                if (azureBatchJobAndTaskState.NodeState == ComputeNodeState.Unusable)
+        //                {
+        //                    return new CombinedBatchTaskInfo
+        //                    {
+        //                        BatchTaskState = BatchTaskState.NodeUnusable,
+        //                        FailureReason = BatchTaskState.NodeUnusable.ToString(),
+        //                        SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
+        //                        Pool = azureBatchJobAndTaskState.Pool
+        //                    };
+        //                }
 
-                        if (azureBatchJobAndTaskState.NodeState == ComputeNodeState.Preempted)
-                        {
-                            return new CombinedBatchTaskInfo
-                            {
-                                BatchTaskState = BatchTaskState.NodePreempted,
-                                FailureReason = BatchTaskState.NodePreempted.ToString(),
-                                SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
-                                Pool = azureBatchJobAndTaskState.Pool
-                            };
-                        }
+        //                if (azureBatchJobAndTaskState.NodeState == ComputeNodeState.Preempted)
+        //                {
+        //                    return new CombinedBatchTaskInfo
+        //                    {
+        //                        BatchTaskState = BatchTaskState.NodePreempted,
+        //                        FailureReason = BatchTaskState.NodePreempted.ToString(),
+        //                        SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
+        //                        Pool = azureBatchJobAndTaskState.Pool
+        //                    };
+        //                }
 
-                        if (azureBatchJobAndTaskState.NodeErrorCode is not null)
-                        {
-                            if (azureBatchJobAndTaskState.NodeErrorCode == TaskFailureInformationCodes.DiskFull)
-                            {
-                                return new CombinedBatchTaskInfo
-                                {
-                                    BatchTaskState = BatchTaskState.NodeFailedDuringStartupOrExecution,
-                                    FailureReason = azureBatchJobAndTaskState.NodeErrorCode,
-                                    SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
-                                    Pool = azureBatchJobAndTaskState.Pool
-                                };
-                            }
-                            else
-                            {
-                                return new CombinedBatchTaskInfo
-                                {
-                                    BatchTaskState = BatchTaskState.NodeFailedDuringStartupOrExecution,
-                                    FailureReason = BatchTaskState.NodeFailedDuringStartupOrExecution.ToString(),
-                                    SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
-                                    Pool = azureBatchJobAndTaskState.Pool
-                                };
-                            }
-                        }
+        //                if (azureBatchJobAndTaskState.NodeErrorCode is not null)
+        //                {
+        //                    if (azureBatchJobAndTaskState.NodeErrorCode == TaskFailureInformationCodes.DiskFull)
+        //                    {
+        //                        return new CombinedBatchTaskInfo
+        //                        {
+        //                            BatchTaskState = BatchTaskState.NodeFailedDuringStartupOrExecution,
+        //                            FailureReason = azureBatchJobAndTaskState.NodeErrorCode,
+        //                            SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
+        //                            Pool = azureBatchJobAndTaskState.Pool
+        //                        };
+        //                    }
+        //                    else
+        //                    {
+        //                        return new CombinedBatchTaskInfo
+        //                        {
+        //                            BatchTaskState = BatchTaskState.NodeFailedDuringStartupOrExecution,
+        //                            FailureReason = BatchTaskState.NodeFailedDuringStartupOrExecution.ToString(),
+        //                            SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
+        //                            Pool = azureBatchJobAndTaskState.Pool
+        //                        };
+        //                    }
+        //                }
 
-                        break;
-                    }
-                case JobState.Terminating:
-                case JobState.Completed:
-                    break;
-                default:
-                    throw new Exception($"Found batch job {tesTask.Id} in unexpected state: {azureBatchJobAndTaskState.JobState}");
-            }
+        //                break;
+        //            }
+        //        case JobState.Terminating:
+        //        case JobState.Completed:
+        //            break;
+        //        default:
+        //            throw new Exception($"Found batch job {tesTask.Id} in unexpected state: {azureBatchJobAndTaskState.JobState}");
+        //    }
 
-            switch (azureBatchJobAndTaskState.TaskState)
-            {
-                case null:
-                    return new CombinedBatchTaskInfo
-                    {
-                        BatchTaskState = BatchTaskState.MissingBatchTask,
-                        FailureReason = BatchTaskState.MissingBatchTask.ToString(),
-                        Pool = azureBatchJobAndTaskState.Pool
-                    };
-                case TaskState.Active:
-                case TaskState.Preparing:
-                    return new CombinedBatchTaskInfo
-                    {
-                        BatchTaskState = BatchTaskState.Initializing,
-                        Pool = azureBatchJobAndTaskState.Pool
-                    };
-                case TaskState.Running:
-                    return new CombinedBatchTaskInfo
-                    {
-                        BatchTaskState = BatchTaskState.Running,
-                        Pool = azureBatchJobAndTaskState.Pool
-                    };
-                case TaskState.Completed:
-                    if (azureBatchJobAndTaskState.TaskExitCode == 0 && azureBatchJobAndTaskState.TaskFailureInformation is null)
-                    {
-                        var metrics = await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask, cancellationToken);
+        //    switch (azureBatchJobAndTaskState.TaskState)
+        //    {
+        //        case null:
+        //            return new CombinedBatchTaskInfo
+        //            {
+        //                BatchTaskState = BatchTaskState.MissingBatchTask,
+        //                FailureReason = BatchTaskState.MissingBatchTask.ToString(),
+        //                Pool = azureBatchJobAndTaskState.Pool
+        //            };
+        //        case TaskState.Active:
+        //        case TaskState.Preparing:
+        //            return new CombinedBatchTaskInfo
+        //            {
+        //                BatchTaskState = BatchTaskState.Initializing,
+        //                Pool = azureBatchJobAndTaskState.Pool
+        //            };
+        //        case TaskState.Running:
+        //            return new CombinedBatchTaskInfo
+        //            {
+        //                BatchTaskState = BatchTaskState.Running,
+        //                Pool = azureBatchJobAndTaskState.Pool
+        //            };
+        //        case TaskState.Completed:
+        //            if (azureBatchJobAndTaskState.TaskExitCode == 0 && azureBatchJobAndTaskState.TaskFailureInformation is null)
+        //            {
+        //                var metrics = await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask, cancellationToken);
 
-                        return new CombinedBatchTaskInfo
-                        {
-                            BatchTaskState = BatchTaskState.CompletedSuccessfully,
-                            BatchTaskExitCode = azureBatchJobAndTaskState.TaskExitCode,
-                            BatchTaskStartTime = metrics.TaskStartTime ?? azureBatchJobAndTaskState.TaskStartTime,
-                            BatchTaskEndTime = metrics.TaskEndTime ?? azureBatchJobAndTaskState.TaskEndTime,
-                            BatchNodeMetrics = metrics.BatchNodeMetrics,
-                            CromwellRcCode = metrics.CromwellRcCode,
-                            Pool = azureBatchJobAndTaskState.Pool
-                        };
-                    }
-                    else
-                    {
-                        logger.LogError("Task {TesTask} failed. ExitCode: {TaskExitCode}, BatchJobInfo: {BatchJobInfo}", tesTask.Id, azureBatchJobAndTaskState.TaskExitCode, JsonConvert.SerializeObject(azureBatchJobAndTaskState));
+        //                return new CombinedBatchTaskInfo
+        //                {
+        //                    BatchTaskState = BatchTaskState.CompletedSuccessfully,
+        //                    BatchTaskExitCode = azureBatchJobAndTaskState.TaskExitCode,
+        //                    BatchTaskStartTime = metrics.TaskStartTime ?? azureBatchJobAndTaskState.TaskStartTime,
+        //                    BatchTaskEndTime = metrics.TaskEndTime ?? azureBatchJobAndTaskState.TaskEndTime,
+        //                    BatchNodeMetrics = metrics.BatchNodeMetrics,
+        //                    CromwellRcCode = metrics.CromwellRcCode,
+        //                    Pool = azureBatchJobAndTaskState.Pool
+        //                };
+        //            }
+        //            else
+        //            {
+        //                logger.LogError("Task {TesTask} failed. ExitCode: {TaskExitCode}, BatchJobInfo: {BatchJobInfo}", tesTask.Id, azureBatchJobAndTaskState.TaskExitCode, JsonConvert.SerializeObject(azureBatchJobAndTaskState));
 
-                        return new CombinedBatchTaskInfo
-                        {
-                            BatchTaskState = BatchTaskState.CompletedWithErrors,
-                            FailureReason = azureBatchJobAndTaskState.TaskFailureInformation?.Code,
-                            BatchTaskExitCode = azureBatchJobAndTaskState.TaskExitCode,
-                            BatchTaskStartTime = azureBatchJobAndTaskState.TaskStartTime,
-                            BatchTaskEndTime = azureBatchJobAndTaskState.TaskEndTime,
-                            SystemLogItems = Enumerable.Empty<string>()
-                                .Append($"Batch task ExitCode: {azureBatchJobAndTaskState.TaskExitCode}, Failure message: {azureBatchJobAndTaskState.TaskFailureInformation?.Message}")
-                                .Concat(azureBatchJobAndTaskState.TaskFailureInformation?.Details?.Select(d => $"{d.Name}: {d.Value}") ?? Enumerable.Empty<string>()),
-                            Pool = azureBatchJobAndTaskState.Pool
-                        };
-                    }
-                default:
-                    throw new Exception($"Found batch task {tesTask.Id} in unexpected state: {azureBatchJobAndTaskState.TaskState}");
-            }
-        }
+        //                return new CombinedBatchTaskInfo
+        //                {
+        //                    BatchTaskState = BatchTaskState.CompletedWithErrors,
+        //                    FailureReason = azureBatchJobAndTaskState.TaskFailureInformation?.Code,
+        //                    BatchTaskExitCode = azureBatchJobAndTaskState.TaskExitCode,
+        //                    BatchTaskStartTime = azureBatchJobAndTaskState.TaskStartTime,
+        //                    BatchTaskEndTime = azureBatchJobAndTaskState.TaskEndTime,
+        //                    SystemLogItems = Enumerable.Empty<string>()
+        //                        .Append($"Batch task ExitCode: {azureBatchJobAndTaskState.TaskExitCode}, Failure message: {azureBatchJobAndTaskState.TaskFailureInformation?.Message}")
+        //                        .Concat(azureBatchJobAndTaskState.TaskFailureInformation?.Details?.Select(d => $"{d.Name}: {d.Value}") ?? Enumerable.Empty<string>()),
+        //                    Pool = azureBatchJobAndTaskState.Pool
+        //                };
+        //            }
+        //        default:
+        //            throw new Exception($"Found batch task {tesTask.Id} in unexpected state: {azureBatchJobAndTaskState.TaskState}");
+        //    }
+        //}
 
         ///// <summary>
         ///// Transitions the <see cref="TesTask"/> to the new state, based on the rules defined in the tesTaskStateTransitions list.

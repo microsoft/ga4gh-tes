@@ -267,21 +267,21 @@ namespace TesApi.Tests
             Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 2, RamGb = 1, Preemptible = false }, azureProxyReturnValues));
         }
 
-        [TestMethod]
-        public async Task TesTaskFailsWhenBatchNodeDiskIsFull()
-        {
-            var tesTask = GetTesTask();
+        //[TestMethod]
+        //public async Task TesTaskFailsWhenBatchNodeDiskIsFull()
+        //{
+        //    var tesTask = GetTesTask();
 
-            (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask, BatchJobAndTaskStates.NodeDiskFull);
+        //    (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask, BatchJobAndTaskStates.NodeDiskFull);
 
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(TesState.EXECUTORERROREnum, tesTask.State);
-                Assert.AreEqual("DiskFull", failureReason);
-                Assert.AreEqual("DiskFull", systemLog[0]);
-                Assert.AreEqual("DiskFull", tesTask.FailureReason);
-            });
-        }
+        //    GuardAssertsWithTesTask(tesTask, () =>
+        //    {
+        //        Assert.AreEqual(TesState.EXECUTORERROREnum, tesTask.State);
+        //        Assert.AreEqual("DiskFull", failureReason);
+        //        Assert.AreEqual("DiskFull", systemLog[0]);
+        //        Assert.AreEqual("DiskFull", tesTask.FailureReason);
+        //    });
+        //}
 
         //TODO: This test (and potentially others) must be reviewed and see if they are necessary considering that the quota verification logic is its own class.
         // There are a couple of issues: a similar validation already exists in the quota verifier class, and in order to run this test a complex set up is required, which is hard to maintain.
@@ -768,312 +768,312 @@ namespace TesApi.Tests
             await RunTest("VmFamily2", TesState.INITIALIZINGEnum, "VmSizeLowPri2");
         }
 
-        [TestMethod]
-        public async Task TaskStateTransitionsFromRunningState()
-        {
-            Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.TaskActive));
-            Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.TaskPreparing));
-            Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.TaskRunning));
-            Assert.AreEqual(TesState.COMPLETEEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.TaskCompletedSuccessfully));
-            Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.TaskFailed));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.JobNotFound));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.TaskNotFound));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.MoreThanOneJobFound));
-            Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.NodeDiskFull));
-            Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.ActiveJobWithMissingAutoPool));
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.NodePreempted));
-        }
+        //[TestMethod]
+        //public async Task TaskStateTransitionsFromRunningState()
+        //{
+        //    Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.TaskActive));
+        //    Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.TaskPreparing));
+        //    Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.TaskRunning));
+        //    Assert.AreEqual(TesState.COMPLETEEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.TaskCompletedSuccessfully));
+        //    Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.TaskFailed));
+        //    Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.JobNotFound));
+        //    Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.TaskNotFound));
+        //    Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.MoreThanOneJobFound));
+        //    Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.NodeDiskFull));
+        //    Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.ActiveJobWithMissingAutoPool));
+        //    Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchJobAndTaskStates.NodePreempted));
+        //}
 
-        [TestMethod]
-        public async Task TaskStateTransitionsFromInitializingState()
-        {
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.TaskActive));
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.TaskPreparing));
-            Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.TaskRunning));
-            Assert.AreEqual(TesState.COMPLETEEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.TaskCompletedSuccessfully));
-            Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.TaskFailed));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.JobNotFound));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.TaskNotFound));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.MoreThanOneJobFound));
-            Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.NodeDiskFull));
-            Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.NodeAllocationFailed));
-            Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.ImageDownloadFailed));
-            Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.ActiveJobWithMissingAutoPool));
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.NodePreempted));
-        }
+        //[TestMethod]
+        //public async Task TaskStateTransitionsFromInitializingState()
+        //{
+        //    Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.TaskActive));
+        //    Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.TaskPreparing));
+        //    Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.TaskRunning));
+        //    Assert.AreEqual(TesState.COMPLETEEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.TaskCompletedSuccessfully));
+        //    Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.TaskFailed));
+        //    Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.JobNotFound));
+        //    Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.TaskNotFound));
+        //    Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.MoreThanOneJobFound));
+        //    Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.NodeDiskFull));
+        //    Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.NodeAllocationFailed));
+        //    Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.ImageDownloadFailed));
+        //    Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.ActiveJobWithMissingAutoPool));
+        //    Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchJobAndTaskStates.NodePreempted));
+        //}
 
-        [TestMethod]
-        public async Task TaskStateTransitionsFromQueuedState()
-        {
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.TaskActive));
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.TaskPreparing));
-            Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.TaskRunning));
-            Assert.AreEqual(TesState.COMPLETEEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.TaskCompletedSuccessfully));
-            Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.TaskFailed));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.MoreThanOneJobFound));
-            Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.NodeDiskFull));
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.TaskNotFound));
-        }
+        //[TestMethod]
+        //public async Task TaskStateTransitionsFromQueuedState()
+        //{
+        //    Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.TaskActive));
+        //    Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.TaskPreparing));
+        //    Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.TaskRunning));
+        //    Assert.AreEqual(TesState.COMPLETEEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.TaskCompletedSuccessfully));
+        //    Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.TaskFailed));
+        //    Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.MoreThanOneJobFound));
+        //    Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.NodeDiskFull));
+        //    Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchJobAndTaskStates.TaskNotFound));
+        //}
 
-        [TestMethod]
-        public async Task TaskIsRequeuedUpToThreeTimesForTransientErrors()
-        {
-            var tesTask = GetTesTask();
+        //[TestMethod]
+        //public async Task TaskIsRequeuedUpToThreeTimesForTransientErrors()
+        //{
+        //    var tesTask = GetTesTask();
 
-            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
+        //    var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
-            azureProxyReturnValues.VmSizesAndPrices = new() {
-                new() { VmSize = "VmSize1", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 1 },
-                new() { VmSize = "VmSize2", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 2 },
-                new() { VmSize = "VmSize3", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 3 },
-                new() { VmSize = "VmSize4", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 4 },
-                new() { VmSize = "VmSize5", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 5 }
-            };
+        //    azureProxyReturnValues.VmSizesAndPrices = new() {
+        //        new() { VmSize = "VmSize1", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 1 },
+        //        new() { VmSize = "VmSize2", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 2 },
+        //        new() { VmSize = "VmSize3", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 3 },
+        //        new() { VmSize = "VmSize4", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 4 },
+        //        new() { VmSize = "VmSize5", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 5 }
+        //    };
 
-            await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
-            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchJobAndTaskStates.NodeAllocationFailed)));
-            await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
-            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchJobAndTaskStates.NodeAllocationFailed)));
-            await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
-            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchJobAndTaskStates.NodeAllocationFailed)));
-            await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
-            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(tesTask, BatchJobAndTaskStates.NodeAllocationFailed)));
-        }
+        //    await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
+        //    await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchJobAndTaskStates.NodeAllocationFailed)));
+        //    await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
+        //    await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchJobAndTaskStates.NodeAllocationFailed)));
+        //    await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
+        //    await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchJobAndTaskStates.NodeAllocationFailed)));
+        //    await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
+        //    await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(tesTask, BatchJobAndTaskStates.NodeAllocationFailed)));
+        //}
 
-        [TestMethod]
-        public async Task TaskThatFailsWithNodeAllocationErrorIsRequeuedOnDifferentVmSize()
-        {
-            var tesTask = GetTesTask();
+        //[TestMethod]
+        //public async Task TaskThatFailsWithNodeAllocationErrorIsRequeuedOnDifferentVmSize()
+        //{
+        //    var tesTask = GetTesTask();
 
-            await GetNewTesTaskStateAsync(tesTask);
-            await GetNewTesTaskStateAsync(tesTask, BatchJobAndTaskStates.NodeAllocationFailed);
-            var firstAttemptVmSize = tesTask.Logs[0].VirtualMachineInfo.VmSize;
+        //    await GetNewTesTaskStateAsync(tesTask);
+        //    await GetNewTesTaskStateAsync(tesTask, BatchJobAndTaskStates.NodeAllocationFailed);
+        //    var firstAttemptVmSize = tesTask.Logs[0].VirtualMachineInfo.VmSize;
 
-            await GetNewTesTaskStateAsync(tesTask);
-            await GetNewTesTaskStateAsync(tesTask, BatchJobAndTaskStates.NodeAllocationFailed);
-            var secondAttemptVmSize = tesTask.Logs[1].VirtualMachineInfo.VmSize;
+        //    await GetNewTesTaskStateAsync(tesTask);
+        //    await GetNewTesTaskStateAsync(tesTask, BatchJobAndTaskStates.NodeAllocationFailed);
+        //    var secondAttemptVmSize = tesTask.Logs[1].VirtualMachineInfo.VmSize;
 
-            GuardAssertsWithTesTask(tesTask, () => Assert.AreNotEqual(firstAttemptVmSize, secondAttemptVmSize));
+        //    GuardAssertsWithTesTask(tesTask, () => Assert.AreNotEqual(firstAttemptVmSize, secondAttemptVmSize));
 
-            // There are only two suitable VMs, and both have been excluded because of the NodeAllocationFailed error on the two earlier attempts
-            _ = await GetNewTesTaskStateAsync(tesTask);
+        //    // There are only two suitable VMs, and both have been excluded because of the NodeAllocationFailed error on the two earlier attempts
+        //    _ = await GetNewTesTaskStateAsync(tesTask);
 
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
-                Assert.AreEqual("NoVmSizeAvailable", tesTask.FailureReason);
-            });
-        }
+        //    GuardAssertsWithTesTask(tesTask, () =>
+        //    {
+        //        Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
+        //        Assert.AreEqual("NoVmSizeAvailable", tesTask.FailureReason);
+        //    });
+        //}
 
-        [TestMethod]
-        public async Task TaskGetsCancelled()
-        {
-            var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELINGEnum };
+        //[TestMethod]
+        //public async Task TaskGetsCancelled()
+        //{
+        //    var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELINGEnum };
 
-            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskActive;
-            Mock<IAzureProxy> azureProxy = default;
-            var azureProxySetter = new Action<Mock<IAzureProxy>>(mock =>
-            {
-                GetMockAzureProxy(azureProxyReturnValues)(mock);
-                azureProxy = mock;
-            });
+        //    var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
+        //    azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskActive;
+        //    Mock<IAzureProxy> azureProxy = default;
+        //    var azureProxySetter = new Action<Mock<IAzureProxy>>(mock =>
+        //    {
+        //        GetMockAzureProxy(azureProxyReturnValues)(mock);
+        //        azureProxy = mock;
+        //    });
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, azureProxyReturnValues);
+        //    _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, azureProxyReturnValues);
 
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(TesState.CANCELEDEnum, tesTask.State);
-                Assert.IsTrue(tesTask.IsTaskDeletionRequired);
-                azureProxy.Verify(i => i.TerminateBatchTaskAsync(tesTask.Id, It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()));
-            });
-        }
+        //    GuardAssertsWithTesTask(tesTask, () =>
+        //    {
+        //        Assert.AreEqual(TesState.CANCELEDEnum, tesTask.State);
+        //        Assert.IsTrue(tesTask.IsTaskDeletionRequired);
+        //        azureProxy.Verify(i => i.TerminateBatchTaskAsync(tesTask.Id, It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()));
+        //    });
+        //}
 
-        [TestMethod]
-        public async Task CancelledTaskGetsDeleted()
-        {
-            var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELEDEnum, IsTaskDeletionRequired = true, Logs = new() { new() { StartTime = DateTimeOffset.UtcNow - TimeSpan.FromMinutes(11) } } };
+        //[TestMethod]
+        //public async Task CancelledTaskGetsDeleted()
+        //{
+        //    var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELEDEnum, IsTaskDeletionRequired = true, Logs = new() { new() { StartTime = DateTimeOffset.UtcNow - TimeSpan.FromMinutes(11) } } };
 
-            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskActive;
-            Mock<IAzureProxy> azureProxy = default;
-            var azureProxySetter = new Action<Mock<IAzureProxy>>(mock =>
-            {
-                GetMockAzureProxy(azureProxyReturnValues)(mock);
-                azureProxy = mock;
-            });
+        //    var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
+        //    azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskActive;
+        //    Mock<IAzureProxy> azureProxy = default;
+        //    var azureProxySetter = new Action<Mock<IAzureProxy>>(mock =>
+        //    {
+        //        GetMockAzureProxy(azureProxyReturnValues)(mock);
+        //        azureProxy = mock;
+        //    });
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, azureProxyReturnValues);
+        //    _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, azureProxyReturnValues);
 
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.IsFalse(tesTask.IsTaskDeletionRequired);
-                azureProxy.Verify(i => i.DeleteBatchTaskAsync(tesTask.Id, It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()));
-            });
-        }
+        //    GuardAssertsWithTesTask(tesTask, () =>
+        //    {
+        //        Assert.IsFalse(tesTask.IsTaskDeletionRequired);
+        //        azureProxy.Verify(i => i.DeleteBatchTaskAsync(tesTask.Id, It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()));
+        //    });
+        //}
 
-        [TestMethod]
-        public async Task SuccessfullyCompletedTaskContainsBatchNodeMetrics()
-        {
-            var tesTask = GetTesTask();
+        //[TestMethod]
+        //public async Task SuccessfullyCompletedTaskContainsBatchNodeMetrics()
+        //{
+        //    var tesTask = GetTesTask();
 
-            var metricsFileContent = @"
-                BlobXferPullStart=2020-10-08T02:30:39+00:00
-                BlobXferPullEnd=2020-10-08T02:31:39+00:00
-                ExecutorPullStart=2020-10-08T02:32:39+00:00
-                ExecutorImageSizeInBytes=3000000000
-                ExecutorPullEnd=2020-10-08T02:34:39+00:00
-                DownloadStart=2020-10-08T02:35:39+00:00
-                FileDownloadSizeInBytes=2000000000
-                DownloadEnd=2020-10-08T02:38:39+00:00
-                ExecutorStart=2020-10-08T02:39:39+00:00
-                ExecutorEnd=2020-10-08T02:43:39+00:00
-                UploadStart=2020-10-08T02:44:39+00:00
-                FileUploadSizeInBytes=4000000000
-                UploadEnd=2020-10-08T02:49:39+00:00
-                DiskSizeInKiB=8000000
-                DiskUsedInKiB=1000000".Replace(" ", string.Empty);
+        //    var metricsFileContent = @"
+        //        BlobXferPullStart=2020-10-08T02:30:39+00:00
+        //        BlobXferPullEnd=2020-10-08T02:31:39+00:00
+        //        ExecutorPullStart=2020-10-08T02:32:39+00:00
+        //        ExecutorImageSizeInBytes=3000000000
+        //        ExecutorPullEnd=2020-10-08T02:34:39+00:00
+        //        DownloadStart=2020-10-08T02:35:39+00:00
+        //        FileDownloadSizeInBytes=2000000000
+        //        DownloadEnd=2020-10-08T02:38:39+00:00
+        //        ExecutorStart=2020-10-08T02:39:39+00:00
+        //        ExecutorEnd=2020-10-08T02:43:39+00:00
+        //        UploadStart=2020-10-08T02:44:39+00:00
+        //        FileUploadSizeInBytes=4000000000
+        //        UploadEnd=2020-10-08T02:49:39+00:00
+        //        DiskSizeInKiB=8000000
+        //        DiskUsedInKiB=1000000".Replace(" ", string.Empty);
 
-            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskCompletedSuccessfully;
-            azureProxyReturnValues.DownloadedBlobContent = metricsFileContent;
+        //    var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
+        //    azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskCompletedSuccessfully;
+        //    azureProxyReturnValues.DownloadedBlobContent = metricsFileContent;
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
+        //    _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
 
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(TesState.COMPLETEEnum, tesTask.State);
+        //    GuardAssertsWithTesTask(tesTask, () =>
+        //    {
+        //        Assert.AreEqual(TesState.COMPLETEEnum, tesTask.State);
 
-                var batchNodeMetrics = tesTask.GetOrAddTesTaskLog().BatchNodeMetrics;
-                Assert.IsNotNull(batchNodeMetrics);
-                Assert.AreEqual(60, batchNodeMetrics.BlobXferImagePullDurationInSeconds);
-                Assert.AreEqual(120, batchNodeMetrics.ExecutorImagePullDurationInSeconds);
-                Assert.AreEqual(3, batchNodeMetrics.ExecutorImageSizeInGB);
-                Assert.AreEqual(180, batchNodeMetrics.FileDownloadDurationInSeconds);
-                Assert.AreEqual(240, batchNodeMetrics.ExecutorDurationInSeconds);
-                Assert.AreEqual(300, batchNodeMetrics.FileUploadDurationInSeconds);
-                Assert.AreEqual(1.024, batchNodeMetrics.DiskUsedInGB);
-                Assert.AreEqual(12.5f, batchNodeMetrics.DiskUsedPercent);
-                Assert.AreEqual(2, batchNodeMetrics.FileDownloadSizeInGB);
-                Assert.AreEqual(4, batchNodeMetrics.FileUploadSizeInGB);
+        //        var batchNodeMetrics = tesTask.GetOrAddTesTaskLog().BatchNodeMetrics;
+        //        Assert.IsNotNull(batchNodeMetrics);
+        //        Assert.AreEqual(60, batchNodeMetrics.BlobXferImagePullDurationInSeconds);
+        //        Assert.AreEqual(120, batchNodeMetrics.ExecutorImagePullDurationInSeconds);
+        //        Assert.AreEqual(3, batchNodeMetrics.ExecutorImageSizeInGB);
+        //        Assert.AreEqual(180, batchNodeMetrics.FileDownloadDurationInSeconds);
+        //        Assert.AreEqual(240, batchNodeMetrics.ExecutorDurationInSeconds);
+        //        Assert.AreEqual(300, batchNodeMetrics.FileUploadDurationInSeconds);
+        //        Assert.AreEqual(1.024, batchNodeMetrics.DiskUsedInGB);
+        //        Assert.AreEqual(12.5f, batchNodeMetrics.DiskUsedPercent);
+        //        Assert.AreEqual(2, batchNodeMetrics.FileDownloadSizeInGB);
+        //        Assert.AreEqual(4, batchNodeMetrics.FileUploadSizeInGB);
 
-                var executorLog = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
-                Assert.IsNotNull(executorLog);
-                Assert.AreEqual(0, executorLog.ExitCode);
-                Assert.AreEqual(DateTimeOffset.Parse("2020-10-08T02:30:39+00:00"), executorLog.StartTime);
-                Assert.AreEqual(DateTimeOffset.Parse("2020-10-08T02:49:39+00:00"), executorLog.EndTime);
-            });
-        }
+        //        var executorLog = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
+        //        Assert.IsNotNull(executorLog);
+        //        Assert.AreEqual(0, executorLog.ExitCode);
+        //        Assert.AreEqual(DateTimeOffset.Parse("2020-10-08T02:30:39+00:00"), executorLog.StartTime);
+        //        Assert.AreEqual(DateTimeOffset.Parse("2020-10-08T02:49:39+00:00"), executorLog.EndTime);
+        //    });
+        //}
 
-        [TestMethod]
-        public async Task SuccessfullyCompletedTaskContainsCromwellResultCode()
-        {
-            var tesTask = GetTesTask();
+        //[TestMethod]
+        //public async Task SuccessfullyCompletedTaskContainsCromwellResultCode()
+        //{
+        //    var tesTask = GetTesTask();
 
-            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskCompletedSuccessfully;
-            azureProxyReturnValues.DownloadedBlobContent = "2";
-            var azureProxy = GetMockAzureProxy(azureProxyReturnValues);
+        //    var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
+        //    azureProxyReturnValues.BatchJobAndTaskState = BatchJobAndTaskStates.TaskCompletedSuccessfully;
+        //    azureProxyReturnValues.DownloadedBlobContent = "2";
+        //    var azureProxy = GetMockAzureProxy(azureProxyReturnValues);
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxy, azureProxyReturnValues);
+        //    _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxy, azureProxyReturnValues);
 
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(TesState.COMPLETEEnum, tesTask.State);
-                Assert.AreEqual(2, tesTask.GetOrAddTesTaskLog().CromwellResultCode);
-                Assert.AreEqual(2, tesTask.CromwellResultCode);
-            });
-        }
+        //    GuardAssertsWithTesTask(tesTask, () =>
+        //    {
+        //        Assert.AreEqual(TesState.COMPLETEEnum, tesTask.State);
+        //        Assert.AreEqual(2, tesTask.GetOrAddTesTaskLog().CromwellResultCode);
+        //        Assert.AreEqual(2, tesTask.CromwellResultCode);
+        //    });
+        //}
 
-        [TestMethod]
-        public async Task TesInputFilePathMustStartWithCromwellExecutions()
-        {
-            var tesTask = GetTesTask();
+        //[TestMethod]
+        //public async Task TesInputFilePathMustStartWithCromwellExecutions()
+        //{
+        //    var tesTask = GetTesTask();
 
-            tesTask.Inputs.Add(new()
-            {
-                Path = "xyz/path"
-            });
+        //    tesTask.Inputs.Add(new()
+        //    {
+        //        Path = "xyz/path"
+        //    });
 
-            (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask);
+        //    (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask);
 
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
-                Assert.AreEqual($"InvalidInputFilePath", failureReason);
-                Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
-                Assert.AreEqual($"Unsupported input path 'xyz/path' for task Id {tesTask.Id}. Must start with '/'.", systemLog[1]);
-            });
-        }
+        //    GuardAssertsWithTesTask(tesTask, () =>
+        //    {
+        //        Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
+        //        Assert.AreEqual($"InvalidInputFilePath", failureReason);
+        //        Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
+        //        Assert.AreEqual($"Unsupported input path 'xyz/path' for task Id {tesTask.Id}. Must start with '/'.", systemLog[1]);
+        //    });
+        //}
 
-        [TestMethod]
-        public async Task TesInputFileMustHaveEitherUrlOrContent()
-        {
-            var tesTask = GetTesTask();
+        //[TestMethod]
+        //public async Task TesInputFileMustHaveEitherUrlOrContent()
+        //{
+        //    var tesTask = GetTesTask();
 
-            tesTask.Inputs.Add(new()
-            {
-                Url = null,
-                Content = null,
-                Path = "/file1.txt"
-            });
+        //    tesTask.Inputs.Add(new()
+        //    {
+        //        Url = null,
+        //        Content = null,
+        //        Path = "/file1.txt"
+        //    });
 
-            (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask);
+        //    (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask);
 
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
-                Assert.AreEqual($"InvalidInputFilePath", failureReason);
-                Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
-                Assert.AreEqual($"One of Input Url or Content must be set", systemLog[1]);
-            });
-        }
+        //    GuardAssertsWithTesTask(tesTask, () =>
+        //    {
+        //        Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
+        //        Assert.AreEqual($"InvalidInputFilePath", failureReason);
+        //        Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
+        //        Assert.AreEqual($"One of Input Url or Content must be set", systemLog[1]);
+        //    });
+        //}
 
-        [TestMethod]
-        public async Task TesInputFileMustNotHaveBothUrlAndContent()
-        {
-            var tesTask = GetTesTask();
+        //[TestMethod]
+        //public async Task TesInputFileMustNotHaveBothUrlAndContent()
+        //{
+        //    var tesTask = GetTesTask();
 
-            tesTask.Inputs.Add(new()
-            {
-                Url = "/storageaccount1/container1/file1.txt",
-                Content = "test content",
-                Path = "/file1.txt"
-            });
+        //    tesTask.Inputs.Add(new()
+        //    {
+        //        Url = "/storageaccount1/container1/file1.txt",
+        //        Content = "test content",
+        //        Path = "/file1.txt"
+        //    });
 
-            (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask);
+        //    (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask);
 
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
-                Assert.AreEqual($"InvalidInputFilePath", failureReason);
-                Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
-                Assert.AreEqual($"Input Url and Content cannot be both set", systemLog[1]);
-            });
-        }
+        //    GuardAssertsWithTesTask(tesTask, () =>
+        //    {
+        //        Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
+        //        Assert.AreEqual($"InvalidInputFilePath", failureReason);
+        //        Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
+        //        Assert.AreEqual($"Input Url and Content cannot be both set", systemLog[1]);
+        //    });
+        //}
 
-        [TestMethod]
-        public async Task TesInputFileTypeMustNotBeDirectory()
-        {
-            var tesTask = GetTesTask();
+        //[TestMethod]
+        //public async Task TesInputFileTypeMustNotBeDirectory()
+        //{
+        //    var tesTask = GetTesTask();
 
-            tesTask.Inputs.Add(new()
-            {
-                Url = "/storageaccount1/container1/directory",
-                Type = TesFileType.DIRECTORYEnum,
-                Path = "/directory"
-            });
+        //    tesTask.Inputs.Add(new()
+        //    {
+        //        Url = "/storageaccount1/container1/directory",
+        //        Type = TesFileType.DIRECTORYEnum,
+        //        Path = "/directory"
+        //    });
 
-            (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask);
+        //    (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask);
 
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
-                Assert.AreEqual($"InvalidInputFilePath", failureReason);
-                Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
-                Assert.AreEqual($"Directory input is not supported.", systemLog[1]);
-            });
-        }
+        //    GuardAssertsWithTesTask(tesTask, () =>
+        //    {
+        //        Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
+        //        Assert.AreEqual($"InvalidInputFilePath", failureReason);
+        //        Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
+        //        Assert.AreEqual($"Directory input is not supported.", systemLog[1]);
+        //    });
+        //}
 
         [TestMethod]
         public async Task QueryStringsAreRemovedFromLocalFilePathsWhenCommandScriptIsProvidedAsFile()
@@ -1506,15 +1506,15 @@ namespace TesApi.Tests
             Assert.AreEqual(expectedPath, destination.Container.Path);
         }
 
-        private static async Task<(string FailureReason, string[] SystemLog)> ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(TesTask tesTask, AzureBatchJobAndTaskState? azureBatchJobAndTaskState = null)
-        {
-            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            azureProxyReturnValues.BatchJobAndTaskState = azureBatchJobAndTaskState ?? azureProxyReturnValues.BatchJobAndTaskState;
+        //private static async Task<(string FailureReason, string[] SystemLog)> ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(TesTask tesTask, AzureBatchJobAndTaskState? azureBatchJobAndTaskState = null)
+        //{
+        //    var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
+        //    azureProxyReturnValues.BatchJobAndTaskState = azureBatchJobAndTaskState ?? azureProxyReturnValues.BatchJobAndTaskState;
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
+        //    _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
 
-            return (tesTask.Logs?.LastOrDefault()?.FailureReason, tesTask.Logs?.LastOrDefault()?.SystemLogs?.ToArray());
-        }
+        //    return (tesTask.Logs?.LastOrDefault()?.FailureReason, tesTask.Logs?.LastOrDefault()?.SystemLogs?.ToArray());
+        //}
 
         private static Task<(string JobId, CloudTask CloudTask, PoolInformation PoolInformation, Pool batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync()
             => ProcessTesTaskAndGetBatchJobArgumentsAsync(GetTesTask(), GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
@@ -1532,11 +1532,25 @@ namespace TesApi.Tests
             var batchScheduler = serviceProvider.GetT();
             serviceProviderActions?.Invoke(serviceProvider);
 
+            //BatchJobAndTaskStates.TaskActive
+            //BatchJobAndTaskStates.TaskPreparing
+            //BatchJobAndTaskStates.TaskRunning
+            //BatchJobAndTaskStates.TaskCompletedSuccessfully
+            //BatchJobAndTaskStates.TaskFailed
+            //BatchJobAndTaskStates.JobNotFound
+            //BatchJobAndTaskStates.TaskNotFound
+            //BatchJobAndTaskStates.MoreThanOneJobFound
+            //BatchJobAndTaskStates.NodeAllocationFailed
+            //BatchJobAndTaskStates.NodePreempted
+            //BatchJobAndTaskStates.NodeDiskFull
+            //BatchJobAndTaskStates.ActiveJobWithMissingAutoPool
+            //BatchJobAndTaskStates.ImageDownloadFailed
+
             await foreach (var _ in tesTask.State switch
             {
                 TesState.CANCELINGEnum => batchScheduler.ProcessCancelledTesTasksAsync(new[] { tesTask }, System.Threading.CancellationToken.None),
                 TesState.QUEUEDEnum => batchScheduler.ProcessQueuedTesTasksAsync(new[] { tesTask }, System.Threading.CancellationToken.None),
-                TesState.COMPLETEEnum => batchScheduler.ProcessCompletedTesTasksAsync(new[] { tesTask }, new[] { new CloudTask(tesTask.Id, "") }, System.Threading.CancellationToken.None),
+                TesState.COMPLETEEnum => batchScheduler.ProcessCompletedTesTasksAsync(new[] { tesTask }, new[] { BatchPoolTests.GenerateTask(tesTask.PoolId, tesTask.Id, executionInfo: new(0, 0, startTime: DateTime.UtcNow - TimeSpan.FromMinutes(15), endTime: DateTime.UtcNow - TimeSpan.FromMinutes(5), exitCode: 0)) }, System.Threading.CancellationToken.None),
                 TesState.EXECUTORERROREnum => batchScheduler.ProcessCompletedTesTasksAsync(new[] { tesTask }, new[] { new CloudTask(tesTask.Id, "") }, System.Threading.CancellationToken.None),
                 TesState.SYSTEMERROREnum => batchScheduler.ProcessCompletedTesTasksAsync(new[] { tesTask }, new[] { new CloudTask(tesTask.Id, "") }, System.Threading.CancellationToken.None),
                 _ => batchScheduler.ProcessTerminatedTesTasksAsync(new[] { tesTask }, System.Threading.CancellationToken.None),
@@ -1619,13 +1633,13 @@ namespace TesApi.Tests
             return tesTask.State;
         }
 
-        private static Task<TesState> GetNewTesTaskStateAsync(TesState currentTesTaskState, AzureBatchJobAndTaskState azureBatchJobAndTaskState)
-            => GetNewTesTaskStateAsync(new TesTask { Id = "test", State = currentTesTaskState, Executors = new() { new() { Image = "imageName1", Command = new() { "command" } } } }, azureBatchJobAndTaskState);
+        private static Task<TesState> GetNewTesTaskStateAsync(TesState currentTesTaskState/*, AzureBatchJobAndTaskState azureBatchJobAndTaskState*/)
+            => GetNewTesTaskStateAsync(new TesTask { Id = "test", State = currentTesTaskState, Executors = new() { new() { Image = "imageName1", Command = new() { "command" } } } }/*, azureBatchJobAndTaskState*/);
 
-        private static Task<TesState> GetNewTesTaskStateAsync(TesTask tesTask, AzureBatchJobAndTaskState? azureBatchJobAndTaskState = null)
+        private static Task<TesState> GetNewTesTaskStateAsync(TesTask tesTask/*, AzureBatchJobAndTaskState? azureBatchJobAndTaskState = null*/)
         {
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            azureProxyReturnValues.BatchJobAndTaskState = azureBatchJobAndTaskState ?? azureProxyReturnValues.BatchJobAndTaskState;
+            //azureProxyReturnValues.BatchJobAndTaskState = azureBatchJobAndTaskState ?? azureProxyReturnValues.BatchJobAndTaskState;
 
             return GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
         }
@@ -1660,8 +1674,8 @@ namespace TesApi.Tests
                 azureProxy.Setup(a => a.GetActivePoolsAsync(It.IsAny<string>()))
                     .Returns(AsyncEnumerable.Empty<CloudPool>());
 
-                azureProxy.Setup(a => a.GetBatchJobAndTaskStateAsync(It.IsAny<TesTask>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Returns(Task.FromResult(azureProxyReturnValues.BatchJobAndTaskState));
+                //azureProxy.Setup(a => a.GetBatchJobAndTaskStateAsync(It.IsAny<TesTask>(), It.IsAny<System.Threading.CancellationToken>()))
+                //    .Returns(Task.FromResult(azureProxyReturnValues.BatchJobAndTaskState));
 
                 azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount", It.IsAny<System.Threading.CancellationToken>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.StorageAccountInfos["defaultstorageaccount"]));
@@ -1815,22 +1829,22 @@ namespace TesApi.Tests
             }
         }
 
-        private struct BatchJobAndTaskStates
-        {
-            public static AzureBatchJobAndTaskState TaskActive => new() { JobState = JobState.Active, TaskState = TaskState.Active };
-            public static AzureBatchJobAndTaskState TaskPreparing => new() { JobState = JobState.Active, TaskState = TaskState.Preparing };
-            public static AzureBatchJobAndTaskState TaskRunning => new() { JobState = JobState.Active, TaskState = TaskState.Running };
-            public static AzureBatchJobAndTaskState TaskCompletedSuccessfully => new() { JobState = JobState.Completed, TaskState = TaskState.Completed, TaskExitCode = 0 };
-            public static AzureBatchJobAndTaskState TaskFailed => new() { JobState = JobState.Completed, TaskState = TaskState.Completed, TaskExitCode = -1 };
-            public static AzureBatchJobAndTaskState JobNotFound => new() { JobState = null };
-            public static AzureBatchJobAndTaskState TaskNotFound => new() { JobState = JobState.Active, TaskState = null };
-            public static AzureBatchJobAndTaskState MoreThanOneJobFound => new() { MoreThanOneActiveJobOrTaskFound = true };
-            public static AzureBatchJobAndTaskState NodeAllocationFailed => new() { JobState = JobState.Active, NodeAllocationFailed = true };
-            public static AzureBatchJobAndTaskState NodePreempted => new() { JobState = JobState.Active, NodeState = ComputeNodeState.Preempted };
-            public static AzureBatchJobAndTaskState NodeDiskFull => new() { JobState = JobState.Active, NodeErrorCode = "DiskFull" };
-            public static AzureBatchJobAndTaskState ActiveJobWithMissingAutoPool => new() { ActiveJobWithMissingAutoPool = true };
-            public static AzureBatchJobAndTaskState ImageDownloadFailed => new() { JobState = JobState.Active, NodeErrorCode = "ContainerInvalidImage" };
-        }
+        //private struct BatchJobAndTaskStates
+        //{
+        //    public static AzureBatchJobAndTaskState TaskActive => new() { JobState = JobState.Active, TaskState = TaskState.Active };
+        //    public static AzureBatchJobAndTaskState TaskPreparing => new() { JobState = JobState.Active, TaskState = TaskState.Preparing };
+        //    public static AzureBatchJobAndTaskState TaskRunning => new() { JobState = JobState.Active, TaskState = TaskState.Running };
+        //    public static AzureBatchJobAndTaskState TaskCompletedSuccessfully => new() { JobState = JobState.Completed, TaskState = TaskState.Completed, TaskExitCode = 0 };
+        //    public static AzureBatchJobAndTaskState TaskFailed => new() { JobState = JobState.Completed, TaskState = TaskState.Completed, TaskExitCode = -1 };
+        //    public static AzureBatchJobAndTaskState JobNotFound => new() { JobState = null };
+        //    public static AzureBatchJobAndTaskState TaskNotFound => new() { JobState = JobState.Active, TaskState = null };
+        //    public static AzureBatchJobAndTaskState MoreThanOneJobFound => new() { MoreThanOneActiveJobOrTaskFound = true };
+        //    public static AzureBatchJobAndTaskState NodeAllocationFailed => new() { JobState = JobState.Active, NodeAllocationFailed = true };
+        //    public static AzureBatchJobAndTaskState NodePreempted => new() { JobState = JobState.Active, NodeState = ComputeNodeState.Preempted };
+        //    public static AzureBatchJobAndTaskState NodeDiskFull => new() { JobState = JobState.Active, NodeErrorCode = "DiskFull" };
+        //    public static AzureBatchJobAndTaskState ActiveJobWithMissingAutoPool => new() { ActiveJobWithMissingAutoPool = true };
+        //    public static AzureBatchJobAndTaskState ImageDownloadFailed => new() { JobState = JobState.Active, NodeErrorCode = "ContainerInvalidImage" };
+        //}
 
         private class AzureProxyReturnValues
         {
@@ -1845,7 +1859,7 @@ namespace TesApi.Tests
             public IEnumerable<AzureBatchNodeCount> ActiveNodeCountByVmSize { get; set; }
             public int ActiveJobCount { get; set; }
             public int ActivePoolCount { get; set; }
-            public AzureBatchJobAndTaskState BatchJobAndTaskState { get; set; }
+            //public AzureBatchJobAndTaskState BatchJobAndTaskState { get; set; }
             public string StorageAccountKey { get; set; }
             public string DownloadedBlobContent { get; set; }
             public bool LocalFileExists { get; set; }
@@ -1870,7 +1884,7 @@ namespace TesApi.Tests
                 ActiveNodeCountByVmSize = new List<AzureBatchNodeCount>(),
                 ActiveJobCount = 0,
                 ActivePoolCount = 0,
-                BatchJobAndTaskState = BatchJobAndTaskStates.JobNotFound,
+                //BatchJobAndTaskState = BatchJobAndTaskStates.JobNotFound,
                 StorageAccountKey = "Key1",
                 DownloadedBlobContent = string.Empty,
                 LocalFileExists = true

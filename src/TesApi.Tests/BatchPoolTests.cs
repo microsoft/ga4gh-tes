@@ -380,7 +380,7 @@ namespace TesApi.Tests
                 => item is null ? default : new(item.Name, item.Value);
         }
 
-        internal static CloudTask GenerateTask(string jobId, string id, DateTime stateTransitionTime = default)
+        internal static CloudTask GenerateTask(string jobId, string id, DateTime stateTransitionTime = default, Microsoft.Azure.Batch.Protocol.Models.TaskExecutionInformation executionInfo = default)
         {
             if (default == stateTransitionTime)
             {
@@ -393,7 +393,7 @@ namespace TesApi.Tests
                 .Invoke(new object[] { batchServiceClient });
             var parentClient = (BatchClient)typeof(BatchClient).GetConstructor(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, new Type[] { typeof(Microsoft.Azure.Batch.Protocol.BatchServiceClient).Assembly.GetType("Microsoft.Azure.Batch.IProtocolLayer") }, null)
                 .Invoke(new object[] { protocolLayer });
-            var modelTask = new Microsoft.Azure.Batch.Protocol.Models.CloudTask(id: id, stateTransitionTime: stateTransitionTime, state: Microsoft.Azure.Batch.Protocol.Models.TaskState.Active);
+            var modelTask = new Microsoft.Azure.Batch.Protocol.Models.CloudTask(id: id, stateTransitionTime: stateTransitionTime, executionInfo: executionInfo, state: Microsoft.Azure.Batch.Protocol.Models.TaskState.Active);
             var task = (CloudTask)typeof(CloudTask).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, new Type[] { typeof(BatchClient), typeof(string), typeof(Microsoft.Azure.Batch.Protocol.Models.CloudTask), typeof(IEnumerable<BatchClientBehavior>) }, default)
                 .Invoke(new object[] { parentClient, jobId, modelTask, Enumerable.Empty<BatchClientBehavior>() });
             return task;

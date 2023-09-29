@@ -138,9 +138,6 @@ namespace TesApi.Web
         public int GetBatchActivePoolCount() => cachingRetryHandler.ExecuteWithRetry(() => azureProxy.GetBatchActivePoolCount());
 
         /// <inheritdoc/>
-        public Task<AzureBatchJobAndTaskState> GetBatchJobAndTaskStateAsync(Tes.Models.TesTask tesTask, CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.GetBatchJobAndTaskStateAsync(tesTask, ct), cancellationToken);
-
-        /// <inheritdoc/>
         public Task<IEnumerable<string>> GetPoolIdsReferencedByJobsAsync(CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(azureProxy.GetPoolIdsReferencedByJobsAsync, cancellationToken);
 
         /// <inheritdoc/>

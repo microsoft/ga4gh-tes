@@ -47,10 +47,10 @@ namespace TesApi.Web
         /// Finalize completed <see cref="TesTask"/>s on a batch system
         /// </summary>
         /// <param name="tesTasks"><see cref="TesTask"/>s to schedule on the batch system.</param>
-        /// <param name="cloudTask"><see cref="CloudTask"/>s corresponding to each <seealso cref="TesTask"/>.</param>
+        /// <param name="cloudTasks"><see cref="CloudTask"/>s corresponding to each <seealso cref="TesTask"/>.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
-        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCompletedTesTasksAsync(IEnumerable<TesTask> tesTasks, CloudTask[] cloudTask, CancellationToken cancellationToken);
+        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessCompletedTesTasksAsync(IEnumerable<TesTask> tesTasks, CloudTask[] cloudTasks, CancellationToken cancellationToken);
 
         /// <summary>
         /// Terminate cancelled <see cref="TesTask"/>s on a batch system

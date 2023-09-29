@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
@@ -70,5 +71,12 @@ namespace TesApi.Web
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         ValueTask<DateTime> GetAllocationStateTransitionTime(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets the completed tasks in this pool's associated job.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        IAsyncEnumerable<CloudTask> GetCompletedTasks(CancellationToken cancellationToken);
     }
 }

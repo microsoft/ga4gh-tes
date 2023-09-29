@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
@@ -497,38 +498,44 @@ namespace TesApi.Web
                     catch (Exception ex)
                     {
                         exceptions.Add(ex);
-                        return await RemoveMissingPools(ex);
+                        return await RemoveMissingPoolsAsync(ex, cancellationToken);
                     }
                 }
 
                 return false;
             }
+        }
 
-            async ValueTask<bool> RemoveMissingPools(Exception ex)
+        /// <inheritdoc/>
+        public IAsyncEnumerable<CloudTask> GetCompletedTasks(CancellationToken _1)
+        {
+            return _azureProxy.ListTasksAsync(Pool.PoolId, new ODATADetailLevel { FilterClause = "id,executionInfo", SelectClause = "state eq completed" });
+        }
+
+        private async ValueTask<bool> RemoveMissingPoolsAsync(Exception ex, CancellationToken cancellationToken)
+        {
+            switch (ex)
             {
-                switch (ex)
-                {
-                    case AggregateException aggregateException:
-                        var result = true;
-                        foreach (var e in aggregateException.InnerExceptions)
-                        {
-                            result &= await RemoveMissingPools(e);
-                        }
-                        return result;
+                case AggregateException aggregateException:
+                    var result = true;
+                    foreach (var e in aggregateException.InnerExceptions)
+                    {
+                        result &= await RemoveMissingPoolsAsync(e, cancellationToken);
+                    }
+                    return result;
 
-                    case BatchException batchException:
-                        if (batchException.RequestInformation.BatchError.Code == BatchErrorCodeStrings.PoolNotFound)
-                        {
-                            _logger.LogError(ex, "Batch pool {PoolId} is missing. Removing it from TES's active pool list.", Pool.PoolId);
-                            _ = _batchPools.RemovePoolFromList(this);
-                            // TODO: Consider moving any remaining tasks to another pool, or failing tasks explicitly
-                            await _batchPools.DeletePoolAsync(this, cancellationToken); // Ensure job removal too
-                            return false;
-                        }
-                        break;
-                }
-                return true;
+                case BatchException batchException:
+                    if (batchException.RequestInformation.BatchError.Code == BatchErrorCodeStrings.PoolNotFound)
+                    {
+                        _logger.LogError(ex, "Batch pool {PoolId} is missing. Removing it from TES's active pool list.", Pool.PoolId);
+                        _ = _batchPools.RemovePoolFromList(this);
+                        // TODO: Consider moving any remaining tasks to another pool, or failing tasks explicitly
+                        await _batchPools.DeletePoolAsync(this, cancellationToken); // Ensure job removal too
+                        return false;
+                    }
+                    break;
             }
+            return true;
         }
 
         /// <inheritdoc/>

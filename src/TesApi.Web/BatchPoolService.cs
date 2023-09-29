@@ -2,12 +2,15 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Hosting;
+using Microsoft.Azure.Batch;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using Tes.Models;
+using Tes.Repository;
 
 namespace TesApi.Web
 {
@@ -16,11 +19,8 @@ namespace TesApi.Web
     /// This should only be used as a system-wide singleton service.  This class does not support scale-out on multiple machines,
     /// nor does it implement a leasing mechanism.  In the future, consider using the Lease Blob operation.
     /// </summary>
-    public class BatchPoolService : BackgroundService
+    internal class BatchPoolService : OrchestrateOnBatchSchedulerService
     {
-        private readonly IBatchScheduler _batchScheduler;
-        private readonly ILogger _logger;
-
         /// <summary>
         /// Interval between each call to <see cref="IBatchPool.ServicePoolAsync(CancellationToken)"/>.
         /// </summary>
@@ -29,56 +29,37 @@ namespace TesApi.Web
         /// <summary>
         /// Default constructor
         /// </summary>
+        /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler"></param>
         /// <param name="logger"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public BatchPoolService(IBatchScheduler batchScheduler, ILogger<BatchPoolService> logger)
+        public BatchPoolService(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<BatchPoolService> logger)
+            : base(repository, batchScheduler, logger) { }
+
+        /// <inheritdoc />
+        protected override void ExecuteSetup(CancellationToken stoppingToken)
         {
-            _batchScheduler = batchScheduler ?? throw new ArgumentNullException(nameof(batchScheduler));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            batchScheduler.LoadExistingPoolsAsync(stoppingToken).Wait(stoppingToken); // Delay starting Scheduler until this completes to finish initializing BatchScheduler.
         }
 
         /// <inheritdoc />
-        public override Task StopAsync(CancellationToken cancellationToken)
+        protected override Task ExecuteCoreAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("Batch Pools stopping...");
-            return base.StopAsync(cancellationToken);
-        }
-
-        /// <inheritdoc />
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            _logger.LogInformation("Batch Pools started.");
-            _batchScheduler.LoadExistingPoolsAsync(stoppingToken).Wait(stoppingToken); // Delay starting Scheduler until this completes to finish initializing BatchScheduler.
-
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                try
-                {
-                    await ServiceBatchPools(stoppingToken);
-                    await Task.Delay(RunInterval, stoppingToken);
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (Exception exc)
-                {
-                    _logger.LogError(exc, @"{ExceptionMessage}", exc.Message);
-                }
-            }
-
-            _logger.LogInformation("Batch Pools gracefully stopped.");
+            return Task.WhenAll(ServiceBatchPoolsAsync(stoppingToken), ExecuteCompletedTesTasksOnBatchAsync(stoppingToken));
         }
 
         /// <summary>
-        /// Retrieves all batch pools from the database and affords an opportunity to react to changes.
+        /// Performs an action on each batch pool.
         /// </summary>
-        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="pollName"></param>
+        /// <param name="action"></param>
+        /// <param name="stoppingToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        private async ValueTask ServiceBatchPools(CancellationToken cancellationToken)
+        private async ValueTask ExecuteActionOnPoolsAsync(string pollName, Func<IBatchPool, CancellationToken, ValueTask> action, CancellationToken stoppingToken)
         {
-            var pools = _batchScheduler.GetPools().ToList();
+            ArgumentNullException.ThrowIfNull(action);
+
+            var pools = batchScheduler.GetPools().ToList();
 
             if (0 == pools.Count)
             {
@@ -91,15 +72,76 @@ namespace TesApi.Web
             {
                 try
                 {
-                    await pool.ServicePoolAsync(cancellationToken);
+                    await action(pool, stoppingToken);
                 }
                 catch (Exception exc)
                 {
-                    _logger.LogError(exc, "Batch pool {PoolId} threw an exception in ServiceBatchPools.", pool.Pool?.PoolId);
+                    logger.LogError(exc, @"Batch pool {PoolId} threw an exception in {Poll}.", pool.Pool?.PoolId, pollName);
                 }
             }
 
-            _logger.LogDebug(@"ServiceBatchPools for {PoolsCount} pools completed in {TotalSeconds} seconds.", pools.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
+            logger.LogDebug(@"{Poll} for {PoolsCount} pools completed in {TotalSeconds} seconds.", pollName, pools.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
+        }
+
+        /// <summary>
+        /// Calls <see cref="ExecuteServiceBatchPoolsAsync(CancellationToken)"/> repeatedly.
+        /// </summary>
+        /// <param name="stoppingToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        private Task ServiceBatchPoolsAsync(CancellationToken stoppingToken)
+        {
+            return ExecuteActionOnIntervalAsync(RunInterval, ExecuteServiceBatchPoolsAsync, stoppingToken);
+        }
+
+        /// <summary>
+        /// Retrieves all batch pools from the database and affords an opportunity to react to changes.
+        /// </summary>
+        /// <param name="stoppingToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        private ValueTask ExecuteServiceBatchPoolsAsync(CancellationToken stoppingToken)
+        {
+            return ExecuteActionOnPoolsAsync("ServiceBatchPools", (pool, token) => pool.ServicePoolAsync(token), stoppingToken);
+        }
+
+        /// <summary>
+        /// Calls <see cref="ProcessCompletedCloudTasksAsync(CancellationToken)"/> repeatedly.
+        /// </summary>
+        /// <param name="stoppingToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        private Task ExecuteCompletedTesTasksOnBatchAsync(CancellationToken stoppingToken)
+        {
+            return ExecuteActionOnIntervalAsync(RunInterval, ProcessCompletedCloudTasksAsync, stoppingToken);
+        }
+
+        /// <summary>
+        /// Retrieves all completed tasks from every batch pools from the database and affords an opportunity to react to changes.
+        /// </summary>
+        /// <param name="stoppingToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        private async ValueTask ProcessCompletedCloudTasksAsync(CancellationToken stoppingToken)
+        {
+            var tasks = new List<CloudTask>();
+            await ExecuteActionOnPoolsAsync("ServiceBatchTasks", async (pool, token) => tasks.AddRange(await pool.GetCompletedTasks(token).ToListAsync(token)), stoppingToken);
+
+            await OrchestrateTesTasksOnBatchAsync(
+                "Completed",
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+                async token => GetTesTasks(token),
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+                (tesTasks, token) => batchScheduler.ProcessCompletedTesTasksAsync(tesTasks, tasks.ToArray(), token),
+                stoppingToken);
+
+            async IAsyncEnumerable<TesTask> GetTesTasks([EnumeratorCancellation] CancellationToken cancellationToken)
+            {
+                foreach (var id in tasks.Select(t => t.Id))
+                {
+                    TesTask tesTask = default;
+                    if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
+                    {
+                        yield return tesTask;
+                    }
+                }
+            }
         }
     }
 }

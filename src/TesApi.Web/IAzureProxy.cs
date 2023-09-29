@@ -57,13 +57,7 @@ namespace TesApi.Web
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken);
 
-        /// <summary>
-        /// Gets the combined state of Azure Batch job, task and pool that corresponds to the given TES task
-        /// </summary>
-        /// <param name="tesTask">The TES task</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>Job state information</returns>
-        Task<AzureBatchJobAndTaskState> GetBatchJobAndTaskStateAsync(TesTask tesTask, CancellationToken cancellationToken);
+        // TODO: we may need a query or two to replace what was here
 
         /// <summary>
         /// Deletes an Azure Batch job for Autopools
