@@ -94,8 +94,8 @@ namespace TesApi.Tests.Runner
             //creates the script
             batchNodeScriptBuilderMock.Verify(c => c.Build(), Times.Once);
 
-            //it should upload two assets/blobs: node task definition and script
-            storageAccessProviderMock.Verify(p => p.UploadBlobAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+            //it should upload three assets/blobs: server task, node task definition and script
+            storageAccessProviderMock.Verify(p => p.UploadBlobAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
         }
 
         private static TesTask GetTestTesTask()
