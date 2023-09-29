@@ -166,7 +166,7 @@ namespace Tes.Repository
         /// </summary>
         private async ValueTask WriterWorkerAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("WriterWorkerAsync running...");
+            _logger.LogInformation($"WriterWorkerAsync running... {DateTime.UtcNow}");
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
             while (true)
