@@ -47,6 +47,7 @@ namespace TesApi.Tests.Runner
 
         [DataTestMethod]
         [DataRow($"https://foo{StorageUrlUtils.BlobEndpointHostNameSuffix}", true)]
+        [DataRow($"https://foo{StorageUrlUtils.BlobEndpointHostNameSuffix}/", true)]
         [DataRow($"https://foo{StorageUrlUtils.BlobEndpointHostNameSuffix}/container", true)]
         [DataRow($"https://foo{StorageUrlUtils.BlobEndpointHostNameSuffix}/container/", true)]
         [DataRow($"https://foo{StorageUrlUtils.BlobEndpointHostNameSuffix}/container/blob", true)]
