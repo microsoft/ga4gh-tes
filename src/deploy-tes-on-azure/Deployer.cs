@@ -575,12 +575,11 @@ namespace TesDeployer
                     {
                         if (!configuration.SkipTestWorkflow)
                         {
-                            // Note: The message is changed to "Could not run the test task" to match the proj1 original code
                             ConsoleEx.WriteLine("Could not run the test task.", ConsoleColor.Yellow);
                         }
 
                         string quotaMessage = string.Join(" and ", insufficientQuotas);
-                        string batchAccountName = configuration.BatchAccountName;  // Added to align with proj1
+                        string batchAccountName = configuration.BatchAccountName;
                         ConsoleEx.WriteLine($"Deployment was successful, but Batch account {batchAccountName} does not have sufficient {quotaMessage} quota to run workflows.", ConsoleColor.Yellow);
                         ConsoleEx.WriteLine($"Request Batch {quotaMessage} quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
                         ConsoleEx.WriteLine("After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
