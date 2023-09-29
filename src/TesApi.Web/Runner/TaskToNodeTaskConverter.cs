@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Tes.Extensions;
 using Tes.Models;
 using Tes.Runner.Models;
 using TesApi.Web.Management.Configuration;
@@ -72,13 +71,9 @@ namespace TesApi.Web.Runner
         /// Converts TesTask to a new NodeTask
         /// </summary>
         /// <param name="task">Node task</param>
-        /// <param name="additionalInputs"></param>
-        /// <param name="containerCleanupOptions"></param>
+        /// <param name="nodeTaskConversionOptions"></param>
         /// <param name="cancellationToken"></param>
-        /// <param name="defaultStorageAccountName"></param>
-        public virtual async Task<NodeTask> ToNodeTaskAsync(TesTask task,
-            IList<TesInput> additionalInputs, RuntimeContainerCleanupOptions containerCleanupOptions, string defaultStorageAccountName,
-            CancellationToken cancellationToken)
+        public virtual async Task<NodeTask> ToNodeTaskAsync(TesTask task, NodeTaskConversionOptions nodeTaskConversionOptions, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(task);
 
@@ -90,10 +85,9 @@ namespace TesApi.Web.Runner
                 var executor = task.Executors.First();
 
                 builder.WithId(task.Id)
-                    .WithResourceIdManagedIdentity(task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity))
+                    .WithResourceIdManagedIdentity(nodeTaskConversionOptions.NodeManagedIdentityResourceId)
                     .WithWorkflowId(task.WorkflowId)
                     .WithContainerCommands(executor.Command.Select(EscapeBashArgument).ToList())
-                    .WithDockerCleanUpOptions(containerCleanupOptions)
                     .WithContainerImage(executor.Image)
                     .WithMetricsFile(MetricsFileName);
 
@@ -104,9 +98,9 @@ namespace TesApi.Web.Runner
                         terraOptions.SasAllowedIpRange);
                 }
 
-                await BuildInputsAsync(task, builder, additionalInputs, defaultStorageAccountName, cancellationToken);
+                await BuildInputsAsync(task, builder, nodeTaskConversionOptions.AdditionalInputs, nodeTaskConversionOptions.DefaultStorageAccountName, cancellationToken);
 
-                BuildOutputs(task, defaultStorageAccountName, builder);
+                BuildOutputs(task, nodeTaskConversionOptions.DefaultStorageAccountName, builder);
 
                 return builder.Build();
             }
@@ -375,4 +369,13 @@ namespace TesApi.Web.Runner
     /// <param name="ExecuteDockerRmi"></param>
     /// <param name="ExecuteDockerPrune"></param>
     public record RuntimeContainerCleanupOptions(bool ExecuteDockerRmi, bool ExecuteDockerPrune);
+
+    /// <summary>
+    /// Additional configuration options for the Node runner.
+    /// </summary>
+    /// <param name="AdditionalInputs"></param>
+    /// <param name="DefaultStorageAccountName"></param>
+    /// <param name="NodeManagedIdentityResourceId"></param>
+    public record NodeTaskConversionOptions(IList<TesInput> AdditionalInputs = default, string DefaultStorageAccountName = default,
+        string NodeManagedIdentityResourceId = default);
 }

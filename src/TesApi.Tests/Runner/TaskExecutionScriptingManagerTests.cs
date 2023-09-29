@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -53,7 +52,7 @@ namespace TesApi.Tests.Runner
 
             taskToNodeTaskConverterMock = new Mock<TaskToNodeTaskConverter>();
             taskToNodeTaskConverterMock.Setup(x => x.ToNodeTaskAsync(It.IsAny<TesTask>(),
-                It.IsAny<IList<TesInput>>(), It.IsAny<RuntimeContainerCleanupOptions>(), It.IsAny<String>(), It.IsAny<CancellationToken>()))
+                 It.IsAny<NodeTaskConversionOptions>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(nodeTask);
 
             batchNodeScriptBuilderMock = new Mock<BatchNodeScriptBuilder>();
@@ -80,18 +79,16 @@ namespace TesApi.Tests.Runner
         [TestMethod]
         public async Task PrepareBatchScript_ValidTask_CreatesAndUploadsExpectedAssetsToInternalStorageLocation()
         {
+            var options = new NodeTaskConversionOptions();
 
             var assets = await taskExecutionScriptingManager.PrepareBatchScriptAsync(tesTask,
-                new List<TesInput>(),
-                new RuntimeContainerCleanupOptions(false, false),
-                defaultStorageAccountName: default, CancellationToken.None);
+                options, CancellationToken.None);
 
             Assert.IsNotNull(assets);
 
             //creates a node task definition:
             taskToNodeTaskConverterMock.Verify(c => c.ToNodeTaskAsync(It.IsAny<TesTask>(),
-                    It.IsAny<IList<TesInput>>(), It.IsAny<RuntimeContainerCleanupOptions>(),
-                    It.IsAny<string>(), It.IsAny<CancellationToken>()),
+                    It.IsAny<NodeTaskConversionOptions>(), It.IsAny<CancellationToken>()),
                 Times.Once);
 
             //creates the script

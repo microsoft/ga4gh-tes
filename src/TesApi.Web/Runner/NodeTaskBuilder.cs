@@ -196,24 +196,6 @@ namespace TesApi.Web.Runner
             return this;
         }
 
-        /// <summary>
-        /// Sets docker clean up options for the NodeTask
-        /// </summary>
-        /// <param name="dockerCleanUpOptions"></param>
-        /// <returns></returns>
-        public NodeTaskBuilder WithDockerCleanUpOptions(RuntimeContainerCleanupOptions dockerCleanUpOptions)
-        {
-            ArgumentNullException.ThrowIfNull(dockerCleanUpOptions);
-
-            nodeTask.RuntimeOptions ??= new RuntimeOptions();
-            nodeTask.RuntimeOptions.DockerCleanUp = new DockerCleanUpOptions()
-            {
-                ExecuteRmi = dockerCleanUpOptions.ExecuteDockerRmi,
-                ExecutePrune = dockerCleanUpOptions.ExecuteDockerPrune
-            };
-
-            return this;
-        }
 
         /// <summary>
         /// Returns the built NodeTask

@@ -124,19 +124,6 @@ namespace TesApi.Tests.Runner
         }
 
         [TestMethod]
-        public void WithDockerCleanUpOptions_OptionsProvided_CleanupOptionsAreSet()
-        {
-            var options = new RuntimeContainerCleanupOptions(
-                ExecuteDockerPrune: true,
-                ExecuteDockerRmi: true);
-
-            nodeTaskBuilder.WithDockerCleanUpOptions(options);
-            var dockerCleanUp = nodeTaskBuilder.Build().RuntimeOptions.DockerCleanUp;
-            Assert.AreEqual(options.ExecuteDockerPrune, dockerCleanUp.ExecutePrune);
-            Assert.AreEqual(options.ExecuteDockerRmi, dockerCleanUp.ExecuteRmi);
-        }
-
-        [TestMethod]
         public void Build_NoWithStatementCall_NodeTaskInstanceIsReturned()
         {
             Assert.IsNotNull(nodeTaskBuilder.Build());
