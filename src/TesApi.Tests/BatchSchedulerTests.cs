@@ -1942,6 +1942,9 @@ namespace TesApi.Tests
         {
             public TestBatchQuotaVerifierQuotaMaxedOut(IBatchQuotaProvider batchQuotaProvider) : base(batchQuotaProvider) { }
 
+            public override Task<(int exceeded, Exception exception)> CheckBatchAccountPoolOrJobQuotasAsync(int required, CancellationToken cancellationToken)
+                => throw new AzureBatchQuotaMaxedOutException("Test AzureBatchQuotaMaxedOutException");
+
             public override Task CheckBatchAccountQuotasAsync(VirtualMachineInformation _1, bool _2, System.Threading.CancellationToken cancellationToken)
                 => throw new AzureBatchQuotaMaxedOutException("Test AzureBatchQuotaMaxedOutException");
         }
@@ -1949,6 +1952,9 @@ namespace TesApi.Tests
         private class TestBatchQuotaVerifierLowQuota : TestBatchQuotaVerifierBase
         {
             public TestBatchQuotaVerifierLowQuota(IBatchQuotaProvider batchQuotaProvider) : base(batchQuotaProvider) { }
+
+            public override Task<(int exceeded, Exception exception)> CheckBatchAccountPoolOrJobQuotasAsync(int required, CancellationToken cancellationToken)
+                => throw new NotSupportedException();
 
             public override Task CheckBatchAccountQuotasAsync(VirtualMachineInformation _1, bool _2, System.Threading.CancellationToken cancellationToken)
                 => throw new AzureBatchLowQuotaException("Test AzureBatchLowQuotaException");
@@ -1960,6 +1966,8 @@ namespace TesApi.Tests
 
             protected TestBatchQuotaVerifierBase(IBatchQuotaProvider batchQuotaProvider)
                 => this.batchQuotaProvider = batchQuotaProvider;
+
+            public abstract Task<(int exceeded, Exception exception)> CheckBatchAccountPoolOrJobQuotasAsync(int required, CancellationToken cancellationToken);
 
             public abstract Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck, System.Threading.CancellationToken cancellationToken);
 

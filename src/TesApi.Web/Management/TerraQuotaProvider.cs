@@ -85,6 +85,13 @@ namespace TesApi.Web.Management
                     batchQuota.QuotaValues.LowPriorityCoreQuota));
         }
 
+        /// <inheritdoc />
+        public async Task<(int PoolQuota, int ActiveJobAndJobScheduleQuota)> GetPoolOrJobQuotaAsync(CancellationToken cancellationToken)
+        {
+            var quotas = await GetBatchAccountQuotaFromTerraAsync(cancellationToken);
+            return (quotas.QuotaValues.PoolQuota, quotas.QuotaValues.ActiveJobAndJobScheduleQuota);
+        }
+
         private async Task<QuotaApiResponse> GetBatchAccountQuotaFromTerraAsync(CancellationToken cancellationToken)
         {
             var batchResourceId = await GetBatchAccountResourceIdFromLandingZone(cancellationToken);

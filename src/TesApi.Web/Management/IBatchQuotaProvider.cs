@@ -33,5 +33,12 @@ namespace TesApi.Web.Management
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         Task<BatchVmCoreQuota> GetVmCoreQuotaAsync(bool lowPriority, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Returns the Pool and Active Job and JobSchedule quotas.
+        /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        Task<(int PoolQuota, int ActiveJobAndJobScheduleQuota)> GetPoolOrJobQuotaAsync(CancellationToken cancellationToken);
     }
 }

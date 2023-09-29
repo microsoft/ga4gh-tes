@@ -563,11 +563,11 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            var taskMetadataByPools = new Dictionary<string, List<(TesTask TesTask, VirtualMachineInformation VirtualMachineInfo, (ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic) ContainerMetadata, string PoolDisplayName)>>();
-            var poolKeyByTasks = new Dictionary<string, string>();
+            var taskMetadataListByPoolKey = new Dictionary<string, List<(TesTask TesTask, VirtualMachineInformation VirtualMachineInfo, (ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic) ContainerMetadata, string PoolDisplayName)>>();
+            var poolKeyByTaskIds = new Dictionary<string, string>();
             var tasks = tesTasks.ToList();
 
-            // Determe how many nodes in each pool we might need for this group.
+            // Determine how many nodes in each pool we might need for this group.
             foreach (var tesTask in tesTasks)
             {
                 Task<bool> quickResult = default;
@@ -580,16 +580,16 @@ namespace TesApi.Web
                     (poolKey, var displayName) = GetPoolKey(tesTask, virtualMachineInfo, containerMetadata.ContainerConfiguration, cancellationToken);
                     await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: !IsPoolAvailable(poolKey), cancellationToken: cancellationToken);
 
-                    if (taskMetadataByPools.TryGetValue(poolKey, out var resource))
+                    if (taskMetadataListByPoolKey.TryGetValue(poolKey, out var resource))
                     {
                         resource.Add((tesTask, virtualMachineInfo, containerMetadata, displayName));
                     }
                     else
                     {
-                        taskMetadataByPools.Add(poolKey, new() { (tesTask, virtualMachineInfo, containerMetadata, displayName) });
+                        taskMetadataListByPoolKey.Add(poolKey, new() { (tesTask, virtualMachineInfo, containerMetadata, displayName) });
                     }
 
-                    poolKeyByTasks.Add(tesTask.Id, poolKey);
+                    poolKeyByTaskIds.Add(tesTask.Id, poolKey);
                 }
                 catch (Exception ex)
                 {
@@ -603,12 +603,43 @@ namespace TesApi.Web
                 }
             }
 
-            var neededPoolCounts = taskMetadataByPools.ToDictionary(t => t.Key, t => t.Value.Count);
+            // Remove already returned tasks from the dictionary
+            taskMetadataListByPoolKey = taskMetadataListByPoolKey
+                .Select(p => (p.Key, Value: p.Value.Where(v => tasks.Contains(v.TesTask)).ToList())) // keep only tasks that remain in the tasks variable
+                .Where(t => t.Value.Count != 0) // Remove any empty pool keys
+                .ToDictionary(p => p.Key, p => p.Value);
 
-            foreach (var (tesTask, virtualMachineInfo, containerMetadata, displayName) in taskMetadataByPools.Values.SelectMany(e => e).Where(m => tasks.Contains(m.TesTask)))
+            // Determine how many nodes in each new pool we might need for this group.
+            var neededPoolNodesByPoolKey = taskMetadataListByPoolKey.ToDictionary(t => t.Key, t => t.Value.Count);
+
+            // Determine how many new pools/jobs we will need for this batch
+            var requiredNewPools = neededPoolNodesByPoolKey.Where(t => !IsPoolAvailable(t.Key)).Sum(t => t.Value);
+
+            // Revisit pool/job quotas (the above loop already dealt with the possiblility of needing just one more pool/job)
+            if (requiredNewPools > 1)
+            {
+                var (excess, exception) = await quotaVerifier.CheckBatchAccountPoolOrJobQuotasAsync(requiredNewPools, cancellationToken);
+                var initial = taskMetadataListByPoolKey.Count - 1;
+                var final = initial - excess;
+
+                for (var i = initial; i > final; --i)
+                {
+                    var key = taskMetadataListByPoolKey.Keys.ElementAt(i);
+                    if (taskMetadataListByPoolKey.Remove(key, out var listOfTaskMetadata))
+                    {
+                        foreach (var (task, _, _, _) in listOfTaskMetadata)
+                        {
+                            yield return (task, Task.FromException<bool>(exception));
+                        }
+                    }
+                }
+            }
+
+            // Obtain assigned pool and create and assign the cloudtask for each task.
+            foreach (var (tesTask, virtualMachineInfo, containerMetadata, displayName) in taskMetadataListByPoolKey.Values.SelectMany(e => e))
             {
                 Task<bool> quickResult = default;
-                var poolKey = poolKeyByTasks[tesTask.Id];
+                var poolKey = poolKeyByTaskIds[tesTask.Id];
 
                 try
                 {
@@ -639,7 +670,7 @@ namespace TesApi.Web
                                 vmSize: virtualMachineInfo.VmSize,
                                 autoscaled: true,
                                 preemptable: virtualMachineInfo.LowPriority,
-                                neededPoolCounts[poolKey],
+                                neededPoolNodesByPoolKey[poolKey],
                                 nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                                 containerConfiguration: containerMetadata.ContainerConfiguration,
                                 encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
@@ -651,7 +682,7 @@ namespace TesApi.Web
                     tesTask.PoolId = poolInformation.PoolId;
                     var cloudTask = await ConvertTesTaskToBatchTaskAsync(jobOrTaskId, tesTask, containerMetadata.IsPublic, cancellationToken);
 
-                    logger.LogInformation($"Creating batch task for TES task {tesTask.Id}. Using VM size {virtualMachineInfo.VmSize}.");
+                    logger.LogInformation(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VmSize);
                     await azureProxy.AddBatchTaskAsync(tesTask.Id, cloudTask, poolInformation, cancellationToken);
 
                     tesTaskLog.StartTime = DateTimeOffset.UtcNow;
