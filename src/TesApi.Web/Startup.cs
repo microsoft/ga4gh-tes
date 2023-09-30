@@ -259,8 +259,14 @@ namespace TesApi.Web
         /// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         /// </summary>
         /// <param name="app">An Microsoft.AspNetCore.Builder.IApplicationBuilder for the app to configure.</param>
-        public void Configure(IApplicationBuilder app)
-            => app.UseRouting()
+        /// <param name="serviceProvider">The service provider</param>
+        public async void Configure(IApplicationBuilder app, IServiceProvider serviceProvider)
+        {
+            // Wait for database schema to be updated and cache warmed
+            var tesTaskPostgreSqlRepository = serviceProvider.GetRequiredService<TesTaskPostgreSqlRepository>();
+            await tesTaskPostgreSqlRepository.InitializationTask;
+
+            app.UseRouting()
                 .UseEndpoints(endpoints =>
                 {
                     endpoints.MapControllers();
@@ -290,6 +296,7 @@ namespace TesApi.Web
                         var r = s.UseHsts();
                         logger.LogInformation("Configuring for Production environment");
                     });
+        }
     }
 
     internal static class BooleanMethodSelectorExtensions

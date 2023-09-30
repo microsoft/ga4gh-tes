@@ -23,6 +23,7 @@ namespace Tes.Repository
     /// <typeparam name="TesTask"></typeparam>
     public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem>, IRepository<TesTask>
     {
+        public Task InitializationTask { get; set; }     
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
@@ -35,8 +36,11 @@ namespace Tes.Repository
             var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
             CreateDbContext = () => { return new TesDbContext(connectionString); };
             using var dbContext = CreateDbContext();
-            dbContext.Database.MigrateAsync().Wait();
-            WarmCacheAsync(CancellationToken.None).Wait();
+            InitializationTask = Task.Run(async () =>
+            {
+                await dbContext.Database.MigrateAsync();
+                await WarmCacheAsync(CancellationToken.None);
+            });
         }
 
         /// <summary>
