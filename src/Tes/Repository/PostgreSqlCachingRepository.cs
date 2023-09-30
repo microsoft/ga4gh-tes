@@ -152,7 +152,7 @@ namespace Tes.Repository
         /// <summary>
         /// Continuously writes items to the database
         /// </summary>
-        private async ValueTask WriterWorkerAsync(CancellationToken cancellationToken)
+        private async Task WriterWorkerAsync(CancellationToken cancellationToken)
         {
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
