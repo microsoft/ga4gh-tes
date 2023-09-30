@@ -34,6 +34,8 @@ namespace TesApi.Web
     /// </summary>
     public class Startup
     {
+        // TODO centralize in single location
+        private const string tesVersion = "4.7.0";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -110,9 +112,9 @@ namespace TesApi.Web
 
                     .AddSwaggerGen(c =>
                     {
-                        c.SwaggerDoc("4.6.0", new()
+                        c.SwaggerDoc(tesVersion, new()
                         {
-                            Version = "4.6.0",
+                            Version = tesVersion,
                             Title = "GA4GH Task Execution Service",
                             Description = "Task Execution Service (ASP.NET Core 7.0)",
                             Contact = new()
@@ -276,7 +278,7 @@ namespace TesApi.Web
                 })
                 .UseSwaggerUI(c =>
                 {
-                    c.SwaggerEndpoint("/swagger/4.6.0/openapi.json", "Task Execution Service");
+                    c.SwaggerEndpoint($"/swagger/{tesVersion}/openapi.json", "Task Execution Service");
                 })
 
                 .IfThenElse(hostingEnvironment.IsDevelopment(),
