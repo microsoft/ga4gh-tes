@@ -263,8 +263,8 @@ namespace TesApi.Web
         public async void Configure(IApplicationBuilder app, IServiceProvider serviceProvider)
         {
             // Wait for database schema to be updated and cache warmed
-            var tesTaskPostgreSqlRepository = serviceProvider.GetRequiredService<TesTaskPostgreSqlRepository>();
-            await tesTaskPostgreSqlRepository.InitializationTask;
+            await serviceProvider.GetRequiredService<TesTaskPostgreSqlRepository>().InitializationTask;
+            logger?.LogInformation("Database schema is up to date and the cache is warmed.");
 
             app.UseRouting()
                 .UseEndpoints(endpoints =>

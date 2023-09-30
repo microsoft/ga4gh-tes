@@ -35,9 +35,10 @@ namespace Tes.Repository
         {
             var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
             CreateDbContext = () => { return new TesDbContext(connectionString); };
-            using var dbContext = CreateDbContext();
+            
             InitializationTask = Task.Run(async () =>
             {
+                using var dbContext = CreateDbContext();
                 await dbContext.Database.MigrateAsync();
                 await WarmCacheAsync(CancellationToken.None);
             });
