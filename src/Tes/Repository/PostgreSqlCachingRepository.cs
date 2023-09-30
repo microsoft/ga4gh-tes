@@ -44,7 +44,7 @@ namespace Tes.Repository
             {
                 _logger = logger;
                 _cache = cache;
-                _logger.LogInformation($"PostgreSqlCachingRepository constructor start {tempGuid} {DateTime.UtcNow}");
+                _logger.LogInformation($"PostgreSqlCachingRepository constructor start {tempGuid} {DateTime.UtcNow.Ticks}");
                 // The only "normal" exit for _writerWorkerTask is "cancelled". Anything else should force the process to exit because it means that this repository will no longer write to the database!
                 _writerWorkerTask = Task.Run(() => WriterWorkerAsync(_writerWorkerCancellationTokenSource.Token))
                     .ContinueWith(async task =>
@@ -55,21 +55,21 @@ namespace Tes.Repository
                                 _logger.LogCritical("Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
                                 break;
                             case TaskStatus.RanToCompletion:
-                                _logger.LogCritical($"Repository WriterWorkerAsync unexpectedly completed.  {DateTime.UtcNow}");
+                                _logger.LogCritical($"Repository WriterWorkerAsync unexpectedly completed.  {DateTime.UtcNow.Ticks}");
                                 break;
                         }
 
                         await Task.Delay(50); // Give the logger time to flush.
-                        _logger.LogCritical($"Throwing UnreachableException in PostgreSqlCachingRepository  {DateTime.UtcNow}");
-                        throw new System.Diagnostics.UnreachableException($"Repository WriterWorkerAsync unexpectedly ended.  {DateTime.UtcNow}"); // Force the process to exit via this being an unhandled exception.
+                        _logger.LogCritical($"Throwing UnreachableException in PostgreSqlCachingRepository  {DateTime.UtcNow.Ticks}");
+                        throw new System.Diagnostics.UnreachableException($"Repository WriterWorkerAsync unexpectedly ended.  {DateTime.UtcNow.Ticks}"); // Force the process to exit via this being an unhandled exception.
                     },
                     TaskContinuationOptions.NotOnCanceled);
 
-                _logger.LogInformation($"PostgreSqlCachingRepository constructor end {tempGuid}  {DateTime.UtcNow}");
+                _logger.LogInformation($"PostgreSqlCachingRepository constructor end {tempGuid}  {DateTime.UtcNow.Ticks}");
             }
             catch (Exception exc)
             {
-                _logger.LogCritical(exc, $"PostgreSqlCachingRepository threw an exception in the constructor  {DateTime.UtcNow}");
+                _logger.LogCritical(exc, $"PostgreSqlCachingRepository threw an exception in the constructor  {DateTime.UtcNow.Ticks}");
                 throw;
             }
         }
@@ -166,11 +166,19 @@ namespace Tes.Repository
         /// </summary>
         private async ValueTask WriterWorkerAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation($"WriterWorkerAsync running... {DateTime.UtcNow}");
+            _logger.LogInformation($"WriterWorkerAsync running... {DateTime.UtcNow.Ticks}");
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
+            long loopNum = 0;
 
             while (true)
             {
+                _logger.LogInformation($"WriterWorkerAsync loop {loopNum++} {DateTime.UtcNow.Ticks}");
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogInformation($"WriterWorkerAsync IsCancellationRequested=true {DateTime.UtcNow.Ticks}");
+                }
+
                 cancellationToken.ThrowIfCancellationRequested();
 
                 if (_itemsToWrite.TryDequeue(out var itemToWrite))
