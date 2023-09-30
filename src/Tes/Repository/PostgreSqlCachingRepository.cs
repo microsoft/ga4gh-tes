@@ -46,7 +46,7 @@ namespace Tes.Repository
                 _cache = cache;
                 _logger.LogInformation($"PostgreSqlCachingRepository constructor start {tempGuid} {DateTime.UtcNow.Ticks}");
                 // The only "normal" exit for _writerWorkerTask is "cancelled". Anything else should force the process to exit because it means that this repository will no longer write to the database!
-                _writerWorkerTask = Task.Run(() => WriterWorkerAsync(_writerWorkerCancellationTokenSource.Token))
+                _writerWorkerTask = Task.Run(async () => await WriterWorkerAsync(_writerWorkerCancellationTokenSource.Token))
                     .ContinueWith(async task =>
                     {
                         switch (task.Status)
