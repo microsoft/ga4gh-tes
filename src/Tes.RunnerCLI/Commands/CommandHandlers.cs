@@ -58,11 +58,8 @@ namespace Tes.RunnerCLI.Commands
                     throw new InvalidOperationException("The container task failed to return results");
                 }
 
-                var (stdout, stderr) = await result.ContainerResult.Logs.ReadOutputToEndAsync(CancellationToken.None);
-
                 Logger.LogInformation($"Docker container execution status code: {result.ContainerResult.StatusCode}");
-                Logger.LogInformation($"Docker container execution standard output: {stdout}");
-                Logger.LogInformation($"Docker container execution standard error: {stderr}");
+
                 if (!string.IsNullOrWhiteSpace(result.ContainerResult.Error))
                 {
                     Logger.LogInformation($"Docker container result error: {result.ContainerResult.Error}");

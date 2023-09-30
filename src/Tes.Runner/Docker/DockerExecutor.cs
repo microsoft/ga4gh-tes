@@ -17,11 +17,15 @@ namespace Tes.Runner.Docker
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
         private readonly NetworkUtility networkUtility = new NetworkUtility();
         private readonly RetryHandler retryHandler = new RetryHandler(Options.Create(new RetryPolicyOptions()));
+        private readonly MultiplexedStreamLogReader multiplexedStreamLogReader;
+
+        const int LogStreamingMaxWaitTimeInSeconds = 30;
 
         public DockerExecutor(Uri dockerHost)
         {
             dockerClient = new DockerClientConfiguration(dockerHost)
                 .CreateClient();
+            multiplexedStreamLogReader = new ConsoleStreamLogReader();
         }
 
         public async Task<ContainerExecutionResult> RunOnContainerAsync(string? imageName, string? tag, List<string>? commandsToExecute, List<string>? volumeBindings, string? workingDir)
@@ -37,10 +41,17 @@ namespace Tes.Runner.Docker
 
             var logs = await StartContainerWithStreamingOutput(createResponse);
 
+            logger.LogInformation("Starting to read output from container");
+
+            multiplexedStreamLogReader.StartReadingFromLogStream(logs);
+
             var runResponse = await dockerClient.Containers.WaitContainerAsync(createResponse.ID);
 
-            return new ContainerExecutionResult(createResponse.ID, runResponse.Error?.Message, runResponse.StatusCode, logs);
+            await multiplexedStreamLogReader.WaitUntilAsync(TimeSpan.FromSeconds(LogStreamingMaxWaitTimeInSeconds));
+
+            return new ContainerExecutionResult(createResponse.ID, runResponse.Error?.Message, runResponse.StatusCode);
         }
+
 
         private async Task<MultiplexedStream> StartContainerWithStreamingOutput(CreateContainerResponse createResponse)
         {
