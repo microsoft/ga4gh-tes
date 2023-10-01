@@ -91,7 +91,6 @@ namespace TesApi.Web
                         })
                     .Services
 
-                    .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
                     .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
                     .AddSingleton<IRepository<TesTask>>(sp => ActivatorUtilities.CreateInstance<RepositoryRetryHandler<TesTask>>(sp, (IRepository<TesTask>)sp.GetRequiredService(typeof(TesTaskPostgreSqlRepository))))
