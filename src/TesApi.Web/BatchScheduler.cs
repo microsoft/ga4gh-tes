@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -343,7 +344,7 @@ namespace TesApi.Web
         /// <returns>The command to execute</returns>
         private string CreateWgetDownloadCommand(string urlToDownload, string localFilePathDownloadLocation, bool setExecutable = false)
         {
-            string command = $"wget --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload}'";
+            string command = $"wget --no-verbose --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload}'";
 
             if (setExecutable)
             {
