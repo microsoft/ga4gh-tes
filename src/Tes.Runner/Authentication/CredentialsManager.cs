@@ -14,6 +14,7 @@ namespace Tes.Runner.Authentication
     public class CredentialsManager
     {
         private readonly ILogger logger = PipelineLoggerFactory.Create<CredentialsManager>();
+
         private readonly RetryPolicy retryPolicy;
         private const int MaxRetryCount = 5;
         private const int ExponentialBackOffExponent = 2;
@@ -21,9 +22,9 @@ namespace Tes.Runner.Authentication
         public CredentialsManager()
         {
             retryPolicy = Policy
-                .Handle<CredentialUnavailableException>()
-                .WaitAndRetry(MaxRetryCount,
-                SleepDurationHandler);
+                    .Handle<Exception>()
+                    .WaitAndRetry(MaxRetryCount,
+                    SleepDurationHandler);
         }
 
         private TimeSpan SleepDurationHandler(int attempt)
@@ -40,17 +41,24 @@ namespace Tes.Runner.Authentication
         }
         private TokenCredential GetTokenCredentialImpl(RuntimeOptions runtimeOptions)
         {
-            if (!string.IsNullOrWhiteSpace(runtimeOptions.NodeManagedIdentityResourceId))
+            try
             {
-                logger.LogInformation($"Token credentials with Managed Identity and resource ID: {runtimeOptions.NodeManagedIdentityResourceId}");
+                if (!string.IsNullOrWhiteSpace(runtimeOptions.NodeManagedIdentityResourceId))
+                {
+                    logger.LogInformation($"Token credentials with Managed Identity and resource ID: {runtimeOptions.NodeManagedIdentityResourceId}");
 
-                return new ManagedIdentityCredential(new ResourceIdentifier(runtimeOptions.NodeManagedIdentityResourceId));
+                    return new ManagedIdentityCredential(new ResourceIdentifier(runtimeOptions.NodeManagedIdentityResourceId));
+                }
+
+                logger.LogInformation("Token credentials with DefaultAzureCredential");
+
+                return new DefaultAzureCredential();
             }
-
-            logger.LogInformation("Token credentials with DefaultAzureCredential");
-
-            return new DefaultAzureCredential();
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to get token credential");
+                throw;
+            }
         }
-
     }
 }
