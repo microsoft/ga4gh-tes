@@ -180,7 +180,7 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new Uri($"https://{defaultStorageAccountName}.blob.core.windows.net/{blobPathWithPrefix.TrimStart('/')}"));
+            var builder = new BlobUriBuilder(new Uri($"https://{defaultStorageAccountName}.blob.core.windows.net/{TesExecutionsPathPrefix}/{blobPathWithPrefix.TrimStart('/')}"));
 
             return builder.ToUri().ToString();
         }
