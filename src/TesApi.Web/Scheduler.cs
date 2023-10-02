@@ -58,7 +58,11 @@ namespace TesApi.Web
         /// <returns>A System.Threading.Tasks.Task that represents the long running operations.</returns>
         protected override Task ExecuteCoreAsync(CancellationToken stoppingToken)
         {
-            return Task.WhenAll(ExecuteCancelledTesTasksOnBatchAsync(stoppingToken), ExecuteQueuedTesTasksOnBatchAsync(stoppingToken), ExecuteTerminatedTesTasksOnBatchAsync(stoppingToken));
+            return Task.WhenAll(
+                ExecuteCancelledTesTasksOnBatchAsync(stoppingToken),
+                ExecuteQueuedTesTasksOnBatchAsync(stoppingToken),
+                ExecuteTerminatedTesTasksOnBatchAsync(stoppingToken),
+                ExecuteUpdateTesTaskFromEventBlobAsync(stoppingToken));
         }
 
         /// <summary>
@@ -82,6 +86,7 @@ namespace TesApi.Web
         /// <summary>
         /// Retrieves all cancelled TES tasks from the database, performs an action in the batch system, and updates the resultant state
         /// </summary>
+        /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
         /// <returns></returns>
         private Task ExecuteCancelledTesTasksOnBatchAsync(CancellationToken stoppingToken)
         {
@@ -100,6 +105,7 @@ namespace TesApi.Web
         /// <summary>
         /// Retrieves all terminated TES tasks from the database, performs an action in the batch system, and updates the resultant state
         /// </summary>
+        /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
         /// <returns></returns>
         private Task ExecuteTerminatedTesTasksOnBatchAsync(CancellationToken stoppingToken)
         {
@@ -113,6 +119,38 @@ namespace TesApi.Web
             return ExecuteActionOnIntervalAsync(runInterval,
                 cancellationToken => OrchestrateTesTasksOnBatchAsync("Terminated", query, batchScheduler.ProcessTerminatedTesTasksAsync, cancellationToken),
                 stoppingToken);
+        }
+
+        /// <summary>
+        /// Retrieves all event blobs from storage and updates the resultant state.
+        /// </summary>
+        /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
+        /// <returns></returns>
+        private Task ExecuteUpdateTesTaskFromEventBlobAsync(CancellationToken stoppingToken)
+        {
+            return ExecuteActionOnIntervalAsync(runInterval,
+                UpdateTesTasksFromEventBlobsAsync,
+                stoppingToken);
+        }
+
+        // TODO: Implement this
+        /// <summary>
+        /// Retrieves all event blobs from storage and updates the resultant state.
+        /// </summary>
+        /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
+        /// <returns></returns>
+        ValueTask UpdateTesTasksFromEventBlobsAsync(CancellationToken stoppingToken)
+        {
+            return ValueTask.CompletedTask;
+
+            //// Get and parse event blobs
+
+            //// Get TesTask for each blob
+
+            //// Update TesTasks
+            //await OrchestrateTesTasksOnBatchAsync("NodeEvent", query, (tasks, cancellationToken) => batchScheduler.MethodToBeWrittenAsync(tasks, events, cancellationToken), stoppingToken);
+
+            //// Delete blobs
         }
     }
 }
