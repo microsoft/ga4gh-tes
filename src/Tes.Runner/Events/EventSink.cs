@@ -9,32 +9,27 @@ namespace Tes.Runner.Events
 {
     public abstract class EventSink : IEventSink
     {
-        const double StopDelay = 30;
-        private readonly Channel<EventMessage> events;
-        private readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
-        private readonly ILogger logger = PipelineLoggerFactory.Create<EventSink>();
+        const int MaxWaitAttempts = 20;
+        const double WaitInterval = 5;
 
+        private readonly Channel<EventMessage> events = Channel.CreateUnbounded<EventMessage>();
+        private readonly ILogger logger = PipelineLoggerFactory.Create<EventSink>();
         private Task? eventHandlerTask;
 
-        protected EventSink()
-        {
-            events = Channel.CreateUnbounded<EventMessage>();
-        }
-
         public abstract Task HandleEventAsync(EventMessage eventMessage);
-        public Task PublishEventAsync(EventMessage eventMessage)
+
+        public async Task PublishEventAsync(EventMessage eventMessage)
         {
-            throw new NotImplementedException();
+            await events.Writer.WriteAsync(eventMessage);
         }
 
-        public Task StartAsync()
+        public void Start()
         {
             logger.LogDebug("Starting events processing handler");
 
-            eventHandlerTask = EventHandlerAsync(cancellationTokenSource.Token);
-
-            return eventHandlerTask;
+            eventHandlerTask = Task.Run(async () => await EventHandlerAsync());
         }
+
 
         public async Task StopAsync()
         {
@@ -45,7 +40,21 @@ namespace Tes.Runner.Events
                 throw new InvalidOperationException("Event handler task is not running");
             }
 
-            await Task.WhenAny(eventHandlerTask, Task.Delay(TimeSpan.FromSeconds(StopDelay)));
+            //close the chanel to stop the event handler
+            events.Writer.Complete();
+
+            //wait until the event count is zero
+            var waitAttempts = 0;
+            while (events.Reader.Count > 0 && waitAttempts < MaxWaitAttempts)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(WaitInterval));
+                waitAttempts++;
+            }
+
+            if (waitAttempts == MaxWaitAttempts)
+            {
+                logger.LogWarning($"Events processing handler is stopped with {events.Reader.Count} events in the queue");
+            }
 
             logger.LogDebug("Events processing handler is stopped");
         }
@@ -57,15 +66,15 @@ namespace Tes.Runner.Events
                 { "event_name", eventMessage.Name },
                 { "event_id", eventMessage.Id },
                 { "entity_type", eventMessage.EntityType },
-                { "entity_id", eventMessage.EntityId },
-                { "correlation_id", eventMessage.CorrelationId },
+                { "task_id", eventMessage.EntityId },
+                { "workflow_id", eventMessage.CorrelationId },
                 //format date to ISO 8601, which is URL friendly
                 { "created", eventMessage.Created.ToString("yyyy-MM-ddTHH:mm:ssZ") }
             };
         }
-        private async Task EventHandlerAsync(CancellationToken cancellationToken)
+        private async Task EventHandlerAsync()
         {
-            while (await events.Reader.WaitToReadAsync(cancellationToken))
+            while (await events.Reader.WaitToReadAsync())
             {
                 while (events.Reader.TryRead(out var eventMessage))
                 {
@@ -79,7 +88,7 @@ namespace Tes.Runner.Events
                     }
                     catch (Exception e)
                     {
-                        //event error should be handled silently....
+                        //event error should be handled silently, as event failures should not affect overall processing....
                         logger.LogError(e, $"Error handling event. Event ID: {eventMessage.Id}");
                     }
                 }

@@ -1,7 +1,9 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Microsoft.Extensions.Logging;
 using Tes.Runner.Models;
+using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Events;
 
@@ -19,6 +21,11 @@ public class EventsPublisher
 
     private readonly IList<IEventSink> sinks;
     private static EventsPublisher instance = null!;
+    private static ILogger logger = PipelineLoggerFactory.Create<EventsPublisher>();
+
+    public const string SuccessStatus = "Success";
+    public const string FailedStatus = "Failed";
+    public const string StartedStatus = "Started";
 
     public static EventsPublisher Instance
     {
@@ -34,6 +41,8 @@ public class EventsPublisher
 
     public static void Initialize(IList<IEventSink> sinks)
     {
+        logger.LogTrace("Initializing EventsPublisher");
+
         if (instance != null)
         {
             throw new InvalidOperationException("EventsPublisher is already initialized");
@@ -49,7 +58,7 @@ public class EventsPublisher
 
     public async Task PublishUploadEventStart(NodeTask nodeTask, int numberOfFiles)
     {
-        var eventMessage = CreateNewEventMessage(nodeTask.Id, UploadStartEvent, $"Start uploading {numberOfFiles} files",
+        var eventMessage = CreateNewEventMessage(nodeTask.Id, UploadStartEvent, StartedStatus,
             nodeTask.WorkflowId);
 
         eventMessage.EventData = new Dictionary<string, string>
@@ -60,15 +69,16 @@ public class EventsPublisher
         await PublishAsync(eventMessage);
     }
 
-    public async Task PublishUploadEventEnd(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes)
+    public async Task PublishUploadEventEnd(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default)
     {
-        var eventMessage = CreateNewEventMessage(nodeTask.Id, UploadEndEvent, $"Finish uploading {numberOfFiles} files",
+        var eventMessage = CreateNewEventMessage(nodeTask.Id, UploadEndEvent, statusMessage,
             nodeTask.WorkflowId);
 
         eventMessage.EventData = new Dictionary<string, string>
         {
             { "number_of_files", numberOfFiles.ToString()},
-            { "total_size_in_bytes", totalSizeInBytes.ToString()}
+            { "total_size_in_bytes", totalSizeInBytes.ToString()},
+            { "error_message", errorMessage??string.Empty}
         };
 
         await PublishAsync(eventMessage);
@@ -76,38 +86,39 @@ public class EventsPublisher
 
     public async Task PublishExecutorEventStart(NodeTask nodeTask, string cpuCores, string memSize)
     {
-        var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorStartEvent, $"Start executing task",
+        var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorStartEvent, StartedStatus,
                        nodeTask.WorkflowId);
 
-        eventMessage.EventData = new Dictionary<string, string>
-        {
-            { "image", nodeTask.ImageName!},
-            { "image_tag", nodeTask.ImageTag!},
-            { "cpu_cores", cpuCores},
-            { "mem_size", memSize}
-        };
-        await PublishAsync(eventMessage);
-    }
+        var commands = nodeTask.CommandsToExecute ?? new List<string>();
 
-    public async Task PublishExecutorEventEnd(NodeTask nodeTask, string cpuCores, string memSize, int exitCode, string errorMessage)
-    {
-        var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorEndEvent, $"Finish executing task",
-                                  nodeTask.WorkflowId);
         eventMessage.EventData = new Dictionary<string, string>
         {
             { "image", nodeTask.ImageName!},
             { "image_tag", nodeTask.ImageTag!},
             { "cpu_cores", cpuCores},
             { "mem_size", memSize},
+            { "commands", string.Join(' ', commands) }
+        };
+        await PublishAsync(eventMessage);
+    }
+
+    public async Task PublishExecutorEventEnd(NodeTask nodeTask, int exitCode, string statusMessage, string? errorMessage = default)
+    {
+        var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorEndEvent, statusMessage,
+                                  nodeTask.WorkflowId);
+        eventMessage.EventData = new Dictionary<string, string>
+        {
+            { "image", nodeTask.ImageName!},
+            { "image_tag", nodeTask.ImageTag!},
             { "exit_code", exitCode.ToString()},
-            { "error_message", errorMessage}
+            { "error_message", errorMessage??string.Empty}
         };
         await PublishAsync(eventMessage);
     }
 
     public async Task PublishDownloadEventStart(NodeTask nodeTask, int numberOfFiles)
     {
-        var eventMessage = CreateNewEventMessage(nodeTask.Id, DownloadStartEvent, $"Start downloading {numberOfFiles} files",
+        var eventMessage = CreateNewEventMessage(nodeTask.Id, DownloadStartEvent, StartedStatus,
                        nodeTask.WorkflowId);
         eventMessage.EventData = new Dictionary<string, string>
         {
@@ -116,19 +127,20 @@ public class EventsPublisher
         await PublishAsync(eventMessage);
     }
 
-    public async Task PublishDownloadEventEnd(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes)
+    public async Task PublishDownloadEventEnd(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default)
     {
-        var eventMessage = CreateNewEventMessage(nodeTask.Id, DownloadEndEvent, $"Finish downloading {numberOfFiles} files",
+        var eventMessage = CreateNewEventMessage(nodeTask.Id, DownloadEndEvent, statusMessage,
                        nodeTask.WorkflowId);
         eventMessage.EventData = new Dictionary<string, string>
         {
             { "number_of_files", numberOfFiles.ToString()},
-            { "total_size_in_bytes", totalSizeInBytes.ToString()}
+            { "total_size_in_bytes", totalSizeInBytes.ToString()},
+            { "error_message", errorMessage??string.Empty}
         };
         await PublishAsync(eventMessage);
     }
 
-    private EventMessage CreateNewEventMessage(string? entityId, string name, string message,
+    private EventMessage CreateNewEventMessage(string? entityId, string name, string statusMessage,
         string? correlationId)
     {
 
@@ -136,7 +148,7 @@ public class EventsPublisher
         {
             Id = Guid.NewGuid().ToString(),
             Name = name,
-            Message = message,
+            StatusMessage = statusMessage,
             EntityType = TesTaskRunnerEntityType,
             CorrelationId = correlationId ?? Guid.NewGuid().ToString(),
             EntityId = entityId ?? Guid.NewGuid().ToString(),
@@ -151,6 +163,8 @@ public class EventsPublisher
     {
         foreach (var sink in sinks)
         {
+            logger.LogTrace($"Publishing event {message.Name} to sink: {sink.GetType().Name}");
+
             await sink.PublishEventAsync(message);
         }
     }

@@ -98,6 +98,12 @@ public class BlobBlockApiHttpUtils
         return await retryPolicy.ExecuteAsync(ct => ExecuteHttpRequestImplAsync(requestFactory, ct), cancellationToken);
     }
 
+    public async Task<HttpResponseMessage> ExecutePutBlobRequestAsync(Func<HttpRequestMessage> requestFactory,
+        CancellationToken cancellationToken = default)
+    {
+        return await retryPolicy.ExecuteAsync(ct => ExecuteHttpRequestImplAsync(requestFactory, ct), cancellationToken);
+    }
+
     private async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request, CancellationToken cancellationToken)
     {
         HttpResponseMessage? response = null;

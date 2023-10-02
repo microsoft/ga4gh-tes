@@ -13,8 +13,8 @@ public class EventMessage
     [JsonPropertyName("event_name")]
     public string Name { get; set; } = null!;
 
-    [JsonPropertyName("event_message")]
-    public string Message { get; set; } = null!;
+    [JsonPropertyName("status_message")]
+    public string StatusMessage { get; set; } = null!;
 
     [JsonPropertyName("entity_type")]
     public string EntityType { get; set; } = null!;

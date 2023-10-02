@@ -6,7 +6,7 @@ namespace Tes.Runner.Events
     public interface IEventSink
     {
         Task PublishEventAsync(EventMessage eventMessage);
-        Task StartAsync();
+        void Start();
         Task StopAsync();
     }
 }
