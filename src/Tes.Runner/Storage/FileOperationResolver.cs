@@ -70,7 +70,7 @@ namespace Tes.Runner.Storage
 
             return new FileInput
             {
-                SasStrategy = input.SasStrategy,
+                TransformationStrategy = input.TransformationStrategy,
                 SourceUrl = input.SourceUrl,
                 Path = fileInfoProvider.GetExpandedFileName(input.Path!),
             };
@@ -83,7 +83,7 @@ namespace Tes.Runner.Storage
                 ArgumentNullException.ThrowIfNull(input);
                 ArgumentException.ThrowIfNullOrEmpty(input.Path, nameof(input.Path));
                 ArgumentException.ThrowIfNullOrEmpty(input.SourceUrl, nameof(input.SourceUrl));
-                ArgumentNullException.ThrowIfNull(input.SasStrategy, nameof(input.SasStrategy));
+                ArgumentNullException.ThrowIfNull(input.TransformationStrategy, nameof(input.TransformationStrategy));
             }
             catch (Exception e)
             {

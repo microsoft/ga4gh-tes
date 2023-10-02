@@ -35,12 +35,27 @@ namespace Tes.Runner.Storage
             if (!IsValidAzureStorageAccountUri(sourceUrl))
             {
                 var uri = new Uri(sourceUrl);
-                logger.LogWarning($"The URL provide is not a valid storage account. The resolution strategy won't be applied. Host: {uri.Host}");
+                logger.LogWarning($"The URL provided is not a valid storage account. The resolution strategy won't be applied. Host: {uri.Host}");
+
+                return uri;
+            }
+
+            if (UrlContainsSasToken(sourceUrl))
+            {
+                var uri = new Uri(sourceUrl);
+                logger.LogWarning($"The URL provided has SAS token. The resolution strategy won't be applied. Host: {uri.Host}");
 
                 return uri;
             }
 
             return await GetStorageUriWithSasTokenAsync(sourceUrl, blobSasPermissions);
+        }
+
+        private bool UrlContainsSasToken(string sourceUrl)
+        {
+            var blobBuilder = new BlobUriBuilder(new Uri(sourceUrl));
+
+            return !string.IsNullOrWhiteSpace(blobBuilder?.Sas?.Signature);
         }
 
         private async Task<Uri> GetStorageUriWithSasTokenAsync(string sourceUrl, BlobSasPermissions permissions)

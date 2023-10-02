@@ -85,7 +85,7 @@ public class ResolutionPolicyHandler
             throw new ArgumentException("A task input is missing the path property. Please check the task definition.");
         }
 
-        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.SasStrategy, downloadBlobSasPermissions, runtimeOptions);
+        var uri = await ApplySasResolutionToUrlAsync(input.SourceUrl, input.TransformationStrategy, downloadBlobSasPermissions, runtimeOptions);
 
         return new DownloadInfo(input.Path, uri);
     }
