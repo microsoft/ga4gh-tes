@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Docker;
+using Tes.Runner.Events;
 using Tes.Runner.Models;
 using Tes.Runner.Storage;
 using Tes.Runner.Transfer;
@@ -13,32 +14,69 @@ namespace Tes.Runner
     public class Executor
     {
         public const long ZeroBytesTransferred = 0;
+        const long DefaultErrorExitCode = -1;
         private readonly ILogger logger = PipelineLoggerFactory.Create<Executor>();
         private readonly NodeTask tesNodeTask;
         private readonly FileOperationResolver operationResolver;
         private readonly VolumeBindingsGenerator volumeBindingsGenerator = new VolumeBindingsGenerator();
+        private readonly EventsPublisher eventsPublisher;
 
-        public Executor(NodeTask tesNodeTask) : this(tesNodeTask, new FileOperationResolver(tesNodeTask))
+        public Executor(NodeTask tesNodeTask, EventsPublisher eventsPublisher) : this(tesNodeTask, new FileOperationResolver(tesNodeTask), eventsPublisher)
         {
         }
 
-        public Executor(NodeTask tesNodeTask, FileOperationResolver operationResolver)
+        public static async Task<Executor> CreateExecutorAsync(NodeTask nodeTask)
+        {
+            var publisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask);
+
+            return new Executor(nodeTask, publisher);
+        }
+
+        public Executor(NodeTask tesNodeTask, FileOperationResolver operationResolver, EventsPublisher eventsPublisher)
         {
             ArgumentNullException.ThrowIfNull(tesNodeTask);
             ArgumentNullException.ThrowIfNull(operationResolver);
+            ArgumentNullException.ThrowIfNull(eventsPublisher);
 
             this.tesNodeTask = tesNodeTask;
             this.operationResolver = operationResolver;
+            this.eventsPublisher = eventsPublisher;
         }
 
         public async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(DockerExecutor dockerExecutor)
         {
-            var bindings = volumeBindingsGenerator.GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs);
+            try
+            {
+                await eventsPublisher.PublishExecutorEventStartAsync(tesNodeTask);
 
-            var result = await dockerExecutor.RunOnContainerAsync(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings, tesNodeTask.ContainerWorkDir);
+                var bindings = volumeBindingsGenerator.GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs);
 
-            return new NodeTaskResult(result);
+                var result = await dockerExecutor.RunOnContainerAsync(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings, tesNodeTask.ContainerWorkDir);
+
+                await eventsPublisher.PublishExecutorEventEndAsync(tesNodeTask, result.ExitCode, ToStatusMessage(result), result.Error);
+
+                return new NodeTaskResult(result);
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to execute container");
+
+                await eventsPublisher.PublishExecutorEventEndAsync(tesNodeTask, DefaultErrorExitCode, EventsPublisher.FailedStatus, e.Message);
+
+                throw;
+            }
         }
+
+        private string ToStatusMessage(ContainerExecutionResult result)
+        {
+            if (result.ExitCode == 0 && string.IsNullOrWhiteSpace(result.Error))
+            {
+                return EventsPublisher.FailedStatus;
+            }
+
+            return EventsPublisher.SuccessStatus;
+        }
+
 
         private async ValueTask AppendMetrics(string? metricsFormat, long bytesTransferred)
         {
@@ -50,28 +88,50 @@ namespace Tes.Runner
 
         public async Task<long> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions)
         {
-            ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
-
-            var outputs = await CreateUploadOutputsAsync();
-
-            if (outputs is null)
+            var statusMessage = EventsPublisher.SuccessStatus;
+            var bytesTransferred = ZeroBytesTransferred;
+            var numberOfOutputs = 0;
+            var errorMessage = string.Empty;
+            try
             {
-                return ZeroBytesTransferred;
-            }
+                await eventsPublisher.PublishUploadEventStartAsync(tesNodeTask);
 
-            if (outputs.Count == 0)
+                ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
+
+                var outputs = await CreateUploadOutputsAsync();
+
+                if (outputs is null)
+                {
+                    return bytesTransferred;
+                }
+
+                if (outputs.Count == 0)
+                {
+                    logger.LogWarning("No output files were found.");
+                    return bytesTransferred;
+                }
+
+                numberOfOutputs = outputs.Count;
+
+                var optimizedOptions = OptimizeBlobPipelineOptionsForUpload(blobPipelineOptions, outputs);
+
+                bytesTransferred = await UploadOutputsAsync(optimizedOptions, outputs);
+
+                await AppendMetrics(tesNodeTask.OutputsMetricsFormat, bytesTransferred);
+
+                return bytesTransferred;
+            }
+            catch (Exception e)
             {
-                logger.LogWarning("No output files were found.");
-                return ZeroBytesTransferred;
+                logger.LogError(e, "Upload operation failed");
+                statusMessage = EventsPublisher.FailedStatus;
+                errorMessage = e.Message;
+                throw;
             }
-
-            var optimizedOptions = OptimizeBlobPipelineOptionsForUpload(blobPipelineOptions, outputs);
-
-            var bytesTransferred = await UploadOutputsAsync(optimizedOptions, outputs);
-
-            await AppendMetrics(tesNodeTask.OutputsMetricsFormat, bytesTransferred);
-
-            return bytesTransferred;
+            finally
+            {
+                await eventsPublisher.PublishUploadEventEndAsync(tesNodeTask, numberOfOutputs, bytesTransferred, statusMessage, errorMessage);
+            }
         }
 
         private async Task<long> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions, List<UploadInfo> outputs)
@@ -126,22 +186,43 @@ namespace Tes.Runner
 
         public async Task<long> DownloadInputsAsync(BlobPipelineOptions blobPipelineOptions)
         {
-            ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
+            var statusMessage = EventsPublisher.SuccessStatus;
+            var bytesTransferred = ZeroBytesTransferred;
+            var numberOfInputs = 0;
+            var errorMessage = string.Empty;
 
-            var inputs = await CreateDownloadInputsAsync();
-
-            if (inputs is null)
+            try
             {
-                return 0;
+                await eventsPublisher.PublishDownloadEventStartAsync(tesNodeTask);
+
+                ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
+
+                var inputs = await CreateDownloadInputsAsync();
+
+                if (inputs is null)
+                {
+                    return numberOfInputs;
+                }
+
+                var optimizedOptions = OptimizeBlobPipelineOptionsForDownload(blobPipelineOptions);
+
+                bytesTransferred = await DownloadInputsAsync(optimizedOptions, inputs);
+
+                await AppendMetrics(tesNodeTask.InputsMetricsFormat, bytesTransferred);
+
+                return bytesTransferred;
             }
-
-            var optimizedOptions = OptimizeBlobPipelineOptionsForDownload(blobPipelineOptions);
-
-            var bytesTransferred = await DownloadInputsAsync(optimizedOptions, inputs);
-
-            await AppendMetrics(tesNodeTask.InputsMetricsFormat, bytesTransferred);
-
-            return bytesTransferred;
+            catch (Exception e)
+            {
+                logger.LogError(e, "Download operation failed");
+                statusMessage = EventsPublisher.FailedStatus;
+                errorMessage = e.Message;
+                throw;
+            }
+            finally
+            {
+                await eventsPublisher.PublishDownloadEventEndAsync(tesNodeTask, numberOfInputs, bytesTransferred, statusMessage, errorMessage);
+            }
         }
 
         private async Task<long> DownloadInputsAsync(BlobPipelineOptions blobPipelineOptions, List<DownloadInfo> inputs)

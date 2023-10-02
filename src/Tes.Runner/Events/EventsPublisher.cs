@@ -3,7 +3,9 @@
 
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Models;
+using Tes.Runner.Storage;
 using Tes.Runner.Transfer;
+using static Azure.Storage.Sas.BlobSasPermissions;
 
 namespace Tes.Runner.Events;
 
@@ -20,56 +22,76 @@ public class EventsPublisher
     const string ExecutorEndEvent = "ExecutorEnd";
 
     private readonly IList<IEventSink> sinks;
-    private static EventsPublisher instance = null!;
-    private static ILogger logger = PipelineLoggerFactory.Create<EventsPublisher>();
+    private readonly ILogger logger = PipelineLoggerFactory.Create<EventsPublisher>();
 
     public const string SuccessStatus = "Success";
     public const string FailedStatus = "Failed";
     public const string StartedStatus = "Started";
-
-    public static EventsPublisher Instance
-    {
-        get
-        {
-            if (instance == null)
-            {
-                throw new InvalidOperationException("EventsPublisher is not initialized");
-            }
-            return instance;
-        }
-    }
-
-    public static void Initialize(IList<IEventSink> sinks)
-    {
-        logger.LogTrace("Initializing EventsPublisher");
-
-        if (instance != null)
-        {
-            throw new InvalidOperationException("EventsPublisher is already initialized");
-        }
-        instance = new EventsPublisher(sinks);
-    }
-
 
     public EventsPublisher(IList<IEventSink> sinks)
     {
         this.sinks = sinks;
     }
 
-    public async Task PublishUploadEventStart(NodeTask nodeTask, int numberOfFiles)
+    /// <summary>
+    /// Parameter-less constructor for mocking
+    /// </summary>
+    protected EventsPublisher()
+    {
+        this.sinks = new List<IEventSink>();
+    }
+
+    public static async Task<EventsPublisher> CreateEventsPublisherAsync(NodeTask nodeTask)
+    {
+        var storageSink = await GetStorageEventSinkFromTaskIfRequestedAsync(nodeTask);
+
+        var sinkList = new List<IEventSink>();
+        if (storageSink != null)
+        {
+            sinkList.Add(storageSink);
+        }
+
+        return new EventsPublisher(sinkList);
+    }
+
+    private static async Task<IEventSink?> GetStorageEventSinkFromTaskIfRequestedAsync(NodeTask nodeTask)
+    {
+        ArgumentNullException.ThrowIfNull(nodeTask);
+
+        if (nodeTask.RuntimeOptions.StorageEventSink is null)
+        {
+            return default;
+        }
+
+        if (string.IsNullOrWhiteSpace(nodeTask.RuntimeOptions.StorageEventSink.TargetUrl))
+        {
+            return default;
+        }
+
+        var transformationStrategy = UrlTransformationStrategyFactory.CreateStrategy(
+            nodeTask.RuntimeOptions.StorageEventSink.TransformationStrategy,
+            nodeTask.RuntimeOptions);
+
+
+        var transformedUrl = await transformationStrategy.TransformUrlWithStrategyAsync(
+            nodeTask.RuntimeOptions.StorageEventSink.TargetUrl,
+            Read | Create | Write | Add | List);
+
+        return new BlobStorageEventSink(transformedUrl);
+
+    }
+
+    public virtual async Task PublishUploadEventStartAsync(NodeTask nodeTask)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, UploadStartEvent, StartedStatus,
             nodeTask.WorkflowId);
 
-        eventMessage.EventData = new Dictionary<string, string>
-        {
-            { "number_of_files", numberOfFiles.ToString()}
-        };
+        eventMessage.EventData = new Dictionary<string, string>();
 
         await PublishAsync(eventMessage);
     }
 
-    public async Task PublishUploadEventEnd(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default)
+    public virtual async Task PublishUploadEventEndAsync(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, UploadEndEvent, statusMessage,
             nodeTask.WorkflowId);
@@ -84,7 +106,7 @@ public class EventsPublisher
         await PublishAsync(eventMessage);
     }
 
-    public async Task PublishExecutorEventStart(NodeTask nodeTask, string cpuCores, string memSize)
+    public virtual async Task PublishExecutorEventStartAsync(NodeTask nodeTask)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorStartEvent, StartedStatus,
                        nodeTask.WorkflowId);
@@ -95,14 +117,12 @@ public class EventsPublisher
         {
             { "image", nodeTask.ImageName!},
             { "image_tag", nodeTask.ImageTag!},
-            { "cpu_cores", cpuCores},
-            { "mem_size", memSize},
             { "commands", string.Join(' ', commands) }
         };
         await PublishAsync(eventMessage);
     }
 
-    public async Task PublishExecutorEventEnd(NodeTask nodeTask, int exitCode, string statusMessage, string? errorMessage = default)
+    public virtual async Task PublishExecutorEventEndAsync(NodeTask nodeTask, long exitCode, string statusMessage, string? errorMessage = default)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorEndEvent, statusMessage,
                                   nodeTask.WorkflowId);
@@ -116,18 +136,17 @@ public class EventsPublisher
         await PublishAsync(eventMessage);
     }
 
-    public async Task PublishDownloadEventStart(NodeTask nodeTask, int numberOfFiles)
+    public virtual async Task PublishDownloadEventStartAsync(NodeTask nodeTask)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, DownloadStartEvent, StartedStatus,
                        nodeTask.WorkflowId);
-        eventMessage.EventData = new Dictionary<string, string>
-        {
-            { "number_of_files", numberOfFiles.ToString()}
-        };
+
+        eventMessage.EventData = new Dictionary<string, string>();
+
         await PublishAsync(eventMessage);
     }
 
-    public async Task PublishDownloadEventEnd(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default)
+    public virtual async Task PublishDownloadEventEndAsync(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, DownloadEndEvent, statusMessage,
                        nodeTask.WorkflowId);
@@ -161,6 +180,12 @@ public class EventsPublisher
 
     private async Task PublishAsync(EventMessage message)
     {
+        if (sinks.Count == 0)
+        {
+            logger.LogTrace("No sinks configured for publishing events");
+            return;
+        }
+
         foreach (var sink in sinks)
         {
             logger.LogTrace($"Publishing event {message.Name} to sink: {sink.GetType().Name}");

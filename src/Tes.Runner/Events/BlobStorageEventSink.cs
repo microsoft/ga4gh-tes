@@ -9,11 +9,11 @@ namespace Tes.Runner.Events
 {
     public class BlobStorageEventSink : EventSink
     {
-        private readonly Uri storageContainerUrl;
+        private readonly Uri storageUrl;
 
-        public BlobStorageEventSink(Uri storageContainerUrl)
+        public BlobStorageEventSink(Uri storageUrl)
         {
-            this.storageContainerUrl = storageContainerUrl;
+            this.storageUrl = storageUrl;
         }
 
         public override async Task HandleEventAsync(EventMessage eventMessage)
@@ -31,7 +31,7 @@ namespace Tes.Runner.Events
         {
             var blobName = ToBlobName(eventMessage);
 
-            var blobUrl = new BlobUriBuilder(storageContainerUrl) { BlobName = blobName };
+            var blobUrl = new BlobUriBuilder(storageUrl) { BlobName = blobName };
 
             var blobClient = new BlobClient(blobUrl.ToUri());
             return blobClient;

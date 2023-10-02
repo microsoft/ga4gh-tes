@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Tes.Runner;
 using Tes.Runner.Docker;
+using Tes.Runner.Events;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
@@ -49,7 +50,7 @@ namespace Tes.RunnerCLI.Commands
             {
                 var nodeTask = await DeserializeNodeTaskAsync(file.FullName);
 
-                var executor = new Executor(nodeTask);
+                var executor = await Executor.CreateExecutorAsync(nodeTask);
 
                 var result = await executor.ExecuteNodeContainerTaskAsync(new DockerExecutor(dockerUri));
 
@@ -58,7 +59,7 @@ namespace Tes.RunnerCLI.Commands
                     throw new InvalidOperationException("The container task failed to return results");
                 }
 
-                Logger.LogInformation($"Docker container execution status code: {result.ContainerResult.StatusCode}");
+                Logger.LogInformation($"Docker container execution status code: {result.ContainerResult.ExitCode}");
 
                 if (!string.IsNullOrWhiteSpace(result.ContainerResult.Error))
                 {
@@ -140,7 +141,7 @@ namespace Tes.RunnerCLI.Commands
             {
                 var nodeTask = await DeserializeNodeTaskAsync(taskDefinitionFile.FullName);
 
-                var executor = new Executor(nodeTask);
+                var executor = await Executor.CreateExecutorAsync(nodeTask);
 
                 var result = await transferOperation(executor);
 
