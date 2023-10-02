@@ -98,7 +98,7 @@ namespace TesApi.Web
         /// <summary>
         /// Runs <paramref name="action"/> repeatedly at an interval of <paramref name="runInterval"/>.
         /// </summary>
-        /// <param name="runInterval">Delay between runs of <paramref name="action"/>.</param>
+        /// <param name="runInterval">Interval to rerun <paramref name="action"/>.</param>
         /// <param name="action">Action to repeatedly run.</param>
         /// <param name="stoppingToken">Triggered when <see cref="IHostedService.StopAsync(CancellationToken)"/> is called.</param>
         /// <returns>A System.Threading.Tasks.Task that represents the long running operations.</returns>
@@ -106,22 +106,29 @@ namespace TesApi.Web
         {
             ArgumentNullException.ThrowIfNull(action);
 
-            while (!stoppingToken.IsCancellationRequested)
+            using PeriodicTimer timer = new(runInterval);
+
+            try
             {
-                try
+                do
                 {
-                    await action(stoppingToken);
-                    await Task.Delay(runInterval, stoppingToken);
+                    try
+                    {
+                        await action(stoppingToken);
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    catch (Exception exc)
+                    {
+                        logger.LogError(exc, "{Message}", exc.Message);
+                    }
                 }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (Exception exc)
-                {
-                    logger.LogError(exc, "{Message}", exc.Message);
-                }
+                while (await timer.WaitForNextTickAsync(stoppingToken));
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            { }
         }
 
         /// <summary>
