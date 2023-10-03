@@ -135,7 +135,7 @@ namespace TesApi.Web
         /// Retrieves provided actionable TES tasks from the database using <paramref name="tesTaskGetter"/>, performs an action in the batch system using <paramref name="tesTaskProcessor"/>, and updates the resultant state
         /// </summary>
         /// <returns>A System.Threading.Tasks.ValueTask that represents the long running operations.</returns>
-        protected async ValueTask OrchestrateTesTasksOnBatchAsync(string pollName, Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter, Func<TesTask[], CancellationToken, IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModified)>> tesTaskProcessor, CancellationToken stoppingToken)
+        protected async ValueTask OrchestrateTesTasksOnBatchAsync(string pollName, Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter, Func<TesTask[], CancellationToken, IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedAsync)>> tesTaskProcessor, CancellationToken stoppingToken)
         {
             var pools = new HashSet<string>();
             var tesTasks = await (await tesTaskGetter(stoppingToken)).ToArrayAsync(stoppingToken);

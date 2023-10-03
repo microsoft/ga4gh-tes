@@ -128,7 +128,7 @@ namespace TesApi.Web
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
                 async token => GetTesTasks(token),
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
-                (tesTasks, token) => batchScheduler.ProcessCompletedTesTasksAsync(tesTasks, tasks.ToArray(), token),
+                (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, tasks.Select(GetBatchState).ToArray(), token),
                 stoppingToken);
 
             async IAsyncEnumerable<TesTask> GetTesTasks([EnumeratorCancellation] CancellationToken cancellationToken)
@@ -140,6 +140,29 @@ namespace TesApi.Web
                     {
                         yield return tesTask;
                     }
+                }
+            }
+
+            AzureBatchTaskState GetBatchState(CloudTask task)
+            {
+                if (task.ExecutionInformation.ExitCode != 0 || task.ExecutionInformation.FailureInformation is not null)
+                {
+                    return new(AzureBatchTaskState.TaskState.CompletedWithErrors,
+                        Failure: new(task.ExecutionInformation.FailureInformation.Code,
+                        Enumerable.Empty<string>()
+                            .Append(task.ExecutionInformation.FailureInformation.Message)
+                            .Append($"Batch task ExitCode: {task.ExecutionInformation?.ExitCode}, Failure message: {task.ExecutionInformation?.FailureInformation?.Message}")
+                            .Concat(task.ExecutionInformation.FailureInformation.Details.Select(pair => pair.Value))),
+                        BatchTaskStartTime: task.ExecutionInformation.StartTime,
+                        BatchTaskEndTime: task.ExecutionInformation.EndTime,
+                        BatchTaskExitCode: task.ExecutionInformation.ExitCode);
+                }
+                else
+                {
+                    return new(AzureBatchTaskState.TaskState.CompletedSuccessfully,
+                        BatchTaskStartTime: task.ExecutionInformation.StartTime,
+                        BatchTaskEndTime: task.ExecutionInformation.EndTime,
+                        BatchTaskExitCode: task.ExecutionInformation.ExitCode);
                 }
             }
         }
