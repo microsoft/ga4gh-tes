@@ -7,34 +7,34 @@ namespace Tes.Runner.Events;
 
 public class EventMessage
 {
-    [JsonPropertyName("event_id")]
+    [JsonPropertyName("eventId")]
     public string Id { get; set; } = null!;
 
-    [JsonPropertyName("event_name")]
+    [JsonPropertyName("eventName")]
     public string Name { get; set; } = null!;
 
-    [JsonPropertyName("status_message")]
+    [JsonPropertyName("statusMessage")]
     public string StatusMessage { get; set; } = null!;
 
-    [JsonPropertyName("entity_type")]
+    [JsonPropertyName("entityType")]
     public string EntityType { get; set; } = null!;
 
-    [JsonPropertyName("correlation_id")]
+    [JsonPropertyName("correlationId")]
     public string CorrelationId { get; set; } = null!;
 
-    [JsonPropertyName("entity_id")]
+    [JsonPropertyName("entityId")]
     public string EntityId { get; set; } = null!;
 
     [JsonPropertyName("resources")]
     public List<string>? Resources { get; set; }
     [JsonPropertyName("created")]
     public DateTime Created { get; set; }
-    [JsonPropertyName("event_version")]
+    [JsonPropertyName("eventVersion")]
     public string EventVersion { get; set; } = null!;
 
-    [JsonPropertyName("event_data_version")]
+    [JsonPropertyName("eventDataVersion")]
     public string EventDataVersion { get; set; } = null!;
 
-    [JsonPropertyName("event_data")]
+    [JsonPropertyName("eventData")]
     public Dictionary<string, string>? EventData { get; set; }
 }

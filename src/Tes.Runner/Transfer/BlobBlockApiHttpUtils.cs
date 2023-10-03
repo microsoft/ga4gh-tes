@@ -45,6 +45,29 @@ public class BlobBlockApiHttpUtils
         return request;
     }
 
+    public static HttpRequestMessage CreatePutBlobRequestAsync(string blobUrl, string content, string apiVersion,
+        Dictionary<string, string> tags)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put, blobUrl)
+        {
+            Content = new StringContent(content)
+        };
+
+        AddPutBlobHeaders(request, apiVersion, tags);
+
+        return request;
+    }
+
+    private static void AddPutBlobHeaders(HttpRequestMessage request, string apiVersion, Dictionary<string, string>? tags)
+    {
+        AddPutBlockHeaders(request, apiVersion);
+
+        if (tags is { Count: > 0 })
+        {
+            request.Headers.Add("x-ms-tags", string.Join("&", tags.Select(t => $"{t.Key}={t.Value}")));
+        }
+    }
+
     public static Uri ParsePutBlockUrl(Uri? baseUri, int ordinal)
     {
         return new Uri($"{baseUri?.AbsoluteUri}&comp=block&blockid={ToBlockId(ordinal)}");
@@ -94,12 +117,6 @@ public class BlobBlockApiHttpUtils
     }
 
     public async Task<HttpResponseMessage> ExecuteHttpRequestAsync(Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken = default)
-    {
-        return await retryPolicy.ExecuteAsync(ct => ExecuteHttpRequestImplAsync(requestFactory, ct), cancellationToken);
-    }
-
-    public async Task<HttpResponseMessage> ExecutePutBlobRequestAsync(Func<HttpRequestMessage> requestFactory,
-        CancellationToken cancellationToken = default)
     {
         return await retryPolicy.ExecuteAsync(ct => ExecuteHttpRequestImplAsync(requestFactory, ct), cancellationToken);
     }

@@ -6,6 +6,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Storage.Blobs;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Tes.Models;
+using Tes.Runner.Models;
+using TesApi.Web.Management.Configuration;
+using TesApi.Web.Options;
+using TesApi.Web.Storage;
 using FileType = Tes.Runner.Models.FileType;
 
 namespace TesApi.Web.Runner
@@ -81,6 +89,7 @@ namespace TesApi.Web.Runner
                     .WithWorkflowId(task.WorkflowId)
                     .WithContainerCommands(executor.Command.Select(EscapeBashArgument).ToList())
                     .WithContainerImage(executor.Image)
+                    .WithStorageEventSink(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
                     .WithMetricsFile(MetricsFileName);
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))

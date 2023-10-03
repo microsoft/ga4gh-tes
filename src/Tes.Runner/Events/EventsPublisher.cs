@@ -98,9 +98,9 @@ public class EventsPublisher
 
         eventMessage.EventData = new Dictionary<string, string>
         {
-            { "number_of_files", numberOfFiles.ToString()},
-            { "total_size_in_bytes", totalSizeInBytes.ToString()},
-            { "error_message", errorMessage??string.Empty}
+            { "numberOfFiles", numberOfFiles.ToString()},
+            { "totalSizeInBytes", totalSizeInBytes.ToString()},
+            { "errorMessage", errorMessage??string.Empty}
         };
 
         await PublishAsync(eventMessage);
@@ -115,8 +115,8 @@ public class EventsPublisher
 
         eventMessage.EventData = new Dictionary<string, string>
         {
-            { "image", nodeTask.ImageName!},
-            { "image_tag", nodeTask.ImageTag!},
+            { "image", nodeTask.ImageName??string.Empty},
+            { "imageTag", nodeTask.ImageTag??string.Empty},
             { "commands", string.Join(' ', commands) }
         };
         await PublishAsync(eventMessage);
@@ -128,10 +128,10 @@ public class EventsPublisher
                                   nodeTask.WorkflowId);
         eventMessage.EventData = new Dictionary<string, string>
         {
-            { "image", nodeTask.ImageName!},
-            { "image_tag", nodeTask.ImageTag!},
-            { "exit_code", exitCode.ToString()},
-            { "error_message", errorMessage??string.Empty}
+            { "image", nodeTask.ImageName??string.Empty},
+            { "imageTag", nodeTask.ImageTag??string.Empty},
+            { "exitCode", exitCode.ToString()},
+            { "errorMessage", errorMessage??string.Empty}
         };
         await PublishAsync(eventMessage);
     }
@@ -152,9 +152,9 @@ public class EventsPublisher
                        nodeTask.WorkflowId);
         eventMessage.EventData = new Dictionary<string, string>
         {
-            { "number_of_files", numberOfFiles.ToString()},
-            { "total_size_in_bytes", totalSizeInBytes.ToString()},
-            { "error_message", errorMessage??string.Empty}
+            { "numberOfFiles", numberOfFiles.ToString()},
+            { "totalSizeInBytes", totalSizeInBytes.ToString()},
+            { "errorMessage", errorMessage??string.Empty}
         };
         await PublishAsync(eventMessage);
     }

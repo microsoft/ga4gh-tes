@@ -1,45 +1,78 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Text;
 using System.Text.Json;
 using Azure.Storage.Blobs;
+using Microsoft.Extensions.Logging;
+using Tes.Runner.Transfer;
+using static System.DateTime;
 
 namespace Tes.Runner.Events
 {
     public class BlobStorageEventSink : EventSink
     {
+        const string EventTimeStampFormat = "yyyy-MM-dd HH:mm:ss.fff";
+        const string Iso8601DateFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+        private const string ApiVersion = "2023-01-01";
         private readonly Uri storageUrl;
+        private readonly ILogger logger = PipelineLoggerFactory.Create<BlobStorageEventSink>();
+        private readonly BlobBlockApiHttpUtils blobBlockApiHttpUtils = new BlobBlockApiHttpUtils();
+
 
         public BlobStorageEventSink(Uri storageUrl)
         {
+            ArgumentNullException.ThrowIfNull(storageUrl);
+
             this.storageUrl = storageUrl;
         }
 
         public override async Task HandleEventAsync(EventMessage eventMessage)
         {
-            var blobClient = GetBlobClient(eventMessage);
+            try
+            {
+                var content = JsonSerializer.Serialize(eventMessage);
 
-            var json = JsonSerializer.Serialize(eventMessage);
-
-            await blobClient.UploadAsync(new MemoryStream(Encoding.UTF8.GetBytes(json)), overwrite: true);
-
-            await blobClient.SetTagsAsync(ToEventTag(eventMessage));
+                await blobBlockApiHttpUtils.ExecuteHttpRequestAsync(() =>
+                    BlobBlockApiHttpUtils.CreatePutBlobRequestAsync(ToEventUrl(storageUrl, eventMessage), content, ApiVersion, ToTags(eventMessage)));
+            }
+            catch (Exception e)
+            {
+                //failure to publish event to blob storage should not fail the execution of the node task
+                logger.LogError(e, $"Failed to publish event {eventMessage.Id} to blob storage");
+            }
         }
 
-        private BlobClient GetBlobClient(EventMessage eventMessage)
+        private string ToEventUrl(Uri uri, EventMessage message)
         {
-            var blobName = ToBlobName(eventMessage);
+            var blobBuilder = new BlobUriBuilder(uri);
 
-            var blobUrl = new BlobUriBuilder(storageUrl) { BlobName = blobName };
+            var blobName = ToBlobName(message);
 
-            var blobClient = new BlobClient(blobUrl.ToUri());
-            return blobClient;
+            if (!string.IsNullOrWhiteSpace(blobBuilder.BlobName))
+            {
+                blobName = $"{blobBuilder.BlobName.TrimEnd('/')}/{blobName}";
+            }
+
+            blobBuilder.BlobName = blobName;
+
+            return blobBuilder.ToUri().ToString();
+        }
+
+        private Dictionary<string, string> ToTags(EventMessage eventMessage)
+        {
+            return new Dictionary<string, string>
+            {
+                { "task-id", eventMessage.EntityId },
+                { "workflow-id", eventMessage.CorrelationId },
+                { "event-name", eventMessage.Name },
+                { "created", eventMessage.Created.ToString(Iso8601DateFormat) }
+            };
         }
 
         private static string ToBlobName(EventMessage eventMessage)
         {
-            var blobName = $"{eventMessage.Name}/{eventMessage.Created.Year}/{eventMessage.Created.Month}/{eventMessage.Created.Day}/{eventMessage.Created.Hour}/{eventMessage.Id}.json";
+            var blobName =
+                $"events/{eventMessage.Name}/{eventMessage.Created.Year}/{eventMessage.Created.Month}/{eventMessage.Created.Day}/{eventMessage.Created.Hour}/{UtcNow.ToString(EventTimeStampFormat)}{eventMessage.Id}.json";
             return blobName;
         }
     }

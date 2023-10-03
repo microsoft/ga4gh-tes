@@ -2,6 +2,12 @@
 // Licensed under the MIT License.
 
 using System.Diagnostics;
+using Microsoft.Extensions.Logging;
+using Tes.Runner.Docker;
+using Tes.Runner.Events;
+using Tes.Runner.Models;
+using Tes.Runner.Storage;
+using Tes.Runner.Transfer;
 
 namespace Tes.Runner
 {

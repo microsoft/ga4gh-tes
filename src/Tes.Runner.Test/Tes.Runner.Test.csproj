@@ -24,8 +24,4 @@
     <ProjectReference Include="..\Tes.Runner\Tes.Runner.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Events\" />
-  </ItemGroup>
-
 </Project>

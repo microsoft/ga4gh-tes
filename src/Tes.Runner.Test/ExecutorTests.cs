@@ -79,14 +79,28 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task DownloadInputsAsync_ParameterIsNullAndThrows_StartFailureEventsAreCreated()
         {
-            var inputs = new List<DownloadInfo>
-            {
-                new DownloadInfo( FullFilePath: "/mnt/data/input1.txt", SourceUrl: new Uri("https://test.blob.core.windows.net/test/input1.txt"))
-            };
-
-            await Assert.ThrowsExceptionAsync<ArgumentNullException>(() => executor.DownloadInputsAsync(null));
+            await Assert.ThrowsExceptionAsync<ArgumentNullException>(() => executor.DownloadInputsAsync(null!));
             eventsPublisherMock.Verify(p => p.PublishDownloadEventStartAsync(It.IsAny<NodeTask>()), Times.Once);
             eventsPublisherMock.Verify(p => p.PublishDownloadEventEndAsync(It.IsAny<NodeTask>(), 0, 0, EventsPublisher.FailedStatus, It.Is<string?>((c) => !string.IsNullOrEmpty(c))), Times.Once);
+        }
+
+        [TestMethod]
+        public async Task UploadOutputsAsync_NoOutputProvided_StartSuccessEventsAreCreated()
+        {
+            var outputs = new List<UploadInfo>();
+            fileOperationResolverMock.Setup(r => r.ResolveOutputsAsync()).ReturnsAsync(outputs);
+            var result = await executor.UploadOutputsAsync(blobPipelineOptions);
+            Assert.AreEqual(Executor.ZeroBytesTransferred, result);
+            eventsPublisherMock.Verify(p => p.PublishUploadEventStartAsync(It.IsAny<NodeTask>()), Times.Once);
+            eventsPublisherMock.Verify(p => p.PublishUploadEventEndAsync(It.IsAny<NodeTask>(), 0, 0, EventsPublisher.SuccessStatus, string.Empty), Times.Once);
+        }
+
+        [TestMethod]
+        public async Task UploadOutputAsync_NullOptionsThrowsError_StartFailureEventsAreCreated()
+        {
+            await Assert.ThrowsExceptionAsync<ArgumentNullException>(() => executor.UploadOutputsAsync(null!));
+            eventsPublisherMock.Verify(p => p.PublishUploadEventStartAsync(It.IsAny<NodeTask>()), Times.Once);
+            eventsPublisherMock.Verify(p => p.PublishUploadEventEndAsync(It.IsAny<NodeTask>(), 0, 0, EventsPublisher.FailedStatus, It.Is<string?>((c) => !string.IsNullOrEmpty(c))), Times.Once);
         }
     }
 }
