@@ -41,10 +41,10 @@ namespace TesApi.Web.Extensions
             var list = source.Where(e => e is not null).Select(e => (Entry: e, Task: sourceToTask(e))).ToList();
             var pendingCount = list.Count;
 
-            //if (list.Select(e => e.Task).ToHashSet().Count != pendingCount) // Check for duplicate tasks
-            //{
-            //    throw new ArgumentException("Duplicate System.Threading.Tasks found referenced in collection.", nameof(source));
-            //}
+            if (list.Select(e => e.Task).ToHashSet().Count != pendingCount) // Check for duplicate tasks
+            {
+                throw new ArgumentException("Duplicate System.Threading.Tasks found referenced in collection.", nameof(source));
+            }
 
             if (list.Count == 0)
             {

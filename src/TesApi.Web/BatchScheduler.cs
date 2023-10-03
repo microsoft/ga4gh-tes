@@ -1043,17 +1043,15 @@ namespace TesApi.Web
 
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedAsync)> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        public IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedAsync)> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(tesTasks);
             ArgumentNullException.ThrowIfNull(taskStates);
 
-            await foreach (var result in taskStates.Zip(tesTasks)
-                .Select(entry => (entry.Second, HandleTesTaskTransitionAsync(entry.Second, entry.First, cancellationToken).AsTask()))
-                .WhenEach(cancellationToken, tuple => tuple.Item2))
-            {
-                yield return result;
-            }
+            return taskStates.Zip(tesTasks, (TaskState, TesTask) => (TaskState, TesTask))
+                .Where(entry => entry.TesTask.IsActiveState())
+                .Select(entry => (entry.TesTask, HandleTesTaskTransitionAsync(entry.TesTask, entry.TaskState, cancellationToken).AsTask()))
+                .WhenEach(cancellationToken, tuple => tuple.Item2);
         }
 
         /// <summary>
