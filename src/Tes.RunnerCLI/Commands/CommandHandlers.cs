@@ -1,14 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Text.Json;
-using Microsoft.Extensions.Logging;
-using Tes.Runner;
-using Tes.Runner.Docker;
-using Tes.Runner.Events;
-using Tes.Runner.Models;
-using Tes.Runner.Transfer;
-
 namespace Tes.RunnerCLI.Commands
 {
     internal class CommandHandlers
