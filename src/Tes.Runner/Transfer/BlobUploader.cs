@@ -46,7 +46,7 @@ namespace Tes.Runner.Transfer
 
             try
             {
-                response = await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreatePutBlockRequestAsync(buffer, PipelineOptions.ApiVersion));
+                response = await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreatePutBlockRequestAsync(buffer, PipelineOptions.ApiVersion), cancellationToken);
             }
             finally
             {

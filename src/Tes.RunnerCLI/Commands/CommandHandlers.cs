@@ -38,7 +38,6 @@ namespace Tes.RunnerCLI.Commands
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Failed to execute the task. Error: {e.Message}");
                 Logger.LogError(e, "Failed to execute the task");
                 return ErrorExitCode;
             }
@@ -48,7 +47,7 @@ namespace Tes.RunnerCLI.Commands
         {
             try
             {
-                var nodeTask = DeserializeNodeTask(file.FullName);
+                var nodeTask = await DeserializeNodeTaskAsync(file.FullName);
 
                 var executor = new Executor(nodeTask);
 
@@ -59,11 +58,12 @@ namespace Tes.RunnerCLI.Commands
                     throw new InvalidOperationException("The container task failed to return results");
                 }
 
-                var (stdout, stderr) = await result.ContainerResult.Logs.ReadOutputToEndAsync(CancellationToken.None);
+                Logger.LogInformation($"Docker container execution status code: {result.ContainerResult.StatusCode}");
 
-                Console.WriteLine($"Execution Status Code: {result.ContainerResult.StatusCode}. Error: {result.ContainerResult.Error}");
-                Console.WriteLine($"StdOutput: {stdout}");
-                Console.WriteLine($"StdError: {stderr}");
+                if (!string.IsNullOrWhiteSpace(result.ContainerResult.Error))
+                {
+                    Logger.LogInformation($"Docker container result error: {result.ContainerResult.Error}");
+                }
             }
             catch (Exception e)
             {
@@ -95,7 +95,7 @@ namespace Tes.RunnerCLI.Commands
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-            Console.WriteLine("Starting upload operation.");
+            Logger.LogInformation("Starting upload operation.");
 
             return await ExecuteTransferTaskAsync(file, exec => exec.UploadOutputsAsync(options));
         }
@@ -108,7 +108,7 @@ namespace Tes.RunnerCLI.Commands
                     $"Task operation failed. Command: {command}. Exit Code: {results.ExitCode}{Environment.NewLine}Error: {results.StandardError}{Environment.NewLine}Output: {results.StandardOutput}");
             }
 
-            Console.WriteLine($"Result: {results.StandardOutput}");
+            Console.WriteLine($"{results.StandardOutput}"); //writing the result to the console to keep formatting
         }
 
         private static async Task ExecuteTransferAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
@@ -129,7 +129,7 @@ namespace Tes.RunnerCLI.Commands
         {
             var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-            Console.WriteLine("Starting download operation.");
+            Logger.LogInformation("Starting download operation.");
 
             return await ExecuteTransferTaskAsync(file, exec => exec.DownloadInputsAsync(options));
         }
@@ -138,13 +138,13 @@ namespace Tes.RunnerCLI.Commands
         {
             try
             {
-                var nodeTask = DeserializeNodeTask(taskDefinitionFile.FullName);
+                var nodeTask = await DeserializeNodeTaskAsync(taskDefinitionFile.FullName);
 
                 var executor = new Executor(nodeTask);
 
                 var result = await transferOperation(executor);
 
-                Console.WriteLine($"Total bytes transfer: {result:n0}");
+                Logger.LogInformation($"Total bytes transferred: {result:n0}");
 
                 return SuccessExitCode;
             }
@@ -156,19 +156,28 @@ namespace Tes.RunnerCLI.Commands
             }
         }
 
-        private static NodeTask DeserializeNodeTask(string tesNodeTaskFilePath)
+        private static async Task<NodeTask> DeserializeNodeTaskAsync(string tesNodeTaskFilePath)
         {
             try
             {
-                var nodeTask = File.ReadAllText(tesNodeTaskFilePath);
+                var nodeTaskText = await File.ReadAllTextAsync(tesNodeTaskFilePath);
 
-                return JsonSerializer.Deserialize<NodeTask>(nodeTask, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true }) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
+                var nodeTask = JsonSerializer.Deserialize<NodeTask>(nodeTaskText, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true }) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
+
+                AddDefaultValuesIfMissing(nodeTask);
+
+                return nodeTask;
             }
             catch (Exception e)
             {
                 Logger.LogError(e, "Failed to deserialize task JSON file.");
                 throw;
             }
+        }
+
+        private static void AddDefaultValuesIfMissing(NodeTask nodeTask)
+        {
+            nodeTask.RuntimeOptions ??= new RuntimeOptions();
         }
     }
 }

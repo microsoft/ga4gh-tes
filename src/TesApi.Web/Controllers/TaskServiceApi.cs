@@ -73,6 +73,11 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(object), description: "")]
         public virtual async Task<IActionResult> CancelTask([FromRoute][Required] string id, CancellationToken cancellationToken)
         {
+            if (!TesTask.IsValidId(id))
+            {
+                return BadRequest("Invalid ID");
+            }
+
             TesTask tesTask = null;
 
             if (await repository.TryGetItemAsync(id, cancellationToken, item => tesTask = item))
@@ -95,7 +100,8 @@ namespace TesApi.Controllers
                     }
                     catch (RepositoryCollisionException exc)
                     {
-                        // TODO
+                        logger.LogError(exc, $"RepositoryCollisionException in CancelTask for {id}");
+                        return Conflict(new { message = "The task could not be updated due to a conflict with the current state; please retry." });
                     }
                 }
             }
@@ -160,8 +166,7 @@ namespace TesApi.Controllers
                 ?.FirstOrDefault();
 
             // Prefix the TES task id with first eight characters of root Cromwell job id to facilitate easier debugging
-            var tesTaskIdPrefix = tesTask.WorkflowId is not null && Guid.TryParse(tesTask.WorkflowId, out _) ? $"{tesTask.WorkflowId.Substring(0, 8)}_" : string.Empty;
-            tesTask.Id = $"{tesTaskIdPrefix}{Guid.NewGuid():N}";
+            tesTask.Id = tesTask.CreateId();
 
             // For CWL workflows, if disk size is not specified in TES object (always), try to retrieve it from the corresponding workflow stored by Cromwell in /cromwell-tmp directory
             // Also allow for TES-style "memory" and "cpu" hints in CWL.
@@ -261,6 +266,11 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(TesTask), description: "")]
         public virtual async Task<IActionResult> GetTaskAsync([FromRoute][Required] string id, [FromQuery] string view, CancellationToken cancellationToken)
         {
+            if (!TesTask.IsValidId(id))
+            {
+                return BadRequest("Invalid ID");
+            }
+
             TesTask tesTask = null;
             var itemFound = await repository.TryGetItemAsync(id, cancellationToken, item => tesTask = item);
 

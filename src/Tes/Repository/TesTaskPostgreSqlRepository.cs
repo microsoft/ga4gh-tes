@@ -76,11 +76,11 @@ namespace Tes.Repository
                     {
                         _logger?.LogCritical(ex, "Couldn't warm cache, is the database online?");
                     })
-                .ExecuteAsync(async () =>
+                .ExecuteAsync(async ct =>
                 {
-                    var activeTasksCount = (await InternalGetItemsAsync(task => TesTask.ActiveStates.Contains(task.State), cancellationToken, q => q.OrderBy(t => t.Json.CreationTime))).Count();
+                    var activeTasksCount = (await InternalGetItemsAsync(task => TesTask.ActiveStates.Contains(task.State), ct, q => q.OrderBy(t => t.Json.CreationTime))).Count();
                     _logger?.LogInformation("Cache warmed successfully in {TotalSeconds} seconds. Added {TasksAddedCount} items to the cache.", $"{sw.Elapsed.TotalSeconds:n3}", $"{activeTasksCount:n0}");
-                });
+                }, cancellationToken);
         }
 
 

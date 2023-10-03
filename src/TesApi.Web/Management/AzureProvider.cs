@@ -12,23 +12,23 @@ namespace TesApi.Web.Management
     /// </summary>
     public abstract class AzureProvider
     {
-        private protected readonly CacheAndRetryHandler CacheAndRetryHandler;
+        private protected readonly CachingRetryHandler CachingRetryHandler;
         private protected readonly AzureManagementClientsFactory ManagementClientsFactory;
         private protected readonly ILogger Logger;
 
         /// <summary>
         /// Protected constructor AzureProvider
         /// </summary>
-        /// <param name="cacheAndRetryHandler"><see cref="CacheAndRetryHandler"/></param>
+        /// <param name="cachingRetryHandler"><see cref="CachingRetryHandler"/></param>
         /// <param name="managementClientsFactory"><see cref="ManagementClientsFactory"/></param>
         /// <param name="logger"><see cref="ILogger{TCategoryName}"/>></param>
-        protected AzureProvider(CacheAndRetryHandler cacheAndRetryHandler, AzureManagementClientsFactory managementClientsFactory, ILogger logger)
+        protected AzureProvider(CachingRetryHandler cachingRetryHandler, AzureManagementClientsFactory managementClientsFactory, ILogger logger)
         {
-            ArgumentNullException.ThrowIfNull(cacheAndRetryHandler);
+            ArgumentNullException.ThrowIfNull(cachingRetryHandler);
             ArgumentNullException.ThrowIfNull(managementClientsFactory);
             ArgumentNullException.ThrowIfNull(logger);
 
-            this.CacheAndRetryHandler = cacheAndRetryHandler;
+            this.CachingRetryHandler = cachingRetryHandler;
             this.ManagementClientsFactory = managementClientsFactory;
             this.Logger = logger;
         }

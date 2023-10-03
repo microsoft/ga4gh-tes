@@ -30,7 +30,6 @@ namespace TesApi.Web.Management.Batch
         private const string CloningInstructionsCloneNothing = "COPY_NOTHING";
         private const string AccessScopeSharedAccess = "SHARED_ACCESS";
         private const string UserManaged = "USER";
-        private readonly string tesBatchPoolName = Guid.NewGuid().ToString();
 
         private readonly TerraWsmApiClient terraWsmApiClient;
         private readonly IMapper mapper;

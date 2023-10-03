@@ -7,9 +7,11 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
+using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.ApiClients;
+using Tes.ApiClients.Models.Terra;
 using Tes.Extensions;
 using Tes.Models;
 using TesApi.Web.Management.Configuration;
@@ -144,6 +146,16 @@ namespace TesApi.Web.Storage
             return await GetMappedSasUrlFromWsmAsync(blobInfo, cancellationToken);
         }
 
+        /// <inheritdoc />
+        public override string GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath)
+        {
+            var blobInfo = GetTerraBlobInfoForInternalTesTask(task, blobPath);
+
+            //passing the resulting string through the builder to ensure that the path is properly encoded and valid
+            var builder = new BlobUriBuilder(new Uri($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}/{blobInfo.BlobName.TrimStart('/')}"));
+
+            return builder.ToUri().ToString();
+        }
         private TerraBlobInfo GetTerraBlobInfoForInternalTes(string blobPath)
         {
             var internalPath = GetInternalTesPath();
@@ -166,7 +178,7 @@ namespace TesApi.Web.Storage
 
             if (task.Resources != null && task.Resources.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix))
             {
-                internalPath = $"/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}";
+                internalPath = $"{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}";
             }
 
             if (!string.IsNullOrEmpty(blobPath))
@@ -190,7 +202,7 @@ namespace TesApi.Web.Storage
             if (!StorageAccountUrlSegments.TryCreate(path, out var segments))
             {
                 throw new InvalidOperationException(
-                    "Invalid path provided. The path must be a valid blob storage url or a path with the following format: /accountName/container");
+                    "Invalid path provided. The path must be a valid blob storage URL or a path with the following format: /accountName/container");
             }
 
             CheckIfAccountIsTerraStorageAccount(segments.AccountName);
@@ -231,7 +243,12 @@ namespace TesApi.Web.Storage
             }
         }
 
-
+        /// <summary>
+        /// Returns the workspace ID from the container name.
+        /// It assumes the container name is in the format sc-{workspaceId}
+        /// </summary>
+        /// <param name="segmentsContainerName"></param>
+        /// <returns></returns>
         private Guid ToWorkspaceId(string segmentsContainerName)
         {
             try

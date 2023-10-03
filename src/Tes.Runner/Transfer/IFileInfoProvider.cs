@@ -3,7 +3,7 @@
 
 namespace Tes.Runner.Transfer;
 
-// A simple abstraction to the file stats information.
+// A simple abstraction for file searching and stats.
 // The main purpose of this is to facilitate testing and provide a light abstraction on top of the file system
 // and enable future extensibility to support full glob POSIX semantics.
 
@@ -15,7 +15,13 @@ public interface IFileInfoProvider
 
     bool FileExists(string fileName);
 
-    string[] GetFilesBySearchPattern(string path, string searchPattern);
+    List<FileResult> GetFilesBySearchPattern(string searchPath, string searchPattern);
 
-    string[] GetAllFilesInDirectory(string path);
+    List<FileResult> GetAllFilesInDirectory(string path);
+
+    RootPathPair GetRootPathPair(string path);
 }
+
+public record RootPathPair(string Root, string RelativePath);
+
+public record FileResult(string AbsolutePath, string RelativePathToSearchPath, string SearchPath);

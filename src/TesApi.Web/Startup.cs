@@ -25,6 +25,7 @@ using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
+using TesApi.Web.Runner;
 using TesApi.Web.Storage;
 
 namespace TesApi.Web
@@ -34,6 +35,8 @@ namespace TesApi.Web
     /// </summary>
     public class Startup
     {
+        // TODO centralize in single location
+        private const string tesVersion = "4.7.0";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -82,20 +85,20 @@ namespace TesApi.Web
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
                     .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
-                    .AddNewtonsoftJson(opts =>
-                    {
-                        opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                        opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
-                    }).Services
+                        .AddNewtonsoftJson(opts =>
+                        {
+                            opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                            opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
+                        })
+                    .Services
 
-                    .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
                     .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
                     .AddSingleton<IRepository<TesTask>>(sp => ActivatorUtilities.CreateInstance<RepositoryRetryHandler<TesTask>>(sp, (IRepository<TesTask>)sp.GetRequiredService(typeof(TesTaskPostgreSqlRepository))))
 
                     .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
                     .AddSingleton<ContainerRegistryProvider>()
-                    .AddSingleton<CacheAndRetryHandler>()
+                    .AddSingleton<CachingRetryHandler>()
                     .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton<PriceApiClient>()
@@ -106,12 +109,15 @@ namespace TesApi.Web
                     .AddSingleton<ConfigurationUtils>()
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
                     .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
+                    .AddSingleton<TaskToNodeTaskConverter>()
+                    .AddSingleton<TaskExecutionScriptingManager>()
+                    .AddTransient<BatchNodeScriptBuilder>()
 
                     .AddSwaggerGen(c =>
                     {
-                        c.SwaggerDoc("4.5.0", new()
+                        c.SwaggerDoc(tesVersion, new()
                         {
-                            Version = "4.5.0",
+                            Version = tesVersion,
                             Title = "GA4GH Task Execution Service",
                             Description = "Task Execution Service (ASP.NET Core 7.0)",
                             Contact = new()
@@ -140,7 +146,6 @@ namespace TesApi.Web
                     .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedAutoPoolsHostedService>();
                 //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
-
             }
             catch (Exception exc)
             {
@@ -276,7 +281,7 @@ namespace TesApi.Web
                 })
                 .UseSwaggerUI(c =>
                 {
-                    c.SwaggerEndpoint("/swagger/4.5.0/openapi.json", "Task Execution Service");
+                    c.SwaggerEndpoint($"/swagger/{tesVersion}/openapi.json", "Task Execution Service");
                 })
 
                 .IfThenElse(hostingEnvironment.IsDevelopment(),

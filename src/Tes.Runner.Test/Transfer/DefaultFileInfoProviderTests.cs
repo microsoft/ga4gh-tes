@@ -66,13 +66,38 @@ namespace Tes.Runner.Test.Transfer
         {
             var files = fileInfoProvider.GetFilesBySearchPattern(directoryInfo.FullName, pattern);
 
-            AssertAllTempFilesAreReturned(files);
+            AssertCountOfFilesReturned(files);
         }
 
-        private static void AssertAllTempFilesAreReturned(string[] files)
+
+        [TestMethod]
+        public void GetFilesBySearchPattern_SingleFileUseRootAsPathAndRemainingAsSearchPattern_ReturnsFile()
+        {
+            var targetFile = directoryInfo.GetFiles().First();
+            var rootFullName = targetFile.Directory!.Root.FullName;
+            var searchPattern = targetFile.FullName.Substring(rootFullName.Length);
+
+            var files = fileInfoProvider.GetFilesBySearchPattern(rootFullName, searchPattern);
+
+            Assert.AreEqual(1, files.Count);
+            Assert.AreEqual(targetFile.FullName, files[0].AbsolutePath);
+        }
+
+        [TestMethod]
+        public void GetRootPathPair_SingleFile_RootAndRelativePathIsReturned()
+        {
+            var targetFile = directoryInfo.GetFiles().First();
+
+            var rootPathPair = fileInfoProvider.GetRootPathPair(targetFile.FullName);
+
+            Assert.AreEqual(targetFile.Directory!.Root.Name, rootPathPair.Root);
+            Assert.AreEqual(targetFile.FullName.Substring(targetFile.Directory.Root.Name.Length), rootPathPair.RelativePath);
+        }
+
+        private static void AssertCountOfFilesReturned(IEnumerable<Object> files)
         {
             //the setup creates 4 files with the same prefix
-            Assert.AreEqual(4, files.Length);
+            Assert.AreEqual(4, files.Count());
         }
 
         [TestMethod]
@@ -80,7 +105,33 @@ namespace Tes.Runner.Test.Transfer
         {
             var files = fileInfoProvider.GetAllFilesInDirectory(directoryInfo.FullName);
 
-            AssertAllTempFilesAreReturned(files);
+            AssertCountOfFilesReturned(files.AsEnumerable());
+        }
+
+        [TestMethod]
+        public void GetAllFilesInDirectoryTest_DirectoryPathIsProvidedWithAndWithoutEndingSlash_AllFilesAreReturned()
+        {
+            var directoryNameWithoutEndingSlash = directoryInfo.FullName.TrimEnd(Path.DirectorySeparatorChar);
+            var directoryNameWithEndingSlash = $"{directoryNameWithoutEndingSlash}{Path.DirectorySeparatorChar}";
+
+            var files = fileInfoProvider.GetAllFilesInDirectory(directoryNameWithoutEndingSlash);
+
+            AssertCountOfFilesReturned(files.AsEnumerable());
+
+            files = fileInfoProvider.GetAllFilesInDirectory(directoryNameWithEndingSlash);
+
+            AssertCountOfFilesReturned(files.AsEnumerable());
+        }
+
+        [TestMethod]
+        public void GetAllFilesInDirectoryTest_DirectoryPathContainsAnEnvVariable_AllFilesAreReturned()
+        {
+            Environment.SetEnvironmentVariable("TEST_PATH", directoryInfo.FullName);
+            var directoryNameAsEnvVar = "%TEST_PATH%";
+
+            var files = fileInfoProvider.GetAllFilesInDirectory(directoryNameAsEnvVar);
+
+            AssertCountOfFilesReturned(files.AsEnumerable());
         }
     }
 }

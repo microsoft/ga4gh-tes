@@ -32,7 +32,7 @@ namespace TesApi.Web.Controllers
                 // TODO: 503? If so, how to add "Retry-After" and ensure that caching-related headers are not enabling caching of this result?
                 // Alternatively: 429? Is there a built-in IActionResult for that?
                 // If we are overloaded we do want to signal readyness for a retry, but this may also signal the service being shutdown.
-                context.Result = new StatusCodeResult(504);
+                context.Result = new StatusCodeResult((int)System.Net.HttpStatusCode.GatewayTimeout);
                 context.ExceptionHandled = true;
             }
         }

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
+using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.WindowsAzure.Storage;
@@ -164,6 +165,24 @@ namespace TesApi.Web.Storage
         private static string NormalizedBlobPath(string blobPath)
         {
             return string.IsNullOrEmpty(blobPath) ? string.Empty : $"/{blobPath.TrimStart('/')}";
+        }
+
+        /// <inheritdoc />
+        public override string GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath)
+        {
+            var normalizedBlobPath = NormalizedBlobPath(blobPath);
+            var blobPathWithPrefix = $"{task.Id}{normalizedBlobPath}";
+            if (task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters
+                    .internal_path_prefix) == true)
+            {
+                blobPathWithPrefix =
+                    $"{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}{normalizedBlobPath}";
+            }
+
+            //passing the resulting string through the builder to ensure that the path is properly encoded and valid
+            var builder = new BlobUriBuilder(new Uri($"https://{defaultStorageAccountName}.blob.core.windows.net/{TesExecutionsPathPrefix}/{blobPathWithPrefix.TrimStart('/')}"));
+
+            return builder.ToUri().ToString();
         }
 
         /// <inheritdoc />

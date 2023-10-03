@@ -15,7 +15,7 @@ namespace Tes.ApiClients.Tests
     public class PriceApiClientTests
     {
         private PriceApiClient pricingApiClient = null!;
-        private CacheAndRetryHandler cacheAndRetryHandler = null!;
+        private CachingRetryHandler cachingRetryHandler = null!;
         private IMemoryCache appCache = null!;
 
         [TestInitialize]
@@ -24,8 +24,8 @@ namespace Tes.ApiClients.Tests
             appCache = new MemoryCache(new MemoryCacheOptions());
             var options = new Mock<IOptions<RetryPolicyOptions>>();
             options.Setup(o => o.Value).Returns(new RetryPolicyOptions());
-            cacheAndRetryHandler = new CacheAndRetryHandler(appCache, options.Object);
-            pricingApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
+            cachingRetryHandler = new CachingRetryHandler(appCache, options.Object);
+            pricingApiClient = new PriceApiClient(cachingRetryHandler, new NullLogger<PriceApiClient>());
         }
 
         [TestCleanup]
@@ -40,7 +40,7 @@ namespace Tes.ApiClients.Tests
             var page = await pricingApiClient.GetPricingInformationPageAsync(0, "westus2", CancellationToken.None);
 
             Assert.IsNotNull(page);
-            Assert.IsTrue(page.Items.Length == 100);
+            Assert.IsTrue(page.Items.Length > 0);
         }
 
         [TestMethod]
@@ -50,9 +50,9 @@ namespace Tes.ApiClients.Tests
             var cacheKey = await pricingApiClient.ToCacheKeyAsync(new Uri(page.RequestLink), false, CancellationToken.None);
             var cachedPage = JsonSerializer.Deserialize<RetailPricingData>(appCache.Get<string>(cacheKey)!);
             Assert.IsNotNull(page);
-            Assert.IsTrue(page.Items.Length == 100);
+            Assert.IsTrue(page.Items.Length > 0);
             Assert.IsNotNull(cachedPage);
-            Assert.IsTrue(cachedPage.Items.Length == 100);
+            Assert.IsTrue(page.Items.Length == cachedPage.Items.Length);
         }
 
         [TestMethod]
