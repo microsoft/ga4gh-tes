@@ -142,6 +142,7 @@ namespace TesApi.Web
 
             if (0 == tesTasks.Length)
             {
+                logger.LogInformation("OrchestrateTesTasksOnBatch({Poll}) skipped.", pollName);
                 return;
             }
 
@@ -273,7 +274,7 @@ namespace TesApi.Web
                 await batchScheduler.FlushPoolsAsync(pools, stoppingToken);
             }
 
-            logger.LogDebug("OrchestrateTesTasksOnBatch({Poll}) for {TaskCount} tasks completed in {TotalSeconds} seconds.", pollName, tesTasks.Length, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
+            logger.LogInformation("OrchestrateTesTasksOnBatch({Poll}) for {TaskCount} tasks completed in {TotalSeconds} seconds.", pollName, tesTasks.Length, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
         }
     }
 }
