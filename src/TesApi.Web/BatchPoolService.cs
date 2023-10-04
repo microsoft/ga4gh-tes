@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -24,7 +25,7 @@ namespace TesApi.Web
         /// <summary>
         /// Interval between each call to <see cref="IBatchPool.ServicePoolAsync(CancellationToken)"/>.
         /// </summary>
-        public static readonly TimeSpan RunInterval = TimeSpan.FromSeconds(30);
+        public static readonly TimeSpan RunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs uses a 30 second polling interval
 
         /// <summary>
         /// Default constructor
@@ -98,9 +99,31 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="stoppingToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        private ValueTask ExecuteServiceBatchPoolsAsync(CancellationToken stoppingToken)
+        private async ValueTask ExecuteServiceBatchPoolsAsync(CancellationToken stoppingToken)
         {
-            return ExecuteActionOnPoolsAsync("ServiceBatchPools", (pool, token) => pool.ServicePoolAsync(token), stoppingToken);
+            var list = new ConcurrentBag<(TesTask TesTask, AzureBatchTaskState State)>();
+
+            await ExecuteActionOnPoolsAsync("ServiceBatchPools", (pool, token) => ProcessFailures(pool.ServicePoolAsync(token), token), stoppingToken);
+
+            await OrchestrateTesTasksOnBatchAsync(
+                "Failures",
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+                async token => list.Select(t => t.TesTask).ToAsyncEnumerable(),
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+                (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, list.Select(t => t.State).ToArray(), token),
+                stoppingToken);
+
+            async ValueTask ProcessFailures(IAsyncEnumerable<(string taskId, AzureBatchTaskState)> failures, CancellationToken cancellationToken)
+            {
+                await foreach (var (id, state) in failures.WithCancellation(cancellationToken))
+                {
+                    TesTask tesTask = default;
+                    if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
+                    {
+                        list.Add((tesTask, state));
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -128,7 +151,7 @@ namespace TesApi.Web
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
                 async token => GetTesTasks(token),
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
-                (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, tasks.Select(GetBatchState).ToArray(), token),
+                (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, tasks.Select(GetCompletedBatchState).ToArray(), token),
                 stoppingToken);
 
             async IAsyncEnumerable<TesTask> GetTesTasks([EnumeratorCancellation] CancellationToken cancellationToken)
@@ -143,11 +166,18 @@ namespace TesApi.Web
                 }
             }
 
-            AzureBatchTaskState GetBatchState(CloudTask task)
+            AzureBatchTaskState GetCompletedBatchState(CloudTask task)
             {
-                if (task.ExecutionInformation.ExitCode != 0 || task.ExecutionInformation.FailureInformation is not null)
+                return task.ExecutionInformation.Result switch
                 {
-                    return new(AzureBatchTaskState.TaskState.CompletedWithErrors,
+                    Microsoft.Azure.Batch.Common.TaskExecutionResult.Success => new(
+                        AzureBatchTaskState.TaskState.CompletedSuccessfully,
+                        BatchTaskStartTime: task.ExecutionInformation.StartTime,
+                        BatchTaskEndTime: task.ExecutionInformation.EndTime,
+                        BatchTaskExitCode: task.ExecutionInformation.ExitCode),
+
+                    Microsoft.Azure.Batch.Common.TaskExecutionResult.Failure => new(
+                        AzureBatchTaskState.TaskState.CompletedWithErrors,
                         Failure: new(task.ExecutionInformation.FailureInformation.Code,
                         Enumerable.Empty<string>()
                             .Append(task.ExecutionInformation.FailureInformation.Message)
@@ -155,15 +185,10 @@ namespace TesApi.Web
                             .Concat(task.ExecutionInformation.FailureInformation.Details.Select(pair => pair.Value))),
                         BatchTaskStartTime: task.ExecutionInformation.StartTime,
                         BatchTaskEndTime: task.ExecutionInformation.EndTime,
-                        BatchTaskExitCode: task.ExecutionInformation.ExitCode);
-                }
-                else
-                {
-                    return new(AzureBatchTaskState.TaskState.CompletedSuccessfully,
-                        BatchTaskStartTime: task.ExecutionInformation.StartTime,
-                        BatchTaskEndTime: task.ExecutionInformation.EndTime,
-                        BatchTaskExitCode: task.ExecutionInformation.ExitCode);
-                }
+                        BatchTaskExitCode: task.ExecutionInformation.ExitCode),
+
+                    _ => throw new InvalidOperationException(),
+                };
             }
         }
     }

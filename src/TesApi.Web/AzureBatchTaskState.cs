@@ -25,6 +25,11 @@ namespace TesApi.Web
         public enum TaskState
         {
             /// <summary>
+            /// A request has been made for the task's cancellation.
+            /// </summary>
+            CancellationRequested,
+
+            /// <summary>
             /// The task has been assigned to a compute node, but is waiting for a
             /// required Job Preparation task to complete on the node.
             /// </summary>

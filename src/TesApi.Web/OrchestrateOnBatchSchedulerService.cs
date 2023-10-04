@@ -168,7 +168,6 @@ namespace TesApi.Web
                         if (exc is Microsoft.Azure.Batch.Common.BatchException batchException)
                         {
                             var requestInfo = batchException.RequestInformation;
-                            //var requestId = batchException.RequestInformation?.ServiceRequestId;
                             var reason = (batchException.InnerException as Microsoft.Azure.Batch.Protocol.Models.BatchErrorException)?.Response?.ReasonPhrase;
                             var logs = new List<string>();
 
@@ -181,6 +180,7 @@ namespace TesApi.Web
                             {
                                 logs.Add($"BatchErrorCode: {requestInfo.BatchError.Code}");
                                 logs.Add($"BatchErrorMessage: {requestInfo.BatchError.Message}");
+
                                 foreach (var detail in requestInfo.BatchError.Values?.Select(d => $"{d.Key}={d.Value}") ?? Enumerable.Empty<string>())
                                 {
                                     logs.Add(detail);
@@ -262,7 +262,7 @@ namespace TesApi.Web
                     logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
                 }
 
-                if (!string.IsNullOrWhiteSpace(tesTask.PoolId) && (TesState.QUEUEDEnum == tesTask.State || TesState.RUNNINGEnum == tesTask.State))
+                if (!string.IsNullOrWhiteSpace(tesTask.PoolId) && (TesState.INITIALIZINGEnum == tesTask.State || TesState.RUNNINGEnum == tesTask.State))
                 {
                     pools.Add(tesTask.PoolId);
                 }

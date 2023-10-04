@@ -257,6 +257,7 @@ namespace TesApi.Web
                                 {
                                     case ComputeNodeState.Unusable:
                                         _logger.LogDebug("Found unusable node {NodeId}", node.Id);
+                                        // TODO: notify running tasks that task will switch nodes?
                                         break;
 
                                     case ComputeNodeState.StartTaskFailed:
@@ -266,6 +267,7 @@ namespace TesApi.Web
 
                                     case ComputeNodeState.Preempted:
                                         _logger.LogDebug("Found preempted node {NodeId}", node.Id);
+                                        // TODO: notify running tasks that task will switch nodes? Or, in the future, terminate the task?
                                         break;
 
                                     default: // Should never reach here. Skip.
@@ -421,14 +423,6 @@ namespace TesApi.Web
             return true;
         }
 
-        /// <inheritdoc/>
-        public ResizeError PopNextResizeError()
-            => ResizeErrors.TryDequeue(out var resizeError) ? resizeError : default;
-
-        /// <inheritdoc/>
-        public TaskFailureInformation PopNextStartTaskFailure()
-            => StartTaskFailures.TryDequeue(out var failure) ? failure : default;
-
         /// <summary>
         /// Service methods dispatcher.
         /// </summary>
@@ -458,7 +452,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async ValueTask ServicePoolAsync(CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<(string taskId, AzureBatchTaskState)> ServicePoolAsync([EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var exceptions = new List<Exception>();
 
@@ -470,7 +464,12 @@ namespace TesApi.Web
             switch (exceptions.Count)
             {
                 case 0:
-                    return;
+                    await foreach (var (id, state) in _azureProxy.ListTasksAsync(Pool.PoolId, new ODATADetailLevel { FilterClause = "id", SelectClause = "state eq active" }).Select(cloud => cloud.Id).Zip(GetFailures(cancellationToken), (id, state) => (id, state)).WithCancellation(cancellationToken))
+                    {
+                        yield return (id, state);
+                    }
+
+                    yield break;
 
                 case 1:
                     throw exceptions.First();
@@ -504,6 +503,38 @@ namespace TesApi.Web
 
                 return false;
             }
+
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+            async IAsyncEnumerable<AzureBatchTaskState> GetFailures([EnumeratorCancellation] CancellationToken cancellationToken)
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+            {
+                for (var failure = PopNextStartTaskFailure(); failure is not null; failure = PopNextStartTaskFailure())
+                {
+                    yield return ConvertFromStartTask(failure);
+                }
+
+                for (var failure = PopNextResizeError(); failure is not null; failure = PopNextResizeError())
+                {
+                    yield return ConvertFromResize(failure);
+                }
+            }
+
+            AzureBatchTaskState ConvertFromResize(ResizeError failure)
+                => new(AzureBatchTaskState.TaskState.NodeAllocationFailed, Failure: new(failure.Code, Enumerable.Empty<string>()
+                    .Append(failure.Message)
+                    .Concat(failure.Values.Select(t => t.Value))));
+
+            AzureBatchTaskState ConvertFromStartTask(TaskFailureInformation failure)
+                => new(AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, Failure: new(failure.Code, Enumerable.Empty<string>()
+                    .Append(failure.Message)
+                    .Append($"Start task failed ({failure.Category})")
+                    .Concat(failure.Details.Select(t => t.Value))));
+
+            ResizeError PopNextResizeError()
+                => ResizeErrors.TryDequeue(out var resizeError) ? resizeError : default;
+
+            TaskFailureInformation PopNextStartTaskFailure()
+                => StartTaskFailures.TryDequeue(out var failure) ? failure : default;
         }
 
         /// <inheritdoc/>
@@ -512,6 +543,7 @@ namespace TesApi.Web
             return _azureProxy.ListTasksAsync(Pool.PoolId, new ODATADetailLevel { FilterClause = "id,executionInfo", SelectClause = "state eq completed" });
         }
 
+        // Returns false when pool/job was removed because it was not found. Returns true if the error was completely something else.
         private async ValueTask<bool> RemoveMissingPoolsAsync(Exception ex, CancellationToken cancellationToken)
         {
             switch (ex)
@@ -525,12 +557,12 @@ namespace TesApi.Web
                     return result;
 
                 case BatchException batchException:
-                    if (batchException.RequestInformation.BatchError.Code == BatchErrorCodeStrings.PoolNotFound)
+                    if (batchException.RequestInformation.BatchError.Code == BatchErrorCodeStrings.PoolNotFound ||
+                        batchException.RequestInformation.BatchError.Code == BatchErrorCodeStrings.JobNotFound)
                     {
-                        _logger.LogError(ex, "Batch pool {PoolId} is missing. Removing it from TES's active pool list.", Pool.PoolId);
+                        _logger.LogError(ex, "Batch pool and/or job {PoolId} is missing. Removing them from TES's active pool list.", Pool.PoolId);
                         _ = _batchPools.RemovePoolFromList(this);
-                        // TODO: Consider moving any remaining tasks to another pool, or failing tasks explicitly
-                        await _batchPools.DeletePoolAsync(this, cancellationToken); // Ensure job removal too
+                        await _batchPools.DeletePoolAsync(this, cancellationToken);
                         return false;
                     }
                     break;

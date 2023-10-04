@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
 using Tes.Repository;
-using YamlDotNet.Core.Tokens;
 
 namespace TesApi.Web
 {
@@ -20,7 +19,8 @@ namespace TesApi.Web
     /// </summary>
     internal class Scheduler : OrchestrateOnBatchSchedulerService
     {
-        private readonly TimeSpan runInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs uses a 30 second polling interval
+        private readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(5);
+        private readonly TimeSpan batchRunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs uses a 30 second polling interval
 
         /// <summary>
         /// Default constructor
@@ -78,7 +78,7 @@ namespace TesApi.Web
                 .OrderBy(t => t.CreationTime)
                 .ToAsyncEnumerable());
 
-            return ExecuteActionOnIntervalAsync(runInterval,
+            return ExecuteActionOnIntervalAsync(batchRunInterval,
                 cancellationToken => OrchestrateTesTasksOnBatchAsync("Queued", query, batchScheduler.ProcessQueuedTesTasksAsync, cancellationToken),
                 stoppingToken);
         }
@@ -97,8 +97,15 @@ namespace TesApi.Web
                 .OrderBy(t => t.CreationTime)
                 .ToAsyncEnumerable());
 
-            return ExecuteActionOnIntervalAsync(runInterval,
-                cancellationToken => OrchestrateTesTasksOnBatchAsync("Cancelled", query, batchScheduler.ProcessCancelledTesTasksAsync, cancellationToken),
+            return ExecuteActionOnIntervalAsync(batchRunInterval,
+                cancellationToken => OrchestrateTesTasksOnBatchAsync(
+                    "Cancelled",
+                    query,
+                    (tasks, cancellationToken) => batchScheduler.ProcessTesTaskBatchStatesAsync(
+                        tasks,
+                        Enumerable.Repeat<AzureBatchTaskState>(new(AzureBatchTaskState.TaskState.CancellationRequested), tasks.Length).ToArray(),
+                        cancellationToken),
+                    cancellationToken),
                 stoppingToken);
         }
 
@@ -116,8 +123,15 @@ namespace TesApi.Web
                 .OrderBy(t => t.CreationTime)
                 .ToAsyncEnumerable());
 
-            return ExecuteActionOnIntervalAsync(runInterval,
-                cancellationToken => OrchestrateTesTasksOnBatchAsync("Terminated", query, batchScheduler.ProcessTerminatedTesTasksAsync, cancellationToken),
+            return ExecuteActionOnIntervalAsync(batchRunInterval,
+                cancellationToken => OrchestrateTesTasksOnBatchAsync(
+                    "Terminated",
+                    query,
+                    (tasks, cancellationToken) => batchScheduler.ProcessTesTaskBatchStatesAsync(
+                        tasks,
+                        Enumerable.Repeat<AzureBatchTaskState>(new(AzureBatchTaskState.TaskState.CancellationRequested), tasks.Length).ToArray(),
+                        cancellationToken),
+                    cancellationToken),
                 stoppingToken);
         }
 
@@ -128,7 +142,7 @@ namespace TesApi.Web
         /// <returns></returns>
         private Task ExecuteUpdateTesTaskFromEventBlobAsync(CancellationToken stoppingToken)
         {
-            return ExecuteActionOnIntervalAsync(runInterval,
+            return ExecuteActionOnIntervalAsync(blobRunInterval,
                 UpdateTesTasksFromEventBlobsAsync,
                 stoppingToken);
         }

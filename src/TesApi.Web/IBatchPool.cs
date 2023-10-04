@@ -46,24 +46,12 @@ namespace TesApi.Web
         ValueTask<bool> CanBeDeleted(CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Removes and returns the next available resize error.
-        /// </summary>
-        /// <returns>The first <see cref="ResizeError"/> in the list, or null if the list is empty.</returns>
-        /// <remarks><see cref="ResizeError.Values"/> appears to contain two entries with <see cref="NameValuePair.Name"/> containing respectively "code" &amp; "message"</remarks>
-        ResizeError PopNextResizeError();
-
-        /// <summary>
-        /// Removes and returns the next available start task failure.
-        /// </summary>
-        /// <returns>The first <see cref="TaskFailureInformation"/> in the list, or null if the list is empty.</returns>
-        TaskFailureInformation PopNextStartTaskFailure();
-
-        /// <summary>
         /// Updates this instance based on changes to its environment.
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <remarks>Calls each internal servicing method in order. Throws all exceptions gathered from all methods.</remarks>
-        ValueTask ServicePoolAsync(CancellationToken cancellationToken = default);
+        /// <returns></returns>
+        IAsyncEnumerable<(string taskId, AzureBatchTaskState)> ServicePoolAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets the last time the pool's compute node list was changed.

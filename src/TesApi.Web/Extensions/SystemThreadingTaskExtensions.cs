@@ -2,7 +2,9 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -41,7 +43,7 @@ namespace TesApi.Web.Extensions
             var list = source.Where(e => e is not null).Select(e => (Entry: e, Task: sourceToTask(e))).ToList();
             var pendingCount = list.Count;
 
-            if (list.Select(e => e.Task).ToHashSet().Count != pendingCount) // Check for duplicate tasks
+            if (list.Select(e => e.Task).ToHashSet(new SystemTaskEqualityComparer()).Count != pendingCount) // Check for duplicate tasks
             {
                 throw new ArgumentException("Duplicate System.Threading.Tasks found referenced in collection.", nameof(source));
             }
@@ -77,6 +79,15 @@ namespace TesApi.Web.Extensions
             {
                 yield return entry;
             }
+        }
+
+        private class SystemTaskEqualityComparer : IEqualityComparer<Task>
+        {
+            public bool Equals(Task x, Task y)
+                => ReferenceEquals(x, y);
+
+            public int GetHashCode([DisallowNull] Task obj)
+                => obj?.GetHashCode() ?? 0;
         }
     }
 }
