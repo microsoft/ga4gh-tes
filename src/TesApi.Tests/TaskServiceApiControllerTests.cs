@@ -322,7 +322,7 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(result);
             Assert.AreEqual(200, result.StatusCode);
-            Assert.AreEqual(TesState.CANCELEDEnum, tesTask.State);
+            Assert.AreEqual(TesState.CANCELINGEnum, tesTask.State);
             services.TesTaskRepository.Verify(x => x.UpdateItemAsync(tesTask, It.IsAny<System.Threading.CancellationToken>()));
         }
 

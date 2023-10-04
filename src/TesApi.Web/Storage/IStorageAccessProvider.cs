@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Tes.Models;
@@ -95,5 +96,14 @@ namespace TesApi.Web.Storage
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         public Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Returns an Azure Storage Blob URL without a SAS token for the specified blob path in the internal storage location.
+        /// </summary>
+        /// <param name="task"></param>
+        /// <param name="blobPath"></param>
+        /// <returns></returns>
+        public string GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath);
+
     }
 }

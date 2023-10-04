@@ -35,7 +35,7 @@ namespace Tes.Runner
         {
             var bindings = volumeBindingsGenerator.GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs);
 
-            var result = await dockerExecutor.RunOnContainerAsync(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings);
+            var result = await dockerExecutor.RunOnContainerAsync(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings, tesNodeTask.ContainerWorkDir);
 
             return new NodeTaskResult(result);
         }

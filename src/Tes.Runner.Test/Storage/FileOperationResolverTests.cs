@@ -28,7 +28,7 @@ namespace Tes.Runner.Test.Storage
             {
                 Path = "/foo/bar",
                 SourceUrl = "https://foo.bar/cont?sig=sasToken",
-                SasStrategy = TransformationStrategy.None,
+                TransformationStrategy = TransformationStrategy.None,
             };
 
             singleFileOutput = new FileOutput
