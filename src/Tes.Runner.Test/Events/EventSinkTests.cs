@@ -70,7 +70,7 @@ namespace Tes.Runner.Test.Events
         }
 
         [TestMethod]
-        public async Task Stop_MultipleEventsAreSetnConcurrently_StopWaitsForAll()
+        public async Task Stop_MultipleEventsAreSetConcurrently_StopWaitsForAll()
         {
             eventSink.Start();
 
@@ -97,6 +97,20 @@ namespace Tes.Runner.Test.Events
             await eventSink.PublishEventAsync(new EventMessage());
             await eventSink.StopAsync();
             await Assert.ThrowsExceptionAsync<ChannelClosedException>(() => eventSink.PublishEventAsync(new EventMessage()));
+        }
+
+
+        [TestMethod]
+        public async Task Stop_CalledMultipleTimes_StopIsIdempotent()
+        {
+            eventSink.Start();
+            await eventSink.PublishEventAsync(new EventMessage());
+
+            await eventSink.StopAsync();
+            await eventSink.StopAsync();
+            await eventSink.StopAsync();
+
+            Assert.AreEqual(1, eventSink.EventsHandled.Count);
         }
     }
 }

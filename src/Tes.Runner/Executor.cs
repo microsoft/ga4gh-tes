@@ -14,7 +14,7 @@ namespace Tes.Runner
     public class Executor : IAsyncDisposable
     {
         public const long ZeroBytesTransferred = 0;
-        public const long DefaultErrorExitCode = -1;
+        public const long DefaultErrorExitCode = 1;
         private readonly ILogger logger = PipelineLoggerFactory.Create<Executor>();
         private readonly NodeTask tesNodeTask;
         private readonly FileOperationResolver operationResolver;
@@ -280,7 +280,6 @@ namespace Tes.Runner
 
         public async ValueTask DisposeAsync()
         {
-            GC.SuppressFinalize(this);
             await eventsPublisher.FlushPublishersAsync();
         }
     }

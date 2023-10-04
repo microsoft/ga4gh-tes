@@ -12,7 +12,7 @@ namespace Tes.Runner.Events
     public class BlobStorageEventSink : EventSink
     {
         const string EventTimeStampFormat = "HH-mm-ss.fff";
-        const string Iso8601DateFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+        // https://learn.microsoft.com/en-us/rest/api/storageservices/version-2023-05-03
         private const string ApiVersion = "2023-05-03";
         private readonly Uri storageUrl;
         private readonly ILogger logger = PipelineLoggerFactory.Create<BlobStorageEventSink>();

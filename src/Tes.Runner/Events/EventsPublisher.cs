@@ -90,8 +90,6 @@ public class EventsPublisher : IAsyncDisposable
         var eventMessage = CreateNewEventMessage(nodeTask.Id, UploadStartEvent, StartedStatus,
             nodeTask.WorkflowId);
 
-        eventMessage.EventData = new Dictionary<string, string>();
-
         await PublishAsync(eventMessage);
     }
 
@@ -189,7 +187,8 @@ public class EventsPublisher : IAsyncDisposable
             EntityId = entityId ?? Guid.NewGuid().ToString(),
             Created = DateTime.UtcNow,
             EventVersion = EventVersion,
-            EventDataVersion = EventDataVersion
+            EventDataVersion = EventDataVersion,
+            EventData = new Dictionary<string, string>()
         };
     }
 
@@ -198,7 +197,7 @@ public class EventsPublisher : IAsyncDisposable
     {
         if (sinks.Count == 0)
         {
-            logger.LogInformation("No sinks configured for publishing events");
+            logger.LogWarning("No sinks configured for publishing events");
             return;
         }
 
@@ -219,7 +218,6 @@ public class EventsPublisher : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        GC.SuppressFinalize(this);
         await FlushPublishersAsync();
     }
 }

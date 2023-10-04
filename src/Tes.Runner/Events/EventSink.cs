@@ -9,7 +9,9 @@ namespace Tes.Runner.Events
 {
     public abstract class EventSink : IEventSink
     {
-        const int StopWaitDurationInSeconds = 60;
+        public const string Iso8601DateFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+
+        const int StopWaitDurationInSeconds = 30;
 
         private readonly Channel<EventMessage> events = Channel.CreateUnbounded<EventMessage>();
         private readonly ILogger logger = PipelineLoggerFactory.Create<EventSink>();
@@ -37,6 +39,12 @@ namespace Tes.Runner.Events
                 throw new InvalidOperationException("Event handler task is not running");
             }
 
+            if (eventHandlerTask.IsCompleted)
+            {
+                logger.LogDebug("Task already completed");
+                return;
+            }
+
             //close the channel to stop the event handler
             events.Writer.Complete();
 
@@ -53,7 +61,7 @@ namespace Tes.Runner.Events
                 { "task_id", eventMessage.EntityId },
                 { "workflow_id", eventMessage.CorrelationId },
                 //format date to ISO 8601, which is URL friendly
-                { "created", eventMessage.Created.ToString("yyyy-MM-ddTHH:mm:ssZ") }
+                { "created", eventMessage.Created.ToString(Iso8601DateFormat) }
             };
         }
         private async Task EventHandlerAsync()
