@@ -21,6 +21,7 @@ using Tes.ApiClients.Options;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Filters;
+using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Configuration;
@@ -75,8 +76,11 @@ namespace TesApi.Web
                     .Configure<BatchSchedulingOptions>(configuration.GetSection(BatchSchedulingOptions.SectionName))
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
+                    .Configure<AuthenticationOptions>(configuration.GetSection(AuthenticationOptions.SectionName))
 
                     .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
+                    .AddSingleton<AuthenticationConfigurationService>()
+                    .AddOpenIdConnectAuthentication()
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
