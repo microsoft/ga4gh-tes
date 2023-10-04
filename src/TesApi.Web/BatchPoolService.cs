@@ -20,7 +20,7 @@ namespace TesApi.Web
     /// This should only be used as a system-wide singleton service.  This class does not support scale-out on multiple machines,
     /// nor does it implement a leasing mechanism.  In the future, consider using the Lease Blob operation.
     /// </summary>
-    internal class BatchPoolService : OrchestrateOnBatchSchedulerService
+    internal class BatchPoolService : OrchestrateOnBatchSchedulerServiceBase
     {
         /// <summary>
         /// Interval between each call to <see cref="IBatchPool.ServicePoolAsync(CancellationToken)"/>.

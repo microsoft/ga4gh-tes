@@ -20,7 +20,7 @@ namespace TesApi.Web
     /// This should only be used to build system-wide singleton services.  This class does not support scale-out on multiple machines,
     /// nor does it implement a leasing mechanism.  In the future, consider using the Lease Blob operation.
     /// </summary>
-    internal abstract class OrchestrateOnBatchSchedulerService : BackgroundService
+    internal abstract class OrchestrateOnBatchSchedulerServiceBase : BackgroundService
     {
         protected readonly IRepository<TesTask> repository;
         protected readonly IBatchScheduler batchScheduler;
@@ -32,7 +32,7 @@ namespace TesApi.Web
         /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler">The batch scheduler implementation</param>
         /// <param name="logger">The logger instance</param>
-        protected OrchestrateOnBatchSchedulerService(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger logger)
+        protected OrchestrateOnBatchSchedulerServiceBase(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger logger)
         {
             this.repository = repository;
             this.batchScheduler = batchScheduler;
