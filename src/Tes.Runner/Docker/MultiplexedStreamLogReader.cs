@@ -6,7 +6,7 @@ using Docker.DotNet;
 
 namespace Tes.Runner.Docker
 {
-    public abstract class MultiplexedStreamLogReader
+    public abstract class MultiplexedStreamLogReader : IStreamLogReader
     {
         const int KiB = 1024;
 

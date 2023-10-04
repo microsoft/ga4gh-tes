@@ -11,10 +11,10 @@ using Tes.Runner.Transfer;
 
 namespace Tes.Runner
 {
-    public class Executor
+    public class Executor : IAsyncDisposable
     {
         public const long ZeroBytesTransferred = 0;
-        const long DefaultErrorExitCode = -1;
+        public const long DefaultErrorExitCode = -1;
         private readonly ILogger logger = PipelineLoggerFactory.Create<Executor>();
         private readonly NodeTask tesNodeTask;
         private readonly FileOperationResolver operationResolver;
@@ -47,13 +47,13 @@ namespace Tes.Runner
         {
             try
             {
-                await eventsPublisher.PublishExecutorEventStartAsync(tesNodeTask);
+                await eventsPublisher.PublishExecutorStartEventAsync(tesNodeTask);
 
                 var bindings = volumeBindingsGenerator.GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs);
 
                 var result = await dockerExecutor.RunOnContainerAsync(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings, tesNodeTask.ContainerWorkDir);
 
-                await eventsPublisher.PublishExecutorEventEndAsync(tesNodeTask, result.ExitCode, ToStatusMessage(result), result.Error);
+                await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, result.ExitCode, ToStatusMessage(result), result.Error);
 
                 return new NodeTaskResult(result);
             }
@@ -61,7 +61,7 @@ namespace Tes.Runner
             {
                 logger.LogError(e, "Failed to execute container");
 
-                await eventsPublisher.PublishExecutorEventEndAsync(tesNodeTask, DefaultErrorExitCode, EventsPublisher.FailedStatus, e.Message);
+                await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, DefaultErrorExitCode, EventsPublisher.FailedStatus, e.Message);
 
                 throw;
             }
@@ -71,10 +71,10 @@ namespace Tes.Runner
         {
             if (result.ExitCode == 0 && string.IsNullOrWhiteSpace(result.Error))
             {
-                return EventsPublisher.FailedStatus;
+                return EventsPublisher.SuccessStatus;
             }
 
-            return EventsPublisher.SuccessStatus;
+            return EventsPublisher.FailedStatus;
         }
 
 
@@ -94,7 +94,7 @@ namespace Tes.Runner
             var errorMessage = string.Empty;
             try
             {
-                await eventsPublisher.PublishUploadEventStartAsync(tesNodeTask);
+                await eventsPublisher.PublishUploadStartEventAsync(tesNodeTask);
 
                 ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
 
@@ -130,7 +130,7 @@ namespace Tes.Runner
             }
             finally
             {
-                await eventsPublisher.PublishUploadEventEndAsync(tesNodeTask, numberOfOutputs, bytesTransferred, statusMessage, errorMessage);
+                await eventsPublisher.PublishUploadEndEventAsync(tesNodeTask, numberOfOutputs, bytesTransferred, statusMessage, errorMessage);
             }
         }
 
@@ -193,7 +193,7 @@ namespace Tes.Runner
 
             try
             {
-                await eventsPublisher.PublishDownloadEventStartAsync(tesNodeTask);
+                await eventsPublisher.PublishDownloadStartEventAsync(tesNodeTask);
 
                 ArgumentNullException.ThrowIfNull(blobPipelineOptions, nameof(blobPipelineOptions));
 
@@ -221,7 +221,7 @@ namespace Tes.Runner
             }
             finally
             {
-                await eventsPublisher.PublishDownloadEventEndAsync(tesNodeTask, numberOfInputs, bytesTransferred, statusMessage, errorMessage);
+                await eventsPublisher.PublishDownloadEndEventAsync(tesNodeTask, numberOfInputs, bytesTransferred, statusMessage, errorMessage);
             }
         }
 
@@ -277,5 +277,11 @@ namespace Tes.Runner
         }
 
         private record TimedExecutionResult<T>(TimeSpan Elapsed, T Result);
+
+        public async ValueTask DisposeAsync()
+        {
+            GC.SuppressFinalize(this);
+            await eventsPublisher.FlushPublishersAsync();
+        }
     }
 }

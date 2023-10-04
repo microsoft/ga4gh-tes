@@ -11,9 +11,9 @@ namespace Tes.Runner.Events
 {
     public class BlobStorageEventSink : EventSink
     {
-        const string EventTimeStampFormat = "yyyy-MM-dd HH:mm:ss.fff";
+        const string EventTimeStampFormat = "HH-mm-ss.fff";
         const string Iso8601DateFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
-        private const string ApiVersion = "2023-01-01";
+        private const string ApiVersion = "2023-05-03";
         private readonly Uri storageUrl;
         private readonly ILogger logger = PipelineLoggerFactory.Create<BlobStorageEventSink>();
         private readonly BlobBlockApiHttpUtils blobBlockApiHttpUtils = new BlobBlockApiHttpUtils();
@@ -72,7 +72,7 @@ namespace Tes.Runner.Events
         private static string ToBlobName(EventMessage eventMessage)
         {
             var blobName =
-                $"events/{eventMessage.Name}/{eventMessage.Created.Year}/{eventMessage.Created.Month}/{eventMessage.Created.Day}/{eventMessage.Created.Hour}/{UtcNow.ToString(EventTimeStampFormat)}{eventMessage.Id}.json";
+                $"events/{eventMessage.Name}/{eventMessage.Created.Year}/{eventMessage.Created.Month}/{eventMessage.Created.Day}/{UtcNow.ToString(EventTimeStampFormat)}{eventMessage.Id}.json";
             return blobName;
         }
     }

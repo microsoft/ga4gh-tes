@@ -29,7 +29,7 @@ namespace Tes.Runner.Test.Events
 
             await eventSink.StopAsync();
 
-            Assert.AreEqual(1, eventSink.EventsHandles.Count);
+            Assert.AreEqual(1, eventSink.EventsHandled.Count);
         }
 
         [TestMethod]
@@ -43,7 +43,7 @@ namespace Tes.Runner.Test.Events
 
             await eventSink.StopAsync();
 
-            Assert.AreEqual(3, eventSink.EventsHandles.Count);
+            Assert.AreEqual(3, eventSink.EventsHandled.Count);
         }
 
         [TestMethod]
@@ -61,7 +61,7 @@ namespace Tes.Runner.Test.Events
 
             await eventSink.StopAsync();
 
-            Assert.AreEqual(3, eventSink.EventsHandles.Count);
+            Assert.AreEqual(3, eventSink.EventsHandled.Count);
 
             foreach (var task in tasks)
             {
@@ -82,7 +82,7 @@ namespace Tes.Runner.Test.Events
 
             await eventSink.StopAsync();
 
-            Assert.AreEqual(3, eventSink.EventsHandles.Count);
+            Assert.AreEqual(3, eventSink.EventsHandled.Count);
 
             foreach (var task in tasks)
             {
@@ -97,19 +97,6 @@ namespace Tes.Runner.Test.Events
             await eventSink.PublishEventAsync(new EventMessage());
             await eventSink.StopAsync();
             await Assert.ThrowsExceptionAsync<ChannelClosedException>(() => eventSink.PublishEventAsync(new EventMessage()));
-        }
-    }
-
-    public class TestEventSink : EventSink
-    {
-        public List<EventMessage> EventsHandles { get; } = new List<EventMessage>();
-        public int Delay { get; set; }
-
-        public override async Task HandleEventAsync(EventMessage eventMessage)
-        {
-            EventsHandles.Add(eventMessage);
-
-            await Task.Delay(Delay);
         }
     }
 }

@@ -110,6 +110,9 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <inheritdoc />
     public abstract string GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath);
 
+    /// <inheritdoc />
+    public abstract string GetInternalTesBlobUrlWithoutSasToken(string blobPath);
+
     /// <summary>
     /// Tries to parse the input into a Http Url. 
     /// </summary>

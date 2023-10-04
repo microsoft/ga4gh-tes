@@ -9,8 +9,7 @@ namespace Tes.Runner.Events
 {
     public abstract class EventSink : IEventSink
     {
-        const int MaxWaitAttempts = 20;
-        const double WaitInterval = 5;
+        const int StopWaitDurationInSeconds = 60;
 
         private readonly Channel<EventMessage> events = Channel.CreateUnbounded<EventMessage>();
         private readonly ILogger logger = PipelineLoggerFactory.Create<EventSink>();
@@ -33,30 +32,15 @@ namespace Tes.Runner.Events
 
         public async Task StopAsync()
         {
-            logger.LogDebug("Stopping events processing handler");
-
             if (eventHandlerTask is null)
             {
                 throw new InvalidOperationException("Event handler task is not running");
             }
 
-            //close the chanel to stop the event handler
+            //close the channel to stop the event handler
             events.Writer.Complete();
 
-            //wait until the event count is zero
-            var waitAttempts = 0;
-            while (events.Reader.Count > 0 && waitAttempts < MaxWaitAttempts)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(WaitInterval));
-                waitAttempts++;
-            }
-
-            if (waitAttempts == MaxWaitAttempts)
-            {
-                logger.LogWarning($"Events processing handler is stopped with {events.Reader.Count} events in the queue");
-            }
-
-            logger.LogDebug("Events processing handler is stopped");
+            await eventHandlerTask.WaitAsync(TimeSpan.FromSeconds(StopWaitDurationInSeconds));
         }
 
         protected IDictionary<string, string> ToEventTag(EventMessage eventMessage)

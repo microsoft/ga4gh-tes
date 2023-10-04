@@ -275,10 +275,11 @@ namespace TesApi.Web.Runner
         /// </summary>
         /// <param name="targetUrl"></param>
         /// <returns></returns>
-        public object WithStorageEventSink(string targetUrl)
+        public NodeTaskBuilder WithStorageEventSink(string targetUrl)
         {
             ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
 
+            nodeTask.RuntimeOptions ??= new RuntimeOptions();
             nodeTask.RuntimeOptions.StorageEventSink = new StorageEventSink()
             {
                 TargetUrl = targetUrl,

@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Text.Json.Serialization;
+
 namespace Tes.Runner.Models
 {
     public class NodeTask
@@ -51,21 +52,6 @@ namespace Tes.Runner.Models
         public string TargetUrl { get; set; } = null!;
         public TransformationStrategy TransformationStrategy { get; set; }
     }
-
-    public class DockerCleanUpOptions
-    {
-        public bool ExecuteRmi { get; set; }
-        public bool ExecutePrune { get; set; }
-    }
-
-    public class EventSink
-    {
-        public string? Type { get; set; }
-        public string? Url { get; set; }
-        public string? TopicName { get; set; }
-        public string? EventName { get; set; }
-    }
-
 
     public class TerraRuntimeOptions
     {

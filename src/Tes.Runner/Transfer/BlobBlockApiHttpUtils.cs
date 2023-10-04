@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Text;
+using System.Web;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
@@ -64,7 +65,9 @@ public class BlobBlockApiHttpUtils
 
         if (tags is { Count: > 0 })
         {
-            request.Headers.Add("x-ms-tags", string.Join("&", tags.Select(t => $"{t.Key}={t.Value}")));
+            var tagsHeader = string.Join("&", tags.Select(t => $"{t.Key}={HttpUtility.UrlEncode(t.Value)}"));
+
+            request.Headers.Add("x-ms-tags", tagsHeader);
         }
     }
 
@@ -193,7 +196,6 @@ public class BlobBlockApiHttpUtils
         {
             return true;
         }
-
 
         return ContainsRetriableException(ex.InnerException);
     }

@@ -1,25 +1,26 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Models;
 using Tes.Runner.Storage;
 using Tes.Runner.Transfer;
-using static Azure.Storage.Sas.BlobSasPermissions;
 
 namespace Tes.Runner.Events;
 
-public class EventsPublisher
+public class EventsPublisher : IAsyncDisposable
 {
     const string EventVersion = "1.0";
     const string EventDataVersion = "1.0";
-    const string TesTaskRunnerEntityType = "TesRunnerTask";
-    const string DownloadStartEvent = "DownloadStart";
-    const string DownloadEndEvent = "DownloadEnd";
-    const string UploadStartEvent = "UploadStart";
-    const string UploadEndEvent = "UploadEnd";
-    const string ExecutorStartEvent = "ExecutorStar";
-    const string ExecutorEndEvent = "ExecutorEnd";
+    public const string TesTaskRunnerEntityType = "TesRunnerTask";
+    public const string DownloadStartEvent = "downloadStart";
+    public const string DownloadEndEvent = "downloadEnd";
+    public const string UploadStartEvent = "uploadStart";
+    public const string UploadEndEvent = "uploadEnd";
+    public const string ExecutorStartEvent = "executorStar";
+    public const string ExecutorEndEvent = "executorEnd";
+    public const string TaskCompletionEvent = "taskCompleted";
 
     private readonly IList<IEventSink> sinks;
     private readonly ILogger logger = PipelineLoggerFactory.Create<EventsPublisher>();
@@ -43,7 +44,7 @@ public class EventsPublisher
 
     public static async Task<EventsPublisher> CreateEventsPublisherAsync(NodeTask nodeTask)
     {
-        var storageSink = await GetStorageEventSinkFromTaskIfRequestedAsync(nodeTask);
+        var storageSink = await CreateAndStartStorageEventSinkFromTaskIfRequestedAsync(nodeTask);
 
         var sinkList = new List<IEventSink>();
         if (storageSink != null)
@@ -54,7 +55,7 @@ public class EventsPublisher
         return new EventsPublisher(sinkList);
     }
 
-    private static async Task<IEventSink?> GetStorageEventSinkFromTaskIfRequestedAsync(NodeTask nodeTask)
+    private static async Task<IEventSink?> CreateAndStartStorageEventSinkFromTaskIfRequestedAsync(NodeTask nodeTask)
     {
         ArgumentNullException.ThrowIfNull(nodeTask);
 
@@ -75,13 +76,16 @@ public class EventsPublisher
 
         var transformedUrl = await transformationStrategy.TransformUrlWithStrategyAsync(
             nodeTask.RuntimeOptions.StorageEventSink.TargetUrl,
-            Read | Create | Write | Add | List);
+             BlobSasPermissions.Write | BlobSasPermissions.Create | BlobSasPermissions.Tag);
 
-        return new BlobStorageEventSink(transformedUrl);
+        var sink = new BlobStorageEventSink(transformedUrl);
 
+        sink.Start();
+
+        return sink;
     }
 
-    public virtual async Task PublishUploadEventStartAsync(NodeTask nodeTask)
+    public virtual async Task PublishUploadStartEventAsync(NodeTask nodeTask)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, UploadStartEvent, StartedStatus,
             nodeTask.WorkflowId);
@@ -91,7 +95,7 @@ public class EventsPublisher
         await PublishAsync(eventMessage);
     }
 
-    public virtual async Task PublishUploadEventEndAsync(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default)
+    public virtual async Task PublishUploadEndEventAsync(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, UploadEndEvent, statusMessage,
             nodeTask.WorkflowId);
@@ -106,7 +110,7 @@ public class EventsPublisher
         await PublishAsync(eventMessage);
     }
 
-    public virtual async Task PublishExecutorEventStartAsync(NodeTask nodeTask)
+    public virtual async Task PublishExecutorStartEventAsync(NodeTask nodeTask)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorStartEvent, StartedStatus,
                        nodeTask.WorkflowId);
@@ -122,7 +126,7 @@ public class EventsPublisher
         await PublishAsync(eventMessage);
     }
 
-    public virtual async Task PublishExecutorEventEndAsync(NodeTask nodeTask, long exitCode, string statusMessage, string? errorMessage = default)
+    public virtual async Task PublishExecutorEndEventAsync(NodeTask nodeTask, long exitCode, string statusMessage, string? errorMessage = default)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, ExecutorEndEvent, statusMessage,
                                   nodeTask.WorkflowId);
@@ -136,7 +140,7 @@ public class EventsPublisher
         await PublishAsync(eventMessage);
     }
 
-    public virtual async Task PublishDownloadEventStartAsync(NodeTask nodeTask)
+    public virtual async Task PublishDownloadStartEventAsync(NodeTask nodeTask)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, DownloadStartEvent, StartedStatus,
                        nodeTask.WorkflowId);
@@ -146,7 +150,7 @@ public class EventsPublisher
         await PublishAsync(eventMessage);
     }
 
-    public virtual async Task PublishDownloadEventEndAsync(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default)
+    public virtual async Task PublishDownloadEndEventAsync(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, DownloadEndEvent, statusMessage,
                        nodeTask.WorkflowId);
@@ -159,10 +163,22 @@ public class EventsPublisher
         await PublishAsync(eventMessage);
     }
 
+    public async Task PublishTaskCompletionEventAsync(NodeTask tesNodeTask, TimeSpan duration, string statusMessage, string? errorMessage)
+    {
+        var eventMessage = CreateNewEventMessage(tesNodeTask.Id, TaskCompletionEvent, statusMessage,
+            tesNodeTask.WorkflowId);
+        eventMessage.EventData = new Dictionary<string, string>
+        {
+            { "duration", duration.ToString()},
+            { "errorMessage", errorMessage??string.Empty}
+        };
+
+        await PublishAsync(eventMessage);
+    }
+
     private EventMessage CreateNewEventMessage(string? entityId, string name, string statusMessage,
         string? correlationId)
     {
-
         return new EventMessage
         {
             Id = Guid.NewGuid().ToString(),
@@ -182,15 +198,28 @@ public class EventsPublisher
     {
         if (sinks.Count == 0)
         {
-            logger.LogTrace("No sinks configured for publishing events");
+            logger.LogInformation("No sinks configured for publishing events");
             return;
         }
 
         foreach (var sink in sinks)
         {
-            logger.LogTrace($"Publishing event {message.Name} to sink: {sink.GetType().Name}");
+            logger.LogInformation($"Publishing event {message.Name} to sink: {sink.GetType().Name}");
 
             await sink.PublishEventAsync(message);
         }
+    }
+
+    public async Task FlushPublishersAsync(int waitTimeInSeconds = 60)
+    {
+        var stopTasks = sinks.Select(s => s.StopAsync());
+
+        await Task.WhenAll(stopTasks).WaitAsync(TimeSpan.FromSeconds(waitTimeInSeconds));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        await FlushPublishersAsync();
     }
 }
