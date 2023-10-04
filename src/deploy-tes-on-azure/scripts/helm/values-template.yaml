@@ -15,7 +15,6 @@ config:
     subnetId: RUNTIME_PARAMETER
     disablePublicIpAddress: RUNTIME_PARAMETER
     globalStartTask: /configuration/start-task.sh
-    globalManagedIdentity:
   batchScheduling:
     usePreemptibleVmsOnly: RUNTIME_PARAMETER
     poolRotationForcedDays: "7"
