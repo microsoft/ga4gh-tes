@@ -1,7 +1,10 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using TesApi.Web.Options;
 
 namespace TesApi.Web.Extensions
 {
@@ -10,9 +13,14 @@ namespace TesApi.Web.Extensions
         public static IServiceCollection AddOpenIdConnectAuthentication(this IServiceCollection services)
         {
             var serviceProvider = services.BuildServiceProvider();
-            var authenticationConfigurationService = serviceProvider.GetRequiredService<AuthenticationConfigurationService>();
-            var authenticationBuilder = services.AddAuthentication();
-            authenticationConfigurationService.ConfigureJwtBearer(authenticationBuilder);
+            var authenticationOptions = serviceProvider.GetService<IOptions<AuthenticationOptions>>();
+
+            if (authenticationOptions?.Value?.Providers?.Any() == true)
+            {
+                var authenticationConfigurationService = serviceProvider.GetRequiredService<AuthenticationConfigurationService>();
+                var authenticationBuilder = services.AddAuthentication();
+                authenticationConfigurationService.ConfigureJwtBearer(authenticationBuilder);
+            }
 
             return services;
         }
