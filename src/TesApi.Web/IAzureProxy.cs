@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
-using Tes.Models;
 using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
@@ -56,8 +55,6 @@ namespace TesApi.Web
         /// <param name="isPreemptable">True if nodes in this pool will all be preemptable. False if nodes will all be dedicated.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken);
-
-        // TODO: we may need a query or two to replace what was here
 
         /// <summary>
         /// Deletes an Azure Batch job for Autopools

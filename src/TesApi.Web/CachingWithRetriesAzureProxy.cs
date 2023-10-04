@@ -94,10 +94,10 @@ namespace TesApi.Web
         public Task DeleteBatchJobAsync(string taskId, CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchJobAsync(taskId, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task TerminateBatchTaskAsync(string taskId, string jobId, CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.TerminateBatchTaskAsync(taskId, jobId, ct), cancellationToken);
+        public Task DeleteBatchTaskAsync(string taskId, string jobId, CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchTaskAsync(taskId, jobId, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task DeleteBatchTaskAsync(string taskId, string jobId, CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchTaskAsync(taskId, jobId, ct), cancellationToken);
+        public Task TerminateBatchTaskAsync(string taskId, string jobId, CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.TerminateBatchTaskAsync(taskId, jobId, ct), cancellationToken);
 
         /// <inheritdoc/>
         public Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchPoolAsync(poolId, ct), cancellationToken);

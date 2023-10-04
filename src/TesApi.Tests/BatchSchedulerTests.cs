@@ -25,7 +25,6 @@ using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
 using TesApi.Web.Storage;
-using ResourceFile = Microsoft.Azure.Batch.ResourceFile;
 
 namespace TesApi.Tests
 {
@@ -298,10 +297,27 @@ namespace TesApi.Tests
             azureProxyReturnValues.BatchQuotas = new() { ActiveJobAndJobScheduleQuota = 1, PoolQuota = 1, DedicatedCoreQuota = 9, LowPriorityCoreQuota = 17 };
 
             azureProxyReturnValues.ActiveNodeCountByVmSize = new List<AzureBatchNodeCount> {
+                new() { VirtualMachineSize = "VmSize1", DedicatedNodeCount = 4, LowPriorityNodeCount = 8 }  // 8 (4 * 2) dedicated and 16 (8 * 2) low pri cores are in use, there is no more room for 2 cores
+            };
+
+            // The actual CPU core count (2) of the selected VM is used for quota calculation, not the TesResources CpuCores requirement
+            Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 1, RamGb = 1, Preemptible = false }, azureProxyReturnValues));
+            Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 1, RamGb = 1, Preemptible = true }, azureProxyReturnValues));
+
+            azureProxyReturnValues.ActiveNodeCountByVmSize = new List<AzureBatchNodeCount> {
                 new() { VirtualMachineSize = "VmSize1", DedicatedNodeCount = 4, LowPriorityNodeCount = 7 }  // 8 dedicated and 14 low pri cores are in use
             };
 
             Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 1, RamGb = 1, Preemptible = true }, azureProxyReturnValues));
+
+            var dedicatedCoreQuotaPerVMFamily = new List<VirtualMachineFamilyCoreQuota> { new("VmFamily1", 100) };
+            azureProxyReturnValues.BatchQuotas = new() { ActiveJobAndJobScheduleQuota = 1, PoolQuota = 1, DedicatedCoreQuota = 9, LowPriorityCoreQuota = 17, DedicatedCoreQuotaPerVMFamilyEnforced = true, DedicatedCoreQuotaPerVMFamily = dedicatedCoreQuotaPerVMFamily };
+
+            azureProxyReturnValues.ActiveNodeCountByVmSize = new List<AzureBatchNodeCount> {
+                new() { VirtualMachineSize = "VmSize1", DedicatedNodeCount = 4, LowPriorityNodeCount = 8 }  // 8 (4 * 2) dedicated and 16 (8 * 2) low pri cores are in use, there is no more room for 2 cores
+            };
+
+            Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 1, RamGb = 1, Preemptible = false }, azureProxyReturnValues));
         }
 
         private async Task AddBatchTaskHandlesExceptions(TesState newState, Func<AzureProxyReturnValues, (Action<IServiceCollection>, Action<Mock<IAzureProxy>>)> testArranger, Action<TesTask, IEnumerable<(LogLevel, Exception)>> resultValidator)
@@ -607,7 +623,7 @@ namespace TesApi.Tests
                 GetMockAllowedVms(config));
             var batchScheduler = serviceProvider.GetT();
 
-            await foreach (var _ in batchScheduler.ProcessQueuedTesTasksAsync(new[] { tesTask }, System.Threading.CancellationToken.None));
+            await foreach (var _ in batchScheduler.ProcessQueuedTesTasksAsync(new[] { tesTask }, System.Threading.CancellationToken.None)) { }
 
             var createBatchPoolAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateBatchPoolAsync));
             var addBatchTaskAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.AddBatchTaskAsync));
@@ -1666,9 +1682,6 @@ namespace TesApi.Tests
                 azureProxy.Setup(a => a.GetActivePoolsAsync(It.IsAny<string>()))
                     .Returns(AsyncEnumerable.Empty<CloudPool>());
 
-                //azureProxy.Setup(a => a.GetBatchJobAndTaskStateAsync(It.IsAny<TesTask>(), It.IsAny<System.Threading.CancellationToken>()))
-                //    .Returns(Task.FromResult(azureProxyReturnValues.BatchJobAndTaskState));
-
                 azureProxy.Setup(a => a.GetStorageAccountInfoAsync("defaultstorageaccount", It.IsAny<System.Threading.CancellationToken>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.StorageAccountInfos["defaultstorageaccount"]));
 
@@ -1821,20 +1834,6 @@ namespace TesApi.Tests
             }
         }
 
-
-        //BatchJobAndTaskStates.TaskActive
-        //BatchJobAndTaskStates.TaskPreparing
-        //BatchJobAndTaskStates.TaskRunning
-        //BatchJobAndTaskStates.TaskCompletedSuccessfully
-        //BatchJobAndTaskStates.TaskFailed
-        //BatchJobAndTaskStates.JobNotFound
-        //BatchJobAndTaskStates.TaskNotFound
-        //BatchJobAndTaskStates.MoreThanOneJobFound
-        //BatchJobAndTaskStates.NodeAllocationFailed
-        //BatchJobAndTaskStates.NodePreempted
-        //BatchJobAndTaskStates.NodeDiskFull
-        //BatchJobAndTaskStates.ActiveJobWithMissingAutoPool
-        //BatchJobAndTaskStates.ImageDownloadFailed
 
         private struct BatchTaskStates
         {
