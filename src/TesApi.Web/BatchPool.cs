@@ -464,7 +464,7 @@ namespace TesApi.Web
             switch (exceptions.Count)
             {
                 case 0:
-                    await foreach (var (id, state) in _azureProxy.ListTasksAsync(Pool.PoolId, new ODATADetailLevel { FilterClause = "id", SelectClause = "state eq 'active'" }).Select(cloud => cloud.Id).Zip(GetFailures(cancellationToken), (id, state) => (id, state)).WithCancellation(cancellationToken))
+                    await foreach (var (id, state) in _azureProxy.ListTasksAsync(Pool.PoolId, new ODATADetailLevel { SelectClause = "id", FilterClause = "state eq 'active'" }).Select(cloud => cloud.Id).Zip(GetFailures(cancellationToken), (id, state) => (id, state)).WithCancellation(cancellationToken))
                     {
                         yield return (id, state);
                     }
@@ -540,7 +540,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudTask> GetCompletedTasks(CancellationToken _1)
         {
-            return _azureProxy.ListTasksAsync(Pool.PoolId, new ODATADetailLevel { FilterClause = "id,executionInfo", SelectClause = "state eq 'completed'" });
+            return _azureProxy.ListTasksAsync(Pool.PoolId, new ODATADetailLevel { SelectClause = "id,executionInfo", FilterClause = "state eq 'completed'" });
         }
 
         // Returns false when pool/job was removed because it was not found. Returns true if the error was completely something else.
