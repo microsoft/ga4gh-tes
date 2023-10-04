@@ -10,8 +10,9 @@ namespace TesApi.Web.Extensions
 {
     public static class ServiceCollectionExtensions
     {
-        public static IServiceCollection AddOpenIdConnectAuthentication(this IServiceCollection services)
+        public static IServiceCollection AddOpenIdConnectAuthentication(this IServiceCollection services, out bool isAuthConfigured)
         {
+            isAuthConfigured = false;
             var serviceProvider = services.BuildServiceProvider();
             var authenticationOptions = serviceProvider.GetService<IOptions<AuthenticationOptions>>();
 
@@ -20,6 +21,7 @@ namespace TesApi.Web.Extensions
                 var authenticationConfigurationService = serviceProvider.GetRequiredService<AuthenticationConfigurationService>();
                 var authenticationBuilder = services.AddAuthentication();
                 authenticationConfigurationService.ConfigureJwtBearer(authenticationBuilder);
+                isAuthConfigured = true;
             }
 
             return services;

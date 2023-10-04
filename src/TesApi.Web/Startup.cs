@@ -8,6 +8,8 @@ using Azure.Core;
 using Azure.Identity;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -80,7 +82,7 @@ namespace TesApi.Web
 
                     .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
                     .AddSingleton<AuthenticationConfigurationService>()
-                    .AddOpenIdConnectAuthentication()
+                    .AddOpenIdConnectAuthentication(out bool isAuthConfigured)
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
@@ -88,7 +90,18 @@ namespace TesApi.Web
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
-                    .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
+                    .AddControllers(options =>
+                    {
+                        options.Filters.Add<Controllers.OperationCancelledExceptionFilter>();
+
+                        if (isAuthConfigured)
+                        {
+                            services.Configure<MvcOptions>(options =>
+                            {
+                                options.Filters.Add(new AuthorizeFilter());
+                            });
+                        }
+                    })
                         .AddNewtonsoftJson(opts =>
                         {
                             opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
