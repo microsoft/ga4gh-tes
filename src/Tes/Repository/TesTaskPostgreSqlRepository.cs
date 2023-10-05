@@ -232,7 +232,7 @@ namespace Tes.Repository
                 }
                 else
                 {
-                    if (item.Json.OwnerUserId == userId)
+                    if (item.Json?.User?.Id == userId)
                     {
                         return item;
                     }
@@ -248,7 +248,7 @@ namespace Tes.Repository
             if (userId != null)
             {
                 // Search for Id within the JSON
-                item = await _asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.OwnerUserId == userId && t.Json.Id == id, ct), cancellationToken);
+                item = await _asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.User.Id == userId && t.Json.Id == id, ct), cancellationToken);
             }
             else
             {

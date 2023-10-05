@@ -5,12 +5,14 @@ namespace TesApi.Web.Extensions
 {
     using System;
     using System.Security.Claims;
+    using Tes.Models;
 
     public static class ClaimsPrincipalExtensions
     {
-        public static string GetUserId(this ClaimsPrincipal user)
+        public static TesUser GetUserId(this ClaimsPrincipal user)
         {
             var subClaim = user?.FindFirst(ClaimTypes.NameIdentifier);
+            var oidClaim = user?.FindFirst("oid"); // TODO set "oid" value from AuthenticationOptions Provider field
 
             if (string.IsNullOrWhiteSpace(subClaim?.Value))
             {
@@ -18,7 +20,11 @@ namespace TesApi.Web.Extensions
                 throw new UnauthorizedAccessException("User is not authenticated.");
             }
 
-            return subClaim.Value;
+            return new TesUser
+            {
+                Id = subClaim.Value,
+                ExternalId = oidClaim?.Value
+            };
         }
     }
 }

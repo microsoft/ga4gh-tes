@@ -158,7 +158,7 @@ namespace TesApi.Controllers
 
             var userId = User.GetUserId();
 
-            tesTask.OwnerUserId = userId;
+            tesTask.User = new TesUser { Id = userId, ExternalId = "" };
             tesTask.State = TesState.QUEUEDEnum;
             tesTask.CreationTime = DateTimeOffset.UtcNow;
 
