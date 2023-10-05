@@ -223,6 +223,11 @@ namespace TesApi.Web.Runner
                     output.TransformationStrategy = TransformationStrategy.CombinedTerra;
                 }
             }
+
+            if (nodeTask.RuntimeOptions.StorageEventSink is not null)
+            {
+                nodeTask.RuntimeOptions.StorageEventSink.TransformationStrategy = TransformationStrategy.CombinedTerra;
+            }
         }
 
         private TransformationStrategy GetCombinedTransformationStrategyFromRuntimeOptions()
@@ -262,6 +267,25 @@ namespace TesApi.Web.Runner
         {
             nodeTask.RuntimeOptions ??= new RuntimeOptions();
             nodeTask.RuntimeOptions.NodeManagedIdentityResourceId = resourceId;
+            return this;
+        }
+
+        /// <summary>
+        /// Adds the storage event sink to the node task and its transformation strategy
+        /// </summary>
+        /// <param name="targetUrl"></param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithStorageEventSink(string targetUrl)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
+
+            nodeTask.RuntimeOptions ??= new RuntimeOptions();
+            nodeTask.RuntimeOptions.StorageEventSink = new StorageEventSink()
+            {
+                TargetUrl = targetUrl,
+                TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions()
+            };
+
             return this;
         }
     }

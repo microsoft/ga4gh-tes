@@ -25,7 +25,7 @@ namespace TesApi.Tests.Storage
         private StorageOptions storageOptions;
         private StorageAccountInfo storageAccountInfo;
         private const string DefaultStorageAccountName = "defaultstorage";
-        private const string StorageAccountBlobEndpoint = $"https://{DefaultStorageAccountName}.blob.windows.net";
+        private const string StorageAccountBlobEndpoint = $"https://{DefaultStorageAccountName}.blob.core.windows.net";
 
         [TestInitialize]
         public void Setup()
@@ -83,6 +83,18 @@ namespace TesApi.Tests.Storage
             Assert.IsNotNull(url);
             var uri = new Uri(url);
             Assert.AreEqual($"{StorageAccountBlobEndpoint}/{internalPathPrefix}/{blobName.TrimStart('/')}", ToHostWithAbsolutePathOnly(uri));
+        }
+
+
+        [TestMethod]
+        [DataRow("", $"{StorageAccountBlobEndpoint}{StorageAccessProvider.TesExecutionsPathPrefix}")]
+        [DataRow("blob", $"{StorageAccountBlobEndpoint}{StorageAccessProvider.TesExecutionsPathPrefix}/blob")]
+        public void GetInternalTesBlobUrlWithoutSasToken_BlobPathIsProvided_ExpectedUrl(string blobPath,
+            string expectedUrl)
+        {
+            var url = defaultStorageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath);
+
+            Assert.AreEqual(expectedUrl, url);
         }
 
         private static string GenerateRandomTestAzureStorageKey()

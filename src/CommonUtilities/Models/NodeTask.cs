@@ -43,14 +43,15 @@ namespace Tes.Runner.Models
         public TerraRuntimeOptions? Terra { get; set; }
 
         public string? NodeManagedIdentityResourceId { get; set; }
+
+        public StorageEventSink? StorageEventSink { get; set; }
     }
 
-    public class DockerCleanUpOptions
+    public class StorageEventSink
     {
-        public bool ExecuteRmi { get; set; }
-        public bool ExecutePrune { get; set; }
+        public string TargetUrl { get; set; } = null!;
+        public TransformationStrategy TransformationStrategy { get; set; }
     }
-
 
     public class TerraRuntimeOptions
     {
