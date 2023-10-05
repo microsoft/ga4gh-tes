@@ -151,11 +151,37 @@ namespace TesApi.Web.Storage
         {
             var blobInfo = GetTerraBlobInfoForInternalTesTask(task, blobPath);
 
+            var blobName = blobInfo.BlobName;
+
+            if (!string.IsNullOrWhiteSpace(blobName))
+            {
+                blobName = $"/{blobName.TrimStart('/')}";
+            }
+
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
             var builder = new BlobUriBuilder(new Uri($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}/{blobInfo.BlobName.TrimStart('/')}"));
 
             return builder.ToUri().ToString();
         }
+
+        /// <inheritdoc />
+        public override string GetInternalTesBlobUrlWithoutSasToken(string blobPath)
+        {
+            var blobInfo = GetTerraBlobInfoForInternalTes(blobPath);
+
+            var blobName = blobInfo.BlobName;
+
+            if (!string.IsNullOrWhiteSpace(blobName))
+            {
+                blobName = $"/{blobName.TrimStart('/')}";
+            }
+
+            //passing the resulting string through the builder to ensure that the path is properly encoded and valid
+            var builder = new BlobUriBuilder(new Uri($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}{blobName}"));
+
+            return builder.ToUri().ToString();
+        }
+
         private TerraBlobInfo GetTerraBlobInfoForInternalTes(string blobPath)
         {
             var internalPath = GetInternalTesPath();

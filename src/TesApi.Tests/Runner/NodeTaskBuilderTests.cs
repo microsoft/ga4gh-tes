@@ -145,5 +145,15 @@ namespace TesApi.Tests.Runner
             var nodeTask = nodeTaskBuilder.Build();
             Assert.AreEqual("resourceId", nodeTask.RuntimeOptions.NodeManagedIdentityResourceId);
         }
+
+        [TestMethod]
+        public void WithStorageEventSink_Called_StorageSinkIsSet()
+        {
+            var url = "https://foo.blob.core.windows.net/cont";
+            nodeTaskBuilder.WithStorageEventSink(url);
+            var nodeTask = nodeTaskBuilder.Build();
+            Assert.AreEqual(url, nodeTask.RuntimeOptions.StorageEventSink!.TargetUrl);
+            Assert.AreEqual(TransformationStrategy.CombinedAzureResourceManager, nodeTask.RuntimeOptions.StorageEventSink.TransformationStrategy);
+        }
     }
 }

@@ -89,6 +89,7 @@ namespace TesApi.Web.Runner
                     .WithWorkflowId(task.WorkflowId)
                     .WithContainerCommands(executor.Command.Select(EscapeBashArgument).ToList())
                     .WithContainerImage(executor.Image)
+                    .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
                     .WithMetricsFile(MetricsFileName);
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))

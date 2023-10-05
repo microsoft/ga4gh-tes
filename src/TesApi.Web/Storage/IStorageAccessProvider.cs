@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Tes.Models;
@@ -89,7 +88,7 @@ namespace TesApi.Web.Storage
         public Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Returns an Azure Storage Blob URL with a SAS token for the specified blob path in the internal storage location.
+        /// Returns an Azure Storage Blob URL with a SAS token for the specified blob path in the TES task internal storage location.
         /// </summary>
         /// <param name="task"></param>
         /// <param name="blobPath"></param>
@@ -98,12 +97,18 @@ namespace TesApi.Web.Storage
         public Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Returns an Azure Storage Blob URL without a SAS token for the specified blob path in the internal storage location.
+        /// Returns an Azure Storage Blob URL without a SAS token for the specified blob path in the TES task internal storage location.
         /// </summary>
         /// <param name="task"></param>
         /// <param name="blobPath"></param>
         /// <returns></returns>
         public string GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath);
 
+        /// <summary>
+        /// Returns an Azure Storage Blob URL without a SAS token for the specified blob path in the TES internal storage location.
+        /// </summary>
+        /// <param name="blobPath"></param>
+        /// <returns></returns>
+        public string GetInternalTesBlobUrlWithoutSasToken(string blobPath);
     }
 }

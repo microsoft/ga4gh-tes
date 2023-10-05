@@ -13,7 +13,7 @@ using TesApi.Web.Storage;
 namespace TesApi.Web.Runner
 {
     /// <summary>
-    /// 
+    /// Manages the creation and uploading of the Batch script to execute and all its dependencies
     /// </summary>
     public class TaskExecutionScriptingManager
     {
