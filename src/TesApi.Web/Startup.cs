@@ -57,9 +57,6 @@ namespace TesApi.Web
         {
             try
             {
-                var authenticationOptions = new AuthenticationOptions();
-                configuration.GetSection(AuthenticationOptions.SectionName).Bind(authenticationOptions);
-
                 services
                     .AddLogging()
                     .AddApplicationInsightsTelemetry(configuration)
@@ -76,9 +73,9 @@ namespace TesApi.Web
                     .Configure<BatchSchedulingOptions>(configuration.GetSection(BatchSchedulingOptions.SectionName))
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
+                    .ConfigureAuthenticationAndControllers(configuration)
 
                     .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
-                    .ConfigureAuthenticationAndControllers(authenticationOptions)
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()

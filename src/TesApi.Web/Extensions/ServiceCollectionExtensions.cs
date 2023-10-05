@@ -3,17 +3,22 @@
 
 using System.Linq;
 using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Serialization;
+using TesApi.Web.Options;
 
 namespace TesApi.Web.Extensions
 {
     public static class ServiceCollectionExtensions
     {
-        public static IServiceCollection ConfigureAuthenticationAndControllers(this IServiceCollection services, Options.AuthenticationOptions authenticationOptions)
+        public static IServiceCollection ConfigureAuthenticationAndControllers(this IServiceCollection services, IConfiguration configuration)
         {
             bool isAuthConfigured = false;
+
+            var authenticationOptions = new AuthenticationOptions();
+            configuration.GetSection(AuthenticationOptions.SectionName).Bind(authenticationOptions);
 
             if (authenticationOptions?.Providers?.Any() == true)
             {
