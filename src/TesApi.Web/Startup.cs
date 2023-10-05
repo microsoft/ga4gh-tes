@@ -58,7 +58,7 @@ namespace TesApi.Web
             try
             {
                 var authenticationOptions = new AuthenticationOptions();
-                configuration.GetSection(AuthenticationOptions.SectionName)?.Bind(authenticationOptions);
+                configuration.GetSection(AuthenticationOptions.SectionName).Bind(authenticationOptions);
 
                 services
                     .AddLogging()
