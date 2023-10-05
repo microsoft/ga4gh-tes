@@ -15,12 +15,11 @@ namespace TesApi.Web.Extensions
     {
         public static IServiceCollection ConfigureAuthenticationAndControllers(this IServiceCollection services, IConfiguration configuration)
         {
-            bool isAuthConfigured = false;
-
             var authenticationOptions = new AuthenticationOptions();
             configuration.GetSection(AuthenticationOptions.SectionName).Bind(authenticationOptions);
+            var isAuthConfigured = authenticationOptions?.Providers?.Any() == true;
 
-            if (authenticationOptions?.Providers?.Any() == true)
+            if (isAuthConfigured)
             {
                 var authBuilder = services.AddAuthentication();
 
@@ -32,8 +31,6 @@ namespace TesApi.Web.Extensions
                         options.Audience = provider.Audience;
                     });
                 }
-
-                isAuthConfigured = true;
             }
 
             services.AddControllers(options =>
