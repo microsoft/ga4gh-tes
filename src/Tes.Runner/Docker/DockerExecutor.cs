@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.ApiClients;
 using Tes.ApiClients.Options;
+using Tes.Runner.Logs;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Docker
@@ -54,9 +55,12 @@ namespace Tes.Runner.Docker
 
             var createResponse = await CreateContainerAsync(imageName, tag, commandsToExecute, volumeBindings, workingDir);
 
-            var logs = await StartContainerWithStreamingOutput(createResponse);
+            await dockerClient.Containers.StartContainerAsync(createResponse.ID,
+                new ContainerStartParameters());
 
-            streamLogReader.StartReadingFromLogStream(logs);
+            // var logs = await StartContainerWithStreamingOutput(createResponse);
+            //
+            // streamLogReader.StartReadingFromLogStreams(logs);
 
             var runResponse = await dockerClient.Containers.WaitContainerAsync(createResponse.ID);
 

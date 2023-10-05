@@ -13,24 +13,27 @@ namespace Tes.Runner.Transfer;
 /// <summary>
 /// A class containing the logic to create and make the HTTP requests for the blob block API.
 /// </summary>
-public class BlobBlockApiHttpUtils
+public class BlobApiHttpUtils
 {
-    private const string BlobType = "BlockBlob";
+    //https://learn.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs
+    public const string DefaultApiVersion = "2023-05-03";
+    public const string BlockBlobType = "BlockBlob";
+    public const string AppendBlobType = "AppendBlob";
     private const int MaxRetryCount = 9;
     private readonly HttpClient httpClient;
-    private static readonly ILogger Logger = PipelineLoggerFactory.Create<BlobBlockApiHttpUtils>();
+    private static readonly ILogger Logger = PipelineLoggerFactory.Create<BlobApiHttpUtils>();
     private readonly AsyncRetryPolicy retryPolicy;
 
 
     public const string RootHashMetadataName = "md5_4mib_hashlist_root_hash";
 
-    public BlobBlockApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolicy)
+    public BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolicy)
     {
         this.httpClient = httpClient;
         this.retryPolicy = retryPolicy;
     }
 
-    public BlobBlockApiHttpUtils() : this(new HttpClient(), DefaultAsyncRetryPolicy(MaxRetryCount))
+    public BlobApiHttpUtils() : this(new HttpClient(), DefaultAsyncRetryPolicy(MaxRetryCount))
     {
     }
 
@@ -45,22 +48,36 @@ public class BlobBlockApiHttpUtils
         return request;
     }
 
+    public static HttpRequestMessage CreatePutAppendBlockRequestAsync(string data, string url, string apiVersion)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put, url)
+        {
+            Content = new StringContent(data)
+        };
+
+        AddBlobServiceHeaders(request, apiVersion);
+
+        return request;
+    }
+
     public static HttpRequestMessage CreatePutBlobRequestAsync(string blobUrl, string content, string apiVersion,
-        Dictionary<string, string> tags)
+        Dictionary<string, string>? tags, string blobType = BlockBlobType)
     {
         var request = new HttpRequestMessage(HttpMethod.Put, blobUrl)
         {
             Content = new StringContent(content)
         };
 
-        AddPutBlobHeaders(request, apiVersion, tags);
+        AddPutBlobHeaders(request, apiVersion, tags, blobType);
 
         return request;
     }
 
-    private static void AddPutBlobHeaders(HttpRequestMessage request, string apiVersion, Dictionary<string, string>? tags)
+    private static void AddPutBlobHeaders(HttpRequestMessage request, string apiVersion, Dictionary<string, string>? tags, string blobType)
     {
-        AddPutBlockHeaders(request, apiVersion);
+        request.Headers.Add("x-ms-blob-type", blobType);
+
+        AddBlobServiceHeaders(request, apiVersion);
 
         if (tags is { Count: > 0 })
         {
@@ -74,6 +91,10 @@ public class BlobBlockApiHttpUtils
     {
         return new Uri($"{baseUri?.AbsoluteUri}&comp=block&blockid={ToBlockId(ordinal)}");
     }
+    public static Uri ParsePutAppendBlockUrl(Uri? baseUri)
+    {
+        return new Uri($"{baseUri?.AbsoluteUri}&comp=appendblock");
+    }
 
     public static string ToBlockId(int ordinal)
     {
@@ -82,9 +103,9 @@ public class BlobBlockApiHttpUtils
 
     private static void AddPutBlockHeaders(HttpRequestMessage request, string apiVersion)
     {
-        request.Headers.Add("x-ms-blob-type", BlobType);
+        request.Headers.Add("x-ms-blob-type", BlockBlobType);
 
-        AddBlockBlobServiceHeaders(request, apiVersion);
+        AddBlobServiceHeaders(request, apiVersion);
     }
 
     private static void AddMetadataHeaderIfValueIsSet(HttpRequestMessage request, string name, string? value)
@@ -96,7 +117,7 @@ public class BlobBlockApiHttpUtils
         request.Headers.Add($"x-ms-meta-{name}", value);
     }
 
-    private static void AddBlockBlobServiceHeaders(HttpRequestMessage request, string apiVersion)
+    private static void AddBlobServiceHeaders(HttpRequestMessage request, string apiVersion)
     {
         request.Headers.Add("x-ms-version", apiVersion);
         request.Headers.Add("x-ms-date", DateTime.UtcNow.ToString("R"));
@@ -114,7 +135,7 @@ public class BlobBlockApiHttpUtils
         };
 
         AddMetadataHeaderIfValueIsSet(request, RootHashMetadataName, rootHash);
-        AddBlockBlobServiceHeaders(request, apiVersion);
+        AddBlobServiceHeaders(request, apiVersion);
         return request;
     }
 

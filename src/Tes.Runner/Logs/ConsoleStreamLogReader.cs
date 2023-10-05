@@ -1,11 +1,10 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-namespace Tes.Runner.Docker;
+namespace Tes.Runner.Logs;
 
-public class ConsoleStreamLogReader : MultiplexedStreamLogReader
+public class ConsoleStreamLogReader : StreamLogReader
 {
-
     public ConsoleStreamLogReader()
     {
 
