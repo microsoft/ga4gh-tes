@@ -162,13 +162,20 @@ namespace TesApi.Web
                     TesTask tesTask = default;
                     if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
                     {
+                        logger.LogDebug("Completing task {TesTask}.", tesTask.Id);
                         yield return tesTask;
+                    }
+                    else
+                    {
+                        logger.LogDebug("Could not find task {TesTask}.", tesTask.Id);
+                        yield return null;
                     }
                 }
             }
 
             AzureBatchTaskState GetCompletedBatchState(CloudTask task)
             {
+                logger.LogDebug("Getting batch task state from completed task {TesTask}.", task.Id);
                 return task.ExecutionInformation.Result switch
                 {
                     Microsoft.Azure.Batch.Common.TaskExecutionResult.Success => new(

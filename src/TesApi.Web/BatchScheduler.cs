@@ -373,7 +373,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(taskStates);
 
             return taskStates.Zip(tesTasks, (TaskState, TesTask) => (TaskState, TesTask))
-                .Where(entry => entry.TesTask.IsActiveState()) // Removes already terminal TesTasks
+                .Where(entry => entry.TesTask?.IsActiveState() ?? false) // Removes already terminal TesTasks from being further processed.
                 .Select(entry => (entry.TesTask, IsModifiedAsync: WrapHandleTesTaskTransitionAsync(entry.TesTask, entry.TaskState, cancellationToken)))
                 .WhenEach(cancellationToken, tuple => tuple.IsModifiedAsync);
 

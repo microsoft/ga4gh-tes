@@ -140,7 +140,7 @@ namespace TesApi.Web
             var pools = new HashSet<string>();
             var tesTasks = await (await tesTaskGetter(stoppingToken)).ToArrayAsync(stoppingToken);
 
-            if (0 == tesTasks.Length)
+            if (tesTasks.All(task => task is null))
             {
                 logger.LogDebug("OrchestrateTesTasksOnBatch({Poll}) skipped.", pollName);
                 return;
@@ -274,7 +274,7 @@ namespace TesApi.Web
                 await batchScheduler.FlushPoolsAsync(pools, stoppingToken);
             }
 
-            logger.LogDebug("OrchestrateTesTasksOnBatch({Poll}) for {TaskCount} tasks completed in {TotalSeconds} seconds.", pollName, tesTasks.Length, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
+            logger.LogDebug("OrchestrateTesTasksOnBatch({Poll}) for {TaskCount} tasks completed in {TotalSeconds} seconds.", pollName, tesTasks.Where(task => task is not null).Count(), DateTime.UtcNow.Subtract(startTime).TotalSeconds);
         }
     }
 }
