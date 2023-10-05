@@ -76,7 +76,6 @@ namespace TesApi.Web
                     .Configure<BatchSchedulingOptions>(configuration.GetSection(BatchSchedulingOptions.SectionName))
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
-                    .Configure<AuthenticationOptions>(configuration.GetSection(AuthenticationOptions.SectionName))
 
                     .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
                     .ConfigureAuthenticationAndControllers(authenticationOptions)
