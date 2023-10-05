@@ -79,7 +79,7 @@ namespace TesApi.Controllers
                 return BadRequest("Invalid ID");
             }
 
-            var userId = User.GetUserId();
+            var userId = User.GetTesUser();
 
             TesTask tesTask = null;
 
@@ -156,9 +156,7 @@ namespace TesApi.Controllers
                 }
             }
 
-            var userId = User.GetUserId();
-
-            tesTask.User = new TesUser { Id = userId, ExternalId = "" };
+            tesTask.User = User.GetTesUser();
             tesTask.State = TesState.QUEUEDEnum;
             tesTask.CreationTime = DateTimeOffset.UtcNow;
 
@@ -276,7 +274,7 @@ namespace TesApi.Controllers
             {
                 return BadRequest("Invalid ID");
             }
-            var userId = User.GetUserId();
+            var userId = User.GetTesUser();
             TesTask tesTask = null;
             var itemFound = await repository.TryGetItemAsync(userId, id, cancellationToken, item => tesTask = item);
 
@@ -314,7 +312,7 @@ namespace TesApi.Controllers
                 return BadRequest("If provided, pageSize must be greater than 0 and less than 2048. Defaults to 256.");
             }
 
-            var userId = User.GetUserId();
+            var userId = User.GetTesUser();
 
             (var nextPageToken, var tasks) = await repository.GetItemsAsync(
                 userId,

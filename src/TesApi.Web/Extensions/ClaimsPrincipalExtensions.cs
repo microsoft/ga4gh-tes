@@ -9,7 +9,7 @@ namespace TesApi.Web.Extensions
 
     public static class ClaimsPrincipalExtensions
     {
-        public static TesUser GetUserId(this ClaimsPrincipal user)
+        public static TesUser GetTesUser(this ClaimsPrincipal user)
         {
             var subClaim = user?.FindFirst(ClaimTypes.NameIdentifier);
             var oidClaim = user?.FindFirst("oid"); // TODO set "oid" value from AuthenticationOptions Provider field
