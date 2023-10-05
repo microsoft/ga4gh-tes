@@ -49,27 +49,42 @@ namespace TesApi.Web
             => _asyncRetryPolicy.ExecuteAsync(ct => _repository.CreateItemAsync(item, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task DeleteItemAsync(string id, CancellationToken cancellationToken)
-            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.DeleteItemAsync(id, ct), cancellationToken);
+        public Task InternalDeleteItemAsync(string id, CancellationToken cancellationToken)
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.InternalDeleteItemAsync(id, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken)
-            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, ct), cancellationToken);
+        public Task<IEnumerable<T>> InternalGetItemsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken)
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.InternalGetItemsAsync(predicate, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken)
-            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, pageSize, continuationToken, ct), cancellationToken);
+        public Task<(string, IEnumerable<T>)> InternalGetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken)
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.InternalGetItemsAsync(predicate, pageSize, continuationToken, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task<bool> TryGetItemAsync(string id, CancellationToken cancellationToken, Action<T> onSuccess)
-            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.TryGetItemAsync(id, ct, onSuccess), cancellationToken);
+        public Task<bool> TryGetItemAsync(string userId, string id, CancellationToken cancellationToken, Action<T> onSuccess)
+            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.TryGetItemAsync(userId, id, ct, onSuccess), cancellationToken);
 
         /// <inheritdoc/>
-        public Task<T> UpdateItemAsync(T item, CancellationToken cancellationToken)
-            => _asyncRetryPolicy.ExecuteAsync(ct => _repository.UpdateItemAsync(item, ct), cancellationToken);
+        public Task<T> InternalUpdateItemAsync(T item, CancellationToken cancellationToken)
+            => _asyncRetryPolicy.ExecuteAsync((Func<CancellationToken, Task<T>>)(ct => _repository.InternalUpdateItemAsync(item, ct)), cancellationToken);
 
         /// <inheritdoc/>
         public ValueTask<bool> TryRemoveItemFromCacheAsync(T item, CancellationToken cancellationToken)
             => _repository.TryRemoveItemFromCacheAsync(item, cancellationToken);
+
+        public Task<bool> InternalTryGetItemAsync(string id, CancellationToken cancellationToken, Action<T> onSuccess = null)
+        {
+            return _asyncRetryPolicy.ExecuteAsync(ct => _repository.InternalTryGetItemAsync(id, ct, onSuccess), cancellationToken);
+        }
+
+        public Task<IEnumerable<T>> GetItemsAsync(string userId, Expression<Func<T, bool>> predicate, CancellationToken cancellationToken)
+        {
+            return _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(userId, predicate, ct), cancellationToken);
+        }
+
+        public Task<(string, IEnumerable<T>)> GetItemsAsync(string userId, Expression<Func<T, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken)
+        {
+            return _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(userId, predicate, pageSize, continuationToken, ct), cancellationToken);
+        }
     }
 }

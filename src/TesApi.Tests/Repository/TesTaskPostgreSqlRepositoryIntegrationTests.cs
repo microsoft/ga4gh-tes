@@ -101,7 +101,7 @@ namespace Tes.Repository.Tests
         [TestMethod]
         public async Task GetItemsAsyncTest()
         {
-            var items = (await repository.GetItemsAsync(c => c.Id != null, System.Threading.CancellationToken.None)).ToList();
+            var items = (await repository.InternalGetItemsAsync(c => c.Id != null, System.Threading.CancellationToken.None)).ToList();
 
             foreach (var item in items)
             {
@@ -147,13 +147,13 @@ namespace Tes.Repository.Tests
             }
 
             sw.Restart();
-            var runningTasks = (await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None)).ToList();
+            var runningTasks = (await repository.InternalGetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None)).ToList();
 
             // Ensure performance is decent
             Assert.IsTrue(sw.Elapsed.TotalSeconds < 20);
             Console.WriteLine($"Retrieved {runningTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
             sw.Restart();
-            var allOtherTasks = (await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None)).ToList();
+            var allOtherTasks = (await repository.InternalGetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None)).ToList();
             Console.WriteLine($"Retrieved {allOtherTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
             Console.WriteLine($"Total running tasks: {runningTasks.Count}");
             Console.WriteLine($"Total other tasks: {allOtherTasks.Count}");
@@ -176,13 +176,13 @@ namespace Tes.Repository.Tests
         {
             const int pageSize = 256;
 
-            var (continuation, items) = await repository.GetItemsAsync(c => c.Id != null, pageSize, null, CancellationToken.None);
+            var (continuation, items) = await repository.InternalGetItemsAsync(c => c.Id != null, pageSize, null, CancellationToken.None);
             var itemsList = items.ToList();
             Assert.IsTrue(itemsList.Count <= pageSize);
 
             while (!string.IsNullOrWhiteSpace(continuation))
             {
-                (continuation, items) = await repository.GetItemsAsync(c => c.Id != null, pageSize, continuation, CancellationToken.None);
+                (continuation, items) = await repository.InternalGetItemsAsync(c => c.Id != null, pageSize, continuation, CancellationToken.None);
                 itemsList.AddRange(items);
             }
 
@@ -231,7 +231,7 @@ namespace Tes.Repository.Tests
             createdItem.Description = description;
             createdItem.State = Models.TesState.COMPLETEEnum;
 
-            await repository.UpdateItemAsync(createdItem, System.Threading.CancellationToken.None);
+            await repository.InternalUpdateItemAsync(createdItem, System.Threading.CancellationToken.None);
 
             Models.TesTask updatedAndRetrievedItem = null;
 
@@ -255,7 +255,7 @@ namespace Tes.Repository.Tests
                 Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
             }, System.Threading.CancellationToken.None);
             Assert.IsNotNull(createdItem);
-            await repository.DeleteItemAsync(id, System.Threading.CancellationToken.None);
+            await repository.InternalDeleteItemAsync(id, System.Threading.CancellationToken.None);
 
             Models.TesTask updatedAndRetrievedItem = null;
 

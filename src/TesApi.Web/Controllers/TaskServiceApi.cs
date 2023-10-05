@@ -27,6 +27,7 @@ using Tes.Models;
 using Tes.Repository;
 using TesApi.Attributes;
 using TesApi.Web;
+using TesApi.Web.Extensions;
 
 namespace TesApi.Controllers
 {
@@ -78,9 +79,11 @@ namespace TesApi.Controllers
                 return BadRequest("Invalid ID");
             }
 
+            var userId = User.GetUserId();
+
             TesTask tesTask = null;
 
-            if (await repository.TryGetItemAsync(id, cancellationToken, item => tesTask = item))
+            if (await repository.TryGetItemAsync(userId, id, cancellationToken, item => tesTask = item))
             {
                 if (tesTask.State == TesState.COMPLETEEnum ||
                     tesTask.State == TesState.EXECUTORERROREnum ||
@@ -96,7 +99,7 @@ namespace TesApi.Controllers
 
                     try
                     {
-                        await repository.UpdateItemAsync(tesTask, cancellationToken);
+                        await repository.InternalUpdateItemAsync(tesTask, cancellationToken);
                     }
                     catch (RepositoryCollisionException exc)
                     {
@@ -153,6 +156,9 @@ namespace TesApi.Controllers
                 }
             }
 
+            var userId = User.GetUserId();
+
+            tesTask.OwnerUserId = userId;
             tesTask.State = TesState.QUEUEDEnum;
             tesTask.CreationTime = DateTimeOffset.UtcNow;
 
@@ -270,9 +276,9 @@ namespace TesApi.Controllers
             {
                 return BadRequest("Invalid ID");
             }
-
+            var userId = User.GetUserId();
             TesTask tesTask = null;
-            var itemFound = await repository.TryGetItemAsync(id, cancellationToken, item => tesTask = item);
+            var itemFound = await repository.TryGetItemAsync(userId, id, cancellationToken, item => tesTask = item);
 
             if (!itemFound)
             {
@@ -308,7 +314,10 @@ namespace TesApi.Controllers
                 return BadRequest("If provided, pageSize must be greater than 0 and less than 2048. Defaults to 256.");
             }
 
+            var userId = User.GetUserId();
+
             (var nextPageToken, var tasks) = await repository.GetItemsAsync(
+                userId,
                 t => string.IsNullOrWhiteSpace(namePrefix) || t.Name.StartsWith(namePrefix),
                 pageSize.HasValue ? (int)pageSize : 256,
                 decodedPageToken, cancellationToken);

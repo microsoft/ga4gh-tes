@@ -96,12 +96,39 @@ namespace Tes.Repository
         /// <param name="pagination"></param>
         /// <returns></returns>
         /// <remarks>Ensure that the <see cref="DbContext"/> from which <paramref name="dbSet"/> comes isn't disposed until the entire query completes.</remarks>
-        protected async Task<IEnumerable<T>> GetItemsAsync(DbSet<T> dbSet, Expression<Func<T, bool>> predicate, CancellationToken cancellationToken, Func<IQueryable<T>, IQueryable<T>> orderBy = default, Func<IQueryable<T>, IQueryable<T>> pagination = default)
+        protected async Task<IEnumerable<T>> InternalGetItemsAsync(DbSet<T> dbSet, Expression<Func<T, bool>> predicate, CancellationToken cancellationToken, Func<IQueryable<T>, IQueryable<T>> orderBy = default, Func<IQueryable<T>, IQueryable<T>> pagination = default)
         {
             ArgumentNullException.ThrowIfNull(dbSet);
             ArgumentNullException.ThrowIfNull(predicate);
             orderBy ??= q => q;
             pagination ??= q => q;
+
+            // Search for items in the JSON
+            var query = pagination(orderBy(dbSet.Where(predicate)));
+            //var sqlQuery = query.ToQueryString();
+            //System.Diagnostics.Debugger.Break();
+
+            return await _asyncPolicy.ExecuteAsync(query.ToListAsync, cancellationToken);
+        }
+
+        /// <summary>
+        /// Retrieves items from the database in a consistent fashion.
+        /// </summary>
+        /// <param name="dbSet">The <see cref="DbSet{TEntity}"/> of <typeparamref name="TDatabaseItem"/> to query.</param>
+        /// <param name="predicate">The WHERE clause <see cref="Expression"/> for <typeparamref name="TDatabaseItem"/> selection in the query.</param>
+        /// <param name="cancellationToken"></param>
+        /// <param name="orderBy"></param>
+        /// <param name="pagination"></param>
+        /// <returns></returns>
+        /// <remarks>Ensure that the <see cref="DbContext"/> from which <paramref name="dbSet"/> comes isn't disposed until the entire query completes.</remarks>
+        protected async Task<IEnumerable<T>> GetItemsAsync(string userId, DbSet<T> dbSet, Expression<Func<T, bool>> predicate, CancellationToken cancellationToken, Func<IQueryable<T>, IQueryable<T>> orderBy = default, Func<IQueryable<T>, IQueryable<T>> pagination = default)
+        {
+            ArgumentNullException.ThrowIfNull(dbSet);
+            ArgumentNullException.ThrowIfNull(predicate);
+            orderBy ??= q => q;
+            pagination ??= q => q;
+            
+            // TODO add userId
 
             // Search for items in the JSON
             var query = pagination(orderBy(dbSet.Where(predicate)));

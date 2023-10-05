@@ -21,6 +21,9 @@ namespace Tes.Models
             TesState.PAUSEDEnum,
             TesState.INITIALIZINGEnum};
 
+        [DataMember(Name = "owner_user_id")]
+        public string OwnerUserId { get; set; }     
+
         /// <summary>
         /// Number of retries attempted
         /// </summary>

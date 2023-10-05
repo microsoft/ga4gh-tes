@@ -102,7 +102,7 @@ namespace TesApi.Web
         {
             var pools = new HashSet<string>();
 
-            var tesTasks = (await repository.GetItemsAsync(
+            var tesTasks = (await repository.InternalGetItemsAsync(
                     predicate: t => t.State == TesState.QUEUEDEnum
                         || t.State == TesState.INITIALIZINGEnum
                         || t.State == TesState.RUNNINGEnum
@@ -163,7 +163,7 @@ namespace TesApi.Web
                         }
 
                         logger.LogError(exc, "TES task: {TesTask} threw an exception in OrchestrateTesTasksOnBatch().", tesTask.Id);
-                        await repository.UpdateItemAsync(tesTask, stoppingToken);
+                        await repository.InternalUpdateItemAsync(tesTask, stoppingToken);
                     }
 
                     if (isModified)
@@ -198,7 +198,7 @@ namespace TesApi.Web
                             logger.LogDebug("{TesTask} failed, state: {TesTaskState}, reason: {TesTaskFailureReason}", tesTask.Id, tesTask.State, tesTask.FailureReason);
                         }
 
-                        await repository.UpdateItemAsync(tesTask, stoppingToken);
+                        await repository.InternalUpdateItemAsync(tesTask, stoppingToken);
                     }
                 }
                 catch (RepositoryCollisionException exc)
