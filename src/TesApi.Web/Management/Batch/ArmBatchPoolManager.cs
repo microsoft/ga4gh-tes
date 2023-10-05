@@ -43,18 +43,14 @@ namespace TesApi.Web.Management.Batch
             {
                 var batchManagementClient = await azureClientsFactory.CreateBatchAccountManagementClient(cancellationToken);
 
-                logger.LogInformation("Creating manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolInfo.Name, poolInfo.VmSize, isPreemptable);
-
                 var pool = await batchManagementClient.Pool.CreateAsync(azureClientsFactory.BatchAccountInformation.ResourceGroupName, azureClientsFactory.BatchAccountInformation.Name, poolInfo.Name, poolInfo, cancellationToken: cancellationToken);
-
-                logger.LogInformation("Successfully created manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolInfo.Name, poolInfo.VmSize, isPreemptable);
 
                 return new PoolInformation() { PoolId = pool.Name };
             }
             catch (Exception exc)
             {
                 var batchError = Newtonsoft.Json.JsonConvert.SerializeObject((exc as Microsoft.Azure.Batch.Common.BatchException)?.RequestInformation?.BatchError);
-                logger.LogError(exc, "Error trying to create manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}. Batch error: {BatchError}", poolInfo.Name, poolInfo.VmSize, isPreemptable, batchError);
+                logger.LogError(exc, "Error trying to create batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}. Batch error: {BatchError}", poolInfo.Name, poolInfo.VmSize, isPreemptable, batchError);
                 throw;
             }
         }

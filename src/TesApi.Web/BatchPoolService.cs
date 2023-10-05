@@ -145,6 +145,7 @@ namespace TesApi.Web
         {
             var tasks = new List<CloudTask>();
             await ExecuteActionOnPoolsAsync("ServiceBatchTasks", async (pool, token) => tasks.AddRange(await pool.GetCompletedTasks(token).ToListAsync(token)), stoppingToken);
+            logger.LogDebug("ProcessCompletedCloudTasksAsync found {CompletedTasks} completed tasks.", tasks.Count);
 
             await OrchestrateTesTasksOnBatchAsync(
                 "Completed",

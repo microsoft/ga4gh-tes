@@ -88,12 +88,12 @@ namespace TesApi.Web
                .Handle<BatchException>(ex => "NodeNotReady".Equals(ex.RequestInformation?.BatchError?.Code, StringComparison.InvariantCultureIgnoreCase))
                .WaitAndRetryAsync(
                     5,
-                    (retryAttempt, exception, _) => (exception as BatchException).RequestInformation?.RetryAfter ?? TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                    (retryAttempt, exception, _) => (exception as BatchException)?.RequestInformation?.RetryAfter ?? TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
                     (exception, delay, retryAttempt, _) =>
                         {
-                            var requestId = (exception as BatchException).RequestInformation?.ServiceRequestId;
+                            var requestId = (exception as BatchException)?.RequestInformation?.ServiceRequestId;
                             var reason = (exception.InnerException as Microsoft.Azure.Batch.Protocol.Models.BatchErrorException)?.Response?.ReasonPhrase;
-                            logger.LogDebug(exception, "Retry attempt {RetryAttempt} after delay {DelaySeconds} for NodeNotReady exception: ServiceRequestId: {ServiceRequestId}, BatchErrorCode: NodeNotReady, Reason: {ReasonPhrase}", retryAttempt, delay.TotalSeconds, requestId, reason);
+                            this.logger.LogDebug(exception, "Retry attempt {RetryAttempt} after delay {DelaySeconds} for NodeNotReady exception: ServiceRequestId: {ServiceRequestId}, BatchErrorCode: NodeNotReady, Reason: {ReasonPhrase}", retryAttempt, delay.TotalSeconds, requestId, reason);
                             return Task.FromResult(false);
                         });
 
@@ -536,7 +536,12 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
-            => await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable, cancellationToken);
+        {
+            logger.LogInformation("Creating batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolInfo.Name, poolInfo.VmSize, isPreemptable);
+            var pool = await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable, cancellationToken);
+            logger.LogInformation("Successfully created batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolInfo.Name, poolInfo.VmSize, isPreemptable);
+            return pool;
+        }
 
         // https://learn.microsoft.com/azure/azure-resource-manager/management/move-resource-group-and-subscription#changed-resource-id
         [GeneratedRegex("/*/resourceGroups/([^/]*)/*")]
@@ -582,8 +587,8 @@ namespace TesApi.Web
             => batchClient.JobOperations.ListTasks(jobId, detailLevel: detailLevel).ToAsyncEnumerable();
 
         /// <inheritdoc/>
-        public async Task DisableBatchPoolAutoScaleAsync(string poolId, CancellationToken cancellationToken)
-            => await batchClient.PoolOperations.DisableAutoScaleAsync(poolId, cancellationToken: cancellationToken);
+        public Task DisableBatchPoolAutoScaleAsync(string poolId, CancellationToken cancellationToken)
+            => batchClient.PoolOperations.DisableAutoScaleAsync(poolId, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
         public async Task EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, IAzureProxy.BatchPoolAutoScaleFormulaFactory formulaFactory, CancellationToken cancellationToken)
@@ -595,7 +600,13 @@ namespace TesApi.Web
                 throw new InvalidOperationException();
             }
 
-            await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formulaFactory(preemptable, preemptable ? currentLowPriority ?? 0 : currentDedicated ?? 0), interval, cancellationToken: cancellationToken);
+            var formula = formulaFactory(preemptable, preemptable ? currentLowPriority ?? 0 : currentDedicated ?? 0);
+            logger.LogDebug("Setting Pool {PoolID} to AutoScale({AutoScaleInterval}): '{AutoScaleFormula}'", poolId, interval, formula);
+            await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formula, interval, cancellationToken: cancellationToken);
         }
+
+        /// <inheritdoc/>
+        public Task<AutoScaleRun> EvaluateAutoScaleAsync(string poolId, string autoscaleFormula, CancellationToken cancellationToken)
+            => batchClient.PoolOperations.EvaluateAutoScaleAsync(poolId, autoscaleFormula, cancellationToken: cancellationToken);
     }
 }
