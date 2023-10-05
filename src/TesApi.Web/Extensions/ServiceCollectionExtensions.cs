@@ -2,27 +2,49 @@
 // Licensed under the MIT License.
 
 using System.Linq;
+using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
-using TesApi.Web.Options;
+using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Serialization;
 
 namespace TesApi.Web.Extensions
 {
     public static class ServiceCollectionExtensions
     {
-        public static IServiceCollection AddOpenIdConnectAuthentication(this IServiceCollection services, out bool isAuthConfigured)
+        public static IServiceCollection ConfigureAuthenticationAndControllers(this IServiceCollection services, Options.AuthenticationOptions authenticationOptions)
         {
-            isAuthConfigured = false;
-            var serviceProvider = services.BuildServiceProvider();
-            var authenticationOptions = serviceProvider.GetService<IOptions<AuthenticationOptions>>();
+            bool isAuthConfigured = false;
 
-            if (authenticationOptions?.Value?.Providers?.Any() == true)
+            if (authenticationOptions?.Providers?.Any() == true)
             {
-                var authenticationConfigurationService = serviceProvider.GetRequiredService<AuthenticationConfigurationService>();
-                var authenticationBuilder = services.AddAuthentication();
-                authenticationConfigurationService.ConfigureJwtBearer(authenticationBuilder);
+                var authBuilder = services.AddAuthentication();
+
+                foreach (var provider in authenticationOptions.Providers)
+                {
+                    authBuilder.AddJwtBearer(provider.Name, options =>
+                    {
+                        options.Authority = provider.Authority;
+                        options.Audience = provider.Audience;
+                    });
+                }
+
                 isAuthConfigured = true;
             }
+
+            services.AddControllers(options =>
+            {
+                options.Filters.Add<Controllers.OperationCancelledExceptionFilter>();
+
+                if (isAuthConfigured)
+                {
+                    options.Filters.Add(new AuthorizeFilter());
+                }
+            })
+            .AddNewtonsoftJson(opts =>
+            {
+                opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
+                opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
+            });
 
             return services;
         }

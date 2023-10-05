@@ -8,16 +8,11 @@ using Azure.Core;
 using Azure.Identity;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json.Converters;
-using Newtonsoft.Json.Serialization;
 using Tes.ApiClients;
 using Tes.ApiClients.Options;
 using Tes.Models;
@@ -62,6 +57,9 @@ namespace TesApi.Web
         {
             try
             {
+                var authenticationOptions = new AuthenticationOptions();
+                configuration.GetSection(AuthenticationOptions.SectionName)?.Bind(authenticationOptions);
+
                 services
                     .AddLogging()
                     .AddApplicationInsightsTelemetry(configuration)
@@ -81,33 +79,13 @@ namespace TesApi.Web
                     .Configure<AuthenticationOptions>(configuration.GetSection(AuthenticationOptions.SectionName))
 
                     .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
-                    .AddSingleton<AuthenticationConfigurationService>()
-                    .AddOpenIdConnectAuthentication(out bool isAuthConfigured)
+                    .ConfigureAuthenticationAndControllers(authenticationOptions)
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)
-
-                    .AddControllers(options =>
-                    {
-                        options.Filters.Add<Controllers.OperationCancelledExceptionFilter>();
-
-                        if (isAuthConfigured)
-                        {
-                            services.Configure<MvcOptions>(options =>
-                            {
-                                options.Filters.Add(new AuthorizeFilter());
-                            });
-                        }
-                    })
-                        .AddNewtonsoftJson(opts =>
-                        {
-                            opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                            opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
-                        })
-                    .Services
 
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
                     .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
