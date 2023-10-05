@@ -65,6 +65,8 @@ namespace TesApi.Web.Extensions
 
                 if (isAuthConfigured)
                 {
+                    // Adds authorization to all controllers and operations
+                    // TODO might want to expose ServiceInfo with the Authority and MetadataAddress and Audience
                     options.Filters.Add(new AuthorizeFilter());
                 }
             })
