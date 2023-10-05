@@ -7,6 +7,6 @@ namespace TesApi.Web.Options
     {
         public string Name { get; set; }
         public string Authority { get; set; }
-        public string Audience { get; set; }
+        public string ClientId { get; set; }
     }
 }

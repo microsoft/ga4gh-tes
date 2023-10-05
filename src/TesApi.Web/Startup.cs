@@ -3,11 +3,13 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Azure.Core;
 using Azure.Identity;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -255,37 +257,51 @@ namespace TesApi.Web
         /// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         /// </summary>
         /// <param name="app">An Microsoft.AspNetCore.Builder.IApplicationBuilder for the app to configure.</param>
-        public void Configure(IApplicationBuilder app)
-            => app.UseRouting()
-                .UseEndpoints(endpoints =>
-                {
-                    endpoints.MapControllers();
-                })
-
-                .UseHttpsRedirection()
-
-                .UseDefaultFiles()
-                .UseStaticFiles()
-                .UseSwagger(c =>
-                {
-                    c.RouteTemplate = "swagger/{documentName}/openapi.json";
-                })
-                .UseSwaggerUI(c =>
-                {
-                    c.SwaggerEndpoint($"/swagger/{tesVersion}/openapi.json", "Task Execution Service");
-                })
-
-                .IfThenElse(hostingEnvironment.IsDevelopment(),
+        public void Configure(IApplicationBuilder app) => app
+            .UseForwardedHeaders(new ForwardedHeadersOptions
+            {
+                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+            })
+            .UseDefaultFiles()
+            .UseStaticFiles()
+            .UseSwagger(c =>
+            {
+                c.RouteTemplate = "swagger/{documentName}/openapi.json";
+            })
+            .UseSwaggerUI(c =>
+            {
+                c.SwaggerEndpoint($"/swagger/{tesVersion}/openapi.json", "Task Execution Service");
+            })
+            .UseRouting()
+            .UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+            })
+            .IfThenElse(app
+                .ApplicationServices
+                .GetRequiredService<IOptions<Microsoft.AspNetCore.Authentication.AuthenticationOptions>>()
+                ?.Value
+                ?.Schemes
+                ?.Any() == true,
                     s =>
                     {
-                        var r = s.UseDeveloperExceptionPage();
-                        logger.LogInformation("Configuring for Development environment");
+                        app.UseAuthentication();
+                        app.UseAuthorization();
                     },
-                    s =>
-                    {
-                        var r = s.UseHsts();
-                        logger.LogInformation("Configuring for Production environment");
-                    });
+                    s => { })
+            .IfThenElse(hostingEnvironment.IsDevelopment(),
+                s =>
+                {
+                    s.UseDeveloperExceptionPage();
+                    logger.LogInformation("Configuring for Development environment");
+                },
+                s =>
+                {
+                    s.UseHttpsRedirection();
+                    s.UseHsts();
+                    logger.LogInformation("Configuring for Production environment");
+                });
+
     }
 
     internal static class BooleanMethodSelectorExtensions
