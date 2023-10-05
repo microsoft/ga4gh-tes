@@ -141,12 +141,12 @@ namespace TesApi.Web
                                     // Errors to ignore
                                     case PoolResizeErrorCodes.RemoveNodesFailed:
                                     case PoolResizeErrorCodes.CommunicationEnabledPoolReachedMaxVMCount:
-                                    case PoolResizeErrorCodes.AccountSpotCoreQuotaReached:
                                     case PoolResizeErrorCodes.AllocationTimedOut:
                                         break;
 
                                     // Errors that sometimes require mitigation
                                     case PoolResizeErrorCodes.AccountCoreQuotaReached:
+                                    case PoolResizeErrorCodes.AccountSpotCoreQuotaReached:
                                     case PoolResizeErrorCodes.AccountLowPriorityCoreQuotaReached:
                                         if (autoScaleTransitionCutoff > Creation && pool.AllocationStateTransitionTime < autoScaleTransitionCutoff &&
                                             (await _azureProxy.EvaluateAutoScaleAsync(pool.Id, pool.AutoScaleFormula, cancellationToken: cancellationToken))?.Error is not null)

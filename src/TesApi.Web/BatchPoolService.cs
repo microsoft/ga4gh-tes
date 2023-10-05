@@ -118,7 +118,7 @@ namespace TesApi.Web
                 await foreach (var (id, state) in failures.WithCancellation(cancellationToken))
                 {
                     TesTask tesTask = default;
-                    if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
+                    if (await repository.TryGetItemAsync(batchScheduler.GetTesTaskIdFromCloudTaskId(id), cancellationToken, task => tesTask = task) && tesTask is not null)
                     {
                         list.Add((tesTask, state));
                     }
@@ -157,7 +157,7 @@ namespace TesApi.Web
 
             async IAsyncEnumerable<TesTask> GetTesTasks([EnumeratorCancellation] CancellationToken cancellationToken)
             {
-                foreach (var id in tasks.Select(t => t.Id))
+                foreach (var id in tasks.Select(t => batchScheduler.GetTesTaskIdFromCloudTaskId(t.Id)))
                 {
                     TesTask tesTask = default;
                     if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
@@ -167,7 +167,7 @@ namespace TesApi.Web
                     }
                     else
                     {
-                        logger.LogDebug("Could not find task {TesTask}.", tesTask.Id);
+                        logger.LogDebug("Could not find task {TesTask}.", id);
                         yield return null;
                     }
                 }
@@ -175,7 +175,7 @@ namespace TesApi.Web
 
             AzureBatchTaskState GetCompletedBatchState(CloudTask task)
             {
-                logger.LogDebug("Getting batch task state from completed task {TesTask}.", task.Id);
+                logger.LogDebug("Getting batch task state from completed task {TesTask}.", batchScheduler.GetTesTaskIdFromCloudTaskId(task.Id));
                 return task.ExecutionInformation.Result switch
                 {
                     Microsoft.Azure.Batch.Common.TaskExecutionResult.Success => new(

@@ -268,11 +268,11 @@ namespace TesApi.Web
                 SelectClause = "id"
             };
 
-            List<CloudTask> batchTasksToDelete = default;
+            List<CloudTask> batchTasksToTerminate = default;
 
             try
             {
-                batchTasksToDelete = await batchClient.JobOperations.ListTasks(jobId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
+                batchTasksToTerminate = await batchClient.JobOperations.ListTasks(jobId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
             }
             catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException bee && "JobNotFound".Equals(bee.Body?.Code, StringComparison.InvariantCultureIgnoreCase))
             {
@@ -280,12 +280,12 @@ namespace TesApi.Web
                 return; // Task cannot exist if the job is not found.
             }
 
-            if (batchTasksToDelete.Count > 1)
+            if (batchTasksToTerminate.Count > 1)
             {
                 logger.LogWarning("Found more than one active task for TES task {TesTask}", tesTaskId);
             }
 
-            foreach (var task in batchTasksToDelete)
+            foreach (var task in batchTasksToTerminate)
             {
                 logger.LogInformation("Terminating task {BatchTask}", task.Id);
                 await batchNodeNotReadyRetryPolicy.ExecuteAsync(ct => task.TerminateAsync(cancellationToken: ct), cancellationToken);

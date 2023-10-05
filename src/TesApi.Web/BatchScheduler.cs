@@ -450,6 +450,13 @@ namespace TesApi.Web
             => (inputFile.Name?.Equals("commandScript") ?? false) && (inputFile.Description?.EndsWith(".commandScript") ?? false) && inputFile.Type == TesFileType.FILEEnum && inputFile.Path.EndsWith($"/{CromwellScriptFileName}");
 
         /// <inheritdoc/>
+        public string GetTesTaskIdFromCloudTaskId(string cloudTaskId)
+        {
+            var separatorIndex = cloudTaskId.LastIndexOf('-');
+            return separatorIndex == -1 ? cloudTaskId : cloudTaskId[..separatorIndex];
+        }
+
+        /// <inheritdoc/>
         public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedAsync)> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var tasksMetadataByPoolKey = new Dictionary<string, List<(TesTask TesTask, VirtualMachineInformation VirtualMachineInfo, (ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic) ContainerMetadata, string PoolDisplayName)>>();
@@ -568,9 +575,9 @@ namespace TesApi.Web
                         cancellationToken: cancellationToken)
                         ).Pool;
 
-                    var jobOrTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
+                    var cloudTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
                     tesTask.PoolId = poolInformation.PoolId;
-                    var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(jobOrTaskId, tesTask, cancellationToken);
+                    var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(cloudTaskId, tesTask, cancellationToken);
 
                     logger.LogInformation(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VmSize);
                     await azureProxy.AddBatchTaskAsync(tesTask.Id, cloudTask, poolInformation, cancellationToken);

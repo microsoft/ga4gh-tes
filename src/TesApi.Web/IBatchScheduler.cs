@@ -94,5 +94,12 @@ namespace TesApi.Web
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         ValueTask FlushPoolsAsync(IEnumerable<string> assignedPools, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Gets the <see cref="TesTask.Id"/> from a <see cref="CloudTask.Id"/>.
+        /// </summary>
+        /// <param name="cloudTaskId"><see cref="CloudTask.Id"/>.</param>
+        /// <returns><see cref="TesTask.Id"/>.</returns>
+        string GetTesTaskIdFromCloudTaskId(string cloudTaskId);
     }
 }
