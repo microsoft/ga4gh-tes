@@ -1639,8 +1639,15 @@ namespace TesDeployer
                 $"Creating virtual network and subnets: {configuration.VnetName}...",
                 async () =>
                 {
+                    var tesPorts = new List<int> {};
+
+                    if (configuration.EnableIngress.GetValueOrDefault())
+                    {
+                        tesPorts = new List<int> { 80, 443 };
+                    }
+
                     var defaultNsg = await CreateNetworkSecurityGroupAsync(resourceGroup, $"{configuration.VnetName}-default-nsg");
-                    var aksNsg = await CreateNetworkSecurityGroupAsync(resourceGroup, $"{configuration.VnetName}-aks-nsg", new List<int> { 80, 443 });
+                    var aksNsg = await CreateNetworkSecurityGroupAsync(resourceGroup, $"{configuration.VnetName}-aks-nsg", tesPorts);
                     
                     var vnetDefinition = azureSubscriptionClient.Networks
                         .Define(configuration.VnetName)
