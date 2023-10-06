@@ -130,11 +130,15 @@ namespace TesApi.Web
                         if (pool.AutoScaleRun?.Error is not null || (autoScaleRunCutoff > Creation && pool.AutoScaleRun?.Timestamp < autoScaleRunCutoff))
                         {
                             _resetAutoScalingRequired |= true;
-                            _logger.LogDebug("Resetting AutoScale for pool {PoolId} because AutoScaleRun error '{AutoScaleRunError}' or timestamp '{AutoScaleRunTimestamp}' is older than {AutoScaleRunCutoff}.", Id, pool.AutoScaleRun?.Error?.Code ?? "n/a", pool.AutoScaleRun?.Timestamp.ToUniversalTime().ToString("O") ?? "n/a", autoScaleRunCutoff.ToUniversalTime().ToString("O"));
+                            _logger.LogDebug("Resetting AutoScale for pool {PoolId} because AutoScaleRun error '{AutoScaleRunError}' or timestamp '{AutoScaleRunTimestamp}' is older than {AutoScaleRunCutoff}.",
+                                Id,
+                                pool.AutoScaleRun?.Error?.Code ?? "n/a",
+                                pool.AutoScaleRun?.Timestamp.ToUniversalTime().ToString("O") ?? "n/a",
+                                autoScaleRunCutoff.ToUniversalTime().ToString("O"));
 
                             if (pool.AutoScaleRun?.Error is not null)
                             {
-                                _logger.LogDebug("AutoScale({PoolId}) Error '{AutoScaleRunErrorMessage}': Details: {AutoScaleRunErrorValues} .", Id, pool.AutoScaleRun?.Error?.Message?? "n/a",
+                                _logger.LogDebug("AutoScale({PoolId}) Error '{AutoScaleRunErrorMessage}': Details: {AutoScaleRunErrorValues} .", Id, pool.AutoScaleRun?.Error?.Message ?? "n/a",
                                     string.Join(", ", (pool.AutoScaleRun?.Error?.Values ?? Enumerable.Empty<NameValuePair>()).Select(pair => $"'{pair.Name}': '{pair.Value}'")));
                             }
                         }

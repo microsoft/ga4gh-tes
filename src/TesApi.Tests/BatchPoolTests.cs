@@ -252,7 +252,7 @@ namespace TesApi.Tests
                 else
                 {
                     poolState.Add(id, new(currentDedicatedNodes, currentLowPriorityNodes, allocationState, autoScaleRun, allocationStateTransitionTime, resizeErrors, poolMetadata)
-                        { TargetDedicatedNodes = targetDedicatedNodes, TargetLowPriorityNodes = targetLowPriorityNodes, EnableAutoScale = enableAutoScale });
+                    { TargetDedicatedNodes = targetDedicatedNodes, TargetLowPriorityNodes = targetLowPriorityNodes, EnableAutoScale = enableAutoScale });
                 }
             }
 
@@ -284,13 +284,13 @@ namespace TesApi.Tests
                     AllocationStateTransitionTime: default,
                     ResizeErrors: default,
                     PoolMetadata: pool.Metadata?.Select(ConvertMetadata).ToList())
-                    {
-                        TargetDedicatedNodes = pool.ScaleSettings?.FixedScale?.TargetDedicatedNodes ?? 0,
-                        TargetLowPriorityNodes = pool.ScaleSettings?.FixedScale?.TargetLowPriorityNodes ?? 0,
-                        EnableAutoScale = pool.ScaleSettings?.AutoScale is not null
-                    };
+                {
+                    TargetDedicatedNodes = pool.ScaleSettings?.FixedScale?.TargetDedicatedNodes ?? 0,
+                    TargetLowPriorityNodes = pool.ScaleSettings?.FixedScale?.TargetLowPriorityNodes ?? 0,
+                    EnableAutoScale = pool.ScaleSettings?.AutoScale is not null
+                };
 
-                    poolState.Add(pool.Name, state);
+                poolState.Add(pool.Name, state);
 
                 return GetPoolFromState(pool.Name, state);
 
@@ -309,7 +309,8 @@ namespace TesApi.Tests
             }
 
             private static CloudPool GetPoolFromState(string poolId, PoolState poolState)
-                => GeneratePool(
+            {
+                return GeneratePool(
                     id: poolId,
                     currentDedicatedNodes: poolState.CurrentDedicatedNodes,
                     currentLowPriorityNodes: poolState.CurrentLowPriorityNodes,
@@ -321,6 +322,7 @@ namespace TesApi.Tests
                     autoScaleRun: poolState.AutoScaleRun,
                     enableAutoScale: poolState.EnableAutoScale,
                     metadata: poolState.PoolMetadata);
+            }
         }
 
         private static Action<Mock<IBatchSkuInformationProvider>> GetMockSkuInfoProvider(AzureProxyReturnValues azureProxyReturnValues)
