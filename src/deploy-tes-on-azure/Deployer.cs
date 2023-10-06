@@ -544,7 +544,12 @@ namespace TesDeployer
 
                                 if (configuration.EnableIngress.GetValueOrDefault())
                                 {
-                                    _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient, cts.Token);
+                                    await Execute(
+                                        $"Enabling Ingress {kubernetesManager.TesHostname}",
+                                        async () =>
+                                        {
+                                            _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient, cts.Token);
+                                        });
                                 }
                             });
                     }
@@ -1640,7 +1645,15 @@ namespace TesDeployer
                 $"Creating virtual network and subnets: {configuration.VnetName}...",
                 async () =>
                 {
+                    var tesPorts = new List<int> { };
+
+                    if (configuration.EnableIngress.GetValueOrDefault())
+                    {
+                        tesPorts = new List<int> { 80, 443 };
+                    }
+
                     var defaultNsg = await CreateNetworkSecurityGroupAsync(resourceGroup, $"{configuration.VnetName}-default-nsg");
+                    var aksNsg = await CreateNetworkSecurityGroupAsync(resourceGroup, $"{configuration.VnetName}-aks-nsg", tesPorts);
 
                     var vnetDefinition = azureSubscriptionClient.Networks
                         .Define(configuration.VnetName)
@@ -1649,7 +1662,7 @@ namespace TesDeployer
                         .WithAddressSpace(configuration.VnetAddressSpace)
                         .DefineSubnet(configuration.VmSubnetName)
                         .WithAddressPrefix(configuration.VmSubnetAddressSpace)
-                        .WithExistingNetworkSecurityGroup(defaultNsg)
+                        .WithExistingNetworkSecurityGroup(aksNsg)
                         .Attach();
 
                     vnetDefinition = vnetDefinition.DefineSubnet(configuration.PostgreSqlSubnetName)
@@ -1679,12 +1692,32 @@ namespace TesDeployer
                         batchSubnet);
                 });
 
-        private Task<INetworkSecurityGroup> CreateNetworkSecurityGroupAsync(IResourceGroup resourceGroup, string networkSecurityGroupName)
+        private Task<INetworkSecurityGroup> CreateNetworkSecurityGroupAsync(IResourceGroup resourceGroup, string networkSecurityGroupName, List<int> openPorts = null)
         {
-            return azureSubscriptionClient.NetworkSecurityGroups.Define(networkSecurityGroupName)
+            var icreate = azureSubscriptionClient.NetworkSecurityGroups.Define(networkSecurityGroupName)
                     .WithRegion(configuration.RegionName)
-                    .WithExistingResourceGroup(resourceGroup)
-                    .CreateAsync(cts.Token);
+                    .WithExistingResourceGroup(resourceGroup);
+
+            if (openPorts is not null)
+            {
+                var i = 0;
+                foreach (var port in openPorts)
+                {
+                    icreate = icreate
+                        .DefineRule($"ALLOW-{port}")
+                        .AllowInbound()
+                        .FromAnyAddress()
+                        .FromAnyPort()
+                        .ToAnyAddress()
+                        .ToPort(port)
+                        .WithAnyProtocol()
+                        .WithPriority(1000 + i)
+                        .Attach();
+                    i++;
+                }
+            }
+
+            return icreate.CreateAsync(cts.Token);
         }
 
         private Task<IPrivateDnsZone> CreatePrivateDnsZoneAsync(INetwork virtualNetwork, string name, string title)
