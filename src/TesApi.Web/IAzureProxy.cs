@@ -20,25 +20,25 @@ namespace TesApi.Web
         /// <summary>
         /// Creates a new Azure Batch job for <see cref="IBatchPool"/>
         /// </summary>
-        /// <param name="poolInformation"></param>
+        /// <param name="jobId"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        Task CreateBatchJobAsync(PoolInformation poolInformation, CancellationToken cancellationToken);
+        Task CreateBatchJobAsync(string jobId, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Adds a task to the batch job paired to the <paramref name="poolInformation"/>."/>
+        /// Adds a <see cref="CloudTask"/> to the <paramref name="jobId"/> job."/>
         /// </summary>
         /// <param name="tesTaskId"></param>
         /// <param name="cloudTask"></param>
-        /// <param name="poolInformation"></param>
+        /// <param name="jobId"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        Task AddBatchTaskAsync(string tesTaskId, CloudTask cloudTask, PoolInformation poolInformation, CancellationToken cancellationToken);
+        Task AddBatchTaskAsync(string tesTaskId, CloudTask cloudTask, string jobId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Terminates and deletes an Azure Batch job for <see cref="IBatchPool"/>
         /// </summary>
-        /// <param name="poolInformation"></param>
+        /// <param name="jobId"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        Task DeleteBatchJobAsync(PoolInformation poolInformation, CancellationToken cancellationToken);
+        Task DeleteBatchJobAsync(string jobId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the <see cref="StorageAccountInfo"/> for the given storage account name
@@ -51,33 +51,26 @@ namespace TesApi.Web
         /// <summary>
         /// Creates an Azure Batch pool who's lifecycle must be manually managed
         /// </summary>
-        /// <param name="poolInfo">Contains information about the pool. <see cref="BatchModels.ProxyResource.Name"/> becomes the <see cref="Microsoft.Azure.Batch.Protocol.Models.CloudPool.Id"/></param>
+        /// <param name="poolInfo">Contains information about the pool to be created. Note that <see cref="BatchModels.ProxyResource.Name"/> becomes <see cref="CloudPool.Id"/>.</param>
         /// <param name="isPreemptable">True if nodes in this pool will all be preemptable. False if nodes will all be dedicated.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Deletes an Azure Batch job for Autopools
-        /// </summary>
-        /// <param name="taskId">The unique TES task ID</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        Task DeleteBatchJobAsync(string taskId, CancellationToken cancellationToken);
+        Task<CloudPool> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken);
 
         /// <summary>
         /// Terminates an Azure Batch task
         /// </summary>
-        /// <param name="taskId">The unique TES task ID</param>
+        /// <param name="tesTaskId">The unique TES task ID</param>
         /// <param name="jobId">The batch job that contains the task</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        Task TerminateBatchTaskAsync(string taskId, string jobId, CancellationToken cancellationToken);
+        Task TerminateBatchTaskAsync(string tesTaskId, string jobId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Deletes an Azure Batch task
         /// </summary>
-        /// <param name="taskId">The unique TES task ID</param>
+        /// <param name="tesTaskId">The unique TES task ID</param>
         /// <param name="jobId">The batch job that contains the task</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        Task DeleteBatchTaskAsync(string taskId, string jobId, CancellationToken cancellationToken);
+        Task DeleteBatchTaskAsync(string tesTaskId, string jobId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the counts of active batch nodes, grouped by VmSize
@@ -156,44 +149,11 @@ namespace TesApi.Web
         Task<Microsoft.WindowsAzure.Storage.Blob.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Gets the ids of completed Batch jobs older than specified timespan
-        /// </summary>
-        /// <param name="oldestJobAge"></param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>List of Batch job ids</returns>
-        Task<IEnumerable<string>> ListOldJobsToDeleteAsync(TimeSpan oldestJobAge, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Gets the ids of orphaned Batch jobs older than specified timespan
-        /// These jobs are active for prolonged period of time, have auto pool, NoAction termination option, and no tasks
-        /// </summary>
-        /// <param name="minJobAge"></param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>List of Batch job ids</returns>
-        Task<IEnumerable<string>> ListOrphanedJobsToDeleteAsync(TimeSpan minJobAge, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Gets the list of active pool ids matching the prefix and with creation time older than the minAge
-        /// </summary>
-        /// <param name="prefix"></param>
-        /// <param name="minAge"></param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>Active pool ids</returns>
-        Task<IEnumerable<string>> GetActivePoolIdsAsync(string prefix, TimeSpan minAge, CancellationToken cancellationToken);
-
-        /// <summary>
         /// Gets the list of active pools matching the hostname in the metadata
         /// </summary>
         /// <param name="hostName"></param>
         /// <returns>List of <see cref="Microsoft.Azure.Batch.Protocol.Models.CloudPool"/> managed by the host.</returns>
         IAsyncEnumerable<CloudPool> GetActivePoolsAsync(string hostName);
-
-        /// <summary>
-        /// Gets the list of pool ids referenced by the jobs
-        /// </summary>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>Pool ids</returns>
-        Task<IEnumerable<string>> GetPoolIdsReferencedByJobsAsync(CancellationToken cancellationToken);
 
         /// <summary>
         /// Deletes the specified pool
@@ -207,7 +167,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="poolId">The <see cref="CloudPool.Id"/> of the pool to retrieve.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for controlling which properties are retrieved from the service.</param>
+        /// <param name="detailLevel">A <see cref="DetailLevel"/> used for controlling which properties are retrieved from the service.</param>
         /// <returns><see cref="CloudPool"/></returns>
         Task<CloudPool> GetBatchPoolAsync(string poolId, CancellationToken cancellationToken, DetailLevel detailLevel = default);
 
@@ -216,7 +176,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="jobId">The <see cref="Microsoft.Azure.Batch.Protocol.Models.CloudJob"/> of the job to retrieve.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for controlling which properties are retrieved from the service.</param>
+        /// <param name="detailLevel">A <see cref="DetailLevel"/> used for controlling which properties are retrieved from the service.</param>
         /// <returns></returns>
         Task<CloudJob> GetBatchJobAsync(string jobId, CancellationToken cancellationToken, DetailLevel detailLevel = default);
 
@@ -224,7 +184,7 @@ namespace TesApi.Web
         /// Lists compute nodes in batch pool <paramref name="poolId"/>
         /// </summary>
         /// <param name="poolId">The id of the pool.</param>
-        /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for filtering the list and for controlling which properties are retrieved from the service.</param>
+        /// <param name="detailLevel">A <see cref="DetailLevel"/> used for filtering the list and for controlling which properties are retrieved from the service.</param>
         /// <returns></returns>
         IAsyncEnumerable<ComputeNode> ListComputeNodesAsync(string poolId, DetailLevel detailLevel = null);
 
@@ -232,7 +192,7 @@ namespace TesApi.Web
         /// Lists jobs in the batch account
         /// </summary>
         /// <param name="jobId">The job id (which is the pool id)</param>
-        /// <param name="detailLevel">A Microsoft.Azure.Batch.DetailLevel used for filtering the list and for controlling which properties are retrieved from the service.</param>
+        /// <param name="detailLevel">A <see cref="DetailLevel"/> used for filtering the list and for controlling which properties are retrieved from the service.</param>
         /// <returns></returns>
         IAsyncEnumerable<CloudTask> ListTasksAsync(string jobId, DetailLevel detailLevel = null);
 

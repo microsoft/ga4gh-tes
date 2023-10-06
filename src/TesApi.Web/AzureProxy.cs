@@ -23,19 +23,13 @@ using Microsoft.Rest;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Polly;
 using Polly.Retry;
-using Tes.Models;
 using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 using CloudTask = Microsoft.Azure.Batch.CloudTask;
-using ComputeNodeState = Microsoft.Azure.Batch.Common.ComputeNodeState;
 using FluentAzure = Microsoft.Azure.Management.Fluent.Azure;
-using JobState = Microsoft.Azure.Batch.Common.JobState;
 using OnAllTasksComplete = Microsoft.Azure.Batch.Common.OnAllTasksComplete;
-using PoolInformation = Microsoft.Azure.Batch.PoolInformation;
-using TaskExecutionInformation = Microsoft.Azure.Batch.TaskExecutionInformation;
-using TaskState = Microsoft.Azure.Batch.Common.TaskState;
 
 namespace TesApi.Web
 {
@@ -200,28 +194,28 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task CreateBatchJobAsync(PoolInformation poolInformation, CancellationToken cancellationToken)
+        public async Task CreateBatchJobAsync(string jobId, CancellationToken cancellationToken)
         {
-            ArgumentException.ThrowIfNullOrEmpty(poolInformation?.PoolId, nameof(poolInformation));
+            ArgumentException.ThrowIfNullOrEmpty(jobId);
 
-            logger.LogInformation("TES: Creating Batch job {BatchJob}", poolInformation.PoolId);
-            var job = batchClient.JobOperations.CreateJob(poolInformation.PoolId, poolInformation);
+            logger.LogInformation("TES: Creating Batch job {BatchJob}", jobId);
+            var job = batchClient.JobOperations.CreateJob(jobId, new() { PoolId = jobId });
             job.OnAllTasksComplete = OnAllTasksComplete.NoAction;
             job.OnTaskFailure = OnTaskFailure.NoAction;
 
             await job.CommitAsync(cancellationToken: cancellationToken);
-            logger.LogInformation("TES: Batch job {BatchJob} committed successfully", poolInformation.PoolId);
+            logger.LogInformation("TES: Batch job {BatchJob} committed successfully", jobId);
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
         }
 
         /// <inheritdoc/>
-        public async Task AddBatchTaskAsync(string tesTaskId, CloudTask cloudTask, PoolInformation poolInformation, CancellationToken cancellationToken)
+        public async Task AddBatchTaskAsync(string tesTaskId, CloudTask cloudTask, string jobId, CancellationToken cancellationToken)
         {
-            ArgumentException.ThrowIfNullOrEmpty(poolInformation?.PoolId, nameof(poolInformation));
+            ArgumentException.ThrowIfNullOrEmpty(jobId);
 
-            logger.LogInformation("TES task: {TesTask} - Adding task to job {BatchJob}", tesTaskId, poolInformation.PoolId);
+            logger.LogInformation("TES task: {TesTask} - Adding task to job {BatchJob}", tesTaskId, jobId);
             var job = await batchRaceConditionJobNotFoundRetryPolicy.ExecuteAsync(ct =>
-                    batchClient.JobOperations.GetJobAsync(poolInformation.PoolId, cancellationToken: ct),
+                    batchClient.JobOperations.GetJobAsync(jobId, cancellationToken: ct),
                     cancellationToken);
 
             await job.AddTaskAsync(cloudTask, cancellationToken: cancellationToken);
@@ -229,34 +223,11 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task DeleteBatchJobAsync(PoolInformation poolInformation, CancellationToken cancellationToken)
+        public async Task DeleteBatchJobAsync(string jobId, CancellationToken cancellationToken)
         {
-            ArgumentException.ThrowIfNullOrEmpty(poolInformation?.PoolId, nameof(poolInformation));
-            logger.LogInformation("Deleting job {BatchJob}", poolInformation.PoolId);
-            await batchClient.JobOperations.DeleteJobAsync(poolInformation.PoolId, cancellationToken: cancellationToken);
-        }
-
-        /// <inheritdoc/>
-        public async Task DeleteBatchJobAsync(string tesTaskId, CancellationToken cancellationToken = default)
-        {
-            var jobFilter = new ODATADetailLevel
-            {
-                FilterClause = $"startswith(id,'{tesTaskId}{BatchJobAttemptSeparator}') and state ne 'deleting'",
-                SelectClause = "id"
-            };
-
-            var batchJobsToDelete = await batchClient.JobOperations.ListJobs(jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
-
-            if (batchJobsToDelete.Count > 1)
-            {
-                logger.LogWarning($"Found more than one active job for TES task {tesTaskId}");
-            }
-
-            foreach (var job in batchJobsToDelete)
-            {
-                logger.LogInformation($"Deleting job {job.Id}");
-                await job.DeleteAsync(cancellationToken: cancellationToken);
-            }
+            ArgumentException.ThrowIfNullOrEmpty(jobId);
+            logger.LogInformation("Deleting job {BatchJob}", jobId);
+            await batchClient.JobOperations.DeleteJobAsync(jobId, cancellationToken: cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -326,47 +297,6 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<IEnumerable<string>> ListOldJobsToDeleteAsync(TimeSpan oldestJobAge, CancellationToken cancellationToken)
-        {
-            var filter = new ODATADetailLevel
-            {
-                FilterClause = $"state eq 'completed' and executionInfo/endTime lt DateTime'{DateTime.Today.Subtract(oldestJobAge):yyyy-MM-ddTHH:mm:ssZ}'",
-                SelectClause = "id"
-            };
-
-            return await batchClient.JobOperations.ListJobs(filter).ToAsyncEnumerable().Select(c => c.Id).ToListAsync(cancellationToken);
-        }
-
-        /// <inheritdoc/>
-        public async Task<IEnumerable<string>> ListOrphanedJobsToDeleteAsync(TimeSpan minJobAge, CancellationToken cancellationToken = default)
-        {
-            var filter = new ODATADetailLevel
-            {
-                FilterClause = $"state eq 'active' and creationTime lt DateTime'{DateTime.UtcNow.Subtract(minJobAge):yyyy-MM-ddTHH:mm:ssZ}'",
-                SelectClause = "id,poolInfo,onAllTasksComplete"
-            };
-
-            var noActionTesjobs = batchClient.JobOperations.ListJobs(filter).ToAsyncEnumerable()
-                .Where(j => j.PoolInformation?.AutoPoolSpecification?.AutoPoolIdPrefix == "TES" && j.OnAllTasksComplete == OnAllTasksComplete.NoAction);
-
-            var noActionTesjobsWithNoTasks = noActionTesjobs.WhereAwait(async j => !await j.ListTasks().ToAsyncEnumerable().AnyAsync(cancellationToken));
-
-            return await noActionTesjobsWithNoTasks.Select(j => j.Id).ToListAsync(cancellationToken);
-        }
-
-        /// <inheritdoc/>
-        public async Task<IEnumerable<string>> GetActivePoolIdsAsync(string prefix, TimeSpan minAge, CancellationToken cancellationToken = default)
-        {
-            var activePoolsFilter = new ODATADetailLevel
-            {
-                FilterClause = $"state eq 'active' and startswith(id, '{prefix}') and creationTime lt DateTime'{DateTime.UtcNow.Subtract(minAge):yyyy-MM-ddTHH:mm:ssZ}'",
-                SelectClause = "id"
-            };
-
-            return (await batchClient.PoolOperations.ListPools(activePoolsFilter).ToListAsync(cancellationToken)).Select(p => p.Id);
-        }
-
-        /// <inheritdoc/>
         public IAsyncEnumerable<CloudPool> GetActivePoolsAsync(string hostName)
         {
             var activePoolsFilter = new ODATADetailLevel
@@ -378,12 +308,6 @@ namespace TesApi.Web
             return batchClient.PoolOperations.ListPools(activePoolsFilter).ToAsyncEnumerable()
                 .Where(p => hostName.Equals(p.Metadata?.FirstOrDefault(m => BatchScheduler.PoolHostName.Equals(m.Name, StringComparison.Ordinal))?.Value, StringComparison.OrdinalIgnoreCase));
         }
-
-        /// <inheritdoc/>
-        public async Task<IEnumerable<string>> GetPoolIdsReferencedByJobsAsync(CancellationToken cancellationToken = default)
-            => (await batchClient.JobOperations.ListJobs(new ODATADetailLevel(selectClause: "executionInfo")).ToListAsync(cancellationToken))
-                .Where(j => !string.IsNullOrEmpty(j.ExecutionInformation?.PoolId))
-                .Select(j => j.ExecutionInformation.PoolId);
 
         /// <inheritdoc/>
         public Task DeleteBatchComputeNodesAsync(string poolId, IEnumerable<ComputeNode> computeNodes, CancellationToken cancellationToken = default)
@@ -535,12 +459,13 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
+        public async Task<CloudPool> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
         {
             logger.LogInformation("Creating batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolInfo.Name, poolInfo.VmSize, isPreemptable);
-            var pool = await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable, cancellationToken);
+            var poolId = await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable, cancellationToken);
             logger.LogInformation("Successfully created batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolInfo.Name, poolInfo.VmSize, isPreemptable);
-            return pool;
+
+            return await batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: new ODATADetailLevel { SelectClause = BatchPool.CloudPoolSelectClause }, cancellationToken: cancellationToken);
         }
 
         // https://learn.microsoft.com/azure/azure-resource-manager/management/move-resource-group-and-subscription#changed-resource-id
@@ -601,7 +526,7 @@ namespace TesApi.Web
             }
 
             var formula = formulaFactory(preemptable, preemptable ? currentLowPriority ?? 0 : currentDedicated ?? 0);
-            logger.LogDebug("Setting Pool {PoolID} to AutoScale({AutoScaleInterval}): '{AutoScaleFormula}'", poolId, interval, formula);
+            logger.LogDebug("Setting Pool {PoolID} to AutoScale({AutoScaleInterval}): '{AutoScaleFormula}'", poolId, interval, formula.Replace(Environment.NewLine, @"\n"));
             await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formula, interval, cancellationToken: cancellationToken);
         }
 

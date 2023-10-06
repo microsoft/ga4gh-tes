@@ -37,7 +37,7 @@ namespace TesApi.Web.Management.Batch
         }
 
         /// <inheritdoc />
-        public async Task<PoolInformation> CreateBatchPoolAsync(Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
+        public async Task<string> CreateBatchPoolAsync(Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
         {
             try
             {
@@ -45,7 +45,7 @@ namespace TesApi.Web.Management.Batch
 
                 var pool = await batchManagementClient.Pool.CreateAsync(azureClientsFactory.BatchAccountInformation.ResourceGroupName, azureClientsFactory.BatchAccountInformation.Name, poolInfo.Name, poolInfo, cancellationToken: cancellationToken);
 
-                return new PoolInformation() { PoolId = pool.Name };
+                return pool.Name;
             }
             catch (Exception exc)
             {

@@ -77,7 +77,7 @@ namespace TesApi.Web
                 }
                 catch (Exception exc)
                 {
-                    logger.LogError(exc, @"Batch pool {PoolId} threw an exception in {Poll}.", pool.Pool?.PoolId, pollName);
+                    logger.LogError(exc, @"Batch pool {PoolId} threw an exception in {Poll}.", pool.Id, pollName);
                 }
             }
 

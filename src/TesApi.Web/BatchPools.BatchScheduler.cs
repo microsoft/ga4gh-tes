@@ -27,7 +27,7 @@ namespace TesApi.Web
 
         internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
-        private (string PoolKey, string DisplayName) GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, ContainerConfiguration containerConfiguration, CancellationToken cancellationToken)
+        private (string PoolKey, string DisplayName) GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, BatchModels.ContainerConfiguration containerConfiguration, CancellationToken cancellationToken)
         {
             var identityResourceId = tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true ? tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) : default;
             var executorImage = tesTask.Executors.First().Image;
@@ -183,7 +183,7 @@ namespace TesApi.Web
                         .ToAsyncEnumerable()
                         .WhereAwait(async p => await p.CanBeDeleted(cancellationToken))
                         .ToListAsync(cancellationToken))
-                    .Where(p => !assignedPools.Contains(p.Pool.PoolId))
+                    .Where(p => !assignedPools.Contains(p.Id))
                     .OrderBy(p => p.GetAllocationStateTransitionTime(cancellationToken))
                     .Take(neededPools.Count)
                     .ToList();
@@ -204,11 +204,11 @@ namespace TesApi.Web
         public Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken)
         {
             // TODO: Consider moving any remaining tasks to another pool, or failing tasks explicitly
-            logger.LogDebug(@"Deleting pool and job {PoolId}", pool.Pool.PoolId);
+            logger.LogDebug(@"Deleting pool and job {PoolId}", pool.Id);
 
             return Task.WhenAll(
-                AllowIfNotFound(azureProxy.DeleteBatchPoolAsync(pool.Pool.PoolId, cancellationToken)),
-                AllowIfNotFound(azureProxy.DeleteBatchJobAsync(pool.Pool, cancellationToken)));
+                AllowIfNotFound(azureProxy.DeleteBatchPoolAsync(pool.Id, cancellationToken)),
+                AllowIfNotFound(azureProxy.DeleteBatchJobAsync(pool.Id, cancellationToken)));
 
             static async Task AllowIfNotFound(Task task)
             {
@@ -228,10 +228,10 @@ namespace TesApi.Web
         private class BatchPoolEqualityComparer : IEqualityComparer<IBatchPool>
         {
             bool IEqualityComparer<IBatchPool>.Equals(IBatchPool x, IBatchPool y)
-                => x.Pool.PoolId?.Equals(y.Pool.PoolId) ?? false;
+                => x.Id?.Equals(y.Id) ?? false;
 
             int IEqualityComparer<IBatchPool>.GetHashCode(IBatchPool obj)
-                => obj.Pool.PoolId?.GetHashCode() ?? 0;
+                => obj.Id?.GetHashCode() ?? 0;
         }
 
         #region Used for unit/module testing
@@ -249,13 +249,13 @@ namespace TesApi.Web
                 => item.Key;
 
             private static string GetKeyForItem(IBatchPool pool)
-                => pool is null ? default : GetKeyFromPoolId(pool.Pool.PoolId);
+                => pool is null ? default : GetKeyFromPoolId(pool.Id);
 
             public IEnumerable<IBatchPool> GetAllPools()
                 => this.SelectMany(s => s);
 
             public IBatchPool GetPoolOrDefault(string poolId)
-                => TryGetValue(GetKeyFromPoolId(poolId), out var poolSet) ? poolSet.FirstOrDefault(p => p.Pool.PoolId.Equals(poolId, StringComparison.OrdinalIgnoreCase)) : default;
+                => TryGetValue(GetKeyFromPoolId(poolId), out var poolSet) ? poolSet.FirstOrDefault(p => p.Id.Equals(poolId, StringComparison.OrdinalIgnoreCase)) : default;
 
             public bool Add(IBatchPool pool)
             {

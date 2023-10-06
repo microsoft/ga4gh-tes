@@ -459,7 +459,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedAsync)> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            var tasksMetadataByPoolKey = new Dictionary<string, List<(TesTask TesTask, VirtualMachineInformation VirtualMachineInfo, (ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic) ContainerMetadata, string PoolDisplayName)>>();
+            var tasksMetadataByPoolKey = new Dictionary<string, List<(TesTask TesTask, VirtualMachineInformation VirtualMachineInfo, (BatchModels.ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic) ContainerMetadata, string PoolDisplayName)>>();
             var poolKeyByTaskIds = new Dictionary<string, string>();
             var tasks = tesTasks.ToList();
 
@@ -540,7 +540,7 @@ namespace TesApi.Web
 
                 try
                 {
-                    PoolInformation poolInformation = null;
+                    string poolId = null;
                     var tesTaskLog = tesTask.AddTesTaskLog();
                     tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
                     var identities = new List<string>();
@@ -555,36 +555,32 @@ namespace TesApi.Web
                         identities.Add(tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity));
                     }
 
-                    var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2");
-                    poolInformation = (await GetOrAddPoolAsync(
+                    poolId = (await GetOrAddPoolAsync(
                         key: poolKey,
                         isPreemptable: virtualMachineInfo.LowPriority,
-                        modelPoolFactory: async (id, ct) => ConvertPoolSpecificationToModelsPool(
+                        modelPoolFactory: async (id, ct) => await GetPoolSpecification(
                             name: id,
                             displayName: displayName,
                             poolIdentity: GetBatchPoolIdentity(identities.ToArray()),
-                            pool: await GetPoolSpecification(
-                                vmSize: virtualMachineInfo.VmSize,
-                                autoscaled: true,
-                                preemptable: virtualMachineInfo.LowPriority,
-                                neededPoolNodesByPoolKey[poolKey],
-                                nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                                containerConfiguration: containerMetadata.ContainerConfiguration,
-                                encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
-                                cancellationToken: ct)),
-                        cancellationToken: cancellationToken)
-                        ).Pool;
+                            vmSize: virtualMachineInfo.VmSize,
+                            autoscaled: true,
+                            preemptable: virtualMachineInfo.LowPriority,
+                            initialTarget: neededPoolNodesByPoolKey[poolKey],
+                            nodeInfo: (virtualMachineInfo.HyperVGenerations?.Contains("V2")).GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
+                            containerConfiguration: containerMetadata.ContainerConfiguration,
+                            encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
+                            cancellationToken: ct),
+                        cancellationToken: cancellationToken)).Id;
 
                     var cloudTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
-                    tesTask.PoolId = poolInformation.PoolId;
+                    tesTask.PoolId = poolId;
                     var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(cloudTaskId, tesTask, cancellationToken);
 
                     logger.LogInformation(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VmSize);
-                    await azureProxy.AddBatchTaskAsync(tesTask.Id, cloudTask, poolInformation, cancellationToken);
+                    await azureProxy.AddBatchTaskAsync(tesTask.Id, cloudTask, poolId, cancellationToken);
 
                     tesTaskLog.StartTime = DateTimeOffset.UtcNow;
                     tesTask.State = TesState.INITIALIZINGEnum;
-                    poolInformation = null;
                 }
                 catch (AggregateException aggregateException)
                 {
@@ -909,7 +905,7 @@ namespace TesApi.Web
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         /// <remarks>This method also mitigates errors associated with docker daemons that are not configured to place their filesystem assets on the data drive.</remarks>
-        private async Task<StartTask> StartTaskIfNeeded(VirtualMachineConfiguration machineConfiguration, CancellationToken cancellationToken)
+        private async Task<BatchModels.StartTask> StartTaskIfNeeded(BatchModels.VirtualMachineConfiguration machineConfiguration, CancellationToken cancellationToken)
         {
             var globalStartTaskConfigured = !string.IsNullOrWhiteSpace(globalStartTaskPath);
 
@@ -934,7 +930,7 @@ namespace TesApi.Web
             var dockerConfigured = machineConfiguration.ImageReference.Publisher.Equals("microsoft-azure-batch", StringComparison.InvariantCultureIgnoreCase)
                 && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.InvariantCultureIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.InvariantCultureIgnoreCase));
 
-            if (!dockerConfigured)
+            var dockerConfigCmdLine = new Func<string>(() =>
             {
                 var commandLine = new StringBuilder();
                 commandLine.Append(@"/usr/bin/bash -c 'trap ""echo Error trapped; exit 0"" ERR; sudo touch tmp2.json && (sudo cp /etc/docker/daemon.json tmp1.json || sudo echo {} > tmp1.json) && sudo chmod a+w tmp?.json && if fgrep ""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker"" tmp1.json; then echo grep ""found docker path""; elif [ $? -eq 1 ]; then ");
@@ -948,32 +944,32 @@ namespace TesApi.Web
 
                 commandLine.Append(@" && jq \.\[\""data-root\""\]=\""""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker""\"" tmp1.json >> tmp2.json && sudo cp tmp2.json /etc/docker/daemon.json && sudo chmod 644 /etc/docker/daemon.json && sudo systemctl restart docker && echo ""updated docker data-root""; else (echo ""grep failed"" || exit 1); fi'");
 
-                var startTask = new StartTask
-                {
-                    CommandLine = commandLine.ToString(),
-                    UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
-                };
+                return commandLine.ToString();
+            });
 
-                if (globalStartTaskConfigured)
-                {
-                    startTask.CommandLine = $"({startTask.CommandLine} && {CreateWgetDownloadCommand(startTaskSasUrl, StartTaskScriptFilename, setExecutable: true)}) && ./{StartTaskScriptFilename}";
-                }
+            // Note that this has an embedded ')'. That is to faciliate merging with dockerConfigCmdLine.
+            var globalStartTaskCmdLine = new Func<string>(() => $"{CreateWgetDownloadCommand(startTaskSasUrl, StartTaskScriptFilename, setExecutable: true)}) && ./{StartTaskScriptFilename}");
 
-                return startTask;
-            }
-            else if (globalStartTaskConfigured)
+            BatchModels.StartTask startTask = new()
             {
-                return new StartTask
+                UserIdentity = new BatchModels.UserIdentity(autoUser: new BatchModels.AutoUserSpecification(elevationLevel: BatchModels.ElevationLevel.Admin, scope: BatchModels.AutoUserScope.Pool)),
+                CommandLine = (!dockerConfigured, globalStartTaskConfigured) switch
                 {
-                    CommandLine = $"./{StartTaskScriptFilename}",
-                    UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
-                    ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(startTaskSasUrl, StartTaskScriptFilename) }
-                };
-            }
-            else
-            {
-                return default;
-            }
+                    // Both start tasks are required. Note that dockerConfigCmdLine must be prefixed with an '(' which is closed inside of globalStartTaskCmdLine.
+                    (true, true) => $"({dockerConfigCmdLine()} && {globalStartTaskCmdLine()}",
+
+                    // Only globalStartTaskCmdLine is required. Note that it contains an embedded ')' so the shell starting '(' must be provided.
+                    (false, true) => $"({globalStartTaskCmdLine()}",
+
+                    // Only dockerConfigCmdLine is required. No additional subshell is needed.
+                    (true, false) => dockerConfigCmdLine(),
+
+                    // No start task is needed.
+                    _ => string.Empty,
+                },
+            };
+
+            return string.IsNullOrWhiteSpace(startTask.CommandLine) ? default : startTask;
         }
 
         /// <summary>
@@ -982,7 +978,7 @@ namespace TesApi.Web
         /// <param name="tesTask">The <see cref="TesTask"/> to schedule on Azure Batch</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        private async ValueTask<(ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic)> GetContainerConfigurationIfNeededAsync(TesTask tesTask, CancellationToken cancellationToken)
+        private async ValueTask<(BatchModels.ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic)> GetContainerConfigurationIfNeededAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
             var drsImageNeeded = tesTask.Inputs?.Any(i => i?.Url?.StartsWith("drs://") ?? false) ?? false;
             // TODO: Support for multiple executors. Cromwell has single executor per task.
@@ -1049,7 +1045,7 @@ namespace TesApi.Web
                 ContainerImageNames = result.ContainerImageNames,
                 ContainerRegistries = result
                                     .ContainerRegistries
-                                    .Select(r => new ContainerRegistry(
+                                    .Select(r => new BatchModels.ContainerRegistry(
                                         userName: r.UserName,
                                         password: r.Password,
                                         registryServer: r.RegistryServer,
@@ -1067,8 +1063,11 @@ namespace TesApi.Web
             => identities is null || !identities.Any() ? null : new(BatchModels.PoolIdentityType.UserAssigned, identities.ToDictionary(identity => identity, _ => new BatchModels.UserAssignedIdentities()));
 
         /// <summary>
-        /// Generate the PoolSpecification for the needed pool.
+        /// Generate the <see cref="BatchModels.Pool"/> for the needed pool.
         /// </summary>
+        /// <param name="name"></param>
+        /// <param name="displayName"></param>
+        /// <param name="poolIdentity"></param>
         /// <param name="vmSize"></param>
         /// <param name="autoscaled"></param>
         /// <param name="preemptable"></param>
@@ -1077,18 +1076,21 @@ namespace TesApi.Web
         /// <param name="containerConfiguration"></param>
         /// <param name="encryptionAtHostSupported">VM supports encryption at host.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns><see cref="PoolSpecification"/></returns>
-        /// <remarks>We use the PoolSpecification for both the namespace of all the constituent parts and for the fact that it allows us to configure shared and autopools using the same code.</remarks>
-        private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, int initialTarget, BatchNodeInfo nodeInfo, ContainerConfiguration containerConfiguration, bool encryptionAtHostSupported, CancellationToken cancellationToken)
+        /// <returns>The specification for the pool.</returns>
+        /// <remarks>
+        /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the likely exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
+        /// </remarks>
+        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, bool autoscaled, bool preemptable, int initialTarget, BatchNodeInfo nodeInfo, BatchModels.ContainerConfiguration containerConfiguration, bool encryptionAtHostSupported, CancellationToken cancellationToken)
         {
-            // Any changes to any properties set in this method will require corresponding changes to ConvertPoolSpecificationToModelsPool()
+            ValidateString(name, nameof(name), 64);
+            ValidateString(displayName, nameof(displayName), 1024);
 
-            var vmConfig = new VirtualMachineConfiguration(
-                imageReference: new ImageReference(
-                    nodeInfo.BatchImageOffer,
-                    nodeInfo.BatchImagePublisher,
-                    nodeInfo.BatchImageSku,
-                    nodeInfo.BatchImageVersion),
+            var vmConfig = new BatchModels.VirtualMachineConfiguration(
+                imageReference: new BatchModels.ImageReference(
+                    publisher: nodeInfo.BatchImagePublisher,
+                    offer: nodeInfo.BatchImageOffer,
+                    sku: nodeInfo.BatchImageSku,
+                    version: nodeInfo.BatchImageVersion),
                 nodeAgentSkuId: nodeInfo.BatchNodeAgentSkuId)
             {
                 ContainerConfiguration = containerConfiguration
@@ -1096,154 +1098,52 @@ namespace TesApi.Web
 
             if (encryptionAtHostSupported)
             {
-                vmConfig.DiskEncryptionConfiguration = new DiskEncryptionConfiguration(
-                    targets: new List<DiskEncryptionTarget> { DiskEncryptionTarget.OsDisk, DiskEncryptionTarget.TemporaryDisk }
+                vmConfig.DiskEncryptionConfiguration = new BatchModels.DiskEncryptionConfiguration(
+                    targets: new List<BatchModels.DiskEncryptionTarget> { BatchModels.DiskEncryptionTarget.OsDisk, BatchModels.DiskEncryptionTarget.TemporaryDisk }
                 );
             }
 
-            var poolSpecification = new PoolSpecification
-            {
-                VirtualMachineConfiguration = vmConfig,
-                VirtualMachineSize = vmSize,
-                ResizeTimeout = TimeSpan.FromMinutes(30),
-                StartTask = await StartTaskIfNeeded(vmConfig, cancellationToken),
-                TargetNodeCommunicationMode = NodeCommunicationMode.Simplified,
-            };
+            BatchModels.ScaleSettings scaleSettings = new();
 
             if (autoscaled)
             {
-                poolSpecification.AutoScaleEnabled = true;
-                poolSpecification.AutoScaleEvaluationInterval = BatchPool.AutoScaleEvaluationInterval;
-                poolSpecification.AutoScaleFormula = BatchPool.AutoPoolFormula(preemptable, initialTarget);
+                scaleSettings.AutoScale = new(BatchPool.AutoPoolFormula(preemptable, initialTarget), BatchPool.AutoScaleEvaluationInterval);
             }
             else
             {
-                poolSpecification.AutoScaleEnabled = false;
-                poolSpecification.TargetLowPriorityComputeNodes = preemptable == true ? initialTarget : 0;
-                poolSpecification.TargetDedicatedComputeNodes = preemptable == false ? initialTarget : 0;
+                scaleSettings.FixedScale = new(
+                    resizeTimeout: TimeSpan.FromMinutes(30),
+                    targetDedicatedNodes: preemptable == false ? initialTarget : 0,
+                    targetLowPriorityNodes: preemptable == true ? initialTarget : 0,
+                    nodeDeallocationOption: BatchModels.ComputeNodeDeallocationOption.TaskCompletion);
             }
+
+            BatchModels.Pool poolSpec = new(name: name, displayName: displayName, identity: poolIdentity)
+            {
+                VmSize = vmSize,
+                ScaleSettings = scaleSettings,
+                DeploymentConfiguration = new(virtualMachineConfiguration: vmConfig),
+                //ApplicationPackages = ,
+                StartTask = await StartTaskIfNeeded(vmConfig, cancellationToken),
+                TargetNodeCommunicationMode = BatchModels.NodeCommunicationMode.Simplified,
+            };
 
             if (!string.IsNullOrEmpty(batchNodesSubnetId))
             {
-                poolSpecification.NetworkConfiguration = new()
+                poolSpec.NetworkConfiguration = new()
                 {
-                    PublicIPAddressConfiguration = new PublicIPAddressConfiguration(disableBatchNodesPublicIpAddress ? IPAddressProvisioningType.NoPublicIPAddresses : IPAddressProvisioningType.BatchManaged),
+                    PublicIPAddressConfiguration = new BatchModels.PublicIPAddressConfiguration(disableBatchNodesPublicIpAddress ? BatchModels.IPAddressProvisioningType.NoPublicIPAddresses : BatchModels.IPAddressProvisioningType.BatchManaged),
                     SubnetId = batchNodesSubnetId
                 };
             }
 
-            return poolSpecification;
-        }
+            return poolSpec;
 
-        /// <summary>
-        /// Convert PoolSpecification to Models.Pool, including any BatchPoolIdentity
-        /// </summary>
-        /// <remarks>
-        /// Note: this is not a complete conversion. It only converts properties we are currently using (including referenced objects).<br/>
-        /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the possible exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
-        /// </remarks>
-        /// <param name="name"></param>
-        /// <param name="displayName"></param>
-        /// <param name="poolIdentity"></param>
-        /// <param name="pool"></param>
-        /// <returns>A <see cref="BatchModels.Pool"/>.</returns>
-        private static BatchModels.Pool ConvertPoolSpecificationToModelsPool(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, PoolSpecification pool)
-        {
-            // Don't add feature work here that isn't necesitated by a change to GetPoolSpecification() unless it's a feature that PoolSpecification does not support.
-            // TODO: (perpetually) add new properties we set in the future on <see cref="PoolSpecification"/> and/or its contained objects, if possible. When not, update CreateAutoPoolModePoolInformation().
-
-            ValidateString(name, nameof(name), 64);
-            ValidateString(displayName, nameof(displayName), 1024);
-
-            return new(name: name, displayName: displayName, identity: poolIdentity)
+            static void ValidateString(string value, string paramName, int maxLength)
             {
-                VmSize = pool.VirtualMachineSize,
-                ScaleSettings = true == pool.AutoScaleEnabled ? ConvertAutoScale(pool) : ConvertManualScale(pool),
-                DeploymentConfiguration = new(virtualMachineConfiguration: ConvertVirtualMachineConfiguration(pool.VirtualMachineConfiguration)),
-                ApplicationPackages = pool.ApplicationPackageReferences?.Select(ConvertApplicationPackage).ToList(),
-                NetworkConfiguration = ConvertNetworkConfiguration(pool.NetworkConfiguration),
-                StartTask = ConvertStartTask(pool.StartTask),
-                TargetNodeCommunicationMode = ConvertNodeCommunicationMode(pool.TargetNodeCommunicationMode),
-            };
-
-            static void ValidateString(string value, string name, int length)
-            {
-                ArgumentNullException.ThrowIfNull(value, name);
-                if (value.Length > length) throw new ArgumentException($"{name} exceeds maximum length {length}", name);
+                ArgumentNullException.ThrowIfNull(value, paramName);
+                if (value.Length > maxLength) throw new ArgumentException($"{paramName} exceeds maximum length {maxLength}", paramName);
             }
-
-            static BatchModels.ScaleSettings ConvertManualScale(PoolSpecification pool)
-                => new()
-                {
-                    FixedScale = new()
-                    {
-                        TargetDedicatedNodes = pool.TargetDedicatedComputeNodes,
-                        TargetLowPriorityNodes = pool.TargetLowPriorityComputeNodes,
-                        ResizeTimeout = pool.ResizeTimeout,
-                        NodeDeallocationOption = BatchModels.ComputeNodeDeallocationOption.TaskCompletion
-                    }
-                };
-
-            static BatchModels.ScaleSettings ConvertAutoScale(PoolSpecification pool)
-                => new()
-                {
-                    AutoScale = new()
-                    {
-                        Formula = pool.AutoScaleFormula,
-                        EvaluationInterval = pool.AutoScaleEvaluationInterval
-                    }
-                };
-
-            static BatchModels.VirtualMachineConfiguration ConvertVirtualMachineConfiguration(VirtualMachineConfiguration virtualMachineConfiguration)
-                => virtualMachineConfiguration is null ? default : new(ConvertImageReference(virtualMachineConfiguration.ImageReference), virtualMachineConfiguration.NodeAgentSkuId, containerConfiguration: ConvertContainerConfiguration(virtualMachineConfiguration.ContainerConfiguration), diskEncryptionConfiguration: ConvertDiskEncryptionConfiguration(virtualMachineConfiguration.DiskEncryptionConfiguration));
-
-            static BatchModels.ContainerConfiguration ConvertContainerConfiguration(ContainerConfiguration containerConfiguration)
-                => containerConfiguration is null ? default : new(containerConfiguration.ContainerImageNames, containerConfiguration.ContainerRegistries?.Select(ConvertContainerRegistry).ToList());
-
-            static BatchModels.StartTask ConvertStartTask(StartTask startTask)
-                => startTask is null ? default : new(startTask.CommandLine, startTask.ResourceFiles?.Select(ConvertResourceFile).ToList(), startTask.EnvironmentSettings?.Select(ConvertEnvironmentSetting).ToList(), ConvertUserIdentity(startTask.UserIdentity), startTask.MaxTaskRetryCount, startTask.WaitForSuccess, ConvertTaskContainerSettings(startTask.ContainerSettings));
-
-            static BatchModels.UserIdentity ConvertUserIdentity(UserIdentity userIdentity)
-                => userIdentity is null ? default : new(userIdentity.UserName, ConvertAutoUserSpecification(userIdentity.AutoUser));
-
-            static BatchModels.AutoUserSpecification ConvertAutoUserSpecification(AutoUserSpecification autoUserSpecification)
-                => autoUserSpecification is null ? default : new((BatchModels.AutoUserScope?)autoUserSpecification.Scope, (BatchModels.ElevationLevel?)autoUserSpecification.ElevationLevel);
-
-            static BatchModels.TaskContainerSettings ConvertTaskContainerSettings(TaskContainerSettings containerSettings)
-                => containerSettings is null ? default : new(containerSettings.ImageName, containerSettings.ContainerRunOptions, ConvertContainerRegistry(containerSettings.Registry), (BatchModels.ContainerWorkingDirectory?)containerSettings.WorkingDirectory);
-
-            static BatchModels.ContainerRegistry ConvertContainerRegistry(ContainerRegistry containerRegistry)
-                => containerRegistry is null ? default : new(containerRegistry.UserName, containerRegistry.Password, containerRegistry.RegistryServer, ConvertComputeNodeIdentityReference(containerRegistry.IdentityReference));
-
-            static BatchModels.ResourceFile ConvertResourceFile(ResourceFile resourceFile)
-                => resourceFile is null ? default : new(resourceFile.AutoStorageContainerName, resourceFile.StorageContainerUrl, resourceFile.HttpUrl, resourceFile.BlobPrefix, resourceFile.FilePath, resourceFile.FileMode, ConvertComputeNodeIdentityReference(resourceFile.IdentityReference));
-
-            static BatchModels.ComputeNodeIdentityReference ConvertComputeNodeIdentityReference(ComputeNodeIdentityReference computeNodeIdentityReference)
-                => computeNodeIdentityReference is null ? default : new(computeNodeIdentityReference.ResourceId);
-
-            static BatchModels.EnvironmentSetting ConvertEnvironmentSetting(EnvironmentSetting environmentSetting)
-                => environmentSetting is null ? default : new(environmentSetting.Name, environmentSetting.Value);
-
-            static BatchModels.ImageReference ConvertImageReference(ImageReference imageReference)
-                => imageReference is null ? default : new(imageReference.Publisher, imageReference.Offer, imageReference.Sku, imageReference.Version);
-
-            static BatchModels.ApplicationPackageReference ConvertApplicationPackage(ApplicationPackageReference applicationPackage)
-                => applicationPackage is null ? default : new(applicationPackage.ApplicationId, applicationPackage.Version);
-
-            static BatchModels.NetworkConfiguration ConvertNetworkConfiguration(NetworkConfiguration networkConfiguration)
-                => networkConfiguration is null ? default : new(subnetId: networkConfiguration.SubnetId, publicIPAddressConfiguration: ConvertPublicIPAddressConfiguration(networkConfiguration.PublicIPAddressConfiguration));
-
-            static BatchModels.PublicIPAddressConfiguration ConvertPublicIPAddressConfiguration(PublicIPAddressConfiguration publicIPAddressConfiguration)
-                => publicIPAddressConfiguration is null ? default : new(provision: (BatchModels.IPAddressProvisioningType?)publicIPAddressConfiguration.Provision);
-
-            static BatchModels.NodeCommunicationMode? ConvertNodeCommunicationMode(NodeCommunicationMode? nodeCommunicationMode)
-                => (BatchModels.NodeCommunicationMode?)nodeCommunicationMode;
-
-            static BatchModels.DiskEncryptionConfiguration ConvertDiskEncryptionConfiguration(DiskEncryptionConfiguration diskEncryptionConfiguration)
-                => diskEncryptionConfiguration is null ? default : new(diskEncryptionConfiguration.Targets.Select(x => ConvertDiskEncryptionTarget(x)).ToList());
-
-            static BatchModels.DiskEncryptionTarget ConvertDiskEncryptionTarget(DiskEncryptionTarget? diskEncryptionTarget)
-                => (BatchModels.DiskEncryptionTarget)diskEncryptionTarget;
         }
 
         /// <summary>

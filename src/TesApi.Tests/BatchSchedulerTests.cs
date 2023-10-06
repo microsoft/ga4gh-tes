@@ -46,7 +46,7 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(pool);
             Assert.AreEqual(1, batchScheduler.GetPoolGroupKeys().Count());
-            Assert.IsTrue(batchScheduler.TryGetPool(pool.Pool.PoolId, out var pool1));
+            Assert.IsTrue(batchScheduler.TryGetPool(pool.Id, out var pool1));
             Assert.AreSame(pool, pool1);
         }
 
@@ -67,7 +67,7 @@ namespace TesApi.Tests
             Assert.AreEqual(batchScheduler.GetPools().Count(), count);
             Assert.AreEqual(batchScheduler.GetPoolGroupKeys().Count(), keyCount);
             //Assert.AreSame(info, pool);
-            Assert.AreEqual(info.Pool.PoolId, pool.Pool.PoolId);
+            Assert.AreEqual(info.Id, pool.Id);
             serviceProvider.AzureProxy.Verify(mock => mock.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
         }
 
@@ -89,7 +89,7 @@ namespace TesApi.Tests
             Assert.AreNotEqual(batchScheduler.GetPools().Count(), count);
             Assert.AreEqual(batchScheduler.GetPoolGroupKeys().Count(), keyCount);
             //Assert.AreNotSame(info, pool);
-            Assert.AreNotEqual(info.Pool.PoolId, pool.Pool.PoolId);
+            Assert.AreNotEqual(info.Id, pool.Id);
         }
 
 
@@ -100,11 +100,11 @@ namespace TesApi.Tests
             var batchScheduler = serviceProvider.GetT() as BatchScheduler;
             var info = await AddPool(batchScheduler);
 
-            var result = batchScheduler.TryGetPool(info.Pool.PoolId, out var pool);
+            var result = batchScheduler.TryGetPool(info.Id, out var pool);
 
             Assert.IsTrue(result);
             //Assert.AreSame(infoPoolId, pool);
-            Assert.AreEqual(info.Pool.PoolId, pool.Pool.PoolId);
+            Assert.AreEqual(info.Id, pool.Id);
         }
 
         [TestMethod]
@@ -161,7 +161,7 @@ namespace TesApi.Tests
 
             await pool.ServicePoolAsync(BatchPool.ServiceKind.RemovePoolIfEmpty);
 
-            Assert.AreEqual(pool.Pool.PoolId, poolId);
+            Assert.AreEqual(pool.Id, poolId);
             Assert.IsFalse(batchScheduler.IsPoolAvailable("key1"));
             Assert.IsFalse(batchScheduler.GetPools().Any());
         }
@@ -357,8 +357,8 @@ namespace TesApi.Tests
             return AddBatchTaskHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchJobAsync(It.IsAny<PoolInformation>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Callback<PoolInformation, System.Threading.CancellationToken>((poolInfo, cancellationToken)
+                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchJobAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
+                    .Callback<string, System.Threading.CancellationToken>((_1, _2)
                         => throw new Microsoft.Rest.Azure.CloudException("No job for you.") { Body = new() { Code = BatchErrorCodeStrings.OperationTimedOut } }));
 
             void Validator(TesTask tesTask, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
@@ -381,7 +381,7 @@ namespace TesApi.Tests
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Callback<Pool, bool, System.Threading.CancellationToken>((poolInfo, isPreemptible, cancellationToken)
+                    .Callback<Pool, bool, System.Threading.CancellationToken>((_1, _2, _3)
                         => throw new Microsoft.Rest.Azure.CloudException("No job for you.") { Body = new() { Code = BatchErrorCodeStrings.OperationTimedOut } }));
 
             void Validator(TesTask tesTask, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
@@ -492,8 +492,8 @@ namespace TesApi.Tests
             return AddBatchTaskHandlesExceptions(TesState.SYSTEMERROREnum, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (default, azureProxy => azureProxy.Setup(b => b.AddBatchTaskAsync(It.IsAny<string>(), It.IsAny<CloudTask>(), It.IsAny<PoolInformation>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Callback<string, CloudTask, PoolInformation, System.Threading.CancellationToken>((tesTaskId, cloudTask, poolInfo, cancellationToken)
+                => (default, azureProxy => azureProxy.Setup(b => b.AddBatchTaskAsync(It.IsAny<string>(), It.IsAny<CloudTask>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
+                    .Callback<string, CloudTask, string, System.Threading.CancellationToken>((_1, _2, _3, _4)
                         => throw typeof(BatchClientException)
                                 .GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
                                     new[] { typeof(string), typeof(Exception) })
@@ -518,8 +518,8 @@ namespace TesApi.Tests
             return AddBatchTaskHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchJobAsync(It.IsAny<PoolInformation>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Callback<PoolInformation, System.Threading.CancellationToken>((poolInfo, cancellationToken)
+                => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchJobAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
+                    .Callback<string, System.Threading.CancellationToken>((_1, _2)
                         => throw new BatchException(
                             new Mock<RequestInformation>().Object,
                             default,
@@ -629,16 +629,15 @@ namespace TesApi.Tests
             var addBatchTaskAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.AddBatchTaskAsync));
 
             var cloudTask = addBatchTaskAsyncInvocation?.Arguments[1] as CloudTask;
-            var poolInformation = addBatchTaskAsyncInvocation?.Arguments[2] as PoolInformation;
+            var poolId = addBatchTaskAsyncInvocation?.Arguments[2] as string;
             var pool = createBatchPoolAsyncInvocation?.Arguments[0] as Pool;
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.IsNull(poolInformation.AutoPoolSpecification);
-                Assert.IsNotNull(poolInformation.PoolId);
-                Assert.AreEqual("TES-hostname-edicated1-6aczoqjox53tytv3h7hxwrp5t5ne4yzs-", poolInformation.PoolId[0..^8]);
+                Assert.IsNotNull(poolId);
+                Assert.AreEqual("TES-hostname-edicated1-6aczoqjox53tytv3h7hxwrp5t5ne4yzs-", poolId[0..^8]);
                 Assert.AreEqual("VmSizeDedicated1", pool.VmSize);
-                Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(poolInformation.PoolId, out _));
+                Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(poolId, out _));
                 Assert.AreEqual(1, pool.DeploymentConfiguration.VirtualMachineConfiguration.ContainerConfiguration.ContainerRegistries.Count);
             });
         }
@@ -1924,12 +1923,13 @@ namespace TesApi.Tests
                 AzureProxyDeleteBatchPool(poolId, cancellationToken);
             }
 
-            internal PoolInformation CreateBatchPoolImpl(Pool pool)
+            internal CloudPool CreateBatchPoolImpl(Pool pool)
             {
                 var poolId = pool.Name;
+                var metadata = pool.Metadata?.Select(Convert).ToList();
 
-                poolMetadata.Add(poolId, pool.Metadata?.Select(Convert).ToList());
-                return new() { PoolId = poolId };
+                poolMetadata.Add(poolId, metadata);
+                return BatchPoolTests.GeneratePool(id: poolId, creationTime: DateTime.UtcNow, metadata: metadata);
 
                 static Microsoft.Azure.Batch.MetadataItem Convert(Microsoft.Azure.Management.Batch.Models.MetadataItem item)
                     => new(item.Name, item.Value);
