@@ -48,9 +48,11 @@ public class BlobApiHttpUtils
         return request;
     }
 
-    public static HttpRequestMessage CreatePutAppendBlockRequestAsync(string data, string url, string apiVersion)
+    public static HttpRequestMessage CreatePutAppendBlockRequestAsync(string data, Uri url, string apiVersion)
     {
-        var request = new HttpRequestMessage(HttpMethod.Put, url)
+        var appendBlockUrl = BlobApiHttpUtils.ParsePutAppendBlockUrl(url);
+
+        var request = new HttpRequestMessage(HttpMethod.Put, appendBlockUrl)
         {
             Content = new StringContent(data)
         };
@@ -60,13 +62,19 @@ public class BlobApiHttpUtils
         return request;
     }
 
-    public static HttpRequestMessage CreatePutBlobRequestAsync(string blobUrl, string content, string apiVersion,
+    public static HttpRequestMessage CreatePutBlobRequestAsync(Uri blobUrl, string? content, string apiVersion,
         Dictionary<string, string>? tags, string blobType = BlockBlobType)
     {
-        var request = new HttpRequestMessage(HttpMethod.Put, blobUrl)
+        ArgumentNullException.ThrowIfNull(blobUrl);
+        ArgumentException.ThrowIfNullOrEmpty(apiVersion, nameof(apiVersion));
+
+        var request = new HttpRequestMessage(HttpMethod.Put, blobUrl);
+
+        if (blobType == BlockBlobType && content is not null)
         {
-            Content = new StringContent(content)
-        };
+            //only add content when creating a block blob
+            request.Content = new StringContent(content);
+        }
 
         AddPutBlobHeaders(request, apiVersion, tags, blobType);
 
@@ -93,7 +101,19 @@ public class BlobApiHttpUtils
     }
     public static Uri ParsePutAppendBlockUrl(Uri? baseUri)
     {
-        return new Uri($"{baseUri?.AbsoluteUri}&comp=appendblock");
+        ArgumentNullException.ThrowIfNull(baseUri);
+
+        var uriBuilder = new UriBuilder(baseUri);
+
+        if (string.IsNullOrWhiteSpace(uriBuilder.Query))
+        {
+            uriBuilder.Query = "comp=appendblock";
+        }
+        else
+        {
+            uriBuilder.Query += "&comp=appendblock";
+        }
+        return uriBuilder.Uri;
     }
 
     public static string ToBlockId(int ordinal)

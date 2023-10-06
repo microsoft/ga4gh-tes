@@ -42,7 +42,7 @@ namespace Tes.Runner.Events
             }
         }
 
-        private string ToEventUrl(Uri uri, EventMessage message)
+        private Uri ToEventUrl(Uri uri, EventMessage message)
         {
             var blobBuilder = new BlobUriBuilder(uri);
 
@@ -55,10 +55,10 @@ namespace Tes.Runner.Events
 
             blobBuilder.BlobName = blobName;
 
-            return blobBuilder.ToUri().ToString();
+            return blobBuilder.ToUri();
         }
 
-        private Dictionary<string, string>? ToTags(EventMessage eventMessage)
+        private Dictionary<string, string> ToTags(EventMessage eventMessage)
         {
             return new Dictionary<string, string>
             {

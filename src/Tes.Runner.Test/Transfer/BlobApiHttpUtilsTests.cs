@@ -197,5 +197,65 @@ namespace Tes.Runner.Test.Transfer
                 Assert.AreEqual(blockId, xmlBlockList[i]!.InnerText);
             }
         }
+
+        [DataTestMethod]
+        [DataRow("https://foo.com/cont", "https://foo.com/cont?comp=appendblock")]
+        [DataRow("https://foo.com/cont/blob", "https://foo.com/cont/blob?comp=appendblock")]
+        [DataRow("https://foo.com/cont/", "https://foo.com/cont/?comp=appendblock")]
+        [DataRow("https://foo.com/cont/?sig=123", "https://foo.com/cont/?sig=123&comp=appendblock")]
+
+        public void ParsePutAppendBlockUrl_ValidUrl_ExpectedResult(string baseUrl, string expectedResult)
+        {
+            var result = BlobApiHttpUtils.ParsePutAppendBlockUrl(new Uri(baseUrl));
+            Assert.AreEqual(expectedResult, result.ToString());
+        }
+
+
+
+        [DataTestMethod]
+        [DataRow("data", "https://foo.com/cont/blob?sg=signature")]
+        [DataRow("", "https://foo.com/cont?sg=signature")]
+        public async Task CreatePutAppendBlockRequestAsync_ValidInputs_ExpectedRequestIsCreated(string data, string url)
+        {
+            var request = BlobApiHttpUtils.CreatePutAppendBlockRequestAsync(data, new Uri(url), BlobApiHttpUtils.DefaultApiVersion);
+
+            var expectedUrl = BlobApiHttpUtils.ParsePutAppendBlockUrl(new Uri(url));
+
+            Assert.AreEqual(HttpMethod.Put, request.Method);
+            Assert.AreEqual(expectedUrl.ToString(), request.RequestUri?.ToString());
+            Assert.AreEqual(data, await request?.Content?.ReadAsStringAsync()!);
+            Assert.IsTrue(request.Headers.Contains("x-ms-version"));
+            Assert.IsTrue(request.Headers.Contains("x-ms-date"));
+        }
+
+        [DataTestMethod]
+        [DataRow("data", "data", "https://foo.com/cont/blob?sg=signature", BlobApiHttpUtils.BlockBlobType)]
+        [DataRow("", null, "https://foo.com/cont/blob?sg=signature", BlobApiHttpUtils.AppendBlobType)]
+        [DataRow("data", null, "https://foo.com/cont/blob?sg=signature", BlobApiHttpUtils.AppendBlobType)]
+        public async Task CreatePutBlobRequestAsync_ValidInput_ExpectedRequestIsCreated(string data, string? expectedContent, string url, string blobType)
+        {
+            var request = BlobApiHttpUtils.CreatePutBlobRequestAsync(new Uri(url), data, BlobApiHttpUtils.DefaultApiVersion, tags: default, blobType);
+
+
+            Assert.AreEqual(HttpMethod.Put, request.Method);
+            Assert.AreEqual(url, request.RequestUri?.ToString());
+
+            if (expectedContent is null)
+            {
+                Assert.IsNull(request.Content);
+            }
+            else
+            {
+                Assert.AreEqual(expectedContent, await request?.Content?.ReadAsStringAsync());
+            }
+
+
+            Assert.IsTrue(request.Headers.Contains("x-ms-version"));
+            Assert.IsTrue(request.Headers.Contains("x-ms-date"));
+
+            Assert.IsTrue(request.Headers.Contains("x-ms-blob-type"));
+            request.Headers.TryGetValues("x-ms-blob-type", out var actualBlobType);
+            Assert.AreEqual(blobType, actualBlobType?.FirstOrDefault());
+        }
     }
 }

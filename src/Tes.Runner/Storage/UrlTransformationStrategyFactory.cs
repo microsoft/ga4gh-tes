@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 using Azure.Storage.Blobs;
+using Azure.Storage.Sas;
+using Microsoft.Azure.Management.CosmosDB.Fluent.Models;
 using Tes.Runner.Authentication;
 using Tes.Runner.Models;
 
@@ -38,6 +40,17 @@ namespace Tes.Runner.Storage
             }
 
             throw new NotImplementedException();
+        }
+
+        public static async Task<Uri> GetTransformedUrlAsync(RuntimeOptions runtimeOptions, StorageTargetLocation location, BlobSasPermissions permissions)
+        {
+            ArgumentNullException.ThrowIfNull(location);
+            ArgumentNullException.ThrowIfNull(runtimeOptions);
+            ArgumentException.ThrowIfNullOrEmpty(location.TargetUrl, nameof(location.TargetUrl));
+
+            var strategy = CreateStrategy(location.TransformationStrategy, runtimeOptions);
+
+            return await strategy.TransformUrlWithStrategyAsync(location.TargetUrl, permissions);
         }
     }
 }

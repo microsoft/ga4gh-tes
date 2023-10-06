@@ -23,7 +23,7 @@ namespace Tes.Runner.Docker
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
         public DockerExecutor(Uri dockerHost) : this(new DockerClientConfiguration(dockerHost)
-            .CreateClient(), new ConsoleStreamLogReader())
+            .CreateClient(), new ConsoleStreamLogPublisher())
         {
         }
 
@@ -55,12 +55,12 @@ namespace Tes.Runner.Docker
 
             var createResponse = await CreateContainerAsync(imageName, tag, commandsToExecute, volumeBindings, workingDir);
 
-            await dockerClient.Containers.StartContainerAsync(createResponse.ID,
-                new ContainerStartParameters());
+            // await dockerClient.Containers.StartContainerAsync(createResponse.ID,
+            //     new ContainerStartParameters());
 
-            // var logs = await StartContainerWithStreamingOutput(createResponse);
-            //
-            // streamLogReader.StartReadingFromLogStreams(logs);
+            var logs = await StartContainerWithStreamingOutput(createResponse);
+
+            streamLogReader.StartReadingFromLogStreams(logs);
 
             var runResponse = await dockerClient.Containers.WaitContainerAsync(createResponse.ID);
 

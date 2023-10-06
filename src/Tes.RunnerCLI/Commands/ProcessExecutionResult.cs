@@ -3,4 +3,4 @@
 
 namespace Tes.RunnerCLI.Commands;
 
-public record ProcessExecutionResult(string StandardOutput, string StandardError, int ExitCode);
+public record ProcessExecutionResult(string ProcessName, int ExitCode);

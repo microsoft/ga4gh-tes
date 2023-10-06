@@ -44,10 +44,12 @@ namespace Tes.Runner.Models
 
         public string? NodeManagedIdentityResourceId { get; set; }
 
-        public StorageEventSink? StorageEventSink { get; set; }
+        public StorageTargetLocation? StorageEventSink { get; set; }
+
+        public StorageTargetLocation? StreamingLogPublisher { get; set; }
     }
 
-    public class StorageEventSink
+    public class StorageTargetLocation
     {
         public string TargetUrl { get; set; } = null!;
         public TransformationStrategy TransformationStrategy { get; set; }

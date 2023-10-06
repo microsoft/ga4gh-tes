@@ -15,25 +15,25 @@ public class DefaultFileInfoProvider : IFileInfoProvider
 
     public long GetFileSize(string fileName)
     {
-        logger.LogInformation($"Getting file size for file: {fileName}");
+        logger.LogDebug($"Getting file size for file: {fileName}");
 
         return GetFileInfoOrThrowIfFileDoesNotExist(fileName).Length;
     }
 
     public string GetExpandedFileName(string fileName)
     {
-        logger.LogInformation($"Expanding file name: {fileName}");
+        logger.LogDebug($"Expanding file name: {fileName}");
 
         var expandedValue = Environment.ExpandEnvironmentVariables(fileName);
 
-        logger.LogInformation($"Expanded file name: {expandedValue}");
+        logger.LogDebug($"Expanded file name: {expandedValue}");
 
         return expandedValue;
     }
 
     public bool FileExists(string fileName)
     {
-        logger.LogInformation($"Checking if file exists: {fileName}");
+        logger.LogDebug($"Checking if file exists: {fileName}");
 
         var fileInfo = new FileInfo(Environment.ExpandEnvironmentVariables(fileName));
 

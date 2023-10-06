@@ -280,7 +280,7 @@ namespace TesApi.Web.Runner
             ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
 
             nodeTask.RuntimeOptions ??= new RuntimeOptions();
-            nodeTask.RuntimeOptions.StorageEventSink = new StorageEventSink()
+            nodeTask.RuntimeOptions.StorageEventSink = new StorageTargetLocation()
             {
                 TargetUrl = targetUrl,
                 TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions()
