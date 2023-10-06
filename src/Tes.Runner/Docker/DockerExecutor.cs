@@ -4,40 +4,67 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Tes.ApiClients;
+using Tes.ApiClients.Options;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Docker
 {
     public class DockerExecutor
     {
-        private readonly IDockerClient dockerClient;
+        private readonly IDockerClient dockerClient = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
         private readonly NetworkUtility networkUtility = new NetworkUtility();
+        private readonly RetryHandler retryHandler = new RetryHandler(Options.Create(new RetryPolicyOptions()));
+        private readonly IStreamLogReader streamLogReader = null!;
 
-        public DockerExecutor(Uri dockerHost)
+        const int LogStreamingMaxWaitTimeInSeconds = 30;
+
+        public DockerExecutor(Uri dockerHost) : this(new DockerClientConfiguration(dockerHost)
+            .CreateClient(), new ConsoleStreamLogReader())
         {
-            dockerClient = new DockerClientConfiguration(dockerHost)
-                .CreateClient();
         }
 
-        public async Task<ContainerExecutionResult> RunOnContainerAsync(string? imageName, string? tag, List<string>? commandsToExecute, List<string>? volumeBindings)
+        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader)
+        {
+            ArgumentNullException.ThrowIfNull(dockerClient);
+            ArgumentNullException.ThrowIfNull(streamLogReader);
+
+            this.dockerClient = dockerClient;
+            this.streamLogReader = streamLogReader;
+        }
+
+        /// <summary>
+        /// Parameter-less constructor for mocking
+        /// </summary>
+        protected DockerExecutor()
+        {
+
+        }
+
+        public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(string? imageName, string? tag, List<string>? commandsToExecute, List<string>? volumeBindings, string? workingDir)
         {
             ArgumentException.ThrowIfNullOrEmpty(imageName);
-            ArgumentException.ThrowIfNullOrEmpty(tag);
             ArgumentNullException.ThrowIfNull(commandsToExecute);
 
-            await PullImageAsync(imageName, tag);
+            await PullImageWithRetriesAsync(imageName, tag);
 
             await ConfigureNetworkAsync();
 
-            var createResponse = await CreateContainerAsync(imageName, commandsToExecute, volumeBindings);
+            var createResponse = await CreateContainerAsync(imageName, tag, commandsToExecute, volumeBindings, workingDir);
 
             var logs = await StartContainerWithStreamingOutput(createResponse);
 
+            streamLogReader.StartReadingFromLogStream(logs);
+
             var runResponse = await dockerClient.Containers.WaitContainerAsync(createResponse.ID);
 
-            return new ContainerExecutionResult(createResponse.ID, runResponse.Error?.Message, runResponse.StatusCode, logs);
+            await streamLogReader.WaitUntilAsync(TimeSpan.FromSeconds(LogStreamingMaxWaitTimeInSeconds));
+
+            return new ContainerExecutionResult(createResponse.ID, runResponse.Error?.Message, runResponse.StatusCode);
         }
+
 
         private async Task<MultiplexedStream> StartContainerWithStreamingOutput(CreateContainerResponse createResponse)
         {
@@ -61,34 +88,50 @@ namespace Tes.Runner.Docker
                 });
         }
 
-        private async Task<CreateContainerResponse> CreateContainerAsync(string imageName, List<string> commandsToExecute, List<string>? volumeBindings)
+        private async Task<CreateContainerResponse> CreateContainerAsync(string imageName, string? imageTag,
+            List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir)
         {
+            var imageWithTag = ToImageNameWithTag(imageName, imageTag);
+            logger.LogInformation($"Creating container with image name: {imageWithTag}");
+
             var createResponse = await dockerClient.Containers.CreateContainerAsync(
                 new CreateContainerParameters
                 {
-                    Image = imageName,
-                    Entrypoint = commandsToExecute,
+                    Image = imageWithTag,
+                    Cmd = commandsToExecute,
                     AttachStdout = true,
                     AttachStderr = true,
-                    WorkingDir = "/",
+                    WorkingDir = workingDir,
                     HostConfig = new HostConfig
                     {
+                        AutoRemove = true,
                         Binds = volumeBindings
                     }
                 });
             return createResponse;
         }
 
-        private async Task PullImageAsync(string imageName, string tag, AuthConfig? authConfig = null)
+        private static string ToImageNameWithTag(string imageName, string? imageTag)
         {
-            await dockerClient.Images.CreateImageAsync(
-                new ImagesCreateParameters()
-                {
-                    FromImage = imageName,
-                    Tag = tag
-                },
-                authConfig,
-                new Progress<JSONMessage>(message => logger.LogInformation(message.Status)));
+            if (string.IsNullOrWhiteSpace(imageTag))
+            {
+                return imageName;
+            }
+
+            return $"{imageName}:{imageTag}";
+        }
+
+        private async Task PullImageWithRetriesAsync(string imageName, string? tag, AuthConfig? authConfig = null)
+        {
+            logger.LogInformation($"Pulling image name: {imageName} image tag: {tag}");
+
+            await retryHandler.AsyncRetryPolicy.ExecuteAsync(async () =>
+            {
+                await dockerClient.Images.CreateImageAsync(
+                    new ImagesCreateParameters() { FromImage = imageName, Tag = tag },
+                    authConfig,
+                    new Progress<JSONMessage>(message => logger.LogDebug(message.Status)));
+            });
         }
 
         /// <summary>

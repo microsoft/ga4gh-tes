@@ -4,6 +4,8 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Text;
+using Microsoft.Extensions.Logging;
+using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
 {
@@ -11,6 +13,7 @@ namespace Tes.RunnerCLI.Commands
     {
         private readonly StringBuilder standardOut = new StringBuilder();
         private readonly StringBuilder standardError = new StringBuilder();
+        private readonly ILogger logger = PipelineLoggerFactory.Create<ProcessLauncher>();
 
         public async Task<ProcessExecutionResult> LaunchProcessAndWaitAsync(string[] options)
         {
@@ -61,6 +64,8 @@ namespace Tes.RunnerCLI.Commands
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
+
+            logger.LogInformation($"Starting process: {process.StartInfo.FileName} {process.StartInfo.Arguments}");
         }
 
         private static string? GetExecutableFullPath()

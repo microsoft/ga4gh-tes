@@ -17,7 +17,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <summary>
     /// Cromwell path prefix
     /// </summary>
-    protected const string CromwellPathPrefix = "/cromwell-executions/";
+    public const string CromwellPathPrefix = "/cromwell-executions/";
 
     /// <summary>
     /// TES path for internal execution files
@@ -106,6 +106,12 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
 
     /// <inheritdoc />
     public abstract Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);
+
+    /// <inheritdoc />
+    public abstract string GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath);
+
+    /// <inheritdoc />
+    public abstract string GetInternalTesBlobUrlWithoutSasToken(string blobPath);
 
     /// <summary>
     /// Tries to parse the input into a Http Url. 
