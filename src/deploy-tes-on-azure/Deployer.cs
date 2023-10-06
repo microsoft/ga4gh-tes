@@ -468,7 +468,7 @@ namespace TesDeployer
                             await CreateDefaultStorageContainersAsync(storageAccount);
                             await WritePersonalizedFilesToStorageAccountAsync(storageAccount, managedIdentity.Name);
                             await AssignVmAsContributorToStorageAccountAsync(managedIdentity, storageAccount);
-                            await AssignVmAsDataReaderToStorageAccountAsync(managedIdentity, storageAccount);
+                            await AssignVmAsDataOwnerToStorageAccountAsync(managedIdentity, storageAccount);
                             await AssignManagedIdOperatorToResourceAsync(managedIdentity, resourceGroup);
                             await AssignMIAsNetworkContributorToResourceAsync(managedIdentity, resourceGroup);
                         });
@@ -554,12 +554,6 @@ namespace TesDeployer
                             });
                     }
 
-
-                    var maxPerFamilyQuota = batchAccount.DedicatedCoreQuotaPerVMFamilyEnforced ? batchAccount.DedicatedCoreQuotaPerVMFamily.Select(q => q.CoreQuota).Where(q => 0 != q) : Enumerable.Repeat(batchAccount.DedicatedCoreQuota ?? 0, 1);
-                    var isBatchQuotaAvailable = batchAccount.LowPriorityCoreQuota > 0 || (batchAccount.DedicatedCoreQuota > 0 && maxPerFamilyQuota.Append(0).Max() > 0);
-
-                    int exitCode;
-
                     if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
                     {
                         // Write credentials to JSON file in working directory
@@ -571,7 +565,33 @@ namespace TesDeployer
                         ConsoleEx.WriteLine($"TES credentials file written to: {credentialsPath}");
                     }
 
-                    if (isBatchQuotaAvailable)
+                    var maxPerFamilyQuota = batchAccount.DedicatedCoreQuotaPerVMFamilyEnforced ? batchAccount.DedicatedCoreQuotaPerVMFamily.Select(q => q.CoreQuota).Where(q => 0 != q) : Enumerable.Repeat(batchAccount.DedicatedCoreQuota ?? 0, 1);
+                    bool isBatchQuotaAvailable = batchAccount.LowPriorityCoreQuota > 0 || (batchAccount.DedicatedCoreQuota > 0 && maxPerFamilyQuota.Append(0).Max() > 0);
+                    bool isBatchPoolQuotaAvailable = batchAccount.PoolQuota > 0;
+                    bool isBatchJobQuotaAvailable = batchAccount.ActiveJobAndJobScheduleQuota > 0;
+                    var insufficientQuotas = new List<string>();
+                    int exitCode;
+
+                    if (!isBatchQuotaAvailable) insufficientQuotas.Add("core");
+                    if (!isBatchPoolQuotaAvailable) insufficientQuotas.Add("pool");
+                    if (!isBatchJobQuotaAvailable) insufficientQuotas.Add("job");
+
+                    if (insufficientQuotas.Any())
+                    {
+                        if (!configuration.SkipTestWorkflow)
+                        {
+                            ConsoleEx.WriteLine("Could not run the test task.", ConsoleColor.Yellow);
+                        }
+
+                        string quotaMessage = string.Join(" and ", insufficientQuotas);
+                        string batchAccountName = configuration.BatchAccountName;
+                        ConsoleEx.WriteLine($"Deployment was successful, but Batch account {batchAccountName} does not have sufficient {quotaMessage} quota to run workflows.", ConsoleColor.Yellow);
+                        ConsoleEx.WriteLine($"Request Batch {quotaMessage} quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
+                        ConsoleEx.WriteLine("After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
+
+                        exitCode = 2;
+                    }
+                    else
                     {
                         if (configuration.SkipTestWorkflow)
                         {
@@ -604,24 +624,10 @@ namespace TesDeployer
                             {
                                 tokenSource.Cancel();
                             }
-
                         }
-                    }
-                    else
-                    {
-                        if (!configuration.SkipTestWorkflow)
-                        {
-                            ConsoleEx.WriteLine($"Could not run the test task.", ConsoleColor.Yellow);
-                        }
-
-                        ConsoleEx.WriteLine($"Deployment was successful, but Batch account {configuration.BatchAccountName} does not have sufficient core quota to run workflows.", ConsoleColor.Yellow);
-                        ConsoleEx.WriteLine($"Request Batch core quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
-                        ConsoleEx.WriteLine($"After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
-                        exitCode = 2;
                     }
 
                     ConsoleEx.WriteLine($"Completed in {mainTimer.Elapsed.TotalMinutes:n1} minutes.");
-
                     return exitCode;
                 }
                 finally
@@ -1332,13 +1338,13 @@ namespace TesDeployer
                     cts.Token));
         }
 
-        private Task AssignVmAsDataReaderToStorageAccountAsync(IIdentity managedIdentity, IStorageAccount storageAccount)
+        private Task AssignVmAsDataOwnerToStorageAccountAsync(IIdentity managedIdentity, IStorageAccount storageAccount)
         {
-            // https://docs.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#storage-blob-data-reader
-            var roleDefinitionId = $"/subscriptions/{configuration.SubscriptionId}/providers/Microsoft.Authorization/roleDefinitions/2a2b9908-6ea1-4ae2-8e65-a410df84e7d1";
+            //https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#storage-blob-data-owner
+            var roleDefinitionId = $"/subscriptions/{configuration.SubscriptionId}/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b";
 
             return Execute(
-                $"Assigning Storage Blob Data Reader role for user-managed identity to Storage Account resource scope...",
+                $"Assigning Storage Blob Data Owner role for user-managed identity to Storage Account resource scope...",
                 () => roleAssignmentHashConflictRetryPolicy.ExecuteAsync(
                     ct => azureSubscriptionClient.AccessManagement.RoleAssignments
                         .Define(Guid.NewGuid().ToString())

@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
@@ -17,7 +16,7 @@ namespace Tes.Repository
 {
     public abstract class PostgreSqlCachingRepository<T> : IDisposable where T : class
     {
-        private readonly TimeSpan _writerWaitTime = TimeSpan.FromSeconds(1);
+        private readonly TimeSpan _writerWaitTime = TimeSpan.FromMilliseconds(50);
         private readonly int _batchSize = 1000;
         private static readonly TimeSpan defaultCompletedTaskCacheExpiration = TimeSpan.FromDays(1);
 
@@ -25,9 +24,10 @@ namespace Tes.Repository
             .Handle<Npgsql.NpgsqlException>(e => e.IsTransient)
             .WaitAndRetryAsync(10, i => TimeSpan.FromSeconds(Math.Pow(2, i)));
 
-        private readonly ConcurrentQueue<(T, WriteAction, TaskCompletionSource<T>)> _itemsToWrite = new();
-        private readonly ConcurrentDictionary<T, object> _updatingItems = new();
-        private readonly BackgroundWorker _writerWorker = new();
+        private readonly ConcurrentQueue<(T, WriteAction, TaskCompletionSource<T>)> _itemsToWrite = new(); // Current _writerWorkerTask work queue
+        private readonly ConcurrentDictionary<T, object> _updatingItems = new(); // Collection of all pending items to be written.
+        private readonly CancellationTokenSource _writerWorkerCancellationTokenSource = new();
+        private readonly Task _writerWorkerTask;
 
         protected enum WriteAction { Add, Update, Delete }
 
@@ -42,10 +42,24 @@ namespace Tes.Repository
             _logger = logger;
             _cache = cache;
 
-            _writerWorker.WorkerSupportsCancellation = true;
-            _writerWorker.RunWorkerCompleted += WriterWorkerCompleted;
-            _writerWorker.DoWork += WriterWorkerProc;
-            _writerWorker.RunWorkerAsync();
+            // The only "normal" exit for _writerWorkerTask is "cancelled". Anything else should force the process to exit because it means that this repository will no longer write to the database!
+            _writerWorkerTask = Task.Run(() => WriterWorkerAsync(_writerWorkerCancellationTokenSource.Token))
+                .ContinueWith(async task =>
+                {
+                    switch (task.Status)
+                    {
+                        case TaskStatus.Faulted:
+                            _logger.LogCritical("Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
+                            break;
+                        case TaskStatus.RanToCompletion:
+                            _logger.LogCritical("Repository WriterWorkerAsync unexpectedly completed.");
+                            break;
+                    }
+
+                    await Task.Delay(50); // Give the logger time to flush.
+                    throw new System.Diagnostics.UnreachableException("Repository WriterWorkerAsync unexpectedly ended."); // Force the process to exit via this being an unhandled exception.
+                },
+                TaskContinuationOptions.NotOnCanceled);
         }
 
         /// <summary>
@@ -94,7 +108,7 @@ namespace Tes.Repository
             //var sqlQuery = query.ToQueryString();
             //System.Diagnostics.Debugger.Break();
 
-            return await _asyncPolicy.ExecuteAsync(ct => query.ToListAsync(ct), cancellationToken);
+            return await _asyncPolicy.ExecuteAsync(query.ToListAsync, cancellationToken);
         }
 
         /// <summary>
@@ -135,60 +149,44 @@ namespace Tes.Repository
             }
         }
 
-        private void WriterWorkerCompleted(object _1, RunWorkerCompletedEventArgs e)
+        /// <summary>
+        /// Continuously writes items to the database
+        /// </summary>
+        private async Task WriterWorkerAsync(CancellationToken cancellationToken)
         {
-            if (e.Error is not null)
+            var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
+
+            while (true)
             {
-                _logger?.LogCritical(e.Error, "Repository writer worker failed. Restarting worker.");
-                _writerWorker.RunWorkerAsync();
-            }
-        }
+                cancellationToken.ThrowIfCancellationRequested();
 
-
-        private void WriterWorkerProc(object _1, DoWorkEventArgs _2)
-        {
-            while (!_writerWorker.CancellationPending)
-            {
-                var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
-
-                while (_itemsToWrite.TryDequeue(out var itemToWrite))
+                if (_itemsToWrite.TryDequeue(out var itemToWrite))
                 {
                     list.Add(itemToWrite);
-                }
 
-                while (list.Count > 0)
-                {
-                    if (_writerWorker.CancellationPending)
+                    if (list.Count < _batchSize)
                     {
-                        break;
-                    }
-
-                    try
-                    {
-                        var work = list.Take(_batchSize).ToList();
-                        list = list.Except(work).ToList();
-                        WriteItemsAsync(work).Wait();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogError(ex, "Repository writer worker: WriteItemsAsync failed: {Message}.", ex.Message);
+                        continue;
                     }
                 }
 
-                if (_writerWorker.CancellationPending)
+                if (list.Count == 0)
                 {
+                    // Wait, because the queue is empty
+                    await Task.Delay(_writerWaitTime, cancellationToken);
                     continue;
                 }
 
-                Thread.Sleep(_writerWaitTime);
+                await WriteItemsAsync(list, cancellationToken);
+                list.Clear();
             }
         }
 
-        // TODO: Consider wiring in cancellation
-        private async Task WriteItemsAsync(IList<(T DbItem, WriteAction Action, TaskCompletionSource<T> TaskSource)> dbItems)
+        private async ValueTask WriteItemsAsync(IList<(T DbItem, WriteAction Action, TaskCompletionSource<T> TaskSource)> dbItems, CancellationToken cancellationToken)
         {
             if (dbItems.Count == 0) { return; }
 
+            cancellationToken.ThrowIfCancellationRequested();
             using var dbContext = CreateDbContext();
 
             // Manually set entity state to avoid potential NPG PostgreSql bug
@@ -196,13 +194,15 @@ namespace Tes.Repository
 
             try
             {
-                dbContext.AddRange(dbItems.Where(e => WriteAction.Add.Equals(e.Action)).Select(e => e.DbItem));
                 dbContext.RemoveRange(dbItems.Where(e => WriteAction.Delete.Equals(e.Action)).Select(e => e.DbItem));
                 dbContext.UpdateRange(dbItems.Where(e => WriteAction.Update.Equals(e.Action)).Select(e => e.DbItem));
-                await _asyncPolicy.ExecuteAsync(() => dbContext.SaveChangesAsync());
+                dbContext.AddRange(dbItems.Where(e => WriteAction.Add.Equals(e.Action)).Select(e => e.DbItem));
+                await _asyncPolicy.ExecuteAsync(dbContext.SaveChangesAsync, cancellationToken);
             }
             catch (Exception ex)
             {
+                // It doesn't matter which item the failure was for, we will fail all items in this round.
+                // TODO: are there exceptions Postgre will send us that will tell us which item(s) failed?
                 FailAll(dbItems.Select(e => e.TaskSource), ex);
                 return;
             }
@@ -219,27 +219,16 @@ namespace Tes.Repository
             {
                 if (disposing)
                 {
-                    _writerWorker.CancelAsync();
-                    while (_writerWorker.IsBusy) { Thread.Sleep(10); } // Wait for background thread to exit
-                    _writerWorker.Dispose();
+                    _writerWorkerCancellationTokenSource.Cancel();
+                    _writerWorkerTask.Wait();
                 }
 
-                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
-                // TODO: set large fields to null
                 _disposedValue = true;
             }
         }
 
-        // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
-        // ~PostgreSqlCachingRepository()
-        // {
-        //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-        //     Dispose(disposing: false);
-        // }
-
         public void Dispose()
         {
-            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
             Dispose(disposing: true);
             GC.SuppressFinalize(this);
         }

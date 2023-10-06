@@ -32,5 +32,10 @@ namespace Tes.Runner.Transfer
         {
             return SLogFactory.CreateLogger<T>();
         }
+
+        public static ILogger Create(string category)
+        {
+            return SLogFactory.CreateLogger(category);
+        }
     }
 }
