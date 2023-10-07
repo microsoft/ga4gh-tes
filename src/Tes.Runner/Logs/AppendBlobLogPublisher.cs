@@ -9,8 +9,6 @@ namespace Tes.Runner.Logs
 {
     public class AppendBlobLogPublisher : StreamLogReader
     {
-        //https://learn.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs
-        const int MaxNumberOfBlocks = 50000;
         private readonly string targetUrl;
         private readonly BlobApiHttpUtils blobApiHttpUtils = new BlobApiHttpUtils();
         private readonly string stdOutLogNamePrefix;
@@ -24,20 +22,20 @@ namespace Tes.Runner.Logs
         private string currentStdErrBlobName = string.Empty;
 
 
-        public AppendBlobLogPublisher(string targetUrl, string stdOutLogNamePrefix, string stdErrLogNamePrefix)
+        public AppendBlobLogPublisher(string targetUrl, string logNamePrefix)
         {
             ArgumentException.ThrowIfNullOrEmpty(targetUrl);
-            ArgumentException.ThrowIfNullOrEmpty(stdOutLogNamePrefix);
-            ArgumentException.ThrowIfNullOrEmpty(stdErrLogNamePrefix);
+            ArgumentException.ThrowIfNullOrEmpty(logNamePrefix);
 
             this.targetUrl = targetUrl;
-            this.stdOutLogNamePrefix = stdOutLogNamePrefix;
-            this.stdErrLogNamePrefix = stdErrLogNamePrefix;
+            var prefixTimeStamp = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
+            stdOutLogNamePrefix = $"{logNamePrefix}_stdout_{prefixTimeStamp}";
+            stdErrLogNamePrefix = $"{logNamePrefix}_stderr_{prefixTimeStamp}";
         }
 
         private string GetBlobNameConsideringBlockCountCurrentState(int blockCount, string logName)
         {
-            var blobNumber = blockCount / MaxNumberOfBlocks;
+            var blobNumber = blockCount / BlobSizeUtils.MaxBlobBlocksCount;
 
             if (blobNumber == 0)
             {
@@ -46,8 +44,6 @@ namespace Tes.Runner.Logs
 
             return $"{logName}_{blobNumber}";
         }
-
-
 
         public override async Task AppendStandardOutputAsync(string data)
         {

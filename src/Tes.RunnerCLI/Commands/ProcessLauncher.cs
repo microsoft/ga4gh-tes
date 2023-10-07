@@ -3,11 +3,8 @@
 
 using System.Diagnostics;
 using System.Reflection;
-using System.Text;
-using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Logs;
-using Tes.Runner.Storage;
 using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
@@ -15,10 +12,7 @@ namespace Tes.RunnerCLI.Commands
     public class ProcessLauncher
     {
         const int LogWaitTimeout = 30;
-        const BlobSasPermissions LogLocationPermissions = BlobSasPermissions.Read | BlobSasPermissions.Create | BlobSasPermissions.Write | BlobSasPermissions.Add;
 
-        // private readonly StringBuilder standardOut = new StringBuilder();
-        // private readonly StringBuilder standardError = new StringBuilder();
         private readonly IStreamLogReader logReader;
         private readonly ILogger logger = PipelineLoggerFactory.Create<ProcessLauncher>();
 
@@ -29,7 +23,6 @@ namespace Tes.RunnerCLI.Commands
             this.logReader = logReader;
         }
 
-
         public async Task<ProcessExecutionResult> LaunchProcessAndWaitAsync(string[] options)
         {
             var process = new Process();
@@ -37,44 +30,32 @@ namespace Tes.RunnerCLI.Commands
             SetupProcessStartInfo(options, process);
 
             process.Start();
-            // process.BeginOutputReadLine();
-            // process.BeginErrorReadLine();
+
+            var processName = "NA";
+
+            if (!process.HasExited)
+            {
+                processName = process.ProcessName;
+            }
 
             SetupErrorAndOutputReaders(process);
 
             await StartAndWaitForExitAsync(process);
 
-            return new ProcessExecutionResult(process.ProcessName, process.ExitCode);
+            return new ProcessExecutionResult(processName, process.ExitCode);
         }
 
         private async Task StartAndWaitForExitAsync(Process process)
         {
-
             await process.WaitForExitAsync();
-
 
             await logReader.WaitUntilAsync(timeout: TimeSpan.FromSeconds(LogWaitTimeout));
         }
 
         private void SetupErrorAndOutputReaders(Process process)
         {
-            //standardOut.Clear();
-            //standardError.Clear();
             logReader.StartReadingFromLogStreams(process.StandardOutput, process.StandardError);
         }
-
-        //
-        // private void ProcessOnOutputDataReceived(object sender, DataReceivedEventArgs e)
-        // {
-        //     standardOut.Append(e.Data);
-        //     standardOut.Append('\n');
-        // }
-        //
-        // private void ProcessOnErrorDataReceived(object sender, DataReceivedEventArgs e)
-        // {
-        //     standardError.Append(e.Data);
-        //     standardError.Append('\n');
-        // }
 
         private void SetupProcessStartInfo(string[] options, Process process)
         {
@@ -113,23 +94,9 @@ namespace Tes.RunnerCLI.Commands
 
             var nodeTask = await NodeTaskUtils.DeserializeNodeTaskAsync(file.FullName);
 
-            if (nodeTask.RuntimeOptions?.StreamingLogPublisher?.TargetUrl is not null)
-            {
+            var logPublisher = await LogPublisher.CreateStreamReaderLogPublisherAsync(nodeTask, logNamePrefix);
 
-                var transformedUrl = UrlTransformationStrategyFactory.GetTransformedUrlAsync(
-                    nodeTask.RuntimeOptions,
-                    nodeTask.RuntimeOptions.StreamingLogPublisher,
-                    LogLocationPermissions);
-
-                var appendBlobLogPublisher = new AppendBlobLogPublisher(
-                    transformedUrl.ToString()!,
-                    $"{logNamePrefix}_stdout",
-                    $"{logNamePrefix}_stderr");
-
-                return new ProcessLauncher(appendBlobLogPublisher);
-            }
-
-            return new ProcessLauncher(new ConsoleStreamLogPublisher());
+            return new ProcessLauncher(logPublisher);
         }
     }
 }

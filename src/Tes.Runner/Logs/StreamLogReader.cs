@@ -97,7 +97,7 @@ namespace Tes.Runner.Logs
         {
             try
             {
-                var buffer = new Memory<char>(new char[16 * KiB]); //8K at the time
+                var buffer = new Memory<char>(new char[16 * KiB]); //16K at the time
                 using (streamSource)
                 {
                     while (!streamSource.EndOfStream)
@@ -107,11 +107,11 @@ namespace Tes.Runner.Logs
                         switch (source)
                         {
                             case StreamSource.StandardOut:
-                                await AppendStandardOutputAsync(result.ToString());
+                                await AppendStandardOutputAsync(buffer[0..result].ToString());
                                 break;
 
                             case StreamSource.StandardErr:
-                                await AppendStandardErrAsync(result.ToString());
+                                await AppendStandardErrAsync(buffer[0..result].ToString());
                                 break;
 
                             default:
@@ -122,7 +122,7 @@ namespace Tes.Runner.Logs
             }
             catch (Exception e)
             {
-                logger.LogError(e, "Failed read form the multiplexed stream");
+                logger.LogError(e, "Failed read and process stream");
             }
         }
     }

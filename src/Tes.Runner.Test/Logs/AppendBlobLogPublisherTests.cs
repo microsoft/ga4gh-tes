@@ -1,39 +1,47 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Azure.Storage.Blobs;
+using Tes.Runner.Logs;
+using Tes.Runner.Transfer;
+
 namespace Tes.Runner.Test.Logs
 {
     [TestClass, TestCategory("Unit")]
     public class AppendBlobLogPublisherTests
     {
-        [TestMethod()]
-        public void AppendBlobLogPublisherTest()
+        private AppendBlobLogPublisher publisher = null!;
+        private readonly string targetUrl = "https://test.blob.core.windows.net/cont?sig=signature";
+        private readonly string logNamePrefix = "prefix";
+
+        [DataTestMethod]
+        [DataRow(0, "prefix_stdout", "prefix_stdout")]
+        [DataRow(BlobSizeUtils.MaxBlobBlocksCount + 1, "prefix_stdout", "prefix_stdout_1")]
+        [DataRow(2 * BlobSizeUtils.MaxBlobBlocksCount + 1, "prefix_stdout", "prefix_stdout_2")]
+        public void GetUriAndBlobNameFromCurrentState_InitialState_ReturnsExpectedUrl(int currentBlockCount, string baseLogName, string expectedBlobName)
         {
-            Assert.Fail();
+            publisher = new AppendBlobLogPublisher(targetUrl, logNamePrefix);
+
+            var blobBuilder = new BlobUriBuilder(new Uri(targetUrl)) { BlobName = expectedBlobName };
+
+            var uri = publisher.GetUriAndBlobNameFromCurrentState(currentBlockCount, baseLogName, out var blobLogName);
+            Assert.AreEqual(blobBuilder.ToUri().ToString(), uri.ToString());
+            Assert.AreEqual(expectedBlobName, blobLogName);
         }
 
-        [TestMethod()]
-        public void AppendStandardOutputAsyncTest()
+        [TestMethod]
+        public void GetUriAndBlobNameFromCurrentState_TargetUrlWithSegments_ReturnsUrlWithSegmentsAndBlobName()
         {
-            Assert.Fail();
-        }
+            var targetUrlWithSegments = "https://test.blob.core.windows.net/cont/seg1/seg2?sig=signature";
+            publisher = new AppendBlobLogPublisher(targetUrlWithSegments, logNamePrefix);
 
-        [TestMethod()]
-        public void GetUriAndBlobNameFromCurrentStateTest()
-        {
-            Assert.Fail();
-        }
+            var blobBuilder = new BlobUriBuilder(new Uri(targetUrlWithSegments));
+            blobBuilder.BlobName += "/prefix_stdout";
 
-        [TestMethod()]
-        public void AppendStandardErrAsyncTest()
-        {
-            Assert.Fail();
-        }
+            var uri = publisher.GetUriAndBlobNameFromCurrentState(0, "prefix_stdout", out var blobLogName);
 
-        [TestMethod()]
-        public void OnCompleteTest()
-        {
-            Assert.Fail();
+            Assert.AreEqual(blobBuilder.ToUri().ToString(), uri.ToString());
+            Assert.AreEqual("prefix_stdout", blobLogName);
         }
     }
 }
