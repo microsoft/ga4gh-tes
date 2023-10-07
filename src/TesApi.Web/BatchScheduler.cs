@@ -19,7 +19,6 @@ using Tes.Models;
 using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
-using TesApi.Web.Options;
 using TesApi.Web.Runner;
 using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
@@ -74,7 +73,8 @@ namespace TesApi.Web
         private readonly string globalManagedIdentity;
         private readonly ContainerRegistryProvider containerRegistryProvider;
         private readonly string batchPrefix;
-        private readonly IBatchPoolFactory _batchPoolFactory;
+        private readonly IBatchPoolFactory batchPoolFactory;
+        private readonly BatchTesEventMessageFactory batchTesEventMessageFactory;
         private readonly IAllowedVmSizesService allowedVmSizesService;
         private readonly TaskExecutionScriptingManager taskExecutionScriptingManager;
 
@@ -96,7 +96,8 @@ namespace TesApi.Web
         /// <param name="containerRegistryProvider">Container registry information <see cref="ContainerRegistryProvider"/></param>
         /// <param name="poolFactory">Batch pool factory <see cref="IBatchPoolFactory"/></param>
         /// <param name="allowedVmSizesService">Service to get allowed vm sizes.</param>
-        /// <param name="taskExecutionScriptingManager"><see cref="taskExecutionScriptingManager"/></param>
+        /// <param name="taskExecutionScriptingManager"><see cref="TaskExecutionScriptingManager"/></param>
+        /// <param name="batchTesEventMessageFactory"><see cref="BatchTesEventMessageFactory"/>/param>
         public BatchScheduler(
             ILogger<BatchScheduler> logger,
             IOptions<Options.BatchImageGeneration1Options> batchGen1Options,
@@ -113,7 +114,8 @@ namespace TesApi.Web
             ContainerRegistryProvider containerRegistryProvider,
             IBatchPoolFactory poolFactory,
             IAllowedVmSizesService allowedVmSizesService,
-            TaskExecutionScriptingManager taskExecutionScriptingManager)
+            TaskExecutionScriptingManager taskExecutionScriptingManager,
+            BatchTesEventMessageFactory batchTesEventMessageFactory)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(azureProxy);
@@ -123,6 +125,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(containerRegistryProvider);
             ArgumentNullException.ThrowIfNull(poolFactory);
             ArgumentNullException.ThrowIfNull(taskExecutionScriptingManager);
+            ArgumentNullException.ThrowIfNull(batchTesEventMessageFactory);
 
             this.logger = logger;
             this.azureProxy = azureProxy;
@@ -144,8 +147,9 @@ namespace TesApi.Web
             this.globalManagedIdentity = batchNodesOptions.Value.GlobalManagedIdentity;
             this.allowedVmSizesService = allowedVmSizesService;
             this.taskExecutionScriptingManager = taskExecutionScriptingManager;
+            this.batchTesEventMessageFactory = batchTesEventMessageFactory;
 
-            _batchPoolFactory = poolFactory;
+            batchPoolFactory = poolFactory;
             batchPrefix = batchSchedulingOptions.Value.Prefix;
             logger.LogInformation("BatchPrefix: {BatchPrefix}", batchPrefix);
             File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh"));
@@ -345,7 +349,7 @@ namespace TesApi.Web
             {
                 try
                 {
-                    var batchPool = _batchPoolFactory.CreateNew();
+                    var batchPool = batchPoolFactory.CreateNew();
                     await batchPool.AssignPoolAsync(cloudPool, cancellationToken);
                 }
                 catch (Exception exc)
@@ -1371,6 +1375,39 @@ namespace TesApi.Web
             => text.Split(rowDelimiter)
                 .Select(line => { var parts = line.Split(fieldDelimiter); return new KeyValuePair<string, string>(parts[0], parts[1]); })
                 .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+        /// <inheritdoc/>
+        public async IAsyncEnumerable<TesEventMessage> GetEventMessages([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, string @event = null)
+        {
+            var path = "events";
+
+            if (!string.IsNullOrWhiteSpace(@event))
+            {
+                path += "/" + @event;
+            }
+
+            Uri directoryUri = new(await storageAccessProvider.GetInternalTesBlobUrlAsync(path, cancellationToken));
+            var accountSegments = StorageAccountUrlSegments.Create(directoryUri.ToString());
+
+            await foreach (var blobItem in azureProxy.ListBlobsWithTagsAsync(directoryUri, new Dictionary<string, string>() { { TesEventMessage.ProcessedTag, string.Empty } }, cancellationToken)
+                .WithCancellation(cancellationToken))
+            {
+                if (blobItem.Tags.ContainsKey(TesEventMessage.ProcessedTag))
+                {
+                    continue;
+                }
+
+                UriBuilder builder = new(directoryUri)
+                {
+                    Path = $"{accountSegments.ContainerName}/{blobItem.BlobName}"
+                };
+
+                var pathUnderDirectory = builder.Path[accountSegments.BlobName.Length..];
+                var eventName = pathUnderDirectory[..pathUnderDirectory.IndexOf('/')];
+
+                yield return batchTesEventMessageFactory.CreateNew(builder.Uri, blobItem.Tags, eventName);
+            }
+        }
 
         /// <summary>
         /// Class that captures how <see cref="TesTask"/> transitions from current state to the new state, given the current Batch task state and optional condition. 

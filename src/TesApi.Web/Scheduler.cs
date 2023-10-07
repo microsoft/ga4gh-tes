@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -153,18 +154,93 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
         /// <returns></returns>
-        ValueTask UpdateTesTasksFromEventBlobsAsync(CancellationToken stoppingToken)
+        async ValueTask UpdateTesTasksFromEventBlobsAsync(CancellationToken stoppingToken)
         {
-            return ValueTask.CompletedTask;
+            var messageInfos = new List<TesEventMessage>();
+            var messages = new ConcurrentBag<Tes.Runner.Events.EventMessage>();
 
-            //// Get and parse event blobs
+            // Get and parse event blobs
+            await foreach (var message in batchScheduler.GetEventMessages(stoppingToken).WithCancellation(stoppingToken))
+            {
+                messageInfos.Add(message);
+            }
 
-            //// Get TesTask for each blob
+            try
+            {
+                await Parallel.ForEachAsync(messageInfos, ProcessMessage);
+            }
+            catch { } // TODO: identify exceptions
 
-            //// Update TesTasks
-            //await OrchestrateTesTasksOnBatchAsync("NodeEvent", query, (tasks, cancellationToken) => batchScheduler.MethodToBeWrittenAsync(tasks, events, cancellationToken), stoppingToken);
+            // Update TesTasks
+            await OrchestrateTesTasksOnBatchAsync(
+                "NodeEvent",
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+                async token => GetTesTasks(token),
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+                (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, messages.Select(GetCompletedBatchState).ToArray(), token),
+                stoppingToken);
 
-            //// Delete blobs
+            // Helpers
+            async ValueTask ProcessMessage(TesEventMessage messageInfo, CancellationToken cancellationToken)
+            {
+                // TODO: remove the switch (keeping the message retrieval) when GetCompletedBatchState can process the rest
+                switch (messageInfo.Event)
+                {
+                    case "taskCompleted":
+                        messages.Add(await messageInfo.GetMessageAsync(cancellationToken));
+                        break;
+
+                    default:
+                        break;
+                }
+
+                await messageInfo.MarkMessageProcessed(cancellationToken);
+            }
+
+            async IAsyncEnumerable<TesTask> GetTesTasks([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+            {
+                foreach (var id in messages.Select(t => batchScheduler.GetTesTaskIdFromCloudTaskId(t.EntityId)))
+                {
+                    TesTask tesTask = default;
+                    if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
+                    {
+                        logger.LogDebug("Completing task {TesTask}.", tesTask.Id);
+                        yield return tesTask;
+                    }
+                    else
+                    {
+                        logger.LogDebug("Could not find task {TesTask}.", id);
+                        yield return null;
+                    }
+                }
+            }
+
+            AzureBatchTaskState GetCompletedBatchState(Tes.Runner.Events.EventMessage task)
+            {
+                logger.LogDebug("Getting batch task state from event {EventName} for {TesTask}.", task.Name, task.EntityId);
+                return task.Name switch
+                {
+                    "taskCompleted" => string.IsNullOrWhiteSpace(task.EventData["errorMessage"])
+
+                        ? new(
+                            AzureBatchTaskState.TaskState.CompletedSuccessfully,
+                            BatchTaskStartTime: task.Created - TimeSpan.Parse(task.EventData["duration"]),
+                            BatchTaskEndTime: task.Created/*,
+                            BatchTaskExitCode: 0*/)
+
+                        : new(
+                            AzureBatchTaskState.TaskState.CompletedWithErrors,
+                            Failure: new("ExecutorError",
+                            Enumerable.Empty<string>()
+                                .Append(task.EventData["errorMessage"])),
+                            BatchTaskStartTime: task.Created - TimeSpan.Parse(task.EventData["duration"]),
+                            BatchTaskEndTime: task.Created/*,
+                            BatchTaskExitCode: 0*/),
+
+                    // TODO: the rest
+                    _ => throw new System.Diagnostics.UnreachableException(),
+                };
+            }
         }
     }
 }

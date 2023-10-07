@@ -15,7 +15,6 @@ using Polly;
 using Polly.Retry;
 using Tes.ApiClients;
 using Tes.ApiClients.Options;
-using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
@@ -209,5 +208,12 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task<AutoScaleRun> EvaluateAutoScaleAsync(string poolId, string autoscaleFormula, CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.EvaluateAutoScaleAsync(poolId, autoscaleFormula, ct), cancellationToken);
+
+        /// <inheritdoc/>
+        public IAsyncEnumerable<Azure.Storage.Blobs.Models.TaggedBlobItem> ListBlobsWithTagsAsync(Uri directoryUri, IDictionary<string, string> tagsQuery, CancellationToken cancellationToken)
+            => cachingRetryHandler.AsyncRetryPolicy.ExecuteAsync(() => azureProxy.ListBlobsWithTagsAsync(directoryUri, tagsQuery, cancellationToken), cachingRetryHandler.RetryPolicy);
+
+        /// <inheritdoc/>
+        public Task SetBlobTags(Uri blobAbsoluteUri, IDictionary<string, string> tags, CancellationToken cancellationToken) => cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.SetBlobTags(blobAbsoluteUri, tags, ct), cancellationToken);
     }
 }

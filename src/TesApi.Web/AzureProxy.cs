@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Storage.Blobs;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Auth;
 using Microsoft.Azure.Batch.Common;
@@ -62,7 +63,7 @@ namespace TesApi.Web
         /// <param name="batchPoolManager"><inheritdoc cref="IBatchPoolManager"/></param>
         /// <param name="logger">The logger</param>
         /// <exception cref="InvalidOperationException"></exception>
-        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, IBatchPoolManager batchPoolManager, ILogger<AzureProxy> logger)
+        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, IBatchPoolManager batchPoolManager, ILogger<AzureProxy> logger/*, Azure.Core.TokenCredential tokenCredential*/)
         {
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
             ArgumentNullException.ThrowIfNull(logger);
@@ -407,6 +408,36 @@ namespace TesApi.Web
             while (continuationToken is not null);
 
             return results;
+        }
+
+        /// <inheritdoc/>
+        public IAsyncEnumerable<Azure.Storage.Blobs.Models.TaggedBlobItem> ListBlobsWithTagsAsync(Uri directoryUri, IDictionary<string, string> tagsQuery, CancellationToken cancellationToken)
+        {
+            BlobUriBuilder builder = new(directoryUri);
+            var directory = builder.BlobName;
+            builder.BlobName = string.Empty;
+            BlobContainerClient container = new(builder.ToUri());
+
+            if (!directory.EndsWith('/'))
+            {
+                directory += "/";
+            }
+
+            return container.FindBlobsByTagsAsync($"&where=@container='{container.Name}' AND {string.Join(" AND", tagsQuery.Select(pair => $"\"{pair.Key}\"='{pair.Value}'"))}", cancellationToken)
+                .Where(blob => blob.BlobName.StartsWith(directory));
+        }
+
+
+        /// <inheritdoc/>
+        public async Task SetBlobTags(Uri blobAbsoluteUri, IDictionary<string, string> tags, CancellationToken cancellationToken)
+        {
+            BlobClient blob = new(blobAbsoluteUri);
+            using var result = await blob.SetTagsAsync(tags, cancellationToken: cancellationToken);
+
+            if (result.IsError)
+            {
+                // throw something here.
+            }
         }
 
         /// <inheritdoc/>

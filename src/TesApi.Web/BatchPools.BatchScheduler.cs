@@ -153,7 +153,7 @@ namespace TesApi.Web
                 modelPool.Metadata ??= new List<BatchModels.MetadataItem>();
                 modelPool.Metadata.Add(new(PoolHostName, this.batchPrefix));
                 modelPool.Metadata.Add(new(PoolIsDedicated, (!isPreemptable).ToString()));
-                var batchPool = _batchPoolFactory.CreateNew();
+                var batchPool = batchPoolFactory.CreateNew();
                 await batchPool.CreatePoolAndJobAsync(modelPool, isPreemptable, cancellationToken);
                 pool = batchPool;
             }

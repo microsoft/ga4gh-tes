@@ -69,7 +69,7 @@ namespace TesApi.Web
         /// Deletes pool and job.
         /// </summary>
         /// <param name="pool"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken);
 
@@ -91,7 +91,7 @@ namespace TesApi.Web
         /// Flushes empty pools to accomodate pool quota limits.
         /// </summary>
         /// <param name="assignedPools">Pool Ids of pools connected to active TES Tasks. Used to prevent accidentally removing active pools.</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         ValueTask FlushPoolsAsync(IEnumerable<string> assignedPools, CancellationToken cancellationToken);
 
@@ -101,5 +101,13 @@ namespace TesApi.Web
         /// <param name="cloudTaskId"><see cref="CloudTask.Id"/>.</param>
         /// <returns><see cref="TesTask.Id"/>.</returns>
         string GetTesTaskIdFromCloudTaskId(string cloudTaskId);
+
+        /// <summary>
+        /// Gets unprocessed events from the storage account.
+        /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="event">Optional event to retrieve.</param>
+        /// <returns></returns>
+        IAsyncEnumerable<TesEventMessage> GetEventMessages(CancellationToken cancellationToken, string @event = default);
     }
 }

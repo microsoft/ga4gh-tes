@@ -15,7 +15,7 @@
     <PackageReference Include="Azure.Identity" Version="1.10.1" />
     <PackageReference Include="Azure.ResourceManager" Version="1.4.0" />
     <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.4.0" />
-    <PackageReference Include="Azure.Storage.Blobs" Version="12.15.0" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.16.0" />
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.21.0" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="7.0.3" />
     <PackageReference Include="Microsoft.Azure.Management.ApplicationInsights" Version="0.3.0-preview" />
@@ -63,6 +63,7 @@
   <ItemGroup>
     <ProjectReference Include="..\CommonUtilities\CommonUtilities.csproj" />
     <ProjectReference Include="..\Tes.ApiClients\Tes.ApiClients.csproj" />
+    <ProjectReference Include="..\Tes.Runner\Tes.Runner.csproj" />
     <ProjectReference Include="..\Tes\Tes.csproj" />
   </ItemGroup>
 

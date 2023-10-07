@@ -149,6 +149,24 @@ namespace TesApi.Web
         Task<Microsoft.WindowsAzure.Storage.Blob.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken);
 
         /// <summary>
+        /// List blobs whose tags match a given search expression in the given directory.
+        /// </summary>
+        /// <param name="directoryUri">Directory Uri</param>
+        /// <param name="tagsQuery">Tags and values to exactly match (case sensitive).</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        IAsyncEnumerable<Azure.Storage.Blobs.Models.TaggedBlobItem> ListBlobsWithTagsAsync(Uri directoryUri, IDictionary<string, string> tagsQuery, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Sets tags on the underlying blob.
+        /// </summary>
+        /// <param name="blobAbsoluteUri">Absolute Blob URI</param>
+        /// <param name="tags">The tags to set on the blob.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        Task SetBlobTags(Uri blobAbsoluteUri, IDictionary<string, string> tags, CancellationToken cancellationToken);
+
+        /// <summary>
         /// Gets the list of active pools matching the hostname in the metadata
         /// </summary>
         /// <param name="hostName"></param>
