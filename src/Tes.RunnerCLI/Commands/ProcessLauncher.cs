@@ -50,6 +50,8 @@ namespace Tes.RunnerCLI.Commands
             await process.WaitForExitAsync();
 
             await logReader.WaitUntilAsync(timeout: TimeSpan.FromSeconds(LogWaitTimeout));
+
+            logger.LogInformation($"Process exited. Arguments: {process.StartInfo.Arguments}");
         }
 
         private void SetupErrorAndOutputReaders(Process process)

@@ -7,6 +7,9 @@ using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Logs
 {
+    /// <summary>
+    /// Reads the log data from the stream and incrementally publishes it to Azure storage as append blobs.
+    /// </summary>
     public class AppendBlobLogPublisher : StreamLogReader
     {
         private readonly string targetUrl;
@@ -39,10 +42,10 @@ namespace Tes.Runner.Logs
 
             if (blobNumber == 0)
             {
-                return $"{logName}";
+                return $"{logName}.txt";
             }
 
-            return $"{logName}_{blobNumber}";
+            return $"{logName}_{blobNumber}.txt";
         }
 
         public override async Task AppendStandardOutputAsync(string data)
@@ -59,8 +62,8 @@ namespace Tes.Runner.Logs
 
             if (!blobNameFromCurrentState.Equals(currentBlobLogName, StringComparison.OrdinalIgnoreCase))
             {
-                // If we are here is because a new blob is required. Either this is the first call 
-                // or the we've reached the max limit of blocks per blob.
+                // A new blob is required - a new name was returned.
+                // Either this is the first call or it's reached the max limit of blocks per blob.
                 await blobApiHttpUtils.ExecuteHttpRequestAsync(() => BlobApiHttpUtils.CreatePutBlobRequestAsync(
                     targetUri,
                     content: default,  //append blobs are created empty

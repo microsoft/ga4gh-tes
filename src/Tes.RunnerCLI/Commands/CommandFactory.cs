@@ -47,7 +47,7 @@ namespace Tes.RunnerCLI.Commands
                 rootCommand.AddOption(option);
             }
 
-            rootCommand.SetHandler(CommandHandlers.ExecuteNodeTaskAsync,
+            rootCommand.SetHandler(CommandHandlers.ExecuteRootCommandAsync,
                 GetOptionByName<FileInfo>(rootCommand, BlobPipelineOptionsConverter.FileOption),
                 GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.BlockSizeOption),
                 GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.WritersOption),
@@ -69,7 +69,7 @@ namespace Tes.RunnerCLI.Commands
                 cmd.AddOption(option);
             }
 
-            cmd.SetHandler(CommandHandlers.ExecuteUploadTaskAsync,
+            cmd.SetHandler(CommandHandlers.ExecuteUploadCommandAsync,
                 GetOptionByName<FileInfo>(cmd, BlobPipelineOptionsConverter.FileOption),
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BlockSizeOption),
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.WritersOption),
@@ -86,7 +86,7 @@ namespace Tes.RunnerCLI.Commands
 
             cmd.AddOption(CreateOption<Uri>(CommandFactory.DockerUriOption, "local docker engine endpoint", "-u", defaultValue: DefaultDockerUri));
 
-            cmd.SetHandler(CommandHandlers.ExecuteNodeContainerTaskAsync,
+            cmd.SetHandler(CommandHandlers.ExecuteExecCommandAsync,
                 GetOptionByName<FileInfo>(cmd, BlobPipelineOptionsConverter.FileOption),
                 GetOptionByName<Uri>(cmd, CommandFactory.DockerUriOption));
 
@@ -103,7 +103,7 @@ namespace Tes.RunnerCLI.Commands
                 cmd.AddOption(option);
             }
 
-            cmd.SetHandler(CommandHandlers.ExecuteDownloadTaskAsync,
+            cmd.SetHandler(CommandHandlers.ExecuteDownloadCommandAsync,
                 GetOptionByName<FileInfo>(cmd, BlobPipelineOptionsConverter.FileOption),
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BlockSizeOption),
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.WritersOption),

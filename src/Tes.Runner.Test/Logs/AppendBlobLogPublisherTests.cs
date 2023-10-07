@@ -15,9 +15,9 @@ namespace Tes.Runner.Test.Logs
         private readonly string logNamePrefix = "prefix";
 
         [DataTestMethod]
-        [DataRow(0, "prefix_stdout", "prefix_stdout")]
-        [DataRow(BlobSizeUtils.MaxBlobBlocksCount + 1, "prefix_stdout", "prefix_stdout_1")]
-        [DataRow(2 * BlobSizeUtils.MaxBlobBlocksCount + 1, "prefix_stdout", "prefix_stdout_2")]
+        [DataRow(0, "prefix_stdout", "prefix_stdout.txt")]
+        [DataRow(BlobSizeUtils.MaxBlobBlocksCount + 1, "prefix_stdout", "prefix_stdout_1.txt")]
+        [DataRow(2 * BlobSizeUtils.MaxBlobBlocksCount + 1, "prefix_stdout", "prefix_stdout_2.txt")]
         public void GetUriAndBlobNameFromCurrentState_InitialState_ReturnsExpectedUrl(int currentBlockCount, string baseLogName, string expectedBlobName)
         {
             publisher = new AppendBlobLogPublisher(targetUrl, logNamePrefix);
@@ -36,12 +36,12 @@ namespace Tes.Runner.Test.Logs
             publisher = new AppendBlobLogPublisher(targetUrlWithSegments, logNamePrefix);
 
             var blobBuilder = new BlobUriBuilder(new Uri(targetUrlWithSegments));
-            blobBuilder.BlobName += "/prefix_stdout";
+            blobBuilder.BlobName += "/prefix_stdout.txt";
 
             var uri = publisher.GetUriAndBlobNameFromCurrentState(0, "prefix_stdout", out var blobLogName);
 
             Assert.AreEqual(blobBuilder.ToUri().ToString(), uri.ToString());
-            Assert.AreEqual("prefix_stdout", blobLogName);
+            Assert.AreEqual("prefix_stdout.txt", blobLogName);
         }
     }
 }
