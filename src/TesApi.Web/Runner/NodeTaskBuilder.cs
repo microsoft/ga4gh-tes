@@ -271,7 +271,7 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
-        /// Adds the storage event sink to the node task and its transformation strategy
+        /// Adds the storage event sink to the node task with its transformation strategy
         /// </summary>
         /// <param name="targetUrl"></param>
         /// <returns></returns>
@@ -281,6 +281,25 @@ namespace TesApi.Web.Runner
 
             nodeTask.RuntimeOptions ??= new RuntimeOptions();
             nodeTask.RuntimeOptions.StorageEventSink = new StorageTargetLocation()
+            {
+                TargetUrl = targetUrl,
+                TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions()
+            };
+
+            return this;
+        }
+
+        /// <summary>
+        /// Adds the streaming log publisher storage destination to the node task with its transformation strategy
+        /// </summary>
+        /// <param name="targetUrl"></param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithLogPublisher(string targetUrl)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
+
+            nodeTask.RuntimeOptions ??= new RuntimeOptions();
+            nodeTask.RuntimeOptions.StreamingLogPublisher = new StorageTargetLocation()
             {
                 TargetUrl = targetUrl,
                 TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions()

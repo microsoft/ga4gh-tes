@@ -155,5 +155,16 @@ namespace TesApi.Tests.Runner
             Assert.AreEqual(url, nodeTask.RuntimeOptions.StorageEventSink!.TargetUrl);
             Assert.AreEqual(TransformationStrategy.CombinedAzureResourceManager, nodeTask.RuntimeOptions.StorageEventSink.TransformationStrategy);
         }
+
+
+        [TestMethod]
+        public void WithLogPublisher_Called_LogStorageIsSet()
+        {
+            var url = "https://foo.blob.core.windows.net/cont/log";
+            nodeTaskBuilder.WithLogPublisher(url);
+            var nodeTask = nodeTaskBuilder.Build();
+            Assert.AreEqual(url, nodeTask.RuntimeOptions.StreamingLogPublisher!.TargetUrl);
+            Assert.AreEqual(TransformationStrategy.CombinedAzureResourceManager, nodeTask.RuntimeOptions.StreamingLogPublisher.TransformationStrategy);
+        }
     }
 }
