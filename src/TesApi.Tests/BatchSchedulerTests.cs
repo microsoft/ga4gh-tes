@@ -25,7 +25,6 @@ using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
 using TesApi.Web.Storage;
-using ResourceFile = Microsoft.Azure.Batch.ResourceFile;
 
 namespace TesApi.Tests
 {
@@ -1785,7 +1784,7 @@ namespace TesApi.Tests
 
         private static IEnumerable<FileToDownload> GetFilesToDownload(Mock<IAzureProxy> azureProxy)
         {
-            var downloadFilesScriptContent = (string)azureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.UploadBlobAsync) && i.Arguments[0].ToString().Contains("/TesTask.json"))?.Arguments[1];
+            var downloadFilesScriptContent = (string)azureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.UploadBlobAsync) && i.Arguments[0].ToString().Contains("/runner-task.json"))?.Arguments[1];
 
             if (string.IsNullOrEmpty(downloadFilesScriptContent))
             {
