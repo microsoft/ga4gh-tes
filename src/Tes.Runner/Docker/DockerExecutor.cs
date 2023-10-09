@@ -55,9 +55,6 @@ namespace Tes.Runner.Docker
 
             var createResponse = await CreateContainerAsync(imageName, tag, commandsToExecute, volumeBindings, workingDir);
 
-            // await dockerClient.Containers.StartContainerAsync(createResponse.ID,
-            //     new ContainerStartParameters());
-
             var logs = await StartContainerWithStreamingOutput(createResponse);
 
             streamLogReader.StartReadingFromLogStreams(logs);
