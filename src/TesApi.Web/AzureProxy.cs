@@ -547,7 +547,7 @@ namespace TesApi.Web
             => batchClient.PoolOperations.DisableAutoScaleAsync(poolId, cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
-        public async Task EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, IAzureProxy.BatchPoolAutoScaleFormulaFactory formulaFactory, CancellationToken cancellationToken)
+        public async Task EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, IAzureProxy.BatchPoolAutoScaleFormulaFactory formulaFactory, Func<int, ValueTask<int>> currentTargetFunc, CancellationToken cancellationToken)
         {
             var (allocationState, _, _, currentLowPriority, _, currentDedicated) = await GetFullAllocationStateAsync(poolId, cancellationToken);
 
@@ -556,7 +556,7 @@ namespace TesApi.Web
                 throw new InvalidOperationException();
             }
 
-            var formula = formulaFactory(preemptable, preemptable ? currentLowPriority ?? 0 : currentDedicated ?? 0);
+            var formula = formulaFactory(preemptable, await currentTargetFunc(preemptable ? currentLowPriority ?? 0 : currentDedicated ?? 0));
             logger.LogDebug("Setting Pool {PoolID} to AutoScale({AutoScaleInterval}): '{AutoScaleFormula}'", poolId, interval, formula.Replace(Environment.NewLine, @"\n"));
             await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formula, interval, cancellationToken: cancellationToken);
         }

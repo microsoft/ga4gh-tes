@@ -2,11 +2,8 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -32,7 +29,7 @@ namespace TesApi.Web.Extensions
         /// A task is sent to the return enumeration when it is "complete", which is when it either completes successfully, fails (queues an exception), or is cancelled.<br/>
         /// No items in <paramref name="source"/> should share an identical <see cref="Task"/> instance.
         /// </remarks>
-        public static async IAsyncEnumerable<T> WhenEach<T>(this IEnumerable<T> source, [EnumeratorCancellation] CancellationToken cancellationToken, Func<T, Task> sourceToTask = default)
+        public static async IAsyncEnumerable<T> WhenEach<T>(this IEnumerable<T> source, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, Func<T, Task> sourceToTask = default)
         {
             ArgumentNullException.ThrowIfNull(source);
             ArgumentNullException.ThrowIfNull(cancellationToken);
@@ -43,17 +40,12 @@ namespace TesApi.Web.Extensions
             var list = source.Where(e => e is not null).Select(e => (Entry: e, Task: sourceToTask(e))).ToList();
             var pendingCount = list.Count;
 
-            if (list.Select(e => e.Task).ToHashSet(new SystemTaskEqualityComparer()).Count != pendingCount) // Check for duplicate tasks
-            {
-                throw new ArgumentException("Duplicate System.Threading.Tasks found referenced in collection.", nameof(source));
-            }
-
             if (list.Count == 0)
             {
                 yield break;
             }
 
-            // There should be no more ArgumentExceptions after this point.
+            // There should be no new ArgumentExceptions after this point.
             var channel = Channel.CreateBounded<T>(pendingCount);
 
             // Add continuations to every task. Those continuations will feed the foreach below
@@ -79,15 +71,6 @@ namespace TesApi.Web.Extensions
             {
                 yield return entry;
             }
-        }
-
-        private class SystemTaskEqualityComparer : IEqualityComparer<Task>
-        {
-            public bool Equals(Task x, Task y)
-                => ReferenceEquals(x, y);
-
-            public int GetHashCode([DisallowNull] Task obj)
-                => obj?.GetHashCode() ?? 0;
         }
     }
 }

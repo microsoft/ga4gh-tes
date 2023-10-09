@@ -267,9 +267,10 @@ namespace TesApi.Web
         /// <param name="preemptable">Type of compute nodes: false if dedicated, otherwise true.</param>
         /// <param name="interval">The interval for periodic reevaluation of the formula.</param>
         /// <param name="formulaFactory">A factory function that generates an auto-scale formula.</param>
+        /// <param name="currentTargetFunc">A function that provides the initial compute node target. The function's argument is the current node target on the pool.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        Task EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, BatchPoolAutoScaleFormulaFactory formulaFactory, CancellationToken cancellationToken);
+        Task EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, BatchPoolAutoScaleFormulaFactory formulaFactory, Func<int, ValueTask<int>> currentTargetFunc, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the result of evaluating an automatic scaling formula on the specified pool.  This
@@ -291,7 +292,7 @@ namespace TesApi.Web
         /// Describes a function to generate autoscale formulas
         /// </summary>
         /// <param name="preemptable">Type of compute nodes: false if dedicated, otherwise true.</param>
-        /// <param name="currentTarget">Current number of compute nodes.</param>
+        /// <param name="currentTarget">The initial compute node target.</param>
         /// <returns></returns>
         delegate string BatchPoolAutoScaleFormulaFactory(bool preemptable, int currentTarget);
     }

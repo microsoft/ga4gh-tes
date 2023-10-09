@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
@@ -257,7 +256,11 @@ namespace TesApi.Web
             {
                 switch (_scalingMode)
                 {
-                    case ScalingMode.AutoScaleEnabled:
+                    case ScalingMode.AutoScaleEnabled when autoScaleEnabled != true:
+                        _scalingMode = ScalingMode.RemovingFailedNodes;
+                        break;
+
+                    case ScalingMode.AutoScaleEnabled when autoScaleEnabled == true:
                         if (_resetAutoScalingRequired || await GetNodesToRemove(false).AnyAsync(cancellationToken))
                         {
                             _logger.LogInformation(@"Switching pool {PoolId} to manual scale to clear resize errors and/or compute nodes in invalid states.", Id);
@@ -318,7 +321,7 @@ namespace TesApi.Web
                         ResizeErrors.Clear();
                         _resizeErrorsRetrieved = true;
                         _logger.LogInformation(@"Switching pool {PoolId} back to autoscale.", Id);
-                        await _azureProxy.EnableBatchPoolAutoScaleAsync(Id, !IsDedicated, AutoScaleEvaluationInterval, (p, t) => AutoPoolFormula(p, GetTaskCount(t)), cancellationToken);
+                        await _azureProxy.EnableBatchPoolAutoScaleAsync(Id, !IsDedicated, AutoScaleEvaluationInterval, AutoPoolFormula, GetTaskCountAsync, cancellationToken);
                         _autoScaleWaitTime = DateTime.UtcNow + (3 * AutoScaleEvaluationInterval) + BatchPoolService.RunInterval;
                         _scalingMode = _resetAutoScalingRequired ? ScalingMode.WaitingForAutoScale : ScalingMode.SettingAutoScale;
                         break;
@@ -337,11 +340,11 @@ namespace TesApi.Web
                         break;
                 }
 
-                int GetTaskCount(int @default) // Used to make reenabling auto-scale more performant by attempting to gather the current number of "pending" tasks, falling back on the current target.
+                async ValueTask<int> GetTaskCountAsync(int @default) // Used to make reenabling auto-scale more performant by attempting to gather the current number of "pending" tasks, falling back on the current target.
                 {
                     try
                     {
-                        return GetTasksAsync(includeCompleted: false).CountAsync(cancellationToken).AsTask().Result;
+                        return await GetTasksAsync(includeCompleted: false).CountAsync(cancellationToken);
                     }
                     catch
                     {
@@ -474,7 +477,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<(string taskId, AzureBatchTaskState)> ServicePoolAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<(string taskId, AzureBatchTaskState)> ServicePoolAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var exceptions = new List<Exception>();
 
@@ -527,7 +530,7 @@ namespace TesApi.Web
             }
 
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-            async IAsyncEnumerable<AzureBatchTaskState> GetFailures([EnumeratorCancellation] CancellationToken cancellationToken)
+            async IAsyncEnumerable<AzureBatchTaskState> GetFailures([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
             {
                 for (var failure = PopNextStartTaskFailure(); failure is not null; failure = PopNextStartTaskFailure())

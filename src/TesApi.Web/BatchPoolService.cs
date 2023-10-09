@@ -5,7 +5,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
@@ -108,7 +107,7 @@ namespace TesApi.Web
             await OrchestrateTesTasksOnBatchAsync(
                 "Failures",
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-                async token => list.Select(t => t.TesTask).ToAsyncEnumerable(),
+                async _ => list.Select(t => t.TesTask).ToAsyncEnumerable(),
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
                 (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, list.Select(t => t.State).ToArray(), token),
                 stoppingToken);
@@ -150,12 +149,12 @@ namespace TesApi.Web
             await OrchestrateTesTasksOnBatchAsync(
                 "Completed",
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-                async token => GetTesTasks(token),
+                async cancellationToken => GetTesTasks(cancellationToken),
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
                 (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, tasks.Select(GetCompletedBatchState).ToArray(), token),
                 stoppingToken);
 
-            async IAsyncEnumerable<TesTask> GetTesTasks([EnumeratorCancellation] CancellationToken cancellationToken)
+            async IAsyncEnumerable<TesTask> GetTesTasks([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
             {
                 foreach (var id in tasks.Select(t => batchScheduler.GetTesTaskIdFromCloudTaskId(t.Id)))
                 {

@@ -8,7 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Npgsql.Replication.PgOutput.Messages;
 using Tes.Extensions;
 using Tes.Models;
 using Tes.Repository;
@@ -137,7 +136,6 @@ namespace TesApi.Web
         /// <returns>A System.Threading.Tasks.ValueTask that represents the long running operations.</returns>
         protected async ValueTask OrchestrateTesTasksOnBatchAsync(string pollName, Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter, Func<TesTask[], CancellationToken, IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedAsync)>> tesTaskProcessor, CancellationToken stoppingToken)
         {
-            var pools = new HashSet<string>();
             var tesTasks = await (await tesTaskGetter(stoppingToken)).ToArrayAsync(stoppingToken);
 
             if (tesTasks.All(task => task is null))
@@ -236,7 +234,6 @@ namespace TesApi.Web
                     //TODO: retrieve fresh task if possible and add logs to the task in a similar way to the commanted out code block below.
                     //Also: consider doing the same in the other place(s) this exception is caught.
                 }
-                // TODO catch EF / postgres exception?
                 //catch (Microsoft.Azure.Cosmos.CosmosException exc)
                 //{
                 //    TesTask currentTesTask = default;
@@ -262,15 +259,11 @@ namespace TesApi.Web
                 {
                     logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
                 }
-
-                if (!string.IsNullOrWhiteSpace(tesTask.PoolId) && (TesState.INITIALIZINGEnum == tesTask.State || TesState.RUNNINGEnum == tesTask.State))
-                {
-                    pools.Add(tesTask.PoolId);
-                }
             }
 
             if (batchScheduler.NeedPoolFlush)
             {
+                var pools = (await repository.GetItemsAsync(task => TesState.INITIALIZINGEnum == task.State || TesState.RUNNINGEnum == task.State, stoppingToken)).Select(task => task.PoolId).Distinct();
                 await batchScheduler.FlushPoolsAsync(pools, stoppingToken);
             }
 
