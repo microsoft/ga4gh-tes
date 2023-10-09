@@ -167,7 +167,7 @@ namespace TesApi.Web.Runner
         {
             var blobUrl =
                 await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, fileName, cancellationToken);
-
+            logger.LogWarning($"JSAUN: Upload to Tes Internal {blobUrl}");
             await storageAccessProvider.UploadBlobAsync(new Uri(blobUrl), content, cancellationToken);
             return blobUrl;
         }
