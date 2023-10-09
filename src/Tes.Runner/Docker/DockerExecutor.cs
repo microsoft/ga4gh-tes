@@ -13,22 +13,37 @@ namespace Tes.Runner.Docker
 {
     public class DockerExecutor
     {
-        private readonly IDockerClient dockerClient;
+        private readonly IDockerClient dockerClient = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
         private readonly NetworkUtility networkUtility = new NetworkUtility();
         private readonly RetryHandler retryHandler = new RetryHandler(Options.Create(new RetryPolicyOptions()));
-        private readonly MultiplexedStreamLogReader multiplexedStreamLogReader;
+        private readonly IStreamLogReader streamLogReader = null!;
 
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
-        public DockerExecutor(Uri dockerHost)
+        public DockerExecutor(Uri dockerHost) : this(new DockerClientConfiguration(dockerHost)
+            .CreateClient(), new ConsoleStreamLogReader())
         {
-            dockerClient = new DockerClientConfiguration(dockerHost)
-                .CreateClient();
-            multiplexedStreamLogReader = new ConsoleStreamLogReader();
         }
 
-        public async Task<ContainerExecutionResult> RunOnContainerAsync(string? imageName, string? tag, List<string>? commandsToExecute, List<string>? volumeBindings, string? workingDir)
+        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader)
+        {
+            ArgumentNullException.ThrowIfNull(dockerClient);
+            ArgumentNullException.ThrowIfNull(streamLogReader);
+
+            this.dockerClient = dockerClient;
+            this.streamLogReader = streamLogReader;
+        }
+
+        /// <summary>
+        /// Parameter-less constructor for mocking
+        /// </summary>
+        protected DockerExecutor()
+        {
+
+        }
+
+        public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(string? imageName, string? tag, List<string>? commandsToExecute, List<string>? volumeBindings, string? workingDir)
         {
             ArgumentException.ThrowIfNullOrEmpty(imageName);
             ArgumentNullException.ThrowIfNull(commandsToExecute);
@@ -41,13 +56,11 @@ namespace Tes.Runner.Docker
 
             var logs = await StartContainerWithStreamingOutput(createResponse);
 
-            logger.LogInformation("Starting to read output from container");
-
-            multiplexedStreamLogReader.StartReadingFromLogStream(logs);
+            streamLogReader.StartReadingFromLogStream(logs);
 
             var runResponse = await dockerClient.Containers.WaitContainerAsync(createResponse.ID);
 
-            await multiplexedStreamLogReader.WaitUntilAsync(TimeSpan.FromSeconds(LogStreamingMaxWaitTimeInSeconds));
+            await streamLogReader.WaitUntilAsync(TimeSpan.FromSeconds(LogStreamingMaxWaitTimeInSeconds));
 
             return new ContainerExecutionResult(createResponse.ID, runResponse.Error?.Message, runResponse.StatusCode);
         }

@@ -14,7 +14,6 @@ using Tes.ApiClients.Models.Terra;
 using Tes.Models;
 using TesApi.Web;
 using TesApi.Web.Management.Configuration;
-using TesApi.Web.Management.Models.Terra;
 using TesApi.Web.Options;
 using TesApi.Web.Storage;
 
@@ -26,6 +25,7 @@ namespace TesApi.Tests
     {
         private const string WorkspaceStorageAccountName = TerraApiStubData.WorkspaceAccountName;
         private const string WorkspaceStorageContainerName = TerraApiStubData.WorkspaceStorageContainerName;
+        private const string BatchSchedulingPrefix = "prefix-foo.bar";
 
         private Mock<TerraWsmApiClient> wsmApiClientMock;
         private Mock<IAzureProxy> azureProxyMock;
@@ -44,7 +44,7 @@ namespace TesApi.Tests
             wsmApiClientMock = new Mock<TerraWsmApiClient>();
             optionsMock = new Mock<IOptions<TerraOptions>>();
             terraOptions = terraApiStubData.GetTerraOptions();
-            batchSchedulingOptions = new BatchSchedulingOptions() { Prefix = Guid.NewGuid().ToString() };
+            batchSchedulingOptions = new BatchSchedulingOptions() { Prefix = BatchSchedulingPrefix };
             optionsMock.Setup(o => o.Value).Returns(terraOptions);
             azureProxyMock = new Mock<IAzureProxy>();
             terraStorageAccessProvider = new TerraStorageAccessProvider(wsmApiClientMock.Object, azureProxyMock.Object, optionsMock.Object, Options.Create(batchSchedulingOptions), NullLogger<TerraStorageAccessProvider>.Instance);
@@ -211,6 +211,17 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(url);
             Assert.AreNotEqual('/', capturedTokenApiParameters.SasBlobName[0]);
+        }
+
+        [TestMethod]
+        [DataRow("", $"https://{WorkspaceStorageAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}/{BatchSchedulingPrefix}{StorageAccessProvider.TesExecutionsPathPrefix}")]
+        [DataRow("blob", $"https://{WorkspaceStorageAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}/{BatchSchedulingPrefix}{StorageAccessProvider.TesExecutionsPathPrefix}/blob")]
+        public void GetInternalTesBlobUrlWithoutSasToken_BlobPathIsProvided_ExpectedUrl(string blobPath,
+            string expectedUrl)
+        {
+            var url = terraStorageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath);
+
+            Assert.AreEqual(expectedUrl, url);
         }
     }
 }

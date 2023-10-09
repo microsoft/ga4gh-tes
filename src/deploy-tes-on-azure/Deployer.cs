@@ -468,7 +468,7 @@ namespace TesDeployer
                             await CreateDefaultStorageContainersAsync(storageAccount);
                             await WritePersonalizedFilesToStorageAccountAsync(storageAccount, managedIdentity.Name);
                             await AssignVmAsContributorToStorageAccountAsync(managedIdentity, storageAccount);
-                            await AssignVmAsDataContributorToStorageAccountAsync(managedIdentity, storageAccount);
+                            await AssignVmAsDataOwnerToStorageAccountAsync(managedIdentity, storageAccount);
                             await AssignManagedIdOperatorToResourceAsync(managedIdentity, resourceGroup);
                             await AssignMIAsNetworkContributorToResourceAsync(managedIdentity, resourceGroup);
                         });
@@ -544,7 +544,12 @@ namespace TesDeployer
 
                                 if (configuration.EnableIngress.GetValueOrDefault())
                                 {
-                                    _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient, cts.Token);
+                                    await Execute(
+                                        $"Enabling Ingress {kubernetesManager.TesHostname}",
+                                        async () =>
+                                        {
+                                            _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient, cts.Token);
+                                        });
                                 }
                             });
                     }
@@ -1333,13 +1338,13 @@ namespace TesDeployer
                     cts.Token));
         }
 
-        private Task AssignVmAsDataContributorToStorageAccountAsync(IIdentity managedIdentity, IStorageAccount storageAccount)
+        private Task AssignVmAsDataOwnerToStorageAccountAsync(IIdentity managedIdentity, IStorageAccount storageAccount)
         {
-            // https://docs.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#storage-blob-data-contributor
-            var roleDefinitionId = $"/subscriptions/{configuration.SubscriptionId}/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe";
+            //https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#storage-blob-data-owner
+            var roleDefinitionId = $"/subscriptions/{configuration.SubscriptionId}/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b";
 
             return Execute(
-                $"Assigning Storage Blob Data Contributor role for user-managed identity to Storage Account resource scope...",
+                $"Assigning Storage Blob Data Owner role for user-managed identity to Storage Account resource scope...",
                 () => roleAssignmentHashConflictRetryPolicy.ExecuteAsync(
                     ct => azureSubscriptionClient.AccessManagement.RoleAssignments
                         .Define(Guid.NewGuid().ToString())
@@ -1640,7 +1645,15 @@ namespace TesDeployer
                 $"Creating virtual network and subnets: {configuration.VnetName}...",
                 async () =>
                 {
+                    var tesPorts = new List<int> { };
+
+                    if (configuration.EnableIngress.GetValueOrDefault())
+                    {
+                        tesPorts = new List<int> { 80, 443 };
+                    }
+
                     var defaultNsg = await CreateNetworkSecurityGroupAsync(resourceGroup, $"{configuration.VnetName}-default-nsg");
+                    var aksNsg = await CreateNetworkSecurityGroupAsync(resourceGroup, $"{configuration.VnetName}-aks-nsg", tesPorts);
 
                     var vnetDefinition = azureSubscriptionClient.Networks
                         .Define(configuration.VnetName)
@@ -1649,7 +1662,7 @@ namespace TesDeployer
                         .WithAddressSpace(configuration.VnetAddressSpace)
                         .DefineSubnet(configuration.VmSubnetName)
                         .WithAddressPrefix(configuration.VmSubnetAddressSpace)
-                        .WithExistingNetworkSecurityGroup(defaultNsg)
+                        .WithExistingNetworkSecurityGroup(aksNsg)
                         .Attach();
 
                     vnetDefinition = vnetDefinition.DefineSubnet(configuration.PostgreSqlSubnetName)
@@ -1679,12 +1692,32 @@ namespace TesDeployer
                         batchSubnet);
                 });
 
-        private Task<INetworkSecurityGroup> CreateNetworkSecurityGroupAsync(IResourceGroup resourceGroup, string networkSecurityGroupName)
+        private Task<INetworkSecurityGroup> CreateNetworkSecurityGroupAsync(IResourceGroup resourceGroup, string networkSecurityGroupName, List<int> openPorts = null)
         {
-            return azureSubscriptionClient.NetworkSecurityGroups.Define(networkSecurityGroupName)
+            var icreate = azureSubscriptionClient.NetworkSecurityGroups.Define(networkSecurityGroupName)
                     .WithRegion(configuration.RegionName)
-                    .WithExistingResourceGroup(resourceGroup)
-                    .CreateAsync(cts.Token);
+                    .WithExistingResourceGroup(resourceGroup);
+
+            if (openPorts is not null)
+            {
+                var i = 0;
+                foreach (var port in openPorts)
+                {
+                    icreate = icreate
+                        .DefineRule($"ALLOW-{port}")
+                        .AllowInbound()
+                        .FromAnyAddress()
+                        .FromAnyPort()
+                        .ToAnyAddress()
+                        .ToPort(port)
+                        .WithAnyProtocol()
+                        .WithPriority(1000 + i)
+                        .Attach();
+                    i++;
+                }
+            }
+
+            return icreate.CreateAsync(cts.Token);
         }
 
         private Task<IPrivateDnsZone> CreatePrivateDnsZoneAsync(INetwork virtualNetwork, string name, string title)

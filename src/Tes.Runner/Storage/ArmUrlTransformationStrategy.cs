@@ -70,8 +70,7 @@ namespace Tes.Runner.Storage
                 var sasBuilder = new BlobSasBuilder()
                 {
                     BlobContainerName = blobUrl.BlobContainerName,
-                    BlobName = blobUrl.BlobName,
-                    Resource = "b",
+                    Resource = "c",
                     ExpiresOn = DateTimeOffset.UtcNow.AddHours(BlobSasTokenExpirationInHours)
                 };
 
