@@ -11,7 +11,7 @@ namespace Tes.Runner.Transfer
         private static readonly ILoggerFactory SLogFactory = LoggerFactory.Create(builder =>
         {
             builder
-                .AddSystemdConsole(options =>
+                .AddSimpleConsole(options =>
                 {
                     options.IncludeScopes = true;
                     options.TimestampFormat = "yyyy-MM-dd HH:mm:ss.fff ";

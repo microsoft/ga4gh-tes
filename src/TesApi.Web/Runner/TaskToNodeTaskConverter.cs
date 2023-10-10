@@ -87,9 +87,10 @@ namespace TesApi.Web.Runner
                 builder.WithId(task.Id)
                     .WithResourceIdManagedIdentity(nodeTaskConversionOptions.NodeManagedIdentityResourceId)
                     .WithWorkflowId(task.WorkflowId)
-                    .WithContainerCommands(executor.Command.Select(EscapeBashArgument).ToList())
+                    .WithContainerCommands(executor.Command)
                     .WithContainerImage(executor.Image)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
+                    .WithLogPublisher(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
                     .WithMetricsFile(MetricsFileName);
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
@@ -350,12 +351,6 @@ namespace TesApi.Web.Runner
             return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, input.Content, cancellationToken);
         }
 
-        private static string EscapeBashArgument(string arg)
-        {
-            return $"{arg.Replace(@"'", @"'\''")}";
-        }
-
-
         private static void MapOutputs(List<TesOutput> outputs, string pathParentDirectory, string containerMountParentDirectory,
             NodeTaskBuilder builder)
         {
@@ -399,13 +394,6 @@ namespace TesApi.Web.Runner
             return inputPath;
         }
     }
-
-    /// <summary>
-    /// Docker clean up options for the Node runner. 
-    /// </summary>
-    /// <param name="ExecuteDockerRmi"></param>
-    /// <param name="ExecuteDockerPrune"></param>
-    public record RuntimeContainerCleanupOptions(bool ExecuteDockerRmi, bool ExecuteDockerPrune);
 
     /// <summary>
     /// Additional configuration options for the Node runner.
