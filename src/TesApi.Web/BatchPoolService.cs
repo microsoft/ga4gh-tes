@@ -102,7 +102,7 @@ namespace TesApi.Web
         {
             var list = new ConcurrentBag<(TesTask TesTask, AzureBatchTaskState State)>();
 
-            await ExecuteActionOnPoolsAsync("ServiceBatchPools", (pool, token) => ProcessFailures(pool.ServicePoolAsync(token), token), stoppingToken);
+            await ExecuteActionOnPoolsAsync("Service Batch Pools", (pool, token) => ProcessFailures(pool.ServicePoolAsync(token), token), stoppingToken);
 
             await OrchestrateTesTasksOnBatchAsync(
                 "Failures",
@@ -142,8 +142,10 @@ namespace TesApi.Web
         /// <returns></returns>
         private async ValueTask ProcessCompletedCloudTasksAsync(CancellationToken stoppingToken)
         {
-            var tasks = new List<CloudTask>();
-            await ExecuteActionOnPoolsAsync("ServiceBatchTasks", async (pool, token) => tasks.AddRange(await pool.GetCompletedTasks(token).ToListAsync(token)), stoppingToken);
+            var tasks = new ConcurrentBag<CloudTask>();
+
+            await ExecuteActionOnPoolsAsync("Service Batch Tasks", async (pool, token) => await pool.GetCompletedTasks(token).ForEachAsync(tasks.Add, token), stoppingToken);
+
             logger.LogDebug("ProcessCompletedCloudTasksAsync found {CompletedTasks} completed tasks.", tasks.Count);
 
             await OrchestrateTesTasksOnBatchAsync(
