@@ -61,10 +61,9 @@ namespace Tes.Repository.Tests
                 DatabaseUserPassword = adminPw
             };
 
-            var optionsMock = new Mock<IOptions<PostgreSqlOptions>>();
-            optionsMock.Setup(x => x.Value).Returns(options);
-            var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(optionsMock.Object);
-            repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(connectionString));
+            var optionsMock = new Mock<PostgreSqlOptions>();
+            var connectionString = new PostgresConnectionStringUtility(optionsMock.Object, null);
+            repository = new TesTaskPostgreSqlRepository();
             Console.WriteLine("Creation complete.");
         }
 
