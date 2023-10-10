@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.ApiClients;
 using Tes.ApiClients.Options;
+using Tes.Runner.Logs;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Docker
@@ -22,7 +23,7 @@ namespace Tes.Runner.Docker
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
         public DockerExecutor(Uri dockerHost) : this(new DockerClientConfiguration(dockerHost)
-            .CreateClient(), new ConsoleStreamLogReader())
+            .CreateClient(), new ConsoleStreamLogPublisher())
         {
         }
 
@@ -56,7 +57,7 @@ namespace Tes.Runner.Docker
 
             var logs = await StartContainerWithStreamingOutput(createResponse);
 
-            streamLogReader.StartReadingFromLogStream(logs);
+            streamLogReader.StartReadingFromLogStreams(logs);
 
             var runResponse = await dockerClient.Containers.WaitContainerAsync(createResponse.ID);
 

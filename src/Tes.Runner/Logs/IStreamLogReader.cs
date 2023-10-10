@@ -3,10 +3,11 @@
 
 using Docker.DotNet;
 
-namespace Tes.Runner.Docker;
+namespace Tes.Runner.Logs;
 
 public interface IStreamLogReader
 {
-    void StartReadingFromLogStream(MultiplexedStream multiplexedStream);
+    void StartReadingFromLogStreams(MultiplexedStream multiplexedStream);
+    void StartReadingFromLogStreams(StreamReader stdOut, StreamReader stdErr);
     Task WaitUntilAsync(TimeSpan timeout);
 }

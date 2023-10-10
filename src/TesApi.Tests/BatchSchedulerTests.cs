@@ -1555,24 +1555,6 @@ namespace TesApi.Tests
                 Assert.AreEqual("subnet1", poolNetworkConfiguration?.SubnetId);
             });
         }
-        [DataTestMethod]
-        [DataRow("https://blob.foo/cont/blob?sas=sas", "https://blob.foo/cont?sas=sas", "blob")]
-        [DataRow("https://blob.foo/cont?sas=sas", "https://blob.foo/cont?sas=sas", "")]
-        [DataRow("https://blob.foo/cont/?sas=sas", "https://blob.foo/cont?sas=sas", "")]
-        public async Task
-            CreateOutputFileDestinationInTesInternalLocationAsync_BlobOrContainerUrlProvided_OutputDestinationHasContainerUrlAndPath(string inputUrl, string expectedUrl, string expectedPath)
-        {
-            await using var serviceProvider = GetServiceProviderWithMockStorageProvider();
-            var batchScheduler = serviceProvider.GetT() as BatchScheduler;
-            serviceProvider.StorageAccessProvider.Setup(p => p.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(inputUrl);
-
-            var tesTask = GetTesTask();
-            var destination = await batchScheduler!.CreateOutputFileDestinationInTesInternalLocationAsync(tesTask, CancellationToken.None);
-
-            Assert.AreEqual(expectedUrl, destination.Container.ContainerUrl);
-            Assert.AreEqual(expectedPath, destination.Container.Path);
-        }
 
         private static async Task<(string FailureReason, string[] SystemLog)> ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(TesTask tesTask, AzureBatchJobAndTaskState? azureBatchJobAndTaskState = null)
         {

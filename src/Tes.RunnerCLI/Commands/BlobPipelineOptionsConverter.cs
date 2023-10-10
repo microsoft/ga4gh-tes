@@ -16,10 +16,10 @@ namespace Tes.RunnerCLI.Commands
 
         public static string[] ToCommandArgs(string command, string fileOption, BlobPipelineOptions blobPipelineOptions)
         {
-            ArgumentException.ThrowIfNullOrEmpty(command);
             ArgumentNullException.ThrowIfNull(blobPipelineOptions);
+            ArgumentException.ThrowIfNullOrEmpty(command, nameof(command));
 
-            var args = new List<string>()
+            var args = new List<string>
             {
                 command,
                 $"--{BlockSizeOption} {blobPipelineOptions.BlockSizeBytes}",
