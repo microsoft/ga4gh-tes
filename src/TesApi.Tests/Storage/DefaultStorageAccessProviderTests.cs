@@ -82,7 +82,7 @@ namespace TesApi.Tests.Storage
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
-            Assert.AreEqual($"{StorageAccountBlobEndpoint}/{internalPathPrefix}/{blobName.TrimStart('/')}", ToHostWithAbsolutePathOnly(uri));
+            Assert.AreEqual($"{StorageAccountBlobEndpoint}/tes-internal/{internalPathPrefix}/{blobName.TrimStart('/')}", ToHostWithAbsolutePathOnly(uri));
         }
 
 
