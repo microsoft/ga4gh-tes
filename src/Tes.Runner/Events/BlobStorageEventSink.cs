@@ -33,7 +33,7 @@ namespace Tes.Runner.Events
                 var content = JsonSerializer.Serialize(eventMessage);
 
                 await blobBlockApiHttpUtils.ExecuteHttpRequestAsync(() =>
-                    BlobBlockApiHttpUtils.CreatePutBlobRequestAsync(ToEventUrl(storageUrl, eventMessage), content, ApiVersion, ToTags(eventMessage)));
+                    BlobBlockApiHttpUtils.CreatePutBlobRequestAsync(ToEventUrl(storageUrl, eventMessage), content, ApiVersion, ToEventTag(eventMessage)));
             }
             catch (Exception e)
             {
@@ -56,17 +56,6 @@ namespace Tes.Runner.Events
             blobBuilder.BlobName = blobName;
 
             return blobBuilder.ToUri().ToString();
-        }
-
-        private Dictionary<string, string> ToTags(EventMessage eventMessage)
-        {
-            return new Dictionary<string, string>
-            {
-                { "task-id", eventMessage.EntityId },
-                { "workflow-id", eventMessage.CorrelationId },
-                { "event-name", eventMessage.Name },
-                { "created", eventMessage.Created.ToString(Iso8601DateFormat) }
-            };
         }
 
         private static string ToBlobName(EventMessage eventMessage)

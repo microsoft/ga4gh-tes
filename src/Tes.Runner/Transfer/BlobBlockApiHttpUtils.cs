@@ -46,7 +46,7 @@ public class BlobBlockApiHttpUtils
     }
 
     public static HttpRequestMessage CreatePutBlobRequestAsync(string blobUrl, string content, string apiVersion,
-        Dictionary<string, string> tags)
+        IDictionary<string, string> tags)
     {
         var request = new HttpRequestMessage(HttpMethod.Put, blobUrl)
         {
@@ -58,7 +58,7 @@ public class BlobBlockApiHttpUtils
         return request;
     }
 
-    private static void AddPutBlobHeaders(HttpRequestMessage request, string apiVersion, Dictionary<string, string>? tags)
+    private static void AddPutBlobHeaders(HttpRequestMessage request, string apiVersion, IDictionary<string, string>? tags)
     {
         AddPutBlockHeaders(request, apiVersion);
 

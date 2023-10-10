@@ -417,16 +417,17 @@ namespace TesApi.Web
             var directory = builder.BlobName;
             builder.BlobName = string.Empty;
             BlobContainerClient container = new(builder.ToUri());
+            var fullTagsQuery = Enumerable.Empty<string>()
+                .Append(new($"&where=@container='{container.Name}'"))
+                .Concat(tagsQuery.Select(pair => $"\"{pair.Key}\"='{pair.Value}'"));
 
             if (!directory.EndsWith('/'))
             {
                 directory += "/";
             }
 
-            return container.FindBlobsByTagsAsync($"&where=@container='{container.Name}' AND {string.Join(" AND", tagsQuery.Select(pair => $"\"{pair.Key}\"='{pair.Value}'"))}", cancellationToken)
-                .Where(blob => blob.BlobName.StartsWith(directory));
+            return container.FindBlobsByTagsAsync(string.Join(" AND", fullTagsQuery), cancellationToken).Where(blob => blob.BlobName.StartsWith(directory));
         }
-
 
         /// <inheritdoc/>
         public async Task SetBlobTags(Uri blobAbsoluteUri, IDictionary<string, string> tags, CancellationToken cancellationToken)

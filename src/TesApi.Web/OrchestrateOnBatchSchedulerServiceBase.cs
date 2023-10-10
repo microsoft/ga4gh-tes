@@ -140,7 +140,7 @@ namespace TesApi.Web
 
             if (tesTasks.All(task => task is null))
             {
-                logger.LogDebug("OrchestrateTesTasksOnBatch({Poll}) skipped.", pollName);
+                // Quick return for no tasks
                 return;
             }
 
@@ -263,7 +263,7 @@ namespace TesApi.Web
 
             if (batchScheduler.NeedPoolFlush)
             {
-                var pools = (await repository.GetItemsAsync(task => TesState.INITIALIZINGEnum == task.State || TesState.RUNNINGEnum == task.State, stoppingToken)).Select(task => task.PoolId).Distinct();
+                var pools = (await repository.GetItemsAsync(task => task.State == TesState.INITIALIZINGEnum || task.State == TesState.RUNNINGEnum, stoppingToken)).Select(task => task.PoolId).Distinct();
                 await batchScheduler.FlushPoolsAsync(pools, stoppingToken);
             }
 

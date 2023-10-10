@@ -51,19 +51,25 @@ namespace Tes.Runner.Events
             await eventHandlerTask.WaitAsync(TimeSpan.FromSeconds(StopWaitDurationInSeconds));
         }
 
-        protected IDictionary<string, string> ToEventTag(EventMessage eventMessage)
+        protected static IDictionary<string, string> ToEventTag(EventMessage eventMessage)
         {
             return new Dictionary<string, string>
             {
-                { "event_name", eventMessage.Name },
-                { "event_id", eventMessage.Id },
-                { "entity_type", eventMessage.EntityType },
-                { "task_id", eventMessage.EntityId },
-                { "workflow_id", eventMessage.CorrelationId },
-                //format date to ISO 8601, which is URL friendly
+                { "task-id", eventMessage.EntityId },
+                { "workflow-id", eventMessage.CorrelationId },
+                { "event-name", eventMessage.Name },
                 { "created", eventMessage.Created.ToString(Iso8601DateFormat) }
+
+                //{ "event_name", eventMessage.Name },
+                //{ "event_id", eventMessage.Id },
+                //{ "entity_type", eventMessage.EntityType },
+                //{ "task_id", eventMessage.EntityId },
+                //{ "workflow_id", eventMessage.CorrelationId },
+                ////format date to ISO 8601, which is URL friendly
+                //{ "created", eventMessage.Created.ToString(Iso8601DateFormat) }
             };
         }
+
         private async Task EventHandlerAsync()
         {
             while (await events.Reader.WaitToReadAsync())

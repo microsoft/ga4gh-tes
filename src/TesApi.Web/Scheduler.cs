@@ -160,7 +160,7 @@ namespace TesApi.Web
             var messages = new ConcurrentBag<Tes.Runner.Events.EventMessage>();
 
             // Get and parse event blobs
-            await foreach (var message in batchScheduler.GetEventMessages(stoppingToken).WithCancellation(stoppingToken))
+            await foreach (var message in batchScheduler.GetEventMessages(stoppingToken, "taskCompleted").WithCancellation(stoppingToken))
             {
                 messageInfos.Add(message);
             }
@@ -183,7 +183,7 @@ namespace TesApi.Web
             // Helpers
             async ValueTask ProcessMessage(TesEventMessage messageInfo, CancellationToken cancellationToken)
             {
-                // TODO: remove the switch (keeping the message retrieval) when GetCompletedBatchState can process the rest
+                // TODO: remove the switch (keeping the message retrieval) when GetCompletedBatchState can process all events
                 switch (messageInfo.Event)
                 {
                     case "taskCompleted":

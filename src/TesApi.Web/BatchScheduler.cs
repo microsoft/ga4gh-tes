@@ -1376,29 +1376,27 @@ namespace TesApi.Web
         public async IAsyncEnumerable<TesEventMessage> GetEventMessages([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, string @event = null)
         {
             var path = "events";
+            var tags = new Dictionary<string, string>();
 
             if (!string.IsNullOrWhiteSpace(@event))
             {
                 path += "/" + @event;
+                tags.Add("event-name", @event);
             }
 
             Uri directoryUri = new(await storageAccessProvider.GetInternalTesBlobUrlAsync(path, cancellationToken));
             var accountSegments = StorageAccountUrlSegments.Create(directoryUri.ToString());
 
-            await foreach (var blobItem in azureProxy.ListBlobsWithTagsAsync(directoryUri, new Dictionary<string, string>() { { TesEventMessage.ProcessedTag, string.Empty } }, cancellationToken)
-                .WithCancellation(cancellationToken))
+            await foreach (var blobItem in azureProxy.ListBlobsWithTagsAsync(directoryUri, tags, cancellationToken).WithCancellation(cancellationToken))
             {
                 if (blobItem.Tags.ContainsKey(TesEventMessage.ProcessedTag))
                 {
                     continue;
                 }
 
-                UriBuilder builder = new(directoryUri)
-                {
-                    Path = $"{accountSegments.ContainerName}/{blobItem.BlobName}"
-                };
+                UriBuilder builder = new(directoryUri) { Path = $"{accountSegments.ContainerName}/{blobItem.BlobName}" };
 
-                var pathUnderDirectory = builder.Path[accountSegments.BlobName.Length..];
+                var pathUnderDirectory = builder.Path[(builder.Path.LastIndexOf("/events/") + 8)..];
                 var eventName = pathUnderDirectory[..pathUnderDirectory.IndexOf('/')];
 
                 yield return batchTesEventMessageFactory.CreateNew(builder.Uri, blobItem.Tags, eventName);
