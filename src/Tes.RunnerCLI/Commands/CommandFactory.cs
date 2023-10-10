@@ -61,7 +61,7 @@ namespace Tes.RunnerCLI.Commands
 
         internal static Command CreateUploadCommand(RootCommand rootCommand)
         {
-            var cmd = CreateCommand(UploadCommandName, "Uploads output files to blob storage");
+            var cmd = new Command(UploadCommandName, "Uploads output files to blob storage");
             rootCommand.Add(cmd);
 
             foreach (var option in TransferOptions)
@@ -81,7 +81,7 @@ namespace Tes.RunnerCLI.Commands
         }
         internal static Command CreateExecutorCommand(RootCommand rootCommand)
         {
-            var cmd = CreateCommand(ExecutorCommandName, "Executes the TES Task commands on the container");
+            var cmd = new Command(ExecutorCommandName, "Executes the TES Task commands on the container");
             rootCommand.Add(cmd);
 
             cmd.AddOption(CreateOption<Uri>(CommandFactory.DockerUriOption, "local docker engine endpoint", "-u", defaultValue: DefaultDockerUri));
@@ -95,7 +95,7 @@ namespace Tes.RunnerCLI.Commands
 
         internal static Command CreateDownloadCommand(RootCommand rootCommand)
         {
-            var cmd = CreateCommand(DownloadCommandName, "Downloads input files from a HTTP source");
+            var cmd = new Command(DownloadCommandName, "Downloads input files from a HTTP source");
             rootCommand.Add(cmd);
 
             foreach (var option in TransferOptions)
@@ -110,19 +110,6 @@ namespace Tes.RunnerCLI.Commands
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.ReadersOption),
                 GetOptionByName<int>(cmd, BlobPipelineOptionsConverter.BufferCapacityOption),
                 GetOptionByName<string>(cmd, BlobPipelineOptionsConverter.ApiVersionOption));
-
-            return cmd;
-        }
-
-        //internal static Command CreateCommand(string optName, string optDescription, params Option[] options)
-        internal static Command CreateCommand(string optName, string optDescription)
-        {
-            var cmd = new Command(optName, optDescription);
-
-            // foreach (var option in options)
-            // {
-            //     cmd.AddOption(option);
-            // }
 
             return cmd;
         }

@@ -3,7 +3,6 @@
 
 using Azure.Storage.Blobs;
 using Azure.Storage.Sas;
-using Microsoft.Azure.Management.CosmosDB.Fluent.Models;
 using Tes.Runner.Authentication;
 using Tes.Runner.Models;
 

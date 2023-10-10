@@ -18,8 +18,8 @@ namespace Tes.Runner.Logs
         private readonly string stdErrLogNamePrefix;
         private readonly ILogger logger = PipelineLoggerFactory.Create<AppendBlobLogPublisher>();
 
-        private int currentStdOutBLockCount;
-        private int currentStdErrBLockCount;
+        private int currentStdOutBlockCount;
+        private int currentStdErrBlockCount;
 
         private string currentStdOutBlobName = string.Empty;
         private string currentStdErrBlobName = string.Empty;
@@ -50,10 +50,10 @@ namespace Tes.Runner.Logs
 
         public override async Task AppendStandardOutputAsync(string data)
         {
-            currentStdOutBlobName = await CreateOrAppendLogDataAsync(data, currentStdOutBLockCount, currentStdOutBlobName, stdOutLogNamePrefix);
+            currentStdOutBlobName = await CreateOrAppendLogDataAsync(data, currentStdOutBlockCount, currentStdOutBlobName, stdOutLogNamePrefix);
 
             //increment block count state
-            currentStdOutBLockCount++;
+            currentStdOutBlockCount++;
         }
 
         private async Task<string> CreateOrAppendLogDataAsync(string data, int currentBlockCount, string currentBlobLogName, string baseLogName)
@@ -103,10 +103,10 @@ namespace Tes.Runner.Logs
 
         public override async Task AppendStandardErrAsync(string data)
         {
-            currentStdErrBlobName = await CreateOrAppendLogDataAsync(data, currentStdErrBLockCount, currentStdErrBlobName, stdErrLogNamePrefix);
+            currentStdErrBlobName = await CreateOrAppendLogDataAsync(data, currentStdErrBlockCount, currentStdErrBlobName, stdErrLogNamePrefix);
 
             //increment block count state
-            currentStdErrBLockCount++;
+            currentStdErrBlockCount++;
         }
 
         public override void OnComplete(Exception? err)

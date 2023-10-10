@@ -87,7 +87,7 @@ namespace TesApi.Web.Runner
                 builder.WithId(task.Id)
                     .WithResourceIdManagedIdentity(nodeTaskConversionOptions.NodeManagedIdentityResourceId)
                     .WithWorkflowId(task.WorkflowId)
-                    .WithContainerCommands(executor.Command.Select(c => c).ToList())
+                    .WithContainerCommands(executor.Command)
                     .WithContainerImage(executor.Image)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
                     .WithLogPublisher(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))

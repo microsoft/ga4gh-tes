@@ -11,7 +11,7 @@ namespace Tes.RunnerCLI.Commands
 {
     public class ProcessLauncher
     {
-        const int LogWaitTimeout = 30;
+        const int LogWaitTimeoutInSeconds = 30;
 
         private readonly IStreamLogReader logReader;
         private readonly ILogger logger = PipelineLoggerFactory.Create<ProcessLauncher>();
@@ -49,7 +49,7 @@ namespace Tes.RunnerCLI.Commands
         {
             await process.WaitForExitAsync();
 
-            await logReader.WaitUntilAsync(timeout: TimeSpan.FromSeconds(LogWaitTimeout));
+            await logReader.WaitUntilAsync(timeout: TimeSpan.FromSeconds(LogWaitTimeoutInSeconds));
 
             logger.LogInformation($"Process exited. Arguments: {process.StartInfo.Arguments}");
         }

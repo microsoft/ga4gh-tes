@@ -66,7 +66,7 @@ namespace Tes.Runner.Docker
         {
             try
             {
-                var buffer = new byte[16 * KiB]; //8K at the time
+                var buffer = new byte[16 * KiB]; //16K at the time
                 using (multiplexedStream)
                 {
                     var result = await multiplexedStream.ReadOutputAsync(buffer, 0, buffer.Length, CancellationToken.None);
