@@ -736,13 +736,6 @@ namespace TesApi.Web
             {
                 Constraints = new(maxWallClockTime: poolLifetime, retentionTime: TimeSpan.Zero, maxTaskRetryCount: 0),
                 UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
-                OutputFiles = new List<OutputFile>
-                {
-                    new OutputFile(
-                        "../*.txt",
-                        await CreateOutputFileDestinationInTesInternalLocationAsync(task, cancellationToken),
-                        new OutputFileUploadOptions(OutputFileUploadCondition.TaskCompletion)),
-                }
             };
 
             return cloudTask;
@@ -873,29 +866,6 @@ namespace TesApi.Web
             {
                 throw new TesException("InvalidInputFilePath", "Directory input is not supported.");
             }
-        }
-
-        /// <summary>
-        /// Creates a OutputFileDestination in the TES internal blob storage location
-        /// </summary>
-        /// <param name="task"></param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task<OutputFileDestination> CreateOutputFileDestinationInTesInternalLocationAsync(TesTask task, CancellationToken cancellationToken)
-        {
-            var internalUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobPath: string.Empty,
-                cancellationToken);
-            var storageSegments = StorageAccountUrlSegments.Create(internalUrl);
-
-            var containerUrl = $"{storageSegments.BlobEndpoint}/{storageSegments.ContainerName}?{storageSegments.SasToken}";
-            var path = string.Empty;
-
-            if (!string.IsNullOrEmpty(storageSegments.BlobName))
-            {
-                path = storageSegments.BlobName;
-            }
-
-            return new OutputFileDestination(new OutputFileBlobContainerDestination(containerUrl, path));
         }
 
         /// <summary>

@@ -16,7 +16,7 @@ namespace Tes.Runner.Events
         private const string ApiVersion = "2023-05-03";
         private readonly Uri storageUrl;
         private readonly ILogger logger = PipelineLoggerFactory.Create<BlobStorageEventSink>();
-        private readonly BlobBlockApiHttpUtils blobBlockApiHttpUtils = new BlobBlockApiHttpUtils();
+        private readonly BlobApiHttpUtils blobApiHttpUtils = new BlobApiHttpUtils();
 
 
         public BlobStorageEventSink(Uri storageUrl)
@@ -32,8 +32,8 @@ namespace Tes.Runner.Events
             {
                 var content = JsonSerializer.Serialize(eventMessage);
 
-                await blobBlockApiHttpUtils.ExecuteHttpRequestAsync(() =>
-                    BlobBlockApiHttpUtils.CreatePutBlobRequestAsync(ToEventUrl(storageUrl, eventMessage), content, ApiVersion, ToEventTag(eventMessage)));
+                await blobApiHttpUtils.ExecuteHttpRequestAsync(() =>
+                    BlobApiHttpUtils.CreatePutBlobRequestAsync(ToEventUrl(storageUrl, eventMessage), content, ApiVersion, ToEventTag(eventMessage)));
             }
             catch (Exception e)
             {
@@ -42,7 +42,7 @@ namespace Tes.Runner.Events
             }
         }
 
-        private string ToEventUrl(Uri uri, EventMessage message)
+        private Uri ToEventUrl(Uri uri, EventMessage message)
         {
             var blobBuilder = new BlobUriBuilder(uri);
 
@@ -55,7 +55,7 @@ namespace Tes.Runner.Events
 
             blobBuilder.BlobName = blobName;
 
-            return blobBuilder.ToUri().ToString();
+            return blobBuilder.ToUri();
         }
 
         private static string ToBlobName(EventMessage eventMessage)

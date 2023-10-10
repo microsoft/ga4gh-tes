@@ -58,6 +58,9 @@ namespace TesApi.Tests.Runner
             storageAccessProviderMock.Setup(x =>
                     x.GetInternalTesBlobUrlWithoutSasToken(It.IsAny<string>()))
                 .Returns(InternalBlobUrl);
+            storageAccessProviderMock.Setup(x =>
+                    x.GetInternalTesTaskBlobUrlWithoutSasToken(It.IsAny<TesTask>(), It.IsAny<string>()))
+                .Returns(InternalBlobUrl);
 
 
             taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), storageAccessProviderMock.Object, Options.Create(storageOptions), new NullLogger<TaskToNodeTaskConverter>());

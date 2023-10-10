@@ -60,7 +60,7 @@ public class BlobDownloader : BlobOperationPipeline
     /// <returns>Part's length in bytes</returns>
     public override async ValueTask<int> ExecuteReadAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
     {
-        return await BlobBlockApiHttpUtils.ExecuteHttpRequestAndReadBodyResponseAsync(buffer, () => BlobBlockApiHttpUtils.CreateReadByRangeHttpRequest(buffer), cancellationToken);
+        return await BlobApiHttpUtils.ExecuteHttpRequestAndReadBodyResponseAsync(buffer, () => BlobApiHttpUtils.CreateReadByRangeHttpRequest(buffer), cancellationToken);
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ public class BlobDownloader : BlobOperationPipeline
 
         try
         {
-            response = await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => new HttpRequestMessage(HttpMethod.Head, new Uri(source)));
+            response = await BlobApiHttpUtils.ExecuteHttpRequestAsync(() => new HttpRequestMessage(HttpMethod.Head, new Uri(source)));
 
             return response.Content.Headers.ContentLength ?? 0;
         }

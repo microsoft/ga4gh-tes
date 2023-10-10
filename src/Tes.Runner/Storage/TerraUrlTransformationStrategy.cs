@@ -120,6 +120,17 @@ namespace Tes.Runner.Storage
             {
                 permissions += "d";
             }
+
+            if (blobSasPermissions.HasFlag(BlobSasPermissions.Tag))
+            {
+                permissions += "t";
+            }
+
+            if (blobSasPermissions.HasFlag(BlobSasPermissions.List))
+            {
+                permissions += "l";
+            }
+
             return permissions;
         }
 

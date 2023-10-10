@@ -79,7 +79,7 @@ namespace Tes.Runner.Docker
 
             var volBinding = $"{expandedMountParentDirectory.TrimEnd('/')}/{targetDir}:/{targetDir}";
 
-            logger.LogInformation($"Volume binding for {expandedPath} is {volBinding}");
+            logger.LogDebug($"Volume binding for {expandedPath} is {volBinding}");
 
             return volBinding;
         }
