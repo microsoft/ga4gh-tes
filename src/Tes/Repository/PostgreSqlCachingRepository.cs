@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -23,7 +24,7 @@ namespace Tes.Repository
             .Handle<Npgsql.NpgsqlException>(e => e.IsTransient)
             .WaitAndRetryAsync(10, i => TimeSpan.FromSeconds(Math.Pow(2, i)));
 
-        private readonly BlockingCollection<(T, WriteAction, TaskCompletionSource<T>)> _itemsToWrite = new BlockingCollection<(T, WriteAction, TaskCompletionSource<T>)>(_batchSize);
+        private readonly Channel<(T, WriteAction, TaskCompletionSource<T>)> _itemsToWrite = Channel.CreateUnbounded<(T, WriteAction, TaskCompletionSource<T>)>();
         private readonly ConcurrentDictionary<T, object> _updatingItems = new(); // Collection of all pending items to be written.
         private readonly CancellationTokenSource _writerWorkerCancellationTokenSource = new();
         private readonly Task _writerWorkerTask;
@@ -133,7 +134,7 @@ namespace Tes.Repository
                 }
             }
 
-            _itemsToWrite.Add((item, action, source), cancellationToken);
+            _itemsToWrite.Writer.TryWrite((item, action, source));
             return result;
 
             Task<T> RemoveUpdatingItem(Task<T> task)
@@ -155,16 +156,14 @@ namespace Tes.Repository
         {
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
-            while (!cancellationToken.IsCancellationRequested)
+            await foreach (var itemToWrite in _itemsToWrite.Reader.ReadAllAsync(cancellationToken))
             {
-                // Block until the first item is available.
-                var itemToWrite = _itemsToWrite.Take(cancellationToken);
                 list.Add(itemToWrite);
 
                 // Get remaining items up to _batchSize or until no more items are immediately available.
-                while (list.Count < _batchSize && _itemsToWrite.TryTake(out itemToWrite))
+                while (list.Count < _batchSize && _itemsToWrite.Reader.TryRead(out var additionalItem))
                 {
-                    list.Add(itemToWrite);
+                    list.Add(additionalItem);
                 }
 
                 await WriteItemsAsync(list, cancellationToken);
