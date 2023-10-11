@@ -172,15 +172,6 @@ namespace Tes.Repository
             }
 
             // If cancellation is requested, do not write any more items
-            //while (_itemsToWrite.TryTake(out var remainingItem))
-            //{
-            //    list.Add(remainingItem);
-            //}
-
-            //if (list.Any())
-            //{
-            //    await WriteItemsAsync(list, cancellationToken);
-            //}
         }
 
         private async ValueTask WriteItemsAsync(IList<(T DbItem, WriteAction Action, TaskCompletionSource<T> TaskSource)> dbItems, CancellationToken cancellationToken)
