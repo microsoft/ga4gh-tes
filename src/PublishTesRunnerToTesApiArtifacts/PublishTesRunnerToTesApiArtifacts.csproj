@@ -95,21 +95,21 @@
     </ConvertNoneToPublishDir>
     <ItemGroup>
       <IntermediateAssembly Remove="@(IntermediateAssembly)" />
-        <__tRunnerPath Include="@(__PublishDirs)" Condition="Exists('%(__PublishDirs.Identity)/tRunner') and '%(__PublishDirs.TargetPath)' == 'tRunner'" />
+        <__tRunnerPath Include="@(__PublishDirs)" Condition="Exists('%(__PublishDirs.Identity)/tes-runner') and '%(__PublishDirs.TargetPath)' == 'tes-runner'" />
         <__tRunnerFiles Include="%(__tRunnerPath.FullPath)\**\*" />
         <__tesapiScriptsPath Include="@(__PublishDirs->'%(FullPath)\scripts')"  Condition="Exists('%(__PublishDirs.Identity)/tesapi.dll') and '%(__PublishDirs.TargetPath)' == 'tesapi.dll'" />
     </ItemGroup>
     <Copy SourceFiles="@(__tRunnerFiles)"
           DestinationFolder="@(__tesapiScriptsPath)"
           SkipUnchangedFiles="false"
-          Condition=" '%(__tRunnerFiles.Filename)%(__tRunnerFiles.Extension)' == 'tRunner' "/>
-    <GenerateMD5 InputFile="@(__tesapiScriptsPath->'%(FullPath)\tRunner')">
+          Condition=" '%(__tRunnerFiles.Filename)%(__tRunnerFiles.Extension)' == 'tes-runner' "/>
+    <GenerateMD5 InputFile="@(__tesapiScriptsPath->'%(FullPath)\tes-runner')">
       <Output TaskParameter="MD5Hash" PropertyName="__TRunnerMD5Hash" />
     </GenerateMD5>
-    <WriteLinesToFile Lines="$(__TRunnerMD5Hash)" File="@(__tesapiScriptsPath->'%(FullPath)\TRunnerMD5Hash.txt')" WriteOnlyWhenDifferent="true" Overwrite="true" />
+    <WriteLinesToFile Lines="$(__TRunnerMD5Hash)" File="@(__tesapiScriptsPath->'%(FullPath)\tes-runnerMD5hash.txt')" WriteOnlyWhenDifferent="true" Overwrite="true" />
     <ItemGroup>
-      <FileWrites Include="@(__tesapiScriptsPath->'%(FullPath)\TRunnerMD5Hash.txt')" />
-      <FileWrites Include="@(__tesapiScriptsPath->'%(FullPath)\tRunner')" />
+      <FileWrites Include="@(__tesapiScriptsPath->'%(FullPath)\tes-runnerMD5hash.txt')" />
+      <FileWrites Include="@(__tesapiScriptsPath->'%(FullPath)\tes-runner')" />
     </ItemGroup>
   </Target>
 
