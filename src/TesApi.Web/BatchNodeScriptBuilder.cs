@@ -23,11 +23,11 @@ namespace TesApi.Web
         /// <summary>
         /// Name of the TES runner binary file
         /// </summary>
-        public const string NodeTaskRunnerFilename = "tRunner";
+        public const string NodeTaskRunnerFilename = "tes-runner";
         /// <summary>
         /// Name of the TES runner task definition file
         /// </summary>
-        public const string NodeRunnerTaskDefinitionFilename = "TesTask.json";
+        public const string NodeRunnerTaskDefinitionFilename = "runner-task.json";
 
         private readonly StringBuilder batchScript;
         private bool useMetricsFile;

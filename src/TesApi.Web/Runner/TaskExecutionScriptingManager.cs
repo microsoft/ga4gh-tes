@@ -17,8 +17,8 @@ namespace TesApi.Web.Runner
     /// </summary>
     public class TaskExecutionScriptingManager
     {
-        private const string NodeTaskFilename = "TesTask.json";
-        private const string NodeTaskRunnerFilename = "tRunner";
+        private const string NodeTaskFilename = "runner-task.json";
+        private const string NodeTaskRunnerFilename = "tes-runner";
         private const string BatchScriptFileName = "batch_script";
 
         private readonly IStorageAccessProvider storageAccessProvider;
@@ -84,7 +84,7 @@ namespace TesApi.Web.Runner
                         DefaultValueHandling = DefaultValueHandling.Ignore
                     });
 
-                await UploadContentAsBlobToInternalTesLocationAsync(tesTask, severTesTaskContent, "ServerTesTask.json",
+                await UploadContentAsBlobToInternalTesLocationAsync(tesTask, severTesTaskContent, "server-tes-task.json",
                     cancellationToken);
             }
             catch (Exception e)
