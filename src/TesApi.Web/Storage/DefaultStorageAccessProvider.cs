@@ -104,6 +104,7 @@ namespace TesApi.Web.Storage
             {
                 path = $"/{defaultStorageAccountName}{path}";
             }
+
             //TODO: refactor this to throw an exception instead of logging and error and returning null.
             if (!StorageAccountUrlSegments.TryCreate(path, out var pathSegments))
             {
@@ -119,7 +120,7 @@ namespace TesApi.Web.Storage
             {
                 try
                 {
-                    var result = await AddSasTokenAsync(pathSegments, sasTokenDuration, getContainerSas, false, false, true, cancellationToken, path);
+                    var result = await AddSasTokenAsync(pathSegments, sasTokenDuration, getContainerSas, needsTags: false, needsFind: false, needsWrite: true, cancellationToken, path);
                     return result.ToUriString();
                 }
                 catch

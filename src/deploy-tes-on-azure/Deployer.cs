@@ -367,6 +367,8 @@ namespace TesDeployer
                         postgreSqlFlexServer = await ValidateAndGetExistingPostgresqlServerAsync();
                         var keyVault = await ValidateAndGetExistingKeyVaultAsync();
 
+                        ConsoleEx.WriteLine($"Deploying TES on Azure version {Utility.DelimitedTextToDictionary(Utility.GetFileContent("scripts", "env-00-tes-version.txt")).GetValueOrDefault("TesOnAzureVersion")} into resource group '{resourceGroup.Name}'...");
+
                         // Configuration preferences not currently settable by user.
                         if (string.IsNullOrWhiteSpace(configuration.PostgreSqlServerName) && configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault())
                         {
