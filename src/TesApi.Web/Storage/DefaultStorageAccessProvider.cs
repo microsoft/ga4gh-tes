@@ -206,7 +206,7 @@ namespace TesApi.Web.Storage
                     .internal_path_prefix) == true)
             {
                 var internalPath = $"{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}{normalizedBlobPath}";
-                
+
                 if (storageOptions.ExecutionsContainerName is not null &&
                     !internalPath.StartsWith(storageOptions.ExecutionsContainerName, StringComparison.OrdinalIgnoreCase))
                 {
