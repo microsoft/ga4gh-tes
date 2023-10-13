@@ -246,5 +246,12 @@ namespace TesApi.Web.Storage
             return result is not null;
         }
 
+        /// <summary>
+        /// True if the path is the cromwell executions folder
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        private bool IsKnownExecutionFilePath(string path)
+            => path.StartsWith(storageOptions.ExecutionsContainerName, StringComparison.OrdinalIgnoreCase);
     }
 }
