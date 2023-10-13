@@ -11,8 +11,8 @@ namespace Tes.Repository
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.EntityFrameworkCore;
+    using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Logging;
-    using Microsoft.Extensions.Options;
     using Polly;
     using Tes.Models;
     using Tes.Utilities;
@@ -23,32 +23,22 @@ namespace Tes.Repository
     /// <typeparam name="TesTask"></typeparam>
     public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem>, IRepository<TesTask>
     {
+        private readonly IServiceScopeFactory _scopeFactory = null!;
+
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
         /// <param name="options"></param>
         /// <param name="logger"></param>
         /// <param name="cache"></param>
-        public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTaskDatabaseItem> cache = null)
+        public TesTaskPostgreSqlRepository(ILogger<TesTaskPostgreSqlRepository> logger = default, IServiceScopeFactory scopeFactory = default, ICache<TesTaskDatabaseItem> cache = null)
             : base(logger, cache)
         {
-            var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
-            CreateDbContext = () => { return new TesDbContext(connectionString); };
-            using var dbContext = CreateDbContext();
+            _scopeFactory = scopeFactory;
+            using var scope = _scopeFactory.CreateScope();
+            using var dbContext = scope.ServiceProvider.GetRequiredService<TesDbContext>();
             dbContext.Database.MigrateAsync().Wait();
             WarmCacheAsync(CancellationToken.None).Wait();
-        }
-
-        /// <summary>
-        /// Constructor for testing to enable mocking DbContext 
-        /// </summary>
-        /// <param name="createDbContext">A delegate that creates a TesTaskPostgreSqlRepository context</param>
-        public TesTaskPostgreSqlRepository(Func<TesDbContext> createDbContext)
-            : base()
-        {
-            CreateDbContext = createDbContext;
-            using var dbContext = createDbContext();
-            dbContext.Database.MigrateAsync().Wait();
         }
 
         private async Task WarmCacheAsync(CancellationToken cancellationToken)
@@ -224,7 +214,8 @@ namespace Tes.Repository
 
             if (!_cache?.TryGetValue(id, out item) ?? true)
             {
-                using var dbContext = CreateDbContext();
+                using var scope = _scopeFactory.CreateScope();
+                using var dbContext = scope.ServiceProvider.GetRequiredService<TesDbContext>();
 
                 // Search for Id within the JSON
                 item = await _asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, ct), cancellationToken);
@@ -252,7 +243,8 @@ namespace Tes.Repository
             //orderBy = pagination is null ? orderBy : q => q.OrderBy(t => t.Json.CreationTime).ThenBy(t => t.Json.Id);
             orderBy = pagination is null ? orderBy : q => q.OrderBy(t => t.Json.Id);
 
-            using var dbContext = CreateDbContext();
+            using var scope = _scopeFactory.CreateScope();
+            using var dbContext = scope.ServiceProvider.GetRequiredService<TesDbContext>();
             return (await GetItemsAsync(dbContext.TesTasks, WhereTesTask(predicate), cancellationToken, orderBy, pagination)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
         }
 

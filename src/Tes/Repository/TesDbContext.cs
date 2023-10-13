@@ -1,40 +1,40 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
+using Azure.Core;
+using Azure.Identity;
 using Microsoft.EntityFrameworkCore;
 using Tes.Models;
+using Tes.Utilities;
 
 namespace Tes.Repository
 {
     public class TesDbContext : DbContext
     {
-        public const string TesTasksPostgresTableName = "testasks";
+        private const int maxBatchSize = 1000;
+        private readonly PostgresConnectionStringUtility connectionStringUtility = null!;
 
         public TesDbContext()
         {
             // Default constructor, which is required to run the EF migrations tool,
             // "dotnet ef migrations add InitialCreate"
+            // DI will NOT use this constructor
         }
 
-        public TesDbContext(string connectionString)
+        public TesDbContext(PostgresConnectionStringUtility connectionStringUtility)
         {
-            ArgumentException.ThrowIfNullOrEmpty(connectionString, nameof(connectionString));
-            ConnectionString = connectionString;
+            this.connectionStringUtility = connectionStringUtility;
         }
 
-        public string ConnectionString { get; set; }
         public DbSet<TesTaskDatabaseItem> TesTasks { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            if (!optionsBuilder.IsConfigured)
-            {
-                // use PostgreSQL
-                optionsBuilder
-                    .UseNpgsql(ConnectionString, options => options.MaxBatchSize(1000))
-                    .UseLowerCaseNamingConvention();
-            }
+            string connectionString = this.connectionStringUtility.GetConnectionString().Result;
+
+            optionsBuilder
+                .UseNpgsql(connectionString, options => options.MaxBatchSize(maxBatchSize))
+                .UseLowerCaseNamingConvention();
         }
     }
 }

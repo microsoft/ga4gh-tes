@@ -27,5 +27,6 @@ namespace Tes.Models
         public string DatabaseName { get; set; } = "tes_db";
         public string DatabaseUserLogin { get; set; }
         public string DatabaseUserPassword { get; set; }
+        public bool UseManagedIdentity { get; set; }
     }
 }

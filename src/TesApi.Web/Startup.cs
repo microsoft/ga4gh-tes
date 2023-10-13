@@ -20,6 +20,7 @@ using Tes.ApiClients;
 using Tes.ApiClients.Options;
 using Tes.Models;
 using Tes.Repository;
+using Tes.Utilities;
 using TesApi.Filters;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
@@ -77,6 +78,10 @@ namespace TesApi.Web
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
 
                     .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
+
+                    .AddSingleton<TokenCredential, DefaultAzureCredential>()
+                    .AddSingleton<PostgresConnectionStringUtility>()
+                    .AddDbContext<TesDbContext>(ServiceLifetime.Scoped)
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
@@ -108,7 +113,6 @@ namespace TesApi.Web
                     .AddSingleton<AzureManagementClientsFactory>()
                     .AddSingleton<ConfigurationUtils>()
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
-                    .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
                     .AddSingleton<TaskToNodeTaskConverter>()
                     .AddSingleton<TaskExecutionScriptingManager>()
                     .AddTransient<BatchNodeScriptBuilder>()

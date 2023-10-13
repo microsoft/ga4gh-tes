@@ -9,6 +9,7 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Polly;
 
@@ -16,6 +17,7 @@ namespace Tes.Repository
 {
     public abstract class PostgreSqlCachingRepository<T> : IDisposable where T : class
     {
+        private readonly IServiceScopeFactory _scopeFactory = null!;
         private readonly TimeSpan _writerWaitTime = TimeSpan.FromMilliseconds(50);
         private readonly int _batchSize = 1000;
         private static readonly TimeSpan defaultCompletedTaskCacheExpiration = TimeSpan.FromDays(1);
@@ -30,17 +32,16 @@ namespace Tes.Repository
         private readonly Task _writerWorkerTask;
 
         protected enum WriteAction { Add, Update, Delete }
-
-        protected Func<TesDbContext> CreateDbContext { get; init; }
         protected readonly ICache<T> _cache;
         protected readonly ILogger _logger;
 
         private bool _disposedValue;
 
-        protected PostgreSqlCachingRepository(ILogger logger = default, ICache<T> cache = default)
+        protected PostgreSqlCachingRepository(ILogger logger = default, ICache<T> cache = default, IServiceScopeFactory scopeFactory = default)
         {
             _logger = logger;
             _cache = cache;
+            _scopeFactory = scopeFactory;
 
             // The only "normal" exit for _writerWorkerTask is "cancelled". Anything else should force the process to exit because it means that this repository will no longer write to the database!
             _writerWorkerTask = Task.Run(() => WriterWorkerAsync(_writerWorkerCancellationTokenSource.Token))
@@ -187,7 +188,8 @@ namespace Tes.Repository
             if (dbItems.Count == 0) { return; }
 
             cancellationToken.ThrowIfCancellationRequested();
-            using var dbContext = CreateDbContext();
+            using var scope = _scopeFactory.CreateScope();
+            using var dbContext = scope.ServiceProvider.GetRequiredService<TesDbContext>();
 
             // Manually set entity state to avoid potential NPG PostgreSql bug
             dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
