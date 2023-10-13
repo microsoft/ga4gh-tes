@@ -37,7 +37,7 @@ namespace Tes.Repository
 
         private bool _disposedValue;
 
-        protected PostgreSqlCachingRepository(ILogger logger = default, ICache<T> cache = default)
+        protected PostgreSqlCachingRepository(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger logger = default, ICache<T> cache = default)
         {
             _logger = logger;
             _cache = cache;
@@ -57,7 +57,7 @@ namespace Tes.Repository
                     }
 
                     await Task.Delay(50); // Give the logger time to flush.
-                    throw new System.Diagnostics.UnreachableException("Repository WriterWorkerAsync unexpectedly ended."); // Force the process to exit via this being an unhandled exception.
+                    hostApplicationLifetime?.StopApplication();
                 },
                 TaskContinuationOptions.NotOnCanceled);
         }

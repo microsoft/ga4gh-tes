@@ -26,11 +26,12 @@ namespace TesApi.Web
         /// <summary>
         /// Default constructor
         /// </summary>
+        /// <param name="hostApplicationLifetime">Used for requesting termination of the current application during initialization.</param>
         /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler">The batch scheduler implementation</param>
         /// <param name="logger">The logger instance</param>
-        public Scheduler(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
-            : base(repository, batchScheduler, logger) { }
+        public Scheduler(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
+            : base(hostApplicationLifetime, repository, batchScheduler, logger) { }
 
 
         /// <summary>

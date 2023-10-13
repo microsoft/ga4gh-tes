@@ -29,12 +29,13 @@ namespace TesApi.Web
         /// <summary>
         /// Default constructor
         /// </summary>
+        /// <param name="hostApplicationLifetime">Used for requesting termination of the current application during initialization.</param>
         /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler"></param>
         /// <param name="logger"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public BatchPoolService(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<BatchPoolService> logger)
-            : base(repository, batchScheduler, logger) { }
+        public BatchPoolService(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<BatchPoolService> logger)
+            : base(hostApplicationLifetime, repository, batchScheduler, logger) { }
 
         /// <inheritdoc />
         protected override void ExecuteSetup(CancellationToken stoppingToken)

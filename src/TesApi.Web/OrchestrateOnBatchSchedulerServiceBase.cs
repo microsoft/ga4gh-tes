@@ -21,6 +21,7 @@ namespace TesApi.Web
     /// </summary>
     internal abstract class OrchestrateOnBatchSchedulerServiceBase : BackgroundService
     {
+        private readonly IHostApplicationLifetime hostApplicationLifetime;
         protected readonly IRepository<TesTask> repository;
         protected readonly IBatchScheduler batchScheduler;
         protected readonly ILogger logger;
@@ -28,11 +29,13 @@ namespace TesApi.Web
         /// <summary>
         /// Default constructor
         /// </summary>
+        /// <param name="hostApplicationLifetime">Used for requesting termination of the current application. Pass null to allow this service to stop during initialization without taking down the application.</param>
         /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler">The batch scheduler implementation</param>
         /// <param name="logger">The logger instance</param>
-        protected OrchestrateOnBatchSchedulerServiceBase(IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger logger)
+        protected OrchestrateOnBatchSchedulerServiceBase(IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger logger)
         {
+            this.hostApplicationLifetime = hostApplicationLifetime;
             this.repository = repository;
             this.batchScheduler = batchScheduler;
             this.logger = logger;
@@ -60,9 +63,17 @@ namespace TesApi.Web
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2254:Template should be a static expression", Justification = "Used to provide service's name in log message.")]
         protected sealed override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            // The order of these two calls is critical.
-            ExecuteSetup(stoppingToken);
-            await ExecuteSetupAsync(stoppingToken);
+            try
+            {
+                // The order of these two calls is critical.
+                ExecuteSetup(stoppingToken);
+                await ExecuteSetupAsync(stoppingToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException oce || oce.CancellationToken == CancellationToken.None)
+            {
+                logger.LogCritical(ex, "Service {ServiceName} was unable to initialize due to '{Message}'.", GetType().Name, ex.Message);
+                hostApplicationLifetime?.StopApplication();
+            }
 
             logger.LogInformation(MarkLogMessage("started."));
 
