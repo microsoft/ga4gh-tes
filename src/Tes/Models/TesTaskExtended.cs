@@ -21,6 +21,8 @@ namespace Tes.Models
             TesState.PAUSEDEnum,
             TesState.INITIALIZINGEnum};
 
+        public TesUser User { get; set; }     
+
         /// <summary>
         /// Number of retries attempted
         /// </summary>

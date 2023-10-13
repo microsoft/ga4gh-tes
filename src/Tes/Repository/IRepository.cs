@@ -28,7 +28,7 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="id">The ID of the item to delete</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        Task DeleteItemAsync(string id, CancellationToken cancellationToken);
+        Task InternalDeleteItemAsync(string id, CancellationToken cancellationToken);
 
         /// <summary>
         /// Get an item by ID
@@ -37,7 +37,16 @@ namespace Tes.Repository
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="onSuccess">The action to run when the item with the ID is found</param>
         /// <returns>The item instance</returns>
-        Task<bool> TryGetItemAsync(string id, CancellationToken cancellationToken, Action<T> onSuccess = null);
+        Task<bool> TryGetItemAsync(string userId, string id, CancellationToken cancellationToken, Action<T> onSuccess = null);
+
+        /// <summary>
+        /// Get an item by ID
+        /// </summary>
+        /// <param name="id">The ID of the item to retrieve</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="onSuccess">The action to run when the item with the ID is found</param>
+        /// <returns>The item instance</returns>
+        Task<bool> InternalTryGetItemAsync(string id, CancellationToken cancellationToken, Action<T> onSuccess = null);
 
         /// <summary>
         /// Reads a collection of items from the repository
@@ -45,7 +54,15 @@ namespace Tes.Repository
         /// <param name="predicate">The 'where' clause</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The collection of retrieved items</returns>
-        Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken);
+        Task<IEnumerable<T>> InternalGetItemsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Reads a collection of items from the repository
+        /// </summary>
+        /// <param name="predicate">The 'where' clause</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>The collection of retrieved items</returns>
+        Task<IEnumerable<T>> GetItemsAsync(string userId, Expression<Func<T, bool>> predicate, CancellationToken cancellationToken);
 
         /// <summary>
         /// Reads a collection of items from the repository
@@ -55,7 +72,17 @@ namespace Tes.Repository
         /// <param name="continuationToken">A token to continue retrieving items if the max is returned</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>A continuation token string, and the collection of retrieved items</returns>
-        Task<(string, IEnumerable<T>)> GetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken);
+        Task<(string, IEnumerable<T>)> GetItemsAsync(string userId, Expression<Func<T, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Reads a collection of items from the repository
+        /// </summary>
+        /// <param name="predicate">The 'where' clause</param>
+        /// <param name="pageSize">The max number of items to retrieve</param>
+        /// <param name="continuationToken">A token to continue retrieving items if the max is returned</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>A continuation token string, and the collection of retrieved items</returns>
+        Task<(string, IEnumerable<T>)> InternalGetItemsAsync(Expression<Func<T, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken);
 
         /// <summary>
         /// Update the item in the repository
@@ -64,7 +91,7 @@ namespace Tes.Repository
         /// <param name="item">The item to persist</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The created document</returns>
-        Task<T> UpdateItemAsync(T item, CancellationToken cancellationToken);
+        Task<T> InternalUpdateItemAsync(T item, CancellationToken cancellationToken);
 
         /// <summary>
         /// Removes an item from the cache if it exists.  This method exists for cache optimizations

@@ -91,9 +91,9 @@ namespace Tes.Repository
         /// <param name="cancellationToken"></param>
         /// <param name="onSuccess">Delegate to be invoked on success</param>
         /// <returns></returns>
-        public async Task<bool> TryGetItemAsync(string id, CancellationToken cancellationToken, Action<TesTask> onSuccess = null)
+        public async Task<bool> TryGetItemAsync(string userId, string id, CancellationToken cancellationToken, Action<TesTask> onSuccess = null)
         {
-            var item = await GetItemFromCacheOrDatabase(id, false, cancellationToken);
+            var item = await GetItemFromCacheOrDatabase(userId, id, false, cancellationToken);
 
             if (item is null)
             {
@@ -111,7 +111,7 @@ namespace Tes.Repository
         /// <param name="predicate">Predicate to query the TesTasks</param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
+        public async Task<IEnumerable<TesTask>> InternalGetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
         {
             return (await InternalGetItemsAsync(predicate, cancellationToken));
         }
@@ -144,9 +144,9 @@ namespace Tes.Repository
         /// <param name="tesTask"></param>
         /// <returns></returns>
         /// <param name="cancellationToken"></param>
-        public async Task<TesTask> UpdateItemAsync(TesTask tesTask, CancellationToken cancellationToken)
+        public async Task<TesTask> InternalUpdateItemAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
-            var item = await GetItemFromCacheOrDatabase(tesTask.Id, true, cancellationToken);
+            var item = await GetItemFromCacheOrDatabase(null, tesTask.Id, true, cancellationToken);
             item.Json = tesTask;
             item = await AddUpdateOrRemoveItemInDbAsync(item, WriteAction.Update, cancellationToken);
             return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json;
@@ -158,9 +158,9 @@ namespace Tes.Repository
         /// <param name="id">TesTask Id</param>
         /// <returns></returns>
         /// <param name="cancellationToken"></param>
-        public async Task DeleteItemAsync(string id, CancellationToken cancellationToken)
+        public async Task InternalDeleteItemAsync(string id, CancellationToken cancellationToken)
         {
-            _ = await AddUpdateOrRemoveItemInDbAsync(await GetItemFromCacheOrDatabase(id, true, cancellationToken), WriteAction.Delete, cancellationToken);
+            _ = await AddUpdateOrRemoveItemInDbAsync(await GetItemFromCacheOrDatabase(null, id, true, cancellationToken), WriteAction.Delete, cancellationToken);
             _ = _cache?.TryRemove(id);
         }
 
@@ -172,7 +172,7 @@ namespace Tes.Repository
         /// <param name="continuationToken"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken)
+        public async Task<(string, IEnumerable<TesTask>)> InternalGetItemsAsync(Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken)
         {
             var last = (CreationTime: DateTimeOffset.MinValue, Id: string.Empty);
 
@@ -218,23 +218,49 @@ namespace Tes.Repository
         /// <param name="throwIfNotFound">Throw (instead of return null) if item is not found.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The found item, or null if not found.</returns>
-        private async Task<TesTaskDatabaseItem> GetItemFromCacheOrDatabase(string id, bool throwIfNotFound, CancellationToken cancellationToken)
+        private async Task<TesTaskDatabaseItem> GetItemFromCacheOrDatabase(string userId, string id, bool throwIfNotFound, CancellationToken cancellationToken)
         {
             TesTaskDatabaseItem item = default;
+            var isItemInCache = _cache?.TryGetValue(id, out item);
 
-            if (!_cache?.TryGetValue(id, out item) ?? true)
+            if (isItemInCache == true)
             {
-                using var dbContext = CreateDbContext();
-
-                // Search for Id within the JSON
-                item = await _asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, ct), cancellationToken);
-
-                if (throwIfNotFound && item is null)
+                if (userId == null)
                 {
-                    throw new KeyNotFoundException($"No TesTask with ID {item.Id} found in the database.");
+                    // internal
+                    return item;
+                }
+                else
+                {
+                    if (item.Json?.User?.Id == userId)
+                    {
+                        return item;
+                    }
+                    else
+                    {
+                        throw new KeyNotFoundException($"No TesTask with ID {item.Id} found in the database.");
+                    }
                 }
             }
 
+            using var dbContext = CreateDbContext();
+            
+            if (userId != null)
+            {
+                // Search for Id within the JSON
+                item = await _asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.User.Id == userId && t.Json.Id == id, ct), cancellationToken);
+            }
+            else
+            {
+                // Search for Id within the JSON
+                item = await _asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, ct), cancellationToken);
+            }
+
+            if (throwIfNotFound && item is null)
+            {
+                throw new KeyNotFoundException($"No TesTask with ID {item.Id} found in the database.");
+            }
+ 
             return item;
         }
 
@@ -253,7 +279,25 @@ namespace Tes.Repository
             orderBy = pagination is null ? orderBy : q => q.OrderBy(t => t.Json.Id);
 
             using var dbContext = CreateDbContext();
-            return (await GetItemsAsync(dbContext.TesTasks, WhereTesTask(predicate), cancellationToken, orderBy, pagination)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
+            return (await InternalGetItemsAsync(dbContext.TesTasks, WhereTesTask(predicate), cancellationToken, orderBy, pagination)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
+        }
+
+        /// <summary>
+        /// Stands up TesTask query, ensures that active tasks queried are maintained in the cache. Entry point for all non-single task SELECT queries in the repository.
+        /// </summary>
+        /// <param name="predicate"></param>
+        /// <param name="cancellationToken"></param>
+        /// <param name="orderBy"></param>
+        /// <param name="pagination"></param>
+        /// <returns></returns>
+        private async Task<IEnumerable<TesTask>> GetItemsAsync(string userId, Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default)
+        {
+            // It turns out, PostgreSQL doesn't handle EF's interpretation of ORDER BY more then one "column" in any resonable way, so we have to order by the only thing we have that is expected to be unique.
+            //orderBy = pagination is null ? orderBy : q => q.OrderBy(t => t.Json.CreationTime).ThenBy(t => t.Json.Id);
+            orderBy = pagination is null ? orderBy : q => q.OrderBy(t => t.Json.Id);
+
+            using var dbContext = CreateDbContext();
+            return (await GetItemsAsync(userId, dbContext.TesTasks, WhereTesTask(predicate), cancellationToken, orderBy, pagination)).Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json);
         }
 
         /// <summary>
@@ -272,6 +316,64 @@ namespace Tes.Repository
         public ValueTask<bool> TryRemoveItemFromCacheAsync(TesTask item, CancellationToken _1)
         {
             return ValueTask.FromResult(_cache?.TryRemove(item.Id) ?? false);
+        }
+
+        public async Task<bool> InternalTryGetItemAsync(string id, CancellationToken cancellationToken, Action<TesTask> onSuccess = null)
+        {
+            var item = await GetItemFromCacheOrDatabase(null, id, false, cancellationToken);
+
+            if (item is null)
+            {
+                return false;
+            }
+
+            onSuccess?.Invoke(item.Json);
+            _ = EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState());
+            return true;
+        }
+
+        public async Task<IEnumerable<TesTask>> GetItemsAsync(string userId, Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
+        {
+            return (await GetItemsAsync(userId, predicate, cancellationToken));
+        }
+
+        public async Task<(string, IEnumerable<TesTask>)> GetItemsAsync(string userId, Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken, CancellationToken cancellationToken)
+        {
+            var last = (CreationTime: DateTimeOffset.MinValue, Id: string.Empty);
+
+            if (continuationToken is not null)
+            {
+                try
+                {
+                    var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(256);
+                    if (Convert.TryFromBase64String(continuationToken, buffer, out var bytesWritten))
+                    {
+                        last = Newtonsoft.Json.JsonConvert.DeserializeAnonymousType(System.Text.Encoding.UTF8.GetString(buffer, 0, bytesWritten), last);
+                    }
+
+                    if (last == default)
+                    {
+                        throw new ArgumentException("pageToken is corrupt or invalid.", nameof(continuationToken));
+                    }
+                }
+                catch (System.Text.DecoderFallbackException ex)
+                {
+                    throw new ArgumentException("pageToken is corrupt or invalid.", nameof(continuationToken), ex);
+                }
+                catch (Newtonsoft.Json.JsonException ex)
+                {
+                    throw new ArgumentException("pageToken is corrupt or invalid.", nameof(continuationToken), ex);
+                }
+            }
+
+            // This "uglyness" should (hopefully) be fixed in EF8: https://github.com/dotnet/roslyn/issues/12897 reference https://github.com/dotnet/efcore/issues/26822 when we can compare last directly with a created per-item tuple
+            //var results = (await InternalGetItemsAsync(predicate, cancellationToken, q => q.Where(t => t.Json.CreationTime > last.CreationTime || (t.Json.CreationTime == last.CreationTime && t.Json.Id.CompareTo(last.Id) > 0)).Take(pageSize))).ToList();
+            var results = (await GetItemsAsync(userId, predicate, cancellationToken, pagination: q => q.Where(t => t.Json.Id.CompareTo(last.Id) > 0).Take(pageSize))).ToList();
+
+            return (GetContinuation(results.Count == pageSize ? results.LastOrDefault() : null), results);
+
+            static string GetContinuation(TesTask item)
+                => item is null ? null : Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(Newtonsoft.Json.JsonConvert.SerializeObject((item.CreationTime, item.Id))));
         }
     }
 }

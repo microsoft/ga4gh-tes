@@ -253,7 +253,7 @@ namespace TesApi.Tests
                 .ReturnsAsync(true);
 
                 // Mock UpdateItemAsync to throw a RepositoryCollisionException
-                r.Setup(repo => repo.UpdateItemAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>()))
+                r.Setup(repo => repo.InternalUpdateItemAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(mockTesTask);
             });
 
@@ -292,7 +292,7 @@ namespace TesApi.Tests
                 .ReturnsAsync(true);
 
                 // Mock UpdateItemAsync to throw a RepositoryCollisionException
-                r.Setup(repo => repo.UpdateItemAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>()))
+                r.Setup(repo => repo.InternalUpdateItemAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new RepositoryCollisionException());
             });
 
@@ -323,7 +323,7 @@ namespace TesApi.Tests
             Assert.IsNotNull(result);
             Assert.AreEqual(200, result.StatusCode);
             Assert.AreEqual(TesState.CANCELEDEnum, tesTask.State);
-            services.TesTaskRepository.Verify(x => x.UpdateItemAsync(tesTask, It.IsAny<System.Threading.CancellationToken>()));
+            services.TesTaskRepository.Verify(x => x.InternalUpdateItemAsync(tesTask, It.IsAny<System.Threading.CancellationToken>()));
         }
 
         [TestMethod]
@@ -425,7 +425,7 @@ namespace TesApi.Tests
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo
-                .GetItemsAsync(It.IsAny<Expression<Func<TesTask, bool>>>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
+                .InternalGetItemsAsync(It.IsAny<Expression<Func<TesTask, bool>>>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync((Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken, System.Threading.CancellationToken _1) =>
                     (string.Empty, tesTasks.Where(i => predicate.Compile().Invoke(i)).Take(pageSize))));
             var controller = services.GetT();
