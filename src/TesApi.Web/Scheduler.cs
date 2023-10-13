@@ -156,11 +156,11 @@ namespace TesApi.Web
         /// <returns></returns>
         async ValueTask UpdateTesTasksFromEventBlobsAsync(CancellationToken stoppingToken)
         {
-            var messageInfos = new List<TesEventMessage>();
-            var messages = new ConcurrentBag<Tes.Runner.Events.EventMessage>();
+            var messageInfos = new ConcurrentBag<TesEventMessage>();
+            var messages = new ConcurrentBag<(string Id, AzureBatchTaskState State)>();
 
             // Get and parse event blobs
-            await foreach (var message in batchScheduler.GetEventMessages(stoppingToken, "taskCompleted").WithCancellation(stoppingToken))
+            await foreach (var message in batchScheduler.GetEventMessagesAsync(stoppingToken, Tes.Runner.Events.EventsPublisher.TaskCompletionEvent).WithCancellation(stoppingToken))
             {
                 messageInfos.Add(message);
             }
@@ -177,17 +177,17 @@ namespace TesApi.Web
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
                 async token => GetTesTasks(token),
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
-                (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, messages.Select(GetCompletedBatchState).ToArray(), token),
+                (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, messages.Select(t => t.State).ToArray(), token),
                 stoppingToken);
 
             // Helpers
             async ValueTask ProcessMessage(TesEventMessage messageInfo, CancellationToken cancellationToken)
             {
-                // TODO: remove the switch (keeping the message retrieval) when GetCompletedBatchState can process all events
+                // TODO: remove the switch (keeping the message state retrieval) when GetCompletedBatchState can process all events
                 switch (messageInfo.Event)
                 {
-                    case "taskCompleted":
-                        messages.Add(await messageInfo.GetMessageAsync(cancellationToken));
+                    case Tes.Runner.Events.EventsPublisher.TaskCompletionEvent:
+                        messages.Add(await messageInfo.GetMessageBatchStateAsync(cancellationToken));
                         break;
 
                     default:
@@ -199,7 +199,7 @@ namespace TesApi.Web
 
             async IAsyncEnumerable<TesTask> GetTesTasks([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
             {
-                foreach (var id in messages.Select(t => batchScheduler.GetTesTaskIdFromCloudTaskId(t.EntityId)))
+                foreach (var id in messages.Select(t => batchScheduler.GetTesTaskIdFromCloudTaskId(t.Id)))
                 {
                     TesTask tesTask = default;
                     if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
@@ -213,33 +213,6 @@ namespace TesApi.Web
                         yield return null;
                     }
                 }
-            }
-
-            AzureBatchTaskState GetCompletedBatchState(Tes.Runner.Events.EventMessage task)
-            {
-                logger.LogDebug("Getting batch task state from event {EventName} for {TesTask}.", task.Name, task.EntityId);
-                return task.Name switch
-                {
-                    "taskCompleted" => string.IsNullOrWhiteSpace(task.EventData["errorMessage"])
-
-                        ? new(
-                            AzureBatchTaskState.TaskState.CompletedSuccessfully,
-                            BatchTaskStartTime: task.Created - TimeSpan.Parse(task.EventData["duration"]),
-                            BatchTaskEndTime: task.Created/*,
-                            BatchTaskExitCode: 0*/)
-
-                        : new(
-                            AzureBatchTaskState.TaskState.CompletedWithErrors,
-                            Failure: new("ExecutorError",
-                            Enumerable.Empty<string>()
-                                .Append(task.EventData["errorMessage"])),
-                            BatchTaskStartTime: task.Created - TimeSpan.Parse(task.EventData["duration"]),
-                            BatchTaskEndTime: task.Created/*,
-                            BatchTaskExitCode: 0*/),
-
-                    // TODO: the rest
-                    _ => throw new System.Diagnostics.UnreachableException(),
-                };
             }
         }
     }

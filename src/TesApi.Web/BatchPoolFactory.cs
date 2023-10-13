@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace TesApi.Web
 {
+    // TODO: Consider moving this class's implementation to Startup
     /// <summary>
     /// Factory to create BatchPool instances.
     /// </summary>

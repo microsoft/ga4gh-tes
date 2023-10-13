@@ -121,6 +121,8 @@ namespace TesApi.Web
             //}
         }
 
+        internal AzureProxy() { } // TODO: Remove. Temporary WIP
+
         // TODO: Static method because the instrumentation key is needed in both Program.cs and Startup.cs and we wanted to avoid intializing the batch client twice.
         // Can we skip initializing app insights with a instrumentation key in Program.cs? If yes, change this to an instance method.
         /// <summary>
@@ -333,14 +335,17 @@ namespace TesApi.Web
             return (pool.AllocationState, pool.AutoScaleEnabled, pool.TargetLowPriorityComputeNodes, pool.CurrentLowPriorityComputeNodes, pool.TargetDedicatedComputeNodes, pool.CurrentDedicatedComputeNodes);
         }
 
-        private static async Task<IEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync(CancellationToken cancellationToken)
+        private static async IAsyncEnumerable<StorageAccountInfo> GetAccessibleStorageAccountsAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var azureClient = await GetAzureManagementClientAsync(cancellationToken);
-            return await (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable()
+
+            await foreach (var storageAccountInfo in (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable()
                 .Select(s => s.SubscriptionId).SelectManyAwait(async (subscriptionId, ct) =>
                     (await azureClient.WithSubscription(subscriptionId).StorageAccounts.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable()
-                    .Select(a => new StorageAccountInfo { Id = a.Id, Name = a.Name, SubscriptionId = subscriptionId, BlobEndpoint = a.EndPoints.Primary.Blob }))
-                .ToListAsync(cancellationToken);
+                        .Select(a => new StorageAccountInfo { Id = a.Id, Name = a.Name, SubscriptionId = subscriptionId, BlobEndpoint = a.EndPoints.Primary.Blob })))
+            {
+                yield return storageAccountInfo;
+            }
         }
 
         /// <inheritdoc/>
@@ -411,28 +416,29 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<Azure.Storage.Blobs.Models.TaggedBlobItem> ListBlobsWithTagsAsync(Uri directoryUri, IDictionary<string, string> tagsQuery, CancellationToken cancellationToken)
+        public IAsyncEnumerable<Azure.Storage.Blobs.Models.BlobItem> ListBlobsWithTagsAsync(Uri containerUri, string prefix, CancellationToken cancellationToken)
         {
-            BlobUriBuilder builder = new(directoryUri);
-            var directory = builder.BlobName;
-            builder.BlobName = string.Empty;
-            BlobContainerClient container = new(builder.ToUri());
+            BlobContainerClient container = new(containerUri, new(BlobClientOptions.ServiceVersion.V2021_04_10));
+
+            return container.GetBlobsAsync(Azure.Storage.Blobs.Models.BlobTraits.Tags, Azure.Storage.Blobs.Models.BlobStates.None, prefix, cancellationToken);
+        }
+
+        /// <inheritdoc/>
+        public IAsyncEnumerable<Azure.Storage.Blobs.Models.TaggedBlobItem> ListBlobsWithTagsAsync(Uri containerUri, string prefix, IDictionary<string, string> tagsQuery, CancellationToken cancellationToken)
+        {
             var fullTagsQuery = Enumerable.Empty<string>()
-                .Append(new($"&where=@container='{container.Name}'"))
+                //.Append(new($"&where=@container='{container.Name}'"))
                 .Concat(tagsQuery.Select(pair => $"\"{pair.Key}\"='{pair.Value}'"));
 
-            if (!directory.EndsWith('/'))
-            {
-                directory += "/";
-            }
+            BlobContainerClient container = new(containerUri, new(BlobClientOptions.ServiceVersion.V2021_04_10));
 
-            return container.FindBlobsByTagsAsync(string.Join(" AND", fullTagsQuery), cancellationToken).Where(blob => blob.BlobName.StartsWith(directory));
+            return container.FindBlobsByTagsAsync(string.Join(" AND", fullTagsQuery), cancellationToken).Where(blob => blob.BlobName.StartsWith(prefix));
         }
 
         /// <inheritdoc/>
         public async Task SetBlobTags(Uri blobAbsoluteUri, IDictionary<string, string> tags, CancellationToken cancellationToken)
         {
-            BlobClient blob = new(blobAbsoluteUri);
+            BlobClient blob = new(blobAbsoluteUri, new(BlobClientOptions.ServiceVersion.V2021_04_10));
             using var result = await blob.SetTagsAsync(tags, cancellationToken: cancellationToken);
 
             if (result.IsError)
@@ -532,8 +538,8 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken)
-            => (await GetAccessibleStorageAccountsAsync(cancellationToken))
-                .FirstOrDefault(storageAccount => storageAccount.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase));
+            => await GetAccessibleStorageAccountsAsync(cancellationToken)
+                .FirstOrDefaultAsync(storageAccount => storageAccount.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
 
         /// <inheritdoc/>
         public IAsyncEnumerable<ComputeNode> ListComputeNodesAsync(string poolId, DetailLevel detailLevel = null)

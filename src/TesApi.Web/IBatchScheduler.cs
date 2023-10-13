@@ -106,8 +106,8 @@ namespace TesApi.Web
         /// Gets unprocessed events from the storage account.
         /// </summary>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="event">Optional event to retrieve.</param>
+        /// <param name="event">Optional event to retrieve. Defaults to all events.</param>
         /// <returns></returns>
-        IAsyncEnumerable<TesEventMessage> GetEventMessages(CancellationToken cancellationToken, string @event = default);
+        IAsyncEnumerable<TesEventMessage> GetEventMessagesAsync(CancellationToken cancellationToken, string @event = default);
     }
 }

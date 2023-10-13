@@ -15,6 +15,7 @@ namespace TesApi.Web
     /// <summary>
     /// Represents the events sent by the node task runner.
     /// </summary>
+    /// <remarks>This should be transient in DI.</remarks>
     public class TesEventMessage
     {
         static TesEventMessage() => Tes.Utilities.NewtonsoftJsonSafeInit.SetDefaultSettings();
@@ -56,9 +57,21 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(tags);
             ArgumentNullException.ThrowIfNull(@event);
 
+            if (tags.Count == 0)
+            {
+                throw new ArgumentException("This message has no tags.", nameof(tags));
+            }
+
             if (tags.ContainsKey(ProcessedTag))
             {
                 throw new ArgumentException("This message was already processed.", nameof(tags));
+            }
+
+            // There are up to 10 tags allowed. We will be adding one.
+            // https://learn.microsoft.com/azure/storage/blobs/storage-manage-find-blobs?tabs=azure-portal#setting-blob-index-tags
+            if (tags.Count > 9)
+            {
+                throw new ArgumentException("This message does not have space to add the processed tag.", nameof(tags));
             }
 
             _azureProxy = azureProxy;
@@ -74,12 +87,26 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task<Tes.Runner.Events.EventMessage> GetMessageAsync(CancellationToken cancellationToken)
+        public async Task<(string Id, AzureBatchTaskState State)> GetMessageBatchStateAsync(CancellationToken cancellationToken)
         {
             var messageText = await _azureProxy.DownloadBlobAsync(_uri, cancellationToken);
             var result = Newtonsoft.Json.JsonConvert.DeserializeObject<Tes.Runner.Events.EventMessage>(messageText);
+
             // TODO: throw if null
-            return result;
+            // Validate. Suggestions include:
+            //Guid.TryParse(result.Id, out _)
+            //Tes.Runner.Events.EventsPublisher.EventVersion.Equals(result.EventVersion, StringComparison.Ordinal)
+            //Tes.Runner.Events.EventsPublisher.EventDataVersion.Equals(result.EventDataVersion, StringComparison.Ordinal)
+            //Tes.Runner.Events.EventsPublisher.TesTaskRunnerEntityType.Equals(result.EntityType, StringComparison.Ordinal)
+            //Tes.Runner.Events.EventsPublisher.TesTaskRunnerEntityType.Equals(result.EntityType, StringComparison.Ordinal)
+            //Event.Equals(result.Name, StringComparison.Ordinal)
+            //new[] { Tes.Runner.Events.EventsPublisher.StartedStatus, Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(result.StatusMessage)
+
+            // Event type specific validations
+            //
+
+            _logger.LogDebug("Getting batch task state from event {EventName} for {TesTask}.", result.Name ?? Event, result.EntityId);
+            return (result.EntityId, GetCompletedBatchState(result));
         }
 
         /// <summary>
@@ -89,14 +116,45 @@ namespace TesApi.Web
         /// <returns></returns>
         public async Task MarkMessageProcessed(CancellationToken cancellationToken)
         {
-            var uri = await _storageAccessProvider.MapLocalPathToSasUrlAsync(_uri.ToString(), cancellationToken);
-            await _azureProxy.SetBlobTags(new Uri(uri), Tags.Append(new KeyValuePair<string, string>(ProcessedTag, DateTime.UtcNow.ToString("O"))).ToDictionary(pair => pair.Key, pair => pair.Value), cancellationToken);
+            await _azureProxy.SetBlobTags(
+                _uri,
+                Tags.Append(new(ProcessedTag, DateTime.UtcNow.ToString("O")))
+                    .ToDictionary(pair => pair.Key, pair => pair.Value),
+                cancellationToken);
+        }
+
+        private /*static*/ AzureBatchTaskState GetCompletedBatchState(Tes.Runner.Events.EventMessage task)
+        {
+            return (task.Name ?? Event) switch
+            {
+                Tes.Runner.Events.EventsPublisher.TaskCompletionEvent => string.IsNullOrWhiteSpace(task.EventData["errorMessage"])
+
+                    ? new(
+                        AzureBatchTaskState.TaskState.CompletedSuccessfully,
+                        BatchTaskStartTime: task.Created - TimeSpan.Parse(task.EventData["duration"]),
+                        BatchTaskEndTime: task.Created/*,
+                            BatchTaskExitCode: 0*/)
+
+                    : new(
+                        AzureBatchTaskState.TaskState.CompletedWithErrors,
+                        Failure: new("ExecutorError",
+                        Enumerable.Empty<string>()
+                            .Append(task.EventData["errorMessage"])),
+                        BatchTaskStartTime: task.Created - TimeSpan.Parse(task.EventData["duration"]),
+                        BatchTaskEndTime: task.Created/*,
+                            BatchTaskExitCode: 0*/),
+
+                // TODO: the rest
+                _ => new(AzureBatchTaskState.TaskState.NodePreempted), //throw new System.Diagnostics.UnreachableException(),
+            };
         }
     }
 
+    // TODO: Consider moving this class's implementation to Startup
     /// <summary>
     /// Factory to create TesEventMessage instances.
     /// </summary>
+    /// <remarks>This can be a singleton in DI.</remarks>
     public sealed class BatchTesEventMessageFactory
     {
         private readonly IServiceProvider _serviceProvider;

@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 namespace TesApi.Web.Extensions
 {
     /// <summary>
-    /// Extension methods for <see cref="System.Threading.Tasks.Task"/> and associated types
+    /// Extension methods for <see cref="Task"/> and associated types
     /// </summary>
     public static class SystemThreadingTaskExtensions
     {
@@ -26,8 +26,7 @@ namespace TesApi.Web.Extensions
         /// <exception cref="ArgumentNullException"></exception>
         /// <exception cref="ArgumentException"></exception>
         /// <remarks>
-        /// A task is sent to the return enumeration when it is "complete", which is when it either completes successfully, fails (queues an exception), or is cancelled.<br/>
-        /// No items in <paramref name="source"/> should share an identical <see cref="Task"/> instance.
+        /// A task is sent to the return enumeration when it is "complete", which is when it either completes successfully, fails (queues an exception), or is cancelled.
         /// </remarks>
         public static async IAsyncEnumerable<T> WhenEach<T>(this IEnumerable<T> source, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, Func<T, Task> sourceToTask = default)
         {
@@ -46,7 +45,7 @@ namespace TesApi.Web.Extensions
             }
 
             // There should be no new ArgumentExceptions after this point.
-            var channel = Channel.CreateBounded<T>(pendingCount);
+            var channel = Channel.CreateBounded<T>(new BoundedChannelOptions(pendingCount) { SingleWriter = false, SingleReader = true, AllowSynchronousContinuations = false, FullMode = BoundedChannelFullMode.Wait });
 
             // Add continuations to every task. Those continuations will feed the foreach below
             _ = Parallel.ForEach(list, tuple =>

@@ -29,7 +29,7 @@ namespace TesApi.Tests
 
         private Mock<TerraWsmApiClient> wsmApiClientMock;
         private Mock<IAzureProxy> azureProxyMock;
-        private TerraStorageAccessProvider terraStorageAccessProvider;
+        private IStorageAccessProvider terraStorageAccessProvider;
         private TerraApiStubData terraApiStubData;
         private Mock<IOptions<TerraOptions>> optionsMock;
         private TerraOptions terraOptions;
@@ -129,7 +129,7 @@ namespace TesApi.Tests
             SetUpTerraApiClient();
 
             var blobInfo = new TerraBlobInfo(terraApiStubData.GetWorkspaceIdFromContainerName(WorkspaceStorageContainerName), terraApiStubData.ContainerResourceId, TerraApiStubData.WorkspaceStorageContainerName, "blobName");
-            var url = await terraStorageAccessProvider.GetMappedSasUrlFromWsmAsync(blobInfo, CancellationToken.None);
+            var url = await ((TerraStorageAccessProvider)terraStorageAccessProvider).GetMappedSasUrlFromWsmAsync(blobInfo, false, CancellationToken.None);
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);

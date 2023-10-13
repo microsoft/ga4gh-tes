@@ -84,8 +84,15 @@ namespace TesApi.Web.Storage
         /// </summary>
         /// <param name="blobPath"></param>
         /// <param name="cancellationToken"></param>
+        /// <param name="needsTags">Optional. Read or write the tags on a blob.</param>
+        /// <param name="needsFind">Optional. Find blobs with index tags.</param>
+        /// <param name="needsWrite">Optional. Allow changing the blob.</param>
         /// <returns></returns>
-        public Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken);
+        /// <remarks>
+        /// If the blobPath is not provided(empty), a container SAS token is generated.
+        /// If the blobPath is provided, a SAS token to the blobPath prefixed with the TES internal segments is generated.
+        /// </remarks>
+        public Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken, bool? needsTags = default, bool? needsFind = default, bool? needsWrite = default);
 
         /// <summary>
         /// Returns an Azure Storage Blob URL with a SAS token for the specified blob path in the TES task internal storage location.
@@ -94,6 +101,10 @@ namespace TesApi.Web.Storage
         /// <param name="blobPath"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
+        /// <remarks>
+        /// If the blobPath is not provided(empty), a container SAS token is generated.
+        /// If the blobPath is provided, a SAS token to the blobPath prefixed with the TES task internal segments is generated.
+        /// </remarks>
         public Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);
 
         /// <summary>

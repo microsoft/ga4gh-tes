@@ -114,10 +114,10 @@ namespace TesApi.Web
 
             async ValueTask ProcessFailures(IAsyncEnumerable<(string taskId, AzureBatchTaskState)> failures, CancellationToken cancellationToken)
             {
-                await foreach (var (id, state) in failures.WithCancellation(cancellationToken))
+                await foreach (var (cloudTaskId, state) in failures.WithCancellation(cancellationToken))
                 {
                     TesTask tesTask = default;
-                    if (await repository.TryGetItemAsync(batchScheduler.GetTesTaskIdFromCloudTaskId(id), cancellationToken, task => tesTask = task) && tesTask is not null)
+                    if (await repository.TryGetItemAsync(batchScheduler.GetTesTaskIdFromCloudTaskId(cloudTaskId), cancellationToken, task => tesTask = task) && tesTask is not null)
                     {
                         list.Add((tesTask, state));
                     }
@@ -158,17 +158,17 @@ namespace TesApi.Web
 
             async IAsyncEnumerable<TesTask> GetTesTasks([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
             {
-                foreach (var id in tasks.Select(t => batchScheduler.GetTesTaskIdFromCloudTaskId(t.Id)))
+                foreach (var tesTaskId in tasks.Select(t => batchScheduler.GetTesTaskIdFromCloudTaskId(t.Id)))
                 {
                     TesTask tesTask = default;
-                    if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
+                    if (await repository.TryGetItemAsync(tesTaskId, cancellationToken, task => tesTask = task) && tesTask is not null)
                     {
                         logger.LogDebug("Completing task {TesTask}.", tesTask.Id);
                         yield return tesTask;
                     }
                     else
                     {
-                        logger.LogDebug("Could not find task {TesTask}.", id);
+                        logger.LogDebug("Could not find task {TesTask}.", tesTaskId);
                         yield return null;
                     }
                 }
@@ -196,7 +196,7 @@ namespace TesApi.Web
                         BatchTaskEndTime: task.ExecutionInformation.EndTime,
                         BatchTaskExitCode: task.ExecutionInformation.ExitCode),
 
-                    _ => throw new InvalidOperationException(),
+                    _ => throw new System.Diagnostics.UnreachableException(),
                 };
             }
         }

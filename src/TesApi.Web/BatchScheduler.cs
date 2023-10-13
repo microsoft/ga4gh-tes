@@ -182,7 +182,7 @@ namespace TesApi.Web
 
             async Task<bool> SetTaskStateAndLog(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                var metrics = newTaskState == TesState.COMPLETEEnum
+                var (batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode) = newTaskState == TesState.COMPLETEEnum
                     ? await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask, cancellationToken)
                     : default;
 
@@ -191,11 +191,11 @@ namespace TesApi.Web
                 var tesTaskLog = tesTask.GetOrAddTesTaskLog();
                 var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog();
 
-                tesTaskLog.BatchNodeMetrics = metrics.BatchNodeMetrics;
-                tesTaskLog.CromwellResultCode = metrics.CromwellRcCode;
+                tesTaskLog.BatchNodeMetrics = batchNodeMetrics;
+                tesTaskLog.CromwellResultCode = cromwellRcCode;
                 tesTaskLog.EndTime = DateTime.UtcNow;
-                tesTaskExecutorLog.StartTime = metrics.TaskStartTime ?? batchInfo.BatchTaskStartTime;
-                tesTaskExecutorLog.EndTime = metrics.TaskEndTime ?? batchInfo.BatchTaskEndTime;
+                tesTaskExecutorLog.StartTime = taskStartTime ?? batchInfo.BatchTaskStartTime;
+                tesTaskExecutorLog.EndTime = taskEndTime ?? batchInfo.BatchTaskEndTime;
                 tesTaskExecutorLog.ExitCode = batchInfo.BatchTaskExitCode;
 
                 // Only accurate when the task completes successfully, otherwise it's the Batch time as reported from Batch
@@ -956,7 +956,7 @@ namespace TesApi.Web
 
             var dockerInDockerIsPublic = true;
             var executorImageIsPublic = containerRegistryProvider.IsImagePublic(executorImage);
-            var cromwellDrsIsPublic = drsImageNeeded ? containerRegistryProvider.IsImagePublic(cromwellDrsLocalizerImageName) : true;
+            var cromwellDrsIsPublic = !drsImageNeeded || containerRegistryProvider.IsImagePublic(cromwellDrsLocalizerImageName);
 
             BatchModels.ContainerConfiguration result = default;
 
@@ -974,54 +974,38 @@ namespace TesApi.Web
 
                 if (!executorImageIsPublic)
                 {
-                    var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage, cancellationToken);
-                    if (containerRegistryInfo is not null)
-                    {
-                        result.ContainerRegistries.Add(new(
-                            userName: containerRegistryInfo.Username,
-                            registryServer: containerRegistryInfo.RegistryServer,
-                            password: containerRegistryInfo.Password));
-                    }
+                    _ = await AddRegistryIfNeeded(executorImage);
                 }
 
                 if (!cromwellDrsIsPublic)
                 {
-                    var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(cromwellDrsLocalizerImageName, cancellationToken);
-                    if (containerRegistryInfo is not null && !result.ContainerRegistries.Any(registry => registry.RegistryServer == containerRegistryInfo.RegistryServer))
-                    {
-                        result.ContainerRegistries.Add(new(
-                            userName: containerRegistryInfo.Username,
-                            registryServer: containerRegistryInfo.RegistryServer,
-                            password: containerRegistryInfo.Password));
-                    }
+                    _ = await AddRegistryIfNeeded(cromwellDrsLocalizerImageName);
                 }
 
                 if (result.ContainerRegistries.Count != 0)
                 {
-                    var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(dockerInDockerImageName, cancellationToken);
-                    dockerInDockerIsPublic = containerRegistryInfo is null;
-                    if (containerRegistryInfo is not null && !result.ContainerRegistries.Any(registry => registry.RegistryServer == containerRegistryInfo.RegistryServer))
-                    {
-                        result.ContainerRegistries.Add(new(
-                            userName: containerRegistryInfo.Username,
-                            registryServer: containerRegistryInfo.RegistryServer,
-                            password: containerRegistryInfo.Password));
-                    }
+                    dockerInDockerIsPublic = await AddRegistryIfNeeded(dockerInDockerImageName);
                 }
             }
 
-            return result is null || result.ContainerRegistries.Count == 0 ? (default, (true, true, true)) : (new()
+            return result is null || result.ContainerRegistries.Count == 0 ? (default, (true, true, true)) : (result, (executorImageIsPublic, dockerInDockerIsPublic, cromwellDrsIsPublic));
+
+            async ValueTask<bool> AddRegistryIfNeeded(string imageName)
             {
-                ContainerImageNames = result.ContainerImageNames,
-                ContainerRegistries = result
-                                    .ContainerRegistries
-                                    .Select(r => new BatchModels.ContainerRegistry(
-                                        userName: r.UserName,
-                                        password: r.Password,
-                                        registryServer: r.RegistryServer,
-                                        identityReference: r.IdentityReference is null ? null : new() { ResourceId = r.IdentityReference.ResourceId }))
-                                    .ToList()
-            }, (executorImageIsPublic, dockerInDockerIsPublic, cromwellDrsIsPublic));
+                var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(imageName, cancellationToken);
+
+                if (containerRegistryInfo is not null && !result.ContainerRegistries.Any(registry => registry.RegistryServer == containerRegistryInfo.RegistryServer))
+                {
+                    result.ContainerRegistries.Add(new(
+                        userName: containerRegistryInfo.Username,
+                        registryServer: containerRegistryInfo.RegistryServer,
+                        password: containerRegistryInfo.Password));
+
+                    return true;
+                }
+
+                return false;
+            }
         }
 
         /// <summary>
@@ -1342,34 +1326,48 @@ namespace TesApi.Web
                 .Select(line => { var parts = line.Split(fieldDelimiter); return new KeyValuePair<string, string>(parts[0], parts[1]); })
                 .ToDictionary(kv => kv.Key, kv => kv.Value);
 
+
         /// <inheritdoc/>
-        public async IAsyncEnumerable<TesEventMessage> GetEventMessages([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, string @event = null)
+        public async IAsyncEnumerable<TesEventMessage> GetEventMessagesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, string @event)
         {
-            var path = "events";
-            var tags = new Dictionary<string, string>();
+            const string eventsFolderName = "events";
+
+            var prefix = eventsFolderName + "/";
+            //var tags = new Dictionary<string, string>();
 
             if (!string.IsNullOrWhiteSpace(@event))
             {
-                path += "/" + @event;
-                tags.Add("event-name", @event);
+                prefix += @event + "/";
+                //tags.Add("event-name", @event);
             }
 
-            Uri directoryUri = new(await storageAccessProvider.GetInternalTesBlobUrlAsync(path, cancellationToken));
-            var accountSegments = StorageAccountUrlSegments.Create(directoryUri.ToString());
+            var tesInternalSegments = StorageAccountUrlSegments.Create(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(string.Empty));
+            var eventsStartIndex = (string.IsNullOrEmpty(tesInternalSegments.BlobName) ? string.Empty : (tesInternalSegments.BlobName + "/")).Length;
+            var eventsEndIndex = eventsStartIndex + eventsFolderName.Length + 1;
 
-            await foreach (var blobItem in azureProxy.ListBlobsWithTagsAsync(directoryUri, tags, cancellationToken).WithCancellation(cancellationToken))
+            //await foreach (var blobItem in azureProxy.ListBlobsWithTagsAsync(new(await storageAccessProvider.GetInternalTesBlobUrlAsync(string.Empty, cancellationToken, needsFind: true)), prefix, tags, cancellationToken).WithCancellation(cancellationToken))
+            //{
+            //    if (blobItem.Tags.ContainsKey(TesEventMessage.ProcessedTag) || !blobItem.Tags.ContainsKey("task-id"))
+            //    {
+            //        continue;
+            //    }
+
+
+            //}
+
+            await foreach (var blobItem in azureProxy.ListBlobsWithTagsAsync(new(await storageAccessProvider.GetInternalTesBlobUrlAsync(string.Empty, cancellationToken, needsTags: true)), prefix, cancellationToken).WithCancellation(cancellationToken))
             {
-                if (blobItem.Tags.ContainsKey(TesEventMessage.ProcessedTag))
+                if (blobItem.Tags.ContainsKey(TesEventMessage.ProcessedTag) || !blobItem.Tags.ContainsKey("task-id"))
                 {
                     continue;
                 }
 
-                UriBuilder builder = new(directoryUri) { Path = $"{accountSegments.ContainerName}/{blobItem.BlobName}" };
+                var blobUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(blobItem.Name[eventsStartIndex..], cancellationToken, needsTags: true, needsWrite: true);
 
-                var pathUnderDirectory = builder.Path[(builder.Path.LastIndexOf("/events/") + 8)..];
-                var eventName = pathUnderDirectory[..pathUnderDirectory.IndexOf('/')];
+                var pathFromEventName = blobItem.Name[eventsEndIndex..];
+                var eventName = pathFromEventName[..pathFromEventName.IndexOf('/')];
 
-                yield return batchTesEventMessageFactory.CreateNew(builder.Uri, blobItem.Tags, eventName);
+                yield return batchTesEventMessageFactory.CreateNew(new(blobUrl), blobItem.Tags, eventName);
             }
         }
 
