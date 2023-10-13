@@ -205,8 +205,16 @@ namespace TesApi.Web.Storage
             if (task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters
                     .internal_path_prefix) == true)
             {
+                var internalPath = $"{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}{normalizedBlobPath}";
+                
+                if (storageOptions.ExecutionsContainerName is not null &&
+                    !internalPath.StartsWith(storageOptions.ExecutionsContainerName, StringComparison.OrdinalIgnoreCase))
+                {
+                    internalPath = $"{storageOptions.ExecutionsContainerName}/{internalPath}";
+                }
+
                 var blobPathWithPathPrefix =
-                    $"/{storageOptions.DefaultAccountName}/{storageOptions.ExecutionsContainerName}/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}{normalizedBlobPath}";
+                    $"/{storageOptions.DefaultAccountName}/{internalPath}";
                 return await MapLocalPathToSasUrlAsync(blobPathWithPathPrefix, cancellationToken, getContainerSas: true);
             }
 
