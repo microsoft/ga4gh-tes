@@ -45,7 +45,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     }
 
     /// <summary>
-    /// Property to assist in directly accessing <see cref="IStorageAccessProvider"/> methods in this instance.
+    /// Property to assist in directly accessing methods in this instance through the <see cref="IStorageAccessProvider"/> interface.
     /// </summary>
     protected IStorageAccessProvider This => this;
 
@@ -110,7 +110,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     public abstract Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken, bool? needsTags, bool? needsFind, bool? needsWrite);
 
     /// <inheritdoc />
-    public abstract Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);
+    public abstract Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken, bool? needsWrite);
 
     /// <inheritdoc />
     public abstract string GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath);

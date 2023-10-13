@@ -144,6 +144,8 @@ namespace TesApi.Web
                         BatchTaskEndTime: task.Created/*,
                             BatchTaskExitCode: 0*/),
 
+                Tes.Runner.Events.EventsPublisher.ExecutorStartEvent => new(AzureBatchTaskState.TaskState.Running),
+
                 // TODO: the rest
                 _ => new(AzureBatchTaskState.TaskState.NodePreempted), //throw new System.Diagnostics.UnreachableException(),
             };

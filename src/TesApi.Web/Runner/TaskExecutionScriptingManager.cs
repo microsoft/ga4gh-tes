@@ -166,7 +166,7 @@ namespace TesApi.Web.Runner
             string content, string fileName, CancellationToken cancellationToken)
         {
             var blobUrl =
-                await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, fileName, cancellationToken);
+                await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, fileName, cancellationToken, needsWrite: true);
 
             await storageAccessProvider.UploadBlobAsync(new Uri(blobUrl), content, cancellationToken);
             return blobUrl;

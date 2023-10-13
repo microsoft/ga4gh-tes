@@ -160,7 +160,9 @@ namespace TesApi.Web
             var messages = new ConcurrentBag<(string Id, AzureBatchTaskState State)>();
 
             // Get and parse event blobs
-            await foreach (var message in batchScheduler.GetEventMessagesAsync(stoppingToken, Tes.Runner.Events.EventsPublisher.TaskCompletionEvent).WithCancellation(stoppingToken))
+            await foreach (var message in batchScheduler.GetEventMessagesAsync(stoppingToken, Tes.Runner.Events.EventsPublisher.TaskCompletionEvent)
+                .Concat(batchScheduler.GetEventMessagesAsync(stoppingToken, Tes.Runner.Events.EventsPublisher.ExecutorStartEvent))
+                .WithCancellation(stoppingToken))
             {
                 messageInfos.Add(message);
             }
@@ -183,9 +185,10 @@ namespace TesApi.Web
             // Helpers
             async ValueTask ProcessMessage(TesEventMessage messageInfo, CancellationToken cancellationToken)
             {
-                // TODO: remove the switch (keeping the message state retrieval) when GetCompletedBatchState can process all events
+                // TODO: remove the switch (keeping the message state retrieval) when TesEventMessage.GetMessageBatchStateAsync() can process all events
                 switch (messageInfo.Event)
                 {
+                    case Tes.Runner.Events.EventsPublisher.ExecutorStartEvent:
                     case Tes.Runner.Events.EventsPublisher.TaskCompletionEvent:
                         messages.Add(await messageInfo.GetMessageBatchStateAsync(cancellationToken));
                         break;

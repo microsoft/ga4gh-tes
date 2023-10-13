@@ -43,7 +43,7 @@ namespace TesApi.Tests.Runner
             storageAccessProviderMock = new Mock<IStorageAccessProvider>();
             storageAccessProviderMock.Setup(x =>
                     x.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(),
-                        It.IsAny<CancellationToken>()))
+                        It.IsAny<CancellationToken>(), It.IsAny<bool?>()))
                 .ReturnsAsync(AssetUrl);
             storageAccessProviderMock.Setup(x =>
                     x.GetInternalTesBlobUrlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(),

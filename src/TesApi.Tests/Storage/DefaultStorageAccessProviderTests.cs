@@ -20,7 +20,7 @@ namespace TesApi.Tests.Storage
     [TestClass, TestCategory("Unit")]
     public class DefaultStorageAccessProviderTests
     {
-        private DefaultStorageAccessProvider defaultStorageAccessProvider;
+        private IStorageAccessProvider defaultStorageAccessProvider;
         private Mock<IAzureProxy> azureProxyMock;
         private StorageOptions storageOptions;
         private StorageAccountInfo storageAccountInfo;

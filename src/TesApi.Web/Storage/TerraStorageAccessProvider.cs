@@ -121,8 +121,10 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken)
+        public override async Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken, bool? needsWrite)
         {
+            // Currently all SAS tokens with Terra are R/W so needsWrite is waiting for a safer future.
+
             var blobInfo = GetTerraBlobInfoForInternalTesTask(task, blobPath);
 
             if (string.IsNullOrEmpty(blobPath))

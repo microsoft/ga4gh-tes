@@ -222,7 +222,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken)
+        public override async Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken, bool? needsWrite)
         {
             var normalizedBlobPath = NormalizedBlobPath(blobPath);
 
@@ -232,10 +232,10 @@ namespace TesApi.Web.Storage
                 var blobPathWithPathPrefix =
                     $"/{defaultStorageAccountName}/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}{normalizedBlobPath}";
 
-                return await This.MapLocalPathToSasUrlAsync(blobPathWithPathPrefix, cancellationToken, getContainerSas: true);
+                return await This.MapLocalPathToSasUrlAsync(blobPathWithPathPrefix, cancellationToken, getContainerSas: needsWrite ?? false);
             }
 
-            return await This.GetInternalTesBlobUrlAsync($"/{task.Id}{normalizedBlobPath}", cancellationToken);
+            return await This.GetInternalTesBlobUrlAsync($"/{task.Id}{normalizedBlobPath}", cancellationToken, needsWrite: needsWrite);
         }
 
         private async Task<bool> TryGetStorageAccountInfoAsync(string accountName, CancellationToken cancellationToken, Action<StorageAccountInfo> onSuccess = null)

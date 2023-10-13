@@ -320,7 +320,7 @@ namespace TesApi.Web.Runner
         {
             var inputFileUrl =
                 await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, Guid.NewGuid().ToString(),
-                    cancellationToken);
+                    cancellationToken, needsWrite: true);
 
             //return the URL without the SAS token, the runner will add it using the transformation strategy
             await storageAccessProvider.UploadBlobAsync(new Uri(inputFileUrl), content, cancellationToken);
