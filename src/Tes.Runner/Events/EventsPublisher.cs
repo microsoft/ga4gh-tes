@@ -18,7 +18,7 @@ public class EventsPublisher : IAsyncDisposable
     public const string DownloadEndEvent = "downloadEnd";
     public const string UploadStartEvent = "uploadStart";
     public const string UploadEndEvent = "uploadEnd";
-    public const string ExecutorStartEvent = "executorStar";
+    public const string ExecutorStartEvent = "executorStart";
     public const string ExecutorEndEvent = "executorEnd";
     public const string TaskCompletionEvent = "taskCompleted";
 

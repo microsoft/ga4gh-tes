@@ -8,7 +8,7 @@ namespace Tes.RunnerCLI.Commands
 {
     internal class CommandFactory
     {
-        const string DefaultTaskDefinitionFile = "TesTask.json";
+        const string DefaultTaskDefinitionFile = "runner-task.json";
 
         private static readonly Uri DefaultDockerUri = new("unix:///var/run/docker.sock");
 
