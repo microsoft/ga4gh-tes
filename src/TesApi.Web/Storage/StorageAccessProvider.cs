@@ -122,4 +122,11 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     protected static bool TryParseHttpUrlFromInput(string input, out Uri uri)
         => Uri.TryCreate(input, UriKind.Absolute, out uri) && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// True if the path is the cromwell executions folder
+    /// </summary>
+    /// <param name="path"></param>
+    /// <returns></returns>
+    protected bool IsKnownExecutionFilePath(string path)
+        => path.StartsWith(CromwellPathPrefix, StringComparison.OrdinalIgnoreCase);
 }
