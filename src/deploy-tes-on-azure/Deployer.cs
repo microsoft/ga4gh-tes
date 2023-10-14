@@ -344,6 +344,15 @@ namespace TesDeployer
                             await AssignVmAsDataOwnerToStorageAccountAsync(managedIdentity, storageAccount);
                         }
 
+                        // TODO: (purpetually) update the stated version in the next line to the next-to-last version that performed role assignment changes.
+                        if (installedVersion is null || installedVersion < new Version(4, 4) ||
+                            // TODO: (purpetually) update the stated version in the next line to one less than the last version that performs role assignment changes.
+                            (installedVersion < new Version(targetVersion) && installedVersion > new Version(4, 6)))
+                        {
+                            ConsoleEx.WriteLine("Waiting 5 minutes for role assignment propagation...");
+                            await Task.Delay(System.TimeSpan.FromMinutes(5));
+                        }
+
                         await kubernetesManager.UpgradeValuesYamlAsync(storageAccount, settings);
                         await PerformHelmDeploymentAsync(resourceGroup);
                     }
@@ -367,7 +376,7 @@ namespace TesDeployer
                         postgreSqlFlexServer = await ValidateAndGetExistingPostgresqlServerAsync();
                         var keyVault = await ValidateAndGetExistingKeyVaultAsync();
 
-                        ConsoleEx.WriteLine($"Deploying TES on Azure version {Utility.DelimitedTextToDictionary(Utility.GetFileContent("scripts", "env-00-tes-version.txt")).GetValueOrDefault("TesOnAzureVersion")} into resource group '{resourceGroup.Name}'...");
+                        ConsoleEx.WriteLine($"Deploying TES on Azure version {Utility.DelimitedTextToDictionary(Utility.GetFileContent("scripts", "env-00-tes-version.txt")).GetValueOrDefault("TesOnAzureVersion")}...");
 
                         // Configuration preferences not currently settable by user.
                         if (string.IsNullOrWhiteSpace(configuration.PostgreSqlServerName) && configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault())
