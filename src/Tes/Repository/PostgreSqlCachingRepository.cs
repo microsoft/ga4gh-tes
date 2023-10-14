@@ -117,7 +117,7 @@ namespace Tes.Repository
         /// <param name="item"></param>
         /// <param name="action"></param>
         /// <returns></returns>
-        protected Task<T> AddUpdateOrRemoveItemInDbAsync(T item, WriteAction action, CancellationToken cancellationToken)
+        protected async Task<T> AddUpdateOrRemoveItemInDbAsync(T item, WriteAction action, CancellationToken cancellationToken)
         {
             var source = new TaskCompletionSource<T>();
             var result = source.Task;
@@ -134,8 +134,8 @@ namespace Tes.Repository
                 }
             }
 
-            _itemsToWrite.Writer.TryWrite((item, action, source));
-            return result;
+            await _itemsToWrite.Writer.WriteAsync((item, action, source));
+            return item;
 
             Task<T> RemoveUpdatingItem(Task<T> task)
             {
