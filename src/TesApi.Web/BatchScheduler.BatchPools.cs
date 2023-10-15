@@ -31,7 +31,7 @@ namespace TesApi.Web
         {
             var identityResourceIds = "<none>";
 
-            if (identities is not null && identities.Count > 0) 
+            if (identities is not null && identities.Count > 0)
             {
                 identityResourceIds = string.Join(";", identities);
             }
