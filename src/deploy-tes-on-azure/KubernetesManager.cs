@@ -356,13 +356,13 @@ namespace TesDeployer
                 }
             });
 
-            var pods = await client.CoreV1.ListNamespacedPodAsync(podNamespace);
-            var workloadPod = pods.Items.Where(x => x.Metadata.Name.Contains(podName)).FirstOrDefault();
-
             if (!await WaitForWorkloadAsync(client, podName, podNamespace, cts.Token))
             {
                 throw new Exception($"Timed out waiting for {podName} to start.");
             }
+
+            var pods = await client.CoreV1.ListNamespacedPodAsync(podNamespace);
+            var workloadPod = pods.Items.Where(x => x.Metadata.Name.Contains(podName)).FirstOrDefault();
 
             // Pod Exec can fail even after the pod is marked ready.
             // Retry on WebSocketExceptions for up to 40 secs.
