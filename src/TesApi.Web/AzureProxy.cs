@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Specialized;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Auth;
 using Microsoft.Azure.Batch.Common;
@@ -396,23 +397,12 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<IEnumerable<CloudBlob>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
+        public IAsyncEnumerable<(string Name, Uri Uri)> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
         {
-            var blob = new CloudBlockBlob(directoryUri);
-            var directory = blob.Container.GetDirectoryReference(blob.Name);
-
-            BlobContinuationToken continuationToken = null;
-            var results = new List<CloudBlob>();
-
-            do
-            {
-                var response = await directory.ListBlobsSegmentedAsync(useFlatBlobListing: true, blobListingDetails: BlobListingDetails.None, maxResults: null, currentToken: continuationToken, options: null, operationContext: null, cancellationToken: cancellationToken);
-                continuationToken = response.ContinuationToken;
-                results.AddRange(response.Results.OfType<CloudBlob>());
-            }
-            while (continuationToken is not null);
-
-            return results;
+            var directory = (new BlobClient(directoryUri, new(BlobClientOptions.ServiceVersion.V2021_04_10)));
+            return directory.GetParentBlobContainerClient()
+                .GetBlobsAsync(prefix: directory.Name, cancellationToken: cancellationToken)
+                .Select(blobItem => (blobItem.Name, new BlobUriBuilder(directory.Uri) { Sas = null, BlobName = blobItem.Name }.ToUri()));
         }
 
         /// <inheritdoc/>
@@ -420,19 +410,7 @@ namespace TesApi.Web
         {
             BlobContainerClient container = new(containerUri, new(BlobClientOptions.ServiceVersion.V2021_04_10));
 
-            return container.GetBlobsAsync(Azure.Storage.Blobs.Models.BlobTraits.Tags, Azure.Storage.Blobs.Models.BlobStates.None, prefix, cancellationToken);
-        }
-
-        /// <inheritdoc/>
-        public IAsyncEnumerable<Azure.Storage.Blobs.Models.TaggedBlobItem> ListBlobsWithTagsAsync(Uri containerUri, string prefix, IDictionary<string, string> tagsQuery, CancellationToken cancellationToken)
-        {
-            var fullTagsQuery = Enumerable.Empty<string>()
-                //.Append(new($"&where=@container='{container.Name}'"))
-                .Concat(tagsQuery.Select(pair => $"\"{pair.Key}\"='{pair.Value}'"));
-
-            BlobContainerClient container = new(containerUri, new(BlobClientOptions.ServiceVersion.V2021_04_10));
-
-            return container.FindBlobsByTagsAsync(string.Join(" AND", fullTagsQuery), cancellationToken).Where(blob => blob.BlobName.StartsWith(prefix));
+            return container.GetBlobsAsync(Azure.Storage.Blobs.Models.BlobTraits.Tags, prefix: prefix, cancellationToken: cancellationToken);
         }
 
         /// <inheritdoc/>

@@ -47,7 +47,7 @@ namespace TesApi.Tests.Runner
                 .ReturnsAsync(AssetUrl);
             storageAccessProviderMock.Setup(x =>
                     x.GetInternalTesBlobUrlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(),
-                        It.IsAny<bool?>(), It.IsAny<bool?>(), It.IsAny<bool?>()))
+                        It.IsAny<bool?>(), It.IsAny<bool?>()))
                 .ReturnsAsync(AssetUrl);
 
             taskToNodeTaskConverterMock = new Mock<TaskToNodeTaskConverter>();

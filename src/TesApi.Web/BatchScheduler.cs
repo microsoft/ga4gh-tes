@@ -790,7 +790,6 @@ namespace TesApi.Web
         {
             var additionalInputFiles = new List<TesInput>();
 
-
             if (!Uri.TryCreate(cromwellExecutionDirectoryUrl, UriKind.Absolute, out _))
             {
                 cromwellExecutionDirectoryUrl = $"/{cromwellExecutionDirectoryUrl}";
@@ -801,14 +800,14 @@ namespace TesApi.Web
             if (executionDirectoryUri is not null)
             {
                 var blobsInExecutionDirectory =
-                    (await azureProxy.ListBlobsAsync(new Uri(executionDirectoryUri), cancellationToken)).ToList();
+                    await azureProxy.ListBlobsAsync(new Uri(executionDirectoryUri), cancellationToken).ToListAsync(cancellationToken);
                 var scriptBlob =
                     blobsInExecutionDirectory.FirstOrDefault(b => b.Name.EndsWith($"/{CromwellScriptFileName}"));
                 var commandScript =
                     task.Inputs?.FirstOrDefault(
                         IsCromwellCommandScript); // this should never be null because it's used to set isCromwell
 
-                if (scriptBlob is not null)
+                if (scriptBlob != default)
                 {
                     blobsInExecutionDirectory.Remove(scriptBlob);
                 }
@@ -833,7 +832,6 @@ namespace TesApi.Web
                         .ToListAsync(cancellationToken);
                 }
             }
-
 
             return additionalInputFiles;
         }
@@ -1331,29 +1329,16 @@ namespace TesApi.Web
         public async IAsyncEnumerable<TesEventMessage> GetEventMessagesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, string @event)
         {
             const string eventsFolderName = "events";
-
             var prefix = eventsFolderName + "/";
-            //var tags = new Dictionary<string, string>();
 
             if (!string.IsNullOrWhiteSpace(@event))
             {
                 prefix += @event + "/";
-                //tags.Add("event-name", @event);
             }
 
             var tesInternalSegments = StorageAccountUrlSegments.Create(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(string.Empty));
             var eventsStartIndex = (string.IsNullOrEmpty(tesInternalSegments.BlobName) ? string.Empty : (tesInternalSegments.BlobName + "/")).Length;
             var eventsEndIndex = eventsStartIndex + eventsFolderName.Length + 1;
-
-            //await foreach (var blobItem in azureProxy.ListBlobsWithTagsAsync(new(await storageAccessProvider.GetInternalTesBlobUrlAsync(string.Empty, cancellationToken, needsFind: true)), prefix, tags, cancellationToken).WithCancellation(cancellationToken))
-            //{
-            //    if (blobItem.Tags.ContainsKey(TesEventMessage.ProcessedTag) || !blobItem.Tags.ContainsKey("task-id"))
-            //    {
-            //        continue;
-            //    }
-
-
-            //}
 
             await foreach (var blobItem in azureProxy.ListBlobsWithTagsAsync(new(await storageAccessProvider.GetInternalTesBlobUrlAsync(string.Empty, cancellationToken, needsTags: true)), prefix, cancellationToken).WithCancellation(cancellationToken))
             {

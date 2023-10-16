@@ -16,7 +16,6 @@ using Microsoft.Azure.Management.Batch.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Microsoft.WindowsAzure.Storage.Blob;
 using Moq;
 using Newtonsoft.Json;
 using Tes.Extensions;
@@ -1363,7 +1362,7 @@ namespace TesApi.Tests
             };
 
             var commandScriptUri = UriFromTesInput(tesTask.Inputs[0]);
-            var executionDirectoryBlobs = tesTask.Inputs.Select(CloudBlobFromTesInput).ToList();
+            var executionDirectoryBlobs = tesTask.Inputs.Select(BlobNameUriFromTesInput).ToList();
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
@@ -1383,13 +1382,13 @@ namespace TesApi.Tests
                 var commandScriptDir = new UriBuilder(commandScriptUri) { Path = Path.GetDirectoryName(commandScriptUri.AbsolutePath).Replace('\\', '/') }.Uri;
                 executionDirectoryUri = UrlMutableSASEqualityComparer.TrimUri(new Uri(storageAccessProvider.MapLocalPathToSasUrlAsync(commandScriptDir.IsFile ? commandScriptDir.AbsolutePath : commandScriptDir.AbsoluteUri, CancellationToken.None, getContainerSas: true).Result));
 
-                serviceProvider.AzureProxy.Setup(p => p.ListBlobsAsync(It.Is(executionDirectoryUri, new UrlMutableSASEqualityComparer()), It.IsAny<CancellationToken>())).Returns(Task.FromResult<IEnumerable<CloudBlob>>(executionDirectoryBlobs));
+                serviceProvider.AzureProxy.Setup(p => p.ListBlobsAsync(It.Is(executionDirectoryUri, new UrlMutableSASEqualityComparer()), It.IsAny<CancellationToken>())).Returns(executionDirectoryBlobs.ToAsyncEnumerable());
 
                 var uri = new UriBuilder(executionDirectoryUri);
                 uri.Path = uri.Path.TrimEnd('/') + $"/{fileName}";
 
                 TesInput writeInput = new() { Url = uri.Uri.AbsoluteUri, Path = Path.Combine(Path.GetDirectoryName(script[1]), fileName).Replace('\\', '/'), Type = TesFileType.FILEEnum, Name = "write_", Content = null };
-                executionDirectoryBlobs.Add(CloudBlobFromTesInput(writeInput));
+                executionDirectoryBlobs.Add(BlobNameUriFromTesInput(writeInput));
 
                 if (fileIsInInputs)
                 {
@@ -1406,8 +1405,8 @@ namespace TesApi.Tests
                 Assert.AreEqual(2, filesToDownload.Length);
             });
 
-            static CloudBlob CloudBlobFromTesInput(TesInput input)
-                => new(UriFromTesInput(input));
+            static (string Name, Uri Uri) BlobNameUriFromTesInput(TesInput input)
+                => (input.Path, UriFromTesInput(input));
 
             static Uri UriFromTesInput(TesInput input)
             {
@@ -1707,6 +1706,9 @@ namespace TesApi.Tests
 
                 azureProxy.Setup(a => a.ListTasksAsync(It.IsAny<string>(), It.IsAny<DetailLevel>()))
                     .Returns(azureProxyReturnValues.AzureProxyListTasks);
+
+                azureProxy.Setup(a => a.ListBlobsAsync(It.IsAny<Uri>(), It.IsAny<System.Threading.CancellationToken>()))
+                    .Returns(AsyncEnumerable.Empty<(string, Uri)>());
             };
 
         private static Func<IEnumerable<(string Key, string Value)>> GetMockConfig()

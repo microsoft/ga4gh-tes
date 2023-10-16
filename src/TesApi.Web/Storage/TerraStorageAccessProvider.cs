@@ -99,14 +99,14 @@ namespace TesApi.Web.Storage
 
             if (getContainerSas)
             {
-                return await GetMappedSasContainerUrlFromWsmAsync(terraBlobInfo, false, false, cancellationToken);
+                return await GetMappedSasContainerUrlFromWsmAsync(terraBlobInfo, false, cancellationToken);
             }
 
             return await GetMappedSasUrlFromWsmAsync(terraBlobInfo, false, cancellationToken);
         }
 
         /// <inheritdoc />
-        public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken, bool? needsTags, bool? needsFind, bool? needsWrite)
+        public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken, bool? needsTags, bool? needsWrite)
         {
             // Currently all SAS tokens with Terra are R/W so needsWrite is waiting for a safer future.
 
@@ -114,7 +114,7 @@ namespace TesApi.Web.Storage
 
             if (string.IsNullOrEmpty(blobPath))
             {
-                return await GetMappedSasContainerUrlFromWsmAsync(blobInfo, needsTags, needsFind, cancellationToken);
+                return await GetMappedSasContainerUrlFromWsmAsync(blobInfo, needsTags, cancellationToken);
             }
 
             return await GetMappedSasUrlFromWsmAsync(blobInfo, needsTags, cancellationToken);
@@ -129,7 +129,7 @@ namespace TesApi.Web.Storage
 
             if (string.IsNullOrEmpty(blobPath))
             {
-                return await GetMappedSasContainerUrlFromWsmAsync(blobInfo, false, false, cancellationToken);
+                return await GetMappedSasContainerUrlFromWsmAsync(blobInfo, false, cancellationToken);
             }
 
             return await GetMappedSasUrlFromWsmAsync(blobInfo, false, cancellationToken);
@@ -281,9 +281,9 @@ namespace TesApi.Web.Storage
             }
         }
 
-        private async Task<string> GetMappedSasContainerUrlFromWsmAsync(TerraBlobInfo blobInfo, bool? needsTags, bool? needsFind, CancellationToken cancellationToken)
+        private async Task<string> GetMappedSasContainerUrlFromWsmAsync(TerraBlobInfo blobInfo, bool? needsTags, CancellationToken cancellationToken)
         {
-            var tokenInfo = await GetWorkspaceContainerSasTokenFromWsmAsync(blobInfo, needsTags, needsFind, cancellationToken);
+            var tokenInfo = await GetWorkspaceContainerSasTokenFromWsmAsync(blobInfo, needsTags, cancellationToken);
 
             var urlBuilder = new UriBuilder(tokenInfo.Url);
 
@@ -341,10 +341,10 @@ namespace TesApi.Web.Storage
                 tokenParams, cancellationToken);
         }
 
-        private async Task<WsmSasTokenApiResponse> GetWorkspaceContainerSasTokenFromWsmAsync(TerraBlobInfo blobInfo, bool? needsTags, bool? needsFind, CancellationToken cancellationToken)
+        private async Task<WsmSasTokenApiResponse> GetWorkspaceContainerSasTokenFromWsmAsync(TerraBlobInfo blobInfo, bool? needsTags, CancellationToken cancellationToken)
         {
             // an empty blob name gets a container Sas token
-            var tokenParams = CreateTokenParamsFromOptions(blobName: "", SasContainerPermissions + (needsTags.GetValueOrDefault() ? "t" : string.Empty) + (needsFind.GetValueOrDefault() ? "l" : string.Empty));
+            var tokenParams = CreateTokenParamsFromOptions(blobName: "", SasContainerPermissions + (needsTags.GetValueOrDefault() ? "t" : string.Empty));
 
             Logger.LogInformation(
                 $"Getting Sas container Url from Terra. Wsm workspace id:{blobInfo.WorkspaceId}");

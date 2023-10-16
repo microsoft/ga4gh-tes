@@ -107,7 +107,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     public abstract Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration, bool getContainerSas);
 
     /// <inheritdoc />
-    public abstract Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken, bool? needsTags, bool? needsFind, bool? needsWrite);
+    public abstract Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken, bool? needsTags, bool? needsWrite);
 
     /// <inheritdoc />
     public abstract Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken, bool? needsWrite);

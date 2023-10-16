@@ -138,7 +138,7 @@ namespace TesApi.Web
         /// <param name="directoryUri">Directory Uri</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>List of blob paths</returns>
-        Task<IEnumerable<Microsoft.WindowsAzure.Storage.Blob.CloudBlob>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken);
+        IAsyncEnumerable<(string Name, Uri Uri)> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken);
 
         /// <summary>
         /// Fetches the blobs properties
@@ -156,16 +156,6 @@ namespace TesApi.Web
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         IAsyncEnumerable<Azure.Storage.Blobs.Models.BlobItem> ListBlobsWithTagsAsync(Uri containerUri, string prefix, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// List blobs whose tags match a given search expression in the given directory.
-        /// </summary>
-        /// <param name="containerUri">Container URI</param>
-        /// <param name="prefix"></param>
-        /// <param name="tagsQuery">Tags and values to exactly match (case sensitive).</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        IAsyncEnumerable<Azure.Storage.Blobs.Models.TaggedBlobItem> ListBlobsWithTagsAsync(Uri containerUri, string prefix, IDictionary<string, string> tagsQuery, CancellationToken cancellationToken);
 
         /// <summary>
         /// Sets tags on the underlying blob.

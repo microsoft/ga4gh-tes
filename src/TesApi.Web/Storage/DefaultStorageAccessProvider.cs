@@ -120,7 +120,7 @@ namespace TesApi.Web.Storage
             {
                 try
                 {
-                    var result = await AddSasTokenAsync(pathSegments, sasTokenDuration, getContainerSas, needsTags: false, needsFind: false, needsWrite: true, cancellationToken, path);
+                    var result = await AddSasTokenAsync(pathSegments, sasTokenDuration, getContainerSas, needsTags: false, needsWrite: true, cancellationToken: cancellationToken, path: path);
                     return result.ToUriString();
                 }
                 catch
@@ -130,7 +130,7 @@ namespace TesApi.Web.Storage
             }
         }
 
-        private async Task<StorageAccountUrlSegments> AddSasTokenAsync(StorageAccountUrlSegments pathSegments, TimeSpan? sasTokenDuration, bool getContainerSas, bool? needsTags, bool? needsFind, bool? needsWrite, CancellationToken cancellationToken, string path = default)
+        private async Task<StorageAccountUrlSegments> AddSasTokenAsync(StorageAccountUrlSegments pathSegments, TimeSpan? sasTokenDuration, bool getContainerSas, bool? needsTags, bool? needsWrite, CancellationToken cancellationToken, string path = default)
         {
             StorageAccountInfo storageAccountInfo = null;
 
@@ -154,11 +154,7 @@ namespace TesApi.Web.Storage
                     sasBlobPermissions |= BlobSasPermissions.Tag;
                 }
 
-                if (pathSegments.IsContainer && needsFind.GetValueOrDefault())
-                {
-                    sasContainerPermissions |= BlobContainerSasPermissions.Filter;
-                }
-                else if (needsWrite.GetValueOrDefault())
+                if (needsWrite.GetValueOrDefault())
                 {
                     sasBlobPermissions |= BlobSasPermissions.Add | BlobSasPermissions.Create | BlobSasPermissions.List | BlobSasPermissions.Write;
                 }
@@ -181,10 +177,10 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken, bool? needsTags, bool? needsFind, bool? needsWrite)
+        public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken, bool? needsTags, bool? needsWrite)
         {
             var pathSegments = StorageAccountUrlSegments.Create(GetInternalTesBlobUrlWithoutSasToken(blobPath));
-            var resultPathSegments = await AddSasTokenAsync(pathSegments, SasTokenDuration, false, needsTags, needsFind, needsWrite, cancellationToken);
+            var resultPathSegments = await AddSasTokenAsync(pathSegments, SasTokenDuration, false, needsTags, needsWrite, cancellationToken);
             return resultPathSegments.ToUriString();
         }
 
