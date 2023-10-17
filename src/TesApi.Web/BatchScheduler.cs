@@ -345,8 +345,9 @@ namespace TesApi.Web
             {
                 try
                 {
+                    var forceRemove = !string.IsNullOrWhiteSpace(globalManagedIdentity) && !(cloudPool.Identity?.UserAssignedIdentities?.Any(id => globalManagedIdentity.Equals(id.ResourceId, StringComparison.OrdinalIgnoreCase)) ?? false);
                     var batchPool = batchPoolFactory.CreateNew();
-                    await batchPool.AssignPoolAsync(cloudPool, cancellationToken);
+                    await batchPool.AssignPoolAsync(cloudPool, forceRemove, cancellationToken);
                 }
                 catch (Exception exc)
                 {

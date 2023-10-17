@@ -306,7 +306,7 @@ namespace TesApi.Web
             var activePoolsFilter = new ODATADetailLevel
             {
                 FilterClause = "state eq 'active'",
-                SelectClause = BatchPool.CloudPoolSelectClause
+                SelectClause = BatchPool.CloudPoolSelectClause + ",identity",
             };
 
             return batchClient.PoolOperations.ListPools(activePoolsFilter).ToAsyncEnumerable()

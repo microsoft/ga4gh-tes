@@ -607,7 +607,7 @@ namespace TesApi.Web
                     _azureProxy.CreateBatchJobAsync(poolModel.Name, cancellationToken),
                     Task.Run(async () => pool = await _azureProxy.CreateBatchPoolAsync(poolModel, isPreemptible, cancellationToken), cancellationToken));
 
-                Configure(pool);
+                Configure(pool, false);
             }
             catch (AggregateException ex)
             {
@@ -652,7 +652,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async ValueTask AssignPoolAsync(CloudPool pool, CancellationToken cancellationToken)
+        public async ValueTask AssignPoolAsync(CloudPool pool, bool forceRemove, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(pool);
 
@@ -668,15 +668,15 @@ namespace TesApi.Web
                 throw new InvalidOperationException($"Active Job not found for Pool {pool.Id}");
             }
 
-            Configure(pool);
+            Configure(pool, forceRemove);
         }
 
-        private void Configure(CloudPool pool)
+        private void Configure(CloudPool pool, bool forceRemove)
         {
             ArgumentNullException.ThrowIfNull(pool);
 
             Id = pool.Id;
-            IsAvailable = DetermineIsAvailable(pool.CreationTime);
+            IsAvailable = !forceRemove && DetermineIsAvailable(pool.CreationTime);
 
             if (IsAvailable)
             {

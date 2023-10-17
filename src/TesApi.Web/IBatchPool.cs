@@ -36,8 +36,9 @@ namespace TesApi.Web
         /// Connects to the provided pool and associated job in the Batch Account.
         /// </summary>
         /// <param name="pool">The <see cref="CloudPool"/> to connect to.</param>
+        /// <param name="forceRemove"></param>
         /// <param name="cancellationToken"></param>
-        ValueTask AssignPoolAsync(CloudPool pool, CancellationToken cancellationToken);
+        ValueTask AssignPoolAsync(CloudPool pool, bool forceRemove, CancellationToken cancellationToken);
 
         /// <summary>
         /// Indicates that the pool is not scheduled to run tasks nor running tasks.
