@@ -319,10 +319,7 @@ namespace TesDeployer
                         }
 
                         var settings = ConfigureSettings(managedIdentity.ClientId, aksValues, installedVersion);
-
-                        //if (installedVersion is null || installedVersion < new Version(4, 2))
-                        //{
-                        //}
+                        var waitForRoleAssignmentPropagation = false;
 
                         if (installedVersion is null || installedVersion < new Version(4, 4))
                         {
@@ -331,6 +328,7 @@ namespace TesDeployer
 
                             // Always place the compute nodes into the new batch subnet (needed for simplified communication with batch and is faster/cheaper for azure services access).
                             await AssignMIAsNetworkContributorToResourceAsync(managedIdentity, resourceGroup);
+                            waitForRoleAssignmentPropagation = true;
 
                             if (string.IsNullOrWhiteSpace(settings["BatchNodesSubnetId"]))
                             {
@@ -342,12 +340,14 @@ namespace TesDeployer
                         {
                             // Storage account now requires Storage Blob Data Owner
                             await AssignVmAsDataOwnerToStorageAccountAsync(managedIdentity, storageAccount);
+                            waitForRoleAssignmentPropagation = true;
                         }
 
-                        // TODO: (purpetually) update the stated version in the next line to the next-to-last version that performed role assignment changes.
-                        if (installedVersion is null || installedVersion < new Version(4, 4) ||
-                            // TODO: (purpetually) update the stated version in the next line to one less than the last version that performs role assignment changes.
-                            (installedVersion < new Version(targetVersion) && installedVersion > new Version(4, 6)))
+                        //if (installedVersion is null || installedVersion < new Version(4, 8))
+                        //{
+                        //}
+
+                        if (waitForRoleAssignmentPropagation)
                         {
                             ConsoleEx.WriteLine("Waiting 5 minutes for role assignment propagation...");
                             await Task.Delay(System.TimeSpan.FromMinutes(5));
