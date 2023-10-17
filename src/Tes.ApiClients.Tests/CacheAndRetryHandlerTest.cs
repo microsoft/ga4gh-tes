@@ -75,7 +75,7 @@ public class CacheAndRetryHandlerTest
 
         await Assert.ThrowsExceptionAsync<Exception>(() => cachingRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, _ => Task.Run(() => mockInstanceToRetry.Object.ToString()), System.Threading.CancellationToken.None));
 
-        Assert.IsFalse(appCache.TryGetValue(cacheKey, out string _));
+        Assert.IsFalse(appCache.TryGetValue(cacheKey, out string? _));
     }
 
     [TestMethod]

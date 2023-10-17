@@ -84,6 +84,7 @@ namespace TesApi.Tests.TestServices
                         .AddTransient<ILogger<TaskExecutionScriptingManager>>(_ => NullLogger<TaskExecutionScriptingManager>.Instance)
                         .AddTransient<ILogger<BatchNodeScriptBuilder>>(_ => NullLogger<BatchNodeScriptBuilder>.Instance)
                         .AddTransient<ILogger<TesEventMessage>>(_ => NullLogger<TesEventMessage>.Instance)
+                        .AddTransient<ILogger<CachingWithRetriesAzureProxy>>(_ => NullLogger<CachingWithRetriesAzureProxy>.Instance)
                         .AddSingleton<TestRepositoryStorage>()
                         .AddSingleton<CachingRetryHandler>()
                         .AddSingleton<PriceApiClient>()

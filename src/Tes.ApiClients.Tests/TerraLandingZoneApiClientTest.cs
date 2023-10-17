@@ -29,7 +29,7 @@ namespace Tes.ApiClients.Tests
         {
             var body = terraApiStubData.GetResourceQuotaApiResponseInJson();
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
-                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>()))
+                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
                 .ReturnsAsync(body);
 
             var quota = await terraLandingZoneApiClient.GetResourceQuotaAsync(terraApiStubData.LandingZoneId, terraApiStubData.BatchAccountId, cacheResults: true, cancellationToken: CancellationToken.None);
@@ -56,7 +56,7 @@ namespace Tes.ApiClients.Tests
             var body = terraApiStubData.GetResourceApiResponseInJson();
 
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
-                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>()))
+                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
                 .ReturnsAsync(body);
 
             var resources = await terraLandingZoneApiClient.GetLandingZoneResourcesAsync(terraApiStubData.LandingZoneId, CancellationToken.None);

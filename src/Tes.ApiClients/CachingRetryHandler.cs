@@ -3,6 +3,7 @@
 
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using Polly;
 using Tes.ApiClients.Options;
 
 namespace Tes.ApiClients
@@ -43,12 +44,13 @@ namespace Tes.ApiClients
         /// <param name="cacheKey"></param>
         /// <param name="action">Action to execute</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="context"></param>
         /// <returns></returns>
-        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken)
+        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, Context? context = default)
         {
             ValidateArgs(cacheKey, action);
 
-            return await ExecuteWithCacheAsync(cacheKey, () => ExecuteWithRetryAsync(action, cancellationToken));
+            return await ExecuteWithCacheAsync(cacheKey, () => ExecuteWithRetryAsync(action, cancellationToken, context));
         }
 
         /// <summary>
@@ -58,23 +60,14 @@ namespace Tes.ApiClients
         /// <param name="action">Action to execute</param>
         /// <param name="cachesExpires"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="context"></param>
         /// <typeparam name="TResult"></typeparam>
         /// <returns></returns>
-        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, DateTimeOffset cachesExpires, CancellationToken cancellationToken)
+        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, DateTimeOffset cachesExpires, CancellationToken cancellationToken, Context? context = default)
         {
             ValidateArgs(cacheKey, action);
 
-            return await ExecuteWithCacheAsync(cacheKey, () => ExecuteWithRetryAsync(action, cancellationToken), cachesExpires);
-        }
-
-        private static void ValidateArgs(string cacheKey, Func<Task> action)
-        {
-            ArgumentNullException.ThrowIfNull(action);
-
-            if (string.IsNullOrEmpty(cacheKey))
-            {
-                throw new ArgumentNullException(nameof(cacheKey), "Invalid cache key. The value can't be null or empty");
-            }
+            return await ExecuteWithCacheAsync(cacheKey, () => ExecuteWithRetryAsync(action, cancellationToken, context), cachesExpires);
         }
 
         private static void ValidateArgs(string cacheKey, Func<CancellationToken, Task> action)

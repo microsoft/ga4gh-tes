@@ -57,28 +57,15 @@ namespace TesApi.Web
         /// <param name="asyncRetryPolicy">Policy retrying calls made while enumerating results returned by <paramref name="func"/>.</param>
         /// <param name="func">Method returning <see cref="IAsyncEnumerable{T}"/>.</param>
         /// <param name="retryPolicy">Policy retrying call to <paramref name="func"/>.</param>
-        /// <returns></returns>
-        public static IAsyncEnumerable<T> ExecuteAsync<T>(this AsyncRetryPolicy asyncRetryPolicy, Func<IAsyncEnumerable<T>> func, RetryPolicy retryPolicy)
-        {
-            return asyncRetryPolicy.ExecuteAsync(_ => func(), retryPolicy, new());
-        }
-
-        /// <summary>
-        /// Adapts calls returning <see cref="IAsyncEnumerable{T}"/> to <see cref="AsyncRetryPolicy"/>.
-        /// </summary>
-        /// <typeparam name="T">Type of results returned in <see cref="IAsyncEnumerable{T}"/> by <paramref name="func"/>.</typeparam>
-        /// <param name="asyncRetryPolicy">Policy retrying calls made while enumerating results returned by <paramref name="func"/>.</param>
-        /// <param name="func">Method returning <see cref="IAsyncEnumerable{T}"/>.</param>
-        /// <param name="retryPolicy">Policy retrying call to <paramref name="func"/>.</param>
         /// <param name="ctx">An optional <see cref="Polly.Context"/>.</param>
         /// <returns></returns>
-        public static IAsyncEnumerable<T> ExecuteAsync<T>(this AsyncRetryPolicy asyncRetryPolicy, Func<Polly.Context, IAsyncEnumerable<T>> func, RetryPolicy retryPolicy, Polly.Context ctx)
+        public static IAsyncEnumerable<T> ExecuteAsync<T>(this AsyncRetryPolicy asyncRetryPolicy, Func<IAsyncEnumerable<T>> func, RetryPolicy retryPolicy, Polly.Context ctx = default)
         {
             ArgumentNullException.ThrowIfNull(asyncRetryPolicy);
             ArgumentNullException.ThrowIfNull(func);
             ArgumentNullException.ThrowIfNull(retryPolicy);
 
-            return new PollyAsyncEnumerable<T>(retryPolicy.Execute(ctx => func(ctx), ctx ??= new()), asyncRetryPolicy, ctx);
+            return new PollyAsyncEnumerable<T>(retryPolicy.Execute(_ => func(), ctx ??= new()), asyncRetryPolicy, ctx);
         }
 
         #region Implementation classes
