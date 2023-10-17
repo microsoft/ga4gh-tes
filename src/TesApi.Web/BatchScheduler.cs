@@ -765,7 +765,7 @@ namespace TesApi.Web
             return globalManagedIdentity;
         }
 
-        private async Task<List<TesInput>> GetAdditionalCromwellInputsAsync(TesTask task, CancellationToken cancellationToken)
+        private async Task<IList<TesInput>> GetAdditionalCromwellInputsAsync(TesTask task, CancellationToken cancellationToken)
         {
             var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
             var isCromwell = cromwellExecutionDirectoryUrl is not null;
@@ -814,22 +814,18 @@ namespace TesApi.Web
 
                 if (commandScript is not null)
                 {
-                    var commandScriptPathParts = commandScript.Path.Split('/').ToList();
-                    var cromwellExecutionDirectory =
-                        string.Join('/', commandScriptPathParts.Take(commandScriptPathParts.Count - 1));
-                    additionalInputFiles = await blobsInExecutionDirectory
-                        .Select(b => (Path: $"/{cromwellExecutionDirectory.TrimStart('/')}/{b.Name.Split('/').Last()}",
-                            b.Uri))
-                        .ToAsyncEnumerable()
-                        .SelectAwait(async b => new TesInput
+                    var expectedPathParts = commandScript.Path.Split('/').Length;
+
+                    additionalInputFiles = blobsInExecutionDirectory
+                        .Where(b => b.Name.Split('/').Length == expectedPathParts)
+                        .Select(b => new TesInput
                         {
-                            Path = b.Path,
-                            Url = await storageAccessProvider.MapLocalPathToSasUrlAsync(b.Uri.AbsoluteUri,
-                                cancellationToken, getContainerSas: true),
-                            Name = Path.GetFileName(b.Path),
+                            Path = b.Name,
+                            Url = b.Uri.AbsoluteUri,
+                            Name = Path.GetFileName(b.Name),
                             Type = TesFileType.FILEEnum
                         })
-                        .ToListAsync(cancellationToken);
+                        .ToList();
                 }
             }
 

@@ -401,7 +401,7 @@ namespace TesApi.Web
         {
             var directory = (new BlobClient(directoryUri, new(BlobClientOptions.ServiceVersion.V2021_04_10)));
             return directory.GetParentBlobContainerClient()
-                .GetBlobsAsync(prefix: directory.Name, cancellationToken: cancellationToken)
+                .GetBlobsAsync(prefix: directory.Name + "/", cancellationToken: cancellationToken)
                 .Select(blobItem => (blobItem.Name, new BlobUriBuilder(directory.Uri) { Sas = null, BlobName = blobItem.Name }.ToUri()));
         }
 

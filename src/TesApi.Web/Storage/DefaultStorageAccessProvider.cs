@@ -163,7 +163,7 @@ namespace TesApi.Web.Storage
                 var builder = pathSegments.IsContainer || getContainerSas ? new BlobSasBuilder(sasContainerPermissions, expiresOn) : new BlobSasBuilder(sasBlobPermissions, expiresOn);
 
                 builder.BlobContainerName = resultPathSegments.ContainerName;
-                builder.BlobName = resultPathSegments.BlobName;
+                builder.BlobName = pathSegments.IsContainer || getContainerSas ? string.Empty : resultPathSegments.BlobName;
                 builder.Protocol = SasProtocol.Https;
 
                 resultPathSegments.SasToken = builder.ToSasQueryParameters(new StorageSharedKeyCredential(storageAccountInfo.Name, accountKey)).ToString();
