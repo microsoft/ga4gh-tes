@@ -15,6 +15,7 @@ using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.Extensions;
+using TesApi.Web.Events;
 using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
@@ -72,31 +73,31 @@ namespace TesApi.Web
         private readonly string globalManagedIdentity;
         private readonly ContainerRegistryProvider containerRegistryProvider;
         private readonly string batchPrefix;
-        private readonly IBatchPoolFactory batchPoolFactory;
-        private readonly BatchTesEventMessageFactory batchTesEventMessageFactory;
+        private readonly Func<IBatchPool> batchPoolFactory;
+        private readonly Func<Uri, IDictionary<string, string>, string, NodeEventMessage> batchTesEventMessageFactory;
         private readonly IAllowedVmSizesService allowedVmSizesService;
         private readonly TaskExecutionScriptingManager taskExecutionScriptingManager;
 
         /// <summary>
         /// Constructor for <see cref="BatchScheduler"/>
         /// </summary>
-        /// <param name="logger">Logger <see cref="ILogger"/></param>
-        /// <param name="batchGen1Options">Configuration of <see cref="Options.BatchImageGeneration1Options"/></param>
-        /// <param name="batchGen2Options">Configuration of <see cref="Options.BatchImageGeneration2Options"/></param>
-        /// <param name="marthaOptions">Configuration of <see cref="Options.MarthaOptions"/></param>
-        /// <param name="storageOptions">Configuration of <see cref="Options.StorageOptions"/></param>
-        /// <param name="batchImageNameOptions">Configuration of <see cref="Options.BatchImageNameOptions"/></param>
-        /// <param name="batchNodesOptions">Configuration of <see cref="Options.BatchNodesOptions"/></param>
-        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/></param>
-        /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
-        /// <param name="storageAccessProvider">Storage access provider <see cref="IStorageAccessProvider"/></param>
-        /// <param name="quotaVerifier">Quota verifier <see cref="IBatchQuotaVerifier"/>></param>
-        /// <param name="skuInformationProvider">Sku information provider <see cref="IBatchSkuInformationProvider"/></param>
-        /// <param name="containerRegistryProvider">Container registry information <see cref="ContainerRegistryProvider"/></param>
-        /// <param name="poolFactory">Batch pool factory <see cref="IBatchPoolFactory"/></param>
+        /// <param name="logger">Logger <see cref="ILogger"/>.</param>
+        /// <param name="batchGen1Options">Configuration of <see cref="Options.BatchImageGeneration1Options"/>.</param>
+        /// <param name="batchGen2Options">Configuration of <see cref="Options.BatchImageGeneration2Options"/>.</param>
+        /// <param name="marthaOptions">Configuration of <see cref="Options.MarthaOptions"/>.</param>
+        /// <param name="storageOptions">Configuration of <see cref="Options.StorageOptions"/>.</param>
+        /// <param name="batchImageNameOptions">Configuration of <see cref="Options.BatchImageNameOptions"/>.</param>
+        /// <param name="batchNodesOptions">Configuration of <see cref="Options.BatchNodesOptions"/>.</param>
+        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/>.</param>
+        /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/>.</param>
+        /// <param name="storageAccessProvider">Storage access provider <see cref="IStorageAccessProvider"/>.</param>
+        /// <param name="quotaVerifier">Quota verifier <see cref="IBatchQuotaVerifier"/>.</param>
+        /// <param name="skuInformationProvider">Sku information provider <see cref="IBatchSkuInformationProvider"/>.</param>
+        /// <param name="containerRegistryProvider">Container registry information <see cref="ContainerRegistryProvider"/>.</param>
+        /// <param name="poolFactory"><see cref="IBatchPool"/> factory.</param>
         /// <param name="allowedVmSizesService">Service to get allowed vm sizes.</param>
-        /// <param name="taskExecutionScriptingManager"><see cref="TaskExecutionScriptingManager"/></param>
-        /// <param name="batchTesEventMessageFactory"><see cref="BatchTesEventMessageFactory"/></param>
+        /// <param name="taskExecutionScriptingManager"><see cref="TaskExecutionScriptingManager"/>.</param>
+        /// <param name="batchTesEventMessageFactory"><see cref="NodeEventMessage"/> factory.</param>
         public BatchScheduler(
             ILogger<BatchScheduler> logger,
             IOptions<Options.BatchImageGeneration1Options> batchGen1Options,
@@ -111,10 +112,10 @@ namespace TesApi.Web
             IBatchQuotaVerifier quotaVerifier,
             IBatchSkuInformationProvider skuInformationProvider,
             ContainerRegistryProvider containerRegistryProvider,
-            IBatchPoolFactory poolFactory,
+            Func<IBatchPool> poolFactory,
             IAllowedVmSizesService allowedVmSizesService,
             TaskExecutionScriptingManager taskExecutionScriptingManager,
-            BatchTesEventMessageFactory batchTesEventMessageFactory)
+            Func<Uri, IDictionary<string, string>, string, NodeEventMessage> batchTesEventMessageFactory)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(azureProxy);
@@ -194,9 +195,9 @@ namespace TesApi.Web
                 tesTaskLog.BatchNodeMetrics = batchNodeMetrics;
                 tesTaskLog.CromwellResultCode = cromwellRcCode;
                 tesTaskLog.EndTime = DateTime.UtcNow;
-                tesTaskExecutorLog.StartTime = taskStartTime ?? batchInfo.BatchTaskStartTime;
-                tesTaskExecutorLog.EndTime = taskEndTime ?? batchInfo.BatchTaskEndTime;
-                tesTaskExecutorLog.ExitCode = batchInfo.BatchTaskExitCode;
+                tesTaskExecutorLog.StartTime ??= taskStartTime ?? batchInfo.BatchTaskStartTime;
+                tesTaskExecutorLog.EndTime ??= taskEndTime ?? batchInfo.BatchTaskEndTime;
+                tesTaskExecutorLog.ExitCode ??= batchInfo.BatchTaskExitCode;
 
                 // Only accurate when the task completes successfully, otherwise it's the Batch time as reported from Batch
                 // TODO this could get large; why?
@@ -261,6 +262,11 @@ namespace TesApi.Web
                 return Task.FromResult(false);
             }
 
+            Task<bool> HandleInfoUpdate(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
+            {
+                return SetTaskStateAndLog(tesTask, tesTask.State, batchInfo, cancellationToken);
+            }
+
             tesTaskStateTransitions = new List<TesTaskStateTransition>()
             {
                 new TesTaskStateTransition(tesTaskDeletionReady, batchTaskState: null, alternateSystemLogItem: null, (tesTask, _, ct) => DeleteCancelledTaskAsync(tesTask, ct)),
@@ -278,7 +284,8 @@ namespace TesApi.Web
                 new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.NodeUnusable, "Please open an issue. There should have been an error reported here.", SetTaskExecutorError),
                 //new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.JobNotFound, BatchTaskState.JobNotFound.ToString(), SetTaskSystemError),
                 //new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.MissingBatchTask, BatchTaskState.MissingBatchTask.ToString(), DeleteBatchJobAndSetTaskSystemErrorAsync),
-                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodePreempted, alternateSystemLogItem: null, HandlePreemptedNodeAsync)
+                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodePreempted, alternateSystemLogItem: null, HandlePreemptedNodeAsync),
+                new TesTaskStateTransition(condition: null, AzureBatchTaskState.TaskState.InfoUpdate, alternateSystemLogItem: null, HandleInfoUpdate)
             }.AsReadOnly();
         }
 
@@ -346,7 +353,7 @@ namespace TesApi.Web
                 try
                 {
                     var forceRemove = !string.IsNullOrWhiteSpace(globalManagedIdentity) && !(cloudPool.Identity?.UserAssignedIdentities?.Any(id => globalManagedIdentity.Equals(id.ResourceId, StringComparison.OrdinalIgnoreCase)) ?? false);
-                    var batchPool = batchPoolFactory.CreateNew();
+                    var batchPool = batchPoolFactory();
                     await batchPool.AssignPoolAsync(cloudPool, forceRemove, cancellationToken);
                 }
                 catch (Exception exc)
@@ -1323,7 +1330,7 @@ namespace TesApi.Web
 
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<TesEventMessage> GetEventMessagesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, string @event)
+        public async IAsyncEnumerable<NodeEventMessage> GetEventMessagesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, string @event)
         {
             const string eventsFolderName = "events";
             var prefix = eventsFolderName + "/";
@@ -1339,7 +1346,7 @@ namespace TesApi.Web
 
             await foreach (var blobItem in azureProxy.ListBlobsWithTagsAsync(new(await storageAccessProvider.GetInternalTesBlobUrlAsync(string.Empty, cancellationToken, needsTags: true)), prefix, cancellationToken).WithCancellation(cancellationToken))
             {
-                if (blobItem.Tags.ContainsKey(TesEventMessage.ProcessedTag) || !blobItem.Tags.ContainsKey("task-id"))
+                if (blobItem.Tags.ContainsKey(NodeEventMessage.ProcessedTag) || !blobItem.Tags.ContainsKey("task-id"))
                 {
                     continue;
                 }
@@ -1349,7 +1356,7 @@ namespace TesApi.Web
                 var pathFromEventName = blobItem.Name[eventsEndIndex..];
                 var eventName = pathFromEventName[..pathFromEventName.IndexOf('/')];
 
-                yield return batchTesEventMessageFactory.CreateNew(new(blobUrl), blobItem.Tags, eventName);
+                yield return batchTesEventMessageFactory(new(blobUrl), blobItem.Tags, eventName);
             }
         }
 

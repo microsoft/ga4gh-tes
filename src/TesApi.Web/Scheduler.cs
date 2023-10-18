@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
 using Tes.Repository;
+using TesApi.Web.Events;
 
 namespace TesApi.Web
 {
@@ -157,12 +158,11 @@ namespace TesApi.Web
         /// <returns></returns>
         async ValueTask UpdateTesTasksFromEventBlobsAsync(CancellationToken stoppingToken)
         {
-            var messageInfos = new ConcurrentBag<TesEventMessage>();
+            var messageInfos = new ConcurrentBag<NodeEventMessage>();
             var messages = new ConcurrentBag<(string Id, AzureBatchTaskState State)>();
 
             // Get and parse event blobs
-            await foreach (var message in batchScheduler.GetEventMessagesAsync(stoppingToken, Tes.Runner.Events.EventsPublisher.TaskCompletionEvent)
-                .Concat(batchScheduler.GetEventMessagesAsync(stoppingToken, Tes.Runner.Events.EventsPublisher.ExecutorStartEvent))
+            await foreach (var message in batchScheduler.GetEventMessagesAsync(stoppingToken)
                 .WithCancellation(stoppingToken))
             {
                 messageInfos.Add(message);
@@ -184,20 +184,9 @@ namespace TesApi.Web
                 stoppingToken);
 
             // Helpers
-            async ValueTask ProcessMessage(TesEventMessage messageInfo, CancellationToken cancellationToken)
+            async ValueTask ProcessMessage(NodeEventMessage messageInfo, CancellationToken cancellationToken)
             {
-                // TODO: remove the switch (keeping the message state retrieval) when TesEventMessage.GetMessageBatchStateAsync() can process all events
-                switch (messageInfo.Event)
-                {
-                    case Tes.Runner.Events.EventsPublisher.ExecutorStartEvent:
-                    case Tes.Runner.Events.EventsPublisher.TaskCompletionEvent:
-                        messages.Add(await messageInfo.GetMessageBatchStateAsync(cancellationToken));
-                        break;
-
-                    default:
-                        break;
-                }
-
+                messages.Add(await messageInfo.GetMessageBatchStateAsync(cancellationToken));
                 await messageInfo.MarkMessageProcessed(cancellationToken);
             }
 

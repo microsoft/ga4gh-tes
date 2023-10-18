@@ -25,6 +25,7 @@ using Microsoft.Rest;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Polly;
 using Polly.Retry;
+using TesApi.Web.Extensions;
 using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;

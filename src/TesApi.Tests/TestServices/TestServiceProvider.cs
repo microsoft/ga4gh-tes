@@ -18,6 +18,7 @@ using Tes.ApiClients.Options;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Web;
+using TesApi.Web.Events;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
@@ -83,15 +84,15 @@ namespace TesApi.Tests.TestServices
                         .AddTransient<ILogger<TaskToNodeTaskConverter>>(_ => NullLogger<TaskToNodeTaskConverter>.Instance)
                         .AddTransient<ILogger<TaskExecutionScriptingManager>>(_ => NullLogger<TaskExecutionScriptingManager>.Instance)
                         .AddTransient<ILogger<BatchNodeScriptBuilder>>(_ => NullLogger<BatchNodeScriptBuilder>.Instance)
-                        .AddTransient<ILogger<TesEventMessage>>(_ => NullLogger<TesEventMessage>.Instance)
+                        .AddTransient<ILogger<NodeEventMessage>>(_ => NullLogger<NodeEventMessage>.Instance)
                         .AddTransient<ILogger<CachingWithRetriesAzureProxy>>(_ => NullLogger<CachingWithRetriesAzureProxy>.Instance)
                         .AddSingleton<TestRepositoryStorage>()
                         .AddSingleton<CachingRetryHandler>()
                         .AddSingleton<PriceApiClient>()
-                        .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
+                        .AddSingleton<Func<IBatchPool>>(s => () => s.GetService<BatchPool>())
                         .AddTransient<BatchPool>()
-                        .AddSingleton<BatchTesEventMessageFactory>()
-                        .AddTransient<TesEventMessage>()
+                        .AddSingleton<Func<Uri, IDictionary<string, string>, string, NodeEventMessage>>(s => (blobAbsoluteUri, tags, @event) => ActivatorUtilities.CreateInstance<NodeEventMessage>(s, blobAbsoluteUri, tags, @event))
+                        .AddTransient<NodeEventMessage>()
                         .AddSingleton<IBatchScheduler, BatchScheduler>()
                         .AddSingleton(s => GetArmBatchQuotaProvider(s, armBatchQuotaProvider)) //added so config utils gets the arm implementation, to be removed once config utils is refactored.
                         .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()

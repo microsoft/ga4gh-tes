@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
 
-namespace TesApi.Web.Controllers
+namespace TesApi.Web
 {
     /// <summary>
     /// Global filter that handles <see cref="OperationCanceledException"/>.

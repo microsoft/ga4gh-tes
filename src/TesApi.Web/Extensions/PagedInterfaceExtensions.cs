@@ -11,7 +11,7 @@ using Microsoft.Rest.Azure;
 using Polly.Retry;
 
 // TODO: move this to Common.csproj?
-namespace TesApi.Web
+namespace TesApi.Web.Extensions
 {
     /// <summary>
     /// Extension methods and implementations for enumerating paged enumeration/collection types from Azure

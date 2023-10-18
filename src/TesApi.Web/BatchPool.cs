@@ -564,7 +564,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudTask> GetCompletedTasks(CancellationToken _1)
-            => GetTasksAsync("id,executionInfo", "state eq 'completed'");
+            => GetTasksAsync("id,executionInfo", $"state eq 'completed' and stateTransitionTime lt {DateTime.UtcNow - TimeSpan.FromSeconds(30):O}");
 
         // Returns false when pool/job was removed because it was not found. Returns true if the error was completely something else.
         private async ValueTask<bool> RemoveMissingPoolsAsync(Exception ex, CancellationToken cancellationToken)

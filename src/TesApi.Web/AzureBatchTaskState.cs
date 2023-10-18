@@ -25,6 +25,16 @@ namespace TesApi.Web
         public enum TaskState
         {
             /// <summary>
+            /// The event does not represent any change in task state.
+            /// </summary>
+            NoChange,
+
+            /// <summary>
+            /// The event provides metadata without changing the task's state.
+            /// </summary>
+            InfoUpdate,
+
+            /// <summary>
             /// A request has been made for the task's cancellation.
             /// </summary>
             CancellationRequested,
@@ -72,7 +82,12 @@ namespace TesApi.Web
             /// <summary>
             /// Node failed during startup or task execution (for example, ContainerInvalidImage, DiskFull)
             /// </summary>
-            NodeFailedDuringStartupOrExecution
+            NodeFailedDuringStartupOrExecution,
+
+            /// <summary>
+            /// Node failed during upload or download
+            /// </summary>
+            NodeFilesUploadOrDownloadFailed,
         }
 
         /// <summary>

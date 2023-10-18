@@ -59,14 +59,6 @@ namespace Tes.Runner.Events
                 { "workflow-id", eventMessage.CorrelationId },
                 { "event-name", eventMessage.Name },
                 { "created", eventMessage.Created.ToString(Iso8601DateFormat) }
-
-                //{ "event_name", eventMessage.Name },
-                //{ "event_id", eventMessage.Id },
-                //{ "entity_type", eventMessage.EntityType },
-                //{ "task_id", eventMessage.EntityId },
-                //{ "workflow_id", eventMessage.CorrelationId },
-                ////format date to ISO 8601, which is URL friendly
-                //{ "created", eventMessage.Created.ToString(Iso8601DateFormat) }
             };
         }
 

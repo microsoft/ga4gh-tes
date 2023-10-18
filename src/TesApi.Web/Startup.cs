@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using Azure.Core;
@@ -80,13 +81,13 @@ namespace TesApi.Web
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
-                    .AddTransient<TesEventMessage>()
-                    .AddSingleton<BatchTesEventMessageFactory>()
+                    .AddTransient<Events.NodeEventMessage>()
+                    .AddSingleton<Func<Uri, IDictionary<string, string>, string, Events.NodeEventMessage>>(s => (blobAbsoluteUri, tags, @event) => ActivatorUtilities.CreateInstance<Events.NodeEventMessage>(s, blobAbsoluteUri, tags, @event))
                     .AddTransient<BatchPool>()
-                    .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
+                    .AddSingleton<Func<IBatchPool>>(services => () => services.GetService<BatchPool>())
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
-                    .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
+                    .AddControllers(options => options.Filters.Add<OperationCancelledExceptionFilter>())
                         .AddNewtonsoftJson(opts =>
                         {
                             opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
