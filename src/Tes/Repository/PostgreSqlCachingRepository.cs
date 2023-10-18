@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -16,15 +17,14 @@ namespace Tes.Repository
 {
     public abstract class PostgreSqlCachingRepository<T> : IDisposable where T : class
     {
-        private readonly TimeSpan _writerWaitTime = TimeSpan.FromMilliseconds(50);
-        private readonly int _batchSize = 1000;
+        private const int _batchSize = 1000;
         private static readonly TimeSpan defaultCompletedTaskCacheExpiration = TimeSpan.FromDays(1);
 
         protected readonly AsyncPolicy _asyncPolicy = Policy
             .Handle<Npgsql.NpgsqlException>(e => e.IsTransient)
             .WaitAndRetryAsync(10, i => TimeSpan.FromSeconds(Math.Pow(2, i)));
 
-        private readonly ConcurrentQueue<(T, WriteAction, TaskCompletionSource<T>)> _itemsToWrite = new(); // Current _writerWorkerTask work queue
+        private readonly Channel<(T, WriteAction, TaskCompletionSource<T>)> _itemsToWrite = Channel.CreateUnbounded<(T, WriteAction, TaskCompletionSource<T>)>();
         private readonly ConcurrentDictionary<T, object> _updatingItems = new(); // Collection of all pending items to be written.
         private readonly CancellationTokenSource _writerWorkerCancellationTokenSource = new();
         private readonly Task _writerWorkerTask;
@@ -134,7 +134,11 @@ namespace Tes.Repository
                 }
             }
 
-            _itemsToWrite.Enqueue((item, action, source));
+            if (!_itemsToWrite.Writer.TryWrite((item, action, source)))
+            {
+                throw new InvalidOperationException("Failed to TryWrite to _itemsToWrite channel.");
+            }
+
             return result;
 
             Task<T> RemoveUpdatingItem(Task<T> task)
@@ -156,30 +160,21 @@ namespace Tes.Repository
         {
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
-            while (true)
+            await foreach (var itemToWrite in _itemsToWrite.Reader.ReadAllAsync(cancellationToken))
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                list.Add(itemToWrite);
 
-                if (_itemsToWrite.TryDequeue(out var itemToWrite))
+                // Get remaining items up to _batchSize or until no more items are immediately available.
+                while (list.Count < _batchSize && _itemsToWrite.Reader.TryRead(out var additionalItem))
                 {
-                    list.Add(itemToWrite);
-
-                    if (list.Count < _batchSize)
-                    {
-                        continue;
-                    }
-                }
-
-                if (list.Count == 0)
-                {
-                    // Wait, because the queue is empty
-                    await Task.Delay(_writerWaitTime, cancellationToken);
-                    continue;
+                    list.Add(additionalItem);
                 }
 
                 await WriteItemsAsync(list, cancellationToken);
                 list.Clear();
             }
+
+            // If cancellation is requested, do not write any more items
         }
 
         private async ValueTask WriteItemsAsync(IList<(T DbItem, WriteAction Action, TaskCompletionSource<T> TaskSource)> dbItems, CancellationToken cancellationToken)
