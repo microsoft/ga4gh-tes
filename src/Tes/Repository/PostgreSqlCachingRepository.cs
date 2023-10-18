@@ -117,7 +117,7 @@ namespace Tes.Repository
         /// <param name="item"></param>
         /// <param name="action"></param>
         /// <returns></returns>
-        protected async Task<T> AddUpdateOrRemoveItemInDbAsync(T item, WriteAction action, CancellationToken cancellationToken)
+        protected Task<T> AddUpdateOrRemoveItemInDbAsync(T item, WriteAction action, CancellationToken cancellationToken)
         {
             var source = new TaskCompletionSource<T>();
             var result = source.Task;
@@ -134,8 +134,12 @@ namespace Tes.Repository
                 }
             }
 
-            await _itemsToWrite.Writer.WriteAsync((item, action, source));
-            return item;
+            if (!_itemsToWrite.Writer.TryWrite((item, action, source)))
+            {
+                throw new InvalidOperationException("Failed to TryWrite to _itemsToWrite channel.");
+            }
+
+            return result;
 
             Task<T> RemoveUpdatingItem(Task<T> task)
             {
