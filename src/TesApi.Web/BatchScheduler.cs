@@ -366,7 +366,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken)
         {
-            var blobUri = new Uri(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken, needsWrite: true));
+            var blobUri = new Uri(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, storageAccessProvider.BlobPermissionsWithWrite, cancellationToken));
             var blobProperties = await azureProxy.GetBlobPropertiesAsync(blobUri, cancellationToken);
             if (!(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, $"scripts/{NodeTaskRunnerMD5HashFilename}"), cancellationToken)).Trim().Equals(blobProperties?.ContentMD5, StringComparison.OrdinalIgnoreCase))
             {
@@ -804,7 +804,7 @@ namespace TesApi.Web
             }
 
             var executionDirectoryUri = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectoryUrl,
-                cancellationToken, getContainerSas: true);
+                storageAccessProvider.DefaultContainerPermissions, cancellationToken);
             if (executionDirectoryUri is not null)
             {
                 var blobsInExecutionDirectory =
@@ -882,7 +882,7 @@ namespace TesApi.Web
             var globalStartTaskConfigured = !string.IsNullOrWhiteSpace(globalStartTaskPath);
 
             var startTaskSasUrl = globalStartTaskConfigured
-                ? await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, cancellationToken, sasTokenDuration: BatchPoolService.RunInterval.Multiply(2).Add(poolLifetime).Add(TimeSpan.FromMinutes(15)))
+                ? await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, storageAccessProvider.DefaultBlobPermissions, cancellationToken, sasTokenDuration: BatchPoolService.RunInterval.Multiply(2).Add(poolLifetime).Add(TimeSpan.FromMinutes(15)))
                 : default;
 
             if (startTaskSasUrl is not null)
@@ -1344,14 +1344,21 @@ namespace TesApi.Web
             var eventsStartIndex = (string.IsNullOrEmpty(tesInternalSegments.BlobName) ? string.Empty : (tesInternalSegments.BlobName + "/")).Length;
             var eventsEndIndex = eventsStartIndex + eventsFolderName.Length + 1;
 
-            await foreach (var blobItem in azureProxy.ListBlobsWithTagsAsync(new(await storageAccessProvider.GetInternalTesBlobUrlAsync(string.Empty, cancellationToken, needsTags: true)), prefix, cancellationToken).WithCancellation(cancellationToken))
+            await foreach (var blobItem in azureProxy.ListBlobsWithTagsAsync(
+                    new(await storageAccessProvider.GetInternalTesBlobUrlAsync(
+                        string.Empty,
+                        Azure.Storage.Sas.BlobSasPermissions.Read | Azure.Storage.Sas.BlobSasPermissions.Tag | Azure.Storage.Sas.BlobSasPermissions.List,
+                        cancellationToken)),
+                    prefix,
+                    cancellationToken)
+                .WithCancellation(cancellationToken))
             {
                 if (blobItem.Tags.ContainsKey(NodeEventMessage.ProcessedTag) || !blobItem.Tags.ContainsKey("task-id"))
                 {
                     continue;
                 }
 
-                var blobUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(blobItem.Name[eventsStartIndex..], cancellationToken, needsTags: true, needsWrite: true);
+                var blobUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(blobItem.Name[eventsStartIndex..], storageAccessProvider.BlobPermissionsWithWriteAndTag, cancellationToken);
 
                 var pathFromEventName = blobItem.Name[eventsEndIndex..];
                 var eventName = pathFromEventName[..pathFromEventName.IndexOf('/')];

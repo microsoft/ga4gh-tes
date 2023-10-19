@@ -4,6 +4,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
 
@@ -44,15 +45,10 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
         this.AzureProxy = azureProxy;
     }
 
-    /// <summary>
-    /// Property to assist in directly accessing methods in this instance through the <see cref="IStorageAccessProvider"/> interface.
-    /// </summary>
-    protected IStorageAccessProvider This => this;
-
     /// <inheritdoc />
     public async Task<string> DownloadBlobAsync(string blobRelativePath, CancellationToken cancellationToken)
     {
-        var url = await This.MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken);
+        var url = await MapLocalPathToSasUrlAsync(blobRelativePath, BlobSasPermissions.Read, cancellationToken, sasTokenDuration: default);
 
         if (url is null)
         {
@@ -85,7 +81,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
 
     /// <inheritdoc />
     public async Task UploadBlobAsync(string blobRelativePath, string content, CancellationToken cancellationToken)
-        => await this.AzureProxy.UploadBlobAsync(new Uri(await This.MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, getContainerSas: true)), content, cancellationToken);
+        => await this.AzureProxy.UploadBlobAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, BlobSasPermissions.Create | BlobSasPermissions.Write, cancellationToken, sasTokenDuration: default)), content, cancellationToken);
 
     /// <inheritdoc />
     public async Task UploadBlobAsync(Uri blobAbsoluteUrl, string content,
@@ -98,19 +94,19 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
 
     /// <inheritdoc />
     public async Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath, CancellationToken cancellationToken)
-        => await this.AzureProxy.UploadBlobFromFileAsync(new Uri(await This.MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken, getContainerSas: true)), sourceLocalFilePath, cancellationToken);
+        => await this.AzureProxy.UploadBlobFromFileAsync(new Uri(await MapLocalPathToSasUrlAsync(blobRelativePath, BlobSasPermissions.Create | BlobSasPermissions.Write, cancellationToken, sasTokenDuration: default)), sourceLocalFilePath, cancellationToken);
 
     /// <inheritdoc />
     public abstract Task<bool> IsPublicHttpUrlAsync(string uriString, CancellationToken cancellationToken);
 
     /// <inheritdoc />
-    public abstract Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration, bool getContainerSas);
+    public abstract Task<string> MapLocalPathToSasUrlAsync(string path, BlobSasPermissions sasPermissions, CancellationToken cancellationToken, TimeSpan? sasTokenDuration);
 
     /// <inheritdoc />
-    public abstract Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken, bool? needsTags, bool? needsWrite);
+    public abstract Task<string> GetInternalTesBlobUrlAsync(string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken);
 
     /// <inheritdoc />
-    public abstract Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken, bool? needsWrite);
+    public abstract Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken);
 
     /// <inheritdoc />
     public abstract string GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath);

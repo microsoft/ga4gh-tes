@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using Azure.Storage.Blobs;
+using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.ApiClients;
@@ -82,9 +83,12 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration, bool getContainerSas)
+        public override async Task<string> MapLocalPathToSasUrlAsync(string path, BlobSasPermissions sasPermissions, CancellationToken cancellationToken, TimeSpan? sasTokenDuration)
         {
+            // Currently all SAS tokens with Terra are R/W but sasPermissions so only List value is used to select between a Container SAS vs a Blob SAS.
+
             ArgumentException.ThrowIfNullOrEmpty(path);
+
             if (sasTokenDuration is not null)
             {
                 throw new ArgumentException("Terra does not support extended length SAS tokens.");
@@ -97,7 +101,7 @@ namespace TesApi.Web.Storage
 
             var terraBlobInfo = await GetTerraBlobInfoFromContainerNameAsync(path, cancellationToken);
 
-            if (getContainerSas)
+            if (sasPermissions.HasFlag(BlobSasPermissions.List))
             {
                 return await GetMappedSasContainerUrlFromWsmAsync(terraBlobInfo, false, cancellationToken);
             }
@@ -106,10 +110,11 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken, bool? needsTags, bool? needsWrite)
+        public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken)
         {
-            // Currently all SAS tokens with Terra are R/W so needsWrite is waiting for a safer future.
+            // Currently all SAS tokens with Terra are R/W so sasPermissions is waiting for a safer future.
 
+            var needsTags = 0 != (sasPermissions & BlobSasPermissions.Tag);
             var blobInfo = GetTerraBlobInfoForInternalTes(blobPath);
 
             if (string.IsNullOrEmpty(blobPath))
@@ -121,9 +126,9 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken, bool? needsWrite)
+        public override async Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken)
         {
-            // Currently all SAS tokens with Terra are R/W so needsWrite is waiting for a safer future.
+            // Currently all SAS tokens with Terra are R/W so sasPermissions is waiting for a safer future.
 
             var blobInfo = GetTerraBlobInfoForInternalTesTask(task, blobPath);
 

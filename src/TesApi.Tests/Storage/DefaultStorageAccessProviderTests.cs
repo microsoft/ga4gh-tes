@@ -20,7 +20,7 @@ namespace TesApi.Tests.Storage
     [TestClass, TestCategory("Unit")]
     public class DefaultStorageAccessProviderTests
     {
-        private IStorageAccessProvider defaultStorageAccessProvider;
+        private DefaultStorageAccessProvider defaultStorageAccessProvider;
         private Mock<IAzureProxy> azureProxyMock;
         private StorageOptions storageOptions;
         private StorageAccountInfo storageAccountInfo;
@@ -52,7 +52,7 @@ namespace TesApi.Tests.Storage
             string blobName)
         {
             var task = new TesTask { Name = "taskName", Id = Guid.NewGuid().ToString() };
-            var url = await defaultStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
+            var url = await defaultStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None);
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
@@ -78,7 +78,8 @@ namespace TesApi.Tests.Storage
             {
                 { TesResources.SupportedBackendParameters.internal_path_prefix.ToString(), internalPathPrefix }
             };
-            var url = await defaultStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
+
+            var url = await defaultStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None);
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);

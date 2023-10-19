@@ -53,7 +53,7 @@ namespace TesApi.Tests.Runner
             storageOptions = new StorageOptions() { ExternalStorageContainers = ExternalStorageContainerWithSas };
             storageAccessProviderMock = new Mock<IStorageAccessProvider>();
             storageAccessProviderMock.Setup(x =>
-                                   x.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<bool?>()))
+                    x.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<Azure.Storage.Sas.BlobSasPermissions>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(InternalBlobUrlWithSas);
             storageAccessProviderMock.Setup(x =>
                     x.GetInternalTesBlobUrlWithoutSasToken(It.IsAny<string>()))

@@ -29,7 +29,7 @@ namespace TesApi.Tests
 
         private Mock<TerraWsmApiClient> wsmApiClientMock;
         private Mock<IAzureProxy> azureProxyMock;
-        private IStorageAccessProvider terraStorageAccessProvider;
+        private TerraStorageAccessProvider terraStorageAccessProvider;
         private TerraApiStubData terraApiStubData;
         private Mock<IOptions<TerraOptions>> optionsMock;
         private TerraOptions terraOptions;
@@ -73,7 +73,7 @@ namespace TesApi.Tests
         {
             SetUpTerraApiClient();
 
-            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input, CancellationToken.None);
+            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None, sasTokenDuration: default);
 
             Assert.IsNotNull(terraApiStubData.GetWsmSasTokenApiResponse().Url, result);
         }
@@ -102,7 +102,7 @@ namespace TesApi.Tests
         {
             SetUpTerraApiClient();
 
-            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input + blobPath, CancellationToken.None, getContainerSas: true);
+            var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input + blobPath, Azure.Storage.Sas.BlobSasPermissions.List, CancellationToken.None, sasTokenDuration: default);
 
             Assert.IsNotNull(result);
             Assert.AreEqual($"{expected}?sv={TerraApiStubData.SasToken}", result);
@@ -118,7 +118,7 @@ namespace TesApi.Tests
         [ExpectedException(typeof(InvalidOperationException))]
         public async Task MapLocalPathToSasUrlAsync_InvalidStorageAccountInputs(string input)
         {
-            await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input, CancellationToken.None);
+            await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None, sasTokenDuration: default);
         }
 
         [TestMethod]
@@ -145,7 +145,7 @@ namespace TesApi.Tests
         {
             SetUpTerraApiClient();
 
-            var url = await terraStorageAccessProvider.GetInternalTesBlobUrlAsync(blobName, CancellationToken.None);
+            var url = await terraStorageAccessProvider.GetInternalTesBlobUrlAsync(blobName, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None);
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
@@ -161,7 +161,7 @@ namespace TesApi.Tests
         {
             SetUpTerraApiClient();
             var task = new TesTask { Name = "taskName", Id = Guid.NewGuid().ToString() };
-            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
+            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None);
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
@@ -184,7 +184,8 @@ namespace TesApi.Tests
             {
                 { TesResources.SupportedBackendParameters.internal_path_prefix.ToString(), internalPathPrefix }
             };
-            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
+
+            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None);
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
@@ -207,7 +208,8 @@ namespace TesApi.Tests
             {
                 { TesResources.SupportedBackendParameters.internal_path_prefix.ToString(), internalPrefix }
             };
-            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobPath, CancellationToken.None);
+
+            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobPath, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None);
 
             Assert.IsNotNull(url);
             Assert.AreNotEqual('/', capturedTokenApiParameters.SasBlobName[0]);

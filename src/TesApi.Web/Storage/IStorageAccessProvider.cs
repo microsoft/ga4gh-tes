@@ -4,6 +4,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Storage.Sas;
 using Tes.Models;
 
 namespace TesApi.Web.Storage
@@ -13,6 +14,32 @@ namespace TesApi.Web.Storage
     /// </summary>
     public interface IStorageAccessProvider
     {
+        /// <summary>
+        /// SAS permissions previously given all containers and when container SAS was requested.
+        /// </summary>
+        public BlobSasPermissions DefaultContainerPermissions => BlobSasPermissions.Add | BlobSasPermissions.Create | BlobSasPermissions.List | BlobSasPermissions.Read | BlobSasPermissions.Write;
+
+
+        /// <summary>
+        /// SAS permissions previously given all blobs when container SAS was not requested.
+        /// </summary>
+        public BlobSasPermissions DefaultBlobPermissions => BlobSasPermissions.Read;
+
+        /// <summary>
+        /// SAS default blob permissions including Create/Write.
+        /// </summary>
+        public BlobSasPermissions BlobPermissionsWithWrite => DefaultBlobPermissions | BlobSasPermissions.Add | BlobSasPermissions.Create | BlobSasPermissions.List | BlobSasPermissions.Write;
+
+        /// <summary>
+        /// SAS default blob permissions including Tag.
+        /// </summary>
+        public BlobSasPermissions BlobPermissionsWithTag => DefaultBlobPermissions | BlobSasPermissions.Tag;
+
+        /// <summary>
+        /// SAS default blob permissions including Create/Write and Tag.
+        /// </summary>
+        public BlobSasPermissions BlobPermissionsWithWriteAndTag => BlobPermissionsWithWrite | BlobSasPermissions.Tag;
+
         /// <summary>
         /// Retrieves file content
         /// </summary>
@@ -73,39 +100,30 @@ namespace TesApi.Web.Storage
         /// - https://accountName.blob.core.windows.net/containerName/blobName
         /// </summary>
         /// <param name="path">The file path to convert. Two-part path is treated as container path. Paths with three or more parts are treated as blobs.</param>
+        /// <param name="sasPermissions"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="sasTokenDuration">Duration SAS should be valid.</param>
-        /// <param name="getContainerSas">Get the container SAS even if path is longer than two parts</param>
         /// <returns>An Azure Block Blob or Container URL with SAS token</returns>
-        public Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false);
+        public Task<string> MapLocalPathToSasUrlAsync(string path, BlobSasPermissions sasPermissions, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default);
 
         /// <summary>
         /// Returns an Azure Storage Blob URL with a SAS token for the specified blob path in the TES internal storage location
         /// </summary>
         /// <param name="blobPath"></param>
+        /// <param name="sasPermissions"></param>
         /// <param name="cancellationToken"></param>
-        /// <param name="needsTags">Optional. Read or write the tags on a blob.</param>
-        /// <param name="needsWrite">Optional. Allow changing the blob.</param>
         /// <returns></returns>
-        /// <remarks>
-        /// If the blobPath is not provided(empty), a container SAS token is generated.
-        /// If the blobPath is provided, a SAS token to the blobPath prefixed with the TES internal segments is generated.
-        /// </remarks>
-        public Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken, bool? needsTags = default, bool? needsWrite = default);
+        public Task<string> GetInternalTesBlobUrlAsync(string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken);
 
         /// <summary>
         /// Returns an Azure Storage Blob URL with a SAS token for the specified blob path in the TES task internal storage location.
         /// </summary>
         /// <param name="task"></param>
         /// <param name="blobPath"></param>
+        /// <param name="sasPermissions"></param>
         /// <param name="cancellationToken"></param>
-        /// <param name="needsWrite">Optional. Allow changing the blob.</param>
         /// <returns></returns>
-        /// <remarks>
-        /// If the blobPath is not provided(empty), a container SAS token is generated.
-        /// If the blobPath is provided, a SAS token to the blobPath prefixed with the TES task internal segments is generated.
-        /// </remarks>
-        public Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken, bool? needsWrite = default);
+        public Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken);
 
         /// <summary>
         /// Returns an Azure Storage Blob URL without a SAS token for the specified blob path in the TES task internal storage location.

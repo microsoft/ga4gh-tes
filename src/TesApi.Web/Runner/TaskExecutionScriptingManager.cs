@@ -125,7 +125,7 @@ namespace TesApi.Web.Runner
         {
             logger.LogInformation($"Creating and uploading Batch script for Task ID: {tesTask.Id}");
 
-            var nodeTaskRunnerUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
+            var nodeTaskRunnerUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, storageAccessProvider.DefaultBlobPermissions, cancellationToken);
 
             var batchNodeScript = batchNodeScriptBuilder
                 .WithAlpineWgetInstallation()
@@ -166,7 +166,7 @@ namespace TesApi.Web.Runner
             string content, string fileName, CancellationToken cancellationToken)
         {
             var blobUrl =
-                await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, fileName, cancellationToken, needsWrite: true);
+                await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, fileName, storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
 
             await storageAccessProvider.UploadBlobAsync(new Uri(blobUrl), content, cancellationToken);
             return blobUrl;
