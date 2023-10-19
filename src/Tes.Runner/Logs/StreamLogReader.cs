@@ -102,7 +102,7 @@ namespace Tes.Runner.Logs
                 {
                     while (!streamSource.EndOfStream)
                     {
-                        var result = await streamSource.ReadBlockAsync(buffer, CancellationToken.None);
+                        var result = await streamSource.ReadAsync(buffer, CancellationToken.None);
 
                         switch (source)
                         {

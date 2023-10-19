@@ -99,12 +99,12 @@ namespace Tes.Runner.Docker
         {
             try
             {
-                var buffer = new Memory<char>(new char[16 * KiB]); //8K at the time
+                var buffer = new Memory<char>(new char[16 * KiB]); //16K at the time
                 using (streamSource)
                 {
                     while (!streamSource.EndOfStream)
                     {
-                        var result = await streamSource.ReadBlockAsync(buffer, CancellationToken.None);
+                        var result = await streamSource.ReadAsync(buffer, CancellationToken.None);
 
                         switch (source)
                         {
