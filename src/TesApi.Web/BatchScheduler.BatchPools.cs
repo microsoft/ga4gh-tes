@@ -27,9 +27,15 @@ namespace TesApi.Web
 
         internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
-        private (string PoolKey, string DisplayName) GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, ContainerConfiguration containerConfiguration, CancellationToken cancellationToken)
+        private (string PoolKey, string DisplayName) GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, ContainerConfiguration containerConfiguration, List<string> identities, CancellationToken cancellationToken)
         {
-            var identityResourceId = tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true ? tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) : default;
+            var identityResourceIds = "<none>";
+
+            if (identities is not null && identities.Count > 0)
+            {
+                identityResourceIds = string.Join(";", identities);
+            }
+
             var executorImage = tesTask.Executors.First().Image;
             string containerImageNames = null;
 
@@ -42,10 +48,9 @@ namespace TesApi.Web
             var vmSize = virtualMachineInformation.VmSize ?? "<none>";
             var isPreemptable = virtualMachineInformation.LowPriority;
             containerImageNames ??= "<none>";
-            identityResourceId ??= "<none>";
 
             // Generate hash of everything that differentiates this group of pools
-            var displayName = $"{label}:{vmSize}:{isPreemptable}:{containerImageNames}:{identityResourceId}";
+            var displayName = $"{label}:{vmSize}:{isPreemptable}:{containerImageNames}:{identityResourceIds}";
             var hash = CommonUtilities.Base32.ConvertToBase32(SHA1.HashData(Encoding.UTF8.GetBytes(displayName))).TrimEnd('=').ToLowerInvariant(); // This becomes 32 chars
 
             // Build a PoolName that is of legal length, while exposing the most important metadata without requiring user to find DisplayName
@@ -58,8 +63,9 @@ namespace TesApi.Web
             // Trim DisplayName if needed
             if (displayName.Length > 1024)
             {
-                // Remove "path" of identityResourceId
-                displayName = displayName[..^identityResourceId.Length] + identityResourceId[(identityResourceId.LastIndexOf('/') + 1)..];
+                // Remove "paths" of identityResourceId
+                displayName = displayName[..^identityResourceIds.Length] + string.Join(";", identities.Select(x => x[(x.LastIndexOf('/') + 1)..]));
+
                 if (displayName.Length > 1024)
                 {
                     // Trim end, leaving fake elipsys as marker

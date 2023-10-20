@@ -504,14 +504,6 @@ namespace TesApi.Web
 
             try
             {
-                var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
-
-                var containerMetadata = await GetContainerConfigurationIfNeededAsync(tesTask, cancellationToken);
-                (poolKey, var displayName) = enableBatchAutopool ? default : GetPoolKey(tesTask, virtualMachineInfo, containerMetadata.ContainerConfiguration, cancellationToken);
-                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: enableBatchAutopool || !IsPoolAvailable(poolKey), needCoresUtilizationQuotaCheck: enableBatchAutopool, cancellationToken: cancellationToken);
-
-                var tesTaskLog = tesTask.AddTesTaskLog();
-                tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
                 var identities = new List<string>();
 
                 if (!string.IsNullOrWhiteSpace(globalManagedIdentity))
@@ -523,6 +515,16 @@ namespace TesApi.Web
                 {
                     identities.Add(tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity));
                 }
+
+                var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
+
+                var containerMetadata = await GetContainerConfigurationIfNeededAsync(tesTask, cancellationToken);
+                (poolKey, var displayName) = enableBatchAutopool ? default : GetPoolKey(tesTask, virtualMachineInfo, containerMetadata.ContainerConfiguration, identities, cancellationToken);
+                await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: enableBatchAutopool || !IsPoolAvailable(poolKey), needCoresUtilizationQuotaCheck: enableBatchAutopool, cancellationToken: cancellationToken);
+
+                var tesTaskLog = tesTask.AddTesTaskLog();
+                tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
+
 
                 var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2");
                 string jobOrTaskId = default;
