@@ -448,6 +448,7 @@ namespace TesDeployer
             values.Service["enableIngress"] = GetValueOrDefault(settings, "EnableIngress");
             values.Config["letsEncryptEmail"] = GetValueOrDefault(settings, "LetsEncryptEmail");
             values.Persistence["storageAccount"] = GetValueOrDefault(settings, "DefaultStorageAccountName");
+            values.Persistence["executionsContainerName"] = GetValueOrDefault(settings, "ExecutionsContainerName");
             values.TesDatabase["serverName"] = GetValueOrDefault(settings, "PostgreSqlServerName");
             values.TesDatabase["serverNameSuffix"] = GetValueOrDefault(settings, "PostgreSqlServerNameSuffix");
             values.TesDatabase["serverPort"] = GetValueOrDefault(settings, "PostgreSqlServerPort");
@@ -515,6 +516,7 @@ namespace TesDeployer
                 ["EnableIngress"] = GetValueOrDefault(values.Service, "enableIngress"),
                 ["LetsEncryptEmail"] = GetValueOrDefault(values.Config, "letsEncryptEmail") as string,
                 ["DefaultStorageAccountName"] = GetValueOrDefault(values.Persistence, "storageAccount"),
+                ["ExecutionsContainerName"] = GetValueOrDefault(values.Persistence, "executionsContainerName"),
                 ["PostgreSqlServerName"] = GetValueOrDefault(values.TesDatabase, "serverName"),
                 ["PostgreSqlServerNameSuffix"] = GetValueOrDefault(values.TesDatabase, "serverNameSuffix"),
                 ["PostgreSqlServerPort"] = GetValueOrDefault(values.TesDatabase, "serverPort"),
