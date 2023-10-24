@@ -79,7 +79,7 @@ namespace TesApi.Web.Management
 
                 var vmInfoList = new List<VirtualMachineInformation>();
 
-                foreach (var vm in localVmSizeInfoForBatchSupportedSkus)
+                foreach (var vm in localVmSizeInfoForBatchSupportedSkus.Where(v => !v.LowPriority))
                 {
 
                     var instancePricingInfo = pricingItems.Where(p => p.armSkuName == vm.VmSize).ToList();
