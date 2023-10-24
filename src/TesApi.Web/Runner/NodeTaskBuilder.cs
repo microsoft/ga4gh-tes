@@ -12,6 +12,7 @@ namespace TesApi.Web.Runner
     /// </summary>
     public class NodeTaskBuilder
     {
+        private const string defaultDockerImageTag = "latest";
         private readonly NodeTask nodeTask;
         const string NodeTaskOutputsMetricsFormat = "FileUploadSizeInBytes={Size}";
         const string NodeTaskInputsMetricsFormat = "FileDownloadSizeInBytes={Size}";
@@ -166,7 +167,7 @@ namespace TesApi.Web.Runner
             var splitByTag = image.Split(':');
 
             nodeTask.ImageName = splitByTag[0];
-            nodeTask.ImageTag = splitByTag.Length == 2 ? splitByTag[1] : string.Empty;
+            nodeTask.ImageTag = splitByTag.Length == 2 ? splitByTag[1] : defaultDockerImageTag;
 
             return this;
         }

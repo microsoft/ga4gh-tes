@@ -338,6 +338,8 @@ namespace TesDeployer
 
                         if (installedVersion is null || installedVersion < new Version(4, 7))
                         {
+                            settings["ExecutionsContainerName"] = TesInternalContainerName;
+
                             // Storage account now requires Storage Blob Data Owner
                             await AssignVmAsDataOwnerToStorageAccountAsync(managedIdentity, storageAccount);
                             waitForRoleAssignmentPropagation = true;
@@ -1046,6 +1048,7 @@ namespace TesDeployer
             {
                 UpdateSetting(settings, defaults, "BatchPrefix", configuration.BatchPrefix, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "DefaultStorageAccountName", configuration.StorageAccountName, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "ExecutionsContainerName", TesInternalContainerName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "BatchAccountName", configuration.BatchAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ApplicationInsightsAccountName", configuration.ApplicationInsightsAccountName, ignoreDefaults: true);
                 UpdateSetting(settings, defaults, "ManagedIdentityClientId", managedIdentityClientId, ignoreDefaults: true);

@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.Extensions;
 using Tes.Models;
+using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
 
 namespace TesApi.Web.Storage
@@ -24,7 +25,7 @@ namespace TesApi.Web.Storage
     public class DefaultStorageAccessProvider : StorageAccessProvider
     {
         private static readonly TimeSpan SasTokenDuration = TimeSpan.FromDays(7); //TODO: refactor this to drive it from configuration.
-        private readonly string defaultStorageAccountName;
+        private readonly StorageOptions storageOptions;
         private readonly List<ExternalStorageContainerInfo> externalStorageContainers;
 
         /// <summary>
@@ -35,9 +36,9 @@ namespace TesApi.Web.Storage
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         public DefaultStorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IOptions<StorageOptions> storageOptions, IAzureProxy azureProxy) : base(logger, azureProxy)
         {
-            //TODO: refactor to use the options pattern.
-            defaultStorageAccountName = storageOptions.Value.DefaultAccountName;    // This account contains the cromwell-executions container
-            Logger.LogInformation($"DefaultStorageAccountName: {defaultStorageAccountName}");
+            ArgumentNullException.ThrowIfNull(storageOptions);
+
+            this.storageOptions = storageOptions.Value;
 
             externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(uri =>
@@ -96,7 +97,7 @@ namespace TesApi.Web.Storage
             // /cromwell-executions/... URLs become /defaultStorageAccountName/cromwell-executions/... to unify how URLs starting with /acct/container/... pattern are handled.
             if (IsKnownExecutionFilePath(path))
             {
-                path = $"/{defaultStorageAccountName}{path}";
+                path = $"/{storageOptions.DefaultAccountName}{path}";
             }
 
             //TODO: refactor this to throw an exception instead of logging and error and returning null.
@@ -227,7 +228,7 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new Uri($"https://{defaultStorageAccountName}.blob.core.windows.net{TesExecutionsPathPrefix}/{blobPathWithPrefix.TrimStart('/')}"));
+            var builder = new BlobUriBuilder(new Uri($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net{TesExecutionsPathPrefix}/{blobPathWithPrefix.TrimStart('/')}"));
 
             return builder.ToUri().ToString();
         }
@@ -238,7 +239,7 @@ namespace TesApi.Web.Storage
             var normalizedBlobPath = NormalizedBlobPath(blobPath);
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new Uri($"https://{defaultStorageAccountName}.blob.core.windows.net{TesExecutionsPathPrefix}{normalizedBlobPath}"));
+            var builder = new BlobUriBuilder(new Uri($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net{TesExecutionsPathPrefix}{normalizedBlobPath}"));
 
             return builder.ToUri().ToString();
         }
@@ -251,9 +252,16 @@ namespace TesApi.Web.Storage
             if (task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters
                     .internal_path_prefix) == true)
             {
-                var blobPathWithPathPrefix =
-                    $"/{defaultStorageAccountName}/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}{normalizedBlobPath}";
+                var internalPath = $"{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}{normalizedBlobPath}";
 
+                if (storageOptions.ExecutionsContainerName is not null &&
+                    !internalPath.StartsWith(storageOptions.ExecutionsContainerName, StringComparison.OrdinalIgnoreCase))
+                {
+                    internalPath = $"{storageOptions.ExecutionsContainerName}/{internalPath}";
+                }
+
+                var blobPathWithPathPrefix =
+                    $"/{storageOptions.DefaultAccountName}/{internalPath}";
                 return await MapLocalPathToSasUrlAsync(blobPathWithPathPrefix, sasPermissions, cancellationToken, sasTokenDuration: default);
             }
 

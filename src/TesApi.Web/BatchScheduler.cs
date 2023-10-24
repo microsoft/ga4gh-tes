@@ -467,7 +467,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedAsync)> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            var tasksMetadataByPoolKey = new Dictionary<string, List<(TesTask TesTask, VirtualMachineInformation VirtualMachineInfo, (BatchModels.ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic) ContainerMetadata, string PoolDisplayName)>>();
+            var tasksMetadataByPoolKey = new Dictionary<string, List<(TesTask TesTask, VirtualMachineInformation VirtualMachineInfo, (BatchModels.ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic) ContainerMetadata, IEnumerable<string> Identities, string PoolDisplayName)>>();
             var poolKeyByTaskIds = new Dictionary<string, string>();
             var tasks = tesTasks.ToList();
 
@@ -476,21 +476,32 @@ namespace TesApi.Web
             {
                 Task<bool> quickResult = default;
                 string poolKey = default;
+                var identities = new List<string>();
+
+                if (!string.IsNullOrWhiteSpace(globalManagedIdentity))
+                {
+                    identities.Add(globalManagedIdentity);
+                }
+
+                if (tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true)
+                {
+                    identities.Add(tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity));
+                }
 
                 try
                 {
                     var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
                     var containerMetadata = await GetContainerConfigurationIfNeededAsync(tesTask, cancellationToken);
-                    (poolKey, var displayName) = GetPoolKey(tesTask, virtualMachineInfo, containerMetadata.ContainerConfiguration, cancellationToken);
+                    (poolKey, var displayName) = GetPoolKey(tesTask, virtualMachineInfo, containerMetadata.ContainerConfiguration, identities, cancellationToken);
                     await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: !IsPoolAvailable(poolKey), cancellationToken: cancellationToken);
 
                     if (tasksMetadataByPoolKey.TryGetValue(poolKey, out var resource))
                     {
-                        resource.Add((tesTask, virtualMachineInfo, containerMetadata, displayName));
+                        resource.Add((tesTask, virtualMachineInfo, containerMetadata, identities, displayName));
                     }
                     else
                     {
-                        tasksMetadataByPoolKey.Add(poolKey, new() { (tesTask, virtualMachineInfo, containerMetadata, displayName) });
+                        tasksMetadataByPoolKey.Add(poolKey, new() { (tesTask, virtualMachineInfo, containerMetadata, identities, displayName) });
                     }
 
                     poolKeyByTaskIds.Add(tesTask.Id, poolKey);
@@ -531,7 +542,7 @@ namespace TesApi.Web
                     var key = tasksMetadataByPoolKey.Keys.ElementAt(i);
                     if (tasksMetadataByPoolKey.Remove(key, out var listOfTaskMetadata))
                     {
-                        foreach (var (task, _, _, _) in listOfTaskMetadata)
+                        foreach (var (task, _, _, _, _) in listOfTaskMetadata)
                         {
                             tasks.Remove(task);
                             yield return (task, HandleException(exception, key, task));
@@ -541,7 +552,7 @@ namespace TesApi.Web
             }
 
             // Obtain assigned pool and create and assign the cloudtask for each task.
-            foreach (var (tesTask, virtualMachineInfo, containerMetadata, displayName) in tasksMetadataByPoolKey.Values.SelectMany(e => e))
+            foreach (var (tesTask, virtualMachineInfo, containerMetadata, identities, displayName) in tasksMetadataByPoolKey.Values.SelectMany(e => e))
             {
                 Task<bool> quickResult = default;
                 var poolKey = poolKeyByTaskIds[tesTask.Id];
@@ -551,18 +562,6 @@ namespace TesApi.Web
                     string poolId = null;
                     var tesTaskLog = tesTask.AddTesTaskLog();
                     tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
-                    var identities = new List<string>();
-
-                    if (!string.IsNullOrWhiteSpace(globalManagedIdentity))
-                    {
-                        identities.Add(globalManagedIdentity);
-                    }
-
-                    if (tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true)
-                    {
-                        identities.Add(tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity));
-                    }
-
                     poolId = (await GetOrAddPoolAsync(
                         key: poolKey,
                         isPreemptable: virtualMachineInfo.LowPriority,
