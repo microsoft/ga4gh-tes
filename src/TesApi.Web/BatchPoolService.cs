@@ -25,6 +25,7 @@ namespace TesApi.Web
         /// Interval between each call to <see cref="IBatchPool.ServicePoolAsync(CancellationToken)"/>.
         /// </summary>
         public static readonly TimeSpan RunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs uses a 30 second polling interval
+        public static readonly TimeSpan CompletedCloudTasksRunInterval = TimeSpan.FromSeconds(90);
 
         /// <summary>
         /// Default constructor
@@ -133,7 +134,7 @@ namespace TesApi.Web
         /// <returns></returns>
         private Task ExecuteCompletedTesTasksOnBatchAsync(CancellationToken stoppingToken)
         {
-            return ExecuteActionOnIntervalAsync(RunInterval, ProcessCompletedCloudTasksAsync, stoppingToken);
+            return ExecuteActionOnIntervalAsync(CompletedCloudTasksRunInterval, ProcessCompletedCloudTasksAsync, stoppingToken);
         }
 
         /// <summary>

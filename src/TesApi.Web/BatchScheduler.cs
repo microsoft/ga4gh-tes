@@ -776,14 +776,12 @@ namespace TesApi.Web
         private async Task<IList<TesInput>> GetAdditionalCromwellInputsAsync(TesTask task, CancellationToken cancellationToken)
         {
             var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
-            var isCromwell = cromwellExecutionDirectoryUrl is not null;
-
 
             // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
             // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
             // TODO: Verify whether this workaround is still needed.
             var additionalInputs = new List<TesInput>();
-            if (isCromwell)
+            if (cromwellExecutionDirectoryUrl is not null)
             {
                 additionalInputs =
                     await GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(task, cromwellExecutionDirectoryUrl,
@@ -805,10 +803,12 @@ namespace TesApi.Web
 
             var executionDirectoryUri = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectoryUrl,
                 storageAccessProvider.DefaultContainerPermissions, cancellationToken);
+
             if (executionDirectoryUri is not null)
             {
                 var blobsInExecutionDirectory =
                     await azureProxy.ListBlobsAsync(new Uri(executionDirectoryUri), cancellationToken).ToListAsync(cancellationToken);
+                logger.LogDebug($"Found {blobsInExecutionDirectory.Count} items in cromwell's task execution directory.");
                 var scriptBlob =
                     blobsInExecutionDirectory.FirstOrDefault(b => b.Name.EndsWith($"/{CromwellScriptFileName}"));
                 var commandScript =
