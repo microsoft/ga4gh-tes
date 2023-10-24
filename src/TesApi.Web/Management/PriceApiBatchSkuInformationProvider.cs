@@ -70,7 +70,7 @@ namespace TesApi.Web.Management
             logger.LogInformation($"Getting VM sizes and price information for region:{region}");
 
             var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync(cancellationToken)).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase));
-            
+
             try
             {
                 var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region, cancellationToken).ToListAsync(cancellationToken);

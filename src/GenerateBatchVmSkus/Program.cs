@@ -218,7 +218,7 @@ namespace TesUtils
                 _ = int.TryParse(sku?.Capabilities.Where(x => x.Name.Equals("vCPUsAvailable")).SingleOrDefault()?.Value, out var vCpusAvailable);
                 _ = bool.TryParse(sku?.Capabilities.Where(x => x.Name.Equals("EncryptionAtHostSupported")).SingleOrDefault()?.Value, out var encryptionAtHostSupported);
 
-                return new List<VirtualMachineInformation>() { 
+                return new List<VirtualMachineInformation>() {
                     new VirtualMachineInformation()
                     {
                         MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
