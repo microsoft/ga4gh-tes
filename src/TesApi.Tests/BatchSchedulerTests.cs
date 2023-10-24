@@ -66,8 +66,8 @@ namespace TesApi.Tests
             var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(new Pool(name: id)), System.Threading.CancellationToken.None);
             await pool.ServicePoolAsync();
 
-            Assert.AreEqual(batchScheduler.GetPools().Count(), count);
-            Assert.AreEqual(batchScheduler.GetPoolGroupKeys().Count(), keyCount);
+            Assert.AreEqual(count, batchScheduler.GetPools().Count());
+            Assert.AreEqual(keyCount, batchScheduler.GetPoolGroupKeys().Count());
             //Assert.AreSame(info, pool);
             Assert.AreEqual(info.Pool.PoolId, pool.Pool.PoolId);
             serviceProvider.AzureProxy.Verify(mock => mock.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
@@ -80,7 +80,7 @@ namespace TesApi.Tests
             using var serviceProvider = GetServiceProvider();
             var batchScheduler = serviceProvider.GetT() as BatchScheduler;
             var info = await AddPool(batchScheduler);
-            ((BatchPool)info).TestSetAvailable(false);
+            info.TestSetAvailable(false);
             //await info.ServicePoolAsync(BatchPool.ServiceKind.Update);
             var keyCount = batchScheduler.GetPoolGroupKeys().Count();
             var key = batchScheduler.GetPoolGroupKeys().First();
@@ -89,8 +89,8 @@ namespace TesApi.Tests
             var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(new Pool(name: id)), System.Threading.CancellationToken.None);
             await pool.ServicePoolAsync();
 
-            Assert.AreNotEqual(batchScheduler.GetPools().Count(), count);
-            Assert.AreEqual(batchScheduler.GetPoolGroupKeys().Count(), keyCount);
+            Assert.AreNotEqual(count, batchScheduler.GetPools().Count());
+            Assert.AreEqual(keyCount, batchScheduler.GetPoolGroupKeys().Count());
             //Assert.AreNotSame(info, pool);
             Assert.AreNotEqual(info.Pool.PoolId, pool.Pool.PoolId);
         }
