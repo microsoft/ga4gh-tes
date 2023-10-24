@@ -105,9 +105,9 @@ namespace TesUtils
             var lowPrPriceForVm = new Dictionary<string, PricingItem>();
 
             var pricesInWE = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(AzureLocation.WestEurope, CancellationToken.None).ToListAsync();
-            foreach (var price in pricesInWE.Where(p => p.effectiveStartDate < DateTime.Now))
+            foreach (var price in pricesInWE.Where(p => p.effectiveStartDate < DateTime.UtcNow))
             {
-                if (price.meterName.Contains("Low Priority"))
+                if (price.meterName.Contains("Low Priority", StringComparison.OrdinalIgnoreCase))
                 {
                     if (lowPrPriceForVm.ContainsKey(price.armSkuName))
                     {

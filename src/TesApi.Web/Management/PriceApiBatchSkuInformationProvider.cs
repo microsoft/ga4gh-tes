@@ -108,8 +108,8 @@ namespace TesApi.Web.Management
             }
             catch (Exception ex)
             {
-                logger.LogWarning(
-                    $"Exception encountered retrieving live pricing data, reverting to local pricing data. Exception: {ex.Message}");
+                logger.LogWarning(ex,
+                    $"Exception encountered retrieving live pricing data, reverting to local pricing data.");
                 return new List<VirtualMachineInformation>(localVmSizeInfoForBatchSupportedSkus);
             }
         }
