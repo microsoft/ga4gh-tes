@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 using System;
@@ -140,25 +140,25 @@ namespace TesApi.Web
         private void EnsureScalingModeSet(bool? autoScaleEnabled)
         {
             /*
-             * If the the scaling mode does not correspond to the actual state of autoscale enablement, this method guides us towards nivana.
+             * If the the scaling mode does not correspond to the actual state of autoscale enablement, this method guides us towards the desired state.
              *
-             * Barring outside intervention, at the time this method is called, the following should hold true:
-             * |------------------|---------------------|-------------------------|
-             * | autoScaleEnabled |     ScalingMode     |          Notes          |
-             * |------------------|---------------------|-------------------------|
-             * |       true       |   AutoScaleEnabled  | Normal long-term state  |
-             * |       false      |  AutoScaleDisabled  | Switched to manual mode |
-             * |       false      | RemovingFailedNodes | Autoscale reengagement  |
-             * |       true       | WaitingForAutoScale | Ensure autoscale works  |
-             * |       true       |   SettingAutoScale  |    Autoscale worked     |
-             * |------------------|---------------------|-------------------------|
+             * Barring outside intervention, at each and every time this method is called, the following should always hold true:
+             * |------------------|---------------------|-------------------------|-------------------------|
+             * | autoScaleEnabled |     ScalingMode     |       Last action       |       Next action       |
+             * |------------------|---------------------|-------------------------|-------------------------|
+             * |       true       |   AutoScaleEnabled  | Normal long-term state  |Change for select errrors|
+             * |       false      |  AutoScaleDisabled  |  Recently disabled AS   |  Perform needed actions |
+             * |       false      | RemovingFailedNodes | Manual resizing actions | Reenalble autoscale mode|
+             * |       true       | WaitingForAutoScale | Ensure autoscale works  | Delay needfully to asses|
+             * |       true       |   SettingAutoScale  |  Assess pool response   | Restore normal long-term|
+             * |------------------|---------------------|-------------------------|-------------------------|
              *
              * The first time this method is called, ScalingMode will be Unknown. Initialize it to an appropriate value to initialize the state machine's state.
              * If autoScaleEnabled is null, don't change anything.
              *
-             * If a pool's autoscale was disabled, the state machine should reenable it. Use the state RemovingFailedNodes for that.
+             * If a pool's autoscale was disabled by an outside agent, the state machine should work to reenable it. Use the state RemovingFailedNodes for that.
              *
-             * If a pool was expected to switch scaling modes, but didn't, the pool's changeover has silently failed.
+             * If a pool was expected to switch scaling modes, but didn't, the pool's changeover has silently failed. Consider ths pool for early retirement.
              */
 
             (var failed, _scalingMode) = autoScaleEnabled switch
@@ -270,7 +270,7 @@ namespace TesApi.Web
           Notes on the formula:
               Reference: https://docs.microsoft.com/en-us/azure/batch/batch-automatic-scaling
 
-          In order to avoid confusion, some of the builtin variable names in batch's autoscale formulas named in a way that may not appear intuitive:
+          In order to avoid confusion, some of the builtin variable names in batch's autoscale formulas are named in a way that may not initially appear intuitive:
               Running tasks are named RunningTasks, which is fine
               Queued tasks are named ActiveTasks, which matches the same value of the "state" property
               The sum of running & queued tasks (what I would have named TotalTasks) is named PendingTasks
@@ -279,14 +279,14 @@ namespace TesApi.Web
           This is accomplished by calling doubleVec's GetSample method, which returns some number of the most recent available samples of the related metric.
           Then, a function is used to extract a scaler from the list of scalers (measurements). NOTE: there does not seem to be a "last" function.
 
-          Whenever autoscaling is first turned on, including when the pool is first created, there are no sampled metrics available. Thus, we need to prevent the
+          Whenever autoscaling is turned on, whether or not the pool waw just created, there are no sampled metrics available. Thus, we need to prevent the
           expected errors that would result from trying to extract the samples. Later on, if recent samples aren't available, we prefer that the formula fails
           (1- so we can potentially capture that, and 2- so that we don't suddenly try to remove all nodes from the pool when there's still demand) so we use a
           timed scheme to substitue an "initial value" (aka initialTarget).
 
           We set NodeDeallocationOption to taskcompletion to prevent wasting time/money by stopping a running task, only to requeue it onto another node, or worse,
-          fail it, just because batch's last sample was taken longer ago than a task's assignment was made to a node, because the formula evaluations are not coordinated
-          with the metric sampling based on my observations. This does mean that some resizes will time out, so we mustn't simply consider timeout to be a fatal error.
+          fail it, just because batch's last sample was taken longer ago than a task's assignment was made to a node, because the formula evaluations intervals are not coordinated
+          with the metric sampling intervals based on my observations. This does mean that some resizes will time out, so we mustn't simply consider timeout to be a fatal error.
 
           internal variables in this formula:
             * lifespan: the amount of time between the creation of the formula and the evaluation time of the formula.
@@ -310,8 +310,9 @@ namespace TesApi.Web
         private async ValueTask ServicePoolManagePoolScalingAsync(CancellationToken cancellationToken)
         {
             // This method implememts a state machine to disable/enable autoscaling as needed to clear certain conditions that can be observed
-            // Inputs are _resetAutoScalingRequired, compute nodes in ejectable states, and the current _scalingMode
-            // This method must noop when allocation state is not Steady
+            // Inputs are _resetAutoScalingRequired, compute nodes in ejectable states, and the current _scalingMode, along with the pool's
+	    // allocation state and autoscale enablement.
+            // This method must noop whenthe  allocation state is not Steady
 
             var (allocationState, _, autoScaleEnabled, _, _, _, _) = await _azureProxy.GetFullAllocationStateAsync(Pool.PoolId, cancellationToken);
 
