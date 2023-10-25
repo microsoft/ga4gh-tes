@@ -82,11 +82,11 @@ namespace TesApi.Web.Management
                 foreach (var vm in localVmSizeInfoForBatchSupportedSkus.Where(v => !v.LowPriority))
                 {
 
-                    var instancePricingInfo = pricingItems.Where(p => p.armSkuName == vm.VmSize).ToList();
-                    var normalPriorityInfo = instancePricingInfo.FirstOrDefault(s =>
-                        s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase));
-                    var lowPriorityInfo = instancePricingInfo.FirstOrDefault(s =>
-                        !s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase));
+                    var instancePricingInfo = pricingItems.Where(p => p.armSkuName == vm.VmSize && p.effectiveStartDate < DateTime.UtcNow).ToList();
+                    var normalPriorityInfo = instancePricingInfo.Where(s =>
+                        !s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase)).MaxBy(p => p.effectiveStartDate);
+                    var lowPriorityInfo = instancePricingInfo.Where(s =>
+                        s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase)).MaxBy(p => p.effectiveStartDate);
 
                     if (lowPriorityInfo is not null)
                     {
