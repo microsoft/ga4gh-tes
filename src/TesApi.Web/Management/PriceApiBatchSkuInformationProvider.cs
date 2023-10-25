@@ -84,9 +84,9 @@ namespace TesApi.Web.Management
 
                     var instancePricingInfo = pricingItems.Where(p => p.armSkuName == vm.VmSize && p.effectiveStartDate < DateTime.UtcNow).ToList();
                     var normalPriorityInfo = instancePricingInfo.Where(s =>
-                        s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase)).MaxBy(p => p.effectiveStartDate);
-                    var lowPriorityInfo = instancePricingInfo.Where(s =>
                         !s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase)).MaxBy(p => p.effectiveStartDate);
+                    var lowPriorityInfo = instancePricingInfo.Where(s =>
+                        s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase)).MaxBy(p => p.effectiveStartDate);
 
                     if (lowPriorityInfo is not null)
                     {
