@@ -102,11 +102,41 @@ namespace TesUtils
             var sizeForVm = new Dictionary<string, VirtualMachineSize>();
             var skuForVm = new Dictionary<string, ComputeResourceSku>();
             var priceForVm = new Dictionary<string, PricingItem>();
+            var lowPrPriceForVm = new Dictionary<string, PricingItem>();
 
             var pricesInWE = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(AzureLocation.WestEurope, CancellationToken.None).ToListAsync();
-            foreach (var price in pricesInWE.Where(p => !p.meterName.Contains("Low Priority")))
+            foreach (var price in pricesInWE.Where(p => p.effectiveStartDate < DateTime.UtcNow))
             {
-                priceForVm.Add(price.armSkuName, price);
+                if (price.meterName.Contains("Low Priority", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (lowPrPriceForVm.ContainsKey(price.armSkuName))
+                    {
+                        var existing = lowPrPriceForVm[price.armSkuName];
+                        if (price.effectiveStartDate > existing.effectiveStartDate)
+                        {
+                            lowPrPriceForVm[price.armSkuName] = price;
+                        }
+                    }
+                    else
+                    {
+                        lowPrPriceForVm.Add(price.armSkuName, price);
+                    }
+                }
+                else
+                {
+                    if (priceForVm.ContainsKey(price.armSkuName))
+                    {
+                        var existing = priceForVm[price.armSkuName];
+                        if (price.effectiveStartDate > existing.effectiveStartDate)
+                        {
+                            priceForVm[price.armSkuName] = price;
+                        }
+                    }
+                    else
+                    {
+                        priceForVm.Add(price.armSkuName, price);
+                    }
+                }
             }
 
             var regions = await subscription.GetLocationsAsync().Where(x => x.Metadata.RegionType == RegionType.Physical).ToListAsync();
@@ -156,12 +186,12 @@ namespace TesUtils
             var batchSupportedVmSet = regionsForVm.Keys.ToList();
             Console.WriteLine($"Superset supportedSkuCount:{batchSupportedVmSet.Count}");
 
-            var batchVmInfo = batchSupportedVmSet.Select((s) =>
+            var batchVmInfo = batchSupportedVmSet.SelectMany<string, VirtualMachineInformation>((s) =>
             {
                 if (!validSet.Contains(s))
                 {
                     Console.WriteLine($"Skipping {s} not in valid vm skus file.");
-                    return null;
+                    return new List<VirtualMachineInformation>();
                 }
 
                 var sizeInfo = sizeForVm[s];
@@ -188,18 +218,35 @@ namespace TesUtils
                 _ = int.TryParse(sku?.Capabilities.Where(x => x.Name.Equals("vCPUsAvailable")).SingleOrDefault()?.Value, out var vCpusAvailable);
                 _ = bool.TryParse(sku?.Capabilities.Where(x => x.Name.Equals("EncryptionAtHostSupported")).SingleOrDefault()?.Value, out var encryptionAtHostSupported);
 
-                return new VirtualMachineInformation()
-                {
-                    MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
-                    MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB!.Value),
-                    VCpusAvailable = vCpusAvailable,
-                    ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB!.Value),
-                    VmSize = sizeInfo.Name,
-                    VmFamily = sku?.Family,
-                    HyperVGenerations = generationList,
-                    RegionsAvailable = new List<string>(regionsForVm[s].Order()),
-                    EncryptionAtHostSupported = encryptionAtHostSupported,
-                    PricePerHour = priceForVm.ContainsKey(s) ? (decimal?)priceForVm[s].retailPrice : null,
+                return new List<VirtualMachineInformation>() {
+                    new VirtualMachineInformation()
+                    {
+                        MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
+                        MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB!.Value),
+                        VCpusAvailable = vCpusAvailable,
+                        ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB!.Value),
+                        VmSize = sizeInfo.Name,
+                        VmFamily = sku?.Family,
+                        LowPriority = false,
+                        HyperVGenerations = generationList,
+                        RegionsAvailable = new List<string>(regionsForVm[s].Order()),
+                        EncryptionAtHostSupported = encryptionAtHostSupported,
+                        PricePerHour = priceForVm.ContainsKey(s) ? (decimal?)priceForVm[s].retailPrice : null,
+                    },
+                    new VirtualMachineInformation()
+                    {
+                        MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
+                        MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB!.Value),
+                        VCpusAvailable = vCpusAvailable,
+                        ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB!.Value),
+                        VmSize = sizeInfo.Name,
+                        VmFamily = sku?.Family,
+                        LowPriority = true,
+                        HyperVGenerations = generationList,
+                        RegionsAvailable = new List<string>(regionsForVm[s].Order()),
+                        EncryptionAtHostSupported = encryptionAtHostSupported,
+                        PricePerHour = lowPrPriceForVm.ContainsKey(s) ? (decimal?)lowPrPriceForVm[s].retailPrice : null,
+                    },
                 };
             }).Where(x => x is not null).OrderBy(x => x!.VmSize).ToList();
 
