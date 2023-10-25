@@ -149,7 +149,7 @@ namespace TesApi.Web
              * |       true       |   AutoScaleEnabled  | Normal long-term state  |Change for select errrors|
              * |       false      |  AutoScaleDisabled  |  Recently disabled AS   |  Perform needed actions |
              * |       false      | RemovingFailedNodes | Manual resizing actions | Reenalble autoscale mode|
-             * |       true       | WaitingForAutoScale | Ensure autoscale works  | Delay needfully to asses|
+             * |       true       | WaitingForAutoScale | Ensure autoscale works  | Delay and re-assess     |
              * |       true       |   SettingAutoScale  |  Assess pool response   | Restore normal long-term|
              * |------------------|---------------------|-------------------------|-------------------------|
              *
