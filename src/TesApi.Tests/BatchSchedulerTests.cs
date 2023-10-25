@@ -1743,7 +1743,7 @@ namespace TesApi.Tests
                     .Returns(Task.CompletedTask);
 
                 azureProxy.Setup(a => a.GetFullAllocationStateAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Returns(Task.FromResult(azureProxyReturnValues.AzureProxyGetFullAllocationState?.Invoke() ?? (null, null, null, null, null, null)));
+                    .Returns(Task.FromResult(azureProxyReturnValues.AzureProxyGetFullAllocationState?.Invoke() ?? new(null, null, null, null, null, null, null)));
 
                 azureProxy.Setup(a => a.ListComputeNodesAsync(It.IsAny<string>(), It.IsAny<DetailLevel>()))
                     .Returns(new Func<string, DetailLevel, IAsyncEnumerable<ComputeNode>>((string poolId, DetailLevel _1)
@@ -1887,7 +1887,7 @@ namespace TesApi.Tests
 
         private class AzureProxyReturnValues
         {
-            internal Func<(Microsoft.Azure.Batch.Common.AllocationState?, bool?, int?, int?, int?, int?)> AzureProxyGetFullAllocationState { get; set; }
+            internal Func<FullBatchPoolAllocationState> AzureProxyGetFullAllocationState { get; set; }
             internal Action<string, System.Threading.CancellationToken> AzureProxyDeleteBatchPoolIfExists { get; set; }
             internal Action<string, System.Threading.CancellationToken> AzureProxyDeleteBatchPool { get; set; }
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<CloudTask>> AzureProxyListTasks { get; set; } = (jobId, detail) => AsyncEnumerable.Empty<CloudTask>();
@@ -1906,7 +1906,7 @@ namespace TesApi.Tests
 
             public static AzureProxyReturnValues Defaults => new()
             {
-                AzureProxyGetFullAllocationState = () => (Microsoft.Azure.Batch.Common.AllocationState.Steady, true, 0, 0, 0, 0),
+                AzureProxyGetFullAllocationState = () => new(Microsoft.Azure.Batch.Common.AllocationState.Steady, DateTime.MinValue.ToUniversalTime(), true, 0, 0, 0, 0),
                 AzureProxyDeleteBatchPoolIfExists = (poolId, cancellationToken) => { },
                 AzureProxyDeleteBatchPool = (poolId, cancellationToken) => { },
                 StorageAccountInfos = new() {
