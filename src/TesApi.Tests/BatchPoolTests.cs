@@ -38,7 +38,7 @@ namespace TesApi.Tests
         public async Task RotateMarksPoolUnavailableWhenRotateIntervalHasPassed()
         {
             var azureProxy = AzureProxyReturnValues.Get();
-            azureProxy.AzureProxyGetComputeNodeAllocationState = id => (Microsoft.Azure.Batch.Common.AllocationState.Steady, true, 0, 0, 1, 1);
+            azureProxy.AzureProxyGetComputeNodeAllocationState = id => new(Microsoft.Azure.Batch.Common.AllocationState.Steady, DateTime.MinValue.ToUniversalTime(), true, 0, 0, 1, 1);
             azureProxy.AzureProxyListTasks = (jobId, detailLevel) => AsyncEnumerable.Empty<CloudTask>().Append(GenerateTask(jobId, "task1-1"));
             azureProxy.AzureProxyListComputeNodesAsync = (i, d) => AsyncEnumerable.Empty<ComputeNode>();
             var services = GetServiceProvider(azureProxy);
@@ -67,7 +67,7 @@ namespace TesApi.Tests
         {
             BatchPool pool = default;
             var azureProxy = AzureProxyReturnValues.Get();
-            azureProxy.AzureProxyGetComputeNodeAllocationState = id => (Microsoft.Azure.Batch.Common.AllocationState.Steady, true, 0, 0, 1, 1);
+            azureProxy.AzureProxyGetComputeNodeAllocationState = id => new(Microsoft.Azure.Batch.Common.AllocationState.Steady, DateTime.MinValue.ToUniversalTime(), true, 0, 0, 1, 1);
             azureProxy.AzureProxyDeleteBatchPool = (poolId, cancellationToken) => Assert.Fail();
             var services = GetServiceProvider(azureProxy);
             pool = await AddPool(services.GetT(), false);
@@ -116,7 +116,7 @@ namespace TesApi.Tests
             services.AzureProxy.Verify(a => a.DisableBatchPoolAutoScaleAsync(pool.Id, It.IsAny<System.Threading.CancellationToken>()));
         }
 
-        [TestMethod]
+        [TestMethod] // TODO: delete?
         public async Task ServicePoolGetResizeErrorsResetsAutoScalingWhenBatchStopsEvaluatingAutoScaleAfterQuotaError()
         {
             var azureProxy = AzureProxyReturnValues.Get();
@@ -136,25 +136,23 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        public async Task ServicePoolGetResizeErrorsResetsAutoScalingWhenBatchStopsEvaluatingAutoScaleLongAllocationStateTransitionDelay()
+        public async Task ServicePoolGetResizeErrorsResetsAutoScalingWhenBatchReturnsAutoscaleEvaluationError()
         {
             var azureProxy = AzureProxyReturnValues.Get();
-            azureProxy.EvaluateAutoScale = (id, formula) => GenerateAutoScaleRun(error: new());
             var services = GetServiceProvider(azureProxy);
             var pool = await AddPool(services.GetT(), false);
-            pool.TimeShift(12 * BatchPool.AutoScaleEvaluationInterval);
 
             azureProxy.SetPoolState(
                 pool.Id,
                 enableAutoScale: true,
-                resizeErrors: Enumerable.Repeat<Microsoft.Azure.Batch.Protocol.Models.ResizeError>(new(Microsoft.Azure.Batch.Common.PoolResizeErrorCodes.AccountCoreQuotaReached, "Core quota reached."), 1).ToList(),
-                allocationStateTransitionTime: DateTime.UtcNow - (11 * BatchPool.AutoScaleEvaluationInterval));
+                autoScaleRun: new(DateTime.UtcNow, error: new(code: "InsufficientSampleData")));
 
             await pool.ServicePoolAsync(BatchPool.ServiceKind.GetResizeErrors);
             await pool.ServicePoolAsync(BatchPool.ServiceKind.ManagePoolScaling);
 
             services.AzureProxy.Verify(a => a.DisableBatchPoolAutoScaleAsync(pool.Id, It.IsAny<System.Threading.CancellationToken>()));
         }
+
 
         private static TestServices.TestServiceProvider<BatchScheduler> GetServiceProvider(AzureProxyReturnValues azureProxyReturn = default)
         {
@@ -184,18 +182,18 @@ namespace TesApi.Tests
 
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<ComputeNode>> AzureProxyListComputeNodesAsync { get; set; } = (poolId, detailLevel) => AsyncEnumerable.Empty<ComputeNode>();
             internal Action<string, IEnumerable<ComputeNode>, System.Threading.CancellationToken> AzureProxyDeleteBatchComputeNodes { get; set; } = (poolId, computeNodes, cancellationToken) => { };
-            internal Func<string, (Microsoft.Azure.Batch.Common.AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)> AzureProxyGetComputeNodeAllocationState { get; set; } = null;
+            internal Func<string, FullBatchPoolAllocationState> AzureProxyGetComputeNodeAllocationState { get; set; } = null;
             internal Action<string, System.Threading.CancellationToken> AzureProxyDeleteBatchPool { get; set; } = (poolId, cancellationToken) => { };
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<CloudTask>> AzureProxyListTasks { get; set; } = (jobId, detailLevel) => AsyncEnumerable.Empty<CloudTask>();
             internal Func<string, string, Microsoft.Azure.Batch.AutoScaleRun> EvaluateAutoScale { get; set; } //= new((poolId, autoscaleFormula) => AutoScaleRun);
             internal List<VirtualMachineInformation> VmSizesAndPrices { get; set; } = new();
 
-            internal static Func<string, (Microsoft.Azure.Batch.Common.AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)> AzureProxyGetComputeNodeAllocationStateDefault = id => (Microsoft.Azure.Batch.Common.AllocationState.Steady, true, 0, 0, 0, 0);
+            internal static Func<string, FullBatchPoolAllocationState> AzureProxyGetComputeNodeAllocationStateDefault = id => new(Microsoft.Azure.Batch.Common.AllocationState.Steady, DateTime.MinValue.ToUniversalTime(), true, 0, 0, 0, 0);
 
             internal bool PoolStateExists(string poolId)
                 => poolState.ContainsKey(poolId);
 
-            private record PoolState(int? CurrentDedicatedNodes, int? CurrentLowPriorityNodes, Microsoft.Azure.Batch.Common.AllocationState? AllocationState, Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun AutoScaleRun, DateTime? AllocationStateTransitionTime, IList<Microsoft.Azure.Batch.Protocol.Models.ResizeError> ResizeErrors, IList<Microsoft.Azure.Batch.MetadataItem> PoolMetadata)
+            private record PoolState(int? CurrentDedicatedNodes, int? CurrentLowPriorityNodes, Microsoft.Azure.Batch.Common.AllocationState? AllocationState, DateTime? AllocationStateTransitionTime, Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun AutoScaleRun, DateTime? CreationTime, IList<Microsoft.Azure.Batch.Protocol.Models.ResizeError> ResizeErrors, IList<Microsoft.Azure.Batch.MetadataItem> PoolMetadata)
             {
                 public int? TargetDedicatedNodes { get; set; }
                 public int? TargetLowPriorityNodes { get; set; }
@@ -213,6 +211,7 @@ namespace TesApi.Tests
                 DateTime? allocationStateTransitionTime = default,
                 Microsoft.Azure.Batch.Common.AllocationState? allocationState = default,
                 IList<Microsoft.Azure.Batch.Protocol.Models.ResizeError> resizeErrors = default,
+                DateTime? creationTime = default,
                 Microsoft.Azure.Batch.Protocol.Models.AutoScaleRun autoScaleRun = default,
                 bool? enableAutoScale = default,
                 IList<Microsoft.Azure.Batch.MetadataItem> poolMetadata = default)
@@ -236,6 +235,7 @@ namespace TesApi.Tests
                         currentDedicatedNodes ?? state.CurrentDedicatedNodes,
                         currentLowPriorityNodes ?? state.CurrentLowPriorityNodes,
                         allocationState ?? state.AllocationState,
+                        allocationStateTransitionTime ?? state.AllocationStateTransitionTime,
                         autoScaleRun ?? state.AutoScaleRun,
                         allocationStateTransitionTime ?? state.AllocationStateTransitionTime,
                         resizeErrors ?? state.ResizeErrors,
@@ -251,7 +251,7 @@ namespace TesApi.Tests
                 }
                 else
                 {
-                    poolState.Add(id, new(currentDedicatedNodes, currentLowPriorityNodes, allocationState, autoScaleRun, allocationStateTransitionTime, resizeErrors, poolMetadata)
+                    poolState.Add(id, new(currentDedicatedNodes, currentLowPriorityNodes, allocationState, allocationStateTransitionTime, autoScaleRun, creationTime, resizeErrors, poolMetadata)
                     { TargetDedicatedNodes = targetDedicatedNodes, TargetLowPriorityNodes = targetLowPriorityNodes, EnableAutoScale = enableAutoScale });
                 }
             }
@@ -283,6 +283,7 @@ namespace TesApi.Tests
                     AutoScaleRun: default,
                     AllocationStateTransitionTime: default,
                     ResizeErrors: default,
+                    CreationTime: DateTime.UtcNow,
                     PoolMetadata: pool.Metadata?.Select(ConvertMetadata).ToList())
                 {
                     TargetDedicatedNodes = pool.ScaleSettings?.FixedScale?.TargetDedicatedNodes ?? 0,
@@ -321,6 +322,7 @@ namespace TesApi.Tests
                     resizeErrors: poolState.ResizeErrors,
                     autoScaleRun: poolState.AutoScaleRun,
                     enableAutoScale: poolState.EnableAutoScale,
+                    creationTime: poolState.CreationTime,
                     metadata: poolState.PoolMetadata);
             }
         }
@@ -381,14 +383,14 @@ namespace TesApi.Tests
                 azureProxy.Setup(a => a.DeleteBatchPoolAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Callback<string, System.Threading.CancellationToken>((poolId, cancellationToken) => azureProxyReturnValues.AzureProxyDeleteBatchPoolImpl(poolId, cancellationToken)).Returns(Task.CompletedTask);
                 azureProxy.Setup(a => a.EvaluateAutoScaleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Returns((string poolId, string autoscaleFormula, CancellationToken _1) => Task.FromResult(azureProxyReturnValues.EvaluateAutoScale(poolId, autoscaleFormula)));
 
-                (Microsoft.Azure.Batch.Common.AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated) GetPoolStateFromSettingStateOrDefault(string poolId)
+                FullBatchPoolAllocationState GetPoolStateFromSettingStateOrDefault(string poolId)
                 {
                     if (azureProxyReturnValues.AzureProxyGetComputeNodeAllocationState is null)
                     {
                         if (azureProxyReturnValues.PoolStateExists(poolId))
                         {
                             var state = azureProxyReturnValues.GetBatchPoolImpl(poolId);
-                            return (state.AllocationState, state.AutoScaleEnabled, state.TargetLowPriorityComputeNodes, state.CurrentLowPriorityComputeNodes, state.TargetDedicatedComputeNodes, state.CurrentDedicatedComputeNodes);
+                            return new(state.AllocationState, state.AllocationStateTransitionTime, state.AutoScaleEnabled, state.TargetLowPriorityComputeNodes, state.CurrentLowPriorityComputeNodes, state.TargetDedicatedComputeNodes, state.CurrentDedicatedComputeNodes);
                         }
                         else
                         {

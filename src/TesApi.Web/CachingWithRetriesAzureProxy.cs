@@ -281,7 +281,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public Task<(AllocationState? AllocationState, bool? AutoScaleEnabled, int? TargetLowPriority, int? CurrentLowPriority, int? TargetDedicated, int? CurrentDedicated)> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken)
+        public Task<FullBatchPoolAllocationState> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken)
         {
             var ctx = new Context();
             ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying GetFullAllocationStateAsync ({RetryCount}).", retryCount));

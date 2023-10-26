@@ -63,8 +63,8 @@ namespace TesApi.Tests
             var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(new Pool(name: id)), System.Threading.CancellationToken.None);
             await foreach (var _ in pool.ServicePoolAsync()) { }
 
-            Assert.AreEqual(batchScheduler.GetPools().Count(), count);
-            Assert.AreEqual(batchScheduler.GetPoolGroupKeys().Count(), keyCount);
+            Assert.AreEqual(count, batchScheduler.GetPools().Count());
+            Assert.AreEqual(keyCount, batchScheduler.GetPoolGroupKeys().Count());
             //Assert.AreSame(info, pool);
             Assert.AreEqual(info.Id, pool.Id);
             serviceProvider.AzureProxy.Verify(mock => mock.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
@@ -76,7 +76,7 @@ namespace TesApi.Tests
             using var serviceProvider = GetServiceProvider();
             var batchScheduler = serviceProvider.GetT() as BatchScheduler;
             var info = await AddPool(batchScheduler);
-            ((BatchPool)info).TestSetAvailable(false);
+            info.TestSetAvailable(false);
             //await info.ServicePoolAsync(BatchPool.ServiceKind.Update);
             var keyCount = batchScheduler.GetPoolGroupKeys().Count();
             var key = batchScheduler.GetPoolGroupKeys().First();
@@ -85,8 +85,8 @@ namespace TesApi.Tests
             var pool = await batchScheduler.GetOrAddPoolAsync(key, false, (id, cancellationToken) => ValueTask.FromResult(new Pool(name: id)), System.Threading.CancellationToken.None);
             await foreach (var _ in pool.ServicePoolAsync()) { }
 
-            Assert.AreNotEqual(batchScheduler.GetPools().Count(), count);
-            Assert.AreEqual(batchScheduler.GetPoolGroupKeys().Count(), keyCount);
+            Assert.AreNotEqual(count, batchScheduler.GetPools().Count());
+            Assert.AreEqual(keyCount, batchScheduler.GetPoolGroupKeys().Count());
             //Assert.AreNotSame(info, pool);
             Assert.AreNotEqual(info.Id, pool.Id);
         }
@@ -1693,7 +1693,7 @@ namespace TesApi.Tests
                     .Returns((Pool p, bool _1, System.Threading.CancellationToken _2) => Task.FromResult(azureProxyReturnValues.CreateBatchPoolImpl(p)));
 
                 azureProxy.Setup(a => a.GetFullAllocationStateAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
-                    .Returns(Task.FromResult(azureProxyReturnValues.AzureProxyGetFullAllocationState?.Invoke() ?? (null, null, null, null, null, null)));
+                    .Returns(Task.FromResult(azureProxyReturnValues.AzureProxyGetFullAllocationState?.Invoke() ?? new(null, null, null, null, null, null, null)));
 
                 azureProxy.Setup(a => a.ListComputeNodesAsync(It.IsAny<string>(), It.IsAny<DetailLevel>()))
                     .Returns(new Func<string, DetailLevel, IAsyncEnumerable<ComputeNode>>((string poolId, DetailLevel _1)
@@ -1839,7 +1839,7 @@ namespace TesApi.Tests
 
         private class AzureProxyReturnValues
         {
-            internal Func<(Microsoft.Azure.Batch.Common.AllocationState?, bool?, int?, int?, int?, int?)> AzureProxyGetFullAllocationState { get; set; }
+            internal Func<FullBatchPoolAllocationState> AzureProxyGetFullAllocationState { get; set; }
             internal Action<string, System.Threading.CancellationToken> AzureProxyDeleteBatchPoolIfExists { get; set; }
             internal Action<string, System.Threading.CancellationToken> AzureProxyDeleteBatchPool { get; set; }
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<CloudTask>> AzureProxyListTasks { get; set; } = (jobId, detail) => AsyncEnumerable.Empty<CloudTask>();
@@ -1857,7 +1857,7 @@ namespace TesApi.Tests
 
             public static AzureProxyReturnValues Defaults => new()
             {
-                AzureProxyGetFullAllocationState = () => (Microsoft.Azure.Batch.Common.AllocationState.Steady, true, 0, 0, 0, 0),
+                AzureProxyGetFullAllocationState = () => new(Microsoft.Azure.Batch.Common.AllocationState.Steady, DateTime.MinValue.ToUniversalTime(), true, 0, 0, 0, 0),
                 AzureProxyDeleteBatchPoolIfExists = (poolId, cancellationToken) => { },
                 AzureProxyDeleteBatchPool = (poolId, cancellationToken) => { },
                 StorageAccountInfos = new() {
