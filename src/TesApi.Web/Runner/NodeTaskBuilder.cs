@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using Tes.Runner.Models;
 
 namespace TesApi.Web.Runner
@@ -12,10 +13,13 @@ namespace TesApi.Web.Runner
     /// </summary>
     public class NodeTaskBuilder
     {
+        private const string ManagedIdentityResourceIdPattern = @"^/subscriptions/[^/]+/resourcegroups/[^/]+/providers/Microsoft.ManagedIdentity/userAssignedIdentities/[^/]+$";
+
         private const string defaultDockerImageTag = "latest";
         private readonly NodeTask nodeTask;
         const string NodeTaskOutputsMetricsFormat = "FileUploadSizeInBytes={Size}";
         const string NodeTaskInputsMetricsFormat = "FileDownloadSizeInBytes={Size}";
+
 
         /// <summary>
         /// Creates a new builder
@@ -266,9 +270,30 @@ namespace TesApi.Web.Runner
         /// <returns></returns>
         public NodeTaskBuilder WithResourceIdManagedIdentity(string resourceId)
         {
+            if (!IsValidManagedIdentityResourceId(resourceId))
+            {
+                throw new ArgumentException("Invalid resource ID. The ID must be a valid Azure resource ID.", nameof(resourceId));
+            }
+
             nodeTask.RuntimeOptions ??= new RuntimeOptions();
             nodeTask.RuntimeOptions.NodeManagedIdentityResourceId = resourceId;
             return this;
+        }
+
+        /// <summary>
+        /// Returns true of the value provided is a valid resource id for a managed identity. 
+        /// </summary>
+        /// <param name="resourceId"></param>
+        /// <returns></returns>
+        public static bool IsValidManagedIdentityResourceId(string resourceId)
+        {
+            if (string.IsNullOrWhiteSpace(resourceId))
+            {
+                return false;
+            }
+            //Ignore the case because constant segments could be lower case, pascal case or camel case. 
+            // e.g. /resourcegroup/ or /resourceGroup/
+            return Regex.IsMatch(resourceId, ManagedIdentityResourceIdPattern, RegexOptions.IgnoreCase);
         }
 
         /// <summary>

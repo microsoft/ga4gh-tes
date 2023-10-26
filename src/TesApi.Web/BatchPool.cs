@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.
+﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 using System;
@@ -311,7 +311,7 @@ namespace TesApi.Web
         {
             // This method implememts a state machine to disable/enable autoscaling as needed to clear certain conditions that can be observed
             // Inputs are _resetAutoScalingRequired, compute nodes in ejectable states, and the current _scalingMode, along with the pool's
-	    // allocation state and autoscale enablement.
+            // allocation state and autoscale enablement.
             // This method must noop whenthe  allocation state is not Steady
 
             var (allocationState, _, autoScaleEnabled, _, _, _, _) = await _azureProxy.GetFullAllocationStateAsync(Pool.PoolId, cancellationToken);

@@ -139,11 +139,20 @@ namespace TesApi.Tests.Runner
         }
 
         [TestMethod]
-        public void WithResourceIdManagedIdentity_Called_ResourceIdIsSet()
+        public void WithResourceIdManagedIdentity_ValidResourceIdProvided_ResourceIdIsSet()
         {
-            nodeTaskBuilder.WithResourceIdManagedIdentity("resourceId");
+            var resourceId = "/subscriptions/aaaaa450-5f22-4b20-9326-b5852bb89d90/resourcegroups/foo/providers/Microsoft.ManagedIdentity/userAssignedIdentities/bar-identity";
+
+            nodeTaskBuilder.WithResourceIdManagedIdentity(resourceId);
             var nodeTask = nodeTaskBuilder.Build();
-            Assert.AreEqual("resourceId", nodeTask.RuntimeOptions.NodeManagedIdentityResourceId);
+            Assert.AreEqual(resourceId, nodeTask.RuntimeOptions.NodeManagedIdentityResourceId);
+        }
+
+        [TestMethod]
+        public void WithResourceIdManagedIdentity_InvalidResourceIdProvided_ExceptionIsThrown()
+        {
+            var resourceId = "invalid-resource-id";
+            Assert.ThrowsException<ArgumentException>(() => nodeTaskBuilder.WithResourceIdManagedIdentity(resourceId));
         }
 
         [TestMethod]

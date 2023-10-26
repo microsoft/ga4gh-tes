@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Tes.Extensions;
 using Tes.Models;
 using Tes.Runner.Models;
 using TesApi.Web.Management.Configuration;
@@ -41,6 +42,7 @@ namespace TesApi.Web.Runner
         private readonly TerraOptions terraOptions;
         private readonly ILogger<TaskToNodeTaskConverter> logger;
         private readonly IList<ExternalStorageContainerInfo> externalStorageContainers;
+        private readonly BatchAccountOptions batchAccountOptions;
 
         /// <summary>
         /// Constructor of TaskToNodeTaskConverter
@@ -48,17 +50,21 @@ namespace TesApi.Web.Runner
         /// <param name="terraOptions"></param>
         /// <param name="storageAccessProvider"></param>
         /// <param name="storageOptions"></param>
+        /// <param name="batchAccountOptions"></param>
         /// <param name="logger"></param>
-        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, IOptions<StorageOptions> storageOptions, ILogger<TaskToNodeTaskConverter> logger)
+        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, IOptions<StorageOptions> storageOptions, IOptions<BatchAccountOptions> batchAccountOptions, ILogger<TaskToNodeTaskConverter> logger)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(storageOptions);
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
+            ArgumentNullException.ThrowIfNull(batchAccountOptions);
             ArgumentNullException.ThrowIfNull(logger);
+
 
             this.terraOptions = terraOptions.Value;
             this.logger = logger;
             this.storageAccessProvider = storageAccessProvider;
+            this.batchAccountOptions = batchAccountOptions.Value;
             externalStorageContainers = StorageUrlUtils.GetExternalStorageContainerInfos(storageOptions.Value);
         }
 
@@ -85,7 +91,7 @@ namespace TesApi.Web.Runner
                 var executor = task.Executors.First();
 
                 builder.WithId(task.Id)
-                    .WithResourceIdManagedIdentity(nodeTaskConversionOptions.NodeManagedIdentityResourceId)
+                    .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(task, nodeTaskConversionOptions.GlobalManagedIdentity))
                     .WithWorkflowId(task.WorkflowId)
                     .WithContainerCommands(executor.Command)
                     .WithContainerImage(executor.Image)
@@ -240,6 +246,33 @@ namespace TesApi.Web.Runner
             return inputs;
         }
 
+        /// <summary>
+        /// This returns the node managed identity resource id from the task if it is set, otherwise it returns the global managed identity.
+        /// If the value in the workflow identity is not a full resource id, it is assumed to be the name. In this case, the resource id is constructed from the name.    
+        /// </summary>
+        /// <param name="task"></param>
+        /// <param name="globalManagedIdentity"></param>
+        /// <returns></returns>
+        public string GetNodeManagedIdentityResourceId(TesTask task, string globalManagedIdentity)
+        {
+            var workflowId =
+                task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters
+                    .workflow_execution_identity);
+
+            if (string.IsNullOrEmpty(workflowId))
+            {
+                return globalManagedIdentity;
+            }
+
+            if (NodeTaskBuilder.IsValidManagedIdentityResourceId(workflowId))
+            {
+                return workflowId;
+            }
+
+            return $"/subscriptions/{batchAccountOptions.SubscriptionId}/resourceGroups/{batchAccountOptions.ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{workflowId}";
+        }
+
+
         private string GetSasTokenFromExternalStorageAccountIfSet(string storageAccount)
         {
             var configuredExternalStorage = externalStorageContainers.FirstOrDefault(e => e.AccountName.Equals(storageAccount, StringComparison.OrdinalIgnoreCase));
@@ -393,6 +426,7 @@ namespace TesApi.Web.Runner
 
             return inputPath;
         }
+
     }
 
     /// <summary>
@@ -400,7 +434,6 @@ namespace TesApi.Web.Runner
     /// </summary>
     /// <param name="AdditionalInputs"></param>
     /// <param name="DefaultStorageAccountName"></param>
-    /// <param name="NodeManagedIdentityResourceId"></param>
     public record NodeTaskConversionOptions(IList<TesInput> AdditionalInputs = default, string DefaultStorageAccountName = default,
-        string NodeManagedIdentityResourceId = default);
+        string GlobalManagedIdentity = default);
 }
