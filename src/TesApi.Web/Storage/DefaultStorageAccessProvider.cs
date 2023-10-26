@@ -103,7 +103,7 @@ namespace TesApi.Web.Storage
             //TODO: refactor this to throw an exception instead of logging and error and returning null.
             if (!StorageAccountUrlSegments.TryCreate(path, out var pathSegments))
             {
-                Logger.LogError($"Could not parse path '{path}'.");
+                Logger.LogError("Could not parse path '{UnparsablePath}'.", path);
                 return null;
             }
 
@@ -131,17 +131,19 @@ namespace TesApi.Web.Storage
         {
             if (pathSegments.IsContainer)
             {
-                throw new ArgumentException(nameof(blobPermissions), "BlobContainerSasPermissions must be used with containers.");
+                throw new ArgumentException("BlobContainerSasPermissions must be used with containers.", nameof(blobPermissions));
             }
 
-            return AddSasTokenAsyncImpl(pathSegments, sasTokenDuration, expiresOn => new BlobSasBuilder(blobPermissions, expiresOn), path, cancellationToken);
+            return blobPermissions.HasFlag(BlobSasPermissions.List)
+                ? AddSasTokenAsyncImpl(pathSegments, sasTokenDuration, expiresOn => new BlobSasBuilder(ConvertSasPermissions(blobPermissions, nameof(blobPermissions)), expiresOn), path, cancellationToken)
+                : AddSasTokenAsyncImpl(pathSegments, sasTokenDuration, expiresOn => new BlobSasBuilder(blobPermissions, expiresOn), path, cancellationToken);
         }
 
         private Task<StorageAccountUrlSegments> AddSasTokenAsync(StorageAccountUrlSegments pathSegments, TimeSpan? sasTokenDuration, BlobContainerSasPermissions containerPermissions, CancellationToken cancellationToken, string path = default)
         {
             if (!pathSegments.IsContainer)
             {
-                throw new ArgumentException(nameof(containerPermissions), "BlobSasPermissions must be used with blobs.");
+                throw new ArgumentException("BlobSasPermissions must be used with blobs.", nameof(containerPermissions));
             }
 
             return AddSasTokenAsyncImpl(pathSegments, sasTokenDuration, expiresOn => new BlobSasBuilder(containerPermissions, expiresOn), path, cancellationToken);
@@ -205,7 +207,7 @@ namespace TesApi.Web.Storage
             if (sasPermissions.HasFlag(BlobSasPermissions.Move)) { result |= BlobContainerSasPermissions.Move; }
             if (sasPermissions.HasFlag(BlobSasPermissions.Execute)) { result |= BlobContainerSasPermissions.Execute; }
             if (sasPermissions.HasFlag(BlobSasPermissions.SetImmutabilityPolicy)) { result |= BlobContainerSasPermissions.SetImmutabilityPolicy; }
-            if (sasPermissions.HasFlag(BlobSasPermissions.PermanentDelete)) { throw new ArgumentOutOfRangeException(paramName, nameof(BlobSasPermissions.PermanentDelete), "Permission that cannot be applied to container was provided."); }
+            if (sasPermissions.HasFlag(BlobSasPermissions.PermanentDelete)) { throw new ArgumentOutOfRangeException(paramName, nameof(BlobSasPermissions.PermanentDelete), "A permission that cannot be applied to a container was provided when a container SAS was required."); }
 
             return result;
         }

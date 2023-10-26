@@ -658,7 +658,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudTask> GetCompletedTasks(CancellationToken _1)
-            => GetTasksAsync("id,executionInfo", $"state eq 'completed' and stateTransitionTime lt '{DateTime.UtcNow - TimeSpan.FromMinutes(2):O}'");
+            => GetTasksAsync("id,executionInfo", $"state eq 'completed' and stateTransitionTime lt DateTime'{DateTime.UtcNow - TimeSpan.FromMinutes(2):O}'");
 
         /// <inheritdoc/>
         public async ValueTask<DateTime> GetAllocationStateTransitionTime(CancellationToken cancellationToken = default)
