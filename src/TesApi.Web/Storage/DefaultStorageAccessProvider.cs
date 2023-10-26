@@ -134,9 +134,7 @@ namespace TesApi.Web.Storage
                 throw new ArgumentException("BlobContainerSasPermissions must be used with containers.", nameof(blobPermissions));
             }
 
-            return blobPermissions.HasFlag(BlobSasPermissions.List)
-                ? AddSasTokenAsyncImpl(pathSegments, sasTokenDuration, expiresOn => new BlobSasBuilder(ConvertSasPermissions(blobPermissions, nameof(blobPermissions)), expiresOn), path, cancellationToken)
-                : AddSasTokenAsyncImpl(pathSegments, sasTokenDuration, expiresOn => new BlobSasBuilder(blobPermissions, expiresOn), path, cancellationToken);
+            return AddSasTokenAsyncImpl(pathSegments, sasTokenDuration, (expiresOn, blobName) => new BlobSasBuilder(blobPermissions, expiresOn) { BlobName = blobPermissions.HasFlag(BlobSasPermissions.List) ? string.Empty : blobName }, path, cancellationToken);
         }
 
         private Task<StorageAccountUrlSegments> AddSasTokenAsync(StorageAccountUrlSegments pathSegments, TimeSpan? sasTokenDuration, BlobContainerSasPermissions containerPermissions, CancellationToken cancellationToken, string path = default)
@@ -146,10 +144,10 @@ namespace TesApi.Web.Storage
                 throw new ArgumentException("BlobSasPermissions must be used with blobs.", nameof(containerPermissions));
             }
 
-            return AddSasTokenAsyncImpl(pathSegments, sasTokenDuration, expiresOn => new BlobSasBuilder(containerPermissions, expiresOn), path, cancellationToken);
+            return AddSasTokenAsyncImpl(pathSegments, sasTokenDuration, (expiresOn, _1) => new BlobSasBuilder(containerPermissions, expiresOn) { BlobName = string.Empty }, path, cancellationToken);
         }
 
-        private async Task<StorageAccountUrlSegments> AddSasTokenAsyncImpl(StorageAccountUrlSegments pathSegments, TimeSpan? sasTokenDuration, Func<DateTimeOffset, BlobSasBuilder> createBuilder, string path, CancellationToken cancellationToken)
+        private async Task<StorageAccountUrlSegments> AddSasTokenAsyncImpl(StorageAccountUrlSegments pathSegments, TimeSpan? sasTokenDuration, Func<DateTimeOffset, string, BlobSasBuilder> createBuilder, string path, CancellationToken cancellationToken)
         {
             StorageAccountInfo storageAccountInfo = null;
 
@@ -165,10 +163,9 @@ namespace TesApi.Web.Storage
                 var resultPathSegments = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName);
 
                 var expiresOn = DateTimeOffset.UtcNow.Add((sasTokenDuration ?? TimeSpan.Zero) + SasTokenDuration);
-                var builder = createBuilder(expiresOn);
+                var builder = createBuilder(expiresOn, resultPathSegments.BlobName);
 
                 builder.BlobContainerName = resultPathSegments.ContainerName;
-                builder.BlobName = resultPathSegments.BlobName;
                 builder.Protocol = SasProtocol.Https;
 
                 resultPathSegments.SasToken = builder.ToSasQueryParameters(new StorageSharedKeyCredential(storageAccountInfo.Name, accountKey)).ToString();
