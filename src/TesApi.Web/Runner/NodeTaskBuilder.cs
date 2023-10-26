@@ -264,12 +264,17 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
-        /// Sets managed identity for the node task
+        /// Sets managed identity for the node task. If the resource ID is empty or null, the property won't be set.
         /// </summary>
-        /// <param name="resourceId"></param>
+        /// <param name="resourceId">A valid managed identity resource ID</param>
         /// <returns></returns>
         public NodeTaskBuilder WithResourceIdManagedIdentity(string resourceId)
         {
+            if (string.IsNullOrEmpty(resourceId))
+            {
+                return this;
+            }
+
             if (!IsValidManagedIdentityResourceId(resourceId))
             {
                 throw new ArgumentException("Invalid resource ID. The ID must be a valid Azure resource ID.", nameof(resourceId));

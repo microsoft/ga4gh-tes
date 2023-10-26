@@ -138,14 +138,15 @@ namespace TesApi.Tests.Runner
             Assert.AreEqual("metrics.txt", metricsFile);
         }
 
-        [TestMethod]
-        public void WithResourceIdManagedIdentity_ValidResourceIdProvided_ResourceIdIsSet()
+        [DataTestMethod]
+        [DataRow(@"/subscriptions/aaaaa450-5f22-4b20-9326-b5852bb89d90/resourcegroups/foo/providers/Microsoft.ManagedIdentity/userAssignedIdentities/bar-identity", @"/subscriptions/aaaaa450-5f22-4b20-9326-b5852bb89d90/resourcegroups/foo/providers/Microsoft.ManagedIdentity/userAssignedIdentities/bar-identity")]
+        [DataRow(null, null)]
+        [DataRow("", null)]
+        public void WithResourceIdManagedIdentity_dResourceIdProvided_ResourceIdIsSet(string resourceId, string expectedResourceId)
         {
-            var resourceId = "/subscriptions/aaaaa450-5f22-4b20-9326-b5852bb89d90/resourcegroups/foo/providers/Microsoft.ManagedIdentity/userAssignedIdentities/bar-identity";
-
             nodeTaskBuilder.WithResourceIdManagedIdentity(resourceId);
             var nodeTask = nodeTaskBuilder.Build();
-            Assert.AreEqual(resourceId, nodeTask.RuntimeOptions.NodeManagedIdentityResourceId);
+            Assert.AreEqual(expectedResourceId, nodeTask.RuntimeOptions?.NodeManagedIdentityResourceId);
         }
 
         [TestMethod]
