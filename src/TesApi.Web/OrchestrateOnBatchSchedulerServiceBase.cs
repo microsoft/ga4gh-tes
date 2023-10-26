@@ -145,7 +145,7 @@ namespace TesApi.Web
         /// Retrieves provided actionable TES tasks from the database using <paramref name="tesTaskGetter"/>, performs an action in the batch system using <paramref name="tesTaskProcessor"/>, and updates the resultant state
         /// </summary>
         /// <returns>A System.Threading.Tasks.ValueTask that represents the long running operations.</returns>
-        protected async ValueTask OrchestrateTesTasksOnBatchAsync(string pollName, Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter, Func<TesTask[], CancellationToken, IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedAsync)>> tesTaskProcessor, CancellationToken stoppingToken)
+        protected async ValueTask OrchestrateTesTasksOnBatchAsync(string pollName, Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter, Func<TesTask[], CancellationToken, IAsyncEnumerable<TesTaskTask<bool>>> tesTaskProcessor, CancellationToken stoppingToken)
         {
             var tesTasks = await (await tesTaskGetter(stoppingToken)).ToArrayAsync(stoppingToken);
 
@@ -157,14 +157,17 @@ namespace TesApi.Web
 
             var startTime = DateTime.UtcNow;
 
-            await foreach (var (tesTask, waitableResult) in tesTaskProcessor(tesTasks, stoppingToken).WithCancellation(stoppingToken))
+            await foreach (var tesTaskTask in tesTaskProcessor(tesTasks, stoppingToken).WithCancellation(stoppingToken))
             {
+                var tesTask = tesTaskTask.TesTask;
+
                 try
                 {
                     var isModified = false;
+
                     try
                     {
-                        isModified = await waitableResult;
+                        isModified = await tesTaskTask;
                     }
                     catch (Exception exc)
                     {

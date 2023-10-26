@@ -375,15 +375,15 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedAsync)> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken)
+        public IAsyncEnumerable<TesTaskTask<bool>> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(tesTasks);
             ArgumentNullException.ThrowIfNull(taskStates);
 
             return taskStates.Zip(tesTasks, (TaskState, TesTask) => (TaskState, TesTask))
                 .Where(entry => entry.TesTask?.IsActiveState() ?? false) // Removes already terminal TesTasks from being further processed.
-                .Select(entry => (entry.TesTask, IsModifiedAsync: WrapHandleTesTaskTransitionAsync(entry.TesTask, entry.TaskState, cancellationToken)))
-                .WhenEach(cancellationToken, tuple => tuple.IsModifiedAsync);
+                .Select(entry => new TesTaskTask<bool>(WrapHandleTesTaskTransitionAsync(entry.TesTask, entry.TaskState, cancellationToken), entry.TesTask))
+                .WhenEach(cancellationToken, tesTaskTask => tesTaskTask.Task);
 
             async Task<bool> WrapHandleTesTaskTransitionAsync(TesTask tesTask, AzureBatchTaskState azureBatchTaskState, CancellationToken cancellationToken)
                 => await HandleTesTaskTransitionAsync(tesTask, azureBatchTaskState, cancellationToken);
@@ -465,7 +465,7 @@ namespace TesApi.Web
             => (inputFile.Name?.Equals("commandScript") ?? false) && (inputFile.Description?.EndsWith(".commandScript") ?? false) && inputFile.Type == TesFileType.FILEEnum && inputFile.Path.EndsWith($"/{CromwellScriptFileName}");
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedAsync)> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<TesTaskTask<bool>> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var tasksMetadataByPoolKey = new Dictionary<string, List<(TesTask TesTask, VirtualMachineInformation VirtualMachineInfo, (BatchModels.ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic) ContainerMetadata, IEnumerable<string> Identities, string PoolDisplayName)>>();
             var poolKeyByTaskIds = new Dictionary<string, string>();
@@ -514,7 +514,7 @@ namespace TesApi.Web
                 if (quickResult is not null)
                 {
                     tasks.Remove(tesTask);
-                    yield return (tesTask, quickResult);
+                    yield return new(quickResult, tesTask);
                 }
             }
 
@@ -545,7 +545,7 @@ namespace TesApi.Web
                         foreach (var (task, _, _, _, _) in listOfTaskMetadata)
                         {
                             tasks.Remove(task);
-                            yield return (task, HandleException(exception, key, task));
+                            yield return new(HandleException(exception, key, task), task);
                         }
                     }
                 }
@@ -612,11 +612,11 @@ namespace TesApi.Web
 
                 if (quickResult is not null)
                 {
-                    yield return (tesTask, quickResult);
+                    yield return new(quickResult, tesTask);
                 }
                 else
                 {
-                    yield return (tesTask, Task.FromResult(true));
+                    yield return new(Task.FromResult(true), tesTask);
                 }
             }
 

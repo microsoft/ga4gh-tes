@@ -42,15 +42,15 @@ namespace TesApi.Web
         /// <param name="taskStates"><see cref="AzureBatchTaskState"/>s corresponding to each <seealso cref="TesTask"/>.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
-        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedAsync)> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken);
+        IAsyncEnumerable<TesTaskTask<bool>> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken);
 
         /// <summary>
         /// Schedule queued <see cref="TesTask"/>s on a batch system
         /// </summary>
         /// <param name="tesTasks"><see cref="TesTask"/>s to schedule on the batch system.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
-        IAsyncEnumerable<(TesTask TesTask, Task<bool> IsModifiedAsync)> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, CancellationToken cancellationToken);
+        /// <returns>True for each <see cref="TesTask"/> that needs to be persisted.</returns>
+        IAsyncEnumerable<TesTaskTask<bool>> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, CancellationToken cancellationToken);
 
         /// <summary>
         /// Adds <see cref="IBatchPool"/> to the managed batch pools.
