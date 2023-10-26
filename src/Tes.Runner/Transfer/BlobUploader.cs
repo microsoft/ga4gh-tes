@@ -14,6 +14,8 @@ namespace Tes.Runner.Transfer
     {
         private readonly ConcurrentDictionary<string, Md5HashListProvider> hashListProviders = new();
 
+        internal readonly ConcurrentBag<(long length, Uri? blobUrl, string fileName)> CompletedFiles = new();
+
         public BlobUploader(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBufferPool) : base(pipelineOptions, memoryBufferPool)
         {
         }
@@ -134,6 +136,7 @@ namespace Tes.Runner.Transfer
             }
             finally
             {
+                CompletedFiles.Add((length, blobUrl, fileName));
                 response?.Dispose();
             }
         }

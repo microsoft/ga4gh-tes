@@ -57,7 +57,7 @@ namespace TesApi.Web.Runner
         {
             try
             {
-                await TryUploadServerTesTask(tesTask, cancellationToken);
+                await TryUploadServerTesTask(tesTask, "server-tes-task.json", cancellationToken);
 
                 var nodeTaskUrl = await CreateAndUploadNodeTaskAsync(tesTask, nodeTaskConversionOptions, cancellationToken);
 
@@ -73,7 +73,7 @@ namespace TesApi.Web.Runner
             }
         }
 
-        private async Task TryUploadServerTesTask(TesTask tesTask, CancellationToken cancellationToken)
+        public async Task TryUploadServerTesTask(TesTask tesTask, string blobName, CancellationToken cancellationToken)
         {
             try
             {
@@ -84,7 +84,7 @@ namespace TesApi.Web.Runner
                         DefaultValueHandling = DefaultValueHandling.Ignore
                     });
 
-                await UploadContentAsBlobToInternalTesLocationAsync(tesTask, severTesTaskContent, "server-tes-task.json",
+                await UploadContentAsBlobToInternalTesLocationAsync(tesTask, severTesTaskContent, blobName,
                     cancellationToken);
             }
             catch (Exception e)

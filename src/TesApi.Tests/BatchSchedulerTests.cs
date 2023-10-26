@@ -971,11 +971,12 @@ namespace TesApi.Tests
                 Assert.AreEqual(2, batchNodeMetrics.FileDownloadSizeInGB);
                 Assert.AreEqual(4, batchNodeMetrics.FileUploadSizeInGB);
 
-                var executorLog = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
+                var taskLog = tesTask.GetOrAddTesTaskLog();
+                var executorLog = taskLog.GetOrAddExecutorLog();
                 Assert.IsNotNull(executorLog);
                 Assert.AreEqual(0, executorLog.ExitCode);
-                Assert.AreEqual(DateTimeOffset.Parse("2020-10-08T02:30:39+00:00"), executorLog.StartTime);
-                Assert.AreEqual(DateTimeOffset.Parse("2020-10-08T02:49:39+00:00"), executorLog.EndTime);
+                Assert.AreEqual(DateTimeOffset.Parse("2020-10-08T02:30:39+00:00"), taskLog.StartTime);
+                Assert.AreEqual(DateTimeOffset.Parse("2020-10-08T02:49:39+00:00"), taskLog.EndTime);
             });
         }
 

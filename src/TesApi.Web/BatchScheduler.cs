@@ -194,9 +194,11 @@ namespace TesApi.Web
 
                 tesTaskLog.BatchNodeMetrics = batchNodeMetrics;
                 tesTaskLog.CromwellResultCode = cromwellRcCode;
-                tesTaskLog.EndTime = DateTime.UtcNow;
-                tesTaskExecutorLog.StartTime ??= taskStartTime ?? batchInfo.BatchTaskStartTime;
-                tesTaskExecutorLog.EndTime ??= taskEndTime ?? batchInfo.BatchTaskEndTime;
+                tesTaskLog.EndTime ??= taskEndTime ?? batchInfo.BatchTaskEndTime;
+                tesTaskLog.StartTime ??= taskStartTime ?? batchInfo.BatchTaskStartTime;
+                tesTaskLog.Outputs ??= batchInfo.OutputFileLogs?.Select(entry => new Tes.Models.TesOutputFileLog { Path = entry.Path, SizeBytes = $"{entry.Size}", Url = entry.Url.AbsoluteUri }).ToList();
+                tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorEndTime;
+                tesTaskExecutorLog.EndTime ??= batchInfo.ExecutorEndTime;
                 tesTaskExecutorLog.ExitCode ??= batchInfo.BatchTaskExitCode;
 
                 // Only accurate when the task completes successfully, otherwise it's the Batch time as reported from Batch
@@ -215,6 +217,11 @@ namespace TesApi.Web
                     {
                         tesTask.AddToSystemLog(new[] { batchInfo.AlternateSystemLogItem });
                     }
+                }
+
+                if (!tesTask.IsActiveState())
+                {
+                    await taskExecutionScriptingManager.TryUploadServerTesTask(tesTask, "server-tes-task-completed.json", cancellationToken);
                 }
 
                 return true;
@@ -249,10 +256,9 @@ namespace TesApi.Web
                     ? AddSystemLogAndSetTaskExecutorErrorAsync(tesTask, batchInfo, "System Error: Retry count exceeded.", cancellationToken)
                     : SetTaskStateAfterFailureAsync(tesTask, TesState.QUEUEDEnum, batchInfo, cancellationToken);
 
-            Task<bool> AddSystemLogAndSetTaskExecutorErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, string alternateSystemLogItem, CancellationToken cancellationToken)
+            Task<bool> AddSystemLogAndSetTaskExecutorErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, string additionalSystemLogItem, CancellationToken cancellationToken)
             {
-                batchInfo = new(new(batchInfo.State, batchInfo.OutputFileLogs, new(batchInfo.Failure.Reason, (batchInfo.Failure.SystemLogs ?? Enumerable.Empty<string>()).Append(alternateSystemLogItem)), batchInfo.CloudTaskCreationTime, batchInfo.BatchTaskStartTime, batchInfo.BatchTaskEndTime, batchInfo.BatchTaskExitCode), batchInfo.AlternateSystemLogItem);
-                return SetTaskExecutorError(tesTask, batchInfo, cancellationToken);
+                return SetTaskExecutorError(tesTask, new(batchInfo, additionalSystemLogItem), cancellationToken);
             }
 
             Task<bool> HandlePreemptedNodeAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
@@ -302,6 +308,7 @@ namespace TesApi.Web
 
             await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
             tesTask.IsTaskDeletionRequired = false;
+            await taskExecutionScriptingManager.TryUploadServerTesTask(tesTask, "server-tes-task-completed.json", cancellationToken);
             return true;
         }
 
@@ -1425,8 +1432,14 @@ namespace TesApi.Web
 
         private record CombinedBatchTaskInfo : AzureBatchTaskState
         {
+            public CombinedBatchTaskInfo(CombinedBatchTaskInfo state, string additionalSystemLogItem)
+                : base(state, additionalSystemLogItem)
+            {
+                AlternateSystemLogItem = state.AlternateSystemLogItem;
+            }
+
             public CombinedBatchTaskInfo(AzureBatchTaskState state, string alternateSystemLogItem)
-                : base(state.State, state.OutputFileLogs, state.Failure, state.CloudTaskCreationTime, state.BatchTaskStartTime, state.BatchTaskEndTime, state.BatchTaskExitCode)
+                : base(state)
             {
                 AlternateSystemLogItem = alternateSystemLogItem;
             }

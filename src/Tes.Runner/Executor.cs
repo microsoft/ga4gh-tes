@@ -92,6 +92,8 @@ namespace Tes.Runner
             var bytesTransferred = ZeroBytesTransferred;
             var numberOfOutputs = 0;
             var errorMessage = string.Empty;
+            IEnumerable<(long Length, Uri? BlobUrl, string FileName)>? completedFiles = default;
+
             try
             {
                 await eventsPublisher.PublishUploadStartEventAsync(tesNodeTask);
@@ -115,7 +117,7 @@ namespace Tes.Runner
 
                 var optimizedOptions = OptimizeBlobPipelineOptionsForUpload(blobPipelineOptions, outputs);
 
-                bytesTransferred = await UploadOutputsAsync(optimizedOptions, outputs);
+                (bytesTransferred, completedFiles) = await UploadOutputsAsync(optimizedOptions, outputs);
 
                 await AppendMetrics(tesNodeTask.OutputsMetricsFormat, bytesTransferred);
 
@@ -130,11 +132,11 @@ namespace Tes.Runner
             }
             finally
             {
-                await eventsPublisher.PublishUploadEndEventAsync(tesNodeTask, numberOfOutputs, bytesTransferred, statusMessage, errorMessage);
+                await eventsPublisher.PublishUploadEndEventAsync(tesNodeTask, numberOfOutputs, bytesTransferred, statusMessage, errorMessage, completedFiles);
             }
         }
 
-        private async Task<long> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions, List<UploadInfo> outputs)
+        private async Task<(long BytesTransferred, IEnumerable<(long length, Uri? blobUrl, string fileName)> CompletedFiles)> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions, List<UploadInfo> outputs)
         {
             var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
 
@@ -144,7 +146,7 @@ namespace Tes.Runner
 
             logger.LogInformation($"Executed Upload. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
 
-            return executionResult.Result;
+            return (executionResult.Result, uploader.CompletedFiles);
         }
 
         private async Task<List<UploadInfo>?> CreateUploadOutputsAsync()

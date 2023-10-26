@@ -12,7 +12,7 @@ using TesApi.Web.Storage;
 namespace TesApi.Web.Events
 {
     /// <summary>
-    /// Represents the events sent by the node task runner.
+    /// Represents an event sent by the node task runner.
     /// </summary>
     public class NodeEventMessage
     {
@@ -159,71 +159,104 @@ namespace TesApi.Web.Events
                 cancellationToken);
         }
 
-        private /*static*/ AzureBatchTaskState GetBatchTaskState(Tes.Runner.Events.EventMessage message)
+        private AzureBatchTaskState GetBatchTaskState(Tes.Runner.Events.EventMessage message)
         {
             return (message.Name ?? Event) switch
             {
-                Tes.Runner.Events.EventsPublisher.DownloadStartEvent => new(AzureBatchTaskState.TaskState.NoChange),
+                Tes.Runner.Events.EventsPublisher.DownloadStartEvent => new(AzureBatchTaskState.TaskState.NoChange,
+                    BatchTaskStartTime: message.Created),
 
-                Tes.Runner.Events.EventsPublisher.DownloadEndEvent => string.IsNullOrWhiteSpace(message.EventData["errorMessage"])
+                Tes.Runner.Events.EventsPublisher.DownloadEndEvent => message.StatusMessage switch
+                {
+                    Tes.Runner.Events.EventsPublisher.SuccessStatus => new(AzureBatchTaskState.TaskState.NoChange),
 
-                    ? new(
-                        AzureBatchTaskState.TaskState.NoChange)
-
-                    : new(
+                    Tes.Runner.Events.EventsPublisher.FailedStatus => new(
                         AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed,
                         Failure: new("SystemError",
                         Enumerable.Empty<string>()
+                            .Append("Download failed.")
                             .Append(message.EventData["errorMessage"]))),
 
-                Tes.Runner.Events.EventsPublisher.ExecutorStartEvent => new(AzureBatchTaskState.TaskState.Running, BatchTaskStartTime: message.Created),
+                    _ => throw new System.Diagnostics.UnreachableException(),
+                },
 
-                Tes.Runner.Events.EventsPublisher.ExecutorEndEvent => string.IsNullOrWhiteSpace(message.EventData["errorMessage"])
+                Tes.Runner.Events.EventsPublisher.ExecutorStartEvent => new(AzureBatchTaskState.TaskState.Running,
+                    ExecutorStartTime: message.Created),
 
-                    ? new(
+                Tes.Runner.Events.EventsPublisher.ExecutorEndEvent => message.StatusMessage switch
+                {
+                    Tes.Runner.Events.EventsPublisher.SuccessStatus => new(
                         AzureBatchTaskState.TaskState.InfoUpdate,
-                        BatchTaskEndTime: message.Created,
-                        BatchTaskExitCode: int.Parse(message.EventData["exitCode"]))
+                        ExecutorEndTime: message.Created,
+                        ExecutorExitCode: int.Parse(message.EventData["exitCode"])),
 
-                    : new(
+                    Tes.Runner.Events.EventsPublisher.FailedStatus => new(
                         AzureBatchTaskState.TaskState.InfoUpdate,
                         Failure: new("ExecutorError",
                         Enumerable.Empty<string>()
                             .Append(message.EventData["errorMessage"])),
-                        BatchTaskEndTime: message.Created,
-                        BatchTaskExitCode: int.Parse(message.EventData["exitCode"])),
+                        ExecutorEndTime: message.Created,
+                        ExecutorExitCode: int.Parse(message.EventData["exitCode"])),
+
+                    _ => throw new System.Diagnostics.UnreachableException(),
+                },
 
                 Tes.Runner.Events.EventsPublisher.UploadStartEvent => new(AzureBatchTaskState.TaskState.NoChange),
 
-                Tes.Runner.Events.EventsPublisher.UploadEndEvent => string.IsNullOrWhiteSpace(message.EventData["errorMessage"])
+                Tes.Runner.Events.EventsPublisher.UploadEndEvent => message.StatusMessage switch
+                {
+                    Tes.Runner.Events.EventsPublisher.SuccessStatus => new(
+                        AzureBatchTaskState.TaskState.InfoUpdate,
+                        OutputFileLogs: GetFileLogs(message.EventData)),
 
-                    ? new(
-                        AzureBatchTaskState.TaskState.NoChange)
-
-                    : new(
+                    Tes.Runner.Events.EventsPublisher.FailedStatus => new(
                         AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed,
                         Failure: new("SystemError",
                         Enumerable.Empty<string>()
-                            .Append(message.EventData["errorMessage"]))), // TODO
+                            .Append("Upload failed.")
+                            .Append(message.EventData["errorMessage"]))),
 
-                Tes.Runner.Events.EventsPublisher.TaskCompletionEvent => string.IsNullOrWhiteSpace(message.EventData["errorMessage"])
+                    _ => throw new System.Diagnostics.UnreachableException(),
+                },
 
-                    ? new(
+                Tes.Runner.Events.EventsPublisher.TaskCompletionEvent => message.StatusMessage switch
+                {
+                    Tes.Runner.Events.EventsPublisher.SuccessStatus => new(
                         AzureBatchTaskState.TaskState.CompletedSuccessfully,
                         BatchTaskStartTime: message.Created - TimeSpan.Parse(message.EventData["duration"]),
-                        BatchTaskEndTime: message.Created/*,
-                            BatchTaskExitCode: 0*/)
+                        BatchTaskEndTime: message.Created),
 
-                    : new(
+                    Tes.Runner.Events.EventsPublisher.FailedStatus => new(
                         AzureBatchTaskState.TaskState.CompletedWithErrors,
-                        Failure: new("ExecutorError",
+                        Failure: new("SystemError",
                         Enumerable.Empty<string>()
+                            .Append("Node script failed.")
                             .Append(message.EventData["errorMessage"])),
                         BatchTaskStartTime: message.Created - TimeSpan.Parse(message.EventData["duration"]),
                         BatchTaskEndTime: message.Created),
 
+                    _ => throw new System.Diagnostics.UnreachableException(),
+                },
+
                 _ => throw new System.Diagnostics.UnreachableException(),
             };
+        }
+
+        private static IEnumerable<AzureBatchTaskState.OutputFileLog> GetFileLogs(IDictionary<string, string> eventData)
+        {
+            if (eventData is null)
+            {
+                yield break;
+            }
+
+            var numberOfFiles = int.Parse(eventData["numberOfFiles"]);
+            for (var i = 0; i < numberOfFiles; ++i)
+            {
+                yield return new(
+                    new Uri(eventData[$"fileUri-{i}"]),
+                    eventData[$"filePath-{i}"],
+                    long.Parse(eventData[$"fileSize-{i}"]));
+            }
         }
     }
 }

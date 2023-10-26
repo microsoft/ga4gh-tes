@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using static TesApi.Web.AzureBatchTaskState;
 
 namespace TesApi.Web
@@ -15,9 +16,22 @@ namespace TesApi.Web
     /// <param name="Failure">Failure information.</param>
     /// <param name="CloudTaskCreationTime"><see cref="Microsoft.Azure.Batch.CloudTask.CreationTime"/>.</param>
     /// <param name="BatchTaskStartTime"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.StartTime"/>.</param>
+    /// <param name="ExecutorStartTime"></param>
+    /// <param name="ExecutorEndTime"></param>
+    /// <param name="ExecutorExitCode"></param>
     /// <param name="BatchTaskEndTime"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.EndTime"/>.</param>
     /// <param name="BatchTaskExitCode"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.ExitCode"/>.</param>
-    public record AzureBatchTaskState(TaskState State, IEnumerable<OutputFileLog> OutputFileLogs = default, FailureInformation Failure = default, DateTimeOffset? CloudTaskCreationTime = default, DateTimeOffset? BatchTaskStartTime = default, DateTimeOffset? BatchTaskEndTime = default, int? BatchTaskExitCode = default)
+    public record AzureBatchTaskState(
+        TaskState State,
+        IEnumerable<OutputFileLog> OutputFileLogs = default,
+        FailureInformation Failure = default,
+        DateTimeOffset? CloudTaskCreationTime = default,
+        DateTimeOffset? BatchTaskStartTime = default,
+        DateTimeOffset? ExecutorStartTime = default,
+        DateTimeOffset? ExecutorEndTime = default,
+        int? ExecutorExitCode = default,
+        DateTimeOffset? BatchTaskEndTime = default,
+        int? BatchTaskExitCode = default)
     {
         /// <summary>
         /// TesTask's state
@@ -104,5 +118,21 @@ namespace TesApi.Web
         /// <param name="Reason">Failure code. Intended to be machine readable. See <see cref="Tes.Models.TesTaskLog.FailureReason"/>.</param>
         /// <param name="SystemLogs">Failure details to be added to <see cref="Tes.Models.TesTaskLog.SystemLogs"/>.</param>
         public record FailureInformation(string Reason, IEnumerable<string> SystemLogs);
+
+        /// <summary>
+        /// SystemLog appending constructor
+        /// </summary>
+        /// <param name="other"></param>
+        /// <param name="appendToSystemLog"></param>
+        protected AzureBatchTaskState(AzureBatchTaskState other, string appendToSystemLog)
+            : this(other)
+        {
+            Failure = other.Failure switch
+            {
+                null => new("Unknown", Enumerable.Empty<string>().Append(appendToSystemLog)),
+                { SystemLogs: null } => new(other.Failure.Reason ?? "Unknown", Enumerable.Empty<string>().Append(appendToSystemLog)),
+                _ => new(other.Failure.Reason ?? "Unknown", other.Failure.SystemLogs.Append(appendToSystemLog)),
+            };
+        }
     }
 }
