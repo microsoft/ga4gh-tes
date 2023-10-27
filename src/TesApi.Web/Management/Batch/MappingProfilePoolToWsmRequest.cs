@@ -59,7 +59,7 @@ namespace TesApi.Web.Management.Batch
         /// </summary>
         /// <param name="resourceId"></param>
         /// <returns></returns>
-        public static string TryGetManagedIdentityNameFromResourceId(string resourceId)
+        private static string TryGetManagedIdentityNameFromResourceId(string resourceId)
         {
             if (NodeTaskBuilder.IsValidManagedIdentityResourceId(resourceId))
             {
