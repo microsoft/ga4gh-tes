@@ -21,6 +21,7 @@ namespace TesApi.Web
     /// <param name="ExecutorExitCode"></param>
     /// <param name="BatchTaskEndTime"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.EndTime"/>.</param>
     /// <param name="BatchTaskExitCode"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.ExitCode"/>.</param>
+    /// <param name="Warning">Warning. First item in enumeration is the Warning code, rest of items are additional system log entries.</param>
     public record AzureBatchTaskState(
         TaskState State,
         IEnumerable<OutputFileLog> OutputFileLogs = default,
@@ -31,7 +32,8 @@ namespace TesApi.Web
         DateTimeOffset? ExecutorEndTime = default,
         int? ExecutorExitCode = default,
         DateTimeOffset? BatchTaskEndTime = default,
-        int? BatchTaskExitCode = default)
+        int? BatchTaskExitCode = default,
+        IEnumerable<string> Warning = default)
     {
         /// <summary>
         /// TesTask's state

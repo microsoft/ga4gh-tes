@@ -83,7 +83,6 @@ namespace TesDeployer
 
         public const string ConfigurationContainerName = "configuration";
         public const string TesInternalContainerName = "tes-internal";
-        public const string ContainersToMountFileName = "containers-to-mount";
         public const string AllowedVmSizesFileName = "allowed-vm-sizes";
         public const string TesCredentialsFileName = "TesCredentials.json";
         public const string InputsContainerName = "inputs";
@@ -109,7 +108,7 @@ namespace TesDeployer
             "Microsoft.DBforPostgreSQL"
         };
 
-        private readonly Dictionary<string, List<string>> requiredResourceProviderFeatures = new Dictionary<string, List<string>>()
+        private readonly Dictionary<string, List<string>> requiredResourceProviderFeatures = new()
         {
             { "Microsoft.Compute", new List<string> { "EncryptionAtHost" } }
         };
@@ -695,7 +694,7 @@ namespace TesDeployer
 
                         if (exc is HttpRequestException rExc)
                         {
-                            ConsoleEx.WriteLine($"HTTP Request StatusCode: {rExc.StatusCode.ToString()}");
+                            ConsoleEx.WriteLine($"HTTP Request StatusCode: {rExc.StatusCode}");
                             if (rExc.InnerException is not null)
                             {
                                 ConsoleEx.WriteLine($"InnerException: {rExc.InnerException.GetType().FullName}: {rExc.InnerException.Message}");
@@ -1449,39 +1448,9 @@ namespace TesDeployer
 
         private Task WritePersonalizedFilesToStorageAccountAsync(IStorageAccount storageAccount, string managedIdentityName)
             => Execute(
-                $"Writing {ContainersToMountFileName} file to '{ConfigurationContainerName}' storage container...",
+                $"Writing {AllowedVmSizesFileName} file to '{TesInternalContainerName}' storage container...",
                 async () =>
                 {
-                    await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, ContainersToMountFileName, Utility.PersonalizeContent(new Utility.ConfigReplaceTextItem[]
-                    {
-                        new("{DefaultStorageAccountName}", configuration.StorageAccountName),
-                        new("{ManagedIdentityName}", managedIdentityName)
-                    }, "scripts", ContainersToMountFileName));
-
-                    // Configure Cromwell config file for Docker Mysql or PostgreSQL on Azure.
-                    //if (configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault())
-                    //{
-                    //    await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, CromwellConfigurationFileName, Utility.PersonalizeContent(new Utility.ConfigReplaceTextItem[]
-                    //    {
-                    //        new("{DatabaseUrl}", $"\"jdbc:postgresql://{configuration.PostgreSqlServerName}.postgres.database.azure.com/{configuration.PostgreSqlCromwellDatabaseName}?sslmode=require\""),
-                    //        new("{DatabaseUser}", configuration.UsePostgreSqlSingleServer ? $"\"{configuration.PostgreSqlCromwellUserLogin}@{configuration.PostgreSqlServerName}\"": $"\"{configuration.PostgreSqlCromwellUserLogin}\""),
-                    //        new("{DatabasePassword}", $"\"{configuration.PostgreSqlCromwellUserPassword}\""),
-                    //        new("{DatabaseDriver}", $"\"org.postgresql.Driver\""),
-                    //        new("{DatabaseProfile}", "\"slick.jdbc.PostgresProfile$\""),
-                    //    }, "scripts", CromwellConfigurationFileName));
-                    //}
-                    //else
-                    //{
-                    //    await UploadTextToStorageAccountAsync(storageAccount, ConfigurationContainerName, CromwellConfigurationFileName, Utility.PersonalizeContent(new Utility.ConfigReplaceTextItem[]
-                    //    {
-                    //        new("{DatabaseUrl}", $"\"jdbc:mysql://mysqldb/cromwell_db?useSSL=false&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true\""),
-                    //        new("{DatabaseUser}", $"\"cromwell\""),
-                    //        new("{DatabasePassword}", $"\"cromwell\""),
-                    //        new("{DatabaseDriver}", $"\"com.mysql.cj.jdbc.Driver\""),
-                    //        new("{DatabaseProfile}", "\"slick.jdbc.MySQLProfile$\""),
-                    //    }, "scripts", CromwellConfigurationFileName));
-                    //}
-
                     await UploadTextToStorageAccountAsync(storageAccount, TesInternalContainerName, $"{ConfigurationContainerName}/{AllowedVmSizesFileName}", Utility.GetFileContent("scripts", AllowedVmSizesFileName));
                 });
 
@@ -1524,12 +1493,6 @@ namespace TesDeployer
                            highAvailability: new("Disabled")
                         ));
                 });
-
-            //await Execute(
-            //    $"Creating PostgreSQL cromwell database: {configuration.PostgreSqlCromwellDatabaseName}...",
-            //    () => postgresManagementClient.Databases.CreateAsync(
-            //        configuration.ResourceGroupName, configuration.PostgreSqlServerName, configuration.PostgreSqlCromwellDatabaseName,
-            //        new()));
 
             await Execute(
                 $"Creating PostgreSQL tes database: {configuration.PostgreSqlTesDatabaseName}...",
@@ -1579,12 +1542,6 @@ namespace TesDeployer
                         .Attach()
                         .ApplyAsync();
                 });
-
-            //await Execute(
-            //    $"Creating PostgreSQL cromwell database: {configuration.PostgreSqlCromwellDatabaseName}...",
-            //    async () => await postgresManagementClient.Databases.CreateOrUpdateAsync(
-            //        configuration.ResourceGroupName, configuration.PostgreSqlServerName, configuration.PostgreSqlCromwellDatabaseName,
-            //        new()));
 
             await Execute(
                 $"Creating PostgreSQL tes database: {configuration.PostgreSqlTesDatabaseName}...",
@@ -2199,7 +2156,7 @@ namespace TesDeployer
                     return (await updatedVnet.GetSubnetAsync(configuration.DefaultBatchSubnetName)).Value.Id.ToString();
                 });
 
-        private void AddServiceEndpointsToSubnet(SubnetData subnet)
+        private static void AddServiceEndpointsToSubnet(SubnetData subnet)
         {
             subnet.ServiceEndpoints.Add(new ServiceEndpointProperties()
             {
@@ -2222,6 +2179,7 @@ namespace TesDeployer
             });
         }
 
+        // TODO: Remove?
         private async Task ValidateVmAsync()
         {
             var computeSkus = (await generalRetryPolicy.ExecuteAsync(ct =>

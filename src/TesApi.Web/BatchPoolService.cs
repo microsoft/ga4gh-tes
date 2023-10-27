@@ -71,17 +71,17 @@ namespace TesApi.Web
 
             var startTime = DateTime.UtcNow;
 
-            foreach (var pool in pools)
+            await Parallel.ForEachAsync(pools, stoppingToken, async (pool, token) =>
             {
                 try
                 {
-                    await action(pool, stoppingToken);
+                    await action(pool, token);
                 }
                 catch (Exception exc)
                 {
                     logger.LogError(exc, @"Batch pool {PoolId} threw an exception in {Poll}.", pool.Id, pollName);
                 }
-            }
+            });
 
             logger.LogDebug(@"{Poll} for {PoolsCount} pools completed in {TotalSeconds} seconds.", pollName, pools.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
         }
@@ -113,6 +113,11 @@ namespace TesApi.Web
                     await ProcessFailures(pool.GetTaskResizeFailures(token), token);
                 },
                 stoppingToken);
+
+            if (list.IsEmpty)
+            {
+                return;
+            }
 
             await OrchestrateTesTasksOnBatchAsync(
                 "Failures",
@@ -156,7 +161,10 @@ namespace TesApi.Web
 
             await ExecuteActionOnPoolsAsync("Service Batch Tasks", async (pool, token) => await pool.GetCompletedTasks(token).ForEachAsync(tasks.Add, token), stoppingToken);
 
-            logger.LogDebug("ProcessCompletedCloudTasksAsync found {CompletedTasks} completed tasks.", tasks.Count);
+            if (tasks.IsEmpty)
+            {
+                return;
+            }
 
             await OrchestrateTesTasksOnBatchAsync(
                 "Completed",

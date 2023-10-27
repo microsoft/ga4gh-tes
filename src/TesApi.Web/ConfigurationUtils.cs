@@ -6,13 +6,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Tes.Models;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
-using TesApi.Web.Options;
 using TesApi.Web.Storage;
 
 namespace TesApi.Web
@@ -22,7 +19,6 @@ namespace TesApi.Web
     /// </summary>
     public class ConfigurationUtils
     {
-        private readonly string defaultStorageAccountName;
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly ILogger<ConfigurationUtils> logger;
         private readonly IBatchQuotaProvider quotaProvider;
@@ -32,31 +28,28 @@ namespace TesApi.Web
         /// <summary>
         /// The constructor
         /// </summary>
-        /// <param name="defaultStorageOptions">Configuration of <see cref="StorageOptions"/></param>
         /// <param name="storageAccessProvider"><see cref="IStorageAccessProvider"/></param>
         /// <param name="quotaProvider"><see cref="IBatchQuotaProvider"/>></param>
         /// <param name="skuInformationProvider"><see cref="IBatchSkuInformationProvider"/>></param>
         /// <param name="batchAccountResourceInformation"><see cref="BatchAccountResourceInformation"/></param>
         /// <param name="logger"><see cref="ILogger"/></param>
         public ConfigurationUtils(
-            IOptions<Options.StorageOptions> defaultStorageOptions,
             IStorageAccessProvider storageAccessProvider,
             IBatchQuotaProvider quotaProvider,
             IBatchSkuInformationProvider skuInformationProvider,
             BatchAccountResourceInformation batchAccountResourceInformation,
             ILogger<ConfigurationUtils> logger)
         {
-            ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(quotaProvider);
             ArgumentNullException.ThrowIfNull(batchAccountResourceInformation);
             if (string.IsNullOrEmpty(batchAccountResourceInformation.Region))
             {
                 throw new ArgumentException(
-                    $"The batch information provided does not include region. Batch information:{batchAccountResourceInformation}");
+                    $"The batch information provided does not include region. Batch information:{batchAccountResourceInformation}",
+                    nameof(batchAccountResourceInformation));
             }
             ArgumentNullException.ThrowIfNull(logger);
 
-            this.defaultStorageAccountName = defaultStorageOptions.Value.DefaultAccountName;
             this.storageAccessProvider = storageAccessProvider;
             this.logger = logger;
             this.quotaProvider = quotaProvider;

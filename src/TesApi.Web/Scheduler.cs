@@ -155,7 +155,6 @@ namespace TesApi.Web
                 stoppingToken);
         }
 
-        // TODO: Implement this
         /// <summary>
         /// Retrieves all event blobs from storage and updates the resultant state.
         /// </summary>
@@ -163,37 +162,44 @@ namespace TesApi.Web
         /// <returns></returns>
         async ValueTask UpdateTesTasksFromEventBlobsAsync(CancellationToken stoppingToken)
         {
+            var markEventsProcessedList = new ConcurrentBag<Func<CancellationToken, Task>>();
             Func<IEnumerable<(RunnerEventsMessage Message, AzureBatchTaskState State)>> getEventsInOrder;
 
             {
-                var messageInfos = new ConcurrentBag<RunnerEventsMessage>();
                 var messages = new ConcurrentBag<(RunnerEventsMessage Message, AzureBatchTaskState State)>();
 
                 // Get and parse event blobs
-                await foreach (var message in batchScheduler.GetEventMessagesAsync(stoppingToken)
-                    .WithCancellation(stoppingToken))
+                await Parallel.ForEachAsync(batchScheduler.GetEventMessagesAsync(stoppingToken), stoppingToken, async (eventMessage, cancellationToken) =>
                 {
-                    messageInfos.Add(message);
-                }
+                    try
+                    {
+                        nodeEventProcessor.ValidateMessageMetadata(eventMessage);
+                        await nodeEventProcessor.DownloadAndValidateMessageContentAsync(eventMessage, cancellationToken);
+                        messages.Add((eventMessage, nodeEventProcessor.GetMessageBatchState(eventMessage)));
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, @"");
+                        messages.Add((eventMessage, new(AzureBatchTaskState.TaskState.InfoUpdate, Warning: new List<string>
+                        {
+                            "EventParsingFailed",
+                            $"{ex.GetType().FullName}: {ex.Message}",
+                        })));
+                        return;
+                    }
 
-                //try
-                //{
-                await Parallel.ForEachAsync(messageInfos, ProcessMessage);
-                //}
-                //catch { } // TODO: identify exceptions
-
-                async ValueTask ProcessMessage(RunnerEventsMessage messageInfo, CancellationToken cancellationToken)
-                {
-                    nodeEventProcessor.ValidateMessageMetadata(messageInfo);
-                    await nodeEventProcessor.DownloadAndValidateMessageContentAsync(messageInfo, cancellationToken);
-                    messages.Add((messageInfo, nodeEventProcessor.GetMessageBatchState(messageInfo)));
-                    await nodeEventProcessor.MarkMessageProcessedAsync(messageInfo, cancellationToken);
-                }
+                    markEventsProcessedList.Add(token => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, token));
+                });
 
                 getEventsInOrder = () => nodeEventProcessor.OrderProcessedByExecutorSequence(messages, item => item.Message);
             }
 
             var orderedMessageList = getEventsInOrder().ToList();
+
+            if (!orderedMessageList.Any())
+            {
+                return;
+            }
 
             // Update TesTasks
             await OrchestrateTesTasksOnBatchAsync(
@@ -205,20 +211,32 @@ namespace TesApi.Web
                 stoppingToken,
                 "events");
 
+            await Parallel.ForEachAsync(markEventsProcessedList, stoppingToken, async (markEventProcessed, cancellationToken) =>
+                {
+                    try
+                    {
+                        await markEventProcessed(cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, @"");
+                    }
+                });
+
             // Helpers
             async IAsyncEnumerable<TesTask> GetTesTasks([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
             {
-                foreach (var id in orderedMessageList.Select(t => t.Message.TesTaskId))
+                foreach (var (id, @event) in orderedMessageList.Select(t => t.Message).Select(m => (m.TesTaskId, m.RunnerEventMessage.Name)))
                 {
                     TesTask tesTask = default;
                     if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
                     {
-                        logger.LogDebug("Completing event for task {TesTask}.", tesTask.Id);
+                        logger.LogDebug("Completing event '{TaskEvent}' for task {TesTask}.", @event, tesTask.Id);
                         yield return tesTask;
                     }
                     else
                     {
-                        logger.LogDebug("Could not find task {TesTask} for event.", id);
+                        logger.LogDebug("Could not find task {TesTask} for event '{TaskEvent}'.", id, @event);
                         yield return null;
                     }
                 }

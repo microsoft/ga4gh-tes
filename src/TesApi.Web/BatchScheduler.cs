@@ -139,6 +139,7 @@ namespace TesApi.Web
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
             this.poolLifetime = TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.PoolRotationForcedDays);
             this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
+            logger.LogInformation(@"Default storage account: {DefaultStorageAccountName}", defaultStorageAccountName);
             this.globalStartTaskPath = StandardizeStartTaskPath(batchNodesOptions.Value.GlobalStartTask, this.defaultStorageAccountName);
             this.globalManagedIdentity = batchNodesOptions.Value.GlobalManagedIdentity;
             this.allowedVmSizesService = allowedVmSizesService;
@@ -167,7 +168,7 @@ namespace TesApi.Web
                 BatchNodeAgentSkuId = batchGen1Options.Value.NodeAgentSkuId
             };
 
-            logger.LogInformation($"usePreemptibleVmsOnly: {usePreemptibleVmsOnly}");
+            logger.LogInformation(@"usePreemptibleVmsOnly: {UsePreemptibleVmsOnly}", usePreemptibleVmsOnly);
 
             static bool tesTaskIsQueuedInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum || tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
             static bool tesTaskIsInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
@@ -176,46 +177,80 @@ namespace TesApi.Web
             static bool tesTaskCancellationRequested(TesTask tesTask) => tesTask.State == TesState.CANCELINGEnum;
             static bool tesTaskDeletionReady(TesTask tesTask) => tesTask.IsTaskDeletionRequired;
 
+            var setTaskStateLock = new object();
+
             async Task<bool> SetTaskStateAndLog(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                var (batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode) = newTaskState == TesState.COMPLETEEnum
-                    ? await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask, cancellationToken)
-                    : default;
-
-                tesTask.State = newTaskState;
-
-                var tesTaskLog = tesTask.GetOrAddTesTaskLog();
-                var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog();
-
-                tesTaskLog.BatchNodeMetrics = batchNodeMetrics;
-                tesTaskLog.CromwellResultCode = cromwellRcCode;
-                tesTaskLog.EndTime ??= taskEndTime ?? batchInfo.BatchTaskEndTime;
-                tesTaskLog.StartTime ??= taskStartTime ?? batchInfo.BatchTaskStartTime;
-                tesTaskLog.Outputs ??= batchInfo.OutputFileLogs?.Select(entry => new Tes.Models.TesOutputFileLog { Path = entry.Path, SizeBytes = $"{entry.Size}", Url = entry.Url.AbsoluteUri }).ToList();
-                tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorEndTime;
-                tesTaskExecutorLog.EndTime ??= batchInfo.ExecutorEndTime;
-                tesTaskExecutorLog.ExitCode ??= batchInfo.BatchTaskExitCode;
-
-                // Only accurate when the task completes successfully, otherwise it's the Batch time as reported from Batch
-                // TODO this could get large; why?
-                //var timefromCoAScriptCompletionToBatchTaskDetectedComplete = tesTaskLog.EndTime - tesTaskExecutorLog.EndTime;
-
-                if (batchInfo.Failure is not null)
                 {
-                    tesTask.SetFailureReason(batchInfo.Failure.Reason);
+                    var newData = System.Text.Json.JsonSerializer.Serialize(batchInfo, new System.Text.Json.JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault });
 
-                    if (batchInfo.Failure.SystemLogs is not null)
+                    if ("{}".Equals(newData) && newTaskState == tesTask.State)
                     {
-                        tesTask.AddToSystemLog(batchInfo.Failure.SystemLogs);
+                        logger.LogDebug(@"For task {TesTask} there's nothing to change.", tesTask.Id);
+                        return false;
                     }
-                    else if (!string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem))
+
+                    logger.LogDebug(@"Setting task {TesTask} with metadata {Metadata}.", tesTask.Id, newData);
+                }
+
+               var(batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode) = newTaskState == TesState.COMPLETEEnum
+                   ? await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask, cancellationToken)
+                   : default;
+
+                lock (setTaskStateLock)
+                {
+                    tesTask.State = newTaskState;
+
+                    var tesTaskLog = tesTask.GetOrAddTesTaskLog();
+                    var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog();
+
+                    tesTaskLog.BatchNodeMetrics = batchNodeMetrics;
+                    tesTaskLog.CromwellResultCode = cromwellRcCode;
+                    tesTaskLog.EndTime ??= taskEndTime ?? batchInfo.BatchTaskEndTime;
+                    tesTaskLog.StartTime ??= taskStartTime ?? batchInfo.BatchTaskStartTime;
+                    tesTaskLog.Outputs ??= batchInfo.OutputFileLogs?.Select(entry => new Tes.Models.TesOutputFileLog { Path = entry.Path, SizeBytes = $"{entry.Size}", Url = entry.Url.AbsoluteUri }).ToList();
+                    tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorEndTime;
+                    tesTaskExecutorLog.EndTime ??= batchInfo.ExecutorEndTime;
+                    tesTaskExecutorLog.ExitCode ??= batchInfo.BatchTaskExitCode;
+
+                    // Only accurate when the task completes successfully, otherwise it's the Batch time as reported from Batch
+                    // TODO this could get large; why?
+                    //var timefromCoAScriptCompletionToBatchTaskDetectedComplete = tesTaskLog.EndTime - tesTaskExecutorLog.EndTime;
+
+                    if (batchInfo.Warning is not null)
                     {
-                        tesTask.AddToSystemLog(new[] { batchInfo.AlternateSystemLogItem });
+                        var warningInfo = batchInfo.Warning.ToList();
+                        switch (warningInfo.Count)
+                        {
+                            case 0:
+                                break;
+                            case 1:
+                                tesTask.SetWarning(warningInfo[0]);
+                                break;
+                            default:
+                                tesTask.SetWarning(warningInfo[0], warningInfo.Skip(1).ToArray());
+                                break;
+                        }
+                    }
+
+                    if (batchInfo.Failure is not null)
+                    {
+                        tesTask.SetFailureReason(batchInfo.Failure.Reason);
+
+                        if (batchInfo.Failure.SystemLogs is not null)
+                        {
+                            tesTask.AddToSystemLog(batchInfo.Failure.SystemLogs);
+                        }
+                        else if (!string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem))
+                        {
+                            tesTask.AddToSystemLog(new[] { batchInfo.AlternateSystemLogItem });
+                        }
                     }
                 }
 
                 if (!tesTask.IsActiveState())
                 {
+                    logger.LogDebug(@"Uploading completed {TesTask}.", tesTask.Id);
                     await taskExecutionScriptingManager.TryUploadServerTesTask(tesTask, "server-tes-task-completed.json", cancellationToken);
                 }
 
@@ -333,7 +368,7 @@ namespace TesApi.Web
         /// <returns>The command to execute</returns>
         private string CreateWgetDownloadCommand(string urlToDownload, string localFilePathDownloadLocation, bool setExecutable = false)
         {
-            string command = $"wget --no-verbose --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload}'";
+            var command = $"wget --no-verbose --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload}'";
 
             if (setExecutable)
             {
