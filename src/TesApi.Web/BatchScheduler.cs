@@ -818,7 +818,6 @@ namespace TesApi.Web
                 var commandScript =
                     task.Inputs?.FirstOrDefault(
                         IsCromwellCommandScript); // this should never be null because it's used to set isCromwell
-                logger.LogDebug($"GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync: scriptBlob is default: {scriptBlob == default}  commandScript is null: {commandScript is null}");
 
                 if (scriptBlob != default)
                 {
@@ -827,6 +826,7 @@ namespace TesApi.Web
 
                 if (commandScript is not null)
                 {
+                    logger.LogDebug($"GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync: commandScript path: {commandScript.Path}  blobsInExecutionDirectory: '{string.Join("', '", blobsInExecutionDirectory.Select(b => b.Name))}'");
                     var expectedPathParts = commandScript.Path.Split('/').Length;
 
                     additionalInputFiles = blobsInExecutionDirectory
