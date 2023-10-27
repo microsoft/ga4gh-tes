@@ -51,8 +51,14 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <remarks>Calls each internal servicing method in order. Throws all exceptions gathered from all methods.</remarks>
+        ValueTask ServicePoolAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets nonrecoverable compute node related failures that occur before tasks are assigned to compute nodes.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        IAsyncEnumerable<(string taskId, AzureBatchTaskState)> ServicePoolAsync(CancellationToken cancellationToken = default);
+        IAsyncEnumerable<CloudTaskBatchTaskState> GetTaskResizeFailures(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets the last time the pool's compute node list was changed.
@@ -67,5 +73,12 @@ namespace TesApi.Web
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         IAsyncEnumerable<CloudTask> GetCompletedTasks(CancellationToken cancellationToken);
+
+        /// <summary>
+        /// A <see cref="CloudTask"/> not yet assigned a compute nodes to remove due to a nonrecoverable compute node or pool resize error.
+        /// </summary>
+        /// <param name="CloudTaskId">A <see cref="CloudTask"/>s not yet assigned a compute node.</param>
+        /// <param name="TaskState">A compute node and/or pool resize error.</param>
+        public record CloudTaskBatchTaskState(string CloudTaskId, AzureBatchTaskState TaskState);
     }
 }

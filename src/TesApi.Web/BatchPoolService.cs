@@ -11,6 +11,7 @@ using Microsoft.Azure.Batch;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
 using Tes.Repository;
+using static TesApi.Web.IBatchPool;
 
 namespace TesApi.Web
 {
@@ -104,7 +105,14 @@ namespace TesApi.Web
         {
             var list = new ConcurrentBag<(TesTask TesTask, AzureBatchTaskState State)>();
 
-            await ExecuteActionOnPoolsAsync("Service Batch Pools", (pool, token) => ProcessFailures(pool.ServicePoolAsync(token), token), stoppingToken);
+            await ExecuteActionOnPoolsAsync(
+                "Service Batch Pools",
+                async (pool, token) =>
+                {
+                    await pool.ServicePoolAsync(token);
+                    await ProcessFailures(pool.GetTaskResizeFailures(token), token);
+                },
+                stoppingToken);
 
             await OrchestrateTesTasksOnBatchAsync(
                 "Failures",
@@ -114,7 +122,7 @@ namespace TesApi.Web
                 (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, list.Select(t => t.State).ToArray(), token),
                 stoppingToken);
 
-            async ValueTask ProcessFailures(IAsyncEnumerable<(string taskId, AzureBatchTaskState)> failures, CancellationToken cancellationToken)
+            async ValueTask ProcessFailures(IAsyncEnumerable<CloudTaskBatchTaskState> failures, CancellationToken cancellationToken)
             {
                 await foreach (var (cloudTaskId, state) in failures.WithCancellation(cancellationToken))
                 {
@@ -170,7 +178,7 @@ namespace TesApi.Web
                     }
                     else
                     {
-                        logger.LogDebug("Could not find task {TesTask}.", tesTaskId);
+                        logger.LogDebug("Could not find completed task {TesTask}.", tesTaskId);
                         yield return null;
                     }
                 }

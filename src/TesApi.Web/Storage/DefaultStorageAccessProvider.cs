@@ -14,7 +14,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.Extensions;
 using Tes.Models;
-using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
 
 namespace TesApi.Web.Storage
@@ -147,6 +146,16 @@ namespace TesApi.Web.Storage
             return AddSasTokenAsyncImpl(pathSegments, sasTokenDuration, (expiresOn, _1) => new BlobSasBuilder(containerPermissions, expiresOn) { BlobName = string.Empty }, path, cancellationToken);
         }
 
+        /// <summary>
+        /// Generates SAS token for both blobs and containers.
+        /// </summary>
+        /// <param name="pathSegments">Target of SAS token.</param>
+        /// <param name="sasTokenDuration">Length of time from now for which SAS token should remain valid.</param>
+        /// <param name="createBuilder">A factory that generates a <see cref="BlobSasBuilder"/>. Receives the expiration time and the blobName, which should be set on the sas builder as appropriate.</param>
+        /// <param name="path">Logging metadata for failures locating storage account.</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
         private async Task<StorageAccountUrlSegments> AddSasTokenAsyncImpl(StorageAccountUrlSegments pathSegments, TimeSpan? sasTokenDuration, Func<DateTimeOffset, string, BlobSasBuilder> createBuilder, string path, CancellationToken cancellationToken)
         {
             StorageAccountInfo storageAccountInfo = null;

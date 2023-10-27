@@ -10,6 +10,7 @@ using Microsoft.Azure.Management.Batch;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using TesApi.Web.Management.Models.Quotas;
+using static TesApi.Web.Management.IBatchQuotaProvider;
 
 namespace TesApi.Web.Management;
 
@@ -75,10 +76,10 @@ public class ArmBatchQuotaProvider : IBatchQuotaProvider
     }
 
     /// <inheritdoc />
-    public async Task<(int PoolQuota, int ActiveJobAndJobScheduleQuota)> GetPoolOrJobQuotaAsync(CancellationToken cancellationToken)
+    public async Task<PoolAndJobQuota> GetPoolAndJobQuotaAsync(CancellationToken cancellationToken)
     {
         var quotas = await GetBatchAccountQuotasAsync(cancellationToken);
-        return (quotas.PoolQuota, quotas.ActiveJobAndJobScheduleQuota);
+        return new(quotas.PoolQuota, quotas.ActiveJobAndJobScheduleQuota);
     }
 
     /// <summary>

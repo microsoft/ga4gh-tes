@@ -181,7 +181,8 @@ namespace TesApi.Web
                 async token => GetTesTasks(token),
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
                 (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, messages.Select(t => t.State).ToArray(), token),
-                stoppingToken);
+                stoppingToken,
+                "events");
 
             // Helpers
             async ValueTask ProcessMessage(NodeEventMessage messageInfo, CancellationToken cancellationToken)
@@ -197,12 +198,12 @@ namespace TesApi.Web
                     TesTask tesTask = default;
                     if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
                     {
-                        logger.LogDebug("Completing task {TesTask}.", tesTask.Id);
+                        logger.LogDebug("Completing event for task {TesTask}.", tesTask.Id);
                         yield return tesTask;
                     }
                     else
                     {
-                        logger.LogDebug("Could not find task {TesTask}.", id);
+                        logger.LogDebug("Could not find task {TesTask} for event.", id);
                         yield return null;
                     }
                 }

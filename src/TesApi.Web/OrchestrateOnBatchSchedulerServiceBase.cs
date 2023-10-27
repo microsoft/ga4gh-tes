@@ -145,7 +145,7 @@ namespace TesApi.Web
         /// Retrieves provided actionable TES tasks from the database using <paramref name="tesTaskGetter"/>, performs an action in the batch system using <paramref name="tesTaskProcessor"/>, and updates the resultant state
         /// </summary>
         /// <returns>A System.Threading.Tasks.ValueTask that represents the long running operations.</returns>
-        protected async ValueTask OrchestrateTesTasksOnBatchAsync(string pollName, Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter, Func<TesTask[], CancellationToken, IAsyncEnumerable<TesTaskTask<bool>>> tesTaskProcessor, CancellationToken stoppingToken)
+        protected async ValueTask OrchestrateTesTasksOnBatchAsync(string pollName, Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter, Func<TesTask[], CancellationToken, IAsyncEnumerable<TesTaskTask<bool>>> tesTaskProcessor, CancellationToken stoppingToken, string unitsLabel = "tasks")
         {
             var tesTasks = await (await tesTaskGetter(stoppingToken)).ToArrayAsync(stoppingToken);
 
@@ -281,7 +281,7 @@ namespace TesApi.Web
                 await batchScheduler.FlushPoolsAsync(pools, stoppingToken);
             }
 
-            logger.LogDebug("OrchestrateTesTasksOnBatch({Poll}) for {TaskCount} tasks completed in {TotalSeconds} seconds.", pollName, tesTasks.Where(task => task is not null).Count(), DateTime.UtcNow.Subtract(startTime).TotalSeconds);
+            logger.LogDebug("OrchestrateTesTasksOnBatch({Poll}) for {TaskCount} {UnitsLabel} completed in {TotalSeconds} seconds.", pollName, tesTasks.Where(task => task is not null).Count(), unitsLabel, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
         }
     }
 }

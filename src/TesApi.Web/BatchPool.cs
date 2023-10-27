@@ -11,6 +11,7 @@ using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using static TesApi.Web.IBatchPool;
 
 namespace TesApi.Web
 {
@@ -544,7 +545,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<(string taskId, AzureBatchTaskState)> ServicePoolAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        public async ValueTask ServicePoolAsync(CancellationToken cancellationToken)
         {
             var exceptions = new List<Exception>();
 
@@ -556,12 +557,7 @@ namespace TesApi.Web
             switch (exceptions.Count)
             {
                 case 0:
-                    await foreach (var (id, state) in GetTasksAsync("id", "state eq 'active'").Select(cloud => cloud.Id).Zip(GetFailures(cancellationToken), (id, state) => (id, state)).WithCancellation(cancellationToken))
-                    {
-                        yield return (id, state);
-                    }
-
-                    yield break;
+                    return;
 
                 case 1:
                     throw exceptions.First();
@@ -577,6 +573,7 @@ namespace TesApi.Web
                     _ => Enumerable.Empty<Exception>().Append(ex),
                 };
 
+            // Returns true to continue to the next action
             async ValueTask<bool> PerformTask(ValueTask serviceAction, CancellationToken cancellationToken)
             {
                 if (!cancellationToken.IsCancellationRequested)
@@ -596,7 +593,7 @@ namespace TesApi.Web
                 return false;
             }
 
-            // Returns false when pool/job was removed because it was not found. Returns true if the error was completely something else.
+            // Returns false when pool/job was removed because it was not found. Returns true otherwise.
             async ValueTask<bool> RemoveMissingPoolsAsync(Exception ex, CancellationToken cancellationToken)
             {
                 switch (ex)
@@ -622,19 +619,33 @@ namespace TesApi.Web
                 }
                 return true;
             }
+        }
+
+        /// <inheritdoc/>
+        public IAsyncEnumerable<CloudTaskBatchTaskState> GetTaskResizeFailures(CancellationToken cancellationToken)
+        {
+            return GetTasksAsync("id", "state eq 'active'").Zip(
+                GetFailures(cancellationToken),
+                (cloud, state) => new CloudTaskBatchTaskState(cloud.Id, state));
 
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
             async IAsyncEnumerable<AzureBatchTaskState> GetFailures([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 for (var failure = PopNextStartTaskFailure(); failure is not null; failure = PopNextStartTaskFailure())
                 {
                     yield return ConvertFromStartTask(failure);
+                    cancellationToken.ThrowIfCancellationRequested();
                 }
+
+                cancellationToken.ThrowIfCancellationRequested();
 
                 for (var failure = PopNextResizeError(); failure is not null; failure = PopNextResizeError())
                 {
                     yield return ConvertFromResize(failure);
+                    cancellationToken.ThrowIfCancellationRequested();
                 }
             }
 

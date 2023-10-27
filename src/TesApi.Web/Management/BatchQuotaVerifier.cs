@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
 using TesApi.Web.Management.Models.Quotas;
+using static TesApi.Web.Management.IBatchQuotaVerifier;
 
 namespace TesApi.Web.Management;
 
@@ -121,25 +122,25 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
     }
 
     /// <inheritdoc cref="IBatchQuotaProvider"/>
-    public async Task<(int exceeded, Exception exception)> CheckBatchAccountPoolOrJobQuotasAsync(int required, CancellationToken cancellationToken)
+    public async Task<CheckGroupPoolAndJobQuotaResult> CheckBatchAccountPoolAndJobQuotasAsync(int required, CancellationToken cancellationToken)
     {
-        var (poolQuota, activeJobAndJobScheduleQuota) = await batchQuotaProvider.GetPoolOrJobQuotaAsync(cancellationToken);
+        var (poolQuota, activeJobAndJobScheduleQuota) = await batchQuotaProvider.GetPoolAndJobQuotaAsync(cancellationToken);
         return CheckBatchAccountPoolOrJobQuotasImpl(required, azureProxy.GetBatchActiveJobCount(), azureProxy.GetBatchActivePoolCount(), activeJobAndJobScheduleQuota, poolQuota);
     }
 
-    private static (int exceeded, Exception exception) CheckBatchAccountPoolOrJobQuotasImpl(int required, int activeJobsCount, int activePoolsCount, int activeJobAndJobScheduleQuota, int poolQuota)
+    private static CheckGroupPoolAndJobQuotaResult CheckBatchAccountPoolOrJobQuotasImpl(int required, int activeJobsCount, int activePoolsCount, int activeJobAndJobScheduleQuota, int poolQuota)
     {
         if (activeJobsCount + required > activeJobAndJobScheduleQuota)
         {
-            return (activeJobsCount + required - activeJobAndJobScheduleQuota, new AzureBatchQuotaMaxedOutException($"No remaining active jobs quota available. There are {activePoolsCount} active jobs out of {activeJobAndJobScheduleQuota}."));
+            return new(activeJobsCount + required - activeJobAndJobScheduleQuota, new AzureBatchQuotaMaxedOutException($"No remaining active jobs quota available. There are {activePoolsCount} active jobs (with {required} more being created) out of {activeJobAndJobScheduleQuota}."));
         }
 
         if (activePoolsCount + required > poolQuota)
         {
-            return (activePoolsCount + required - poolQuota, new AzureBatchQuotaMaxedOutException($"No remaining pool quota available. There are {activePoolsCount} pools in use out of {poolQuota}."));
+            return new(activePoolsCount + required - poolQuota, new AzureBatchQuotaMaxedOutException($"No remaining pool quota available. There are {activePoolsCount} pools in use (with {required} more being created) out of {poolQuota}."));
         }
 
-        return (0, null);
+        return new(0, null);
     }
 
     /// <inheritdoc cref="IBatchQuotaProvider"/>

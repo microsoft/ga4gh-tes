@@ -39,6 +39,13 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        Task<(int PoolQuota, int ActiveJobAndJobScheduleQuota)> GetPoolOrJobQuotaAsync(CancellationToken cancellationToken);
+        Task<PoolAndJobQuota> GetPoolAndJobQuotaAsync(CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Pool and Active Job and JobSchedule quotas.
+        /// </summary>
+        /// <param name="PoolQuota">Pool quota.</param>
+        /// <param name="ActiveJobAndJobScheduleQuota">Active Job and JobSchedule quota.</param>
+        public record struct PoolAndJobQuota(int PoolQuota, int ActiveJobAndJobScheduleQuota);
     }
 }

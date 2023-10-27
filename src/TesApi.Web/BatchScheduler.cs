@@ -388,12 +388,15 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(taskStates);
 
             return taskStates.Zip(tesTasks, (TaskState, TesTask) => (TaskState, TesTask))
-                .Where(entry => entry.TesTask?.IsActiveState() ?? false) // Removes already terminal TesTasks from being further processed.
+                .Where(entry => entry.TesTask?.IsActiveState() ?? false) // Removes already terminal (and null) TesTasks from being further processed.
                 .Select(entry => new TesTaskTask<bool>(WrapHandleTesTaskTransitionAsync(entry.TesTask, entry.TaskState, cancellationToken), entry.TesTask))
                 .WhenEach(cancellationToken, tesTaskTask => tesTaskTask.Task);
 
             async Task<bool> WrapHandleTesTaskTransitionAsync(TesTask tesTask, AzureBatchTaskState azureBatchTaskState, CancellationToken cancellationToken)
                 => await HandleTesTaskTransitionAsync(tesTask, azureBatchTaskState, cancellationToken);
+
+            //Task<bool> WrapHandleTesTaskTransitionAsync(TesTask tesTask, AzureBatchTaskState azureBatchTaskState, CancellationToken cancellationToken)
+            //    => Task.Run(async () => await HandleTesTaskTransitionAsync(tesTask, azureBatchTaskState, cancellationToken));
         }
 
         private static string GetCromwellExecutionDirectoryPathAsUrl(TesTask task)
@@ -475,93 +478,98 @@ namespace TesApi.Web
         public async IAsyncEnumerable<TesTaskTask<bool>> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var tasksMetadataByPoolKey = new Dictionary<string, List<(TesTask TesTask, VirtualMachineInformation VirtualMachineInfo, (BatchModels.ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic) ContainerMetadata, IEnumerable<string> Identities, string PoolDisplayName)>>();
-            var poolKeyByTaskIds = new Dictionary<string, string>();
-            var tasks = tesTasks.ToList();
+            var poolKeyByTaskIds = new Dictionary<string, string>(); // Reverse lookup of 'tasksMetadataByPoolKey'
 
-            // Determine how many nodes in each pool we might need for this group.
-            foreach (var tesTask in tesTasks) // TODO: Consider parallelizing this foreach loop
             {
-                Task<bool> quickResult = default;
-                string poolKey = default;
-                var identities = new List<string>();
+                var tasks = tesTasks.ToList(); // List of tasks that will make it to the next round.
 
-                if (!string.IsNullOrWhiteSpace(globalManagedIdentity))
+                // Determine how many nodes in each pool we might need for this group.
+                foreach (var tesTask in tesTasks) // TODO: Consider parallelizing this foreach loop.
                 {
-                    identities.Add(globalManagedIdentity);
-                }
+                    Task<bool> quickResult = default; // fast exit enabler
+                    string poolKey = default;
+                    var identities = new List<string>();
 
-                if (tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true)
-                {
-                    identities.Add(tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity));
-                }
-
-                try
-                {
-                    var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
-                    var containerMetadata = await GetContainerConfigurationIfNeededAsync(tesTask, cancellationToken);
-                    (poolKey, var displayName) = GetPoolKey(tesTask, virtualMachineInfo, containerMetadata.ContainerConfiguration, identities, cancellationToken);
-                    await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: !IsPoolAvailable(poolKey), cancellationToken: cancellationToken);
-
-                    if (tasksMetadataByPoolKey.TryGetValue(poolKey, out var resource))
+                    if (!string.IsNullOrWhiteSpace(globalManagedIdentity))
                     {
-                        resource.Add((tesTask, virtualMachineInfo, containerMetadata, identities, displayName));
-                    }
-                    else
-                    {
-                        tasksMetadataByPoolKey.Add(poolKey, new() { (tesTask, virtualMachineInfo, containerMetadata, identities, displayName) });
+                        identities.Add(globalManagedIdentity);
                     }
 
-                    poolKeyByTaskIds.Add(tesTask.Id, poolKey);
-                }
-                catch (Exception ex)
-                {
-                    quickResult = HandleException(ex, poolKey, tesTask);
+                    if (tesTask.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity) == true)
+                    {
+                        identities.Add(tesTask.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.workflow_execution_identity));
+                    }
+
+                    try
+                    {
+                        var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
+                        var containerMetadata = await GetContainerConfigurationIfNeededAsync(tesTask, cancellationToken);
+                        (poolKey, var displayName) = GetPoolKey(tesTask, virtualMachineInfo, containerMetadata.ContainerConfiguration, identities, cancellationToken);
+                        await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: !IsPoolAvailable(poolKey), cancellationToken: cancellationToken);
+
+                        if (tasksMetadataByPoolKey.TryGetValue(poolKey, out var resource))
+                        {
+                            resource.Add((tesTask, virtualMachineInfo, containerMetadata, identities, displayName));
+                        }
+                        else
+                        {
+                            tasksMetadataByPoolKey.Add(poolKey, new() { (tesTask, virtualMachineInfo, containerMetadata, identities, displayName) });
+                        }
+
+                        poolKeyByTaskIds.Add(tesTask.Id, poolKey);
+                    }
+                    catch (Exception ex)
+                    {
+                        quickResult = HandleException(ex, poolKey, tesTask);
+                    }
+
+                    if (quickResult is not null)
+                    {
+                        tasks.Remove(tesTask);
+                        yield return new(quickResult, tesTask);
+                    }
                 }
 
-                if (quickResult is not null)
-                {
-                    tasks.Remove(tesTask);
-                    yield return new(quickResult, tesTask);
-                }
+                // Remove already returned tasks from the dictionary
+                tasksMetadataByPoolKey = tasksMetadataByPoolKey
+                    .Select(p => (p.Key, Value: p.Value.Where(v => tasks.Contains(v.TesTask)).ToList())) // keep only tasks that remain in the 'tasks' variable
+                    .Where(t => t.Value.Count != 0) // Remove any now empty pool keys
+                    .ToDictionary(p => p.Key, p => p.Value);
             }
-
-            // Remove already returned tasks from the dictionary
-            tasksMetadataByPoolKey = tasksMetadataByPoolKey
-                .Select(p => (p.Key, Value: p.Value.Where(v => tasks.Contains(v.TesTask)).ToList())) // keep only tasks that remain in the tasks variable
-                .Where(t => t.Value.Count != 0) // Remove any empty pool keys
-                .ToDictionary(p => p.Key, p => p.Value);
 
             // Determine how many nodes in each new pool we might need for this group.
             var neededPoolNodesByPoolKey = tasksMetadataByPoolKey.ToDictionary(t => t.Key, t => t.Value.Count);
 
-            // Determine how many new pools/jobs we will need for this batch
-            var requiredNewPools = neededPoolNodesByPoolKey.Where(t => !IsPoolAvailable(t.Key)).Count();
-
-            // Revisit pool/job quotas (the above loop already dealt with the possiblility of needing just one more pool/job)
-            if (requiredNewPools > 1)
             {
-                var (excess, exception) = await quotaVerifier.CheckBatchAccountPoolOrJobQuotasAsync(requiredNewPools, cancellationToken);
-                var initial = tasksMetadataByPoolKey.Count - 1;
-                var final = initial - excess;
+                // Determine how many new pools/jobs we will need for this batch
+                var requiredNewPools = neededPoolNodesByPoolKey.Where(t => !IsPoolAvailable(t.Key)).Count();
 
-                for (var i = initial; i > final; --i)
+                // Revisit pool/job quotas (the above loop already dealt with the possiblility of needing just one more pool/job).
+                // This will remove pool keys we cannot accomodate due to quota, along with all of their associated tasks, from being queued into Batch.
+                if (requiredNewPools > 1)
                 {
-                    var key = tasksMetadataByPoolKey.Keys.ElementAt(i);
-                    if (tasksMetadataByPoolKey.Remove(key, out var listOfTaskMetadata))
+                    var (excess, exception) = await quotaVerifier.CheckBatchAccountPoolAndJobQuotasAsync(requiredNewPools, cancellationToken);
+                    var initial = tasksMetadataByPoolKey.Count - 1;
+                    var final = initial - excess;
+
+                    for (var i = initial; i > final; --i)
                     {
-                        foreach (var (task, _, _, _, _) in listOfTaskMetadata)
+                        var key = tasksMetadataByPoolKey.Keys.ElementAt(i);
+                        if (tasksMetadataByPoolKey.Remove(key, out var listOfTaskMetadata))
                         {
-                            tasks.Remove(task);
-                            yield return new(HandleException(exception, key, task), task);
+                            foreach (var (task, _, _, _, _) in listOfTaskMetadata)
+                            {
+                                yield return new(HandleException(exception, key, task), task);
+                            }
                         }
                     }
                 }
             }
 
             // Obtain assigned pool and create and assign the cloudtask for each task.
-            foreach (var (tesTask, virtualMachineInfo, containerMetadata, identities, displayName) in tasksMetadataByPoolKey.Values.SelectMany(e => e))
+            foreach (var (tesTask, virtualMachineInfo, containerMetadata, identities, displayName) in tasksMetadataByPoolKey.Values.SelectMany(e => e)) // TODO: Consider parallelizing this foreach loop. Would require making GetOrAddPoolAsync multi-threaded safe.
             {
-                Task<bool> quickResult = default;
+                Task<bool> quickResult = default; // fast exit enabler
                 var poolKey = poolKeyByTaskIds[tesTask.Id];
 
                 try
@@ -720,16 +728,6 @@ namespace TesApi.Web
         /// <param name="azureBatchTaskState">Current Azure Batch task info</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>True if the TES task was changed.</returns>
-        // When task is executed the following may be touched:
-        // tesTask.Log[].SystemLog
-        // tesTask.Log[].FailureReason
-        // tesTask.Log[].CromwellResultCode
-        // tesTask.Log[].BatchExecutionMetrics
-        // tesTask.Log[].EndTime
-        // tesTask.Log[].Log[].StdErr
-        // tesTask.Log[].Log[].ExitCode
-        // tesTask.Log[].Log[].StartTime
-        // tesTask.Log[].Log[].EndTime
         private ValueTask<bool> HandleTesTaskTransitionAsync(TesTask tesTask, AzureBatchTaskState azureBatchTaskState, CancellationToken cancellationToken)
             => tesTaskStateTransitions
                 .FirstOrDefault(m => (m.Condition is null || m.Condition(tesTask)) && (m.CurrentBatchTaskState is null || m.CurrentBatchTaskState == azureBatchTaskState.State))
@@ -787,6 +785,7 @@ namespace TesApi.Web
             // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
             // TODO: Verify whether this workaround is still needed.
             var additionalInputs = new List<TesInput>();
+
             if (cromwellExecutionDirectoryUrl is not null)
             {
                 additionalInputs =
@@ -800,7 +799,7 @@ namespace TesApi.Web
         private async Task<List<TesInput>> GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(TesTask task,
             string cromwellExecutionDirectoryUrl, CancellationToken cancellationToken)
         {
-            var additionalInputFiles = new List<TesInput>();
+            List<TesInput> additionalInputFiles = default;
 
             if (!Uri.TryCreate(cromwellExecutionDirectoryUrl, UriKind.Absolute, out _))
             {
@@ -814,12 +813,12 @@ namespace TesApi.Web
             {
                 var blobsInExecutionDirectory =
                     await azureProxy.ListBlobsAsync(new Uri(executionDirectoryUri), cancellationToken).ToListAsync(cancellationToken);
-                logger.LogDebug($"Found {blobsInExecutionDirectory.Count} items in cromwell's task execution directory.");
                 var scriptBlob =
                     blobsInExecutionDirectory.FirstOrDefault(b => b.Name.EndsWith($"/{CromwellScriptFileName}"));
                 var commandScript =
                     task.Inputs?.FirstOrDefault(
                         IsCromwellCommandScript); // this should never be null because it's used to set isCromwell
+                logger.LogDebug($"GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync: scriptBlob is default: {scriptBlob == default}  commandScript is null: {commandScript is null}");
 
                 if (scriptBlob != default)
                 {
@@ -843,7 +842,7 @@ namespace TesApi.Web
                 }
             }
 
-            return additionalInputFiles;
+            return additionalInputFiles ?? new();
         }
 
         private void ValidateTesTask(TesTask task)
@@ -956,6 +955,7 @@ namespace TesApi.Web
         /// <param name="tesTask">The <see cref="TesTask"/> to schedule on Azure Batch</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
+        // TODO: remove this as soon as the node runner can authenticate to container registries
         private async ValueTask<(BatchModels.ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic)> GetContainerConfigurationIfNeededAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
             var drsImageNeeded = tesTask.Inputs?.Any(i => i?.Url?.StartsWith("drs://") ?? false) ?? false;

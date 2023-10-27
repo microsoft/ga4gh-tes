@@ -129,9 +129,9 @@ namespace TesApi.Web
         {
             Failure = other.Failure switch
             {
-                null => new("Unknown", Enumerable.Empty<string>().Append(appendToSystemLog)),
-                { SystemLogs: null } => new(other.Failure.Reason ?? "Unknown", Enumerable.Empty<string>().Append(appendToSystemLog)),
-                _ => new(other.Failure.Reason ?? "Unknown", other.Failure.SystemLogs.Append(appendToSystemLog)),
+                null => new("UnknownError", Enumerable.Empty<string>().Append(appendToSystemLog)),
+                { SystemLogs: null } => new(other.Failure.Reason ?? "UnknownError", Enumerable.Empty<string>().Append(appendToSystemLog)),
+                _ => new(other.Failure.Reason ?? "UnknownError", other.Failure.SystemLogs.Append(appendToSystemLog)),
             };
         }
     }
