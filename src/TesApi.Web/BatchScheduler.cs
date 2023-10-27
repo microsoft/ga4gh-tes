@@ -182,7 +182,13 @@ namespace TesApi.Web
             async Task<bool> SetTaskStateAndLog(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
                 {
-                    var newData = System.Text.Json.JsonSerializer.Serialize(batchInfo, new System.Text.Json.JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault });
+                    var newData = System.Text.Json.JsonSerializer.Serialize(
+                        batchInfo,
+                        new System.Text.Json.JsonSerializerOptions()
+                        {
+                            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
+                            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
+                        });
 
                     if ("{}".Equals(newData) && newTaskState == tesTask.State)
                     {
@@ -195,7 +201,7 @@ namespace TesApi.Web
 
                 var (batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode) = newTaskState == TesState.COMPLETEEnum
                     ? await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask, cancellationToken)
-                    : default;
+                : default;
 
                 lock (setTaskStateLock)
                 {
@@ -204,14 +210,25 @@ namespace TesApi.Web
                     var tesTaskLog = tesTask.GetOrAddTesTaskLog();
                     var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog();
 
+                    if (batchInfo.OutputFileLogs is not null && tesTaskLog.Outputs is not null)
+                    {
+                        logger.LogCritical("Why is tesTaskLog.Outputs already set?");
+                    }
+
                     tesTaskLog.BatchNodeMetrics = batchNodeMetrics;
                     tesTaskLog.CromwellResultCode = cromwellRcCode;
                     tesTaskLog.EndTime ??= taskEndTime ?? batchInfo.BatchTaskEndTime;
                     tesTaskLog.StartTime ??= taskStartTime ?? batchInfo.BatchTaskStartTime;
-                    tesTaskLog.Outputs ??= batchInfo.OutputFileLogs?.Select(entry => new Tes.Models.TesOutputFileLog { Path = entry.Path, SizeBytes = $"{entry.Size}", Url = entry.Url.AbsoluteUri }).ToList();
-                    tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorEndTime;
+                    tesTaskLog.Outputs ??= batchInfo.OutputFileLogs?.Select(
+                        entry => new Tes.Models.TesOutputFileLog
+                        {
+                            Path = entry.Path,
+                            SizeBytes = $"{entry.Size}",
+                            Url = entry.Url.AbsoluteUri
+                        }).ToList();
+                    tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorStartTime;
                     tesTaskExecutorLog.EndTime ??= batchInfo.ExecutorEndTime;
-                    tesTaskExecutorLog.ExitCode ??= batchInfo.BatchTaskExitCode;
+                    tesTaskExecutorLog.ExitCode ??= batchInfo.ExecutorExitCode;
 
                     // Only accurate when the task completes successfully, otherwise it's the Batch time as reported from Batch
                     // TODO this could get large; why?
@@ -311,7 +328,7 @@ namespace TesApi.Web
                 //new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.MissingBatchTask, alternateSystemLogItem: null, (tesTask, _, ct) => AddBatchTaskAsync(tesTask, ct)),
                 new TesTaskStateTransition(tesTaskIsQueued, AzureBatchTaskState.TaskState.Initializing, alternateSystemLogItem: null, (tesTask, _) => { tesTask.State = TesState.INITIALIZINGEnum; return true; }),
                 new TesTaskStateTransition(tesTaskIsQueuedOrInitializing, AzureBatchTaskState.TaskState.NodeAllocationFailed, alternateSystemLogItem: null, RequeueTaskAfterFailureAsync),
-                new TesTaskStateTransition(tesTaskIsQueuedOrInitializing, AzureBatchTaskState.TaskState.Running, alternateSystemLogItem: null, (tesTask, _) => { tesTask.State = TesState.RUNNINGEnum; return true; }),
+                new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.Running, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, TesState.RUNNINGEnum, info, ct)),
                 //new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.MoreThanOneActiveJobOrTaskFound, BatchTaskState.MoreThanOneActiveJobOrTaskFound.ToString(), DeleteBatchJobAndSetTaskSystemErrorAsync),
                 new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedSuccessfully, alternateSystemLogItem: null, SetTaskCompleted),
                 new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedWithErrors, "Please open an issue. There should have been an error reported here.", SetTaskExecutorError),
@@ -321,7 +338,8 @@ namespace TesApi.Web
                 //new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.JobNotFound, BatchTaskState.JobNotFound.ToString(), SetTaskSystemError),
                 //new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.MissingBatchTask, BatchTaskState.MissingBatchTask.ToString(), DeleteBatchJobAndSetTaskSystemErrorAsync),
                 new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodePreempted, alternateSystemLogItem: null, HandlePreemptedNodeAsync),
-                new TesTaskStateTransition(condition: null, AzureBatchTaskState.TaskState.InfoUpdate, alternateSystemLogItem: null, HandleInfoUpdate)
+                new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed, alternateSystemLogItem: null, HandleInfoUpdate),
+                new TesTaskStateTransition(condition: null, AzureBatchTaskState.TaskState.InfoUpdate, alternateSystemLogItem: null, HandleInfoUpdate),
             }.AsReadOnly();
         }
 
@@ -1456,8 +1474,7 @@ namespace TesApi.Web
 
                 if (Action is not null)
                 {
-                    Action(tesTask, combinedBatchTaskInfo);
-                    tesTaskChanged = true;
+                    tesTaskChanged = Action(tesTask, combinedBatchTaskInfo);
                 }
 
                 return tesTaskChanged;

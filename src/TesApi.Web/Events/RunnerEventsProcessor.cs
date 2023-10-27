@@ -183,7 +183,7 @@ namespace TesApi.Web.Events
             _logger.LogDebug("Getting batch task state from event {EventName} for {TesTask}.", nodeMessage.Name ?? message.Event, nodeMessage.EntityId);
             return (nodeMessage.Name ?? message.Event) switch
             {
-                Tes.Runner.Events.EventsPublisher.DownloadStartEvent => new(AzureBatchTaskState.TaskState.NoChange,
+                Tes.Runner.Events.EventsPublisher.DownloadStartEvent => new(AzureBatchTaskState.TaskState.InfoUpdate,
                     BatchTaskStartTime: nodeMessage.Created),
 
                 Tes.Runner.Events.EventsPublisher.DownloadEndEvent => nodeMessage.StatusMessage switch
@@ -271,10 +271,22 @@ namespace TesApi.Web.Events
                 var numberOfFiles = int.Parse(eventData["numberOfFiles"]);
                 for (var i = 0; i < numberOfFiles; ++i)
                 {
-                    yield return new(
-                        new Uri(eventData[$"fileUri-{i}"]),
-                        eventData[$"filePath-{i}"],
-                        long.Parse(eventData[$"fileSize-{i}"]));
+                    var nodePath = eventData[$"filePath-{i}"];
+                    var idxStart = nodePath.IndexOf("/wd/");
+
+                    if (idxStart > 0)
+                    {
+                        var containerPathUnderRoot = nodePath[(idxStart + 1)..];
+                        var idxDirectory = containerPathUnderRoot.IndexOf('/');
+
+                        if (idxDirectory > 0)
+                        {
+                            yield return new(
+                            new Azure.Storage.Blobs.BlobUriBuilder(new Uri(eventData[$"fileUri-{i}"])) { Sas = null, Query = null }.ToUri(),
+                            $"/{containerPathUnderRoot}",
+                            long.Parse(eventData[$"fileSize-{i}"]));
+                        }
+                    }
                 }
             }
         }
