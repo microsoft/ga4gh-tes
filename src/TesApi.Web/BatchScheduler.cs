@@ -193,9 +193,9 @@ namespace TesApi.Web
                     logger.LogDebug(@"Setting task {TesTask} with metadata {Metadata}.", tesTask.Id, newData);
                 }
 
-               var(batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode) = newTaskState == TesState.COMPLETEEnum
-                   ? await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask, cancellationToken)
-                   : default;
+                var (batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode) = newTaskState == TesState.COMPLETEEnum
+                    ? await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask, cancellationToken)
+                    : default;
 
                 lock (setTaskStateLock)
                 {
