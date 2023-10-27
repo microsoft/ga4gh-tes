@@ -108,6 +108,6 @@ namespace TesApi.Web
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="event">Optional event to retrieve. Defaults to all events.</param>
         /// <returns></returns>
-        IAsyncEnumerable<Events.TaskNodeEventMessage> GetEventMessagesAsync(CancellationToken cancellationToken, string @event = default);
+        IAsyncEnumerable<Events.RunnerEventsMessage> GetEventMessagesAsync(CancellationToken cancellationToken, string @event = default);
     }
 }

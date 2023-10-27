@@ -81,7 +81,7 @@ namespace TesApi.Web
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
                     .AddSingleton<TesTaskPostgreSqlRepository>()
                     .AddSingleton<AzureProxy>()
-                    .AddSingleton<Events.TaskNodeEventProcessor>()
+                    .AddSingleton<Events.RunnerEventsProcessor>()
                     .AddTransient<BatchPool>()
                     .AddSingleton<Func<IBatchPool>>(services => () => services.GetService<BatchPool>())
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)

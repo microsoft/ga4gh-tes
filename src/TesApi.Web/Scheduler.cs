@@ -23,7 +23,7 @@ namespace TesApi.Web
     {
         private readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(5);
         private readonly TimeSpan batchRunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs uses a 30 second polling interval
-        private readonly TaskNodeEventProcessor nodeEventProcessor;
+        private readonly RunnerEventsProcessor nodeEventProcessor;
 
         /// <summary>
         /// Default constructor
@@ -33,7 +33,7 @@ namespace TesApi.Web
         /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler">The batch scheduler implementation</param>
         /// <param name="logger">The logger instance</param>
-        public Scheduler(TaskNodeEventProcessor nodeEventProcessor, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
+        public Scheduler(RunnerEventsProcessor nodeEventProcessor, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
             : base(hostApplicationLifetime, repository, batchScheduler, logger)
         {
             this.nodeEventProcessor = nodeEventProcessor;
@@ -163,11 +163,11 @@ namespace TesApi.Web
         /// <returns></returns>
         async ValueTask UpdateTesTasksFromEventBlobsAsync(CancellationToken stoppingToken)
         {
-            Func<IEnumerable<(TaskNodeEventMessage Message, AzureBatchTaskState State)>> getEventsInOrder;
+            Func<IEnumerable<(RunnerEventsMessage Message, AzureBatchTaskState State)>> getEventsInOrder;
 
             {
-                var messageInfos = new ConcurrentBag<TaskNodeEventMessage>();
-                var messages = new ConcurrentBag<(TaskNodeEventMessage Message, AzureBatchTaskState State)>();
+                var messageInfos = new ConcurrentBag<RunnerEventsMessage>();
+                var messages = new ConcurrentBag<(RunnerEventsMessage Message, AzureBatchTaskState State)>();
 
                 // Get and parse event blobs
                 await foreach (var message in batchScheduler.GetEventMessagesAsync(stoppingToken)
@@ -182,7 +182,7 @@ namespace TesApi.Web
                 //}
                 //catch { } // TODO: identify exceptions
 
-                async ValueTask ProcessMessage(TaskNodeEventMessage messageInfo, CancellationToken cancellationToken)
+                async ValueTask ProcessMessage(RunnerEventsMessage messageInfo, CancellationToken cancellationToken)
                 {
                     nodeEventProcessor.ValidateMessageMetadata(messageInfo);
                     await nodeEventProcessor.DownloadAndValidateMessageContentAsync(messageInfo, cancellationToken);

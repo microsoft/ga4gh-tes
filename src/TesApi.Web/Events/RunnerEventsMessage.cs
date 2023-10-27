@@ -1,8 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
 
 namespace TesApi.Web.Events
 {
@@ -12,7 +12,7 @@ namespace TesApi.Web.Events
     /// <param name="BlobUri">URL of the event message.</param>
     /// <param name="Tags">Tags on the event message blob.</param>
     /// <param name="Event">Name of the event based on parsing the blob's BlobName.</param>
-    public record class TaskNodeEventMessage(Uri BlobUri, IDictionary<string, string> Tags, string Event)
+    public record class RunnerEventsMessage(Uri BlobUri, IDictionary<string, string> Tags, string Event)
     {
         /// <summary>
         /// 

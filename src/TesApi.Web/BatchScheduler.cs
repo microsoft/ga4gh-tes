@@ -1335,7 +1335,7 @@ namespace TesApi.Web
 
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<TaskNodeEventMessage> GetEventMessagesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, string @event)
+        public async IAsyncEnumerable<RunnerEventsMessage> GetEventMessagesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, string @event)
         {
             const string eventsFolderName = "events";
             var prefix = eventsFolderName + "/";
@@ -1358,7 +1358,7 @@ namespace TesApi.Web
                     cancellationToken)
                 .WithCancellation(cancellationToken))
             {
-                if (blobItem.Tags.ContainsKey(TaskNodeEventProcessor.ProcessedTag) || !blobItem.Tags.ContainsKey("task-id"))
+                if (blobItem.Tags.ContainsKey(RunnerEventsProcessor.ProcessedTag) || !blobItem.Tags.ContainsKey("task-id"))
                 {
                     continue;
                 }

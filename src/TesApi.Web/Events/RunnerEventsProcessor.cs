@@ -7,38 +7,33 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using TesApi.Web.Storage;
 
 namespace TesApi.Web.Events
 {
     /// <summary>
     /// Represents an event sent by the node task runner.
     /// </summary>
-    public class TaskNodeEventProcessor
+    public class RunnerEventsProcessor
     {
         /// <summary>
         /// Blob tag used to record event processing.
         /// </summary>
         public const string ProcessedTag = "processed";
 
-        private readonly IStorageAccessProvider _storageAccessProvider;
         private readonly IAzureProxy _azureProxy;
         private readonly ILogger _logger;
 
         /// <summary>
-        /// Constructor of <see cref="TaskNodeEventProcessor"/>.
+        /// Constructor of <see cref="RunnerEventsProcessor"/>.
         /// </summary>
         /// <param name="azureProxy"></param>
         /// <param name="logger"></param>
-        /// <param name="storageAccessProvider"></param>
-        public TaskNodeEventProcessor(IAzureProxy azureProxy, ILogger<TaskNodeEventProcessor> logger, IStorageAccessProvider storageAccessProvider)
+        public RunnerEventsProcessor(IAzureProxy azureProxy, ILogger<RunnerEventsProcessor> logger)
         {
             ArgumentNullException.ThrowIfNull(azureProxy);
-            ArgumentNullException.ThrowIfNull(storageAccessProvider);
 
             _azureProxy = azureProxy;
             _logger = logger;
-            _storageAccessProvider = storageAccessProvider;
         }
 
 
@@ -47,7 +42,7 @@ namespace TesApi.Web.Events
         /// </summary>
         /// <param name="message"></param>
         /// <exception cref="ArgumentException"></exception>
-        public void ValidateMessageMetadata(TaskNodeEventMessage message)
+        public void ValidateMessageMetadata(RunnerEventsMessage message)
         {
             ArgumentNullException.ThrowIfNull(message);
 
@@ -90,7 +85,7 @@ namespace TesApi.Web.Events
         /// <param name="message"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task DownloadAndValidateMessageContentAsync(TaskNodeEventMessage message, CancellationToken cancellationToken)
+        public async Task DownloadAndValidateMessageContentAsync(RunnerEventsMessage message, CancellationToken cancellationToken)
         {
             Tes.Runner.Events.EventMessage result;
 
@@ -168,7 +163,7 @@ namespace TesApi.Web.Events
         /// <param name="source"></param>
         /// <param name="messageGetter"></param>
         /// <returns></returns>
-        public IEnumerable<T> OrderProcessedByExecutorSequence<T>(IEnumerable<T> source, Func<T, TaskNodeEventMessage> messageGetter)
+        public IEnumerable<T> OrderProcessedByExecutorSequence<T>(IEnumerable<T> source, Func<T, RunnerEventsMessage> messageGetter)
         {
             return source.OrderBy(t => messageGetter(t).RunnerEventMessage.Created).ThenBy(t => Enum.TryParse(typeof(EventsInOrder), messageGetter(t).RunnerEventMessage.Name, true, out var result) ? result : -1);
         }
@@ -178,7 +173,7 @@ namespace TesApi.Web.Events
         /// </summary>
         /// <param name="message"></param>
         /// <returns></returns>
-        public AzureBatchTaskState GetMessageBatchState(TaskNodeEventMessage message)
+        public AzureBatchTaskState GetMessageBatchState(RunnerEventsMessage message)
         {
             ArgumentNullException.ThrowIfNull(message);
             ArgumentNullException.ThrowIfNull(message.RunnerEventMessage, nameof(message));
@@ -290,7 +285,7 @@ namespace TesApi.Web.Events
         /// <param name="message"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task MarkMessageProcessedAsync(TaskNodeEventMessage message, CancellationToken cancellationToken)
+        public async Task MarkMessageProcessedAsync(RunnerEventsMessage message, CancellationToken cancellationToken)
         {
             await _azureProxy.SetBlobTags(
                 message.BlobUri,
