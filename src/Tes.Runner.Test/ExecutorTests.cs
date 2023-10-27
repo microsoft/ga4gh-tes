@@ -19,6 +19,9 @@ namespace Tes.Runner.Test
         private BlobPipelineOptions blobPipelineOptions = null!;
         private Mock<EventsPublisher> eventsPublisherMock = null!;
         private Mock<DockerExecutor> dockerExecutorMock = null!;
+        private Mock<ITransferOperationFactory> transferOperationFactoryMock = null!;
+        private Mock<BlobDownloader> blobDownloaderMock = null!;
+        private Mock<BlobUploader> blobUploaderMock = null!;
 
         [TestInitialize]
         public void SetUp()
@@ -27,6 +30,16 @@ namespace Tes.Runner.Test
             fileOperationResolverMock = new Mock<FileOperationResolver>();
             eventsPublisherMock = new Mock<EventsPublisher>();
             blobPipelineOptions = new BlobPipelineOptions();
+            transferOperationFactoryMock = new Mock<ITransferOperationFactory>();
+            blobDownloaderMock = new Mock<BlobDownloader>();
+            blobUploaderMock = new Mock<BlobUploader>();
+
+            transferOperationFactoryMock.Setup(f => f.CreateBlobUploaderAsync(It.IsAny<BlobPipelineOptions>()))
+                .ReturnsAsync(blobUploaderMock.Object);
+
+            transferOperationFactoryMock.Setup(f => f.CreateBlobDownloaderAsync(It.IsAny<BlobPipelineOptions>()))
+                .ReturnsAsync(blobDownloaderMock.Object);
+
             nodeTask = new NodeTask()
             {
                 Outputs = new List<FileOutput>
@@ -43,7 +56,7 @@ namespace Tes.Runner.Test
                     }
                 }
             };
-            executor = new Executor(nodeTask, fileOperationResolverMock.Object, eventsPublisherMock.Object);
+            executor = new Executor(nodeTask, fileOperationResolverMock.Object, eventsPublisherMock.Object, transferOperationFactoryMock.Object);
         }
 
         [TestMethod]
@@ -77,6 +90,33 @@ namespace Tes.Runner.Test
             Assert.AreEqual(Executor.ZeroBytesTransferred, result);
             eventsPublisherMock.Verify(p => p.PublishDownloadStartEventAsync(It.IsAny<NodeTask>()), Times.Once);
             eventsPublisherMock.Verify(p => p.PublishDownloadEndEventAsync(It.IsAny<NodeTask>(), 0, 0, EventsPublisher.SuccessStatus, string.Empty), Times.Once);
+        }
+
+        [TestMethod]
+        public async Task DownloadInputsAsync_InputsProvided_NumberOfFilesInEndEventMatchesTheInputCount()
+        {
+            var inputs = new List<DownloadInfo>
+            {
+                new DownloadInfo( FullFilePath: "/mnt/data/input1.txt", SourceUrl: new Uri("https://test.blob.core.windows.net/test/input1.txt"))
+            };
+
+            nodeTask.Inputs = new List<FileInput>
+            {
+                new FileInput()
+                {
+                    Path = "mnt/data/input",
+                    SourceUrl = "https://test.blob.core.windows.net/test/input1.txt"
+                }
+            };
+
+            blobDownloaderMock.Setup(r => r.DownloadAsync(It.IsAny<List<DownloadInfo>>()))
+                .ReturnsAsync(0);
+
+            fileOperationResolverMock.Setup(r => r.ResolveInputsAsync()).ReturnsAsync(inputs);
+            var result = await executor.DownloadInputsAsync(blobPipelineOptions);
+            Assert.AreEqual(Executor.ZeroBytesTransferred, result);
+            eventsPublisherMock.Verify(p => p.PublishDownloadStartEventAsync(It.IsAny<NodeTask>()), Times.Once);
+            eventsPublisherMock.Verify(p => p.PublishDownloadEndEventAsync(It.IsAny<NodeTask>(), nodeTask.Inputs.Count, 0, EventsPublisher.SuccessStatus, string.Empty), Times.Once);
         }
 
         [TestMethod]

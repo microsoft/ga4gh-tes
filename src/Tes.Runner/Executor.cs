@@ -20,8 +20,9 @@ namespace Tes.Runner
         private readonly FileOperationResolver operationResolver;
         private readonly VolumeBindingsGenerator volumeBindingsGenerator = new VolumeBindingsGenerator();
         private readonly EventsPublisher eventsPublisher;
+        private readonly ITransferOperationFactory transferOperationFactory;
 
-        public Executor(NodeTask tesNodeTask, EventsPublisher eventsPublisher) : this(tesNodeTask, new FileOperationResolver(tesNodeTask), eventsPublisher)
+        public Executor(NodeTask tesNodeTask, EventsPublisher eventsPublisher) : this(tesNodeTask, new FileOperationResolver(tesNodeTask), eventsPublisher, new TransferOperationFactory())
         {
         }
 
@@ -32,8 +33,9 @@ namespace Tes.Runner
             return new Executor(nodeTask, publisher);
         }
 
-        public Executor(NodeTask tesNodeTask, FileOperationResolver operationResolver, EventsPublisher eventsPublisher)
+        public Executor(NodeTask tesNodeTask, FileOperationResolver operationResolver, EventsPublisher eventsPublisher, ITransferOperationFactory transferOperationFactory)
         {
+            ArgumentNullException.ThrowIfNull(transferOperationFactory);
             ArgumentNullException.ThrowIfNull(tesNodeTask);
             ArgumentNullException.ThrowIfNull(operationResolver);
             ArgumentNullException.ThrowIfNull(eventsPublisher);
@@ -41,6 +43,8 @@ namespace Tes.Runner
             this.tesNodeTask = tesNodeTask;
             this.operationResolver = operationResolver;
             this.eventsPublisher = eventsPublisher;
+            this.transferOperationFactory = transferOperationFactory;
+
         }
 
         public async Task<NodeTaskResult> ExecuteNodeContainerTaskAsync(DockerExecutor dockerExecutor)
@@ -136,9 +140,7 @@ namespace Tes.Runner
 
         private async Task<long> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions, List<UploadInfo> outputs)
         {
-            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
-
-            var uploader = new BlobUploader(blobPipelineOptions, memoryBufferChannel);
+            var uploader = await transferOperationFactory.CreateBlobUploaderAsync(blobPipelineOptions);
 
             var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs));
 
@@ -204,6 +206,8 @@ namespace Tes.Runner
                     return numberOfInputs;
                 }
 
+                numberOfInputs = inputs.Count;
+
                 var optimizedOptions = OptimizeBlobPipelineOptionsForDownload(blobPipelineOptions);
 
                 bytesTransferred = await DownloadInputsAsync(optimizedOptions, inputs);
@@ -227,9 +231,7 @@ namespace Tes.Runner
 
         private async Task<long> DownloadInputsAsync(BlobPipelineOptions blobPipelineOptions, List<DownloadInfo> inputs)
         {
-            var memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(blobPipelineOptions.MemoryBufferCapacity, blobPipelineOptions.BlockSizeBytes);
-
-            var downloader = new BlobDownloader(blobPipelineOptions, memoryBufferChannel);
+            var downloader = await transferOperationFactory.CreateBlobDownloaderAsync(blobPipelineOptions);
 
             var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs));
 
