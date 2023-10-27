@@ -410,6 +410,11 @@ namespace TesApi.Web
             };
         }
 
+        private static string GetCromwellExecutionDirectoryPathAsExecutionContainerPath(TesTask task)
+        {
+            return task.Inputs?.FirstOrDefault(IsCromwellCommandScript)?.Path;
+        }
+
         private string GetStorageUploadPath(TesTask task)
         {
             return task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix) ?? false
@@ -800,46 +805,45 @@ namespace TesApi.Web
             string cromwellExecutionDirectoryUrl, CancellationToken cancellationToken)
         {
             List<TesInput> additionalInputFiles = default;
+            var scriptPath = GetCromwellExecutionDirectoryPathAsExecutionContainerPath(task);
 
             if (!Uri.TryCreate(cromwellExecutionDirectoryUrl, UriKind.Absolute, out _))
             {
                 cromwellExecutionDirectoryUrl = $"/{cromwellExecutionDirectoryUrl}";
             }
 
-            var executionDirectoryUri = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectoryUrl,
+            var executionDirectoryUriString = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectoryUrl,
                 storageAccessProvider.DefaultContainerPermissions, cancellationToken);
+
+            var executionDirectoryUri = string.IsNullOrEmpty(executionDirectoryUriString) ? null : new Uri(executionDirectoryUriString);
 
             if (executionDirectoryUri is not null)
             {
+                var executionDirectoryBlobName = new Azure.Storage.Blobs.BlobUriBuilder(executionDirectoryUri).BlobName;
+                var startOfBlobNameIndex = scriptPath.IndexOf(executionDirectoryBlobName, StringComparison.OrdinalIgnoreCase);
+                var pathBlobPrefix = scriptPath[..startOfBlobNameIndex];
+
                 var blobsInExecutionDirectory =
-                    await azureProxy.ListBlobsAsync(new Uri(executionDirectoryUri), cancellationToken).ToListAsync(cancellationToken);
+                    await azureProxy.ListBlobsAsync(executionDirectoryUri, cancellationToken)
+                        .Select(info => (Path: $"{pathBlobPrefix}{info.BlobName}", Uri: info.BlobUri))
+                        .ToListAsync(cancellationToken);
+
                 var scriptBlob =
-                    blobsInExecutionDirectory.FirstOrDefault(b => b.Name.EndsWith($"/{CromwellScriptFileName}"));
-                var commandScript =
-                    task.Inputs?.FirstOrDefault(
-                        IsCromwellCommandScript); // this should never be null because it's used to set isCromwell
+                    blobsInExecutionDirectory.FirstOrDefault(b => scriptPath.Equals(b.Path, StringComparison.OrdinalIgnoreCase));
 
-                if (scriptBlob != default)
-                {
-                    blobsInExecutionDirectory.Remove(scriptBlob);
-                }
+                var expectedPathParts = scriptPath.Split('/').Length;
 
-                if (commandScript is not null)
-                {
-                    logger.LogDebug($"GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync: commandScript path: {commandScript.Path}  blobsInExecutionDirectory: '{string.Join("', '", blobsInExecutionDirectory.Select(b => b.Name))}'");
-                    var expectedPathParts = commandScript.Path.Split('/').Length;
-
-                    additionalInputFiles = blobsInExecutionDirectory
-                        .Where(b => b.Name.Split('/').Length == expectedPathParts)
-                        .Select(b => new TesInput
-                        {
-                            Path = b.Name,
-                            Url = b.Uri.AbsoluteUri,
-                            Name = Path.GetFileName(b.Name),
-                            Type = TesFileType.FILEEnum
-                        })
-                        .ToList();
-                }
+                additionalInputFiles = blobsInExecutionDirectory
+                    .Where(b => b != scriptBlob)
+                    .Where(b => b.Path.Split('/').Length == expectedPathParts)
+                    .Select(b => new TesInput
+                    {
+                        Path = b.Path,
+                        Url = b.Uri.AbsoluteUri,
+                        Name = Path.GetFileName(b.Path),
+                        Type = TesFileType.FILEEnum
+                    })
+                    .ToList();
             }
 
             return additionalInputFiles ?? new();

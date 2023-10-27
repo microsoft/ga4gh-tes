@@ -1,10 +1,10 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Tes.Models;
+using TesApi.Web.Management.Models.Quotas;
 
 namespace TesApi.Web.Management
 {
@@ -37,12 +37,5 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <returns>Batch quota provider <see cref="IBatchQuotaProvider"/></returns>
         IBatchQuotaProvider GetBatchQuotaProvider();
-
-        /// <summary>
-        /// Result of group checking quota for pools and jobs.
-        /// </summary>
-        /// <param name="Exceeded">The number of pools or jobs above the "required" request that exceeded the available quota.</param>
-        /// <param name="Exception">The <see cref="Exception"/> to return to the tasks that could not be accomodated.</param>
-        public record struct CheckGroupPoolAndJobQuotaResult(int Exceeded, Exception Exception);
     }
 }

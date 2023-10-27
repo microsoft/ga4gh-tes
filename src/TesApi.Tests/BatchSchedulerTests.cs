@@ -1386,7 +1386,7 @@ namespace TesApi.Tests
 
                 serviceProvider.AzureProxy.Setup(p => p.ListBlobsAsync(It.Is(executionDirectoryUri, new UrlMutableSASEqualityComparer()), It.IsAny<CancellationToken>())).Returns(executionDirectoryBlobs.ToAsyncEnumerable());
 
-                var uri = new UriBuilder(executionDirectoryUri);
+                var uri = new UriBuilder(executionDirectoryUri) { Query = null };
                 uri.Path = uri.Path.TrimEnd('/') + $"/{fileName}";
 
                 TesInput writeInput = new() { Url = uri.Uri.AbsoluteUri, Path = Path.Combine(Path.GetDirectoryName(script[1]), fileName).Replace('\\', '/'), Type = TesFileType.FILEEnum, Name = "write_", Content = null };
@@ -1407,8 +1407,21 @@ namespace TesApi.Tests
                 Assert.AreEqual(2, filesToDownload.Length);
             });
 
-            static (string Name, Uri Uri) BlobNameUriFromTesInput(TesInput input)
-                => (input.Path, UriFromTesInput(input));
+            static BlobNameAndUri BlobNameUriFromTesInput(TesInput input)
+                => new(BlobNameFromTesInput(input), UriFromTesInput(input));
+
+            static string BlobNameFromTesInput(TesInput input)
+            {
+                var uri = UriFromTesInput(input);
+
+                if (uri.IsFile)
+                {
+                    var trimmedPath = input.Path.TrimStart('/');
+                    return trimmedPath[trimmedPath.IndexOf('/')..].TrimStart('/');
+                }
+
+                return new Azure.Storage.Blobs.BlobUriBuilder(uri).BlobName;
+            }
 
             static Uri UriFromTesInput(TesInput input)
             {
@@ -1710,7 +1723,7 @@ namespace TesApi.Tests
                     .Returns(azureProxyReturnValues.AzureProxyListTasks);
 
                 azureProxy.Setup(a => a.ListBlobsAsync(It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
-                    .Returns(AsyncEnumerable.Empty<(string, Uri)>());
+                    .Returns(AsyncEnumerable.Empty<BlobNameAndUri>());
             };
 
         private static Func<IEnumerable<(string Key, string Value)>> GetMockConfig()

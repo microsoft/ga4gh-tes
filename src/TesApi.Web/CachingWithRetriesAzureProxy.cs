@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+//using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -90,6 +91,8 @@ namespace TesApi.Web
             catch (BatchException exc) when (BatchErrorCodeStrings.TaskExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             { }
         }
+
+        //private void LogRetryError(Exception exception, int retryCount, TimeSpan timeSpan, string message, [CallerMemberName] string caller = default) { }
 
         /// <inheritdoc/>
         public Task DeleteBatchJobAsync(string jobId, CancellationToken cancellationToken)
@@ -227,7 +230,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<(string Name, Uri Uri)> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
+        public IAsyncEnumerable<BlobNameAndUri> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
         {
             var ctx = new Context();
             ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying ListBlobsAsync ({RetryCount}).", retryCount));

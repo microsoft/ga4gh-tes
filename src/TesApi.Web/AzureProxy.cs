@@ -398,12 +398,12 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<(string Name, Uri Uri)> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
+        public IAsyncEnumerable<BlobNameAndUri> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
         {
             var directory = (new BlobClient(directoryUri, new(BlobClientOptions.ServiceVersion.V2021_04_10)));
             return directory.GetParentBlobContainerClient()
                 .GetBlobsAsync(prefix: directory.Name.TrimEnd('/') + "/", cancellationToken: cancellationToken)
-                .Select(blobItem => (blobItem.Name, new BlobUriBuilder(directory.Uri) { Sas = null, BlobName = blobItem.Name }.ToUri()));
+                .Select(blobItem => new BlobNameAndUri(blobItem.Name, new BlobUriBuilder(directory.Uri) { Sas = null, BlobName = blobItem.Name, Query = null }.ToUri()));
         }
 
         /// <inheritdoc/>

@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
-using Microsoft.Azure.Batch.Common;
 using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
@@ -137,8 +136,8 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="directoryUri">Directory Uri</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>List of blob paths</returns>
-        IAsyncEnumerable<(string Name, Uri Uri)> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken);
+        /// <returns>List of blob names and URLs without SAS tokens.</returns>
+        IAsyncEnumerable<BlobNameAndUri> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken);
 
         /// <summary>
         /// Fetches the blobs properties

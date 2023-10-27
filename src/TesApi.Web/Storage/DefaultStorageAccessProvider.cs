@@ -126,6 +126,16 @@ namespace TesApi.Web.Storage
             }
         }
 
+        /// <summary>
+        /// Generates SAS token for storage blobs.
+        /// </summary>
+        /// <param name="pathSegments">Target of SAS token.</param>
+        /// <param name="sasTokenDuration">Length of time from now for which SAS token should remain valid.</param>
+        /// <param name="blobPermissions">Requested permissions to be included in the returned token.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="path">Logging metadata for failures locating storage account.</param>
+        /// <returns>A <see cref="StorageAccountUrlSegments"/> targeting <paramref name="pathSegments"/> with the SAS token.</returns>
+        /// <exception cref="ArgumentException"></exception>
         private Task<StorageAccountUrlSegments> AddSasTokenAsync(StorageAccountUrlSegments pathSegments, TimeSpan? sasTokenDuration, BlobSasPermissions blobPermissions, CancellationToken cancellationToken, string path = default)
         {
             if (pathSegments.IsContainer)
@@ -136,6 +146,16 @@ namespace TesApi.Web.Storage
             return AddSasTokenAsyncImpl(pathSegments, sasTokenDuration, (expiresOn, blobName) => new BlobSasBuilder(blobPermissions, expiresOn) { BlobName = blobPermissions.HasFlag(BlobSasPermissions.List) ? string.Empty : blobName }, path, cancellationToken);
         }
 
+        /// <summary>
+        /// Generates SAS token for storage blob containers.
+        /// </summary>
+        /// <param name="pathSegments">Target of SAS token.</param>
+        /// <param name="sasTokenDuration">Length of time from now for which SAS token should remain valid.</param>
+        /// <param name="containerPermissions">Requested permissions to be included in the returned token.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="path">Logging metadata for failures locating storage account.</param>
+        /// <returns>A <see cref="StorageAccountUrlSegments"/> targeting <paramref name="pathSegments"/> with the SAS token.</returns>
+        /// <exception cref="ArgumentException"></exception>
         private Task<StorageAccountUrlSegments> AddSasTokenAsync(StorageAccountUrlSegments pathSegments, TimeSpan? sasTokenDuration, BlobContainerSasPermissions containerPermissions, CancellationToken cancellationToken, string path = default)
         {
             if (!pathSegments.IsContainer)
@@ -147,13 +167,13 @@ namespace TesApi.Web.Storage
         }
 
         /// <summary>
-        /// Generates SAS token for both blobs and containers.
+        /// Generates SAS token for both blobs and containers. Intended to be called from methods like <seealso cref="AddSasTokenAsync(StorageAccountUrlSegments, TimeSpan?, BlobSasPermissions, CancellationToken, string)"/> and <seealso cref="AddSasTokenAsync(StorageAccountUrlSegments, TimeSpan?, BlobContainerSasPermissions, CancellationToken, string)"/>.
         /// </summary>
         /// <param name="pathSegments">Target of SAS token.</param>
         /// <param name="sasTokenDuration">Length of time from now for which SAS token should remain valid.</param>
         /// <param name="createBuilder">A factory that generates a <see cref="BlobSasBuilder"/>. Receives the expiration time and the blobName, which should be set on the sas builder as appropriate.</param>
         /// <param name="path">Logging metadata for failures locating storage account.</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
         private async Task<StorageAccountUrlSegments> AddSasTokenAsyncImpl(StorageAccountUrlSegments pathSegments, TimeSpan? sasTokenDuration, Func<DateTimeOffset, string, BlobSasBuilder> createBuilder, string path, CancellationToken cancellationToken)
