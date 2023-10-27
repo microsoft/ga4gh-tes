@@ -23,16 +23,21 @@ namespace TesApi.Web
     {
         private readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(5);
         private readonly TimeSpan batchRunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs uses a 30 second polling interval
+        private readonly TaskNodeEventProcessor nodeEventProcessor;
 
         /// <summary>
         /// Default constructor
         /// </summary>
+        /// <param name="nodeEventProcessor">The task node event processor.</param>
         /// <param name="hostApplicationLifetime">Used for requesting termination of the current application during initialization.</param>
         /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler">The batch scheduler implementation</param>
         /// <param name="logger">The logger instance</param>
-        public Scheduler(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
-            : base(hostApplicationLifetime, repository, batchScheduler, logger) { }
+        public Scheduler(TaskNodeEventProcessor nodeEventProcessor, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
+            : base(hostApplicationLifetime, repository, batchScheduler, logger)
+        {
+            this.nodeEventProcessor = nodeEventProcessor;
+        }
 
 
         /// <summary>
@@ -158,21 +163,37 @@ namespace TesApi.Web
         /// <returns></returns>
         async ValueTask UpdateTesTasksFromEventBlobsAsync(CancellationToken stoppingToken)
         {
-            var messageInfos = new ConcurrentBag<NodeEventMessage>();
-            var messages = new ConcurrentBag<(string Id, AzureBatchTaskState State)>();
+            Func<IEnumerable<(TaskNodeEventMessage Message, AzureBatchTaskState State)>> getEventsInOrder;
 
-            // Get and parse event blobs
-            await foreach (var message in batchScheduler.GetEventMessagesAsync(stoppingToken)
-                .WithCancellation(stoppingToken))
             {
-                messageInfos.Add(message);
-            }
+                var messageInfos = new ConcurrentBag<TaskNodeEventMessage>();
+                var messages = new ConcurrentBag<(TaskNodeEventMessage Message, AzureBatchTaskState State)>();
 
-            try
-            {
+                // Get and parse event blobs
+                await foreach (var message in batchScheduler.GetEventMessagesAsync(stoppingToken)
+                    .WithCancellation(stoppingToken))
+                {
+                    messageInfos.Add(message);
+                }
+
+                //try
+                //{
                 await Parallel.ForEachAsync(messageInfos, ProcessMessage);
+                //}
+                //catch { } // TODO: identify exceptions
+
+                async ValueTask ProcessMessage(TaskNodeEventMessage messageInfo, CancellationToken cancellationToken)
+                {
+                    nodeEventProcessor.ValidateMessageMetadata(messageInfo);
+                    await nodeEventProcessor.DownloadAndValidateMessageContentAsync(messageInfo, cancellationToken);
+                    messages.Add((messageInfo, nodeEventProcessor.GetMessageBatchState(messageInfo)));
+                    await nodeEventProcessor.MarkMessageProcessedAsync(messageInfo, cancellationToken);
+                }
+
+                getEventsInOrder = () => nodeEventProcessor.OrderProcessedByExecutorSequence(messages, item => item.Message);
             }
-            catch { } // TODO: identify exceptions
+
+            var orderedMessageList = getEventsInOrder().ToList();
 
             // Update TesTasks
             await OrchestrateTesTasksOnBatchAsync(
@@ -180,20 +201,14 @@ namespace TesApi.Web
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
                 async token => GetTesTasks(token),
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
-                (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, messages.Select(t => t.State).ToArray(), token),
+                (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, orderedMessageList.Select(t => t.State).ToArray(), token),
                 stoppingToken,
                 "events");
 
             // Helpers
-            async ValueTask ProcessMessage(NodeEventMessage messageInfo, CancellationToken cancellationToken)
-            {
-                messages.Add(await messageInfo.GetMessageBatchStateAsync(cancellationToken));
-                await messageInfo.MarkMessageProcessed(cancellationToken);
-            }
-
             async IAsyncEnumerable<TesTask> GetTesTasks([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
             {
-                foreach (var id in messages.Select(t => batchScheduler.GetTesTaskIdFromCloudTaskId(t.Id)))
+                foreach (var id in orderedMessageList.Select(t => t.Message.TesTaskId))
                 {
                     TesTask tesTask = default;
                     if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)

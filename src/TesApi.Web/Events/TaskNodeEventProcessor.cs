@@ -14,7 +14,7 @@ namespace TesApi.Web.Events
     /// <summary>
     /// Represents an event sent by the node task runner.
     /// </summary>
-    public class NodeEventMessage
+    public class TaskNodeEventProcessor
     {
         /// <summary>
         /// Blob tag used to record event processing.
@@ -24,72 +24,79 @@ namespace TesApi.Web.Events
         private readonly IStorageAccessProvider _storageAccessProvider;
         private readonly IAzureProxy _azureProxy;
         private readonly ILogger _logger;
-        private readonly Uri _uri;
 
         /// <summary>
-        /// Tags of this event message.
-        /// </summary>
-        public IDictionary<string, string> Tags { get; }
-
-        /// <summary>
-        /// Event of this event message.
-        /// </summary>
-        public string Event { get; }
-
-        /// <summary>
-        /// Constructor of <see cref="NodeEventMessage"/>.
+        /// Constructor of <see cref="TaskNodeEventProcessor"/>.
         /// </summary>
         /// <param name="azureProxy"></param>
         /// <param name="logger"></param>
         /// <param name="storageAccessProvider"></param>
-        /// <param name="blobAbsoluteUri"></param>
-        /// <param name="tags"></param>
-        /// <param name="event"></param>
-        public NodeEventMessage(IAzureProxy azureProxy, ILogger<NodeEventMessage> logger, IStorageAccessProvider storageAccessProvider, Uri blobAbsoluteUri, IDictionary<string, string> tags, string @event)
+        public TaskNodeEventProcessor(IAzureProxy azureProxy, ILogger<TaskNodeEventProcessor> logger, IStorageAccessProvider storageAccessProvider)
         {
             ArgumentNullException.ThrowIfNull(azureProxy);
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
-            ArgumentNullException.ThrowIfNull(blobAbsoluteUri);
-            ArgumentNullException.ThrowIfNull(tags);
-            ArgumentNullException.ThrowIfNull(@event);
-
-            if (tags.Count == 0)
-            {
-                throw new ArgumentException("This message has no tags.", nameof(tags));
-            }
-
-            if (tags.ContainsKey(ProcessedTag))
-            {
-                throw new ArgumentException("This message was already processed.", nameof(tags));
-            }
-
-            // There are up to 10 tags allowed. We will be adding one.
-            // https://learn.microsoft.com/azure/storage/blobs/storage-manage-find-blobs?tabs=azure-portal#setting-blob-index-tags
-            if (tags.Count > 9)
-            {
-                throw new ArgumentException("This message does not have space to add the processed tag.", nameof(tags));
-            }
 
             _azureProxy = azureProxy;
             _logger = logger;
             _storageAccessProvider = storageAccessProvider;
-            _uri = blobAbsoluteUri;
-            Tags = tags.AsReadOnly();
-            Event = @event;
+        }
+
+
+        /// <summary>
+        /// TODO
+        /// </summary>
+        /// <param name="message"></param>
+        /// <exception cref="ArgumentException"></exception>
+        public void ValidateMessageMetadata(TaskNodeEventMessage message)
+        {
+            ArgumentNullException.ThrowIfNull(message);
+
+            if (message.BlobUri is null)
+            {
+                throw new ArgumentException("This message's URL is missing.", nameof(message));
+            }
+
+            if (message.Tags is null)
+            {
+                throw new ArgumentException("This message's Tags are missing.", nameof(message));
+            }
+
+            if (string.IsNullOrWhiteSpace(message.Event))
+            {
+                throw new ArgumentException("This message's event type is missing.", nameof(message));
+            }
+
+            if (message.Tags.Count == 0)
+            {
+                throw new ArgumentException("This message has no tags.", nameof(message));
+            }
+
+            if (message.Tags.ContainsKey(ProcessedTag))
+            {
+                throw new ArgumentException("This message was already processed.", nameof(message));
+            }
+
+            // There are up to 10 tags allowed. We will be adding one.
+            // https://learn.microsoft.com/azure/storage/blobs/storage-manage-find-blobs?tabs=azure-portal#setting-blob-index-tags
+            if (message.Tags.Count > 9)
+            {
+                throw new ArgumentException("This message does not have space to add the processed tag.", nameof(message));
+            }
         }
 
         /// <summary>
         /// Gets the details of this event message.
         /// </summary>
+        /// <param name="message"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task<(string Id, AzureBatchTaskState State)> GetMessageBatchStateAsync(CancellationToken cancellationToken)
+        public async Task DownloadAndValidateMessageContentAsync(TaskNodeEventMessage message, CancellationToken cancellationToken)
         {
-            Tes.Runner.Events.EventMessage result = null;
+            Tes.Runner.Events.EventMessage result;
 
             try
             {
-                var messageText = await _azureProxy.DownloadBlobAsync(_uri, cancellationToken);
+                var messageText = await _azureProxy.DownloadBlobAsync(message.BlobUri, cancellationToken);
                 result = System.Text.Json.JsonSerializer.Deserialize<Tes.Runner.Events.EventMessage>(messageText)
                     ?? throw new InvalidOperationException("Deserialize() returned null.");
             }
@@ -102,7 +109,7 @@ namespace TesApi.Web.Events
             System.Diagnostics.Debug.Assert(Tes.Runner.Events.EventsPublisher.EventVersion.Equals(result.EventVersion, StringComparison.Ordinal));
             System.Diagnostics.Debug.Assert(Tes.Runner.Events.EventsPublisher.EventDataVersion.Equals(result.EventDataVersion, StringComparison.Ordinal));
             System.Diagnostics.Debug.Assert(Tes.Runner.Events.EventsPublisher.TesTaskRunnerEntityType.Equals(result.EntityType, StringComparison.Ordinal));
-            System.Diagnostics.Debug.Assert(Event.Equals(result.Name, StringComparison.Ordinal));
+            System.Diagnostics.Debug.Assert(message.Event.Equals(result.Name, StringComparison.Ordinal));
 
             // Event type specific validations
             switch (result.Name)
@@ -140,33 +147,51 @@ namespace TesApi.Web.Events
                     break;
             }
 
-            _logger.LogDebug("Getting batch task state from event {EventName} for {TesTask}.", result.Name ?? Event, result.EntityId);
-            return (result.EntityId, GetBatchTaskState(result));
+            message.SetRunnerEventMessage(result);
+        }
+
+        private enum EventsInOrder
+        {
+            downloadStart,
+            downloadEnd,
+            executorStart,
+            executorEnd,
+            uploadStart,
+            uploadEnd,
+            taskCompleted,
         }
 
         /// <summary>
-        /// Marks this event message processed.
+        /// Returns a sequence in the order the events were produced.
         /// </summary>
-        /// <param name="cancellationToken"></param>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="source"></param>
+        /// <param name="messageGetter"></param>
         /// <returns></returns>
-        public async Task MarkMessageProcessed(CancellationToken cancellationToken)
+        public IEnumerable<T> OrderProcessedByExecutorSequence<T>(IEnumerable<T> source, Func<T, TaskNodeEventMessage> messageGetter)
         {
-            await _azureProxy.SetBlobTags(
-                _uri,
-                Tags
-                    .Append(new(ProcessedTag, DateTime.UtcNow.ToString("O")))
-                    .ToDictionary(pair => pair.Key, pair => pair.Value),
-                cancellationToken);
+            return source.OrderBy(t => messageGetter(t).RunnerEventMessage.Created).ThenBy(t => Enum.TryParse(typeof(EventsInOrder), messageGetter(t).RunnerEventMessage.Name, true, out var result) ? result : -1);
         }
 
-        private AzureBatchTaskState GetBatchTaskState(Tes.Runner.Events.EventMessage message)
+        /// <summary>
+        /// Gets the task status details from this event message.
+        /// </summary>
+        /// <param name="message"></param>
+        /// <returns></returns>
+        public AzureBatchTaskState GetMessageBatchState(TaskNodeEventMessage message)
         {
-            return (message.Name ?? Event) switch
+            ArgumentNullException.ThrowIfNull(message);
+            ArgumentNullException.ThrowIfNull(message.RunnerEventMessage, nameof(message));
+
+            var nodeMessage = message.RunnerEventMessage;
+
+            _logger.LogDebug("Getting batch task state from event {EventName} for {TesTask}.", nodeMessage.Name ?? message.Event, nodeMessage.EntityId);
+            return (nodeMessage.Name ?? message.Event) switch
             {
                 Tes.Runner.Events.EventsPublisher.DownloadStartEvent => new(AzureBatchTaskState.TaskState.NoChange,
-                    BatchTaskStartTime: message.Created),
+                    BatchTaskStartTime: nodeMessage.Created),
 
-                Tes.Runner.Events.EventsPublisher.DownloadEndEvent => message.StatusMessage switch
+                Tes.Runner.Events.EventsPublisher.DownloadEndEvent => nodeMessage.StatusMessage switch
                 {
                     Tes.Runner.Events.EventsPublisher.SuccessStatus => new(AzureBatchTaskState.TaskState.NoChange),
 
@@ -175,88 +200,104 @@ namespace TesApi.Web.Events
                         Failure: new("SystemError",
                         Enumerable.Empty<string>()
                             .Append("Download failed.")
-                            .Append(message.EventData["errorMessage"]))),
+                            .Append(nodeMessage.EventData["errorMessage"]))),
 
                     _ => throw new System.Diagnostics.UnreachableException(),
                 },
 
                 Tes.Runner.Events.EventsPublisher.ExecutorStartEvent => new(AzureBatchTaskState.TaskState.Running,
-                    ExecutorStartTime: message.Created),
+                    ExecutorStartTime: nodeMessage.Created),
 
-                Tes.Runner.Events.EventsPublisher.ExecutorEndEvent => message.StatusMessage switch
+                Tes.Runner.Events.EventsPublisher.ExecutorEndEvent => nodeMessage.StatusMessage switch
                 {
                     Tes.Runner.Events.EventsPublisher.SuccessStatus => new(
                         AzureBatchTaskState.TaskState.InfoUpdate,
-                        ExecutorEndTime: message.Created,
-                        ExecutorExitCode: int.Parse(message.EventData["exitCode"])),
+                        ExecutorEndTime: nodeMessage.Created,
+                        ExecutorExitCode: int.Parse(nodeMessage.EventData["exitCode"])),
 
                     Tes.Runner.Events.EventsPublisher.FailedStatus => new(
                         AzureBatchTaskState.TaskState.InfoUpdate,
                         Failure: new("ExecutorError",
                         Enumerable.Empty<string>()
-                            .Append(message.EventData["errorMessage"])),
-                        ExecutorEndTime: message.Created,
-                        ExecutorExitCode: int.Parse(message.EventData["exitCode"])),
+                            .Append(nodeMessage.EventData["errorMessage"])),
+                        ExecutorEndTime: nodeMessage.Created,
+                        ExecutorExitCode: int.Parse(nodeMessage.EventData["exitCode"])),
 
                     _ => throw new System.Diagnostics.UnreachableException(),
                 },
 
                 Tes.Runner.Events.EventsPublisher.UploadStartEvent => new(AzureBatchTaskState.TaskState.NoChange),
 
-                Tes.Runner.Events.EventsPublisher.UploadEndEvent => message.StatusMessage switch
+                Tes.Runner.Events.EventsPublisher.UploadEndEvent => nodeMessage.StatusMessage switch
                 {
                     Tes.Runner.Events.EventsPublisher.SuccessStatus => new(
                         AzureBatchTaskState.TaskState.InfoUpdate,
-                        OutputFileLogs: GetFileLogs(message.EventData)),
+                        OutputFileLogs: GetFileLogs(nodeMessage.EventData)),
 
                     Tes.Runner.Events.EventsPublisher.FailedStatus => new(
                         AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed,
                         Failure: new("SystemError",
                         Enumerable.Empty<string>()
                             .Append("Upload failed.")
-                            .Append(message.EventData["errorMessage"]))),
+                            .Append(nodeMessage.EventData["errorMessage"]))),
 
                     _ => throw new System.Diagnostics.UnreachableException(),
                 },
 
-                Tes.Runner.Events.EventsPublisher.TaskCompletionEvent => message.StatusMessage switch
+                Tes.Runner.Events.EventsPublisher.TaskCompletionEvent => nodeMessage.StatusMessage switch
                 {
                     Tes.Runner.Events.EventsPublisher.SuccessStatus => new(
                         AzureBatchTaskState.TaskState.CompletedSuccessfully,
-                        BatchTaskStartTime: message.Created - TimeSpan.Parse(message.EventData["duration"]),
-                        BatchTaskEndTime: message.Created),
+                        BatchTaskStartTime: nodeMessage.Created - TimeSpan.Parse(nodeMessage.EventData["duration"]),
+                        BatchTaskEndTime: nodeMessage.Created),
 
                     Tes.Runner.Events.EventsPublisher.FailedStatus => new(
                         AzureBatchTaskState.TaskState.CompletedWithErrors,
                         Failure: new("SystemError",
                         Enumerable.Empty<string>()
                             .Append("Node script failed.")
-                            .Append(message.EventData["errorMessage"])),
-                        BatchTaskStartTime: message.Created - TimeSpan.Parse(message.EventData["duration"]),
-                        BatchTaskEndTime: message.Created),
+                            .Append(nodeMessage.EventData["errorMessage"])),
+                        BatchTaskStartTime: nodeMessage.Created - TimeSpan.Parse(nodeMessage.EventData["duration"]),
+                        BatchTaskEndTime: nodeMessage.Created),
 
                     _ => throw new System.Diagnostics.UnreachableException(),
                 },
 
                 _ => throw new System.Diagnostics.UnreachableException(),
             };
+
+            static IEnumerable<AzureBatchTaskState.OutputFileLog> GetFileLogs(IDictionary<string, string> eventData)
+            {
+                if (eventData is null)
+                {
+                    yield break;
+                }
+
+                var numberOfFiles = int.Parse(eventData["numberOfFiles"]);
+                for (var i = 0; i < numberOfFiles; ++i)
+                {
+                    yield return new(
+                        new Uri(eventData[$"fileUri-{i}"]),
+                        eventData[$"filePath-{i}"],
+                        long.Parse(eventData[$"fileSize-{i}"]));
+                }
+            }
         }
 
-        private static IEnumerable<AzureBatchTaskState.OutputFileLog> GetFileLogs(IDictionary<string, string> eventData)
+        /// <summary>
+        /// Marks this event message processed.
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task MarkMessageProcessedAsync(TaskNodeEventMessage message, CancellationToken cancellationToken)
         {
-            if (eventData is null)
-            {
-                yield break;
-            }
-
-            var numberOfFiles = int.Parse(eventData["numberOfFiles"]);
-            for (var i = 0; i < numberOfFiles; ++i)
-            {
-                yield return new(
-                    new Uri(eventData[$"fileUri-{i}"]),
-                    eventData[$"filePath-{i}"],
-                    long.Parse(eventData[$"fileSize-{i}"]));
-            }
+            await _azureProxy.SetBlobTags(
+                message.BlobUri,
+                message.Tags
+                    .Append(new(ProcessedTag, DateTime.UtcNow.ToString("O")))
+                    .ToDictionary(pair => pair.Key, pair => pair.Value),
+                cancellationToken);
         }
     }
 }

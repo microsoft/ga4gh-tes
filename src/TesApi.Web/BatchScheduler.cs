@@ -74,7 +74,6 @@ namespace TesApi.Web
         private readonly ContainerRegistryProvider containerRegistryProvider;
         private readonly string batchPrefix;
         private readonly Func<IBatchPool> batchPoolFactory;
-        private readonly Func<Uri, IDictionary<string, string>, string, NodeEventMessage> batchTesEventMessageFactory;
         private readonly IAllowedVmSizesService allowedVmSizesService;
         private readonly TaskExecutionScriptingManager taskExecutionScriptingManager;
 
@@ -97,7 +96,6 @@ namespace TesApi.Web
         /// <param name="poolFactory"><see cref="IBatchPool"/> factory.</param>
         /// <param name="allowedVmSizesService">Service to get allowed vm sizes.</param>
         /// <param name="taskExecutionScriptingManager"><see cref="TaskExecutionScriptingManager"/>.</param>
-        /// <param name="batchTesEventMessageFactory"><see cref="NodeEventMessage"/> factory.</param>
         public BatchScheduler(
             ILogger<BatchScheduler> logger,
             IOptions<Options.BatchImageGeneration1Options> batchGen1Options,
@@ -114,8 +112,7 @@ namespace TesApi.Web
             ContainerRegistryProvider containerRegistryProvider,
             Func<IBatchPool> poolFactory,
             IAllowedVmSizesService allowedVmSizesService,
-            TaskExecutionScriptingManager taskExecutionScriptingManager,
-            Func<Uri, IDictionary<string, string>, string, NodeEventMessage> batchTesEventMessageFactory)
+            TaskExecutionScriptingManager taskExecutionScriptingManager)
         {
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(azureProxy);
@@ -125,7 +122,6 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(containerRegistryProvider);
             ArgumentNullException.ThrowIfNull(poolFactory);
             ArgumentNullException.ThrowIfNull(taskExecutionScriptingManager);
-            ArgumentNullException.ThrowIfNull(batchTesEventMessageFactory);
 
             this.logger = logger;
             this.azureProxy = azureProxy;
@@ -147,7 +143,6 @@ namespace TesApi.Web
             this.globalManagedIdentity = batchNodesOptions.Value.GlobalManagedIdentity;
             this.allowedVmSizesService = allowedVmSizesService;
             this.taskExecutionScriptingManager = taskExecutionScriptingManager;
-            this.batchTesEventMessageFactory = batchTesEventMessageFactory;
 
             batchPoolFactory = poolFactory;
             batchPrefix = batchSchedulingOptions.Value.Prefix;
@@ -1340,7 +1335,7 @@ namespace TesApi.Web
 
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<NodeEventMessage> GetEventMessagesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, string @event)
+        public async IAsyncEnumerable<TaskNodeEventMessage> GetEventMessagesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, string @event)
         {
             const string eventsFolderName = "events";
             var prefix = eventsFolderName + "/";
@@ -1363,7 +1358,7 @@ namespace TesApi.Web
                     cancellationToken)
                 .WithCancellation(cancellationToken))
             {
-                if (blobItem.Tags.ContainsKey(NodeEventMessage.ProcessedTag) || !blobItem.Tags.ContainsKey("task-id"))
+                if (blobItem.Tags.ContainsKey(TaskNodeEventProcessor.ProcessedTag) || !blobItem.Tags.ContainsKey("task-id"))
                 {
                     continue;
                 }
@@ -1373,7 +1368,7 @@ namespace TesApi.Web
                 var pathFromEventName = blobItem.Name[eventsEndIndex..];
                 var eventName = pathFromEventName[..pathFromEventName.IndexOf('/')];
 
-                yield return batchTesEventMessageFactory(new(blobUrl), blobItem.Tags, eventName);
+                yield return new(new(blobUrl), blobItem.Tags, eventName);
             }
         }
 
