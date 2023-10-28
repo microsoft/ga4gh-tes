@@ -210,22 +210,21 @@ namespace TesApi.Web
                     var tesTaskLog = tesTask.GetOrAddTesTaskLog();
                     var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog();
 
-                    if (batchInfo.OutputFileLogs is not null && tesTaskLog.Outputs is not null)
+                    if (tesTaskLog.Outputs is not null && !(batchInfo.OutputFileLogs?.Any() ?? true))
                     {
-                        logger.LogCritical("Why is tesTaskLog.Outputs already set?");
+                        tesTaskLog.Outputs = batchInfo.OutputFileLogs?.Select(
+                            entry => new Tes.Models.TesOutputFileLog
+                            {
+                                Path = entry.Path,
+                                SizeBytes = $"{entry.Size}",
+                                Url = entry.Url.AbsoluteUri
+                            }).ToList();
                     }
 
                     tesTaskLog.BatchNodeMetrics = batchNodeMetrics;
                     tesTaskLog.CromwellResultCode = cromwellRcCode;
                     tesTaskLog.EndTime ??= taskEndTime ?? batchInfo.BatchTaskEndTime;
                     tesTaskLog.StartTime ??= taskStartTime ?? batchInfo.BatchTaskStartTime;
-                    tesTaskLog.Outputs ??= batchInfo.OutputFileLogs?.Select(
-                        entry => new Tes.Models.TesOutputFileLog
-                        {
-                            Path = entry.Path,
-                            SizeBytes = $"{entry.Size}",
-                            Url = entry.Url.AbsoluteUri
-                        }).ToList();
                     tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorStartTime;
                     tesTaskExecutorLog.EndTime ??= batchInfo.ExecutorEndTime;
                     tesTaskExecutorLog.ExitCode ??= batchInfo.ExecutorExitCode;
