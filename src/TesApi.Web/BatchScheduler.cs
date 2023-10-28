@@ -210,17 +210,6 @@ namespace TesApi.Web
                     var tesTaskLog = tesTask.GetOrAddTesTaskLog();
                     var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog();
 
-                    if (tesTaskLog.Outputs is not null && !(batchInfo.OutputFileLogs?.Any() ?? true))
-                    {
-                        tesTaskLog.Outputs = batchInfo.OutputFileLogs?.Select(
-                            entry => new Tes.Models.TesOutputFileLog
-                            {
-                                Path = entry.Path,
-                                SizeBytes = $"{entry.Size}",
-                                Url = entry.Url.AbsoluteUri
-                            }).ToList();
-                    }
-
                     tesTaskLog.BatchNodeMetrics = batchNodeMetrics;
                     tesTaskLog.CromwellResultCode = cromwellRcCode;
                     tesTaskLog.EndTime ??= taskEndTime ?? batchInfo.BatchTaskEndTime;
@@ -228,6 +217,15 @@ namespace TesApi.Web
                     tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorStartTime;
                     tesTaskExecutorLog.EndTime ??= batchInfo.ExecutorEndTime;
                     tesTaskExecutorLog.ExitCode ??= batchInfo.ExecutorExitCode;
+
+                    if (tesTaskLog.Outputs is null)
+                    {
+                        tesTaskLog.Outputs = batchInfo.OutputFileLogs?.Select(ConvertOutputFileLogToTesOutputFileLog).ToList();
+                    }
+                    else if (!tesTaskLog.Outputs.Any())
+                    {
+                        tesTaskLog.Outputs.AddRange(batchInfo.OutputFileLogs?.Select(ConvertOutputFileLogToTesOutputFileLog) ?? Enumerable.Empty<Tes.Models.TesOutputFileLog>());
+                    }
 
                     // Only accurate when the task completes successfully, otherwise it's the Batch time as reported from Batch
                     // TODO this could get large; why?
@@ -271,6 +269,16 @@ namespace TesApi.Web
                 }
 
                 return true;
+
+                Tes.Models.TesOutputFileLog ConvertOutputFileLogToTesOutputFileLog(AzureBatchTaskState.OutputFileLog fileLog)
+                {
+                    return new Tes.Models.TesOutputFileLog
+                    {
+                        Path = fileLog.Path,
+                        SizeBytes = $"{fileLog.Size}",
+                        Url = fileLog.Url.AbsoluteUri
+                    };
+                }
             }
 
             async Task<bool> SetTaskCompleted(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
