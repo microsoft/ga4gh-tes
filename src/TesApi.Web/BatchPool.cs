@@ -34,6 +34,7 @@ namespace TesApi.Web
 
         private readonly ILogger _logger;
         private readonly IAzureProxy _azureProxy;
+        private readonly Storage.IStorageAccessProvider _storageAccessProvider;
 
         /// <summary>
         /// Constructor of <see cref="BatchPool"/>.
@@ -42,9 +43,11 @@ namespace TesApi.Web
         /// <param name="batchSchedulingOptions"></param>
         /// <param name="azureProxy"></param>
         /// <param name="logger"></param>
+        /// <param name="storageAccessProvider"></param>
         /// <exception cref="ArgumentException"></exception>
-        public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, ILogger<BatchPool> logger)
+        public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, ILogger<BatchPool> logger, Storage.IStorageAccessProvider storageAccessProvider)
         {
+            _storageAccessProvider = storageAccessProvider;
             var rotationDays = batchSchedulingOptions.Value.PoolRotationForcedDays;
             if (rotationDays == 0) { rotationDays = Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays; }
             _forcePoolRotationAge = TimeSpan.FromDays(rotationDays);
@@ -342,6 +345,23 @@ namespace TesApi.Web
                         {
                             var nodesToRemove = Enumerable.Empty<ComputeNode>();
 
+                            async Task SendNodeErrorData(string nodeId, IReadOnlyList<TaskInformation> content)
+                            {
+                                var url = await _storageAccessProvider.GetInternalTesBlobUrlAsync(
+                                    $"nodeError/{nodeId}-{new Guid():B}",
+                                    Azure.Storage.Sas.BlobSasPermissions.Create,
+                                    cancellationToken);
+                                await _azureProxy.UploadBlobAsync(
+                                    new(url),
+                                    System.Text.Json.JsonSerializer.Serialize(content,
+                                    new System.Text.Json.JsonSerializerOptions()
+                                    {
+                                        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
+                                        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
+                                    }),
+                                    cancellationToken);
+                            }
+
                             // It's documented that a max of 100 nodes can be removed at a time. Excess eligible nodes will be removed in a future call to this method.
                             await foreach (var node in GetNodesToRemove(true).Take(MaxComputeNodesToRemoveAtOnce).WithCancellation(cancellationToken))
                             {
@@ -349,6 +369,8 @@ namespace TesApi.Web
                                 {
                                     case ComputeNodeState.Unusable:
                                         _logger.LogDebug("Found unusable node {NodeId}", node.Id);
+                                        await SendNodeErrorData(node.Id, node.RecentTasks);
+                                        //node.RecentTasks[0].ExecutionInformation.FailureInformation.Code == TaskFailureInformationCodes.DiskFull
                                         // TODO: notify running tasks that task will switch nodes?
                                         break;
 
@@ -359,6 +381,9 @@ namespace TesApi.Web
 
                                     case ComputeNodeState.Preempted:
                                         _logger.LogDebug("Found preempted node {NodeId}", node.Id);
+                                        await SendNodeErrorData(node.Id, node.RecentTasks);
+                                        //node.RecentTasks[0].TaskId
+                                        //node.RecentTasks[0].ExecutionInformation.FailureInformation.Category == ErrorCategory.ServerError
                                         // TODO: notify running tasks that task will switch nodes? Or, in the future, terminate the task?
                                         break;
 
@@ -420,7 +445,7 @@ namespace TesApi.Web
             }
 
             IAsyncEnumerable<ComputeNode> GetNodesToRemove(bool withState)
-                => _azureProxy.ListComputeNodesAsync(Id, new ODATADetailLevel(filterClause: @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'", selectClause: withState ? @"id,state,startTaskInfo" : @"id"));
+                => _azureProxy.ListComputeNodesAsync(Id, new ODATADetailLevel(filterClause: @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'", selectClause: withState ? @"id,recentTasks,state,startTaskInfo" : @"id"));
         }
 
         private bool DetermineIsAvailable(DateTime? creation)
