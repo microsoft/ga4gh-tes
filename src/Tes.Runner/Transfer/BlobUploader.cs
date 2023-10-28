@@ -19,6 +19,13 @@ namespace Tes.Runner.Transfer
         }
 
         /// <summary>
+        /// Parameter-less constructor for mocking
+        /// </summary>
+        protected BlobUploader() : base(new BlobPipelineOptions(), Channel.CreateUnbounded<byte[]>())
+        {
+        }
+
+        /// <summary>
         /// Configures each part with the put block URL.
         /// </summary>
         /// <param name="buffer">Pipeline buffer to configure</param>
@@ -144,7 +151,7 @@ namespace Tes.Runner.Transfer
         /// </summary>
         /// <param name="uploadList">File upload list.</param>
         /// <returns></returns>
-        public async Task<long> UploadAsync(List<UploadInfo> uploadList)
+        public virtual async Task<long> UploadAsync(List<UploadInfo> uploadList)
         {
             ValidateUploadList(uploadList);
 
