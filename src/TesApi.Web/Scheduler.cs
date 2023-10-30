@@ -163,37 +163,67 @@ namespace TesApi.Web
         async ValueTask UpdateTesTasksFromEventBlobsAsync(CancellationToken stoppingToken)
         {
             var markEventsProcessedList = new ConcurrentBag<Func<CancellationToken, Task>>();
-            Func<IEnumerable<(RunnerEventsMessage Message, AzureBatchTaskState State)>> getEventsInOrder;
+            Func<IEnumerable<(TesTask Task, AzureBatchTaskState State)>> getEventsInOrder;
 
             {
-                var messages = new ConcurrentBag<(RunnerEventsMessage Message, AzureBatchTaskState State)>();
+                var messages = new ConcurrentBag<(RunnerEventsMessage Message, TesTask Task, AzureBatchTaskState State)>();
 
                 // Get and parse event blobs
                 await Parallel.ForEachAsync(batchScheduler.GetEventMessagesAsync(stoppingToken), stoppingToken, async (eventMessage, cancellationToken) =>
                 {
+                    var tesTask = await GetTesTaskAsync(eventMessage.Tags["task-id"], eventMessage.Tags["event-name"]);
+
+                    if (tesTask is null)
+                    {
+                        return;
+                    }
+
                     try
                     {
                         nodeEventProcessor.ValidateMessageMetadata(eventMessage);
                         await nodeEventProcessor.DownloadAndValidateMessageContentAsync(eventMessage, cancellationToken);
-                        messages.Add((eventMessage, nodeEventProcessor.GetMessageBatchState(eventMessage)));
+                        messages.Add((eventMessage, tesTask, await nodeEventProcessor.GetMessageBatchStateAsync(eventMessage, tesTask, cancellationToken)));
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError(ex, @"");
-                        messages.Add((eventMessage, new(AzureBatchTaskState.TaskState.InfoUpdate, Warning: new List<string>
+                        logger.LogError(ex, @"Downloading and parsing event failed: {ErrorMessage}", ex.Message);
+                        messages.Add((eventMessage, tesTask, new(AzureBatchTaskState.TaskState.InfoUpdate, Warning: new List<string>
                         {
                             "EventParsingFailed",
                             $"{ex.GetType().FullName}: {ex.Message}",
                         })));
+
+                        if (ex is System.Diagnostics.UnreachableException) // Don't retry this event.
+                        {
+                            markEventsProcessedList.Add(token => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, token));
+                        }
+
                         return;
                     }
 
                     markEventsProcessedList.Add(token => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, token));
+
+                    // Helpers
+                    async ValueTask<TesTask> GetTesTaskAsync(string id, string @event)
+                    {
+                        TesTask tesTask = default;
+                        if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
+                        {
+                            logger.LogDebug("Completing event '{TaskEvent}' for task {TesTask}.", @event, tesTask.Id);
+                            return tesTask;
+                        }
+                        else
+                        {
+                            logger.LogDebug("Could not find task {TesTask} for event '{TaskEvent}'.", id, @event);
+                            return null;
+                        }
+                    }
                 });
 
-                getEventsInOrder = () => nodeEventProcessor.OrderProcessedByExecutorSequence(messages, item => item.Message);
+                getEventsInOrder = () => nodeEventProcessor.OrderProcessedByExecutorSequence(messages, item => item.Message).Select(item => (item.Task, item.State));
             }
 
+            // Ensure the IEnumerable is only enumerated one time.
             var orderedMessageList = getEventsInOrder().ToList();
 
             if (!orderedMessageList.Any())
@@ -205,7 +235,7 @@ namespace TesApi.Web
             await OrchestrateTesTasksOnBatchAsync(
                 "NodeEvent",
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-                async token => GetTesTasks(token),
+                async _ => GetTesTasks(),
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
                 (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, orderedMessageList.Select(t => t.State).ToArray(), token),
                 stoppingToken,
@@ -224,22 +254,9 @@ namespace TesApi.Web
                 });
 
             // Helpers
-            async IAsyncEnumerable<TesTask> GetTesTasks([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+            IAsyncEnumerable<TesTask> GetTesTasks()
             {
-                foreach (var (id, @event) in orderedMessageList.Select(t => t.Message).Select(m => (m.TesTaskId, m.RunnerEventMessage.Name)))
-                {
-                    TesTask tesTask = default;
-                    if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
-                    {
-                        logger.LogDebug("Completing event '{TaskEvent}' for task {TesTask}.", @event, tesTask.Id);
-                        yield return tesTask;
-                    }
-                    else
-                    {
-                        logger.LogDebug("Could not find task {TesTask} for event '{TaskEvent}'.", id, @event);
-                        yield return null;
-                    }
-                }
+                return orderedMessageList.Select(t => t.Task).ToAsyncEnumerable();
             }
         }
     }

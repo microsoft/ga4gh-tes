@@ -4,14 +4,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Tes.Models;
 using static TesApi.Web.AzureBatchTaskState;
 
 namespace TesApi.Web
 {
     /// <summary>
-    /// Combined state of an attempt to run a <see cref="Tes.Models.TesTask"/>
+    /// Combined state of the progression of an attempt to run a <see cref="TesTask"/>
     /// </summary>
-    /// <param name="State">Task state. See <see cref="Tes.Models.TesState"/>.</param>
+    /// <param name="State">Task state. Also see <seealso cref="TesState"/>.</param>
     /// <param name="OutputFileLogs">File details after the task has completed successfully, for logging purposes.</param>
     /// <param name="Failure">Failure information.</param>
     /// <param name="CloudTaskCreationTime"><see cref="Microsoft.Azure.Batch.CloudTask.CreationTime"/>.</param>
@@ -22,10 +23,10 @@ namespace TesApi.Web
     /// <param name="BatchTaskEndTime"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.EndTime"/>.</param>
     /// <param name="BatchTaskExitCode"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.ExitCode"/>.</param>
     /// <param name="Warning">Warning. First item in enumeration is the Warning code, rest of items are additional system log entries.</param>
-    public record AzureBatchTaskState(
+    public record class AzureBatchTaskState(
         TaskState State,
         IEnumerable<OutputFileLog> OutputFileLogs = default,
-        FailureInformation Failure = default,
+        FailureInformation? Failure = default,
         DateTimeOffset? CloudTaskCreationTime = default,
         DateTimeOffset? BatchTaskStartTime = default,
         DateTimeOffset? ExecutorStartTime = default,
@@ -41,12 +42,12 @@ namespace TesApi.Web
         public enum TaskState
         {
             /// <summary>
-            /// The event does not represent any change in task state.
+            /// The event does not represent any change in the task's state.
             /// </summary>
             NoChange,
 
             /// <summary>
-            /// The event provides metadata without changing the task's state.
+            /// The event provides task state without changing the task's <see cref="TesTask.State"/>.
             /// </summary>
             InfoUpdate,
 
@@ -112,28 +113,44 @@ namespace TesApi.Web
         /// <param name="Url">URL of the file in storage, e.g. s3://bucket/file.txt</param>
         /// <param name="Path">Path of the file inside the container. Must be an absolute path.</param>
         /// <param name="Size">Size of the file in bytes.</param>
-        public record OutputFileLog(Uri Url, string Path, long Size);
+        public record struct OutputFileLog(Uri Url, string Path, long Size);
 
         /// <summary>
         /// TesTask's failure information
         /// </summary>
-        /// <param name="Reason">Failure code. Intended to be machine readable. See <see cref="Tes.Models.TesTaskLog.FailureReason"/>.</param>
-        /// <param name="SystemLogs">Failure details to be added to <see cref="Tes.Models.TesTaskLog.SystemLogs"/>.</param>
-        public record FailureInformation(string Reason, IEnumerable<string> SystemLogs);
+        /// <param name="Reason">Failure code. Intended to be machine readable. See <see cref="TesTaskLog.FailureReason"/>.</param>
+        /// <param name="SystemLogs">Failure details to be added to <see cref="TesTaskLog.SystemLogs"/>.</param>
+        public record struct FailureInformation(string Reason, IEnumerable<string> SystemLogs)
+        {
+
+            /// <summary>
+            /// Failure details to be added to <see cref="TesTaskLog.SystemLogs"/>.
+            /// </summary>
+            public IEnumerable<string> SystemLogs { get; private set; } = SystemLogs;
+
+            /// <summary>
+            /// Adds additional logs to <see cref="SystemLogs"/>.
+            /// </summary>
+            /// <param name="additionalLogs">Additional logs to add.</param>
+            public void AppendRangeToSystemLogs(IEnumerable<string> additionalLogs)
+            {
+                SystemLogs = SystemLogs.Concat(additionalLogs);
+            }
+        }
 
         /// <summary>
-        /// SystemLog appending constructor
+        /// SystemLog-appending copy constructor
         /// </summary>
-        /// <param name="other"></param>
+        /// <param name="original"></param>
         /// <param name="appendToSystemLog"></param>
-        protected AzureBatchTaskState(AzureBatchTaskState other, string appendToSystemLog)
-            : this(other)
+        protected AzureBatchTaskState(AzureBatchTaskState original, string appendToSystemLog)
+            : this(original)
         {
-            Failure = other.Failure switch
+            Failure = original.Failure switch
             {
                 null => new("UnknownError", Enumerable.Empty<string>().Append(appendToSystemLog)),
-                { SystemLogs: null } => new(other.Failure.Reason ?? "UnknownError", Enumerable.Empty<string>().Append(appendToSystemLog)),
-                _ => new(other.Failure.Reason ?? "UnknownError", other.Failure.SystemLogs.Append(appendToSystemLog)),
+                { SystemLogs: null } => new(original.Failure?.Reason ?? "UnknownError", Enumerable.Empty<string>().Append(appendToSystemLog)),
+                _ => new(original.Failure?.Reason ?? "UnknownError", original.Failure?.SystemLogs.Append(appendToSystemLog)),
             };
         }
     }

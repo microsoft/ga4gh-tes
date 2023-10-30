@@ -20,20 +20,24 @@ namespace TesApi.Web.Events
         /// </summary>
         public const string ProcessedTag = "processed";
 
-        private readonly IAzureProxy _azureProxy;
-        private readonly ILogger _logger;
+        private readonly IAzureProxy azureProxy;
+        private readonly Storage.IStorageAccessProvider storageAccessProvider;
+        private readonly ILogger logger;
 
         /// <summary>
         /// Constructor of <see cref="RunnerEventsProcessor"/>.
         /// </summary>
         /// <param name="azureProxy"></param>
+        /// <param name="storageAccessProvider"></param>
         /// <param name="logger"></param>
-        public RunnerEventsProcessor(IAzureProxy azureProxy, ILogger<RunnerEventsProcessor> logger)
+        public RunnerEventsProcessor(IAzureProxy azureProxy, Storage.IStorageAccessProvider storageAccessProvider, ILogger<RunnerEventsProcessor> logger)
         {
             ArgumentNullException.ThrowIfNull(azureProxy);
+            ArgumentNullException.ThrowIfNull(storageAccessProvider);
 
-            _azureProxy = azureProxy;
-            _logger = logger;
+            this.azureProxy = azureProxy;
+            this.storageAccessProvider = storageAccessProvider;
+            this.logger = logger;
         }
 
 
@@ -71,6 +75,11 @@ namespace TesApi.Web.Events
                 throw new ArgumentException("This message was already processed.", nameof(message));
             }
 
+            if (!message.Tags.ContainsKey("event-name") || !message.Tags.ContainsKey("task-id"))
+            {
+                throw new ArgumentException("This message is missing needed tags.", nameof(message));
+            }
+
             // There are up to 10 tags allowed. We will be adding one.
             // https://learn.microsoft.com/azure/storage/blobs/storage-manage-find-blobs?tabs=azure-portal#setting-blob-index-tags
             if (message.Tags.Count > 9)
@@ -91,7 +100,7 @@ namespace TesApi.Web.Events
 
             try
             {
-                var messageText = await _azureProxy.DownloadBlobAsync(message.BlobUri, cancellationToken);
+                var messageText = await azureProxy.DownloadBlobAsync(message.BlobUri, cancellationToken);
                 result = System.Text.Json.JsonSerializer.Deserialize<Tes.Runner.Events.EventMessage>(messageText)
                     ?? throw new InvalidOperationException("Deserialize() returned null.");
             }
@@ -100,61 +109,87 @@ namespace TesApi.Web.Events
                 throw new InvalidOperationException($"Event message blob is malformed. {ex.GetType().FullName}:{ex.Message}", ex);
             }
 
-            System.Diagnostics.Debug.Assert(Guid.TryParse(result.Id, out _));
-            System.Diagnostics.Debug.Assert(Tes.Runner.Events.EventsPublisher.EventVersion.Equals(result.EventVersion, StringComparison.Ordinal));
-            System.Diagnostics.Debug.Assert(Tes.Runner.Events.EventsPublisher.EventDataVersion.Equals(result.EventDataVersion, StringComparison.Ordinal));
-            System.Diagnostics.Debug.Assert(Tes.Runner.Events.EventsPublisher.TesTaskRunnerEntityType.Equals(result.EntityType, StringComparison.Ordinal));
-            System.Diagnostics.Debug.Assert(message.Event.Equals(result.Name, StringComparison.Ordinal));
+            Assert(Guid.TryParse(result.Id, out _),
+                $"{nameof(result.Id)}('{result.Id}')  is malformed.");
+            Assert(Tes.Runner.Events.EventsPublisher.EventVersion.Equals(result.EventVersion, StringComparison.Ordinal),
+                $"{nameof(result.EventVersion)}('{result.EventVersion}')  is not recognized.");
+            Assert(Tes.Runner.Events.EventsPublisher.EventDataVersion.Equals(result.EventDataVersion, StringComparison.Ordinal),
+                $"{nameof(result.EventDataVersion)}('{result.EventDataVersion}')  is not recognized.");
+            Assert(Tes.Runner.Events.EventsPublisher.TesTaskRunnerEntityType.Equals(result.EntityType, StringComparison.Ordinal),
+                $"{nameof(result.EntityType)}('{result.EntityType}')  is not recognized.");
+
+            Assert(message.TesTaskId.Equals(result.EntityId, StringComparison.Ordinal),
+                $"{nameof(result.EntityId)}('{result.EntityId}') does not match the expected value of '{message.TesTaskId}'.");
+            Assert(result.EntityId.Equals(message.Tags["task-id"], StringComparison.Ordinal),
+                $"{nameof(result.Name)}('{result.EntityId}') does not match the expected value of '{message.Tags["task-id"]}' from the tags..");
+            Assert(message.Event.Equals(result.Name, StringComparison.OrdinalIgnoreCase),
+                $"{nameof(result.Name)}('{result.Name}') does not match the expected value of '{message.Event}' from the blob path.");
+            Assert(result.Name.Equals(message.Tags["event-name"], StringComparison.Ordinal),
+                $"{nameof(result.Name)}('{result.Name}') does not match the expected value of '{message.Tags["event-name"]}' from the tags.");
 
             // Event type specific validations
             switch (result.Name)
             {
                 case Tes.Runner.Events.EventsPublisher.DownloadStartEvent:
-                    System.Diagnostics.Debug.Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(result.StatusMessage, StringComparison.Ordinal));
+                    Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(result.StatusMessage, StringComparison.Ordinal),
+                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.DownloadEndEvent:
-                    System.Diagnostics.Debug.Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(result.StatusMessage));
+                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(result.StatusMessage),
+                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.UploadStartEvent:
-                    System.Diagnostics.Debug.Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(result.StatusMessage, StringComparison.Ordinal));
+                    Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(result.StatusMessage, StringComparison.Ordinal),
+                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.UploadEndEvent:
-                    System.Diagnostics.Debug.Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(result.StatusMessage));
+                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(result.StatusMessage),
+                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.ExecutorStartEvent:
-                    System.Diagnostics.Debug.Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(result.StatusMessage, StringComparison.Ordinal));
+                    Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(result.StatusMessage, StringComparison.Ordinal),
+                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.ExecutorEndEvent:
-                    System.Diagnostics.Debug.Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(result.StatusMessage));
+                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(result.StatusMessage),
+                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.TaskCompletionEvent:
-                    System.Diagnostics.Debug.Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(result.StatusMessage));
+                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(result.StatusMessage),
+                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
                     break;
 
                 default:
-                    System.Diagnostics.Debug.Assert(false);
+                    Assert(false, $"{nameof(result.Name)}('{result.Name}') is not recognized.");
                     break;
             }
 
             message.SetRunnerEventMessage(result);
+
+            static void Assert([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool condition, string message)
+            {
+                if (!condition)
+                {
+                    throw new InvalidOperationException(message);
+                }
+            }
         }
 
-        private enum EventsInOrder
+        private readonly IReadOnlyDictionary<string, int> EventsInOrder = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
-            downloadStart,
-            downloadEnd,
-            executorStart,
-            executorEnd,
-            uploadStart,
-            uploadEnd,
-            taskCompleted,
-        }
+            { Tes.Runner.Events.EventsPublisher.DownloadStartEvent, 20 },
+            { Tes.Runner.Events.EventsPublisher.DownloadEndEvent, 30 },
+            { Tes.Runner.Events.EventsPublisher.ExecutorStartEvent, 40 },
+            { Tes.Runner.Events.EventsPublisher.ExecutorEndEvent, 50 },
+            { Tes.Runner.Events.EventsPublisher.UploadStartEvent, 60 },
+            { Tes.Runner.Events.EventsPublisher.UploadEndEvent, 70 },
+        }.AsReadOnly();
 
         /// <summary>
         /// Returns a sequence in the order the events were produced.
@@ -165,25 +200,27 @@ namespace TesApi.Web.Events
         /// <returns></returns>
         public IEnumerable<T> OrderProcessedByExecutorSequence<T>(IEnumerable<T> source, Func<T, RunnerEventsMessage> messageGetter)
         {
-            return source.OrderBy(t => messageGetter(t).RunnerEventMessage.Created).ThenBy(t => Enum.TryParse(typeof(EventsInOrder), messageGetter(t).RunnerEventMessage.Name, true, out var result) ? result : -1);
+            return source.OrderBy(t => messageGetter(t).RunnerEventMessage.Created).ThenBy(t => EventsInOrder.TryGetValue(messageGetter(t).RunnerEventMessage.Name, out var result) ? result : -1);
         }
 
         /// <summary>
         /// Gets the task status details from this event message.
         /// </summary>
         /// <param name="message"></param>
+        /// <param name="tesTask"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public AzureBatchTaskState GetMessageBatchState(RunnerEventsMessage message)
+        public async Task<AzureBatchTaskState> GetMessageBatchStateAsync(RunnerEventsMessage message, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(message);
             ArgumentNullException.ThrowIfNull(message.RunnerEventMessage, nameof(message));
 
             var nodeMessage = message.RunnerEventMessage;
+            logger.LogDebug("Getting batch task state from event {EventName} for {TesTask}.", nodeMessage.Name ?? message.Event, nodeMessage.EntityId);
 
-            _logger.LogDebug("Getting batch task state from event {EventName} for {TesTask}.", nodeMessage.Name ?? message.Event, nodeMessage.EntityId);
-            return (nodeMessage.Name ?? message.Event) switch
+            var state = (nodeMessage.Name ?? message.Event) switch
             {
-                Tes.Runner.Events.EventsPublisher.DownloadStartEvent => new(AzureBatchTaskState.TaskState.InfoUpdate,
+                Tes.Runner.Events.EventsPublisher.DownloadStartEvent => new AzureBatchTaskState(AzureBatchTaskState.TaskState.InfoUpdate,
                     BatchTaskStartTime: nodeMessage.Created),
 
                 Tes.Runner.Events.EventsPublisher.DownloadEndEvent => nodeMessage.StatusMessage switch
@@ -261,6 +298,17 @@ namespace TesApi.Web.Events
                 _ => throw new System.Diagnostics.UnreachableException(),
             };
 
+            var processLogs = await GetProcessLogs(nodeMessage, tesTask, cancellationToken).ToListAsync(cancellationToken);
+
+            if (processLogs.Any())
+            {
+                processLogs.Insert(0, "Possibly relevant logs:");
+                state.Failure?.AppendRangeToSystemLogs(processLogs);
+            }
+
+            return state;
+
+            // Helpers
             static IEnumerable<AzureBatchTaskState.OutputFileLog> GetFileLogs(IDictionary<string, string> eventData)
             {
                 const string marker = "/wd/";
@@ -291,6 +339,33 @@ namespace TesApi.Web.Events
                     }
                 }
             }
+
+            async IAsyncEnumerable<string> GetProcessLogs(Tes.Runner.Events.EventMessage message, Tes.Models.TesTask tesTask, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+            {
+                var blobNameStartsWith = message.Name switch
+                {
+                    Tes.Runner.Events.EventsPublisher.DownloadEndEvent => "download_std",
+                    Tes.Runner.Events.EventsPublisher.ExecutorEndEvent => "exec_std",
+                    Tes.Runner.Events.EventsPublisher.UploadEndEvent => "upload_std",
+                    _ => string.Empty,
+                };
+
+                if (string.IsNullOrEmpty(blobNameStartsWith))
+                {
+                    yield break;
+                }
+
+                var listUri = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken);
+
+                await foreach(var uri in azureProxy.ListBlobsAsync(new(listUri), cancellationToken)
+                    .Where(blob => blob.BlobName.EndsWith(".txt") && System.IO.Path.GetFileName(blob.BlobName).StartsWith(blobNameStartsWith))
+                    .OrderBy(blob => blob.BlobName)
+                    .Select(blob => blob.BlobUri)
+                    .WithCancellation(cancellationToken))
+                {
+                    yield return uri.AbsoluteUri;
+                }
+            }
         }
 
         /// <summary>
@@ -301,7 +376,7 @@ namespace TesApi.Web.Events
         /// <returns></returns>
         public async Task MarkMessageProcessedAsync(RunnerEventsMessage message, CancellationToken cancellationToken)
         {
-            await _azureProxy.SetBlobTags(
+            await azureProxy.SetBlobTags(
                 message.BlobUri,
                 message.Tags
                     .Append(new(ProcessedTag, DateTime.UtcNow.ToString("O")))

@@ -249,11 +249,11 @@ namespace TesApi.Web
 
                     if (batchInfo.Failure is not null)
                     {
-                        tesTask.SetFailureReason(batchInfo.Failure.Reason);
+                        tesTask.SetFailureReason(batchInfo.Failure?.Reason);
 
-                        if (batchInfo.Failure.SystemLogs is not null)
+                        if (batchInfo.Failure?.SystemLogs is not null)
                         {
-                            tesTask.AddToSystemLog(batchInfo.Failure.SystemLogs);
+                            tesTask.AddToSystemLog(batchInfo.Failure?.SystemLogs);
                         }
                         else if (!string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem))
                         {

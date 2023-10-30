@@ -12,7 +12,7 @@ namespace TesApi.Web.Events
     /// <param name="BlobUri">URL of the event message.</param>
     /// <param name="Tags">Tags on the event message blob.</param>
     /// <param name="Event">Name of the event based on parsing the blob's BlobName.</param>
-    public record class RunnerEventsMessage(Uri BlobUri, IDictionary<string, string> Tags, string Event)
+    public record struct RunnerEventsMessage(Uri BlobUri, IDictionary<string, string> Tags, string Event)
     {
         /// <summary>
         /// 
@@ -22,7 +22,7 @@ namespace TesApi.Web.Events
         /// <summary>
         /// 
         /// </summary>
-        public string TesTaskId => RunnerEventMessage?.EntityId;
+        public readonly string TesTaskId => RunnerEventMessage?.EntityId;
 
         /// <summary>
         /// Sets <see cref="RunnerEventMessage"/>.
