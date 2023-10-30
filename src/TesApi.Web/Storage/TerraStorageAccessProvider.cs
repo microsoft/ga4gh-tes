@@ -153,7 +153,7 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new Uri($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}/{blobInfo.BlobName.TrimStart('/')}"));
+            var builder = new BlobUriBuilder(new Uri($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}{blobName}\")"));
 
             return builder.ToUri().ToString();
         }
@@ -275,7 +275,7 @@ namespace TesApi.Web.Storage
             {
                 ArgumentException.ThrowIfNullOrEmpty(segmentsContainerName);
 
-                var guidString = segmentsContainerName.Substring(3); // remove the sc- prefix
+                var guidString = segmentsContainerName[3..]; // remove the sc- prefix
 
                 return Guid.Parse(guidString); // throws if not a guid
             }
