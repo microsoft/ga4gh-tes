@@ -357,7 +357,7 @@ namespace TesApi.Web.Events
 
                 var listUri = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken);
 
-                await foreach(var uri in azureProxy.ListBlobsAsync(new(listUri), cancellationToken)
+                await foreach (var uri in azureProxy.ListBlobsAsync(new(listUri), cancellationToken)
                     .Where(blob => blob.BlobName.EndsWith(".txt") && System.IO.Path.GetFileName(blob.BlobName).StartsWith(blobNameStartsWith))
                     .OrderBy(blob => blob.BlobName)
                     .Select(blob => blob.BlobUri)
