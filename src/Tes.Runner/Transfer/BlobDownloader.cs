@@ -17,11 +17,18 @@ public class BlobDownloader : BlobOperationPipeline
     }
 
     /// <summary>
+    /// Parameter-less constructor for mocking
+    /// </summary>
+    protected BlobDownloader() : base(new BlobPipelineOptions(), Channel.CreateUnbounded<byte[]>())
+    {
+    }
+
+    /// <summary>
     /// Downloads a list of files from an HTTP source.
     /// </summary>
     /// <param name="downloadList">A list of <see cref="DownloadInfo"/></param>
     /// <returns>Total bytes downloaded</returns>
-    public async ValueTask<long> DownloadAsync(List<DownloadInfo> downloadList)
+    public virtual async ValueTask<long> DownloadAsync(List<DownloadInfo> downloadList)
     {
         ValidateDownloadList(downloadList);
 
