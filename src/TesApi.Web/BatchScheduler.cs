@@ -980,23 +980,9 @@ namespace TesApi.Web
             var nodeTaskCreationOptions = new NodeTaskConversionOptions(
                 DefaultStorageAccountName: defaultStorageAccountName,
                 AdditionalInputs: await GetAdditionalCromwellInputsAsync(task, cancellationToken),
-                NodeManagedIdentityResourceId: GetNodeManagedIdentityResourceId(task)
+                GlobalManagedIdentity: globalManagedIdentity
             );
             return nodeTaskCreationOptions;
-        }
-
-        private string GetNodeManagedIdentityResourceId(TesTask task)
-        {
-            var resourceId =
-                task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters
-                    .workflow_execution_identity);
-
-            if (!string.IsNullOrEmpty(resourceId))
-            {
-                return resourceId;
-            }
-
-            return globalManagedIdentity;
         }
 
         private async Task<List<TesInput>> GetAdditionalCromwellInputsAsync(TesTask task, CancellationToken cancellationToken)

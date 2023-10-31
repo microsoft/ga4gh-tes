@@ -32,12 +32,14 @@ namespace TesApi.Tests.Runner
         private readonly TesTask tesTask = GetTestTesTask();
         private TerraOptions terraOptions;
         private StorageOptions storageOptions;
+        private BatchAccountOptions batchAccountOptions;
 
         private const string SasToken = "sv=2019-12-12&ss=bfqt&srt=sco&spr=https&st=2023-09-27T17%3A32%3A57Z&se=2023-09-28T17%3A32%3A57Z&sp=rwdlacupx&sig=SIGNATURE";
+
         const string DefaultStorageAccountName = "default";
         const string InternalBlobUrl = "http://foo.bar/tes-internal";
         const string InternalBlobUrlWithSas = $"{InternalBlobUrl}?{SasToken}";
-        const string ManagedIdentityResourceId = "resourceId";
+        const string GlobalManagedIdentity = $@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/globalId";
 
 
         const string ExternalStorageAccountName = "external";
@@ -45,12 +47,15 @@ namespace TesApi.Tests.Runner
             $"https://{ExternalStorageAccountName}{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont";
         const string ExternalStorageContainerWithSas =
             $"{ExternalStorageContainer}?{SasToken}";
+        const string ResourceGroup = "myResourceGroup";
+        const string SubscriptionId = "12345678-1234-5678-abcd-1234567890ab";
 
         [TestInitialize]
         public void SetUp()
         {
             terraOptions = new TerraOptions();
             storageOptions = new StorageOptions() { ExternalStorageContainers = ExternalStorageContainerWithSas };
+            batchAccountOptions = new BatchAccountOptions() { SubscriptionId = SubscriptionId, ResourceGroup = ResourceGroup };
             storageAccessProviderMock = new Mock<IStorageAccessProvider>();
             storageAccessProviderMock.Setup(x =>
                                    x.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -63,8 +68,11 @@ namespace TesApi.Tests.Runner
                 .Returns(InternalBlobUrl);
 
 
-            taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), storageAccessProviderMock.Object, Options.Create(storageOptions), new NullLogger<TaskToNodeTaskConverter>());
+            taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), storageAccessProviderMock.Object,
+                Options.Create(storageOptions), Options.Create(batchAccountOptions), new NullLogger<TaskToNodeTaskConverter>());
         }
+
+
         [TestMethod]
         public async Task ToNodeTaskAsync_TesTaskWithContentInputs_ContentInputsAreUploadedAndSetInTaskDefinition()
         {
@@ -78,6 +86,28 @@ namespace TesApi.Tests.Runner
             storageAccessProviderMock.Verify(x => x.UploadBlobAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(1));
             // The input must be uploaded to the internal blob url without a sas token.
             Assert.AreEqual(InternalBlobUrl, nodeTask.Inputs!.Find(i => i.Path == $"{TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar}{contentInput!.Path}")!.SourceUrl);
+        }
+
+        [DataTestMethod]
+        [DataRow("myIdentity", $@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity")]
+        [DataRow($@"/subscriptions/{SubscriptionId}/resourcegroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity", $@"/subscriptions/{SubscriptionId}/resourcegroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity")]
+        [DataRow($@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity", $@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myIdentity")]
+        [DataRow("", GlobalManagedIdentity)]
+        [DataRow(null, GlobalManagedIdentity)]
+        public void GetNodeManagedIdentityResourceId_ResourceIsProvided_ReturnsExpectedResult(string workflowIdentity, string expectedResourceId)
+        {
+
+            tesTask.Resources = new TesResources()
+            {
+                BackendParameters = new Dictionary<string, string>()
+                {
+                    {TesResources.SupportedBackendParameters.workflow_execution_identity.ToString(), workflowIdentity}
+                }
+            };
+
+            var resourceId = taskToNodeTaskConverter.GetNodeManagedIdentityResourceId(tesTask, GlobalManagedIdentity);
+
+            Assert.AreEqual(expectedResourceId, resourceId);
         }
 
         [TestMethod]
@@ -287,13 +317,13 @@ namespace TesApi.Tests.Runner
 
             return new NodeTaskConversionOptions(AdditionalInputs: inputs,
                 DefaultStorageAccountName: DefaultStorageAccountName,
-                NodeManagedIdentityResourceId: ManagedIdentityResourceId);
+                GlobalManagedIdentity: GlobalManagedIdentity);
         }
         private static NodeTaskConversionOptions OptionsWithoutAdditionalInputs()
         {
             return new NodeTaskConversionOptions(AdditionalInputs: null,
                 DefaultStorageAccountName: DefaultStorageAccountName,
-                NodeManagedIdentityResourceId: ManagedIdentityResourceId);
+                GlobalManagedIdentity: GlobalManagedIdentity);
         }
 
         private static TesTask GetTestTesTask()
