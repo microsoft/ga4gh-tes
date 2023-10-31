@@ -192,7 +192,7 @@ namespace TesApi.Web.Runner
                 SasAllowedIpRange = sasAllowedIpRange
             };
 
-            SetCombinedTerraTransformationStrategyForInputsAndOutputs();
+            SetCombinedTerraTransformationStrategyForAllTransformations();
 
             return this;
         }
@@ -207,7 +207,7 @@ namespace TesApi.Web.Runner
             return nodeTask;
         }
 
-        private void SetCombinedTerraTransformationStrategyForInputsAndOutputs()
+        private void SetCombinedTerraTransformationStrategyForAllTransformations()
         {
             if (nodeTask.Inputs != null)
             {
@@ -228,6 +228,11 @@ namespace TesApi.Web.Runner
             if (nodeTask.RuntimeOptions.StorageEventSink is not null)
             {
                 nodeTask.RuntimeOptions.StorageEventSink.TransformationStrategy = TransformationStrategy.CombinedTerra;
+            }
+
+            if (nodeTask.RuntimeOptions.StreamingLogPublisher is not null)
+            {
+                nodeTask.RuntimeOptions.StreamingLogPublisher.TransformationStrategy = TransformationStrategy.CombinedTerra;
             }
         }
 

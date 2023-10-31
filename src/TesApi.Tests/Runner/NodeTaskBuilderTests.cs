@@ -166,5 +166,16 @@ namespace TesApi.Tests.Runner
             Assert.AreEqual(url, nodeTask.RuntimeOptions.StreamingLogPublisher!.TargetUrl);
             Assert.AreEqual(TransformationStrategy.CombinedAzureResourceManager, nodeTask.RuntimeOptions.StreamingLogPublisher.TransformationStrategy);
         }
+
+        [TestMethod]
+        public void WithLogPublisher_CalledThenSetUpTerraRuntimeEnv_LogTargetUrlTransformationStrategyIsTerra()
+        {
+            var url = "https://foo.blob.core.windows.net/cont/log";
+            nodeTaskBuilder.WithLogPublisher(url)
+                .WithTerraAsRuntimeEnvironment("http://wsm.terra.foo", "http://lz.terra.foo", sasAllowedIpRange: null);
+            var nodeTask = nodeTaskBuilder.Build();
+
+            Assert.AreEqual(TransformationStrategy.CombinedTerra, nodeTask.RuntimeOptions.StreamingLogPublisher!.TransformationStrategy);
+        }
     }
 }
