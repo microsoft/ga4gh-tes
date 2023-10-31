@@ -5,7 +5,9 @@ using System;
 using System.Linq;
 using AutoMapper;
 using Microsoft.Azure.Management.Batch.Models;
+using Microsoft.Azure.Management.ContainerRegistry.Fluent.Models;
 using TesApi.Web.Management.Models.Terra;
+using TesApi.Web.Runner;
 
 namespace TesApi.Web.Management.Batch
 {
@@ -48,7 +50,30 @@ namespace TesApi.Web.Management.Batch
                 .ForMember(dest => dest.ResourceGroupName, opt => opt.Ignore())
                 .ForMember(dest => dest.Name, opt => opt.Ignore());
             CreateMap<Pool, ApiAzureBatchPool>()
-               .ForMember(dest => dest.UserAssignedIdentities, opt => opt.MapFrom(src => src.Identity.UserAssignedIdentities.Select(kvp => new ApiUserAssignedIdentity() { Name = kvp.Key, ClientId = kvp.Value.ClientId })));
+               .ForMember(dest => dest.UserAssignedIdentities, opt => opt.MapFrom(src => src.Identity.UserAssignedIdentities.Select(kvp => new ApiUserAssignedIdentity() { Name = TryGetManagedIdentityNameFromResourceId(kvp.Key), ClientId = kvp.Value.ClientId })));
+        }
+
+        /// <summary>
+        /// Gets name of the managed identity if the resource ID is a valid Azure MI resource ID.
+        /// If the resource ID is not a valid Resource ID, returns the value provided.
+        /// </summary>
+        /// <param name="resourceId"></param>
+        /// <returns></returns>
+        private static string TryGetManagedIdentityNameFromResourceId(string resourceId)
+        {
+            if (NodeTaskBuilder.IsValidManagedIdentityResourceId(resourceId))
+            {
+                var parts = resourceId.Split('/');
+
+                if (parts.Length < 2)
+                {
+                    return string.Empty;
+                }
+
+                return parts[^1];
+            }
+
+            return resourceId;
         }
     }
 }

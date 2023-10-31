@@ -138,12 +138,22 @@ namespace TesApi.Tests.Runner
             Assert.AreEqual("metrics.txt", metricsFile);
         }
 
-        [TestMethod]
-        public void WithResourceIdManagedIdentity_Called_ResourceIdIsSet()
+        [DataTestMethod]
+        [DataRow(@"/subscriptions/aaaaa450-5f22-4b20-9326-b5852bb89d90/resourcegroups/foo/providers/Microsoft.ManagedIdentity/userAssignedIdentities/bar-identity", @"/subscriptions/aaaaa450-5f22-4b20-9326-b5852bb89d90/resourcegroups/foo/providers/Microsoft.ManagedIdentity/userAssignedIdentities/bar-identity")]
+        [DataRow(null, null)]
+        [DataRow("", null)]
+        public void WithResourceIdManagedIdentity_dResourceIdProvided_ResourceIdIsSet(string resourceId, string expectedResourceId)
         {
-            nodeTaskBuilder.WithResourceIdManagedIdentity("resourceId");
+            nodeTaskBuilder.WithResourceIdManagedIdentity(resourceId);
             var nodeTask = nodeTaskBuilder.Build();
-            Assert.AreEqual("resourceId", nodeTask.RuntimeOptions.NodeManagedIdentityResourceId);
+            Assert.AreEqual(expectedResourceId, nodeTask.RuntimeOptions?.NodeManagedIdentityResourceId);
+        }
+
+        [TestMethod]
+        public void WithResourceIdManagedIdentity_InvalidResourceIdProvided_ExceptionIsThrown()
+        {
+            var resourceId = "invalid-resource-id";
+            Assert.ThrowsException<ArgumentException>(() => nodeTaskBuilder.WithResourceIdManagedIdentity(resourceId));
         }
 
         [TestMethod]
@@ -165,6 +175,17 @@ namespace TesApi.Tests.Runner
             var nodeTask = nodeTaskBuilder.Build();
             Assert.AreEqual(url, nodeTask.RuntimeOptions.StreamingLogPublisher!.TargetUrl);
             Assert.AreEqual(TransformationStrategy.CombinedAzureResourceManager, nodeTask.RuntimeOptions.StreamingLogPublisher.TransformationStrategy);
+        }
+
+        [TestMethod]
+        public void WithLogPublisher_CalledThenSetUpTerraRuntimeEnv_LogTargetUrlTransformationStrategyIsTerra()
+        {
+            var url = "https://foo.blob.core.windows.net/cont/log";
+            nodeTaskBuilder.WithLogPublisher(url)
+                .WithTerraAsRuntimeEnvironment("http://wsm.terra.foo", "http://lz.terra.foo", sasAllowedIpRange: null);
+            var nodeTask = nodeTaskBuilder.Build();
+
+            Assert.AreEqual(TransformationStrategy.CombinedTerra, nodeTask.RuntimeOptions.StreamingLogPublisher!.TransformationStrategy);
         }
     }
 }

@@ -155,7 +155,7 @@ namespace TesApi.Web
              * |------------------|---------------------|-------------------------|-------------------------|
              * |       true       |   AutoScaleEnabled  | Normal long-term state  |Change for select errrors|
              * |       false      |  AutoScaleDisabled  |  Recently disabled AS   |  Perform needed actions |
-             * |       false      | RemovingFailedNodes | Manual resizing actions | Reenalble autoscale mode|
+             * |       false      | RemovingFailedNodes | Manual resizing actions | Reenable autoscale mode |
              * |       true       | WaitingForAutoScale | Ensure autoscale works  | Delay and re-assess     |
              * |       true       |   SettingAutoScale  |  Assess pool response   | Restore normal long-term|
              * |------------------|---------------------|-------------------------|-------------------------|
@@ -165,7 +165,7 @@ namespace TesApi.Web
              *
              * If a pool's autoscale was disabled by an outside agent, the state machine should work to reenable it. Use the state RemovingFailedNodes for that.
              *
-             * If a pool was expected to switch scaling modes, but didn't, the pool's changeover has silently failed. Consider ths pool for early retirement.
+             * If a pool was expected to switch scaling modes, but didn't, the pool's changeover has silently failed. Consider this pool for early retirement.
              */
 
             (var failed, _scalingMode) = autoScaleEnabled switch
@@ -195,7 +195,7 @@ namespace TesApi.Web
 
             if (failed)
             {
-                IsAvailable = false;
+                IsAvailable = false; // TODO: Move 'active' (aka queued) tasks from this pool's job to another pool's job with the same key
                 _resetAutoScalingRequired = true;
             }
         }

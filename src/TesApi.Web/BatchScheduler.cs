@@ -818,26 +818,12 @@ namespace TesApi.Web
             var nodeTaskCreationOptions = new NodeTaskConversionOptions(
                 DefaultStorageAccountName: defaultStorageAccountName,
                 AdditionalInputs: await GetAdditionalCromwellInputsAsync(task, cancellationToken),
-                NodeManagedIdentityResourceId: GetNodeManagedIdentityResourceId(task)
+                GlobalManagedIdentity: globalManagedIdentity
             );
             return nodeTaskCreationOptions;
         }
 
-        private string GetNodeManagedIdentityResourceId(TesTask task)
-        {
-            var resourceId =
-                task.Resources?.GetBackendParameterValue(TesResources.SupportedBackendParameters
-                    .workflow_execution_identity);
-
-            if (!string.IsNullOrEmpty(resourceId))
-            {
-                return resourceId;
-            }
-
-            return globalManagedIdentity;
-        }
-
-        private async Task<IList<TesInput>> GetAdditionalCromwellInputsAsync(TesTask task, CancellationToken cancellationToken)
+        private async ValueTask<IList<TesInput>> GetAdditionalCromwellInputsAsync(TesTask task, CancellationToken cancellationToken)
         {
             var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
 
@@ -856,7 +842,7 @@ namespace TesApi.Web
             return additionalInputs;
         }
 
-        private async Task<List<TesInput>> GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(TesTask task,
+        private async ValueTask<List<TesInput>> GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(TesTask task,
             string cromwellExecutionDirectoryUrl, CancellationToken cancellationToken)
         {
             List<TesInput> additionalInputFiles = default;

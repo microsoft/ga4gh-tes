@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using Tes.Runner.Models;
 
 namespace TesApi.Web.Runner
@@ -12,10 +13,13 @@ namespace TesApi.Web.Runner
     /// </summary>
     public class NodeTaskBuilder
     {
+        private const string ManagedIdentityResourceIdPattern = @"^/subscriptions/[^/]+/resourcegroups/[^/]+/providers/Microsoft.ManagedIdentity/userAssignedIdentities/[^/]+$";
+
         private const string defaultDockerImageTag = "latest";
         private readonly NodeTask nodeTask;
         const string NodeTaskOutputsMetricsFormat = "FileUploadSizeInBytes={Size}";
         const string NodeTaskInputsMetricsFormat = "FileDownloadSizeInBytes={Size}";
+
 
         /// <summary>
         /// Creates a new builder
@@ -192,7 +196,7 @@ namespace TesApi.Web.Runner
                 SasAllowedIpRange = sasAllowedIpRange
             };
 
-            SetCombinedTerraTransformationStrategyForInputsAndOutputs();
+            SetCombinedTerraTransformationStrategyForAllTransformations();
 
             return this;
         }
@@ -207,7 +211,7 @@ namespace TesApi.Web.Runner
             return nodeTask;
         }
 
-        private void SetCombinedTerraTransformationStrategyForInputsAndOutputs()
+        private void SetCombinedTerraTransformationStrategyForAllTransformations()
         {
             if (nodeTask.Inputs != null)
             {
@@ -228,6 +232,11 @@ namespace TesApi.Web.Runner
             if (nodeTask.RuntimeOptions.StorageEventSink is not null)
             {
                 nodeTask.RuntimeOptions.StorageEventSink.TransformationStrategy = TransformationStrategy.CombinedTerra;
+            }
+
+            if (nodeTask.RuntimeOptions.StreamingLogPublisher is not null)
+            {
+                nodeTask.RuntimeOptions.StreamingLogPublisher.TransformationStrategy = TransformationStrategy.CombinedTerra;
             }
         }
 
@@ -260,15 +269,42 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
-        /// Sets managed identity for the node task
+        /// Sets managed identity for the node task. If the resource ID is empty or null, the property won't be set.
         /// </summary>
-        /// <param name="resourceId"></param>
+        /// <param name="resourceId">A valid managed identity resource ID</param>
         /// <returns></returns>
         public NodeTaskBuilder WithResourceIdManagedIdentity(string resourceId)
         {
+            if (string.IsNullOrEmpty(resourceId))
+            {
+                return this;
+            }
+
+            if (!IsValidManagedIdentityResourceId(resourceId))
+            {
+                throw new ArgumentException("Invalid resource ID. The ID must be a valid Azure resource ID.", nameof(resourceId));
+            }
+
             nodeTask.RuntimeOptions ??= new RuntimeOptions();
             nodeTask.RuntimeOptions.NodeManagedIdentityResourceId = resourceId;
             return this;
+        }
+
+        /// <summary>
+        /// Returns true of the value provided is a valid resource id for a managed identity.
+        /// </summary>
+        /// <param name="resourceId"></param>
+        /// <returns></returns>
+        public static bool IsValidManagedIdentityResourceId(string resourceId)
+        {
+            if (string.IsNullOrWhiteSpace(resourceId))
+            {
+                return false;
+            }
+
+            //Ignore the case because constant segments could be lower case, pascal case or camel case.
+            // e.g. /resourcegroup/ or /resourceGroup/
+            return Regex.IsMatch(resourceId, ManagedIdentityResourceIdPattern, RegexOptions.IgnoreCase);
         }
 
         /// <summary>
