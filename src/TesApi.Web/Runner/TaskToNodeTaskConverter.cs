@@ -433,6 +433,7 @@ namespace TesApi.Web.Runner
     /// </summary>
     /// <param name="AdditionalInputs"></param>
     /// <param name="DefaultStorageAccountName"></param>
+    /// <param name="GlobalManagedIdentity"></param>
     public record NodeTaskConversionOptions(IList<TesInput> AdditionalInputs = default, string DefaultStorageAccountName = default,
         string GlobalManagedIdentity = default);
 }
