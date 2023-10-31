@@ -79,7 +79,7 @@ namespace TesDeployer
 
         private static readonly AsyncRetryPolicy longRetryPolicy = Policy
             .Handle<Exception>()
-            .WaitAndRetryAsync(60, retryAttempt => System.TimeSpan.FromSeconds(15));
+            .WaitAndRetryAsync(60, retryAttempt => System.TimeSpan.FromSeconds(15), (exception, timespan) => ConsoleEx.WriteLine($"{exception.GetType().FullName}:{exception.Message}"));
 
         public const string ConfigurationContainerName = "configuration";
         public const string TesInternalContainerName = "tes-internal";
@@ -626,10 +626,30 @@ namespace TesDeployer
 
                             try
                             {
-                                var token = tokenSource.Token;
-                                var portForwardTask = kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true);
+                                var startPortForward = new Func<CancellationToken, Task>(token => kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true));
 
-                                var isTestWorkflowSuccessful = await RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+                                var token = tokenSource.Token;
+                                var portForwardTask = startPortForward(token);
+                                var runTestTask = RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+
+                                for (var task = await Task.WhenAny(portForwardTask, runTestTask);
+                                    runTestTask != task;
+                                    task = await Task.WhenAny(portForwardTask, runTestTask))
+                                {
+                                    try
+                                    {
+                                        await portForwardTask;
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        ConsoleEx.WriteLine($"kubectl stopped unexpectedly ({ex.Message}).", ConsoleColor.Red);
+                                    }
+
+                                    ConsoleEx.WriteLine($"Restarting kubectl...");
+                                    portForwardTask = startPortForward(token);
+                                }
+
+                                var isTestWorkflowSuccessful = await runTestTask;
                                 exitCode = isTestWorkflowSuccessful ? 0 : 1;
 
                                 if (!isTestWorkflowSuccessful)
@@ -913,7 +933,7 @@ namespace TesDeployer
             })))
                 .Where(a => a is not null)
                 .SelectMany(a => a)
-                .SingleOrDefault(a => a.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase) && regex.Replace(a.Location, "").Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
+                .SingleOrDefault(a => a.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase) && regex.Replace(a.Location, string.Empty).Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase));
         }
 
         private async Task<ManagedCluster> GetExistingAKSClusterAsync(string aksClusterName)
