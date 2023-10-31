@@ -75,7 +75,7 @@ namespace TesApi.Web.Events
                 throw new ArgumentException("This message was already processed.", nameof(message));
             }
 
-            if (!message.Tags.ContainsKey("event-name") || !message.Tags.ContainsKey("task-id"))
+            if (!message.Tags.ContainsKey("event-name") || !message.Tags.ContainsKey("task-id") || !message.Tags.ContainsKey("created"))
             {
                 throw new ArgumentException("This message is missing needed tags.", nameof(message));
             }
@@ -96,6 +96,8 @@ namespace TesApi.Web.Events
         /// <returns></returns>
         public async Task DownloadAndValidateMessageContentAsync(RunnerEventsMessage message, CancellationToken cancellationToken)
         {
+            ArgumentNullException.ThrowIfNull(message);
+
             Tes.Runner.Events.EventMessage result;
 
             try
@@ -109,6 +111,9 @@ namespace TesApi.Web.Events
                 throw new InvalidOperationException($"Event message blob is malformed. {ex.GetType().FullName}:{ex.Message}", ex);
             }
 
+            message.SetRunnerEventMessage(result);
+
+            // Validate content
             Assert(Guid.TryParse(result.Id, out _),
                 $"{nameof(result.Id)}('{result.Id}')  is malformed.");
             Assert(Tes.Runner.Events.EventsPublisher.EventVersion.Equals(result.EventVersion, StringComparison.Ordinal),
@@ -170,8 +175,6 @@ namespace TesApi.Web.Events
                     break;
             }
 
-            message.SetRunnerEventMessage(result);
-
             static void Assert([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool condition, string message)
             {
                 if (!condition)
@@ -181,14 +184,14 @@ namespace TesApi.Web.Events
             }
         }
 
-        private readonly IReadOnlyDictionary<string, int> EventsInOrder = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        private static readonly IReadOnlyDictionary<string, int> EventsInOrder = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
-            { Tes.Runner.Events.EventsPublisher.DownloadStartEvent, 20 },
-            { Tes.Runner.Events.EventsPublisher.DownloadEndEvent, 30 },
-            { Tes.Runner.Events.EventsPublisher.ExecutorStartEvent, 40 },
-            { Tes.Runner.Events.EventsPublisher.ExecutorEndEvent, 50 },
-            { Tes.Runner.Events.EventsPublisher.UploadStartEvent, 60 },
-            { Tes.Runner.Events.EventsPublisher.UploadEndEvent, 70 },
+            { Tes.Runner.Events.EventsPublisher.DownloadStartEvent, int.MinValue },
+            { Tes.Runner.Events.EventsPublisher.DownloadEndEvent, int.MinValue + 1 },
+            { Tes.Runner.Events.EventsPublisher.ExecutorStartEvent, -1 },
+            { Tes.Runner.Events.EventsPublisher.ExecutorEndEvent, +1 },
+            { Tes.Runner.Events.EventsPublisher.UploadStartEvent, int.MaxValue - 1 },
+            { Tes.Runner.Events.EventsPublisher.UploadEndEvent, int.MaxValue },
         }.AsReadOnly();
 
         /// <summary>
@@ -200,7 +203,21 @@ namespace TesApi.Web.Events
         /// <returns></returns>
         public IEnumerable<T> OrderProcessedByExecutorSequence<T>(IEnumerable<T> source, Func<T, RunnerEventsMessage> messageGetter)
         {
-            return source.OrderBy(t => messageGetter(t).RunnerEventMessage.Created).ThenBy(t => EventsInOrder.TryGetValue(messageGetter(t).RunnerEventMessage.Name, out var result) ? result : -1);
+            ArgumentNullException.ThrowIfNull(source);
+            ArgumentNullException.ThrowIfNull(messageGetter);
+
+            return source.OrderBy(t => OrderBy(messageGetter(t))).ThenBy(t => ThenBy(messageGetter(t)));
+
+            static DateTime OrderBy(RunnerEventsMessage message)
+                => message.RunnerEventMessage?.Created ?? DateTime.Parse(message.Tags["created"]).ToUniversalTime();
+
+            static int ThenBy(RunnerEventsMessage message)
+                => ParseEventName(message.RunnerEventMessage is null
+                    ? message.Tags["event-name"]
+                    : message.RunnerEventMessage.Name);
+
+            static int ParseEventName(string eventName)
+                => EventsInOrder.TryGetValue(eventName, out var result) ? result : int.MinValue;
         }
 
         /// <summary>

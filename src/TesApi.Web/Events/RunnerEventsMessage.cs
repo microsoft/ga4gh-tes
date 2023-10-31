@@ -17,7 +17,7 @@ namespace TesApi.Web.Events
         /// <summary>
         /// 
         /// </summary>
-        public Tes.Runner.Events.EventMessage RunnerEventMessage { get; private set; }
+        public Tes.Runner.Events.EventMessage RunnerEventMessage { readonly get; private set; }
 
         /// <summary>
         /// 
