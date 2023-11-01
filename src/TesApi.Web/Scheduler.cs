@@ -182,7 +182,8 @@ namespace TesApi.Web
                     {
                         nodeEventProcessor.ValidateMessageMetadata(eventMessage);
                         await nodeEventProcessor.DownloadAndValidateMessageContentAsync(eventMessage, cancellationToken);
-                        messages.Add((eventMessage, tesTask, await nodeEventProcessor.GetMessageBatchStateAsync(eventMessage, tesTask, cancellationToken)));
+                        var state = await nodeEventProcessor.GetMessageBatchStateAsync(eventMessage, tesTask, cancellationToken);
+                        messages.Add((eventMessage, tesTask, state));
                     }
                     catch (Exception ex)
                     {
@@ -193,7 +194,7 @@ namespace TesApi.Web
                             $"{ex.GetType().FullName}: {ex.Message}",
                         })));
 
-                        if (ex is System.Diagnostics.UnreachableException) // Don't retry this event.
+                        if (ex is System.Diagnostics.UnreachableException || ex is RunnerEventsProcessor.AssertException) // Don't retry this event.
                         {
                             markEventsProcessedList.Add(token => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, token));
                         }

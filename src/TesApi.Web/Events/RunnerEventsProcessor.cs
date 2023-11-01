@@ -48,8 +48,6 @@ namespace TesApi.Web.Events
         /// <exception cref="ArgumentException"></exception>
         public void ValidateMessageMetadata(RunnerEventsMessage message)
         {
-            ArgumentNullException.ThrowIfNull(message);
-
             if (message.BlobUri is null)
             {
                 throw new ArgumentException("This message's URL is missing.", nameof(message));
@@ -96,8 +94,6 @@ namespace TesApi.Web.Events
         /// <returns></returns>
         public async Task DownloadAndValidateMessageContentAsync(RunnerEventsMessage message, CancellationToken cancellationToken)
         {
-            ArgumentNullException.ThrowIfNull(message);
-
             Tes.Runner.Events.EventMessage result;
 
             try
@@ -125,11 +121,11 @@ namespace TesApi.Web.Events
 
             Assert(message.TesTaskId.Equals(result.EntityId, StringComparison.Ordinal),
                 $"{nameof(result.EntityId)}('{result.EntityId}') does not match the expected value of '{message.TesTaskId}'.");
-            Assert(result.EntityId.Equals(message.Tags["task-id"], StringComparison.Ordinal),
-                $"{nameof(result.Name)}('{result.EntityId}') does not match the expected value of '{message.Tags["task-id"]}' from the tags..");
+            Assert(message.Tags["task-id"].Equals(result.EntityId, StringComparison.Ordinal),
+                $"{nameof(result.EntityId)}('{result.EntityId}') does not match the expected value of '{message.Tags["task-id"]}' from the tags..");
             Assert(message.Event.Equals(result.Name, StringComparison.OrdinalIgnoreCase),
                 $"{nameof(result.Name)}('{result.Name}') does not match the expected value of '{message.Event}' from the blob path.");
-            Assert(result.Name.Equals(message.Tags["event-name"], StringComparison.Ordinal),
+            Assert(message.Tags["event-name"].Equals(result.Name, StringComparison.Ordinal),
                 $"{nameof(result.Name)}('{result.Name}') does not match the expected value of '{message.Tags["event-name"]}' from the tags.");
 
             // Event type specific validations
@@ -179,7 +175,7 @@ namespace TesApi.Web.Events
             {
                 if (!condition)
                 {
-                    throw new InvalidOperationException(message);
+                    throw new AssertException(message);
                 }
             }
         }
@@ -229,7 +225,6 @@ namespace TesApi.Web.Events
         /// <returns></returns>
         public async Task<AzureBatchTaskState> GetMessageBatchStateAsync(RunnerEventsMessage message, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
         {
-            ArgumentNullException.ThrowIfNull(message);
             ArgumentNullException.ThrowIfNull(message.RunnerEventMessage, nameof(message));
 
             var nodeMessage = message.RunnerEventMessage;
@@ -399,6 +394,17 @@ namespace TesApi.Web.Events
                     .Append(new(ProcessedTag, DateTime.UtcNow.ToString("O")))
                     .ToDictionary(pair => pair.Key, pair => pair.Value),
                 cancellationToken);
+        }
+
+        /// <summary>
+        /// Validation assert failed.
+        /// </summary>
+        public class AssertException : InvalidOperationException
+        {
+            /// <inheritdoc/>
+            public AssertException(string message) : base(message)
+            {
+            }
         }
     }
 }
