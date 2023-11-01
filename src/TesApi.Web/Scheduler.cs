@@ -181,7 +181,7 @@ namespace TesApi.Web
                     try
                     {
                         nodeEventProcessor.ValidateMessageMetadata(eventMessage);
-                        await nodeEventProcessor.DownloadAndValidateMessageContentAsync(eventMessage, cancellationToken);
+                        eventMessage = await nodeEventProcessor.DownloadAndValidateMessageContentAsync(eventMessage, cancellationToken);
                         var state = await nodeEventProcessor.GetMessageBatchStateAsync(eventMessage, tesTask, cancellationToken);
                         messages.Add((eventMessage, tesTask, state));
                     }

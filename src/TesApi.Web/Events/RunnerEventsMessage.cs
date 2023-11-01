@@ -12,32 +12,22 @@ namespace TesApi.Web.Events
     /// <param name="BlobUri">URL of the event message.</param>
     /// <param name="Tags">Tags on the event message blob.</param>
     /// <param name="Event">Name of the event based on parsing the blob's BlobName.</param>
-    public record struct RunnerEventsMessage(Uri BlobUri, IDictionary<string, string> Tags, string Event)
+    /// <param name="RunnerEventMessage">The content of the event message.</param>
+    public record struct RunnerEventsMessage(Uri BlobUri, IDictionary<string, string> Tags, string Event, Tes.Runner.Events.EventMessage RunnerEventMessage = default)
     {
         /// <summary>
-        /// 
+        /// Copy constructor replacing <see cref="RunnerEventMessage"/>.
         /// </summary>
-        public Tes.Runner.Events.EventMessage RunnerEventMessage { readonly get; private set; }
+        /// <param name="original"></param>
+        /// <param name="runnerEventMessage"></param>
+        public RunnerEventsMessage(RunnerEventsMessage original, Tes.Runner.Events.EventMessage runnerEventMessage)
+            : this(original.BlobUri, original.Tags, original.Event, runnerEventMessage)
+        {
+        }
 
         /// <summary>
         /// 
         /// </summary>
         public readonly string TesTaskId => RunnerEventMessage?.EntityId;
-
-        /// <summary>
-        /// Sets <see cref="RunnerEventMessage"/>.
-        /// </summary>
-        /// <param name="eventMessage">The downloaded event message associated with this storage blob.</param>
-        public void SetRunnerEventMessage(Tes.Runner.Events.EventMessage eventMessage)
-        {
-            ArgumentNullException.ThrowIfNull(eventMessage);
-
-            if (RunnerEventMessage is not null)
-            {
-                throw new InvalidOperationException("RunnerEventMessage has already been set.");
-            }
-
-            RunnerEventMessage = eventMessage;
-        }
     }
 }

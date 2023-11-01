@@ -92,14 +92,14 @@ namespace TesApi.Web.Events
         /// <param name="message"></param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task DownloadAndValidateMessageContentAsync(RunnerEventsMessage message, CancellationToken cancellationToken)
+        public async Task<RunnerEventsMessage> DownloadAndValidateMessageContentAsync(RunnerEventsMessage message, CancellationToken cancellationToken)
         {
-            Tes.Runner.Events.EventMessage result;
+            Tes.Runner.Events.EventMessage content;
 
             try
             {
                 var messageText = await azureProxy.DownloadBlobAsync(message.BlobUri, cancellationToken);
-                result = System.Text.Json.JsonSerializer.Deserialize<Tes.Runner.Events.EventMessage>(messageText)
+                content = System.Text.Json.JsonSerializer.Deserialize<Tes.Runner.Events.EventMessage>(messageText)
                     ?? throw new InvalidOperationException("Deserialize() returned null.");
             }
             catch (Exception ex)
@@ -107,69 +107,71 @@ namespace TesApi.Web.Events
                 throw new InvalidOperationException($"Event message blob is malformed. {ex.GetType().FullName}:{ex.Message}", ex);
             }
 
-            message.SetRunnerEventMessage(result);
+            message = new(message, content);
 
             // Validate content
-            Assert(Guid.TryParse(result.Id, out _),
-                $"{nameof(result.Id)}('{result.Id}')  is malformed.");
-            Assert(Tes.Runner.Events.EventsPublisher.EventVersion.Equals(result.EventVersion, StringComparison.Ordinal),
-                $"{nameof(result.EventVersion)}('{result.EventVersion}')  is not recognized.");
-            Assert(Tes.Runner.Events.EventsPublisher.EventDataVersion.Equals(result.EventDataVersion, StringComparison.Ordinal),
-                $"{nameof(result.EventDataVersion)}('{result.EventDataVersion}')  is not recognized.");
-            Assert(Tes.Runner.Events.EventsPublisher.TesTaskRunnerEntityType.Equals(result.EntityType, StringComparison.Ordinal),
-                $"{nameof(result.EntityType)}('{result.EntityType}')  is not recognized.");
+            Assert(Guid.TryParse(content.Id, out _),
+                $"{nameof(content.Id)}('{content.Id}')  is malformed.");
+            Assert(Tes.Runner.Events.EventsPublisher.EventVersion.Equals(content.EventVersion, StringComparison.Ordinal),
+                $"{nameof(content.EventVersion)}('{content.EventVersion}')  is not recognized.");
+            Assert(Tes.Runner.Events.EventsPublisher.EventDataVersion.Equals(content.EventDataVersion, StringComparison.Ordinal),
+                $"{nameof(content.EventDataVersion)}('{content.EventDataVersion}')  is not recognized.");
+            Assert(Tes.Runner.Events.EventsPublisher.TesTaskRunnerEntityType.Equals(content.EntityType, StringComparison.Ordinal),
+                $"{nameof(content.EntityType)}('{content.EntityType}')  is not recognized.");
 
-            Assert(message.TesTaskId.Equals(result.EntityId, StringComparison.Ordinal),
-                $"{nameof(result.EntityId)}('{result.EntityId}') does not match the expected value of '{message.TesTaskId}'.");
-            Assert(message.Tags["task-id"].Equals(result.EntityId, StringComparison.Ordinal),
-                $"{nameof(result.EntityId)}('{result.EntityId}') does not match the expected value of '{message.Tags["task-id"]}' from the tags..");
-            Assert(message.Event.Equals(result.Name, StringComparison.OrdinalIgnoreCase),
-                $"{nameof(result.Name)}('{result.Name}') does not match the expected value of '{message.Event}' from the blob path.");
-            Assert(message.Tags["event-name"].Equals(result.Name, StringComparison.Ordinal),
-                $"{nameof(result.Name)}('{result.Name}') does not match the expected value of '{message.Tags["event-name"]}' from the tags.");
+            Assert(message.TesTaskId.Equals(content.EntityId, StringComparison.Ordinal),
+                $"{nameof(content.EntityId)}('{content.EntityId}') does not match the expected value of '{message.TesTaskId}'.");
+            Assert(message.Tags["task-id"].Equals(content.EntityId, StringComparison.Ordinal),
+                $"{nameof(content.EntityId)}('{content.EntityId}') does not match the expected value of '{message.Tags["task-id"]}' from the tags..");
+            Assert(message.Event.Equals(content.Name, StringComparison.OrdinalIgnoreCase),
+                $"{nameof(content.Name)}('{content.Name}') does not match the expected value of '{message.Event}' from the blob path.");
+            Assert(message.Tags["event-name"].Equals(content.Name, StringComparison.Ordinal),
+                $"{nameof(content.Name)}('{content.Name}') does not match the expected value of '{message.Tags["event-name"]}' from the tags.");
 
             // Event type specific validations
-            switch (result.Name)
+            switch (content.Name)
             {
                 case Tes.Runner.Events.EventsPublisher.DownloadStartEvent:
-                    Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(result.StatusMessage, StringComparison.Ordinal),
-                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
+                    Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(content.StatusMessage, StringComparison.Ordinal),
+                        $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.DownloadEndEvent:
-                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(result.StatusMessage),
-                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
+                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(content.StatusMessage),
+                        $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.UploadStartEvent:
-                    Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(result.StatusMessage, StringComparison.Ordinal),
-                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
+                    Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(content.StatusMessage, StringComparison.Ordinal),
+                        $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.UploadEndEvent:
-                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(result.StatusMessage),
-                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
+                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(content.StatusMessage),
+                        $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.ExecutorStartEvent:
-                    Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(result.StatusMessage, StringComparison.Ordinal),
-                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
+                    Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(content.StatusMessage, StringComparison.Ordinal),
+                        $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.ExecutorEndEvent:
-                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(result.StatusMessage),
-                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
+                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(content.StatusMessage),
+                        $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.TaskCompletionEvent:
-                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(result.StatusMessage),
-                        $"{nameof(result.StatusMessage)}('{result.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
+                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(content.StatusMessage),
+                        $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
                     break;
 
                 default:
-                    Assert(false, $"{nameof(result.Name)}('{result.Name}') is not recognized.");
+                    Assert(false, $"{nameof(content.Name)}('{content.Name}') is not recognized.");
                     break;
             }
+
+            return message;
 
             static void Assert([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool condition, string message)
             {
