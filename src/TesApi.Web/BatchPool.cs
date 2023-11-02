@@ -347,19 +347,27 @@ namespace TesApi.Web
 
                             async Task SendNodeErrorData(string nodeId, IReadOnlyList<TaskInformation> content)
                             {
-                                var url = await _storageAccessProvider.GetInternalTesBlobUrlAsync(
-                                    $"nodeError/{nodeId}-{new Guid():B}",
+                                var url = new Uri(await _storageAccessProvider.GetInternalTesBlobUrlAsync(
+                                    $"nodeError/{nodeId}-{new Guid():N}",
                                     Azure.Storage.Sas.BlobSasPermissions.Create,
-                                    cancellationToken);
-                                await _azureProxy.UploadBlobAsync(
-                                    new(url),
-                                    System.Text.Json.JsonSerializer.Serialize(content,
-                                    new System.Text.Json.JsonSerializerOptions()
-                                    {
-                                        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
-                                        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
-                                    }),
-                                    cancellationToken);
+                                    cancellationToken));
+
+                                if (content is null || content!.Any())
+                                {
+                                    await _azureProxy.UploadBlobAsync(url, "No recent tasks found on node.", cancellationToken);
+                                }
+                                else
+                                {
+                                    await _azureProxy.UploadBlobAsync(
+                                        url,
+                                        System.Text.Json.JsonSerializer.Serialize(content,
+                                        new System.Text.Json.JsonSerializerOptions()
+                                        {
+                                            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
+                                            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
+                                        }),
+                                        cancellationToken);
+                                }
                             }
 
                             // It's documented that a max of 100 nodes can be removed at a time. Excess eligible nodes will be removed in a future call to this method.
@@ -517,7 +525,7 @@ namespace TesApi.Web
         public string Id { get; private set; }
 
         /// <inheritdoc/>
-        public async ValueTask<bool> CanBeDeleted(CancellationToken cancellationToken = default)
+        public async ValueTask<bool> CanBeDeletedAsync(CancellationToken cancellationToken = default)
         {
             if (await GetTasksAsync(includeCompleted: true).AnyAsync(cancellationToken))
             {
@@ -647,7 +655,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<CloudTaskBatchTaskState> GetTaskResizeFailures(CancellationToken cancellationToken)
+        public IAsyncEnumerable<CloudTaskBatchTaskState> GetTaskResizeFailuresAsync(CancellationToken cancellationToken)
         {
             return GetTasksAsync("id", "state eq 'active'").Zip(
                 GetFailures(cancellationToken),
@@ -693,11 +701,11 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<CloudTask> GetCompletedTasks(CancellationToken _1)
+        public IAsyncEnumerable<CloudTask> GetCompletedTasksAsync(CancellationToken _1)
             => GetTasksAsync("id,executionInfo", $"state eq 'completed' and stateTransitionTime lt DateTime'{DateTime.UtcNow - TimeSpan.FromMinutes(2):O}'");
 
         /// <inheritdoc/>
-        public async ValueTask<DateTime> GetAllocationStateTransitionTime(CancellationToken cancellationToken = default)
+        public async ValueTask<DateTime> GetAllocationStateTransitionTimeAsync(CancellationToken cancellationToken = default)
             => (await _azureProxy.GetBatchPoolAsync(Id, cancellationToken, new ODATADetailLevel { SelectClause = "allocationStateTransitionTime" })).AllocationStateTransitionTime ?? DateTime.UtcNow;
 
         /// <inheritdoc/>

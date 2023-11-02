@@ -110,7 +110,7 @@ namespace TesApi.Web
                 async (pool, token) =>
                 {
                     await pool.ServicePoolAsync(token);
-                    await ProcessFailures(pool.GetTaskResizeFailures(token), token);
+                    await ProcessFailures(pool.GetTaskResizeFailuresAsync(token), token);
                 },
                 stoppingToken);
 
@@ -159,7 +159,7 @@ namespace TesApi.Web
         {
             var tasks = new ConcurrentBag<CloudTask>();
 
-            await ExecuteActionOnPoolsAsync("Service Batch Tasks", async (pool, token) => await pool.GetCompletedTasks(token).ForEachAsync(tasks.Add, token), stoppingToken);
+            await ExecuteActionOnPoolsAsync("Service Batch Tasks", async (pool, token) => await pool.GetCompletedTasksAsync(token).ForEachAsync(tasks.Add, token), stoppingToken);
 
             if (tasks.IsEmpty)
             {

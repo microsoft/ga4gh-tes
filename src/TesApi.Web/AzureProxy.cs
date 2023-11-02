@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Auth;
@@ -22,7 +23,6 @@ using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Rest;
-using Microsoft.WindowsAzure.Storage.Blob;
 using Polly;
 using Polly.Retry;
 using TesApi.Web.Extensions;
@@ -369,29 +369,32 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task UploadBlobAsync(Uri blobAbsoluteUri, string content, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).UploadTextAsync(content, null, null, null, null, cancellationToken);
+            => new BlobClient(blobAbsoluteUri, new(BlobClientOptions.ServiceVersion.V2021_04_10))
+                .UploadAsync(BinaryData.FromString(content), options: null, cancellationToken);
 
         /// <inheritdoc/>
         public Task UploadBlobFromFileAsync(Uri blobAbsoluteUri, string filePath, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).UploadFromFileAsync(filePath, null, null, null, cancellationToken);
+            => new BlobClient(blobAbsoluteUri, new(BlobClientOptions.ServiceVersion.V2021_04_10))
+                .UploadAsync(filePath, options: null, cancellationToken);
 
         /// <inheritdoc/>
-        public Task<string> DownloadBlobAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).DownloadTextAsync(null, null, null, null, cancellationToken);
+        public async Task<string> DownloadBlobAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
+            => (await new BlobClient(blobAbsoluteUri, new(BlobClientOptions.ServiceVersion.V2021_04_10))
+                .DownloadContentAsync(cancellationToken)).Value.Content.ToString();
 
         /// <inheritdoc/>
-        public Task<bool> BlobExistsAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).ExistsAsync(null, null, cancellationToken);
+        public async Task<bool> BlobExistsAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
+            => await new BlobClient(blobAbsoluteUri, new(BlobClientOptions.ServiceVersion.V2021_04_10))
+                .ExistsAsync(cancellationToken);
 
         /// <inheritdoc/>
         public async Task<BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
         {
-            var blob = new CloudBlockBlob(blobAbsoluteUri);
+            var blob = new BlobClient(blobAbsoluteUri, new(BlobClientOptions.ServiceVersion.V2021_04_10));
 
-            if (await blob.ExistsAsync(null, null, cancellationToken))
+            if (await blob.ExistsAsync(cancellationToken))
             {
-                await blob.FetchAttributesAsync(null, null, null, cancellationToken);
-                return blob.Properties;
+                return await blob.GetPropertiesAsync(cancellationToken: cancellationToken);
             }
 
             return default;
@@ -400,18 +403,18 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public IAsyncEnumerable<BlobNameAndUri> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
         {
-            var directory = (new BlobClient(directoryUri, new(BlobClientOptions.ServiceVersion.V2021_04_10)));
+            var directory = new BlobClient(directoryUri, new(BlobClientOptions.ServiceVersion.V2021_04_10));
             return directory.GetParentBlobContainerClient()
                 .GetBlobsAsync(prefix: directory.Name.TrimEnd('/') + "/", cancellationToken: cancellationToken)
                 .Select(blobItem => new BlobNameAndUri(blobItem.Name, new BlobUriBuilder(directory.Uri) { Sas = null, BlobName = blobItem.Name, Query = null }.ToUri()));
         }
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<Azure.Storage.Blobs.Models.BlobItem> ListBlobsWithTagsAsync(Uri containerUri, string prefix, CancellationToken cancellationToken)
+        public IAsyncEnumerable<BlobItem> ListBlobsWithTagsAsync(Uri containerUri, string prefix, CancellationToken cancellationToken)
         {
             BlobContainerClient container = new(containerUri, new(BlobClientOptions.ServiceVersion.V2021_04_10));
 
-            return container.GetBlobsAsync(Azure.Storage.Blobs.Models.BlobTraits.Tags, prefix: prefix, cancellationToken: cancellationToken);
+            return container.GetBlobsAsync(BlobTraits.Tags, prefix: prefix, cancellationToken: cancellationToken);
         }
 
         /// <inheritdoc/>

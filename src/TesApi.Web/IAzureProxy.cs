@@ -145,7 +145,7 @@ namespace TesApi.Web
         /// <param name="blobAbsoluteUri">Absolute Blob URI</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        Task<Microsoft.WindowsAzure.Storage.Blob.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken);
+        Task<Azure.Storage.Blobs.Models.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken);
 
         /// <summary>
         /// List blobs whose tags match a given search expression in the given directory.

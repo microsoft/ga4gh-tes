@@ -44,7 +44,7 @@ namespace TesApi.Web
         /// Indicates that the pool is not scheduled to run tasks nor running tasks.
         /// </summary>
         /// <param name="cancellationToken"></param>
-        ValueTask<bool> CanBeDeleted(CancellationToken cancellationToken = default);
+        ValueTask<bool> CanBeDeletedAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Updates this instance based on changes to its environment.
@@ -58,21 +58,21 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        IAsyncEnumerable<CloudTaskBatchTaskState> GetTaskResizeFailures(CancellationToken cancellationToken = default);
+        IAsyncEnumerable<CloudTaskBatchTaskState> GetTaskResizeFailuresAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets the last time the pool's compute node list was changed.
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        ValueTask<DateTime> GetAllocationStateTransitionTime(CancellationToken cancellationToken = default);
+        ValueTask<DateTime> GetAllocationStateTransitionTimeAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets the completed tasks in this pool's associated job.
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        IAsyncEnumerable<CloudTask> GetCompletedTasks(CancellationToken cancellationToken);
+        IAsyncEnumerable<CloudTask> GetCompletedTasksAsync(CancellationToken cancellationToken);
 
         /// <summary>
         /// A <see cref="CloudTask"/> not yet assigned a compute nodes to remove due to a nonrecoverable compute node or pool resize error.

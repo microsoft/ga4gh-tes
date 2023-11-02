@@ -254,7 +254,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public Task<Microsoft.WindowsAzure.Storage.Blob.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
+        public Task<Azure.Storage.Blobs.Models.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
         {
             var ctx = new Context();
             ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying GetBlobPropertiesAsync ({RetryCount}).", retryCount));
