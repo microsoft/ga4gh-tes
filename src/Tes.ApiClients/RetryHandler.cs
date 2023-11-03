@@ -89,18 +89,18 @@ public class RetryHandler
     /// </summary>
     public virtual AsyncRetryPolicy AsyncRetryPolicy => asyncRetryPolicy;
 
-    /// <summary>
-    /// Executes a delegate with the specified policy.
-    /// </summary>
-    /// <param name="action">Action to execute</param>
-    /// <param name="context"></param>
-    /// <returns>Result instance</returns>
-    public void ExecuteWithRetry(Action action, Context? context = default)
-    {
-        ArgumentNullException.ThrowIfNull(action);
+    ///// <summary>
+    ///// Executes a delegate with the specified policy.
+    ///// </summary>
+    ///// <param name="action">Action to execute</param>
+    ///// <param name="context"></param>
+    ///// <returns>Result instance</returns>
+    //public void ExecuteWithRetry(Action action, Context? context = default)
+    //{
+    //    ArgumentNullException.ThrowIfNull(action);
 
-        retryPolicy.Execute(_ => action(), context ?? new());
-    }
+    //    retryPolicy.Execute(_ => action(), context ?? new());
+    //}
 
     /// <summary>
     /// Executes a delegate with the specified policy.
@@ -116,19 +116,19 @@ public class RetryHandler
         return retryPolicy.Execute(_ => action(), context ?? new());
     }
 
-    /// <summary>
-    /// Executes a delegate with the specified async policy. 
-    /// </summary>
-    /// <param name="action">Action to execute</param>
-    /// <param name="context"></param>
-    /// <typeparam name="TResult">Result type</typeparam>
-    /// <returns>Result instance</returns>
-    public virtual Task<TResult> ExecuteWithRetryAsync<TResult>(Func<Task<TResult>> action, Context? context = default)
-    {
-        ArgumentNullException.ThrowIfNull(action);
+    ///// <summary>
+    ///// Executes a delegate with the specified async policy.
+    ///// </summary>
+    ///// <param name="action">Action to execute</param>
+    ///// <param name="context"></param>
+    ///// <typeparam name="TResult">Result type</typeparam>
+    ///// <returns>Result instance</returns>
+    //public virtual Task<TResult> ExecuteWithRetryAsync<TResult>(Func<Task<TResult>> action, Context? context = default)
+    //{
+    //    ArgumentNullException.ThrowIfNull(action);
 
-        return asyncRetryPolicy.ExecuteAsync(_ => action(), context ?? new());
-    }
+    //    return asyncRetryPolicy.ExecuteAsync(_ => action(), context ?? new());
+    //}
 
     /// <summary>
     /// Executes a delegate with the specified async policy.
@@ -166,7 +166,7 @@ public class RetryHandler
     /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
     /// <param name="context"></param>
     /// <returns>Result HttpResponse</returns>
-    public virtual async Task<HttpResponseMessage> ExecuteHttpRequestWithRetryAsync(Func<CancellationToken, Task<HttpResponseMessage>> action, CancellationToken cancellationToken, Context? context = default)
+    public virtual async Task<HttpResponseMessage> ExecuteWithRetryAsync(Func<CancellationToken, Task<HttpResponseMessage>> action, CancellationToken cancellationToken, Context? context = default)
     {
         ArgumentNullException.ThrowIfNull(action);
 
@@ -176,10 +176,11 @@ public class RetryHandler
 
 public static class RetryHandlerExtensions
 {
-    public static void SetOnRetryHandler<T>(this Context context, Action<DelegateResult<T>, TimeSpan, int> onRetry)
+    public static void SetOnRetryHandler<T>(this Context context, Action<DelegateResult<T>, TimeSpan, int> onretry)
     {
-        context[RetryHandler.OnRetryHandlerKey] = onRetry;
+        context[RetryHandler.OnRetryHandlerKey] = onretry;
     }
+
     public static Action<DelegateResult<T>, TimeSpan, int>? GetOnRetryHandler<T>(this Context context)
     {
         return context.TryGetValue(RetryHandler.OnRetryHandlerKey, out var handler) ? (Action<DelegateResult<T>, TimeSpan, int>)handler : default;

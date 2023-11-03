@@ -61,7 +61,7 @@ namespace TesApi.Web
         private Queue<ResizeError> ResizeErrors { get; } = new();
 
         private IAsyncEnumerable<CloudTask> GetTasksAsync(string select, string filter)
-            => _azureProxy.ListTasksAsync(Id, new ODATADetailLevel { SelectClause = select, FilterClause = filter });
+            => _removedFromService ? AsyncEnumerable.Empty<CloudTask>() : _azureProxy.ListTasksAsync(Id, new ODATADetailLevel { SelectClause = select, FilterClause = filter });
 
         internal IAsyncEnumerable<CloudTask> GetTasksAsync(bool includeCompleted)
             => GetTasksAsync("id,stateTransitionTime", includeCompleted ? default : "state ne 'completed'");
@@ -491,6 +491,7 @@ namespace TesApi.Web
     public sealed partial class BatchPool : IBatchPool
     {
         private static readonly SemaphoreSlim lockObj = new(1, 1);
+        private bool _removedFromService = false;
 
         /// <summary>
         /// Types of maintenance calls offered by the <see cref="ServicePoolAsync(ServiceKind, CancellationToken)"/> service method.
@@ -527,6 +528,11 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async ValueTask<bool> CanBeDeletedAsync(CancellationToken cancellationToken = default)
         {
+            if (_removedFromService)
+            {
+                return true;
+            }
+
             if (await GetTasksAsync(includeCompleted: true).AnyAsync(cancellationToken))
             {
                 return false;
@@ -569,7 +575,10 @@ namespace TesApi.Web
 
             try // Don't add any code that can throw between this line and the call above to acquire lockObj.
             {
-                await func(cancellationToken);
+                if (!_removedFromService)
+                {
+                    await func(cancellationToken);
+                }
             }
             finally
             {
@@ -706,7 +715,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async ValueTask<DateTime> GetAllocationStateTransitionTimeAsync(CancellationToken cancellationToken = default)
-            => (await _azureProxy.GetBatchPoolAsync(Id, cancellationToken, new ODATADetailLevel { SelectClause = "allocationStateTransitionTime" })).AllocationStateTransitionTime ?? DateTime.UtcNow;
+            => (await _azureProxy.GetFullAllocationStateAsync(Id, cancellationToken)).AllocationStateTransitionTime ?? DateTime.UtcNow;
 
         /// <inheritdoc/>
         public async ValueTask CreatePoolAndJobAsync(Microsoft.Azure.Management.Batch.Models.Pool poolModel, bool isPreemptible, CancellationToken cancellationToken)
@@ -796,6 +805,12 @@ namespace TesApi.Web
 
             IsDedicated = bool.Parse(pool.Metadata.First(m => BatchScheduler.PoolIsDedicated.Equals(m.Name, StringComparison.Ordinal)).Value);
             _ = _batchPools.AddPool(this);
+        }
+
+        /// <inheritdoc/>
+        public void MarkRemovedFromService()
+        {
+            _removedFromService = true;
         }
     }
 

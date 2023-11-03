@@ -176,7 +176,18 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public bool RemovePoolFromList(IBatchPool pool)
-            => batchPools.Remove(pool);
+        {
+            pool.MarkRemovedFromService();
+
+            try
+            {
+                return batchPools.Remove(pool);
+            }
+            catch (InvalidOperationException)
+            {
+                return true;
+            }
+        }
 
         /// <inheritdoc/>
         public async ValueTask FlushPoolsAsync(IEnumerable<string> assignedPools, CancellationToken cancellationToken)

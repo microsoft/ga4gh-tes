@@ -181,10 +181,11 @@ namespace Tes.ApiClients
 
         private async Task LogResponseContentAsync(HttpResponseMessage response, string errMessage, Exception ex, CancellationToken cancellationToken)
         {
-            var responseContent = "";
+            var responseContent = string.Empty;
+
             if (response is not null)
             {
-                responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                responseContent = await ReadResponseBodyAsync(response, cancellationToken);
             }
 
             Logger.LogError(ex, $"{errMessage}. Response content:{responseContent}");

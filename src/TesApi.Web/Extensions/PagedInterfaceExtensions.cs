@@ -65,7 +65,8 @@ namespace TesApi.Web.Extensions
             ArgumentNullException.ThrowIfNull(func);
             ArgumentNullException.ThrowIfNull(retryPolicy);
 
-            return new PollyAsyncEnumerable<T>(retryPolicy.Execute(_ => func(), ctx ??= new()), asyncRetryPolicy, ctx);
+            ctx ??= new();
+            return new PollyAsyncEnumerable<T>(retryPolicy.Execute(_ => func(), ctx), asyncRetryPolicy, ctx);
         }
 
         #region Implementation classes
@@ -145,7 +146,7 @@ namespace TesApi.Web.Extensions
                 => _source.DisposeAsync();
 
             ValueTask<bool> IAsyncEnumerator<T>.MoveNextAsync()
-                => new(_retryPolicy.ExecuteAsync((ctx, ct) => _source.MoveNextAsync(ct).AsTask(), _ctx, _cancellationToken));
+                => new(_retryPolicy.ExecuteAsync((_, ct) => _source.MoveNextAsync(ct).AsTask(), new(_ctx.OperationKey, _ctx), _cancellationToken));
         }
 
         private sealed class PageEnumerator<T> : EnumeratorEnumerator<T, IPage<T>>

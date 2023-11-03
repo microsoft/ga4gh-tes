@@ -272,22 +272,6 @@ namespace TesApi.Web
         Task EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, BatchPoolAutoScaleFormulaFactory formulaFactory, Func<int, ValueTask<int>> currentTargetFunc, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Gets the result of evaluating an automatic scaling formula on the specified pool.  This
-        /// is primarily for validating an autoscale formula, as it simply returns the result
-        /// without applying the formula to the pool.
-        /// </summary>
-        /// <param name="poolId">The id of the pool.</param>
-        /// <param name="autoscaleFormula">The formula to be evaluated on the pool.</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>The result of evaluating the <paramref name="autoscaleFormula"/> on the specified pool.</returns>
-        /// <remarks>
-        /// <para>The formula is validated and its results calculated, but is not applied to the pool.  To apply the formula to the pool, use <see cref="EnableBatchPoolAutoScaleAsync"/>.</para>
-        /// <para>This method does not change any state of the pool, and does not affect the <see cref="CloudPool.LastModified"/> or <see cref="CloudPool.ETag"/>.</para>
-        /// <para>The evaluate operation runs asynchronously.</para>
-        /// </remarks>
-        Task<AutoScaleRun> EvaluateAutoScaleAsync(string poolId, string autoscaleFormula, CancellationToken cancellationToken);
-
-        /// <summary>
         /// Describes a function to generate autoscale formulas
         /// </summary>
         /// <param name="preemptable">Type of compute nodes: false if dedicated, otherwise true.</param>

@@ -25,6 +25,9 @@ namespace Tes.ApiClients.Tests
             terraApiStubData = new TerraApiStubData();
             tokenCredential = new Mock<TokenCredential>();
             cacheAndRetryHandler = new Mock<CachingRetryHandler>();
+            var cache = new Mock<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
+            cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(new Mock<Microsoft.Extensions.Caching.Memory.ICacheEntry>().Object);
+            cacheAndRetryHandler.SetupGet(c => c.AppCache).Returns(cache.Object);
             terraWsmApiClient = new TerraWsmApiClient(TerraApiStubData.WsmApiHost, tokenCredential.Object,
                 cacheAndRetryHandler.Object, NullLogger<TerraWsmApiClient>.Instance);
         }
@@ -92,6 +95,9 @@ namespace Tes.ApiClients.Tests
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
                 .ReturnsAsync(response);
 
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
+                .Returns((Func<CancellationToken, Task<string>> action, CancellationToken cancellationToken, Polly.Context _2) => action(cancellationToken));
+
             var apiResponse = await terraWsmApiClient.GetSasTokenAsync(terraApiStubData.WorkspaceId,
                 terraApiStubData.ContainerResourceId, null!, CancellationToken.None);
 
@@ -110,6 +116,9 @@ namespace Tes.ApiClients.Tests
 
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
                 .ReturnsAsync(response);
+
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
+                .Returns((Func<CancellationToken, Task<string>> action, CancellationToken cancellationToken, Polly.Context _2) => action(cancellationToken));
 
             var apiResponse = await terraWsmApiClient.GetContainerResourcesAsync(terraApiStubData.WorkspaceId,
                 offset: 0, limit: 10, CancellationToken.None);

@@ -92,7 +92,7 @@ public class CacheAndRetryHandlerTest
         mockFactory.Setup(f => f.CreateResponseAsync()).Returns(CreateResponseAsync(statusCode));
 
         var response =
-            await cachingRetryHandler.ExecuteHttpRequestWithRetryAsync(_ =>
+            await cachingRetryHandler.ExecuteWithRetryAsync(_ =>
                 mockFactory.Object.CreateResponseAsync(),
                 System.Threading.CancellationToken.None);
 
@@ -150,7 +150,7 @@ public class CacheAndRetryHandlerTest
     //     Assert.IsFalse(appCache.TryGetValue(cacheKey, out HttpResponseMessage _));
     // }
 
-    private Task<HttpResponseMessage> CreateResponseAsync(HttpStatusCode statusCode)
+    private static Task<HttpResponseMessage> CreateResponseAsync(HttpStatusCode statusCode)
         => Task.FromResult<HttpResponseMessage>(new(statusCode));
 
     public interface ITestHttpResponseMessageFactory

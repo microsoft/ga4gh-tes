@@ -21,6 +21,9 @@ namespace Tes.ApiClients.Tests
             terraApiStubData = new TerraApiStubData();
             tokenCredential = new Mock<TokenCredential>();
             cacheAndRetryHandler = new Mock<CachingRetryHandler>();
+            var cache = new Mock<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
+            cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(new Mock<Microsoft.Extensions.Caching.Memory.ICacheEntry>().Object);
+            cacheAndRetryHandler.SetupGet(c => c.AppCache).Returns(cache.Object);
             terraLandingZoneApiClient = new TerraLandingZoneApiClient(TerraApiStubData.LandingZoneApiHost, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
         }
 
@@ -28,7 +31,12 @@ namespace Tes.ApiClients.Tests
         public async Task GetResourceQuotaAsync_ValidResourceIdReturnsQuotaInformationAndGetsAuthToken()
         {
             var body = terraApiStubData.GetResourceQuotaApiResponseInJson();
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
+
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(
+                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
+                .ReturnsAsync(new HttpResponseMessage());
+
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(
                     It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
                 .ReturnsAsync(body);
 
@@ -55,7 +63,11 @@ namespace Tes.ApiClients.Tests
         {
             var body = terraApiStubData.GetResourceApiResponseInJson();
 
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(
+                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
+                .ReturnsAsync(new HttpResponseMessage());
+
+            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(
                     It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
                 .ReturnsAsync(body);
 
@@ -67,7 +79,6 @@ namespace Tes.ApiClients.Tests
             tokenCredential.Verify(t => t.GetTokenAsync(It.IsAny<TokenRequestContext>(),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
-
         }
 
         [TestMethod]

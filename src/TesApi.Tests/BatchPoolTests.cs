@@ -185,7 +185,6 @@ namespace TesApi.Tests
             internal Func<string, FullBatchPoolAllocationState> AzureProxyGetComputeNodeAllocationState { get; set; } = null;
             internal Action<string, System.Threading.CancellationToken> AzureProxyDeleteBatchPool { get; set; } = (poolId, cancellationToken) => { };
             internal Func<string, ODATADetailLevel, IAsyncEnumerable<CloudTask>> AzureProxyListTasks { get; set; } = (jobId, detailLevel) => AsyncEnumerable.Empty<CloudTask>();
-            internal Func<string, string, Microsoft.Azure.Batch.AutoScaleRun> EvaluateAutoScale { get; set; } //= new((poolId, autoscaleFormula) => AutoScaleRun);
             internal List<VirtualMachineInformation> VmSizesAndPrices { get; set; } = new();
 
             internal static Func<string, FullBatchPoolAllocationState> AzureProxyGetComputeNodeAllocationStateDefault = id => new(Microsoft.Azure.Batch.Common.AllocationState.Steady, DateTime.MinValue.ToUniversalTime(), true, 0, 0, 0, 0);
@@ -381,7 +380,6 @@ namespace TesApi.Tests
                 azureProxy.Setup(a => a.GetBatchPoolAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>(), It.IsAny<DetailLevel>())).Returns((string id, System.Threading.CancellationToken cancellationToken, DetailLevel detailLevel) => Task.FromResult(azureProxyReturnValues.GetBatchPoolImpl(id)));
                 azureProxy.Setup(a => a.GetFullAllocationStateAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Returns((string poolId, System.Threading.CancellationToken _1) => Task.FromResult(GetPoolStateFromSettingStateOrDefault(poolId)));
                 azureProxy.Setup(a => a.DeleteBatchPoolAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Callback<string, System.Threading.CancellationToken>((poolId, cancellationToken) => azureProxyReturnValues.AzureProxyDeleteBatchPoolImpl(poolId, cancellationToken)).Returns(Task.CompletedTask);
-                azureProxy.Setup(a => a.EvaluateAutoScaleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Returns((string poolId, string autoscaleFormula, CancellationToken _1) => Task.FromResult(azureProxyReturnValues.EvaluateAutoScale(poolId, autoscaleFormula)));
 
                 FullBatchPoolAllocationState GetPoolStateFromSettingStateOrDefault(string poolId)
                 {

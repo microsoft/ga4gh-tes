@@ -47,6 +47,11 @@ namespace TesApi.Web
         ValueTask<bool> CanBeDeletedAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Indicates that the pool will no longer be serviced.
+        /// </summary>
+        void MarkRemovedFromService();
+
+        /// <summary>
         /// Updates this instance based on changes to its environment.
         /// </summary>
         /// <param name="cancellationToken"></param>

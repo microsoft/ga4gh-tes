@@ -549,9 +549,5 @@ namespace TesApi.Web
             logger.LogDebug("Setting Pool {PoolID} to AutoScale({AutoScaleInterval}): '{AutoScaleFormula}'", poolId, interval, formula.Replace(Environment.NewLine, @"\n"));
             await batchClient.PoolOperations.EnableAutoScaleAsync(poolId, formula, interval, cancellationToken: cancellationToken);
         }
-
-        /// <inheritdoc/>
-        public Task<AutoScaleRun> EvaluateAutoScaleAsync(string poolId, string autoscaleFormula, CancellationToken cancellationToken)
-            => batchClient.PoolOperations.EvaluateAutoScaleAsync(poolId, autoscaleFormula, cancellationToken: cancellationToken);
     }
 }

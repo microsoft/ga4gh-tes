@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-//using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,11 +11,8 @@ using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Polly;
-using Polly.Retry;
 using Tes.ApiClients;
-using Tes.ApiClients.Options;
 using TesApi.Web.Extensions;
 using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
@@ -31,16 +27,14 @@ namespace TesApi.Web
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
         private readonly CachingRetryHandler cachingRetryHandler;
-        private readonly AsyncRetryPolicy batchPoolOrJobCreateOrTaskAddHandler;
 
         /// <summary>
         /// Contructor to create a cache of <see cref="IAzureProxy"/>
         /// </summary>
         /// <param name="azureProxy"><see cref="IAzureProxy"/></param>
-        /// <param name="retryPolicyOptions"></param>
         /// <param name="cachingRetryHandler"></param>
         /// <param name="logger"></param>
-        public CachingWithRetriesAzureProxy(IAzureProxy azureProxy, IOptions<RetryPolicyOptions> retryPolicyOptions, CachingRetryHandler cachingRetryHandler, ILogger<CachingWithRetriesAzureProxy> logger)
+        public CachingWithRetriesAzureProxy(IAzureProxy azureProxy, CachingRetryHandler cachingRetryHandler, ILogger<CachingWithRetriesAzureProxy> logger)
         {
             ArgumentNullException.ThrowIfNull(azureProxy);
             ArgumentNullException.ThrowIfNull(cachingRetryHandler);
@@ -48,26 +42,61 @@ namespace TesApi.Web
             this.cachingRetryHandler = cachingRetryHandler;
             this.azureProxy = azureProxy;
             this.logger = logger;
-
-            var creationErrorFoundCodes = new string[]
-            {
-                BatchErrorCodeStrings.TaskExists,
-                BatchErrorCodeStrings.PoolExists,
-                BatchErrorCodeStrings.JobExists
-            };
-
-            batchPoolOrJobCreateOrTaskAddHandler = Policy
-                .Handle<Exception>()
-                .WaitAndRetryAsync(retryPolicyOptions.Value.MaxRetryCount,
-                    (attempt) => TimeSpan.FromSeconds(Math.Pow(retryPolicyOptions.Value.ExponentialBackOffExponent, attempt)),
-                    (exception, timeSpan) =>
-                    {
-                        if (exception is BatchException batchException && creationErrorFoundCodes.Contains(batchException.RequestInformation?.BatchError?.Code, StringComparer.OrdinalIgnoreCase))
-                        {
-                            ExceptionDispatchInfo.Capture(exception).Throw();
-                        }
-                    });
         }
+
+        private static readonly string[] CreationErrorFoundCodes = new[]
+        {
+            BatchErrorCodeStrings.TaskExists,
+            BatchErrorCodeStrings.PoolExists,
+            BatchErrorCodeStrings.JobExists
+        };
+
+        /// <summary>
+        /// Rethrows exception if exception is <see cref="BatchException"/> and the Batch API call returned <see cref="System.Net.HttpStatusCode.NotFound"/> otherwise invokes <paramref name="OnRetry"/>.
+        /// </summary>
+        /// <param name="OnRetry">Polly retry handler.</param>
+        /// <returns>Polly retry handler.</returns>
+        private static Action<Exception, TimeSpan, int> OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenExists(Action<Exception, TimeSpan, int> OnRetry)
+            => new((outcome, timespan, retryCount) =>
+            {
+                if (outcome is BatchException batchException && CreationErrorFoundCodes.Contains(batchException.RequestInformation?.BatchError?.Code, StringComparer.OrdinalIgnoreCase))
+                {
+                    ExceptionDispatchInfo.Capture(outcome).Throw();
+                }
+
+                OnRetry?.Invoke(outcome, timespan, retryCount);
+            });
+
+        /// <summary>
+        /// Rethrows exception if exception is <see cref="BatchException"/> and the Batch API call returned <see cref="System.Net.HttpStatusCode.NotFound"/> otherwise invokes <paramref name="OnRetry"/>.
+        /// </summary>
+        /// <param name="OnRetry">Polly retry handler.</param>
+        /// <returns>Polly retry handler.</returns>
+        private static Action<Exception, TimeSpan, int> OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenNotFound(Action<Exception, TimeSpan, int> OnRetry)
+            => new((outcome, timespan, retryCount) =>
+            {
+                if (outcome is BatchException batchException && batchException.RequestInformation.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    ExceptionDispatchInfo.Capture(outcome).Throw();
+                }
+
+                OnRetry?.Invoke(outcome, timespan, retryCount);
+            });
+
+        private Action<Exception, TimeSpan, int> LogRetryErrorOnRetryHandler([System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+            => new((exception, retryCount, timeSpan) =>
+            {
+                logger?.LogError(exception, @"Retrying {Method}: RetryCount: {RetryCount} RetryCount: {TimeSpan}", caller, retryCount, timeSpan);
+            });
+
+        //private Action<DelegateResult<T>, TimeSpan, int> LogRetryErrorOnRetryHandler<T>([System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+        //    => new((result, retryCount, timeSpan) =>
+        //    {
+        //        if (result.Exception is not null)
+        //        {
+        //            logger?.LogError(result.Exception, @"Retrying {Method}: RetryCount: {RetryCount} RetryCount: {TimeSpan}", caller, retryCount, timeSpan);
+        //        }
+        //    });
 
 
         /// <inheritdoc/>
@@ -75,7 +104,9 @@ namespace TesApi.Web
         {
             try
             {
-                await batchPoolOrJobCreateOrTaskAddHandler.ExecuteAsync(ct => azureProxy.CreateBatchJobAsync(jobId, ct), cancellationToken);
+                var ctx = new Context();
+                ctx.SetOnRetryHandler(OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenExists(LogRetryErrorOnRetryHandler()));
+                await cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.CreateBatchJobAsync(jobId, ct), cancellationToken, ctx);
             }
             catch (BatchException exc) when (BatchErrorCodeStrings.JobExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             { }
@@ -86,19 +117,19 @@ namespace TesApi.Web
         {
             try
             {
-                await batchPoolOrJobCreateOrTaskAddHandler.ExecuteAsync(ct => azureProxy.AddBatchTaskAsync(tesTaskId, cloudTask, jobId, ct), cancellationToken);
+                var ctx = new Context();
+                ctx.SetOnRetryHandler(OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenExists(LogRetryErrorOnRetryHandler()));
+                await cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.AddBatchTaskAsync(tesTaskId, cloudTask, jobId, ct), cancellationToken, ctx);
             }
             catch (BatchException exc) when (BatchErrorCodeStrings.TaskExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             { }
         }
 
-        //private void LogRetryError(Exception exception, int retryCount, TimeSpan timeSpan, string message, [CallerMemberName] string caller = default) { }
-
         /// <inheritdoc/>
         public Task DeleteBatchJobAsync(string jobId, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying DeleteBatchJobAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchJobAsync(jobId, ct), cancellationToken, ctx);
         }
 
@@ -106,7 +137,7 @@ namespace TesApi.Web
         public Task DeleteBatchTaskAsync(string tesTaskId, string jobId, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying DeleteBatchTaskAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchTaskAsync(tesTaskId, jobId, ct), cancellationToken, ctx);
         }
 
@@ -114,7 +145,7 @@ namespace TesApi.Web
         public Task TerminateBatchTaskAsync(string tesTaskId, string jobId, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying TerminateBatchTaskAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.TerminateBatchTaskAsync(tesTaskId, jobId, ct), cancellationToken, ctx);
         }
 
@@ -122,7 +153,7 @@ namespace TesApi.Web
         public Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying DeleteBatchPoolAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchPoolAsync(poolId, ct), cancellationToken, ctx);
         }
 
@@ -130,7 +161,7 @@ namespace TesApi.Web
         public Task<CloudPool> GetBatchPoolAsync(string poolId, CancellationToken cancellationToken, DetailLevel detailLevel)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying GetBatchPoolAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.GetBatchPoolAsync(poolId, ct, detailLevel), cancellationToken, ctx);
         }
 
@@ -138,7 +169,7 @@ namespace TesApi.Web
         public Task<CloudJob> GetBatchJobAsync(string jobId, CancellationToken cancellationToken, DetailLevel detailLevel)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying GetBatchJobAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.GetBatchJobAsync(jobId, ct, detailLevel), cancellationToken, ctx);
         }
 
@@ -147,7 +178,7 @@ namespace TesApi.Web
         {
             cachingRetryHandler.AppCache.Remove($"{nameof(CachingWithRetriesAzureProxy)}:{poolId}");
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying DeleteBatchComputeNodesAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             await cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchComputeNodesAsync(poolId, computeNodes, ct), cancellationToken, ctx);
         }
 
@@ -155,7 +186,7 @@ namespace TesApi.Web
         public Task<string> DownloadBlobAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying DownloadBlobAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DownloadBlobAsync(blobAbsoluteUri, ct), cancellationToken, ctx);
         }
 
@@ -163,7 +194,7 @@ namespace TesApi.Web
         public Task<bool> BlobExistsAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying BlobExistsAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.BlobExistsAsync(blobAbsoluteUri, ct), cancellationToken, ctx);
         }
 
@@ -171,7 +202,7 @@ namespace TesApi.Web
         public IAsyncEnumerable<CloudPool> GetActivePoolsAsync(string hostName)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying GetActivePoolsAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetry(() => azureProxy.GetActivePoolsAsync(hostName), ctx);
         }
 
@@ -180,7 +211,7 @@ namespace TesApi.Web
         public int GetBatchActiveJobCount()
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying GetBatchActiveJobCount ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetry(azureProxy.GetBatchActiveJobCount, ctx);
         }
 
@@ -188,7 +219,7 @@ namespace TesApi.Web
         public IEnumerable<AzureBatchNodeCount> GetBatchActiveNodeCountByVmSize()
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying GetBatchActiveNodeCountByVmSize ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetry(azureProxy.GetBatchActiveNodeCountByVmSize, ctx);
         }
 
@@ -196,7 +227,7 @@ namespace TesApi.Web
         public int GetBatchActivePoolCount()
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying GetBatchActivePoolCount ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetry(azureProxy.GetBatchActivePoolCount, ctx);
         }
 
@@ -204,7 +235,7 @@ namespace TesApi.Web
         public Task<string> GetStorageAccountKeyAsync(StorageAccountInfo storageAccountInfo, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying GetStorageAccountKeyAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAndCachingAsync($"{nameof(CachingWithRetriesAzureProxy)}:{storageAccountInfo.Id}",
                 ct => azureProxy.GetStorageAccountKeyAsync(storageAccountInfo, ct), DateTimeOffset.Now.AddHours(1), cancellationToken, ctx);
         }
@@ -217,7 +248,7 @@ namespace TesApi.Web
             if (storageAccountInfo is null)
             {
                 var ctx = new Context();
-                ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying GetStorageAccountInfoAsync ({RetryCount}).", retryCount));
+                ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
                 storageAccountInfo = await cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.GetStorageAccountInfoAsync(storageAccountName, ct), cancellationToken, ctx);
 
                 if (storageAccountInfo is not null)
@@ -233,7 +264,7 @@ namespace TesApi.Web
         public IAsyncEnumerable<BlobNameAndUri> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying ListBlobsAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.AsyncRetryPolicy.ExecuteAsync(() => azureProxy.ListBlobsAsync(directoryUri, cancellationToken), cachingRetryHandler.RetryPolicy, ctx);
         }
 
@@ -241,7 +272,7 @@ namespace TesApi.Web
         public Task UploadBlobAsync(Uri blobAbsoluteUri, string content, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying UploadBlobAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.UploadBlobAsync(blobAbsoluteUri, content, ct), cancellationToken);
         }
 
@@ -249,7 +280,7 @@ namespace TesApi.Web
         public Task UploadBlobFromFileAsync(Uri blobAbsoluteUri, string filePath, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying UploadBlobFromFileAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.UploadBlobFromFileAsync(blobAbsoluteUri, filePath, ct), cancellationToken, ctx);
         }
 
@@ -257,7 +288,7 @@ namespace TesApi.Web
         public Task<Azure.Storage.Blobs.Models.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying GetBlobPropertiesAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.GetBlobPropertiesAsync(blobAbsoluteUri, ct), cancellationToken, ctx);
         }
 
@@ -275,7 +306,9 @@ namespace TesApi.Web
         {
             try
             {
-                return await batchPoolOrJobCreateOrTaskAddHandler.ExecuteAsync(ct => azureProxy.CreateBatchPoolAsync(poolInfo, isPreemptable, ct), cancellationToken);
+                var ctx = new Context();
+                ctx.SetOnRetryHandler(OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenExists(LogRetryErrorOnRetryHandler()));
+                return await cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.CreateBatchPoolAsync(poolInfo, isPreemptable, ct), cancellationToken, ctx);
             }
             catch (BatchException exc) when (BatchErrorCodeStrings.PoolExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             {
@@ -287,11 +320,11 @@ namespace TesApi.Web
         public Task<FullBatchPoolAllocationState> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying GetFullAllocationStateAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAndCachingAsync(
                 $"{nameof(CachingWithRetriesAzureProxy)}:{poolId}",
                 ct => azureProxy.GetFullAllocationStateAsync(poolId, ct),
-                DateTimeOffset.Now.Add(BatchPoolService.RunInterval).Subtract(TimeSpan.FromSeconds(1)),
+                DateTimeOffset.UtcNow.Add(BatchPoolService.RunInterval.Divide(2)),
                 cancellationToken,
                 ctx);
         }
@@ -299,39 +332,54 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public IAsyncEnumerable<ComputeNode> ListComputeNodesAsync(string poolId, DetailLevel detailLevel)
         {
-            var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying ListComputeNodesAsync ({RetryCount}).", retryCount));
-            return cachingRetryHandler.AsyncRetryPolicy.ExecuteAsync(() => azureProxy.ListComputeNodesAsync(poolId, detailLevel), cachingRetryHandler.RetryPolicy, ctx);
+            try
+            {
+                var ctx = new Context();
+                ctx.SetOnRetryHandler(OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenNotFound(LogRetryErrorOnRetryHandler()));
+                return cachingRetryHandler.AsyncRetryPolicy.ExecuteAsync(() => azureProxy.ListComputeNodesAsync(poolId, detailLevel), cachingRetryHandler.RetryPolicy, ctx);
+            }
+            catch (BatchException exc) when (exc.RequestInformation.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return AsyncEnumerable.Empty<ComputeNode>();
+            }
         }
 
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudTask> ListTasksAsync(string jobId, DetailLevel detailLevel)
         {
-            var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying ListTasksAsync ({RetryCount}).", retryCount));
-            return cachingRetryHandler.AsyncRetryPolicy.ExecuteAsync(() => azureProxy.ListTasksAsync(jobId, detailLevel), cachingRetryHandler.RetryPolicy, ctx);
+            try
+            {
+                var ctx = new Context();
+                ctx.SetOnRetryHandler(OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenNotFound(LogRetryErrorOnRetryHandler()));
+                return cachingRetryHandler.AsyncRetryPolicy.ExecuteAsync(() => azureProxy.ListTasksAsync(jobId, detailLevel), cachingRetryHandler.RetryPolicy, ctx);
+            }
+            catch (BatchException exc) when (exc.RequestInformation.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return AsyncEnumerable.Empty<CloudTask>();
+            }
         }
 
         /// <inheritdoc/>
-        public Task DisableBatchPoolAutoScaleAsync(string poolId, CancellationToken cancellationToken) => azureProxy.DisableBatchPoolAutoScaleAsync(poolId, cancellationToken);
+        public Task DisableBatchPoolAutoScaleAsync(string poolId, CancellationToken cancellationToken)
+        {
+            var ctx = new Context();
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
+            return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DisableBatchPoolAutoScaleAsync(poolId, ct), cancellationToken, ctx);
+        }
 
         /// <inheritdoc/>
         public Task EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, IAzureProxy.BatchPoolAutoScaleFormulaFactory formulaFactory, Func<int, ValueTask<int>> currentTargetFunc, CancellationToken cancellationToken)
-            => azureProxy.EnableBatchPoolAutoScaleAsync(poolId, preemptable, interval, formulaFactory, currentTargetFunc, cancellationToken);
-
-        /// <inheritdoc/>
-        public Task<AutoScaleRun> EvaluateAutoScaleAsync(string poolId, string autoscaleFormula, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying EvaluateAutoScaleAsync ({RetryCount}).", retryCount));
-            return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.EvaluateAutoScaleAsync(poolId, autoscaleFormula, ct), cancellationToken, ctx);
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
+            return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.EnableBatchPoolAutoScaleAsync(poolId, preemptable, interval, formulaFactory, currentTargetFunc, ct), cancellationToken, ctx);
         }
 
         /// <inheritdoc/>
         public IAsyncEnumerable<Azure.Storage.Blobs.Models.BlobItem> ListBlobsWithTagsAsync(Uri containerUri, string prefix, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying ListBlobsWithTagsAsync ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.AsyncRetryPolicy.ExecuteAsync(() => azureProxy.ListBlobsWithTagsAsync(containerUri, prefix, cancellationToken), cachingRetryHandler.RetryPolicy, ctx);
         }
 
@@ -339,7 +387,7 @@ namespace TesApi.Web
         public Task SetBlobTags(Uri blobAbsoluteUri, IDictionary<string, string> tags, CancellationToken cancellationToken)
         {
             var ctx = new Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount) => logger.LogError(outcome, "Retrying SetBlobTags ({RetryCount}).", retryCount));
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
             return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.SetBlobTags(blobAbsoluteUri, tags, ct), cancellationToken, ctx);
         }
     }
