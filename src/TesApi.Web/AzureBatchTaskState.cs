@@ -120,23 +120,7 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="Reason">Failure code. Intended to be machine readable. See <see cref="TesTaskLog.FailureReason"/>.</param>
         /// <param name="SystemLogs">Failure details to be added to <see cref="TesTaskLog.SystemLogs"/>.</param>
-        public record struct FailureInformation(string Reason, IEnumerable<string> SystemLogs)
-        {
-
-            /// <summary>
-            /// Failure details to be added to <see cref="TesTaskLog.SystemLogs"/>.
-            /// </summary>
-            public IEnumerable<string> SystemLogs { get; private set; } = SystemLogs;
-
-            /// <summary>
-            /// Adds additional logs to <see cref="SystemLogs"/>.
-            /// </summary>
-            /// <param name="additionalLogs">Additional logs to add.</param>
-            public void AppendRangeToSystemLogs(IEnumerable<string> additionalLogs)
-            {
-                SystemLogs = SystemLogs.Concat(additionalLogs);
-            }
-        }
+        public record struct FailureInformation(string Reason, IEnumerable<string> SystemLogs);
 
         /// <summary>
         /// SystemLog-appending copy constructor

@@ -93,7 +93,7 @@ public class EventsPublisher : IAsyncDisposable
         await PublishAsync(eventMessage);
     }
 
-    public virtual async Task PublishUploadEndEventAsync(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default, IEnumerable<(long Length, Uri? BlobUrl, string FileName)>? completedFiles = default)
+    public virtual async Task PublishUploadEndEventAsync(NodeTask nodeTask, int numberOfFiles, long totalSizeInBytes, string statusMessage, string? errorMessage = default, IEnumerable<CompletedUploadFile>? completedFiles = default)
     {
         var eventMessage = CreateNewEventMessage(nodeTask.Id, UploadEndEvent, statusMessage,
             nodeTask.WorkflowId);
@@ -105,7 +105,7 @@ public class EventsPublisher : IAsyncDisposable
             { "errorMessage", errorMessage??string.Empty}
         };
 
-        foreach (var (length, blobUrl, fileName, index) in completedFiles?.Select((item, index) => (item.Length, item.BlobUrl, item.FileName, index)) ?? Enumerable.Empty<(long, Uri?, string, int)>())
+        foreach (var (length, blobUrl, fileName, index) in completedFiles?.Select((logEntry, index) => (logEntry.Length, logEntry.BlobUrl, logEntry.FileName, index)) ?? Enumerable.Empty<(long, Uri?, string, int)>())
         {
             eventMessage.EventData.Add($"fileSize-{index}", length.ToString());
             eventMessage.EventData.Add($"fileUri-{index}", blobUrl?.ToString() ?? string.Empty);

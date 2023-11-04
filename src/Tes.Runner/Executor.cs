@@ -96,7 +96,7 @@ namespace Tes.Runner
             var bytesTransferred = ZeroBytesTransferred;
             var numberOfOutputs = 0;
             var errorMessage = string.Empty;
-            IEnumerable<(long Length, Uri? BlobUrl, string FileName)>? completedFiles = default;
+            IEnumerable<CompletedUploadFile>? completedFiles = default;
 
             try
             {
@@ -140,7 +140,7 @@ namespace Tes.Runner
             }
         }
 
-        private async Task<(long BytesTransferred, IEnumerable<(long length, Uri? blobUrl, string fileName)> CompletedFiles)> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions, List<UploadInfo> outputs)
+        private async Task<(long BytesTransferred, IEnumerable<CompletedUploadFile> CompletedFiles)> UploadOutputsAsync(BlobPipelineOptions blobPipelineOptions, List<UploadInfo> outputs)
         {
             var uploader = await transferOperationFactory.CreateBlobUploaderAsync(blobPipelineOptions);
 

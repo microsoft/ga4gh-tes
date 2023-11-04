@@ -21,7 +21,7 @@ namespace Tes.Models
             TesState.RUNNINGEnum,
             TesState.PAUSEDEnum,
             TesState.INITIALIZINGEnum,
-            TesState.CANCELINGEnum
+            TesState.CANCELINGEnum,
         };
 
         /// <summary>

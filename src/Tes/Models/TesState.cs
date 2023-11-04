@@ -99,6 +99,6 @@ namespace Tes.Models
         /// Enum CANCELINGEnum for CANCELING
         /// </summary>
         [EnumMember(Value = "CANCELING")]
-        CANCELINGEnum = 11
+        CANCELINGEnum = 11,
     }
 }

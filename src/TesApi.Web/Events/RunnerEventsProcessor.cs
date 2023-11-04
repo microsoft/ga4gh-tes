@@ -207,7 +207,7 @@ namespace TesApi.Web.Events
             return source.OrderBy(t => OrderBy(messageGetter(t))).ThenBy(t => ThenBy(messageGetter(t)));
 
             static DateTime OrderBy(RunnerEventsMessage message)
-                => message.RunnerEventMessage?.Created ?? DateTime.Parse(message.Tags["created"]).ToUniversalTime();
+                => (message.RunnerEventMessage?.Created ?? DateTime.Parse(message.Tags["created"])).ToUniversalTime();
 
             static int ThenBy(RunnerEventsMessage message)
                 => ParseEventName(message.RunnerEventMessage is null
@@ -246,7 +246,8 @@ namespace TesApi.Web.Events
                         Failure: new("SystemError",
                         Enumerable.Empty<string>()
                             .Append("Download failed.")
-                            .Append(nodeMessage.EventData["errorMessage"]))),
+                            .Append(nodeMessage.EventData["errorMessage"])
+                            .Concat(await AddProcessLogsIfAvailable(nodeMessage, tesTask, cancellationToken)))),
 
                     _ => throw new System.Diagnostics.UnreachableException(),
                 },
@@ -265,7 +266,8 @@ namespace TesApi.Web.Events
                         AzureBatchTaskState.TaskState.InfoUpdate,
                         Failure: new("ExecutorError",
                         Enumerable.Empty<string>()
-                            .Append(nodeMessage.EventData["errorMessage"])),
+                            .Append(nodeMessage.EventData["errorMessage"])
+                            .Concat(await AddProcessLogsIfAvailable(nodeMessage, tesTask, cancellationToken))),
                         ExecutorEndTime: nodeMessage.Created,
                         ExecutorExitCode: int.Parse(nodeMessage.EventData["exitCode"])),
 
@@ -285,7 +287,8 @@ namespace TesApi.Web.Events
                         Failure: new("SystemError",
                         Enumerable.Empty<string>()
                             .Append("Upload failed.")
-                            .Append(nodeMessage.EventData["errorMessage"]))),
+                            .Append(nodeMessage.EventData["errorMessage"])
+                            .Concat(await AddProcessLogsIfAvailable(nodeMessage, tesTask, cancellationToken)))),
 
                     _ => throw new System.Diagnostics.UnreachableException(),
                 },
@@ -312,17 +315,21 @@ namespace TesApi.Web.Events
                 _ => throw new System.Diagnostics.UnreachableException(),
             };
 
-            var processLogs = await GetProcessLogs(nodeMessage, tesTask, cancellationToken).ToListAsync(cancellationToken);
-
-            if (processLogs.Any())
-            {
-                processLogs.Insert(0, "Possibly relevant logs:");
-                state.Failure?.AppendRangeToSystemLogs(processLogs);
-            }
-
             return state;
 
             // Helpers
+            async ValueTask<IEnumerable<string>> AddProcessLogsIfAvailable(Tes.Runner.Events.EventMessage message, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
+            {
+                var processLogs = await GetProcessLogs(message, tesTask, cancellationToken).ToListAsync(cancellationToken);
+
+                if (processLogs.Any())
+                {
+                    processLogs.Insert(0, "Possibly relevant logs:");
+                }
+
+                return processLogs;
+            }
+
             static IEnumerable<AzureBatchTaskState.OutputFileLog> GetFileLogs(IDictionary<string, string> eventData)
             {
                 const string marker = "/wd/";

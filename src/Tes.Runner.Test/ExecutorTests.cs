@@ -135,7 +135,7 @@ namespace Tes.Runner.Test
             var result = await executor.UploadOutputsAsync(blobPipelineOptions);
             Assert.AreEqual(Executor.ZeroBytesTransferred, result);
             eventsPublisherMock.Verify(p => p.PublishUploadStartEventAsync(It.IsAny<NodeTask>()), Times.Once);
-            eventsPublisherMock.Verify(p => p.PublishUploadEndEventAsync(It.IsAny<NodeTask>(), 0, 0, EventsPublisher.SuccessStatus, string.Empty, null), Times.Once);
+            eventsPublisherMock.Verify(p => p.PublishUploadEndEventAsync(It.IsAny<NodeTask>(), 0, 0, EventsPublisher.SuccessStatus, string.Empty, It.IsAny<IEnumerable<CompletedUploadFile>?>()), Times.Once);
         }
 
         [TestMethod]
@@ -144,7 +144,7 @@ namespace Tes.Runner.Test
             await Assert.ThrowsExceptionAsync<ArgumentNullException>(() => executor.UploadOutputsAsync(null!));
 
             eventsPublisherMock.Verify(p => p.PublishUploadStartEventAsync(It.IsAny<NodeTask>()), Times.Once);
-            eventsPublisherMock.Verify(p => p.PublishUploadEndEventAsync(It.IsAny<NodeTask>(), 0, 0, EventsPublisher.FailedStatus, It.Is<string?>((c) => !string.IsNullOrEmpty(c)), null), Times.Once);
+            eventsPublisherMock.Verify(p => p.PublishUploadEndEventAsync(It.IsAny<NodeTask>(), 0, 0, EventsPublisher.FailedStatus, It.Is<string?>((c) => !string.IsNullOrEmpty(c)), It.IsAny<IEnumerable<CompletedUploadFile>?>()), Times.Once);
         }
 
         [TestMethod]
