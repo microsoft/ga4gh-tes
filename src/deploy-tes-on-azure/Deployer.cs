@@ -603,7 +603,8 @@ namespace TesDeployer
 
                             try
                             {
-                                var startPortForward = new Func<CancellationToken, Task>(token => kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true));
+                                var startPortForward = new Func<CancellationToken, Task>(token =>
+                                    kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true));
 
                                 var token = tokenSource.Token;
                                 var portForwardTask = startPortForward(token);
