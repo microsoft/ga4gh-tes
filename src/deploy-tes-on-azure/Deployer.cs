@@ -603,10 +603,30 @@ namespace TesDeployer
 
                             try
                             {
-                                var token = tokenSource.Token;
-                                var portForwardTask = kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true);
+                                var startPortForward = new Func<CancellationToken, Task>(token => kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true));
 
-                                var isTestWorkflowSuccessful = await RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+                                var token = tokenSource.Token;
+                                var portForwardTask = startPortForward(token);
+                                var runTestTask = RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+
+                                for (var task = await Task.WhenAny(portForwardTask, runTestTask);
+                                    runTestTask != task;
+                                    task = await Task.WhenAny(portForwardTask, runTestTask))
+                                {
+                                    try
+                                    {
+                                        await portForwardTask;
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        ConsoleEx.WriteLine($"kubectl stopped unexpectedly ({ex.Message}).", ConsoleColor.Red);
+                                    }
+
+                                    ConsoleEx.WriteLine($"Restarting kubectl...");
+                                    portForwardTask = startPortForward(token);
+                                }
+
+                                var isTestWorkflowSuccessful = await runTestTask;
                                 exitCode = isTestWorkflowSuccessful ? 0 : 1;
 
                                 if (!isTestWorkflowSuccessful)
