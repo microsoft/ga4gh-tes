@@ -123,7 +123,7 @@ namespace Tes.Runner.Test.Storage
         }
 
         [TestMethod]
-        public async Task TransformUrlWithStrategyAsync_RequestsSasTokenUsingWithMultipleStrategyInstances_SasTokenIsCachedAcrossInstances()
+        public async Task TransformUrlWithStrategyAsync_RequestsSasTokenUsingMultipleStrategyInstances_SasTokenIsCachedAcrossInstances()
         {
             var sourceUrl = $"{stubTerraBlobUrl}/blob";
             await transformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
