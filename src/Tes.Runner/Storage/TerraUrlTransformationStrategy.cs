@@ -196,7 +196,7 @@ namespace Tes.Runner.Storage
 
             logger.LogInformation($"Workspace ID to use: {blobUriBuilder.BlobContainerName}");
 
-            var wsmContainerResourceId = await GetWsmContainerResourceIdAsync(workspaceId, blobUriBuilder.BlobContainerName);
+            var wsmContainerResourceId = await GetWsmContainerResourceIdFromCacheOrWsmAsync(workspaceId, blobUriBuilder.BlobContainerName);
 
             return new TerraBlobInfo(workspaceId, wsmContainerResourceId, blobUriBuilder.BlobContainerName, blobUriBuilder.BlobName.TrimStart('/'));
         }
@@ -233,12 +233,20 @@ namespace Tes.Runner.Storage
                 throw;
             }
         }
-        private async Task<Guid> GetWsmContainerResourceIdAsync(Guid workspaceId, string containerName)
+        private async Task<Guid> GetWsmContainerResourceIdFromCacheOrWsmAsync(Guid workspaceId, string containerName)
         {
             logger.LogInformation($"Getting container resource information from WSM. Workspace ID: {workspaceId} Container Name: {containerName}");
 
             try
             {
+                var cacheKey = $"{workspaceId}-{containerName}";
+
+                if (memoryCache.TryGetValue(cacheKey, out Guid wsmContainerResourceId))
+                {
+                    logger.LogInformation($"Found the container resource ID in cache. Resource ID: {wsmContainerResourceId} Container Name: {containerName}");
+                    return wsmContainerResourceId;
+                }
+
                 //the goal is to get all containers, therefore the limit is set to MaxNumberOfContainerResources (10000) which is a reasonable unreachable number of storage containers in a workspace.
 
                 var response =
@@ -250,7 +258,11 @@ namespace Tes.Runner.Storage
 
                 logger.LogInformation($"Found the resource ID for storage container resource. Resource ID: {metadata.ResourceId} Container Name: {containerName}");
 
-                return Guid.Parse(metadata.ResourceId);
+                var resourceId = Guid.Parse(metadata.ResourceId);
+
+                memoryCache.Set(cacheKey, resourceId, TimeSpan.FromSeconds(CacheExpirationInSeconds));
+
+                return resourceId;
             }
             catch (Exception e)
             {

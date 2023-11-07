@@ -119,6 +119,16 @@ namespace Tes.Runner.Test.Storage
         }
 
         [TestMethod]
+        public async Task TransformUrlWithStrategyAsync_RequestsSasTokenMoreThanOnce_WsmResourceIdIsCached()
+        {
+            var sourceUrl = $"{stubTerraBlobUrl}/blob";
+            await transformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
+            await transformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
+            await transformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
+            mockTerraWsmApiClient.Verify(w => w.GetContainerResourcesAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [TestMethod]
         public async Task TransformUrlWithStrategyAsync_RequestsSasTokenMoreThanOnceAfterExpiration_SasTokenIsRenewed()
         {
             var sourceUrl = $"{stubTerraBlobUrl}/blob";
