@@ -163,7 +163,7 @@ namespace TesDeployer
             V1Namespace coaNamespace = null;
             try
             {
-                coaNamespace = await client.CoreV1.ReadNamespaceAsync(configuration.AksCoANamespace);
+                coaNamespace = await client.CoreV1.ReadNamespaceAsync(configuration.AksCoANamespace, cancellationToken: cToken);
             }
             catch { }
 
@@ -181,11 +181,11 @@ namespace TesDeployer
 
             if (coaNamespace == null)
             {
-                await client.CoreV1.CreateNamespaceAsync(coaNamespaceBody);
+                await client.CoreV1.CreateNamespaceAsync(coaNamespaceBody, cancellationToken: cToken);
             }
             else
             {
-                await client.CoreV1.PatchNamespaceAsync(new V1Patch(coaNamespaceBody, V1Patch.PatchType.MergePatch), configuration.AksCoANamespace);
+                await client.CoreV1.PatchNamespaceAsync(new V1Patch(coaNamespaceBody, V1Patch.PatchType.MergePatch), configuration.AksCoANamespace, cancellationToken: cToken);
             }
 
             // Encryption options: https://httpd.apache.org/docs/2.4/misc/password_encryptions.html
@@ -205,7 +205,7 @@ namespace TesDeployer
                         { "auth", data}
                     },
                 Type = "Opaque"
-            }, configuration.AksCoANamespace);
+            }, configuration.AksCoANamespace, cancellationToken: cToken);
 
             var helmRepoList = await ExecHelmProcessAsync($"repo list", cToken, workingDirectory: null, throwOnNonZeroExitCode: false);
 
@@ -239,7 +239,7 @@ namespace TesDeployer
             await WaitForWorkloadAsync(client, "cert-manager", configuration.AksCoANamespace, cts.Token);
 
             // Wait 10 secs before deploying TES for cert manager to finish starting. 
-            await Task.Delay(TimeSpan.FromSeconds(10));
+            await Task.Delay(TimeSpan.FromSeconds(10), cToken);
 
             return client;
         }
@@ -575,30 +575,45 @@ namespace TesDeployer
             }
 
             var process = new Process();
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardError = true;
-            process.StartInfo.FileName = binaryFullPath;
-            process.StartInfo.Arguments = command;
-            process.OutputDataReceived += new DataReceivedEventHandler(OutputHandler);
-            process.ErrorDataReceived += new DataReceivedEventHandler(OutputHandler);
 
-            if (!string.IsNullOrWhiteSpace(workingDirectory))
+            try
             {
-                process.StartInfo.WorkingDirectory = workingDirectory;
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.RedirectStandardError = true;
+                process.StartInfo.FileName = binaryFullPath;
+                process.StartInfo.Arguments = command;
+                process.OutputDataReceived += new DataReceivedEventHandler(OutputHandler);
+                process.ErrorDataReceived += new DataReceivedEventHandler(OutputHandler);
+
+                if (!string.IsNullOrWhiteSpace(workingDirectory))
+                {
+                    process.StartInfo.WorkingDirectory = workingDirectory;
+                }
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                await process.WaitForExitAsync(cToken);
+            }
+            finally
+            {
+                if (cToken.IsCancellationRequested && !process.HasExited)
+                {
+                    process.Kill();
+                }
             }
 
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            await process.WaitForExitAsync(cToken);
             var output = outputStringBuilder.ToString();
 
             if (throwOnNonZeroExitCode && process.ExitCode != 0)
             {
-                foreach (var line in output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries))
+                if (!configuration.DebugLogging) // already written to console
                 {
-                    ConsoleEx.WriteLine($"{tag}: {line}");
+                    foreach (var line in output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        ConsoleEx.WriteLine($"{tag}: {line}");
+                    }
                 }
 
                 Debugger.Break();
