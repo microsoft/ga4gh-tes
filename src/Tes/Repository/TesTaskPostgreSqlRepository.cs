@@ -54,14 +54,14 @@ namespace Tes.Repository
 
         private async Task WarmCacheAsync(CancellationToken cancellationToken)
         {
-            if (_cache is null)
+            if (Cache is null)
             {
-                _logger?.LogWarning("Cache is null for TesTaskPostgreSqlRepository; no caching will be used.");
+                Logger?.LogWarning("Cache is null for TesTaskPostgreSqlRepository; no caching will be used.");
                 return;
             }
 
             var sw = Stopwatch.StartNew();
-            _logger?.LogInformation("Warming cache...");
+            Logger?.LogInformation("Warming cache...");
 
             // Don't allow the state of the system to change until the cache and system are consistent;
             // this is a fast PostgreSQL query even for 1 million items
@@ -70,17 +70,17 @@ namespace Tes.Repository
                 .WaitAndRetryAsync(3,
                     retryAttempt =>
                     {
-                        _logger?.LogWarning("Warming cache retry attempt #{RetryAttempt}", retryAttempt);
+                        Logger?.LogWarning("Warming cache retry attempt #{RetryAttempt}", retryAttempt);
                         return TimeSpan.FromSeconds(10);
                     },
                     (ex, ts) =>
                     {
-                        _logger?.LogCritical(ex, "Couldn't warm cache, is the database online?");
+                        Logger?.LogCritical(ex, "Couldn't warm cache, is the database online?");
                     })
                 .ExecuteAsync(async ct =>
                 {
                     var activeTasksCount = (await InternalGetItemsAsync(task => TesTask.ActiveStates.Contains(task.State), ct, q => q.OrderBy(t => t.Json.CreationTime))).Count();
-                    _logger?.LogInformation("Cache warmed successfully in {TotalSeconds} seconds. Added {TasksAddedCount} items to the cache.", $"{sw.Elapsed.TotalSeconds:n3}", $"{activeTasksCount:n0}");
+                    Logger?.LogInformation("Cache warmed successfully in {TotalSeconds} seconds. Added {TasksAddedCount} items to the cache.", $"{sw.Elapsed.TotalSeconds:n3}", $"{activeTasksCount:n0}");
                 }, cancellationToken);
         }
 
@@ -162,7 +162,7 @@ namespace Tes.Repository
         public async Task DeleteItemAsync(string id, CancellationToken cancellationToken)
         {
             _ = await AddUpdateOrRemoveItemInDbAsync(await GetItemFromCacheOrDatabase(id, true, cancellationToken), WriteAction.Delete, cancellationToken);
-            _ = _cache?.TryRemove(id);
+            _ = Cache?.TryRemove(id);
         }
 
         /// <summary>
@@ -223,12 +223,12 @@ namespace Tes.Repository
         {
             TesTaskDatabaseItem item = default;
 
-            if (!_cache?.TryGetValue(id, out item) ?? true)
+            if (!Cache?.TryGetValue(id, out item) ?? true)
             {
                 using var dbContext = CreateDbContext();
 
                 // Search for Id within the JSON
-                item = await _asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, ct), cancellationToken);
+                item = await asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, ct), cancellationToken);
 
                 if (throwIfNotFound && item is null)
                 {
@@ -272,7 +272,7 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public ValueTask<bool> TryRemoveItemFromCacheAsync(TesTask item, CancellationToken _1)
         {
-            return ValueTask.FromResult(_cache?.TryRemove(item.Id) ?? false);
+            return ValueTask.FromResult(Cache?.TryRemove(item.Id) ?? false);
         }
     }
 }

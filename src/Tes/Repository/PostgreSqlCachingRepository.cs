@@ -17,42 +17,42 @@ namespace Tes.Repository
 {
     public abstract class PostgreSqlCachingRepository<T> : IDisposable where T : class
     {
-        private const int _batchSize = 1000;
+        private const int BatchSize = 1000;
         private static readonly TimeSpan defaultCompletedTaskCacheExpiration = TimeSpan.FromDays(1);
 
-        protected readonly AsyncPolicy _asyncPolicy = Policy
+        protected readonly AsyncPolicy asyncPolicy = Policy
             .Handle<Npgsql.NpgsqlException>(e => e.IsTransient)
             .WaitAndRetryAsync(10, i => TimeSpan.FromSeconds(Math.Pow(2, i)));
 
-        private readonly Channel<(T, WriteAction, TaskCompletionSource<T>)> _itemsToWrite = Channel.CreateUnbounded<(T, WriteAction, TaskCompletionSource<T>)>();
-        private readonly ConcurrentDictionary<T, object> _updatingItems = new(); // Collection of all pending items to be written.
-        private readonly CancellationTokenSource _writerWorkerCancellationTokenSource = new();
-        private readonly Task _writerWorkerTask;
+        private readonly Channel<(T, WriteAction, TaskCompletionSource<T>)> itemsToWrite = Channel.CreateUnbounded<(T, WriteAction, TaskCompletionSource<T>)>();
+        private readonly ConcurrentDictionary<T, object> updatingItems = new(); // Collection of all pending items to be written.
+        private readonly CancellationTokenSource writerWorkerCancellationTokenSource = new();
+        private readonly Task writerWorkerTask;
 
         protected enum WriteAction { Add, Update, Delete }
 
         protected Func<TesDbContext> CreateDbContext { get; init; }
-        protected readonly ICache<T> _cache;
-        protected readonly ILogger _logger;
+        protected readonly ICache<T> Cache;
+        protected readonly ILogger Logger;
 
         private bool _disposedValue;
 
         protected PostgreSqlCachingRepository(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger logger = default, ICache<T> cache = default)
         {
-            _logger = logger;
-            _cache = cache;
+            Logger = logger;
+            Cache = cache;
 
             // The only "normal" exit for _writerWorkerTask is "cancelled". Anything else should force the process to exit because it means that this repository will no longer write to the database!
-            _writerWorkerTask = Task.Run(() => WriterWorkerAsync(_writerWorkerCancellationTokenSource.Token))
+            writerWorkerTask = Task.Run(() => WriterWorkerAsync(writerWorkerCancellationTokenSource.Token))
                 .ContinueWith(async task =>
                 {
                     switch (task.Status)
                     {
                         case TaskStatus.Faulted:
-                            _logger.LogCritical("Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
+                            Logger.LogCritical("Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
                             break;
                         case TaskStatus.RanToCompletion:
-                            _logger.LogCritical("Repository WriterWorkerAsync unexpectedly completed.");
+                            Logger.LogCritical("Repository WriterWorkerAsync unexpectedly completed.");
                             break;
                     }
 
@@ -71,15 +71,15 @@ namespace Tes.Repository
         /// <returns><paramref name="item"/> (for convenience in fluent/LINQ usage patterns).</returns>
         protected T EnsureActiveItemInCache(T item, Func<T, string> getKey, Predicate<T> isActive)
         {
-            if (_cache is not null)
+            if (Cache is not null)
             {
-                if (_cache.TryGetValue(getKey(item), out _))
+                if (Cache.TryGetValue(getKey(item), out _))
                 {
-                    _ = _cache.TryUpdate(getKey(item), item, isActive(item) ? default : defaultCompletedTaskCacheExpiration);
+                    _ = Cache.TryUpdate(getKey(item), item, isActive(item) ? default : defaultCompletedTaskCacheExpiration);
                 }
                 else if (isActive(item))
                 {
-                    _ = _cache.TryAdd(getKey(item), item);
+                    _ = Cache.TryAdd(getKey(item), item);
                 }
             }
 
@@ -108,7 +108,7 @@ namespace Tes.Repository
             //var sqlQuery = query.ToQueryString();
             //System.Diagnostics.Debugger.Break();
 
-            return await _asyncPolicy.ExecuteAsync(query.ToListAsync, cancellationToken);
+            return await asyncPolicy.ExecuteAsync(query.ToListAsync, cancellationToken);
         }
 
         /// <summary>
@@ -124,7 +124,7 @@ namespace Tes.Repository
 
             if (action == WriteAction.Update)
             {
-                if (_updatingItems.TryAdd(item, null))
+                if (updatingItems.TryAdd(item, null))
                 {
                     result = source.Task.ContinueWith(RemoveUpdatingItem).Unwrap();
                 }
@@ -134,7 +134,7 @@ namespace Tes.Repository
                 }
             }
 
-            if (!_itemsToWrite.Writer.TryWrite((item, action, source)))
+            if (!itemsToWrite.Writer.TryWrite((item, action, source)))
             {
                 throw new InvalidOperationException("Failed to TryWrite to _itemsToWrite channel.");
             }
@@ -143,7 +143,7 @@ namespace Tes.Repository
 
             Task<T> RemoveUpdatingItem(Task<T> task)
             {
-                _ = _updatingItems.Remove(item, out _);
+                _ = updatingItems.Remove(item, out _);
                 return task.Status switch
                 {
                     TaskStatus.RanToCompletion => Task.FromResult(task.Result),
@@ -160,12 +160,12 @@ namespace Tes.Repository
         {
             var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
 
-            await foreach (var itemToWrite in _itemsToWrite.Reader.ReadAllAsync(cancellationToken))
+            await foreach (var itemToWrite in itemsToWrite.Reader.ReadAllAsync(cancellationToken))
             {
                 list.Add(itemToWrite);
 
                 // Get remaining items up to _batchSize or until no more items are immediately available.
-                while (list.Count < _batchSize && _itemsToWrite.Reader.TryRead(out var additionalItem))
+                while (list.Count < BatchSize && itemsToWrite.Reader.TryRead(out var additionalItem))
                 {
                     list.Add(additionalItem);
                 }
@@ -192,7 +192,7 @@ namespace Tes.Repository
                 dbContext.RemoveRange(dbItems.Where(e => WriteAction.Delete.Equals(e.Action)).Select(e => e.DbItem));
                 dbContext.UpdateRange(dbItems.Where(e => WriteAction.Update.Equals(e.Action)).Select(e => e.DbItem));
                 dbContext.AddRange(dbItems.Where(e => WriteAction.Add.Equals(e.Action)).Select(e => e.DbItem));
-                await _asyncPolicy.ExecuteAsync(dbContext.SaveChangesAsync, cancellationToken);
+                await asyncPolicy.ExecuteAsync(dbContext.SaveChangesAsync, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -214,8 +214,14 @@ namespace Tes.Repository
             {
                 if (disposing)
                 {
-                    _writerWorkerCancellationTokenSource.Cancel();
-                    _writerWorkerTask.Wait();
+                    writerWorkerCancellationTokenSource.Cancel();
+
+                    try
+                    {
+                        writerWorkerTask.Wait();
+                    }
+                    catch (OperationCanceledException ex) when (writerWorkerCancellationTokenSource.Token == ex.CancellationToken)
+                    { } // Expected return from Wait().
                 }
 
                 _disposedValue = true;
