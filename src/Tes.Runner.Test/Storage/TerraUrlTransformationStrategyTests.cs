@@ -24,6 +24,7 @@ namespace Tes.Runner.Test.Storage
         private const string StubSasToken =
             "sv=2022-08-22&ss=b&srt=sco&sp=rwdlacupx&se=2023-08-23T03:00:00Z&st=2022-08-22T19:31:04Z&spr=https&sig=XXXXXX";
         private TerraUrlTransformationStrategy transformationStrategy = null!;
+        private TerraUrlTransformationStrategy secondTransformationStrategy = null!;
         private Mock<TerraWsmApiClient> mockTerraWsmApiClient = null!;
         private RuntimeOptions runtimeOptions = null!;
         private SasTokenApiParameters capturedSasTokenApiParameters = null!;
@@ -37,6 +38,9 @@ namespace Tes.Runner.Test.Storage
             capturedSasTokenApiParameters = new SasTokenApiParameters("", 0, "", "");
             SetupWsmClientWithAssumingSuccess();
             transformationStrategy = new TerraUrlTransformationStrategy(runtimeOptions.Terra, mockTerraWsmApiClient.Object, SasExpirationInSeconds);
+            secondTransformationStrategy = new TerraUrlTransformationStrategy(runtimeOptions.Terra, mockTerraWsmApiClient.Object, SasExpirationInSeconds);
+            transformationStrategy.ClearCache(); // Clear cache to avoid test interference, since cache is static in the class level scope.
+
         }
 
         private void SetupWsmClientWithAssumingSuccess()
@@ -116,6 +120,16 @@ namespace Tes.Runner.Test.Storage
             await transformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
             mockTerraWsmApiClient.Verify(w => w.GetSasTokenAsync(It.IsAny<Guid>(),
                                It.IsAny<Guid>(), It.IsAny<SasTokenApiParameters>(), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [TestMethod]
+        public async Task TransformUrlWithStrategyAsync_RequestsSasTokenUsingWithMultipleStrategyInstances_SasTokenIsCachedAcrossInstances()
+        {
+            var sourceUrl = $"{stubTerraBlobUrl}/blob";
+            await transformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
+            await secondTransformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
+            mockTerraWsmApiClient.Verify(w => w.GetSasTokenAsync(It.IsAny<Guid>(),
+                It.IsAny<Guid>(), It.IsAny<SasTokenApiParameters>(), It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [TestMethod]

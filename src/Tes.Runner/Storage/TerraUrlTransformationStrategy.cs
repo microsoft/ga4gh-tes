@@ -26,7 +26,7 @@ namespace Tes.Runner.Storage
         private readonly TerraWsmApiClient terraWsmApiClient;
         private readonly TerraRuntimeOptions terraRuntimeOptions;
         private readonly ILogger<TerraUrlTransformationStrategy> logger = PipelineLoggerFactory.Create<TerraUrlTransformationStrategy>();
-        private readonly IMemoryCache memoryCache;
+        private static IMemoryCache memoryCache = new MemoryCache(new MemoryCacheOptions());
         private readonly int cacheExpirationInSeconds;
 
         public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, int cacheExpirationInSeconds = CacheExpirationInSeconds)
@@ -36,7 +36,6 @@ namespace Tes.Runner.Storage
 
             terraWsmApiClient = TerraWsmApiClient.CreateTerraWsmApiClient(terraRuntimeOptions.WsmApiHost, tokenCredential);
             this.terraRuntimeOptions = terraRuntimeOptions;
-            memoryCache = new MemoryCache(new MemoryCacheOptions());
             this.cacheExpirationInSeconds = cacheExpirationInSeconds;
         }
 
@@ -48,7 +47,6 @@ namespace Tes.Runner.Storage
 
             this.terraWsmApiClient = terraWsmApiClient;
             this.terraRuntimeOptions = terraRuntimeOptions;
-            memoryCache = new MemoryCache(new MemoryCacheOptions());
             this.cacheExpirationInSeconds = cacheExpirationInSeconds;
         }
 
@@ -66,7 +64,11 @@ namespace Tes.Runner.Storage
 
             return await GetMappedSasUrlFromWsmAsync(blobInfo, blobSasPermissions);
         }
-
+        public void ClearCache()
+        {
+            memoryCache.Dispose();
+            memoryCache = new MemoryCache(new MemoryCacheOptions());
+        }
         /// <summary>
         /// Returns a Url with a SAS token for the given input
         /// </summary>
