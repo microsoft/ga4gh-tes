@@ -51,52 +51,55 @@ namespace TesApi.Web
             BatchErrorCodeStrings.JobExists
         };
 
+        private static readonly string[] DeletionErrorFoundCodes = new[]
+        {
+            BatchErrorCodeStrings.TaskNotFound,
+            BatchErrorCodeStrings.PoolNotFound,
+            BatchErrorCodeStrings.JobNotFound
+        };
+
         /// <summary>
-        /// Rethrows exception if exception is <see cref="BatchException"/> and the Batch API call returned <see cref="System.Net.HttpStatusCode.NotFound"/> otherwise invokes <paramref name="OnRetry"/>.
+        /// Rethrows exception if exception is <see cref="BatchException"/> and the Batch API call returned <see cref="System.Net.HttpStatusCode.Conflict"/> otherwise invokes <paramref name="OnRetry"/>.
         /// </summary>
         /// <param name="OnRetry">Polly retry handler.</param>
-        /// <returns>Polly retry handler.</returns>
-        private static Action<Exception, TimeSpan, int> OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenExists(Action<Exception, TimeSpan, int> OnRetry)
-            => new((outcome, timespan, retryCount) =>
+        /// <returns><see cref="RetryHandler.OnRetryHandler"/></returns>
+        private static RetryHandler.OnRetryHandler OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenExists(RetryHandler.OnRetryHandler OnRetry)
+            => new((outcome, timespan, retryCount, correlationId) =>
             {
                 if (outcome is BatchException batchException && CreationErrorFoundCodes.Contains(batchException.RequestInformation?.BatchError?.Code, StringComparer.OrdinalIgnoreCase))
                 {
                     ExceptionDispatchInfo.Capture(outcome).Throw();
                 }
 
-                OnRetry?.Invoke(outcome, timespan, retryCount);
+                OnRetry?.Invoke(outcome, timespan, retryCount, correlationId);
             });
 
         /// <summary>
         /// Rethrows exception if exception is <see cref="BatchException"/> and the Batch API call returned <see cref="System.Net.HttpStatusCode.NotFound"/> otherwise invokes <paramref name="OnRetry"/>.
         /// </summary>
         /// <param name="OnRetry">Polly retry handler.</param>
-        /// <returns>Polly retry handler.</returns>
-        private static Action<Exception, TimeSpan, int> OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenNotFound(Action<Exception, TimeSpan, int> OnRetry)
-            => new((outcome, timespan, retryCount) =>
+        /// <returns><see cref="RetryHandler.OnRetryHandler"/></returns>
+        private static RetryHandler.OnRetryHandler OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenNotFound(RetryHandler.OnRetryHandler OnRetry)
+            => new((outcome, timespan, retryCount, correlationId) =>
             {
-                if (outcome is BatchException batchException && batchException.RequestInformation.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+                if (outcome is BatchException batchException && DeletionErrorFoundCodes.Contains(batchException.RequestInformation?.BatchError?.Code, StringComparer.OrdinalIgnoreCase))
                 {
                     ExceptionDispatchInfo.Capture(outcome).Throw();
                 }
 
-                OnRetry?.Invoke(outcome, timespan, retryCount);
+                OnRetry?.Invoke(outcome, timespan, retryCount, correlationId);
             });
 
-        private Action<Exception, TimeSpan, int> LogRetryErrorOnRetryHandler([System.Runtime.CompilerServices.CallerMemberName] string caller = default)
-            => new((exception, retryCount, timeSpan) =>
+        /// <summary>
+        /// A logging Polly retry handler.
+        /// </summary>
+        /// <param name="caller">Calling method name.</param>
+        /// <returns><see cref="RetryHandler.OnRetryHandler"/></returns>
+        private RetryHandler.OnRetryHandler LogRetryErrorOnRetryHandler([System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+            => new((exception, timeSpan, retryCount, correlationId) =>
             {
-                logger?.LogError(exception, @"Retrying {Method}: RetryCount: {RetryCount} RetryCount: {TimeSpan}", caller, retryCount, timeSpan);
+                logger?.LogError(exception, @"Retrying in {Method}: RetryCount: {RetryCount} RetryCount: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
             });
-
-        //private Action<DelegateResult<T>, TimeSpan, int> LogRetryErrorOnRetryHandler<T>([System.Runtime.CompilerServices.CallerMemberName] string caller = default)
-        //    => new((result, retryCount, timeSpan) =>
-        //    {
-        //        if (result.Exception is not null)
-        //        {
-        //            logger?.LogError(result.Exception, @"Retrying {Method}: RetryCount: {RetryCount} RetryCount: {TimeSpan}", caller, retryCount, timeSpan);
-        //        }
-        //    });
 
 
         /// <inheritdoc/>
@@ -126,19 +129,29 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public Task DeleteBatchJobAsync(string jobId, CancellationToken cancellationToken)
+        public async Task DeleteBatchJobAsync(string jobId, CancellationToken cancellationToken)
         {
-            var ctx = new Context();
-            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
-            return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchJobAsync(jobId, ct), cancellationToken, ctx);
+            try
+            {
+                var ctx = new Context();
+                ctx.SetOnRetryHandler(OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenNotFound(LogRetryErrorOnRetryHandler()));
+                await cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchJobAsync(jobId, ct), cancellationToken, ctx);
+            }
+            catch (BatchException exc) when (BatchErrorCodeStrings.JobNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
+            { }
         }
 
         /// <inheritdoc/>
-        public Task DeleteBatchTaskAsync(string tesTaskId, string jobId, CancellationToken cancellationToken)
+        public async Task DeleteBatchTaskAsync(string tesTaskId, string jobId, CancellationToken cancellationToken)
         {
-            var ctx = new Context();
-            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
-            return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchTaskAsync(tesTaskId, jobId, ct), cancellationToken, ctx);
+            try
+            {
+                var ctx = new Context();
+                ctx.SetOnRetryHandler(OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenNotFound(LogRetryErrorOnRetryHandler()));
+                await cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchTaskAsync(tesTaskId, jobId, ct), cancellationToken, ctx);
+            }
+            catch (BatchException exc) when (BatchErrorCodeStrings.TaskNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
+            { }
         }
 
         /// <inheritdoc/>
@@ -150,11 +163,16 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken)
+        public async Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken)
         {
-            var ctx = new Context();
-            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
-            return cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchPoolAsync(poolId, ct), cancellationToken, ctx);
+            try
+            {
+                var ctx = new Context();
+                ctx.SetOnRetryHandler(OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenNotFound(LogRetryErrorOnRetryHandler()));
+                await cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchPoolAsync(poolId, ct), cancellationToken, ctx);
+            }
+            catch (BatchException exc) when (BatchErrorCodeStrings.PoolNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
+            { }
         }
 
         /// <inheritdoc/>

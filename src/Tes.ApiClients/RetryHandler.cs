@@ -30,18 +30,20 @@ public class RetryHandler
     /// <param name="outcome">The handled exception.</param>
     /// <param name="timespan">The current sleep duration.</param>
     /// <param name="retryCount">The current retry count. It starts at 1 between the first handled condition and the first wait, then 2, etc.</param>
+    /// <param name="correlationId">A Guid guaranteed to be unique to each execution. Acts as a correlation id so that events specific to a single execution can be identified in logging and telemetry.</param>
     /// <remarks>This is called right before the wait.</remarks>
-    public delegate void OnRetryHandler(Exception outcome, TimeSpan timespan, int retryCount);
+    public delegate void OnRetryHandler(Exception outcome, TimeSpan timespan, int retryCount, Guid correlationId);
 
     /// <summary>
     /// The action to call on each retry.
     /// </summary>
-    /// <typeparam name="Result">See <see cref="PolicyBuilder{TResult}"/>.</typeparam>
+    /// <typeparam name="TResult">See <see cref="PolicyBuilder{TResult}"/>.</typeparam>
     /// <param name="result">The handled exception or result.</param>
     /// <param name="timespan">The current sleep duration.</param>
     /// <param name="retryCount">The current retry count. It starts at 1 between the first handled condition and the first wait, then 2, etc.</param>
+    /// <param name="correlationId">A Guid guaranteed to be unique to each execution. Acts as a correlation id so that events specific to a single execution can be identified in logging and telemetry.</param>
     /// <remarks>This is called right before the wait.</remarks>
-    public delegate void OnRetryHandler<Result>(DelegateResult<Result> result, TimeSpan timespan, int retryCount);
+    public delegate void OnRetryHandler<TResult>(DelegateResult<TResult> result, TimeSpan timespan, int retryCount, Guid correlationId);
 
     /// <summary>
     /// Synchronous retry policy instance.
@@ -69,14 +71,14 @@ public class RetryHandler
                     attempt)), OnRetry<HttpResponseMessage>);
     }
 
-    private static void OnRetry<T>(DelegateResult<T> result, TimeSpan span, int retryCount, Context ctx)
+    public static void OnRetry<T>(DelegateResult<T> result, TimeSpan span, int retryCount, Context ctx)
     {
-        ctx.GetOnRetryHandler<T>()?.Invoke(result, span, retryCount);
+        ctx.GetOnRetryHandler<T>()?.Invoke(result, span, retryCount, ctx.CorrelationId);
     }
 
-    private static void OnRetry(Exception outcome, TimeSpan timespan, int retryCount, Context ctx)
+    public static void OnRetry(Exception outcome, TimeSpan timespan, int retryCount, Context ctx)
     {
-        ctx.GetOnRetryHandler()?.Invoke(outcome, timespan, retryCount);
+        ctx.GetOnRetryHandler()?.Invoke(outcome, timespan, retryCount, ctx.CorrelationId);
     }
 
     /// <summary>
@@ -176,23 +178,23 @@ public class RetryHandler
 
 public static class RetryHandlerExtensions
 {
-    public static void SetOnRetryHandler<T>(this Context context, Action<DelegateResult<T>, TimeSpan, int> onretry)
-    {
-        context[RetryHandler.OnRetryHandlerKey] = onretry;
-    }
-
-    public static Action<DelegateResult<T>, TimeSpan, int>? GetOnRetryHandler<T>(this Context context)
-    {
-        return context.TryGetValue(RetryHandler.OnRetryHandlerKey, out var handler) ? (Action<DelegateResult<T>, TimeSpan, int>)handler : default;
-    }
-
-    public static void SetOnRetryHandler(this Context context, Action<Exception, TimeSpan, int> onRetry)
+    public static void SetOnRetryHandler<T>(this Context context, RetryHandler.OnRetryHandler<T> onRetry)
     {
         context[RetryHandler.OnRetryHandlerKey] = onRetry;
     }
 
-    public static Action<Exception, TimeSpan, int>? GetOnRetryHandler(this Context context)
+    public static RetryHandler.OnRetryHandler<T>? GetOnRetryHandler<T>(this Context context)
     {
-        return context.TryGetValue(RetryHandler.OnRetryHandlerKey, out var handler) ? (Action<Exception, TimeSpan, int>)handler : default;
+        return context.TryGetValue(RetryHandler.OnRetryHandlerKey, out var handler) ? (RetryHandler.OnRetryHandler<T>)handler : default;
+    }
+
+    public static void SetOnRetryHandler(this Context context, RetryHandler.OnRetryHandler onRetry)
+    {
+        context[RetryHandler.OnRetryHandlerKey] = onRetry;
+    }
+
+    public static RetryHandler.OnRetryHandler? GetOnRetryHandler(this Context context)
+    {
+        return context.TryGetValue(RetryHandler.OnRetryHandlerKey, out var handler) ? (RetryHandler.OnRetryHandler)handler : default;
     }
 }

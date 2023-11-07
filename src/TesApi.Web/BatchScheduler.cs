@@ -174,7 +174,6 @@ namespace TesApi.Web
             static bool tesTaskIsInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
             static bool tesTaskIsQueuedOrInitializing(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum || tesTask.State == TesState.INITIALIZINGEnum;
             static bool tesTaskIsQueued(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum;
-            static bool tesTaskCancellationRequested(TesTask tesTask) => tesTask.State == TesState.CANCELINGEnum;
             static bool tesTaskDeletionReady(TesTask tesTask) => tesTask.IsTaskDeletionRequired;
 
             var setTaskStateLock = new object();
@@ -307,12 +306,12 @@ namespace TesApi.Web
 
             Task<bool> RequeueTaskAfterFailureAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
                 => ++tesTask.ErrorCount > 3
-                    ? AddSystemLogAndSetTaskExecutorErrorAsync(tesTask, batchInfo, "System Error: Retry count exceeded.", cancellationToken)
+                    ? AddSystemLogAndSetTaskSystemErrorAsync(tesTask, batchInfo, "System Error: Retry count exceeded.", cancellationToken)
                     : SetTaskStateAfterFailureAsync(tesTask, TesState.QUEUEDEnum, batchInfo, cancellationToken);
 
-            Task<bool> AddSystemLogAndSetTaskExecutorErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, string additionalSystemLogItem, CancellationToken cancellationToken)
+            Task<bool> AddSystemLogAndSetTaskSystemErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, string additionalSystemLogItem, CancellationToken cancellationToken)
             {
-                return SetTaskExecutorError(tesTask, new(batchInfo, additionalSystemLogItem), cancellationToken);
+                return SetTaskSystemError(tesTask, new(batchInfo, additionalSystemLogItem), cancellationToken);
             }
 
             Task<bool> HandlePreemptedNodeAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
@@ -329,8 +328,8 @@ namespace TesApi.Web
 
             tesTaskStateTransitions = new List<TesTaskStateTransition>()
             {
-                new TesTaskStateTransition(tesTaskDeletionReady, batchTaskState: null, alternateSystemLogItem: null, (tesTask, _, ct) => DeleteCancelledTaskAsync(tesTask, ct)),
-                new TesTaskStateTransition(tesTaskCancellationRequested, batchTaskState: null, alternateSystemLogItem: null, (tesTask, _, ct) => TerminateBatchTaskAsync(tesTask, ct)),
+                new TesTaskStateTransition(tesTaskDeletionReady, AzureBatchTaskState.TaskState.CancellationRequested, alternateSystemLogItem: null, (tesTask, _, ct) => DeleteCancelledTaskAsync(tesTask, ct)),
+                new TesTaskStateTransition(condition: null, AzureBatchTaskState.TaskState.CancellationRequested, alternateSystemLogItem: null, (tesTask, _, ct) => TerminateBatchTaskAsync(tesTask, ct)),
                 //new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.JobNotFound, alternateSystemLogItem: null, (tesTask, _, ct) => AddBatchTaskAsync(tesTask, ct)),
                 //new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.MissingBatchTask, alternateSystemLogItem: null, (tesTask, _, ct) => AddBatchTaskAsync(tesTask, ct)),
                 new TesTaskStateTransition(tesTaskIsQueued, AzureBatchTaskState.TaskState.Initializing, alternateSystemLogItem: null, (tesTask, _) => { tesTask.State = TesState.INITIALIZINGEnum; return true; }),

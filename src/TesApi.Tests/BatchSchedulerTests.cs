@@ -852,7 +852,7 @@ namespace TesApi.Tests
             await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
             await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed)));
             await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
-            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed)));
+            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed)));
         }
 
         [TestMethod]
@@ -886,7 +886,7 @@ namespace TesApi.Tests
             var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELINGEnum };
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            azureProxyReturnValues.BatchTaskState = BatchTaskStates.TaskPreparing;
+            azureProxyReturnValues.BatchTaskState = BatchTaskStates.Terminated;
             Mock<IAzureProxy> azureProxy = default;
             var azureProxySetter = new Action<Mock<IAzureProxy>>(mock =>
             {
@@ -1844,7 +1844,7 @@ namespace TesApi.Tests
             public static AzureBatchTaskState NodePreempted => new(AzureBatchTaskState.TaskState.NodePreempted);
             public static AzureBatchTaskState NodeDiskFull => new(AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, Failure: new("DiskFull", new[] { "Error message." }));
 
-            public static AzureBatchTaskState Terminated => new(AzureBatchTaskState.TaskState.CompletedWithErrors, CloudTaskCreationTime: DateTimeOffset.UtcNow - TimeSpan.FromMinutes(12));
+            public static AzureBatchTaskState Terminated => new(AzureBatchTaskState.TaskState.CancellationRequested, CloudTaskCreationTime: DateTimeOffset.UtcNow - TimeSpan.FromMinutes(12));
             //public static AzureBatchTaskState ActiveJobWithMissingAutoPool => new() { ActiveJobWithMissingAutoPool = true };
             //public static AzureBatchTaskState ImageDownloadFailed => new() { JobState = JobState.Active, NodeErrorCode = "ContainerInvalidImage" };
         }

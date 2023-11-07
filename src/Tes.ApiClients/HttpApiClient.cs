@@ -69,22 +69,33 @@ namespace Tes.ApiClients
         /// </summary>
         protected HttpApiClient() { }
 
-        private Action<Exception, TimeSpan, int> LogRetryErrorOnRetryHandler([System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
-            => new((exception, retryCount, timeSpan) =>
+        /// <summary>
+        /// A logging Polly retry handler.
+        /// </summary>
+        /// <param name="caller">Calling method name.</param>
+        /// <returns><see cref="RetryHandler.OnRetryHandler"/></returns>
+        private RetryHandler.OnRetryHandler LogRetryErrorOnRetryHandler([System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
+            => new((exception, timeSpan, retryCount, correlationId) =>
             {
-                Logger?.LogError(exception, @"Retrying {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan}", caller, retryCount, timeSpan);
+                Logger?.LogError(exception, @"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
             });
 
-        private Action<Polly.DelegateResult<T>, TimeSpan, int> LogRetryErrorOnRetryHandler<T>([System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
-            => new((result, retryCount, timeSpan) =>
+        /// <summary>
+        /// A logging Polly retry handler.
+        /// </summary>
+        /// <typeparam name="TResult">See <see cref="PolicyBuilder{TResult}"/></typeparam>
+        /// <param name="caller">Calling method name.</param>
+        /// <returns><see cref="RetryHandler.OnRetryHandler{TResult}"/></returns>
+        private RetryHandler.OnRetryHandler<TResult> LogRetryErrorOnRetryHandler<TResult>([System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
+            => new((result, timeSpan, retryCount, correlationId) =>
             {
                 if (result.Exception is null)
                 {
-                    Logger?.LogError(@"Retrying {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan}", caller, retryCount, timeSpan);
+                    Logger?.LogError(@"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
                 }
                 else
                 {
-                    Logger?.LogError(result.Exception, @"Retrying {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan}", caller, retryCount, timeSpan);
+                    Logger?.LogError(result.Exception, @"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
                 }
             });
 
@@ -230,8 +241,8 @@ namespace Tes.ApiClients
                 return string.Empty;
             }
 
-            var queryString = "";
-            var prefix = "";
+            var queryString = string.Empty;
+            var prefix = string.Empty;
 
             foreach (var argument in arguments)
             {
@@ -272,7 +283,7 @@ namespace Tes.ApiClients
                     nameof(tokenScope));
             }
 
-            Logger.LogTrace("Getting token for scope:{}", tokenScope);
+            Logger.LogTrace("Getting token for scope:{TokenScope}", tokenScope);
 
             try
             {
@@ -282,8 +293,8 @@ namespace Tes.ApiClients
             }
             catch (Exception e)
             {
-                Logger.LogError(@"Failed to set authentication header with the access token for scope:{tokenScope}",
-                    e);
+                Logger.LogError(e, @"Failed to set authentication header with the access token for scope:{TokenScope}",
+                    tokenScope);
                 throw;
             }
         }
@@ -297,7 +308,7 @@ namespace Tes.ApiClients
                 if (DateTimeOffset.UtcNow < accessToken.ExpiresOn)
                 {
                     Logger.LogTrace(
-                        $"Using existing token. Token has not expired. Token expiration date: {accessToken.ExpiresOn}");
+                        @"Using existing token. Token has not expired. Token expiration date: {TokenExpiresOn}", accessToken.ExpiresOn);
                     return accessToken.Token;
                 }
 
@@ -305,7 +316,7 @@ namespace Tes.ApiClients
                     new TokenRequestContext(new[] { tokenScope }),
                     cancellationToken);
 
-                Logger.LogTrace($"Returning a new token with an expiration date of: {newAccessToken.ExpiresOn}");
+                Logger.LogTrace(@"Returning a new token with an expiration date of: {TokenExpiresOn}", newAccessToken.ExpiresOn);
                 accessToken = newAccessToken;
                 return accessToken.Token;
             }
