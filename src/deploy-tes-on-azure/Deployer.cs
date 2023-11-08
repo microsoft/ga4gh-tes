@@ -77,9 +77,11 @@ namespace TesDeployer
             .Handle<Exception>()
             .WaitAndRetryAsync(3, retryAttempt => System.TimeSpan.FromSeconds(1));
 
+        private static readonly System.TimeSpan longRetryWaitTime = System.TimeSpan.FromSeconds(15);
+
         private static readonly AsyncRetryPolicy longRetryPolicy = Policy
             .Handle<Exception>()
-            .WaitAndRetryAsync(60, retryAttempt => System.TimeSpan.FromSeconds(15),
+            .WaitAndRetryAsync(60, retryAttempt => longRetryWaitTime,
             (exception, timespan) => ConsoleEx.WriteLine($"Retrying task creation in {timespan} due to {exception.GetType().FullName}: {exception.Message}"));
 
         public const string ConfigurationContainerName = "configuration";
@@ -627,6 +629,7 @@ namespace TesDeployer
                                     kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true));
 
                                 var portForwardTask = startPortForward(tokenSource.Token);
+                                await Task.Delay(longRetryWaitTime * 2, tokenSource.Token); // Give enough time for kubectl to standup the port forwarding.
                                 var runTestTask = RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
 
                                 for (var task = await Task.WhenAny(portForwardTask, runTestTask);
