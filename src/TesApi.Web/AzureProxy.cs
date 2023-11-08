@@ -351,7 +351,7 @@ namespace TesApi.Web
             {
                 FilterClause = "state eq 'active'",
                 SelectClause = BatchPool.CloudPoolSelectClause + ",identity",
-                ExpandClause = "identity,metadata"
+                ExpandClause = "metadata"
             };
 
             return batchClient.PoolOperations.ListPools(activePoolsFilter).ToAsyncEnumerable()

@@ -210,8 +210,11 @@ namespace TesApi.Web
                 var pool = await _azureProxy.GetBatchPoolAsync(Id, cancellationToken, new ODATADetailLevel
                 {
                     SelectClause = autoScaleEnabled ?? false
-                        ? "id,allocationStateTransitionTime,autoScaleFormula,autoScaleRun,resizeErrors"
-                        : "id,allocationStateTransitionTime,resizeErrors"
+                        ? "id,allocationStateTransitionTime,autoScaleRun,resizeErrors"
+                        : "id,allocationStateTransitionTime,resizeErrors",
+                    ExpandClause = autoScaleEnabled ?? false
+                        ? "autoScaleRun,resizeErrors"
+                        : "resizeErrors",
                 });
 
                 if ((autoScaleEnabled ?? false) && pool.AutoScaleRun?.Error is not null)
@@ -803,7 +806,7 @@ namespace TesApi.Web
             }
 
             // Pool is "broken" if its associated job is missing/not active. Reject this pool via the side effect of the exception that is thrown.
-            var job = (await _azureProxy.GetBatchJobAsync(pool.Id, cancellationToken, new ODATADetailLevel { SelectClause = "poolInfo,state", ExpandClause = "poolInfo" }));
+            var job = (await _azureProxy.GetBatchJobAsync(pool.Id, cancellationToken, new ODATADetailLevel { SelectClause = "poolInfo,state" }));
             if (job.State != JobState.Active || !pool.Id.Equals(job.PoolInformation?.PoolId, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException($"Active Job not found for Pool {pool.Id}");
