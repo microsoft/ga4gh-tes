@@ -161,7 +161,7 @@ namespace TesDeployer
                 });
 
                 await ValidateSubscriptionAndResourceGroupAsync(configuration);
-                kubernetesManager = new(configuration, azureCredentials, cts);
+                kubernetesManager = new(configuration, azureCredentials, cts.Token);
                 IResourceGroup resourceGroup = null;
                 ManagedCluster aksCluster = null;
                 BatchAccount batchAccount = null;
@@ -176,7 +176,7 @@ namespace TesDeployer
 
                 try
                 {
-                    var targetVersion = Utility.DelimitedTextToDictionary(Utility.GetFileContent("scripts", "env-00-coa-version.txt")).GetValueOrDefault("CromwellOnAzureVersion");
+                    var targetVersion = Utility.DelimitedTextToDictionary(Utility.GetFileContent("scripts", "env-00-tes-version.txt")).GetValueOrDefault("CromwellOnAzureVersion");
 
                     if (configuration.Update)
                     {
@@ -551,7 +551,7 @@ namespace TesDeployer
                             },
                             async kubernetesClient =>
                             {
-                                await kubernetesManager.DeployCoADependenciesAsync(cts.Token);
+                                await kubernetesManager.DeployCoADependenciesAsync();
 
                                 // Deploy an ubuntu pod to run PSQL commands, then delete it
                                 const string deploymentNamespace = "default";
@@ -567,7 +567,7 @@ namespace TesDeployer
                                         $"Enabling Ingress {kubernetesManager.TesHostname}",
                                         async () =>
                                         {
-                                            _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient, cts.Token);
+                                            _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
                                         });
                                 }
                             });
@@ -626,8 +626,7 @@ namespace TesDeployer
                                 var startPortForward = new Func<CancellationToken, Task>(token =>
                                     kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true));
 
-                                var token = tokenSource.Token;
-                                var portForwardTask = startPortForward(token);
+                                var portForwardTask = startPortForward(tokenSource.Token);
                                 var runTestTask = RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
 
                                 for (var task = await Task.WhenAny(portForwardTask, runTestTask);
@@ -644,7 +643,7 @@ namespace TesDeployer
                                     }
 
                                     ConsoleEx.WriteLine($"Restarting kubectl...");
-                                    portForwardTask = startPortForward(token);
+                                    portForwardTask = startPortForward(tokenSource.Token);
                                 }
 
                                 var isTestWorkflowSuccessful = await runTestTask;
@@ -762,7 +761,7 @@ namespace TesDeployer
             {
                 var kubernetesClient = await kubernetesManager.GetKubernetesClientAsync(resourceGroup);
                 await (asyncTask?.Invoke(kubernetesClient) ?? Task.CompletedTask);
-                await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient, cts.Token);
+                await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
             }
         }
 
@@ -1502,7 +1501,7 @@ namespace TesDeployer
                 $"Writing {AllowedVmSizesFileName} file to '{TesInternalContainerName}' storage container...",
                 async () =>
                 {
-                    await UploadTextToStorageAccountAsync(storageAccount, TesInternalContainerName, $"{ConfigurationContainerName}/{AllowedVmSizesFileName}", Utility.GetFileContent("scripts", AllowedVmSizesFileName));
+                    await UploadTextToStorageAccountAsync(storageAccount, TesInternalContainerName, $"{ConfigurationContainerName}/{AllowedVmSizesFileName}", Utility.GetFileContent("scripts", AllowedVmSizesFileName), cts.Token);
                 });
 
         private Task AssignVmAsContributorToBatchAccountAsync(IIdentity managedIdentity, BatchAccount batchAccount)
@@ -2487,16 +2486,13 @@ namespace TesDeployer
         private static void WriteExecutionTime(ConsoleEx.Line line, DateTime startTime)
             => line.Write($" Completed in {DateTime.UtcNow.Subtract(startTime).TotalSeconds:n0}s", ConsoleColor.Green);
 
-        public static async Task<string> DownloadTextFromStorageAccountAsync(IStorageAccount storageAccount, string containerName, string blobName, CancellationTokenSource cts)
+        public static async Task<string> DownloadTextFromStorageAccountAsync(IStorageAccount storageAccount, string containerName, string blobName, CancellationToken cancellationToken)
         {
             var blobClient = await GetBlobClientAsync(storageAccount);
             var container = blobClient.GetBlobContainerClient(containerName);
 
-            return (await container.GetBlobClient(blobName).DownloadContentAsync(cts.Token)).Value.Content.ToString();
+            return (await container.GetBlobClient(blobName).DownloadContentAsync(cancellationToken)).Value.Content.ToString();
         }
-
-        private async Task UploadTextToStorageAccountAsync(IStorageAccount storageAccount, string containerName, string blobName, string content)
-            => await UploadTextToStorageAccountAsync(storageAccount, containerName, blobName, content, cts.Token);
 
         public static async Task UploadTextToStorageAccountAsync(IStorageAccount storageAccount, string containerName, string blobName, string content, CancellationToken token)
         {
