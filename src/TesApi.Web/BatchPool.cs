@@ -23,7 +23,7 @@ namespace TesApi.Web
         /// <summary>
         /// Minimum property set required for <see cref="CloudPool"/> provided to constructors of this class
         /// </summary>
-        public const string CloudPoolSelectClause = "id,creationTime,metadata";
+        public const string CloudPoolSelectClause = "creationTime,id,metadata";
 
         /// <summary>
         /// Autoscale evalutation interval
@@ -60,11 +60,11 @@ namespace TesApi.Web
         private Queue<TaskFailureInformation> StartTaskFailures { get; } = new();
         private Queue<ResizeError> ResizeErrors { get; } = new();
 
-        private IAsyncEnumerable<CloudTask> GetTasksAsync(string select, string filter, string expand)
-            => _removedFromService ? AsyncEnumerable.Empty<CloudTask>() : _azureProxy.ListTasksAsync(Id, new ODATADetailLevel { SelectClause = select, FilterClause = filter, ExpandClause = expand });
+        private IAsyncEnumerable<CloudTask> GetTasksAsync(string select, string filter)
+            => _removedFromService ? AsyncEnumerable.Empty<CloudTask>() : _azureProxy.ListTasksAsync(Id, new ODATADetailLevel { SelectClause = select, FilterClause = filter });
 
         internal IAsyncEnumerable<CloudTask> GetTasksAsync(bool includeCompleted)
-            => GetTasksAsync("id,stateTransitionTime", includeCompleted ? default : "state ne 'completed'", null);
+            => GetTasksAsync("id,stateTransitionTime", includeCompleted ? default : "state ne 'completed'");
 
         private async ValueTask RemoveNodesAsync(IList<ComputeNode> nodesToRemove, CancellationToken cancellationToken)
         {
@@ -207,15 +207,7 @@ namespace TesApi.Web
 
             if (allocationState == AllocationState.Steady)
             {
-                var pool = await _azureProxy.GetBatchPoolAsync(Id, cancellationToken, new ODATADetailLevel
-                {
-                    SelectClause = autoScaleEnabled ?? false
-                        ? "id,allocationStateTransitionTime,autoScaleRun,resizeErrors"
-                        : "id,allocationStateTransitionTime,resizeErrors",
-                    ExpandClause = autoScaleEnabled ?? false
-                        ? "autoScaleRun,resizeErrors"
-                        : "resizeErrors",
-                });
+                var pool = await _azureProxy.GetBatchPoolAsync(Id, cancellationToken, new ODATADetailLevel { SelectClause = "allocationStateTransitionTime,id,resizeErrors" + (autoScaleEnabled ?? false ? ",autoScaleRun" : string.Empty) });
 
                 if ((autoScaleEnabled ?? false) && pool.AutoScaleRun?.Error is not null)
                 {
@@ -319,7 +311,7 @@ namespace TesApi.Web
         private async ValueTask ServicePoolManagePoolScalingAsync(CancellationToken cancellationToken)
         {
             var nodeList = await GetNodesToRemove(false).ToDictionaryAsync(node => node.Id, cancellationToken: cancellationToken);
-            await foreach (var task in _azureProxy.ListTasksAsync(Id, new ODATADetailLevel { SelectClause = "id,executionInfo,nodeInfo", ExpandClause = "executionInfo,nodeInfo" }).WithCancellation(cancellationToken))
+            await foreach (var task in _azureProxy.ListTasksAsync(Id, new ODATADetailLevel { SelectClause = "id,executionInfo,nodeInfo" }).WithCancellation(cancellationToken))
             {
                 var nodeId = task.ComputeNodeInformation?.ComputeNodeId;
                 if (nodeId is not null && nodeList.ContainsKey(nodeId))
@@ -690,7 +682,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudTaskBatchTaskState> GetTaskResizeFailuresAsync(CancellationToken cancellationToken)
         {
-            return GetTasksAsync("id", "state eq 'active'", null).Zip(
+            return GetTasksAsync("id", "state eq 'active'").Zip(
                 GetFailures(cancellationToken),
                 (cloud, state) => new CloudTaskBatchTaskState(cloud.Id, state));
 
@@ -735,7 +727,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudTask> GetCompletedTasksAsync(CancellationToken _1)
-            => GetTasksAsync("id,executionInfo", $"state eq 'completed' and stateTransitionTime lt DateTime'{DateTime.UtcNow - TimeSpan.FromMinutes(2):O}'", "executionInfo");
+            => GetTasksAsync("executionInfo,id", $"state eq 'completed' and stateTransitionTime lt DateTime'{DateTime.UtcNow - TimeSpan.FromMinutes(2):O}'");
 
         /// <inheritdoc/>
         public async ValueTask<DateTime> GetAllocationStateTransitionTimeAsync(CancellationToken cancellationToken = default)
@@ -806,7 +798,7 @@ namespace TesApi.Web
             }
 
             // Pool is "broken" if its associated job is missing/not active. Reject this pool via the side effect of the exception that is thrown.
-            var job = (await _azureProxy.GetBatchJobAsync(pool.Id, cancellationToken, new ODATADetailLevel { SelectClause = "poolInfo,state" }));
+            var job = await _azureProxy.GetBatchJobAsync(pool.Id, cancellationToken, new ODATADetailLevel { SelectClause = "poolInfo,state" });
             if (job.State != JobState.Active || !pool.Id.Equals(job.PoolInformation?.PoolId, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException($"Active Job not found for Pool {pool.Id}");

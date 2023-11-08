@@ -350,8 +350,7 @@ namespace TesApi.Web
             var activePoolsFilter = new ODATADetailLevel
             {
                 FilterClause = "state eq 'active'",
-                SelectClause = BatchPool.CloudPoolSelectClause + ",identity",
-                ExpandClause = "metadata"
+                SelectClause = BatchPool.CloudPoolSelectClause + ",identity"
             };
 
             return batchClient.PoolOperations.ListPools(activePoolsFilter).ToAsyncEnumerable()
@@ -529,7 +528,7 @@ namespace TesApi.Web
             var poolId = await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable, cancellationToken);
             logger.LogInformation("Successfully created batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolInfo.Name, poolInfo.VmSize, isPreemptable);
 
-            return await batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: new ODATADetailLevel { SelectClause = BatchPool.CloudPoolSelectClause, ExpandClause = "metadata" }, cancellationToken: cancellationToken);
+            return await batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: new ODATADetailLevel { SelectClause = BatchPool.CloudPoolSelectClause }, cancellationToken: cancellationToken);
         }
 
         // https://learn.microsoft.com/azure/azure-resource-manager/management/move-resource-group-and-subscription#changed-resource-id
