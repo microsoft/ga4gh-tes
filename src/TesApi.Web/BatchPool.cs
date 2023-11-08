@@ -60,11 +60,11 @@ namespace TesApi.Web
         private Queue<TaskFailureInformation> StartTaskFailures { get; } = new();
         private Queue<ResizeError> ResizeErrors { get; } = new();
 
-        private IAsyncEnumerable<CloudTask> GetTasksAsync(string select, string filter)
-            => _removedFromService ? AsyncEnumerable.Empty<CloudTask>() : _azureProxy.ListTasksAsync(Id, new ODATADetailLevel { SelectClause = select, FilterClause = filter });
+        private IAsyncEnumerable<CloudTask> GetTasksAsync(string select, string filter, string expand)
+            => _removedFromService ? AsyncEnumerable.Empty<CloudTask>() : _azureProxy.ListTasksAsync(Id, new ODATADetailLevel { SelectClause = select, FilterClause = filter, ExpandClause = expand });
 
         internal IAsyncEnumerable<CloudTask> GetTasksAsync(bool includeCompleted)
-            => GetTasksAsync("id,stateTransitionTime", includeCompleted ? default : "state ne 'completed'");
+            => GetTasksAsync("id,stateTransitionTime", includeCompleted ? default : "state ne 'completed'", null);
 
         private async ValueTask RemoveNodesAsync(IList<ComputeNode> nodesToRemove, CancellationToken cancellationToken)
         {
@@ -315,6 +315,27 @@ namespace TesApi.Web
 
         private async ValueTask ServicePoolManagePoolScalingAsync(CancellationToken cancellationToken)
         {
+            var nodeList = await GetNodesToRemove(false).ToDictionaryAsync(node => node.Id, cancellationToken: cancellationToken);
+            await foreach (var task in _azureProxy.ListTasksAsync(Id, new ODATADetailLevel { SelectClause = "id,executionInfo,nodeInfo", ExpandClause = "executionInfo,nodeInfo" }).WithCancellation(cancellationToken))
+            {
+                var nodeId = task.ComputeNodeInformation?.ComputeNodeId;
+                if (nodeId is not null && nodeList.ContainsKey(nodeId))
+                {
+                    await _azureProxy.UploadBlobAsync(
+                        new Uri(await _storageAccessProvider.GetInternalTesBlobUrlAsync(
+                        $"nodeError/{nodeId}/{task.Id}-{new Guid():N}",
+                        Azure.Storage.Sas.BlobSasPermissions.Create,
+                        cancellationToken)),
+                        System.Text.Json.JsonSerializer.Serialize(task.ExecutionInformation,
+                        new System.Text.Json.JsonSerializerOptions()
+                        {
+                            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
+                            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
+                        }),
+                        cancellationToken);
+                }
+            }
+
             // This method implememts a state machine to disable/enable autoscaling as needed to clear certain conditions that can be observed
             // Inputs are _resetAutoScalingRequired, compute nodes in ejectable states, and the current _scalingMode, along with the pool's
             // allocation state and autoscale enablement.
@@ -345,31 +366,6 @@ namespace TesApi.Web
                         {
                             var nodesToRemove = Enumerable.Empty<ComputeNode>();
 
-                            async Task SendNodeErrorData(string nodeId, IReadOnlyList<TaskInformation> content)
-                            {
-                                var url = new Uri(await _storageAccessProvider.GetInternalTesBlobUrlAsync(
-                                    $"nodeError/{nodeId}-{new Guid():N}",
-                                    Azure.Storage.Sas.BlobSasPermissions.Create,
-                                    cancellationToken));
-
-                                if (content is null || content!.Any())
-                                {
-                                    await _azureProxy.UploadBlobAsync(url, "No recent tasks found on node.", cancellationToken);
-                                }
-                                else
-                                {
-                                    await _azureProxy.UploadBlobAsync(
-                                        url,
-                                        System.Text.Json.JsonSerializer.Serialize(content,
-                                        new System.Text.Json.JsonSerializerOptions()
-                                        {
-                                            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
-                                            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
-                                        }),
-                                        cancellationToken);
-                                }
-                            }
-
                             // It's documented that a max of 100 nodes can be removed at a time. Excess eligible nodes will be removed in a future call to this method.
                             await foreach (var node in GetNodesToRemove(true).Take(MaxComputeNodesToRemoveAtOnce).WithCancellation(cancellationToken))
                             {
@@ -377,7 +373,7 @@ namespace TesApi.Web
                                 {
                                     case ComputeNodeState.Unusable:
                                         _logger.LogDebug("Found unusable node {NodeId}", node.Id);
-                                        await SendNodeErrorData(node.Id, node.RecentTasks);
+                                        await SendNodeTaskInformation(node.Id, node.RecentTasks);
                                         //node.RecentTasks[0].ExecutionInformation.FailureInformation.Code == TaskFailureInformationCodes.DiskFull
                                         // TODO: notify running tasks that task will switch nodes?
                                         break;
@@ -389,7 +385,7 @@ namespace TesApi.Web
 
                                     case ComputeNodeState.Preempted:
                                         _logger.LogDebug("Found preempted node {NodeId}", node.Id);
-                                        await SendNodeErrorData(node.Id, node.RecentTasks);
+                                        await SendNodeTaskInformation(node.Id, node.RecentTasks);
                                         //node.RecentTasks[0].TaskId
                                         //node.RecentTasks[0].ExecutionInformation.FailureInformation.Category == ErrorCategory.ServerError
                                         // TODO: notify running tasks that task will switch nodes? Or, in the future, terminate the task?
@@ -454,6 +450,31 @@ namespace TesApi.Web
 
             IAsyncEnumerable<ComputeNode> GetNodesToRemove(bool withState)
                 => _azureProxy.ListComputeNodesAsync(Id, new ODATADetailLevel(filterClause: @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'", selectClause: withState ? @"id,recentTasks,state,startTaskInfo" : @"id"));
+
+            async Task SendNodeTaskInformation(string nodeId, IReadOnlyList<TaskInformation> content)
+            {
+                var url = new Uri(await _storageAccessProvider.GetInternalTesBlobUrlAsync(
+                    $"nodeError/{nodeId}-{new Guid():N}",
+                    Azure.Storage.Sas.BlobSasPermissions.Create,
+                    cancellationToken));
+
+                if (content is null || content!.Any())
+                {
+                    await _azureProxy.UploadBlobAsync(url, "No recent tasks found on node.", cancellationToken);
+                }
+                else
+                {
+                    await _azureProxy.UploadBlobAsync(
+                        url,
+                        System.Text.Json.JsonSerializer.Serialize(content,
+                        new System.Text.Json.JsonSerializerOptions()
+                        {
+                            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
+                            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
+                        }),
+                        cancellationToken);
+                }
+            }
         }
 
         private bool DetermineIsAvailable(DateTime? creation)
@@ -666,7 +687,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudTaskBatchTaskState> GetTaskResizeFailuresAsync(CancellationToken cancellationToken)
         {
-            return GetTasksAsync("id", "state eq 'active'").Zip(
+            return GetTasksAsync("id", "state eq 'active'", null).Zip(
                 GetFailures(cancellationToken),
                 (cloud, state) => new CloudTaskBatchTaskState(cloud.Id, state));
 
@@ -711,7 +732,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudTask> GetCompletedTasksAsync(CancellationToken _1)
-            => GetTasksAsync("id,executionInfo", $"state eq 'completed' and stateTransitionTime lt DateTime'{DateTime.UtcNow - TimeSpan.FromMinutes(2):O}'");
+            => GetTasksAsync("id,executionInfo", $"state eq 'completed' and stateTransitionTime lt DateTime'{DateTime.UtcNow - TimeSpan.FromMinutes(2):O}'", "executionInfo");
 
         /// <inheritdoc/>
         public async ValueTask<DateTime> GetAllocationStateTransitionTimeAsync(CancellationToken cancellationToken = default)
@@ -781,10 +802,10 @@ namespace TesApi.Web
                 throw new ArgumentException("CloudPool is either not configured correctly or was not retrieved with all required metadata.", nameof(pool));
             }
 
-            // Pool is "broken" if job is missing/not active. Reject this pool via the side effect of the exception that is thrown.
-            if (1 != (await _azureProxy.GetBatchJobAsync(pool.Id, cancellationToken, new ODATADetailLevel { SelectClause = "id,state"/*, FilterClause = "state eq 'active'"*/ }).ToAsyncEnumerable().Where(j => j.State == JobState.Active).ToListAsync(cancellationToken)).Count)
+            // Pool is "broken" if its associated job is missing/not active. Reject this pool via the side effect of the exception that is thrown.
+            var job = (await _azureProxy.GetBatchJobAsync(pool.Id, cancellationToken, new ODATADetailLevel { SelectClause = "poolInfo,state", ExpandClause = "poolInfo" }));
+            if (job.State != JobState.Active || !pool.Id.Equals(job.PoolInformation?.PoolId, StringComparison.OrdinalIgnoreCase))
             {
-                // TODO: investigate why FilterClause throws "Type Microsoft.Azure.Batch.Protocol.BatchRequests.JobGetBatchRequest does not support a filter clause. (Parameter 'detailLevel')"
                 throw new InvalidOperationException($"Active Job not found for Pool {pool.Id}");
             }
 

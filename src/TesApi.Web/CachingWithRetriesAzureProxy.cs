@@ -330,7 +330,7 @@ namespace TesApi.Web
             }
             catch (BatchException exc) when (BatchErrorCodeStrings.PoolExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             {
-                return await GetBatchPoolAsync(poolInfo.Name, cancellationToken, new ODATADetailLevel { SelectClause = BatchPool.CloudPoolSelectClause });
+                return await GetBatchPoolAsync(poolInfo.Name, cancellationToken, new ODATADetailLevel { SelectClause = BatchPool.CloudPoolSelectClause, ExpandClause = "metadata" });
             }
         }
 

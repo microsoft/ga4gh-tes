@@ -74,13 +74,6 @@ namespace TesApi.Web
         Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Retrieves pools associated with this TES from the batch account.
-        /// </summary>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        IAsyncEnumerable<CloudPool> GetCloudPools(CancellationToken cancellationToken);
-
-        /// <summary>
         /// Removes pool from list of managed pools.
         /// </summary>
         /// <param name="pool">Pool to remove.</param>

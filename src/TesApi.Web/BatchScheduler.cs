@@ -402,8 +402,12 @@ namespace TesApi.Web
             return command;
         }
 
-        /// <inheritdoc/>
-        public IAsyncEnumerable<CloudPool> GetCloudPools(CancellationToken cancellationToken)
+        /// <summary>
+        /// Retrieves pools associated with this TES from the batch account.
+        /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        private IAsyncEnumerable<CloudPool> GetCloudPools(CancellationToken cancellationToken)
             => azureProxy.GetActivePoolsAsync(batchPrefix);
 
         /// <inheritdoc/>
