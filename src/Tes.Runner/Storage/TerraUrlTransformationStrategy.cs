@@ -26,7 +26,7 @@ namespace Tes.Runner.Storage
         private readonly TerraWsmApiClient terraWsmApiClient;
         private readonly TerraRuntimeOptions terraRuntimeOptions;
         private readonly ILogger<TerraUrlTransformationStrategy> logger = PipelineLoggerFactory.Create<TerraUrlTransformationStrategy>();
-        private readonly IMemoryCache memoryCache;
+        private static IMemoryCache memoryCache = new MemoryCache(new MemoryCacheOptions());
         private readonly int cacheExpirationInSeconds;
 
         public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, int cacheExpirationInSeconds = CacheExpirationInSeconds)
@@ -36,7 +36,6 @@ namespace Tes.Runner.Storage
 
             terraWsmApiClient = TerraWsmApiClient.CreateTerraWsmApiClient(terraRuntimeOptions.WsmApiHost, tokenCredential);
             this.terraRuntimeOptions = terraRuntimeOptions;
-            memoryCache = new MemoryCache(new MemoryCacheOptions());
             this.cacheExpirationInSeconds = cacheExpirationInSeconds;
         }
 
@@ -48,7 +47,6 @@ namespace Tes.Runner.Storage
 
             this.terraWsmApiClient = terraWsmApiClient;
             this.terraRuntimeOptions = terraRuntimeOptions;
-            memoryCache = new MemoryCache(new MemoryCacheOptions());
             this.cacheExpirationInSeconds = cacheExpirationInSeconds;
         }
 
@@ -66,7 +64,11 @@ namespace Tes.Runner.Storage
 
             return await GetMappedSasUrlFromWsmAsync(blobInfo, blobSasPermissions);
         }
-
+        public void ClearCache()
+        {
+            memoryCache.Dispose();
+            memoryCache = new MemoryCache(new MemoryCacheOptions());
+        }
         /// <summary>
         /// Returns a Url with a SAS token for the given input
         /// </summary>
@@ -196,7 +198,7 @@ namespace Tes.Runner.Storage
 
             logger.LogInformation($"Workspace ID to use: {blobUriBuilder.BlobContainerName}");
 
-            var wsmContainerResourceId = await GetWsmContainerResourceIdAsync(workspaceId, blobUriBuilder.BlobContainerName);
+            var wsmContainerResourceId = await GetWsmContainerResourceIdFromCacheOrWsmAsync(workspaceId, blobUriBuilder.BlobContainerName);
 
             return new TerraBlobInfo(workspaceId, wsmContainerResourceId, blobUriBuilder.BlobContainerName, blobUriBuilder.BlobName.TrimStart('/'));
         }
@@ -233,12 +235,20 @@ namespace Tes.Runner.Storage
                 throw;
             }
         }
-        private async Task<Guid> GetWsmContainerResourceIdAsync(Guid workspaceId, string containerName)
+        private async Task<Guid> GetWsmContainerResourceIdFromCacheOrWsmAsync(Guid workspaceId, string containerName)
         {
             logger.LogInformation($"Getting container resource information from WSM. Workspace ID: {workspaceId} Container Name: {containerName}");
 
             try
             {
+                var cacheKey = $"{workspaceId}-{containerName}";
+
+                if (memoryCache.TryGetValue(cacheKey, out Guid wsmContainerResourceId))
+                {
+                    logger.LogInformation($"Found the container resource ID in cache. Resource ID: {wsmContainerResourceId} Container Name: {containerName}");
+                    return wsmContainerResourceId;
+                }
+
                 //the goal is to get all containers, therefore the limit is set to MaxNumberOfContainerResources (10000) which is a reasonable unreachable number of storage containers in a workspace.
 
                 var response =
@@ -250,7 +260,11 @@ namespace Tes.Runner.Storage
 
                 logger.LogInformation($"Found the resource ID for storage container resource. Resource ID: {metadata.ResourceId} Container Name: {containerName}");
 
-                return Guid.Parse(metadata.ResourceId);
+                var resourceId = Guid.Parse(metadata.ResourceId);
+
+                memoryCache.Set(cacheKey, resourceId, TimeSpan.FromSeconds(CacheExpirationInSeconds));
+
+                return resourceId;
             }
             catch (Exception e)
             {

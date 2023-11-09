@@ -49,7 +49,7 @@ namespace TesDeployer
 
         private Configuration configuration { get; set; }
         private AzureCredentials azureCredentials { get; set; }
-        private CancellationTokenSource cts { get; set; }
+        private CancellationToken cancellationToken { get; set; }
         private string workingDirectoryTemp { get; set; }
         private string kubeConfigPath { get; set; }
         private string valuesTemplatePath { get; set; }
@@ -59,13 +59,13 @@ namespace TesDeployer
         public string TesHostname { get; set; }
         public string AzureDnsLabelName { get; set; }
 
-        public KubernetesManager(Configuration config, AzureCredentials credentials, CancellationTokenSource cts)
+        public KubernetesManager(Configuration config, AzureCredentials credentials, CancellationToken cancellationToken)
         {
-            this.cts = cts;
+            this.cancellationToken = cancellationToken;
             configuration = config;
             azureCredentials = credentials;
 
-            CreateAndInitializeWorkingDirectoriesAsync().Wait();
+            CreateAndInitializeWorkingDirectoriesAsync().Wait(cancellationToken);
         }
 
         public void SetTesIngressNetworkingConfiguration(string prefix)
@@ -131,17 +131,17 @@ namespace TesDeployer
                 status: {}
                 """));
 
-        public async Task DeployCoADependenciesAsync(CancellationToken cToken)
+        public async Task DeployCoADependenciesAsync()
         {
-            var helmRepoList = await ExecHelmProcessAsync($"repo list", cToken, workingDirectory: null, throwOnNonZeroExitCode: false);
+            var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
 
             if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("aad-pod-identity", StringComparison.OrdinalIgnoreCase))
             {
-                await ExecHelmProcessAsync($"repo add aad-pod-identity {AadPluginRepo}", cToken);
+                await ExecHelmProcessAsync($"repo add aad-pod-identity {AadPluginRepo}");
             }
 
-            await ExecHelmProcessAsync($"repo update", cToken);
-            await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig \"{kubeConfigPath}\"", cToken);
+            await ExecHelmProcessAsync($"repo update");
+            await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig \"{kubeConfigPath}\"");
         }
 
         /// <summary>
@@ -151,9 +151,9 @@ namespace TesDeployer
         /// <param name="tesUsername"></param>
         /// <param name="tesPassword"></param>
         /// <param name="client"></param>
-        /// <param name="cToken"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task<IKubernetes> EnableIngress(string tesUsername, string tesPassword, IKubernetes client, CancellationToken cToken)
+        public async Task<IKubernetes> EnableIngress(string tesUsername, string tesPassword, IKubernetes client)
         {
             var certManagerRegistry = "quay.io";
             var certImageController = $"{certManagerRegistry}/jetstack/cert-manager-controller";
@@ -163,7 +163,7 @@ namespace TesDeployer
             V1Namespace coaNamespace = null;
             try
             {
-                coaNamespace = await client.CoreV1.ReadNamespaceAsync(configuration.AksCoANamespace, cancellationToken: cToken);
+                coaNamespace = await client.CoreV1.ReadNamespaceAsync(configuration.AksCoANamespace, cancellationToken: cancellationToken);
             }
             catch { }
 
@@ -181,11 +181,11 @@ namespace TesDeployer
 
             if (coaNamespace == null)
             {
-                await client.CoreV1.CreateNamespaceAsync(coaNamespaceBody, cancellationToken: cToken);
+                await client.CoreV1.CreateNamespaceAsync(coaNamespaceBody, cancellationToken: cancellationToken);
             }
             else
             {
-                await client.CoreV1.PatchNamespaceAsync(new V1Patch(coaNamespaceBody, V1Patch.PatchType.MergePatch), configuration.AksCoANamespace, cancellationToken: cToken);
+                await client.CoreV1.PatchNamespaceAsync(new V1Patch(coaNamespaceBody, V1Patch.PatchType.MergePatch), configuration.AksCoANamespace, cancellationToken: cancellationToken);
             }
 
             // Encryption options: https://httpd.apache.org/docs/2.4/misc/password_encryptions.html
@@ -205,25 +205,25 @@ namespace TesDeployer
                         { "auth", data}
                     },
                 Type = "Opaque"
-            }, configuration.AksCoANamespace, cancellationToken: cToken);
+            }, configuration.AksCoANamespace, cancellationToken: cancellationToken);
 
-            var helmRepoList = await ExecHelmProcessAsync($"repo list", cToken, workingDirectory: null, throwOnNonZeroExitCode: false);
+            var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
 
             if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("ingress-nginx", StringComparison.OrdinalIgnoreCase))
             {
-                await ExecHelmProcessAsync($"repo add ingress-nginx {NginxIngressRepo}", cToken);
+                await ExecHelmProcessAsync($"repo add ingress-nginx {NginxIngressRepo}");
             }
 
             if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("jetstack", StringComparison.OrdinalIgnoreCase))
             {
-                await ExecHelmProcessAsync($"repo add jetstack {CertManagerRepo}", cToken);
+                await ExecHelmProcessAsync($"repo add jetstack {CertManagerRepo}");
             }
 
-            await ExecHelmProcessAsync($"repo update", cToken);
+            await ExecHelmProcessAsync($"repo update");
 
             var dnsAnnotation = $"--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-dns-label-name\"={AzureDnsLabelName}";
             var healthProbeAnnotation = "--set controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/azure-load-balancer-health-probe-request-path\"=/healthz";
-            await ExecHelmProcessAsync($"install ingress-nginx ingress-nginx/ingress-nginx --namespace {configuration.AksCoANamespace} --kubeconfig \"{kubeConfigPath}\" --version {NginxIngressVersion} {healthProbeAnnotation} {dnsAnnotation}", cToken);
+            await ExecHelmProcessAsync($"install ingress-nginx ingress-nginx/ingress-nginx --namespace {configuration.AksCoANamespace} --kubeconfig \"{kubeConfigPath}\" --version {NginxIngressVersion} {healthProbeAnnotation} {dnsAnnotation}");
             await ExecHelmProcessAsync("install cert-manager jetstack/cert-manager " +
                     $"--namespace {configuration.AksCoANamespace} --kubeconfig \"{kubeConfigPath}\" " +
                     $"--version {CertManagerVersion} --set installCRDs=true " +
@@ -233,24 +233,24 @@ namespace TesDeployer
                     $"--set webhook.image.repository={certImageWebhook} " +
                     $"--set webhook.image.tag={CertManagerVersion} " +
                     $"--set cainjector.image.repository={certImageCainjector} " +
-                    $"--set cainjector.image.tag={CertManagerVersion}", cToken);
+                    $"--set cainjector.image.tag={CertManagerVersion}");
 
-            await WaitForWorkloadAsync(client, "ingress-nginx-controller", configuration.AksCoANamespace, cts.Token);
-            await WaitForWorkloadAsync(client, "cert-manager", configuration.AksCoANamespace, cts.Token);
+            await WaitForWorkloadAsync(client, "ingress-nginx-controller", configuration.AksCoANamespace, cancellationToken);
+            await WaitForWorkloadAsync(client, "cert-manager", configuration.AksCoANamespace, cancellationToken);
 
             // Wait 10 secs before deploying TES for cert manager to finish starting. 
-            await Task.Delay(TimeSpan.FromSeconds(10), cToken);
+            await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
 
             return client;
         }
 
-        public async Task DeployHelmChartToClusterAsync(IKubernetes kubernetesClient, CancellationToken cToken)
+        public async Task DeployHelmChartToClusterAsync(IKubernetes kubernetesClient)
         {
             // https://helm.sh/docs/helm/helm_upgrade/
             // The chart argument can be either: a chart reference('example/mariadb'), a path to a chart directory, a packaged chart, or a fully qualified URL
-            await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig \"{kubeConfigPath}\" --namespace {configuration.AksCoANamespace} --create-namespace", cToken,
+            await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig \"{kubeConfigPath}\" --namespace {configuration.AksCoANamespace} --create-namespace",
                 workingDirectory: workingDirectoryTemp);
-            await WaitForWorkloadAsync(kubernetesClient, "tes", configuration.AksCoANamespace, cts.Token);
+            await WaitForWorkloadAsync(kubernetesClient, "tes", configuration.AksCoANamespace, cancellationToken);
         }
 
         public static async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath)
@@ -305,21 +305,21 @@ namespace TesDeployer
 
             var valuesString = KubernetesYaml.Serialize(values);
             await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString);
-            await Deployer.UploadTextToStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cts.Token);
+            await Deployer.UploadTextToStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cancellationToken);
         }
 
         public async Task UpgradeValuesYamlAsync(IStorageAccount storageAccount, Dictionary<string, string> settings)
         {
-            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", cts));
+            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", cancellationToken));
             UpdateValuesFromSettings(values, settings);
             var valuesString = KubernetesYaml.Serialize(values);
             await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString);
-            await Deployer.UploadTextToStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cts.Token);
+            await Deployer.UploadTextToStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cancellationToken);
         }
 
         public async Task<Dictionary<string, string>> GetAKSSettingsAsync(IStorageAccount storageAccount)
         {
-            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", cts));
+            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", cancellationToken));
             return ValuesToSettings(values);
         }
 
@@ -356,7 +356,7 @@ namespace TesDeployer
                 }
             });
 
-            if (!await WaitForWorkloadAsync(client, podName, podNamespace, cts.Token))
+            if (!await WaitForWorkloadAsync(client, podName, podNamespace, cancellationToken))
             {
                 throw new Exception($"Timed out waiting for {podName} to start.");
             }
@@ -366,13 +366,13 @@ namespace TesDeployer
 
             // Pod Exec can fail even after the pod is marked ready.
             // Retry on WebSocketExceptions for up to 40 secs.
-            var result = await KubeExecRetryPolicy.ExecuteAndCaptureAsync(async () =>
+            var result = await KubeExecRetryPolicy.ExecuteAndCaptureAsync(async _ =>
             {
                 foreach (var command in commands)
                 {
                     await client.NamespacedPodExecAsync(workloadPod.Metadata.Name, podNamespace, podName, command, true, printHandler, CancellationToken.None);
                 }
-            });
+            }, cancellationToken);
 
             if (result.Outcome != OutcomeType.Successful && result.FinalException is not null)
             {
@@ -545,22 +545,22 @@ namespace TesDeployer
             return tempCname.TrimEnd('-').ToLowerInvariant();
         }
 
-        public Task<string> ExecKubectlProcessAsync(string command, CancellationToken cToken, string workingDirectory = null, bool throwOnNonZeroExitCode = true, bool appendKubeconfig = false)
+        public Task<string> ExecKubectlProcessAsync(string command, CancellationToken cancellationToken, string workingDirectory = null, bool throwOnNonZeroExitCode = true, bool appendKubeconfig = false)
         {
             if (appendKubeconfig)
             {
                 command = $"{command} --kubeconfig \"{kubeConfigPath}\"";
             }
 
-            return ExecProcessAsync(configuration.KubectlBinaryPath, "KUBE", command, cToken, workingDirectory, throwOnNonZeroExitCode);
+            return ExecProcessAsync(configuration.KubectlBinaryPath, "KUBE", command, cancellationToken, workingDirectory, throwOnNonZeroExitCode);
         }
 
-        private Task<string> ExecHelmProcessAsync(string command, CancellationToken cToken, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
+        private Task<string> ExecHelmProcessAsync(string command, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
         {
-            return ExecProcessAsync(configuration.HelmBinaryPath, "HELM", command, cToken, workingDirectory, throwOnNonZeroExitCode);
+            return ExecProcessAsync(configuration.HelmBinaryPath, "HELM", command, cancellationToken, workingDirectory, throwOnNonZeroExitCode);
         }
 
-        private async Task<string> ExecProcessAsync(string binaryFullPath, string tag, string command, CancellationToken cToken, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
+        private async Task<string> ExecProcessAsync(string binaryFullPath, string tag, string command, CancellationToken cancellationToken, string workingDirectory = null, bool throwOnNonZeroExitCode = true)
         {
             var outputStringBuilder = new StringBuilder();
 
@@ -594,11 +594,11 @@ namespace TesDeployer
                 process.Start();
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
-                await process.WaitForExitAsync(cToken);
+                await process.WaitForExitAsync(cancellationToken);
             }
             finally
             {
-                if (cToken.IsCancellationRequested && !process.HasExited)
+                if (cancellationToken.IsCancellationRequested && !process.HasExited)
                 {
                     process.Kill();
                 }

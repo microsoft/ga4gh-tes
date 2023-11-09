@@ -77,9 +77,12 @@ namespace TesDeployer
             .Handle<Exception>()
             .WaitAndRetryAsync(3, retryAttempt => System.TimeSpan.FromSeconds(1));
 
+        private static readonly System.TimeSpan longRetryWaitTime = System.TimeSpan.FromSeconds(15);
+
         private static readonly AsyncRetryPolicy longRetryPolicy = Policy
             .Handle<Exception>()
-            .WaitAndRetryAsync(60, retryAttempt => System.TimeSpan.FromSeconds(15), (exception, timespan) => ConsoleEx.WriteLine($"{exception.GetType().FullName}:{exception.Message}"));
+            .WaitAndRetryAsync(60, retryAttempt => longRetryWaitTime,
+                (exception, timespan) => ConsoleEx.WriteLine($"Retrying task creation in {timespan} due to {exception.GetType().FullName}: {exception.Message}"));
 
         public const string ConfigurationContainerName = "configuration";
         public const string TesInternalContainerName = "tes-internal";
@@ -160,7 +163,7 @@ namespace TesDeployer
                 });
 
                 await ValidateSubscriptionAndResourceGroupAsync(configuration);
-                kubernetesManager = new(configuration, azureCredentials, cts);
+                kubernetesManager = new(configuration, azureCredentials, cts.Token);
                 IResourceGroup resourceGroup = null;
                 ManagedCluster aksCluster = null;
                 BatchAccount batchAccount = null;
@@ -175,12 +178,12 @@ namespace TesDeployer
 
                 try
                 {
+                    var targetVersion = Utility.DelimitedTextToDictionary(Utility.GetFileContent("scripts", "env-00-tes-version.txt")).GetValueOrDefault("CromwellOnAzureVersion");
+
                     if (configuration.Update)
                     {
                         resourceGroup = await azureSubscriptionClient.ResourceGroups.GetByNameAsync(configuration.ResourceGroupName);
                         configuration.RegionName = resourceGroup.RegionName;
-
-                        var targetVersion = Utility.DelimitedTextToDictionary(Utility.GetFileContent("scripts", "env-00-tes-version.txt")).GetValueOrDefault("TesOnAzureVersion");
 
                         ConsoleEx.WriteLine($"Upgrading TES on Azure instance in resource group '{resourceGroup.Name}' to version {targetVersion}...");
 
@@ -335,23 +338,24 @@ namespace TesDeployer
                             }
                         }
 
-                        if (installedVersion is null || installedVersion < new Version(4, 7))
+                        if (installedVersion is null || installedVersion < new Version(4, 8))
                         {
                             settings["ExecutionsContainerName"] = TesInternalContainerName;
 
-                            // Storage account now requires Storage Blob Data Owner
-                            await AssignVmAsDataOwnerToStorageAccountAsync(managedIdentity, storageAccount);
-                            waitForRoleAssignmentPropagation = true;
+                            var hasAssignedNetworkContributor = await TryAssignMIAsNetworkContributorToResourceAsync(managedIdentity, resourceGroup);
+                            var hasAssignedDataOwner = await TryAssignVmAsDataOwnerToStorageAccountAsync(managedIdentity, storageAccount);
+
+                            waitForRoleAssignmentPropagation |= hasAssignedNetworkContributor || hasAssignedDataOwner;
                         }
 
-                        //if (installedVersion is null || installedVersion < new Version(4, 8))
+                        //if (installedVersion is null || installedVersion < new Version(4, 9))
                         //{
                         //}
 
                         if (waitForRoleAssignmentPropagation)
                         {
-                            ConsoleEx.WriteLine("Waiting 5 minutes for role assignment propagation...");
-                            await Task.Delay(System.TimeSpan.FromMinutes(5));
+                            await Execute("Waiting 5 minutes for role assignment propagation...",
+                                () => Task.Delay(System.TimeSpan.FromMinutes(5)));
                         }
 
                         await kubernetesManager.UpgradeValuesYamlAsync(storageAccount, settings);
@@ -377,7 +381,7 @@ namespace TesDeployer
                         postgreSqlFlexServer = await ValidateAndGetExistingPostgresqlServerAsync();
                         var keyVault = await ValidateAndGetExistingKeyVaultAsync();
 
-                        ConsoleEx.WriteLine($"Deploying TES on Azure version {Utility.DelimitedTextToDictionary(Utility.GetFileContent("scripts", "env-00-tes-version.txt")).GetValueOrDefault("TesOnAzureVersion")}...");
+                        ConsoleEx.WriteLine($"Deploying TES on Azure version {targetVersion}...");
 
                         // Configuration preferences not currently settable by user.
                         if (string.IsNullOrWhiteSpace(configuration.PostgreSqlServerName) && configuration.ProvisionPostgreSqlOnAzure.GetValueOrDefault())
@@ -489,7 +493,7 @@ namespace TesDeployer
                         {
                             storageAccount ??= await CreateStorageAccountAsync();
                             await CreateDefaultStorageContainersAsync(storageAccount);
-                            await WritePersonalizedFilesToStorageAccountAsync(storageAccount, managedIdentity.Name);
+                            await WritePersonalizedFilesToStorageAccountAsync(storageAccount);
                             await AssignVmAsContributorToStorageAccountAsync(managedIdentity, storageAccount);
                             await AssignVmAsDataOwnerToStorageAccountAsync(managedIdentity, storageAccount);
                             await AssignManagedIdOperatorToResourceAsync(managedIdentity, resourceGroup);
@@ -555,7 +559,7 @@ namespace TesDeployer
                             },
                             async kubernetesClient =>
                             {
-                                await kubernetesManager.DeployCoADependenciesAsync(cts.Token);
+                                await kubernetesManager.DeployCoADependenciesAsync();
 
                                 // Deploy an ubuntu pod to run PSQL commands, then delete it
                                 const string deploymentNamespace = "default";
@@ -571,7 +575,7 @@ namespace TesDeployer
                                         $"Enabling Ingress {kubernetesManager.TesHostname}",
                                         async () =>
                                         {
-                                            _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient, cts.Token);
+                                            _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
                                         });
                                 }
                             });
@@ -623,14 +627,15 @@ namespace TesDeployer
                         else
                         {
                             var tokenSource = new CancellationTokenSource();
+                            var deleteResourceGroupTask = Task.CompletedTask;
 
                             try
                             {
                                 var startPortForward = new Func<CancellationToken, Task>(token =>
                                     kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true));
 
-                                var token = tokenSource.Token;
-                                var portForwardTask = startPortForward(token);
+                                var portForwardTask = startPortForward(tokenSource.Token);
+                                await Task.Delay(longRetryWaitTime * 2, tokenSource.Token); // Give enough time for kubectl to standup the port forwarding.
                                 var runTestTask = RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
 
                                 for (var task = await Task.WhenAny(portForwardTask, runTestTask);
@@ -647,7 +652,7 @@ namespace TesDeployer
                                     }
 
                                     ConsoleEx.WriteLine($"Restarting kubectl...");
-                                    portForwardTask = startPortForward(token);
+                                    portForwardTask = startPortForward(tokenSource.Token);
                                 }
 
                                 var isTestWorkflowSuccessful = await runTestTask;
@@ -655,7 +660,7 @@ namespace TesDeployer
 
                                 if (!isTestWorkflowSuccessful)
                                 {
-                                    await DeleteResourceGroupIfUserConsentsAsync();
+                                    deleteResourceGroupTask = DeleteResourceGroupIfUserConsentsAsync();
                                 }
                             }
                             catch (Exception e)
@@ -667,6 +672,7 @@ namespace TesDeployer
                             finally
                             {
                                 tokenSource.Cancel();
+                                await deleteResourceGroupTask;
                             }
                         }
                     }
@@ -764,7 +770,7 @@ namespace TesDeployer
             {
                 var kubernetesClient = await kubernetesManager.GetKubernetesClientAsync(resourceGroup);
                 await (asyncTask?.Invoke(kubernetesClient) ?? Task.CompletedTask);
-                await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient, cts.Token);
+                await kubernetesManager.DeployHelmChartToClusterAsync(kubernetesClient);
             }
         }
 
@@ -1351,7 +1357,22 @@ namespace TesDeployer
             }
         }
 
-        private Task AssignMIAsNetworkContributorToResourceAsync(IIdentity managedIdentity, IResource resource)
+        private async Task<bool> TryAssignMIAsNetworkContributorToResourceAsync(IIdentity managedIdentity, IResource resource)
+        {
+            try
+            {
+                await AssignMIAsNetworkContributorToResourceAsync(managedIdentity, resource, cancelOnException: false);
+                return true;
+            }
+            catch (Exception)
+            {
+                // Already exists
+                ConsoleEx.WriteLine("Network Contributor role for the managed id likely already exists.  Skipping", ConsoleColor.Yellow);
+                return false;
+            }
+        }
+
+        private Task AssignMIAsNetworkContributorToResourceAsync(IIdentity managedIdentity, IResource resource, bool cancelOnException = true)
         {
             // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#network-contributor
             var roleDefinitionId = $"/subscriptions/{configuration.SubscriptionId}/providers/Microsoft.Authorization/roleDefinitions/4d97b98b-1d4f-4787-a291-c67834d212e7";
@@ -1364,7 +1385,8 @@ namespace TesDeployer
                         .WithRoleDefinition(roleDefinitionId)
                         .WithResourceScope(resource)
                         .CreateAsync(ct),
-                    cts.Token));
+                    cts.Token),
+                cancelOnException: cancelOnException);
         }
 
         private Task AssignManagedIdOperatorToResourceAsync(IIdentity managedIdentity, IResource resource)
@@ -1383,7 +1405,22 @@ namespace TesDeployer
                     cts.Token));
         }
 
-        private Task AssignVmAsDataOwnerToStorageAccountAsync(IIdentity managedIdentity, IStorageAccount storageAccount)
+        private async Task<bool> TryAssignVmAsDataOwnerToStorageAccountAsync(IIdentity managedIdentity, IStorageAccount storageAccount)
+        {
+            try
+            {
+                await AssignVmAsDataOwnerToStorageAccountAsync(managedIdentity, storageAccount, cancelOnException: false);
+                return true;
+            }
+            catch (Exception)
+            {
+                // Already exists
+                ConsoleEx.WriteLine("Storage Blob Data Owner role for the managed id likely already exists.  Skipping", ConsoleColor.Yellow);
+                return false;
+            }
+        }
+
+        private Task AssignVmAsDataOwnerToStorageAccountAsync(IIdentity managedIdentity, IStorageAccount storageAccount, bool cancelOnException = true)
         {
             //https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#storage-blob-data-owner
             var roleDefinitionId = $"/subscriptions/{configuration.SubscriptionId}/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b";
@@ -1397,7 +1434,8 @@ namespace TesDeployer
                         .WithRoleDefinition(roleDefinitionId)
                         .WithResourceScope(storageAccount)
                         .CreateAsync(ct),
-                    cts.Token));
+                    cts.Token),
+                cancelOnException: cancelOnException);
         }
 
         private Task AssignVmAsContributorToStorageAccountAsync(IIdentity managedIdentity, IResource storageAccount)
@@ -1467,12 +1505,12 @@ namespace TesDeployer
             await Task.WhenAll(defaultContainers.Select(c => blobClient.GetBlobContainerClient(c).CreateIfNotExistsAsync(cancellationToken: cts.Token)));
         }
 
-        private Task WritePersonalizedFilesToStorageAccountAsync(IStorageAccount storageAccount, string managedIdentityName)
+        private Task WritePersonalizedFilesToStorageAccountAsync(IStorageAccount storageAccount)
             => Execute(
                 $"Writing {AllowedVmSizesFileName} file to '{TesInternalContainerName}' storage container...",
                 async () =>
                 {
-                    await UploadTextToStorageAccountAsync(storageAccount, TesInternalContainerName, $"{ConfigurationContainerName}/{AllowedVmSizesFileName}", Utility.GetFileContent("scripts", AllowedVmSizesFileName));
+                    await UploadTextToStorageAccountAsync(storageAccount, TesInternalContainerName, $"{ConfigurationContainerName}/{AllowedVmSizesFileName}", Utility.GetFileContent("scripts", AllowedVmSizesFileName), cts.Token);
                 });
 
         private Task AssignVmAsContributorToBatchAccountAsync(IIdentity managedIdentity, BatchAccount batchAccount)
@@ -2409,10 +2447,10 @@ namespace TesDeployer
         private static void WriteGeneralRetryMessageToConsole()
             => ConsoleEx.WriteLine("Please try deployment again, and create an issue if this continues to fail: https://github.com/microsoft/ga4gh-tes/issues");
 
-        public Task Execute(string message, Func<Task> func)
-            => Execute(message, async () => { await func(); return false; });
+        public Task Execute(string message, Func<Task> func, bool cancelOnException = true)
+            => Execute(message, async () => { await func(); return false; }, cancelOnException);
 
-        private async Task<T> Execute<T>(string message, Func<Task<T>> func)
+        private async Task<T> Execute<T>(string message, Func<Task<T>> func, bool cancelOnException = true)
         {
             const int retryCount = 3;
 
@@ -2439,7 +2477,12 @@ namespace TesDeployer
                 catch (Exception ex)
                 {
                     line.Write($" Failed. {ex.GetType().Name}: {ex.Message}", ConsoleColor.Red);
-                    cts.Cancel();
+
+                    if (cancelOnException)
+                    {
+                        cts.Cancel();
+                    }
+
                     throw;
                 }
             }
@@ -2452,16 +2495,13 @@ namespace TesDeployer
         private static void WriteExecutionTime(ConsoleEx.Line line, DateTime startTime)
             => line.Write($" Completed in {DateTime.UtcNow.Subtract(startTime).TotalSeconds:n0}s", ConsoleColor.Green);
 
-        public static async Task<string> DownloadTextFromStorageAccountAsync(IStorageAccount storageAccount, string containerName, string blobName, CancellationTokenSource cts)
+        public static async Task<string> DownloadTextFromStorageAccountAsync(IStorageAccount storageAccount, string containerName, string blobName, CancellationToken cancellationToken)
         {
             var blobClient = await GetBlobClientAsync(storageAccount);
             var container = blobClient.GetBlobContainerClient(containerName);
 
-            return (await container.GetBlobClient(blobName).DownloadContentAsync(cts.Token)).Value.Content.ToString();
+            return (await container.GetBlobClient(blobName).DownloadContentAsync(cancellationToken)).Value.Content.ToString();
         }
-
-        private async Task UploadTextToStorageAccountAsync(IStorageAccount storageAccount, string containerName, string blobName, string content)
-            => await UploadTextToStorageAccountAsync(storageAccount, containerName, blobName, content, cts.Token);
 
         public static async Task UploadTextToStorageAccountAsync(IStorageAccount storageAccount, string containerName, string blobName, string content, CancellationToken token)
         {
