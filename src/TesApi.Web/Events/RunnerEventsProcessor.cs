@@ -332,8 +332,6 @@ namespace TesApi.Web.Events
 
             static IEnumerable<AzureBatchTaskState.OutputFileLog> GetFileLogs(IDictionary<string, string> eventData)
             {
-                const string marker = "/wd/";
-
                 if (eventData is null)
                 {
                     yield break;
@@ -342,22 +340,10 @@ namespace TesApi.Web.Events
                 var numberOfFiles = int.Parse(eventData["numberOfFiles"]);
                 for (var i = 0; i < numberOfFiles; ++i)
                 {
-                    var nodePath = eventData[$"filePath-{i}"];
-                    var idxStart = nodePath.IndexOf(marker);
-
-                    if (idxStart > 0)
-                    {
-                        var containerPathUnderRoot = nodePath[(idxStart + marker.Length)..];
-                        var idxDirectory = containerPathUnderRoot.IndexOf('/');
-
-                        if (idxDirectory > 0)
-                        {
-                            yield return new(
-                            new Azure.Storage.Blobs.BlobUriBuilder(new Uri(eventData[$"fileUri-{i}"])) { Sas = null, Query = null }.ToUri(),
-                            $"/{containerPathUnderRoot}",
-                            long.Parse(eventData[$"fileSize-{i}"]));
-                        }
-                    }
+                    yield return new(
+                        new Uri(eventData[$"fileUri-{i}"]),
+                        eventData[$"filePath-{i}"],
+                        long.Parse(eventData[$"fileSize-{i}"]));
                 }
             }
 

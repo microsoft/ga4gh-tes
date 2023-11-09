@@ -14,6 +14,7 @@ namespace Tes.Runner.Transfer
     {
         private readonly ConcurrentDictionary<string, Md5HashListProvider> hashListProviders = new();
 
+        internal readonly IDictionary<string, int> MapPathToMountPrefixLength = new Dictionary<string, int>();
         internal readonly ConcurrentBag<CompletedUploadFile> CompletedFiles = new();
 
         public BlobUploader(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBufferPool) : base(pipelineOptions, memoryBufferPool)
@@ -143,7 +144,10 @@ namespace Tes.Runner.Transfer
             }
             finally
             {
-                CompletedFiles.Add(new(length, blobUrl, fileName));
+                CompletedFiles.Add(new(
+                    length,
+                    new Azure.Storage.Blobs.BlobUriBuilder(blobUrl) { Sas = null }.ToUri(),
+                    MapPathToMountPrefixLength.TryGetValue(fileName, out var prefixLength) ? fileName[prefixLength..] : fileName));
                 response?.Dispose();
             }
         }
@@ -157,6 +161,11 @@ namespace Tes.Runner.Transfer
         public virtual async Task<long> UploadAsync(List<UploadInfo> uploadList)
         {
             ValidateUploadList(uploadList);
+
+            foreach (var upload in uploadList.Where(upload => !string.IsNullOrWhiteSpace(upload.MountParentDirectory)).Where(upload => upload.FullFilePath.StartsWith(upload.MountParentDirectory!)))
+            {
+                MapPathToMountPrefixLength[upload.FullFilePath] = upload.MountParentDirectory!.Length;
+            }
 
             var operationList = uploadList.Select(d => new BlobOperationInfo(d.TargetUri, d.FullFilePath, d.FullFilePath, true)).ToList();
 
