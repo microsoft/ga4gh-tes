@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Azure.Core;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace Tes.ApiClients
@@ -69,6 +70,36 @@ namespace Tes.ApiClients
         protected HttpApiClient() { }
 
         /// <summary>
+        /// A logging Polly retry handler.
+        /// </summary>
+        /// <param name="caller">Calling method name.</param>
+        /// <returns><see cref="RetryHandler.OnRetryHandler"/></returns>
+        private RetryHandler.OnRetryHandler LogRetryErrorOnRetryHandler([System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
+            => new((exception, timeSpan, retryCount, correlationId) =>
+            {
+                Logger?.LogError(exception, @"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
+            });
+
+        /// <summary>
+        /// A logging Polly retry handler.
+        /// </summary>
+        /// <typeparam name="TResult">See <see cref="PolicyBuilder{TResult}"/></typeparam>
+        /// <param name="caller">Calling method name.</param>
+        /// <returns><see cref="RetryHandler.OnRetryHandler{TResult}"/></returns>
+        private RetryHandler.OnRetryHandler<TResult> LogRetryErrorOnRetryHandler<TResult>([System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
+            => new((result, timeSpan, retryCount, correlationId) =>
+            {
+                if (result.Exception is null)
+                {
+                    Logger?.LogError(@"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
+                }
+                else
+                {
+                    Logger?.LogError(result.Exception, @"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
+                }
+            });
+
+        /// <summary>
         /// Sends request with a retry policy
         /// </summary>
         /// <param name="httpRequestFactory">Factory that creates new http requests, in the event of retry the factory is called again
@@ -78,7 +109,10 @@ namespace Tes.ApiClients
         /// <returns></returns>
         protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(
             Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
-            => await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
+        {
+            var ctx = new Polly.Context();
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler<HttpResponseMessage>());
+            return await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
             {
                 var request = httpRequestFactory();
                 if (setAuthorizationHeader)
@@ -87,7 +121,8 @@ namespace Tes.ApiClients
                 }
 
                 return await HttpClient.SendAsync(request, ct);
-            }, cancellationToken);
+            }, cancellationToken, ctx);
+        }
 
         /// <summary>
         /// Sends a Http Get request to the URL and returns body response as string 
@@ -136,12 +171,20 @@ namespace Tes.ApiClients
         {
             var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader, cancellationToken);
 
-            return await cachingRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, async ct =>
+            return (await cachingRetryHandler.AppCache.GetOrCreateAsync(cacheKey, async _ =>
             {
-                var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
+                var ctx = new Polly.Context();
+                ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler<HttpResponseMessage>());
+                var response = await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
+                {
+                    var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
 
-                return await ExecuteRequestAndReadResponseBodyAsync(httpRequest, ct);
-            }, cancellationToken);
+                    var httpResponse = await HttpClient.SendAsync(httpRequest, ct);
+                    return httpResponse.EnsureSuccessStatusCode();
+                }, cancellationToken, ctx);
+
+                return await ReadResponseBodyAsync(response, cancellationToken);
+            }))!;
         }
 
         /// <summary>
@@ -153,13 +196,20 @@ namespace Tes.ApiClients
         /// <returns></returns>
         protected async Task<string> HttpGetRequestWithRetryPolicyAsync(Uri requestUrl,
             CancellationToken cancellationToken, bool setAuthorizationHeader = false)
-            => await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
+        {
+            var ctx = new Polly.Context();
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler<HttpResponseMessage>());
+            var response = await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
             {
                 //request must be recreated in every retry.
                 var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
 
-                return await ExecuteRequestAndReadResponseBodyAsync(httpRequest, ct);
-            }, cancellationToken);
+                var httpResponse = await HttpClient.SendAsync(httpRequest, ct);
+                return httpResponse.EnsureSuccessStatusCode();
+            }, cancellationToken, ctx);
+
+            return await ReadResponseBodyAsync(response, cancellationToken);
+        }
 
         /// <summary>
         /// Returns an query string key-value, with the value escaped. If the value is null or empty returns an empty string
@@ -167,7 +217,7 @@ namespace Tes.ApiClients
         /// <param name="name">parameter name</param>
         /// <param name="value">parameter value</param>
         /// <returns></returns>
-        protected string ParseQueryStringParameter(string name, string value)
+        protected static string ParseQueryStringParameter(string name, string value)
         {
             ArgumentException.ThrowIfNullOrEmpty(name);
 
@@ -184,15 +234,15 @@ namespace Tes.ApiClients
         /// </summary>
         /// <param name="arguments"></param>
         /// <returns></returns>
-        protected string AppendQueryStringParams(params string[] arguments)
+        protected static string AppendQueryStringParams(params string[] arguments)
         {
             if (arguments.Length == 0)
             {
                 return string.Empty;
             }
 
-            var queryString = "";
-            var prefix = "";
+            var queryString = string.Empty;
+            var prefix = string.Empty;
 
             foreach (var argument in arguments)
             {
@@ -218,13 +268,11 @@ namespace Tes.ApiClients
             return httpRequest;
         }
 
-        private static async Task<string> ExecuteRequestAndReadResponseBodyAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected async Task<string> ReadResponseBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
         {
-            var response = await HttpClient.SendAsync(request, cancellationToken);
-
-            response.EnsureSuccessStatusCode();
-
-            return await response.Content.ReadAsStringAsync(cancellationToken);
+            var ctx = new Polly.Context();
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
+            return await cachingRetryHandler.ExecuteWithRetryAsync(response.Content.ReadAsStringAsync, cancellationToken, ctx);
         }
 
         private async Task AddAuthorizationHeaderToRequestAsync(HttpRequestMessage requestMessage, CancellationToken cancellationToken)
@@ -235,7 +283,7 @@ namespace Tes.ApiClients
                     nameof(tokenScope));
             }
 
-            Logger.LogTrace("Getting token for scope:{}", tokenScope);
+            Logger.LogTrace("Getting token for scope:{TokenScope}", tokenScope);
 
             try
             {
@@ -245,8 +293,8 @@ namespace Tes.ApiClients
             }
             catch (Exception e)
             {
-                Logger.LogError(@"Failed to set authentication header with the access token for scope:{tokenScope}",
-                    e);
+                Logger.LogError(e, @"Failed to set authentication header with the access token for scope:{TokenScope}",
+                    tokenScope);
                 throw;
             }
         }
@@ -260,7 +308,7 @@ namespace Tes.ApiClients
                 if (DateTimeOffset.UtcNow < accessToken.ExpiresOn)
                 {
                     Logger.LogTrace(
-                        $"Using existing token. Token has not expired. Token expiration date: {accessToken.ExpiresOn}");
+                        @"Using existing token. Token has not expired. Token expiration date: {TokenExpiresOn}", accessToken.ExpiresOn);
                     return accessToken.Token;
                 }
 
@@ -268,7 +316,7 @@ namespace Tes.ApiClients
                     new TokenRequestContext(new[] { tokenScope }),
                     cancellationToken);
 
-                Logger.LogTrace($"Returning a new token with an expiration date of: {newAccessToken.ExpiresOn}");
+                Logger.LogTrace(@"Returning a new token with an expiration date of: {TokenExpiresOn}", newAccessToken.ExpiresOn);
                 accessToken = newAccessToken;
                 return accessToken.Token;
             }
@@ -303,7 +351,7 @@ namespace Tes.ApiClients
         {
             var hash = sha256.ComputeHash(Encoding.ASCII.GetBytes(input));
 
-            return hash.Aggregate("", (current, t) => current + t.ToString("X2"));
+            return hash.Aggregate(string.Empty, (current, t) => current + t.ToString("X2"));
         }
 
         /// <summary>
@@ -313,11 +361,11 @@ namespace Tes.ApiClients
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <typeparam name="T">Response's content deserialization type</typeparam>
         /// <returns></returns>
-        protected static async Task<T> GetApiResponseContentAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
+        protected async Task<T> GetApiResponseContentAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
         {
             response.EnsureSuccessStatusCode();
 
-            return JsonSerializer.Deserialize<T>(await response.Content.ReadAsStringAsync(cancellationToken))!;
+            return JsonSerializer.Deserialize<T>(await ReadResponseBodyAsync(response, cancellationToken))!;
         }
     }
 }

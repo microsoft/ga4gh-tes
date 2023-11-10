@@ -9,6 +9,7 @@ using Microsoft.Azure.Management.ApplicationInsights.Management;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Rest;
+using TesApi.Web.Extensions;
 
 namespace TesApi.Web.Management
 {

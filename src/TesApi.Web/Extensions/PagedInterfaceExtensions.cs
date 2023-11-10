@@ -11,7 +11,7 @@ using Microsoft.Rest.Azure;
 using Polly.Retry;
 
 // TODO: move this to Common.csproj?
-namespace TesApi.Web
+namespace TesApi.Web.Extensions
 {
     /// <summary>
     /// Extension methods and implementations for enumerating paged enumeration/collection types from Azure
@@ -57,14 +57,16 @@ namespace TesApi.Web
         /// <param name="asyncRetryPolicy">Policy retrying calls made while enumerating results returned by <paramref name="func"/>.</param>
         /// <param name="func">Method returning <see cref="IAsyncEnumerable{T}"/>.</param>
         /// <param name="retryPolicy">Policy retrying call to <paramref name="func"/>.</param>
+        /// <param name="ctx">An optional <see cref="Polly.Context"/>.</param>
         /// <returns></returns>
-        public static IAsyncEnumerable<T> ExecuteAsync<T>(this AsyncRetryPolicy asyncRetryPolicy, Func<IAsyncEnumerable<T>> func, RetryPolicy retryPolicy)
+        public static IAsyncEnumerable<T> ExecuteAsync<T>(this AsyncRetryPolicy asyncRetryPolicy, Func<IAsyncEnumerable<T>> func, RetryPolicy retryPolicy, Polly.Context ctx = default)
         {
             ArgumentNullException.ThrowIfNull(asyncRetryPolicy);
             ArgumentNullException.ThrowIfNull(func);
             ArgumentNullException.ThrowIfNull(retryPolicy);
 
-            return new PollyAsyncEnumerable<T>((retryPolicy).Execute(() => func()), asyncRetryPolicy);
+            ctx ??= new();
+            return new PollyAsyncEnumerable<T>((retryPolicy).Execute(() => func()), asyncRetryPolicy, ctx);
         }
 
         #region Implementation classes
@@ -101,18 +103,21 @@ namespace TesApi.Web
         {
             private readonly IAsyncEnumerable<T> _source;
             private readonly AsyncRetryPolicy _retryPolicy;
+            private readonly Polly.Context _ctx;
 
-            public PollyAsyncEnumerable(IAsyncEnumerable<T> source, AsyncRetryPolicy retryPolicy)
+            public PollyAsyncEnumerable(IAsyncEnumerable<T> source, AsyncRetryPolicy retryPolicy, Polly.Context ctx)
             {
                 ArgumentNullException.ThrowIfNull(source);
                 ArgumentNullException.ThrowIfNull(retryPolicy);
+                ArgumentNullException.ThrowIfNull(ctx);
 
                 _source = source;
                 _retryPolicy = retryPolicy;
+                _ctx = ctx;
             }
 
             IAsyncEnumerator<T> IAsyncEnumerable<T>.GetAsyncEnumerator(CancellationToken cancellationToken)
-                => new PollyAsyncEnumerator<T>(_source.GetAsyncEnumerator(cancellationToken), _retryPolicy, cancellationToken);
+                => new PollyAsyncEnumerator<T>(_source.GetAsyncEnumerator(cancellationToken), _retryPolicy, _ctx, cancellationToken);
         }
 
         private sealed class PollyAsyncEnumerator<T> : IAsyncEnumerator<T>
@@ -120,14 +125,17 @@ namespace TesApi.Web
             private readonly IAsyncEnumerator<T> _source;
             private readonly AsyncRetryPolicy _retryPolicy;
             private readonly CancellationToken _cancellationToken;
+            private readonly Polly.Context _ctx;
 
-            public PollyAsyncEnumerator(IAsyncEnumerator<T> source, AsyncRetryPolicy retryPolicy, CancellationToken cancellationToken)
+            public PollyAsyncEnumerator(IAsyncEnumerator<T> source, AsyncRetryPolicy retryPolicy, Polly.Context ctx, CancellationToken cancellationToken)
             {
                 ArgumentNullException.ThrowIfNull(source);
                 ArgumentNullException.ThrowIfNull(retryPolicy);
+                ArgumentNullException.ThrowIfNull(ctx);
 
                 _source = source;
                 _retryPolicy = retryPolicy;
+                _ctx = ctx;
                 _cancellationToken = cancellationToken;
             }
 
@@ -138,7 +146,7 @@ namespace TesApi.Web
                 => _source.DisposeAsync();
 
             ValueTask<bool> IAsyncEnumerator<T>.MoveNextAsync()
-                => new(_retryPolicy.ExecuteAsync(ct => _source.MoveNextAsync(ct).AsTask(), _cancellationToken));
+                => new(_retryPolicy.ExecuteAsync((_, ct) => _source.MoveNextAsync(ct).AsTask(), new(_ctx.OperationKey, _ctx), _cancellationToken));
         }
 
         private sealed class PageEnumerator<T> : EnumeratorEnumerator<T, IPage<T>>
