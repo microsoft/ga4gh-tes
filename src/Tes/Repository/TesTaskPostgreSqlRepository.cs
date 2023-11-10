@@ -26,11 +26,11 @@ namespace Tes.Repository
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
-        /// <param name="hostApplicationLifetime">Used for requesting termination of the current application if the writer task unexpectedly exits.</param>
         /// <param name="options"></param>
+        /// <param name="hostApplicationLifetime">Used for requesting termination of the current application if the writer task unexpectedly exits.</param>
         /// <param name="logger"></param>
         /// <param name="cache"></param>
-        public TesTaskPostgreSqlRepository(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IOptions<PostgreSqlOptions> options, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTaskDatabaseItem> cache = null)
+        public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTaskDatabaseItem> cache = null)
             : base(hostApplicationLifetime, logger, cache)
         {
             var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);

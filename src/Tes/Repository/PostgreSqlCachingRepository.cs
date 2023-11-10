@@ -15,6 +15,10 @@ using Polly;
 
 namespace Tes.Repository
 {
+    /// <summary>
+    /// A repository for storing <typeparamref name="T"/> in an Entity Framework Postgres table
+    /// </summary>
+    /// <typeparam name="T">Database table schema class</typeparam>
     public abstract class PostgreSqlCachingRepository<T> : IDisposable where T : class
     {
         private const int BatchSize = 1000;
@@ -37,6 +41,13 @@ namespace Tes.Repository
 
         private bool _disposedValue;
 
+        /// <summary>
+        /// Constructor
+        /// </summary>
+        /// <param name="hostApplicationLifetime">Used for requesting termination of the current application if the writer task unexpectedly exits.</param>
+        /// <param name="logger"></param>
+        /// <param name="cache"></param>
+        /// <exception cref="System.Diagnostics.UnreachableException"></exception>
         protected PostgreSqlCachingRepository(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger logger = default, ICache<T> cache = default)
         {
             Logger = logger;
@@ -197,7 +208,7 @@ namespace Tes.Repository
             catch (Exception ex)
             {
                 // It doesn't matter which item the failure was for, we will fail all items in this round.
-                // TODO: are there exceptions Postgre will send us that will tell us which item(s) failed?
+                // TODO: are there exceptions Postgre will send us that will tell us which item(s) failed or alternately succeeded?
                 FailAll(dbItems.Select(e => e.TaskSource), ex);
                 return;
             }
