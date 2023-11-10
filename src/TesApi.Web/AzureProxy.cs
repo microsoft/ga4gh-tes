@@ -158,10 +158,10 @@ namespace TesApi.Web
         private RetryHandler.OnRetryHandler LogRetryErrorOnRetryHandler([System.Runtime.CompilerServices.CallerMemberName] string caller = default)
             => new((exception, timeSpan, retryCount, correlationId) =>
             {
-                var requestId = (exception as BatchException)?.RequestInformation?.ServiceRequestId;
-                var reason = (exception.InnerException as Microsoft.Azure.Batch.Protocol.Models.BatchErrorException)?.Response?.ReasonPhrase;
-                logger?.LogError(exception, @"Retrying in {Method}: RetryCount: {RetryCount} RetryCount: {TimeSpan} BatchErrorCode: '{BatchErrorCode}', ApiStatusCode '{ApiStatusCode}', Reason: '{ReasonPhrase}' ServiceRequestId: '{ServiceRequestId}', CorrelationId: {CorrelationId:D}",
-                    caller, retryCount, timeSpan, (exception as BatchException)?.RequestInformation?.BatchError?.Code, (exception as BatchException)?.RequestInformation?.HttpStatusCode, reason, requestId, correlationId);
+                var requestId = (exception as BatchException)?.RequestInformation?.ServiceRequestId ?? "n/a";
+                var reason = (exception.InnerException as Microsoft.Azure.Batch.Protocol.Models.BatchErrorException)?.Response?.ReasonPhrase ?? "n/a";
+                logger?.LogError(exception, @"Retrying in {Method}: RetryCount: {RetryCount} RetryCount: {TimeSpan} BatchErrorCode: '{BatchErrorCode}', ApiStatusCode '{ApiStatusCode}', Reason: '{ReasonPhrase}' ServiceRequestId: '{ServiceRequestId}', CorrelationId: {CorrelationId}",
+                    caller, retryCount, timeSpan.ToString("c"), (exception as BatchException)?.RequestInformation?.BatchError?.Code ?? "n/a", (exception as BatchException)?.RequestInformation?.HttpStatusCode?.ToString("G") ?? "n/a", reason, requestId, correlationId.ToString("D"));
             });
 
         // TODO: Static method because the instrumentation key is needed in both Program.cs and Startup.cs and we wanted to avoid intializing the batch client twice.

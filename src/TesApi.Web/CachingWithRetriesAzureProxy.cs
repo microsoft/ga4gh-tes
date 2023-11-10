@@ -96,7 +96,8 @@ namespace TesApi.Web
         private RetryHandler.OnRetryHandler LogRetryErrorOnRetryHandler([System.Runtime.CompilerServices.CallerMemberName] string caller = default)
             => new((exception, timeSpan, retryCount, correlationId) =>
             {
-                logger?.LogError(exception, @"Retrying in {Method}: RetryCount: {RetryCount} RetryCount: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
+                logger?.LogError(exception, @"Retrying in {Method} due to '{Message}': RetryCount: {RetryCount} RetryCount: {TimeSpan} CorrelationId: {CorrelationId}",
+                    caller, exception.Message, retryCount, timeSpan.ToString("c"), correlationId.ToString("D"));
             });
 
 

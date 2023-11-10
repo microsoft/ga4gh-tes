@@ -77,25 +77,26 @@ namespace Tes.ApiClients
         private RetryHandler.OnRetryHandler LogRetryErrorOnRetryHandler([System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
             => new((exception, timeSpan, retryCount, correlationId) =>
             {
-                Logger?.LogError(exception, @"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
+                Logger?.LogError(exception, @"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId}", caller, retryCount, timeSpan, correlationId.ToString("D"));
             });
 
         /// <summary>
         /// A logging Polly retry handler.
         /// </summary>
-        /// <typeparam name="TResult">See <see cref="PolicyBuilder{TResult}"/></typeparam>
         /// <param name="caller">Calling method name.</param>
-        /// <returns><see cref="RetryHandler.OnRetryHandler{TResult}"/></returns>
-        private RetryHandler.OnRetryHandler<TResult> LogRetryErrorOnRetryHandler<TResult>([System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
+        /// <returns><see cref="RetryHandler.OnRetryHandler{System.Net.Http.HttpResponseMessage}"/></returns>
+        private RetryHandler.OnRetryHandler<HttpResponseMessage> LogRetryErrorOnRetryHttpResponseMessageHandler([System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
             => new((result, timeSpan, retryCount, correlationId) =>
             {
                 if (result.Exception is null)
                 {
-                    Logger?.LogError(@"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
+                    Logger?.LogError(@"Retrying in {Method} due to HTTP status {HttpStatus}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId}",
+                        caller, result.Result.StatusCode.ToString("G"), retryCount, timeSpan.ToString("c"), correlationId.ToString("D"));
                 }
                 else
                 {
-                    Logger?.LogError(result.Exception, @"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
+                    Logger?.LogError(result.Exception, @"Retrying in {Method} due to '{Message}': RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId}",
+                        caller, result.Exception.Message, retryCount, timeSpan.ToString("c"), correlationId.ToString("D"));
                 }
             });
 
@@ -111,7 +112,7 @@ namespace Tes.ApiClients
             Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
             var ctx = new Polly.Context();
-            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler<HttpResponseMessage>());
+            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHttpResponseMessageHandler());
             return await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
             {
                 var request = httpRequestFactory();
@@ -171,20 +172,8 @@ namespace Tes.ApiClients
         {
             var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader, cancellationToken);
 
-            return (await cachingRetryHandler.AppCache.GetOrCreateAsync(cacheKey, async _ =>
-            {
-                var ctx = new Polly.Context();
-                ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler<HttpResponseMessage>());
-                var response = await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
-                {
-                    var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
-
-                    var httpResponse = await HttpClient.SendAsync(httpRequest, ct);
-                    return httpResponse.EnsureSuccessStatusCode();
-                }, cancellationToken, ctx);
-
-                return await ReadResponseBodyAsync(response, cancellationToken);
-            }))!;
+            return (await cachingRetryHandler.AppCache.GetOrCreateAsync(cacheKey,
+                async _ => await HttpGetRequestWithRetryPolicyAsync(requestUrl, cancellationToken, setAuthorizationHeader)))!;
         }
 
         /// <summary>
@@ -197,18 +186,23 @@ namespace Tes.ApiClients
         protected async Task<string> HttpGetRequestWithRetryPolicyAsync(Uri requestUrl,
             CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
-            var ctx = new Polly.Context();
-            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler<HttpResponseMessage>());
-            var response = await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
+            var context = new Polly.Context();
+            context.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
+            return await cachingRetryHandler.ExecuteWithRetryAsync(async token =>
             {
-                //request must be recreated in every retry.
-                var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
+                var ctx = new Polly.Context();
+                ctx.SetOnRetryHandler(LogRetryErrorOnRetryHttpResponseMessageHandler());
+                var response = await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
+                {
+                    //request must be recreated in every retry.
+                    var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
 
-                var httpResponse = await HttpClient.SendAsync(httpRequest, ct);
-                return httpResponse.EnsureSuccessStatusCode();
-            }, cancellationToken, ctx);
+                    var httpResponse = await HttpClient.SendAsync(httpRequest, ct);
+                    return httpResponse.EnsureSuccessStatusCode();
+                }, token, ctx);
 
-            return await ReadResponseBodyAsync(response, cancellationToken);
+                return await ReadResponseBodyAsync(response, token);
+            }, cancellationToken, context);
         }
 
         /// <summary>

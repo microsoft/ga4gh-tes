@@ -100,8 +100,9 @@ namespace TesApi.Web.Management
         private async Task<ContainerRegistryInfo> LookUpAndAddToCacheContainerRegistryInfoAsync(string imageName, CancellationToken cancellationToken)
         {
             var ctx = new Polly.Context();
-            ctx.SetOnRetryHandler((outcome, timespan, retryCount, correlationId) =>
-                Logger.LogError(outcome, @"Retrying in {Method}: RetryCount: {RetryCount} RetryCount: {TimeSpan} CorrelationId: {CorrelationId:D}", nameof(LookUpAndAddToCacheContainerRegistryInfoAsync), retryCount, timespan, correlationId));
+            ctx.SetOnRetryHandler((exception, timespan, retryCount, correlationId) =>
+                Logger.LogError(exception, @"Retrying in {Method} due to '{Message}': RetryCount: {RetryCount} RetryCount: {TimeSpan} CorrelationId: {CorrelationId}",
+                    nameof(LookUpAndAddToCacheContainerRegistryInfoAsync), exception.Message, retryCount, timespan.ToString("c"), correlationId.ToString("D")));
             var repositories = await CachingRetryHandler.ExecuteWithRetryAsync(GetAccessibleContainerRegistriesAsync, cancellationToken: cancellationToken, context: ctx);
 
             var requestedRepo = repositories?.FirstOrDefault(reg =>
@@ -109,12 +110,12 @@ namespace TesApi.Web.Management
 
             if (requestedRepo is not null)
             {
-                Logger.LogInformation($"Requested repository: {imageName} was found.");
+                Logger.LogInformation(@"Requested repository: {DockerImage} was found.", imageName);
                 CachingRetryHandler.AppCache.Set($"{nameof(ContainerRegistryProvider)}:{imageName}", requestedRepo, DateTimeOffset.UtcNow.AddHours(options.RegistryInfoCacheExpirationInHours));
             }
             else
             {
-                Logger.LogWarning($"The TES service did not find the requested repository: {imageName}");
+                Logger.LogWarning(@"The TES service did not find the requested repository: {DockerImage}", imageName);
             }
 
             return requestedRepo;
@@ -158,11 +159,11 @@ namespace TesApi.Web.Management
                 {
                     var registries = (await azureClient.WithSubscription(subId).ContainerRegistries.ListAsync(cancellationToken: cancellationToken)).ToList();
 
-                    Logger.LogInformation(@$"Searching {subId} for container registries.");
+                    Logger.LogInformation(@"Searching {SubscriptionId} for container registries.", subId);
 
                     foreach (var r in registries)
                     {
-                        Logger.LogInformation(@$"Found {r.Name}. AdminUserEnabled: {r.AdminUserEnabled}");
+                        Logger.LogInformation(@"Found {RegistryName}. AdminUserEnabled: {RegistryAdminUserEnabled}", r.Name, r.AdminUserEnabled);
 
                         try
                         {
@@ -174,13 +175,13 @@ namespace TesApi.Web.Management
                         }
                         catch (Exception ex)
                         {
-                            Logger.LogWarning($"TES service doesn't have permission to get credentials for registry {r.LoginServerUrl}.  Please verify that 'Admin user' is enabled in the 'Access Keys' area in the Azure Portal for this container registry.  Exception: {ex}");
+                            Logger.LogWarning(ex, @"TES service doesn't have permission to get credentials for registry {RegistryLoginServerUrl}.  Please verify that 'Admin user' is enabled in the 'Access Keys' area in the Azure Portal for this container registry.  Exception: ({ExceptionType}): {ExceptionMessage}", r.LoginServerUrl, ex.GetType().FullName, ex.Message);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Logger.LogWarning($"TES service doesn't have permission to list container registries in subscription {subId}.  Exception: {ex}");
+                    Logger.LogWarning(@"TES service doesn't have permission to list container registries in subscription {SubscriptionId}.  Exception: ({ExceptionType}): {ExceptionMessage}", subId, ex.GetType().FullName, ex.Message);
                 }
             }
 
@@ -188,6 +189,5 @@ namespace TesApi.Web.Management
 
             return infos;
         }
-
     }
 }
