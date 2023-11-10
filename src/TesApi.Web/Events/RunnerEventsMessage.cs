@@ -18,16 +18,17 @@ namespace TesApi.Web.Events
         /// <summary>
         /// Copy constructor replacing <see cref="RunnerEventMessage"/>.
         /// </summary>
-        /// <param name="original"></param>
-        /// <param name="runnerEventMessage"></param>
+        /// <param name="original"><see cref="RunnerEventsMessage"/>.</param>
+        /// <param name="runnerEventMessage">Content of this event message.</param>
         public RunnerEventsMessage(RunnerEventsMessage original, Tes.Runner.Events.EventMessage runnerEventMessage)
             : this(original.BlobUri, original.Tags, original.Event, runnerEventMessage)
         {
         }
 
         /// <summary>
-        /// 
+        /// The <see cref="Tes.Models.TesTask.Id"/> associated with this event.
         /// </summary>
+        /// <remarks>This property is only populated when the content is included.</remarks>
         public readonly string TesTaskId => RunnerEventMessage?.EntityId;
     }
 }

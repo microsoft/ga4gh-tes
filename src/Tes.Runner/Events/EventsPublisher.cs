@@ -102,14 +102,20 @@ public class EventsPublisher : IAsyncDisposable
         {
             { "numberOfFiles", numberOfFiles.ToString()},
             { "totalSizeInBytes", totalSizeInBytes.ToString()},
-            { "errorMessage", errorMessage??string.Empty}
+            { "errorMessage", errorMessage ?? string.Empty}
         };
 
-        foreach (var (length, blobUrl, fileName, index) in completedFiles?.Select((logEntry, index) => (logEntry.Length, logEntry.BlobUrl, logEntry.FileName, index)) ?? Enumerable.Empty<(long, Uri?, string, int)>())
+        if (completedFiles is not null)
         {
-            eventMessage.EventData.Add($"fileSize-{index}", length.ToString());
-            eventMessage.EventData.Add($"fileUri-{index}", blobUrl?.ToString() ?? string.Empty);
-            eventMessage.EventData.Add($"filePath-{index}", fileName);
+            completedFiles = completedFiles.ToList();
+            eventMessage.EventData.Add(@"fileLog-Count", completedFiles.Count().ToString("D"));
+
+            foreach (var (logEntry, index) in completedFiles.Select((logEntry, index) => (logEntry, index)))
+            {
+                eventMessage.EventData.Add($"fileSize-{index}", logEntry.Length.ToString("D"));
+                eventMessage.EventData.Add($"fileUri-{index}", logEntry.BlobUrl?.AbsoluteUri ?? string.Empty);
+                eventMessage.EventData.Add($"filePath-{index}", logEntry.FileName);
+            }
         }
 
         await PublishAsync(eventMessage);

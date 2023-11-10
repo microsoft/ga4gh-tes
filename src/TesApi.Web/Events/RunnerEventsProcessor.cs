@@ -27,9 +27,9 @@ namespace TesApi.Web.Events
         /// <summary>
         /// Constructor of <see cref="RunnerEventsProcessor"/>.
         /// </summary>
-        /// <param name="azureProxy"></param>
-        /// <param name="storageAccessProvider"></param>
-        /// <param name="logger"></param>
+        /// <param name="azureProxy">Azure API wrapper.</param>
+        /// <param name="storageAccessProvider">Methods for abstracting storage access.</param>
+        /// <param name="logger">Methods for abstracting storage access.</param>
         public RunnerEventsProcessor(IAzureProxy azureProxy, Storage.IStorageAccessProvider storageAccessProvider, ILogger<RunnerEventsProcessor> logger)
         {
             ArgumentNullException.ThrowIfNull(azureProxy);
@@ -42,10 +42,10 @@ namespace TesApi.Web.Events
 
 
         /// <summary>
-        /// TODO
+        /// Validate the <see cref="RunnerEventsMessage"/>.
         /// </summary>
-        /// <param name="message"></param>
-        /// <exception cref="ArgumentException"></exception>
+        /// <param name="message">Tes runner event message metadata.</param>
+        /// <exception cref="ArgumentException">Validation exceptions.</exception>
         public void ValidateMessageMetadata(RunnerEventsMessage message)
         {
             if (message.BlobUri is null)
@@ -75,7 +75,7 @@ namespace TesApi.Web.Events
 
             if (!message.Tags.ContainsKey("event-name") || !message.Tags.ContainsKey("task-id") || !message.Tags.ContainsKey("created"))
             {
-                throw new ArgumentException("This message is missing needed tags.", nameof(message));
+                throw new ArgumentException("This message is missing required tags.", nameof(message));
             }
 
             // There are up to 10 tags allowed. We will be adding one.
@@ -89,9 +89,11 @@ namespace TesApi.Web.Events
         /// <summary>
         /// Gets the details of this event message.
         /// </summary>
-        /// <param name="message"></param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
+        /// <param name="message">Tes runner event message metadata.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <exception cref="AssertException">Validation exceptions.</exception>
+        /// <returns>A <see cref="RunnerEventsMessage"/> containing the associated <seealso cref="Tes.Runner.Events.EventMessage"/>.</returns>
+        /// <remarks>This method assumes <paramref name="message"/> was successfully validated by <see cref="ValidateMessageMetadata(RunnerEventsMessage)"/>.</remarks>
         public async Task<RunnerEventsMessage> DownloadAndValidateMessageContentAsync(RunnerEventsMessage message, CancellationToken cancellationToken)
         {
             Tes.Runner.Events.EventMessage content;
@@ -195,10 +197,11 @@ namespace TesApi.Web.Events
         /// <summary>
         /// Returns a sequence in the order the events were produced.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="source"></param>
-        /// <param name="messageGetter"></param>
-        /// <returns></returns>
+        /// <typeparam name="T"><paramref name="source"/>'s enumerated type.</typeparam>
+        /// <param name="source">Unordered enumeration of events.</param>
+        /// <param name="messageGetter">Function that returns <see cref="RunnerEventsMessage"/> from <typeparamref name="T"/>.</param>
+        /// <returns>Ordered enumeration of events.</returns>
+        /// <remarks>This method assumes every <see cref="RunnerEventsMessage"/> was successfully validated by <see cref="ValidateMessageMetadata(RunnerEventsMessage)"/>.</remarks>
         public IEnumerable<T> OrderProcessedByExecutorSequence<T>(IEnumerable<T> source, Func<T, RunnerEventsMessage> messageGetter)
         {
             ArgumentNullException.ThrowIfNull(source);
@@ -215,16 +218,17 @@ namespace TesApi.Web.Events
                     : message.RunnerEventMessage.Name);
 
             static int ParseEventName(string eventName)
-                => EventsInOrder.TryGetValue(eventName, out var result) ? result : int.MinValue;
+                => EventsInOrder.TryGetValue(eventName, out var result) ? result : 0;
         }
 
         /// <summary>
         /// Gets the task status details from this event message.
         /// </summary>
-        /// <param name="message"></param>
-        /// <param name="tesTask"></param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
+        /// <param name="message">Tes runner event message metadata.</param>
+        /// <param name="tesTask"><see cref="Tes.Models.TesTask"/> associated with <paramref name="message"/>.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns><see cref="AzureBatchTaskState"/> populated from <paramref name="message"/>.</returns>
+        /// <remarks>This method assumes <paramref name="message"/> was returned by <see cref="DownloadAndValidateMessageContentAsync"/>.</remarks>
         public async Task<AzureBatchTaskState> GetMessageBatchStateAsync(RunnerEventsMessage message, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(message.RunnerEventMessage, nameof(message));
@@ -280,7 +284,7 @@ namespace TesApi.Web.Events
                 {
                     Tes.Runner.Events.EventsPublisher.SuccessStatus => new(
                         AzureBatchTaskState.TaskState.InfoUpdate,
-                        OutputFileLogs: GetFileLogs(nodeMessage.EventData)),
+                        OutputFileLogs: GetOutputFileLogs(nodeMessage.EventData)),
 
                     Tes.Runner.Events.EventsPublisher.FailedStatus => new(
                         AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed,
@@ -318,6 +322,24 @@ namespace TesApi.Web.Events
             return state;
 
             // Helpers
+            static IEnumerable<AzureBatchTaskState.OutputFileLog> GetOutputFileLogs(IDictionary<string, string> eventData)
+            {
+                if (eventData is null || !eventData.ContainsKey("fileLog-Count"))
+                {
+                    yield break;
+                }
+
+                var numberOfFiles = int.Parse(eventData["fileLog-Count"], System.Globalization.CultureInfo.InvariantCulture);
+
+                for (var i = 0; i < numberOfFiles; ++i)
+                {
+                    yield return new(
+                        new Uri(eventData[$"fileUri-{i}"]),
+                        eventData[$"filePath-{i}"],
+                        long.Parse(eventData[$"fileSize-{i}"], System.Globalization.CultureInfo.InvariantCulture));
+                }
+            }
+
             async ValueTask<IEnumerable<string>> AddProcessLogsIfAvailable(Tes.Runner.Events.EventMessage message, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
             {
                 var processLogs = await GetProcessLogs(message, tesTask, cancellationToken).ToListAsync(cancellationToken);
@@ -328,23 +350,6 @@ namespace TesApi.Web.Events
                 }
 
                 return processLogs;
-            }
-
-            static IEnumerable<AzureBatchTaskState.OutputFileLog> GetFileLogs(IDictionary<string, string> eventData)
-            {
-                if (eventData is null)
-                {
-                    yield break;
-                }
-
-                var numberOfFiles = int.Parse(eventData["numberOfFiles"]);
-                for (var i = 0; i < numberOfFiles; ++i)
-                {
-                    yield return new(
-                        new Uri(eventData[$"fileUri-{i}"]),
-                        eventData[$"filePath-{i}"],
-                        long.Parse(eventData[$"fileSize-{i}"]));
-                }
             }
 
             async IAsyncEnumerable<string> GetProcessLogs(Tes.Runner.Events.EventMessage message, Tes.Models.TesTask tesTask, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
@@ -362,11 +367,9 @@ namespace TesApi.Web.Events
                     yield break;
                 }
 
-                var listUri = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken);
-
-                await foreach (var uri in azureProxy.ListBlobsAsync(new(listUri), cancellationToken)
-                    .Where(blob => blob.BlobName.EndsWith(".txt") && System.IO.Path.GetFileName(blob.BlobName).StartsWith(blobNameStartsWith))
-                    .OrderBy(blob => blob.BlobName)
+                await foreach (var uri in azureProxy.ListBlobsAsync(new(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken)), cancellationToken)
+                    .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.Split('/').Last().StartsWith(blobNameStartsWith))
+                    .OrderBy(blob => blob.BlobName) // Not perfect ordering, but reasonable. This is more likely to be read by people rather then machines. Perfect would involve regex.
                     .Select(blob => blob.BlobUri)
                     .WithCancellation(cancellationToken))
                 {
@@ -378,9 +381,10 @@ namespace TesApi.Web.Events
         /// <summary>
         /// Marks this event message processed.
         /// </summary>
-        /// <param name="message"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="message">Tes runner event message metadata.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
+        /// <remarks>This method assumes <paramref name="message"/> was successfully validated by <see cref="ValidateMessageMetadata(RunnerEventsMessage)"/>.</remarks>
         public async Task MarkMessageProcessedAsync(RunnerEventsMessage message, CancellationToken cancellationToken)
         {
             await azureProxy.SetBlobTags(

@@ -132,6 +132,7 @@ namespace Tes.Runner
                 logger.LogError(e, "Upload operation failed");
                 statusMessage = EventsPublisher.FailedStatus;
                 errorMessage = e.Message;
+                completedFiles = default;
                 throw;
             }
             finally
