@@ -34,7 +34,6 @@ namespace TesApi.Web
 
         private readonly ILogger _logger;
         private readonly IAzureProxy _azureProxy;
-        private readonly Storage.IStorageAccessProvider _storageAccessProvider;
 
         /// <summary>
         /// Constructor of <see cref="BatchPool"/>.
@@ -43,11 +42,9 @@ namespace TesApi.Web
         /// <param name="batchSchedulingOptions"></param>
         /// <param name="azureProxy"></param>
         /// <param name="logger"></param>
-        /// <param name="storageAccessProvider"></param>
         /// <exception cref="ArgumentException"></exception>
-        public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, ILogger<BatchPool> logger, Storage.IStorageAccessProvider storageAccessProvider)
+        public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, ILogger<BatchPool> logger)
         {
-            _storageAccessProvider = storageAccessProvider;
             var rotationDays = batchSchedulingOptions.Value.PoolRotationForcedDays;
             if (rotationDays == 0) { rotationDays = Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays; }
             _forcePoolRotationAge = TimeSpan.FromDays(rotationDays);
@@ -310,27 +307,6 @@ namespace TesApi.Web
 
         private async ValueTask ServicePoolManagePoolScalingAsync(CancellationToken cancellationToken)
         {
-            var nodeList = await GetNodesToRemove(false).ToDictionaryAsync(node => node.Id, cancellationToken: cancellationToken);
-            await foreach (var task in _azureProxy.ListTasksAsync(Id, new ODATADetailLevel { SelectClause = "id,executionInfo,nodeInfo" }).WithCancellation(cancellationToken))
-            {
-                var nodeId = task.ComputeNodeInformation?.ComputeNodeId;
-                if (nodeId is not null && nodeList.ContainsKey(nodeId))
-                {
-                    await _azureProxy.UploadBlobAsync(
-                        new Uri(await _storageAccessProvider.GetInternalTesBlobUrlAsync(
-                        $"nodeError/{nodeId}/{task.Id}-{new Guid():N}",
-                        Azure.Storage.Sas.BlobSasPermissions.Create,
-                        cancellationToken)),
-                        System.Text.Json.JsonSerializer.Serialize(task.ExecutionInformation,
-                        new System.Text.Json.JsonSerializerOptions()
-                        {
-                            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
-                            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
-                        }),
-                        cancellationToken);
-                }
-            }
-
             // This method implememts a state machine to disable/enable autoscaling as needed to clear certain conditions that can be observed
             // Inputs are _resetAutoScalingRequired, compute nodes in ejectable states, and the current _scalingMode, along with the pool's
             // allocation state and autoscale enablement.
@@ -368,9 +344,6 @@ namespace TesApi.Web
                                 {
                                     case ComputeNodeState.Unusable:
                                         _logger.LogDebug("Found unusable node {NodeId}", node.Id);
-                                        await SendNodeTaskInformation(node.Id, node.RecentTasks);
-                                        //node.RecentTasks[0].ExecutionInformation.FailureInformation.Code == TaskFailureInformationCodes.DiskFull
-                                        // TODO: notify running tasks that task will switch nodes?
                                         break;
 
                                     case ComputeNodeState.StartTaskFailed:
@@ -380,14 +353,10 @@ namespace TesApi.Web
 
                                     case ComputeNodeState.Preempted:
                                         _logger.LogDebug("Found preempted node {NodeId}", node.Id);
-                                        await SendNodeTaskInformation(node.Id, node.RecentTasks);
-                                        //node.RecentTasks[0].TaskId
-                                        //node.RecentTasks[0].ExecutionInformation.FailureInformation.Category == ErrorCategory.ServerError
-                                        // TODO: notify running tasks that task will switch nodes? Or, in the future, terminate the task?
                                         break;
 
-                                    default: // Should never reach here. Skip.
-                                        continue;
+                                    default:
+                                        throw new System.Diagnostics.UnreachableException($"Unexpected compute node state '{node.State}' received while looking for nodes to remove from the pool.");
                                 }
 
                                 nodesToRemove = nodesToRemove.Append(node);
@@ -412,7 +381,7 @@ namespace TesApi.Web
                         _scalingMode = ScalingMode.RemovingFailedNodes;
                         _logger.LogInformation(@"Switching pool {PoolId} back to autoscale.", Id);
                         await _azureProxy.EnableBatchPoolAutoScaleAsync(Id, !IsDedicated, AutoScaleEvaluationInterval, AutoPoolFormula, GetTaskCountAsync, cancellationToken);
-                        _autoScaleWaitTime = DateTime.UtcNow + (3 * AutoScaleEvaluationInterval) + (BatchPoolService.RunInterval / 2);
+                        _autoScaleWaitTime = DateTime.UtcNow + (3 * AutoScaleEvaluationInterval) + (PoolScheduler.RunInterval / 2);
                         _scalingMode = _resetAutoScalingRequired ? ScalingMode.WaitingForAutoScale : ScalingMode.SettingAutoScale;
                         _resetAutoScalingRequired = false;
                         break;
@@ -444,32 +413,7 @@ namespace TesApi.Web
             }
 
             IAsyncEnumerable<ComputeNode> GetNodesToRemove(bool withState)
-                => _azureProxy.ListComputeNodesAsync(Id, new ODATADetailLevel(filterClause: @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'", selectClause: withState ? @"id,recentTasks,state,startTaskInfo" : @"id"));
-
-            async Task SendNodeTaskInformation(string nodeId, IReadOnlyList<TaskInformation> content)
-            {
-                var url = new Uri(await _storageAccessProvider.GetInternalTesBlobUrlAsync(
-                    $"nodeError/{nodeId}-{new Guid():N}",
-                    Azure.Storage.Sas.BlobSasPermissions.Create,
-                    cancellationToken));
-
-                if (content is null || content!.Any())
-                {
-                    await _azureProxy.UploadBlobAsync(url, "No recent tasks found on node.", cancellationToken);
-                }
-                else
-                {
-                    await _azureProxy.UploadBlobAsync(
-                        url,
-                        System.Text.Json.JsonSerializer.Serialize(content,
-                        new System.Text.Json.JsonSerializerOptions()
-                        {
-                            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
-                            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
-                        }),
-                        cancellationToken);
-                }
-            }
+                => _azureProxy.ListComputeNodesAsync(Id, new ODATADetailLevel(filterClause: @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'", selectClause: withState ? @"id,state,startTaskInfo" : @"id"));
         }
 
         private bool DetermineIsAvailable(DateTime? creation)
@@ -680,31 +624,87 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<CloudTaskBatchTaskState> GetTaskResizeFailuresAsync(CancellationToken cancellationToken)
+        public IAsyncEnumerable<IBatchScheduler.CloudTaskId> GetTasksToDelete(CancellationToken cancellationToken)
         {
-            return GetTasksAsync("id", "state eq 'active'").Zip(
-                GetFailures(cancellationToken),
-                (cloud, state) => new CloudTaskBatchTaskState(cloud.Id, state));
+            return GetTasksAsync("creationTime,id", $"state eq 'completed' and creationTime lt datetime'{DateTimeOffset.UtcNow - TimeSpan.FromMinutes(10):O}'").Select(task => new IBatchScheduler.CloudTaskId(Id, task.Id, task.CreationTime.Value));
+        }
+
+        /// <inheritdoc/>
+        public async IAsyncEnumerable<CloudTaskBatchTaskState> GetCloudTaskStatesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            List<CloudTask> taskListWithComputeNodeInfo; // To check if the task was running when its node became preempted or unusable
+            List<CloudTask> activeTaskList; // These are candidates to be the victim of resizes or starttask failures
+            List<CloudTask> completedTaskList; // Backstop if events don't provide timely task completion information in a timely manner
+
+            {
+                var taskList = await GetTasksAsync("executionInfo,id,nodeInfo,state,stateTransitionTime", null).ToListAsync(cancellationToken);
+                taskListWithComputeNodeInfo = taskList.Where(task => !TaskState.Completed.Equals(task.State) && !string.IsNullOrEmpty(task.ComputeNodeInformation?.ComputeNodeId)).ToList();
+                activeTaskList = taskList.Where(task => TaskState.Active.Equals(task.State)).OrderByDescending(task => task.StateTransitionTime).ToList();
+                completedTaskList = taskList.Where(task => TaskState.Completed.Equals(task.State) && task.StateTransitionTime < DateTime.UtcNow - TimeSpan.FromMinutes(2)).ToList();
+            }
+
+            await foreach (var node in _azureProxy.ListComputeNodesAsync(Id, new ODATADetailLevel(filterClause: @"state eq 'preempted' or state eq 'unusable'", selectClause: @"errors,id,state")).WithCancellation(cancellationToken))
+            {
+                foreach (var task in taskListWithComputeNodeInfo.Where(task => node.Id.Equals(task.ComputeNodeInformation.ComputeNodeId, StringComparison.InvariantCultureIgnoreCase)))
+                {
+                    yield return new(task.Id, node.State switch
+                    {
+                        ComputeNodeState.Preempted => new(AzureBatchTaskState.TaskState.NodePreempted),
+                        ComputeNodeState.Unusable => new(AzureBatchTaskState.TaskState.NodeUnusable, Failure: ParseComputeNodeErrors(node.Errors)),
+                        _ => throw new System.Diagnostics.UnreachableException(),
+                    });
+
+                    _ = activeTaskList.Remove(task);
+                }
+            }
+
+            await foreach (var state in activeTaskList.ToAsyncEnumerable().Zip(GetFailures(cancellationToken),
+                    (cloud, state) => new CloudTaskBatchTaskState(cloud.Id, state))
+                .WithCancellation(cancellationToken))
+            {
+                yield return state;
+            }
+
+            foreach (var task in completedTaskList)
+            {
+                yield return new(task.Id, GetCompletedBatchState(task));
+            }
+
+            yield break;
+
+            static AzureBatchTaskState.FailureInformation ParseComputeNodeErrors(IReadOnlyList<ComputeNodeError> nodeErrors)
+            {
+                var totalList = nodeErrors.Select(nodeError => Enumerable.Empty<string>().Append(nodeError.Code).Append(nodeError.Message)
+                    .Concat(nodeError.ErrorDetails.Select(errorDetail => Enumerable.Empty<string>().Append(errorDetail.Name).Append(errorDetail.Value)).SelectMany(s => s)))
+                    .SelectMany(s => s).ToList();
+
+                if (totalList.Contains(TaskFailureInformationCodes.DiskFull))
+                {
+                    return new(TaskFailureInformationCodes.DiskFull, totalList);
+                }
+                else
+                {
+                    return new(BatchErrorCodeStrings.NodeStateUnusable, totalList);
+                }
+            }
 
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
             async IAsyncEnumerable<AzureBatchTaskState> GetFailures([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
                 for (var failure = PopNextStartTaskFailure(); failure is not null; failure = PopNextStartTaskFailure())
                 {
                     yield return ConvertFromStartTask(failure);
                     cancellationToken.ThrowIfCancellationRequested();
                 }
 
-                cancellationToken.ThrowIfCancellationRequested();
-
                 for (var failure = PopNextResizeError(); failure is not null; failure = PopNextResizeError())
                 {
                     yield return ConvertFromResize(failure);
                     cancellationToken.ThrowIfCancellationRequested();
                 }
+
+                yield break;
             }
 
             AzureBatchTaskState ConvertFromResize(ResizeError failure)
@@ -723,11 +723,33 @@ namespace TesApi.Web
 
             TaskFailureInformation PopNextStartTaskFailure()
                 => StartTaskFailures.TryDequeue(out var failure) ? failure : default;
-        }
 
-        /// <inheritdoc/>
-        public IAsyncEnumerable<CloudTask> GetCompletedTasksAsync(CancellationToken _1)
-            => GetTasksAsync("executionInfo,id", $"state eq 'completed' and stateTransitionTime lt DateTime'{DateTime.UtcNow - TimeSpan.FromMinutes(2):O}'");
+            AzureBatchTaskState GetCompletedBatchState(CloudTask task)
+            {
+                _logger.LogDebug("Getting batch task state from completed task {TesTask}.", _batchPools.GetTesTaskIdFromCloudTaskId(task.Id));
+                return task.ExecutionInformation.Result switch
+                {
+                    TaskExecutionResult.Success => new(
+                        AzureBatchTaskState.TaskState.CompletedSuccessfully,
+                        BatchTaskStartTime: task.ExecutionInformation.StartTime,
+                        BatchTaskEndTime: task.ExecutionInformation.EndTime,
+                        BatchTaskExitCode: task.ExecutionInformation.ExitCode),
+
+                    TaskExecutionResult.Failure => new(
+                        AzureBatchTaskState.TaskState.CompletedWithErrors,
+                        Failure: new(task.ExecutionInformation.FailureInformation.Code,
+                        Enumerable.Empty<string>()
+                            .Append(task.ExecutionInformation.FailureInformation.Message)
+                            .Append($"Batch task ExitCode: {task.ExecutionInformation?.ExitCode}, Failure message: {task.ExecutionInformation?.FailureInformation?.Message}")
+                            .Concat(task.ExecutionInformation.FailureInformation.Details.Select(pair => pair.Value))),
+                        BatchTaskStartTime: task.ExecutionInformation.StartTime,
+                        BatchTaskEndTime: task.ExecutionInformation.EndTime,
+                        BatchTaskExitCode: task.ExecutionInformation.ExitCode),
+
+                    _ => throw new System.Diagnostics.UnreachableException(),
+                };
+            }
+        }
 
         /// <inheritdoc/>
         public async ValueTask<DateTime> GetAllocationStateTransitionTimeAsync(CancellationToken cancellationToken = default)

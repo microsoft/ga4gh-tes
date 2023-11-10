@@ -66,10 +66,10 @@ namespace TesApi.Web
         /// <summary>
         /// Deletes an Azure Batch task
         /// </summary>
-        /// <param name="tesTaskId">The unique TES task ID</param>
+        /// <param name="cloudTaskId">The batch task to delete</param>
         /// <param name="jobId">The batch job that contains the task</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        Task DeleteBatchTaskAsync(string tesTaskId, string jobId, CancellationToken cancellationToken);
+        Task DeleteBatchTaskAsync(string cloudTaskId, string jobId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the counts of active batch nodes, grouped by VmSize

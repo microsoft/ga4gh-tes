@@ -4,12 +4,13 @@
 namespace TesApi.Web
 {
     /// <summary>
-    /// Combines a <see cref="Tes.Models.TesTask"/> with a <see cref="System.Threading.Tasks.Task{TResult}"/>.
+    /// Combines a <typeparamref name="TRelated"/> with a <see cref="System.Threading.Tasks.Task{TResult}"/>.
     /// </summary>
     /// <param name="Task"> The wrapped <see cref="System.Threading.Tasks.Task{TResult}"/>.</param>
-    /// <param name="TesTask"> The wrapped <see cref="Tes.Models.TesTask"/>.</param>
+    /// <param name="Related"> The wrapped item tied to the task/result.</param>
+    /// <typeparam name="TRelated">The type of <paramref name="Related"/>.</typeparam>
     /// <typeparam name="TResult">The type of the result produced by the <see cref="System.Threading.Tasks.Task{TResult}"/>.</typeparam>
-    public record class TesTaskTask<TResult>(System.Threading.Tasks.Task<TResult> Task, Tes.Models.TesTask TesTask) : System.IDisposable
+    public record class RelatedTask<TRelated, TResult>(System.Threading.Tasks.Task<TResult> Task, TRelated Related) : System.IDisposable
     {
         /// <summary>Gets an awaiter used to await the <see cref="System.Threading.Tasks.Task{TResult}"/>.</summary>
         /// <returns>An awaiter instance.</returns>

@@ -31,12 +31,6 @@ namespace Tes.Models
         public int ErrorCount { get; set; }
 
         /// <summary>
-        /// Boolean of whether deletion after termination is required.
-        /// </summary>
-        [DataMember(Name = "is_delete_required")]
-        public bool IsTaskDeletionRequired { get; set; }
-
-        /// <summary>
         /// Date + time the task was completed, in RFC 3339 format. This is set by the system, not the client.
         /// </summary>
         /// <value>Date + time the task was completed, in RFC 3339 format. This is set by the system, not the client.</value>
@@ -97,7 +91,7 @@ namespace Tes.Models
         /// <returns></returns>
         public bool IsActiveState()
         {
-            return ActiveStates.Contains(this.State) || IsTaskDeletionRequired;
+            return ActiveStates.Contains(this.State);
         }
     }
 }

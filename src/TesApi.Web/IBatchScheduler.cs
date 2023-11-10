@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,7 +43,7 @@ namespace TesApi.Web
         /// <param name="taskStates"><see cref="AzureBatchTaskState"/>s corresponding to each <seealso cref="TesTask"/>.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>True for each corresponding <see cref="TesTask"/> that needs to be persisted.</returns>
-        IAsyncEnumerable<TesTaskTask<bool>> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken);
+        IAsyncEnumerable<RelatedTask<TesTask, bool>> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken);
 
         /// <summary>
         /// Schedule queued <see cref="TesTask"/>s on a batch system
@@ -50,7 +51,7 @@ namespace TesApi.Web
         /// <param name="tesTasks"><see cref="TesTask"/>s to schedule on the batch system.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>True for each <see cref="TesTask"/> that needs to be persisted.</returns>
-        IAsyncEnumerable<TesTaskTask<bool>> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, CancellationToken cancellationToken);
+        IAsyncEnumerable<RelatedTask<TesTask, bool>> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, CancellationToken cancellationToken);
 
         /// <summary>
         /// Adds <see cref="IBatchPool"/> to the managed batch pools.
@@ -96,11 +97,27 @@ namespace TesApi.Web
         string GetTesTaskIdFromCloudTaskId(string cloudTaskId);
 
         /// <summary>
+        /// Deletes azure batch tasks.
+        /// </summary>
+        /// <param name="tasks"><see cref="CloudTaskId"/>s to delete from the batch system.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns>True for each <see cref="CloudTaskId"/> that was either deleted or not found.</returns>
+        IAsyncEnumerable<RelatedTask<CloudTaskId, bool>> DeleteCloudTasksAsync(IAsyncEnumerable<CloudTaskId> tasks, CancellationToken cancellationToken);
+
+        /// <summary>
         /// Gets unprocessed events from the storage account.
         /// </summary>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="event">Optional event to retrieve. Defaults to all events.</param>
         /// <returns></returns>
         IAsyncEnumerable<Events.RunnerEventsMessage> GetEventMessagesAsync(CancellationToken cancellationToken, string @event = default);
+
+        /// <summary>
+        /// Identifies an azure cloud task.
+        /// </summary>
+        /// <param name="JobId"><see cref="CloudJob.Id"/> that contains the task.</param>
+        /// <param name="TaskId"><see cref="CloudTask.Id"/>.</param>
+        /// <param name="Created"><see cref="CloudTask.CreationTime"/></param>
+        public record struct CloudTaskId(string JobId, string TaskId, DateTime Created);
     }
 }

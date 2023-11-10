@@ -142,13 +142,13 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task DeleteBatchTaskAsync(string tesTaskId, string jobId, CancellationToken cancellationToken)
+        public async Task DeleteBatchTaskAsync(string cloudTaskId, string jobId, CancellationToken cancellationToken)
         {
             try
             {
                 var ctx = new Context();
                 ctx.SetOnRetryHandler(OnRetryMicrosoftAzureBatchCommonBatchExceptionExceptWhenNotFound(LogRetryErrorOnRetryHandler()));
-                await cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchTaskAsync(tesTaskId, jobId, ct), cancellationToken, ctx);
+                await cachingRetryHandler.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchTaskAsync(cloudTaskId, jobId, ct), cancellationToken, ctx);
             }
             catch (BatchException exc) when (BatchErrorCodeStrings.TaskNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             { }
@@ -342,7 +342,7 @@ namespace TesApi.Web
             return cachingRetryHandler.ExecuteWithRetryAndCachingAsync(
                 $"{nameof(CachingWithRetriesAzureProxy)}:{poolId}",
                 ct => azureProxy.GetFullAllocationStateAsync(poolId, ct),
-                DateTimeOffset.UtcNow.Add(BatchPoolService.RunInterval.Divide(2)),
+                DateTimeOffset.UtcNow.Add(PoolScheduler.RunInterval.Divide(2)),
                 cancellationToken,
                 ctx);
         }

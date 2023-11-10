@@ -62,7 +62,7 @@ namespace TesApi.Web.Extensions
                 },
                 cancellationToken,
                 TaskContinuationOptions.DenyChildAttach,
-                TaskScheduler.Default);
+                System.Threading.Tasks.TaskScheduler.Default);
             });
 
             // Return all completed entries as their tasks are completed, no matter if by failure, cancellation, or running to completion.

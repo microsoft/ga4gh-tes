@@ -310,38 +310,12 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task DeleteBatchTaskAsync(string tesTaskId, string jobId, CancellationToken cancellationToken)
+        public async Task DeleteBatchTaskAsync(string cloudTaskId, string jobId, CancellationToken cancellationToken)
         {
-            var jobFilter = new ODATADetailLevel
-            {
-                FilterClause = $"startswith(id,'{tesTaskId}{BatchJobAttemptSeparator}')",
-                SelectClause = "id"
-            };
-
-            List<CloudTask> batchTasksToDelete = default;
-
-            try
-            {
-                batchTasksToDelete = await batchClient.JobOperations.ListTasks(jobId, jobFilter).ToAsyncEnumerable().ToListAsync(cancellationToken);
-            }
-            catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException bee && "JobNotFound".Equals(bee.Body?.Code, StringComparison.InvariantCultureIgnoreCase))
-            {
-                logger.LogWarning("Job not found for TES task {TesTask}", tesTaskId);
-                return; // Task cannot exist if the job is not found.
-            }
-
-            if (batchTasksToDelete.Count > 1)
-            {
-                logger.LogWarning("Found more than one active task for TES task {TesTask}", tesTaskId);
-            }
-
-            foreach (var task in batchTasksToDelete)
-            {
-                logger.LogInformation("Deleting task {BatchTask}", task.Id);
-                var ctx = new Context();
-                ctx.SetOnRetryHandler(OnRetryMicrosoftAzureBatchCommonBatchExceptionWhenNodeNotReady(LogRetryErrorOnRetryHandler()));
-                await batchRetryPolicy.ExecuteAsync((_, ct) => task.DeleteAsync(cancellationToken: ct), ctx, cancellationToken);
-            }
+            logger.LogInformation("Deleting task {BatchTask}", cloudTaskId);
+            var ctx = new Context();
+            ctx.SetOnRetryHandler(OnRetryMicrosoftAzureBatchCommonBatchExceptionWhenNodeNotReady(LogRetryErrorOnRetryHandler()));
+            await batchRetryPolicy.ExecuteAsync((_, ct) => batchClient.JobOperations.DeleteTaskAsync(jobId, cloudTaskId, cancellationToken: ct), ctx, cancellationToken);
         }
 
         /// <inheritdoc/>

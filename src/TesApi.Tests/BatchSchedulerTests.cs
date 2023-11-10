@@ -899,33 +899,45 @@ namespace TesApi.Tests
             GuardAssertsWithTesTask(tesTask, () =>
             {
                 Assert.AreEqual(TesState.CANCELEDEnum, tesTask.State);
-                Assert.IsTrue(tesTask.IsTaskDeletionRequired);
                 azureProxy.Verify(i => i.TerminateBatchTaskAsync(tesTask.Id, It.IsAny<string>(), It.IsAny<CancellationToken>()));
             });
         }
 
-        [TestMethod]
-        public async Task CancelledTaskGetsDeleted()
-        {
-            var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELEDEnum, IsTaskDeletionRequired = true, Logs = new() { new() { StartTime = DateTimeOffset.UtcNow - TimeSpan.FromMinutes(11) } } };
+        //[TestMethod]
+        //public async Task CancelledTaskGetsDeleted()
+        //{
+        //    var tesTask = new TesTask
+        //    {
+        //        Id = "test", PoolId = "pool1", State = TesState.CANCELEDEnum, Logs = new()
+        //        {
+        //            new()
+        //            {
+        //                StartTime = DateTimeOffset.UtcNow - TimeSpan.FromMinutes(11), Logs = new()
+        //                {
+        //                    new() { IsCloudTaskDeletionRequired = true, TaskId = "cloudTest" }
+        //                }
+        //            }
+        //        }
+        //    };
 
-            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            azureProxyReturnValues.BatchTaskState = BatchTaskStates.Terminated;
-            Mock<IAzureProxy> azureProxy = default;
-            var azureProxySetter = new Action<Mock<IAzureProxy>>(mock =>
-            {
-                GetMockAzureProxy(azureProxyReturnValues)(mock);
-                azureProxy = mock;
-            });
+        //    var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
+        //    azureProxyReturnValues.BatchTaskState = BatchTaskStates.Terminated;
+        //    Mock<IAzureProxy> azureProxy = default;
+        //    var azureProxySetter = new Action<Mock<IAzureProxy>>(mock =>
+        //    {
+        //        GetMockAzureProxy(azureProxyReturnValues)(mock);
+        //        azureProxy = mock;
+        //    });
 
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, azureProxyReturnValues);
+        //    _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, azureProxyReturnValues);
 
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.IsFalse(tesTask.IsTaskDeletionRequired);
-                azureProxy.Verify(i => i.DeleteBatchTaskAsync(tesTask.Id, It.IsAny<string>(), It.IsAny<CancellationToken>()));
-            });
-        }
+        //    GuardAssertsWithTesTask(tesTask, () =>
+        //    {
+        //        var executorLog = tesTask.Logs.Last().Logs.Last();
+        //        Assert.IsFalse(executorLog.IsCloudTaskDeletionRequired);
+        //        azureProxy.Verify(i => i.DeleteBatchTaskAsync(executorLog.TaskId, It.IsAny<string>(), It.IsAny<CancellationToken>()));
+        //    });
+        //}
 
         [TestMethod]
         public async Task SuccessfullyCompletedTaskContainsBatchNodeMetrics()

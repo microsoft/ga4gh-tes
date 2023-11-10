@@ -19,7 +19,7 @@ namespace TesApi.Web
     /// This should only be used as a system-wide singleton service.  This class does not support scale-out on multiple machines,
     /// nor does it implement a leasing mechanism.  In the future, consider using the Lease Blob operation.
     /// </summary>
-    internal class Scheduler : OrchestrateOnBatchSchedulerServiceBase
+    internal class TaskScheduler : OrchestrateOnBatchSchedulerServiceBase
     {
         private readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(5);
         private readonly TimeSpan batchRunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs uses a 30 second polling interval
@@ -33,7 +33,7 @@ namespace TesApi.Web
         /// <param name="repository">The main TES task database repository implementation</param>
         /// <param name="batchScheduler">The batch scheduler implementation</param>
         /// <param name="logger">The logger instance</param>
-        public Scheduler(RunnerEventsProcessor nodeEventProcessor, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<Scheduler> logger)
+        public TaskScheduler(RunnerEventsProcessor nodeEventProcessor, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<TaskScheduler> logger)
             : base(hostApplicationLifetime, repository, batchScheduler, logger)
         {
             this.nodeEventProcessor = nodeEventProcessor;
@@ -69,7 +69,6 @@ namespace TesApi.Web
             return Task.WhenAll(
                 ExecuteCancelledTesTasksOnBatchAsync(stoppingToken),
                 ExecuteQueuedTesTasksOnBatchAsync(stoppingToken),
-                ExecuteTerminatedTesTasksOnBatchAsync(stoppingToken),
                 ExecuteUpdateTesTaskFromEventBlobAsync(stoppingToken));
         }
 
@@ -102,38 +101,12 @@ namespace TesApi.Web
                 async cancellationToken => (await repository.GetItemsAsync(
                     predicate: t => t.State == TesState.CANCELINGEnum,
                     cancellationToken: cancellationToken))
-                .OrderBy(t => t.CreationTime)
+                .OrderByDescending(t => t.CreationTime)
                 .ToAsyncEnumerable());
 
             return ExecuteActionOnIntervalAsync(batchRunInterval,
                 cancellationToken => OrchestrateTesTasksOnBatchAsync(
                     "Cancelled",
-                    query,
-                    (tasks, cancellationToken) => batchScheduler.ProcessTesTaskBatchStatesAsync(
-                        tasks,
-                        Enumerable.Repeat<AzureBatchTaskState>(new(AzureBatchTaskState.TaskState.CancellationRequested), tasks.Length).ToArray(),
-                        cancellationToken),
-                    cancellationToken),
-                stoppingToken);
-        }
-
-        /// <summary>
-        /// Retrieves all terminated TES tasks from the database, performs an action in the batch system, and updates the resultant state
-        /// </summary>
-        /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
-        /// <returns></returns>
-        private Task ExecuteTerminatedTesTasksOnBatchAsync(CancellationToken stoppingToken)
-        {
-            var query = new Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>>(
-                async cancellationToken => (await repository.GetItemsAsync(
-                    predicate: t => t.IsTaskDeletionRequired,
-                    cancellationToken: cancellationToken))
-                .OrderBy(t => t.CreationTime)
-                .ToAsyncEnumerable());
-
-            return ExecuteActionOnIntervalAsync(batchRunInterval,
-                cancellationToken => OrchestrateTesTasksOnBatchAsync(
-                    "Terminated",
                     query,
                     (tasks, cancellationToken) => batchScheduler.ProcessTesTaskBatchStatesAsync(
                         tasks,
@@ -250,7 +223,7 @@ namespace TesApi.Web
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError(ex, @"");
+                        logger.LogError(ex, @"Failed to tag event processed.");
                     }
                 });
 

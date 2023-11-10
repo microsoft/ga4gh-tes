@@ -15,12 +15,14 @@ using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.Extensions;
+using Tes.Models;
 using TesApi.Web.Events;
 using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
 using TesApi.Web.Runner;
 using TesApi.Web.Storage;
+using static TesApi.Web.IBatchScheduler;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 using TesException = Tes.Models.TesException;
 using TesFileType = Tes.Models.TesFileType;
@@ -174,7 +176,6 @@ namespace TesApi.Web
             static bool tesTaskIsInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
             static bool tesTaskIsQueuedOrInitializing(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum || tesTask.State == TesState.INITIALIZINGEnum;
             static bool tesTaskIsQueued(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum;
-            static bool tesTaskDeletionReady(TesTask tesTask) => tesTask.IsTaskDeletionRequired;
 
             var setTaskStateLock = new object();
 
@@ -282,25 +283,25 @@ namespace TesApi.Web
 
             async Task<bool> SetTaskCompleted(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
+                await TerminateBatchTaskAsync(tesTask, batchInfo, cancellationToken);
                 return await SetTaskStateAndLog(tesTask, TesState.COMPLETEEnum, batchInfo, cancellationToken);
             }
 
             async Task<bool> SetTaskExecutorError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
+                await TerminateBatchTaskAsync(tesTask, batchInfo, cancellationToken);
                 return await SetTaskStateAndLog(tesTask, TesState.EXECUTORERROREnum, batchInfo, cancellationToken);
             }
 
             async Task<bool> SetTaskSystemError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
+                await TerminateBatchTaskAsync(tesTask, batchInfo, cancellationToken);
                 return await SetTaskStateAndLog(tesTask, TesState.SYSTEMERROREnum, batchInfo, cancellationToken);
             }
 
             async Task<bool> SetTaskStateAfterFailureAsync(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
+                await TerminateBatchTaskAsync(tesTask, batchInfo, cancellationToken);
                 return await SetTaskStateAndLog(tesTask, newTaskState, batchInfo, cancellationToken);
             }
 
@@ -314,11 +315,17 @@ namespace TesApi.Web
                 return SetTaskSystemError(tesTask, new(batchInfo, additionalSystemLogItem), cancellationToken);
             }
 
-            Task<bool> HandlePreemptedNodeAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
+            bool HandlePreemptedNode(TesTask tesTask, CombinedBatchTaskInfo batchInfo)
             {
-                logger.LogInformation("The TesTask {TesTask}'s node was preempted. It will be automatically rescheduled.", tesTask.Id);
+                // TODO: Keep track of the number of times Azure Batch retried this task and fail it as preempted if it is too many times. Waiting on Cromwell to support preempted tasks to do this.
+                var oldLog = tesTask.GetOrAddTesTaskLog();
+                var newLog = tesTask.AddTesTaskLog();
+                oldLog.Warning = "ComputeNode was preempted. The task will be automatically rescheduled.";
+                newLog.VirtualMachineInfo = oldLog.VirtualMachineInfo;
+                newLog.StartTime = DateTimeOffset.UtcNow;
                 tesTask.State = TesState.INITIALIZINGEnum;
-                return Task.FromResult(false);
+                logger.LogInformation("The TesTask {TesTask}'s node was preempted. It will be automatically rescheduled.", tesTask.Id);
+                return true;
             }
 
             Task<bool> HandleInfoUpdate(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
@@ -328,10 +335,7 @@ namespace TesApi.Web
 
             tesTaskStateTransitions = new List<TesTaskStateTransition>()
             {
-                new TesTaskStateTransition(tesTaskDeletionReady, AzureBatchTaskState.TaskState.CancellationRequested, alternateSystemLogItem: null, (tesTask, _, ct) => DeleteCancelledTaskAsync(tesTask, ct)),
-                new TesTaskStateTransition(condition: null, AzureBatchTaskState.TaskState.CancellationRequested, alternateSystemLogItem: null, (tesTask, _, ct) => TerminateBatchTaskAsync(tesTask, ct)),
-                //new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.JobNotFound, alternateSystemLogItem: null, (tesTask, _, ct) => AddBatchTaskAsync(tesTask, ct)),
-                //new TesTaskStateTransition(tesTaskIsQueued, BatchTaskState.MissingBatchTask, alternateSystemLogItem: null, (tesTask, _, ct) => AddBatchTaskAsync(tesTask, ct)),
+                new TesTaskStateTransition(condition: null, AzureBatchTaskState.TaskState.CancellationRequested, alternateSystemLogItem: null, TerminateBatchTaskAsync),
                 new TesTaskStateTransition(tesTaskIsQueued, AzureBatchTaskState.TaskState.Initializing, alternateSystemLogItem: null, (tesTask, _) => { tesTask.State = TesState.INITIALIZINGEnum; return true; }),
                 new TesTaskStateTransition(tesTaskIsQueuedOrInitializing, AzureBatchTaskState.TaskState.NodeAllocationFailed, alternateSystemLogItem: null, RequeueTaskAfterFailureAsync),
                 new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.Running, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, TesState.RUNNINGEnum, info, ct)),
@@ -343,44 +347,80 @@ namespace TesApi.Web
                 new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.NodeUnusable, "Please open an issue. There should have been an error reported here.", SetTaskExecutorError),
                 //new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.JobNotFound, BatchTaskState.JobNotFound.ToString(), SetTaskSystemError),
                 //new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.MissingBatchTask, BatchTaskState.MissingBatchTask.ToString(), DeleteBatchJobAndSetTaskSystemErrorAsync),
-                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodePreempted, alternateSystemLogItem: null, HandlePreemptedNodeAsync),
+                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodePreempted, alternateSystemLogItem: null, HandlePreemptedNode),
                 new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed, alternateSystemLogItem: null, HandleInfoUpdate),
                 new TesTaskStateTransition(condition: null, AzureBatchTaskState.TaskState.InfoUpdate, alternateSystemLogItem: null, HandleInfoUpdate),
             }.AsReadOnly();
         }
 
-        private async Task<bool> DeleteCancelledTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
+        private async Task<bool> DeleteTerminatedTaskAsync(string taskId, string jobId, DateTime taskCreated, CancellationToken cancellationToken)
         {
             // https://learn.microsoft.com/azure/batch/best-practices#manage-task-lifetime
             var mins10 = TimeSpan.FromMinutes(10);
             var now = DateTimeOffset.UtcNow;
 
-            if (!tesTask.Logs.Any(l => now - l.StartTime > mins10))
+            if (!(now - taskCreated > mins10))
             {
                 return false;
             }
 
-            await azureProxy.DeleteBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
-            tesTask.IsTaskDeletionRequired = false;
-            await taskExecutionScriptingManager.TryUploadServerTesTask(tesTask, "server-tes-task-completed.json", cancellationToken);
-            return true;
+            try
+            {
+                await azureProxy.DeleteBatchTaskAsync(taskId, jobId, cancellationToken);
+                return true;
+            }
+            catch (BatchException exc) when (BatchErrorCodeStrings.TaskNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
         }
 
-        private async Task<bool> TerminateBatchTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
+        private async Task<bool> TerminateBatchTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
         {
             try
             {
+                switch (batchInfo.State)
+                {
+                    case AzureBatchTaskState.TaskState.CompletedSuccessfully:
+                    case AzureBatchTaskState.TaskState.CompletedWithErrors:
+                        return false; // Let it finish on its own
+
+
+                    case AzureBatchTaskState.TaskState.CancellationRequested:
+                        if (!TesTask.ActiveStates.Contains(tesTask.State))
+                        {
+                            return false; // It probably already finished on its own
+                        }
+
+                        tesTask.State = TesState.CANCELEDEnum;
+                        goto default;
+
+                    default:
+                        break;
+                }
+
                 await azureProxy.TerminateBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
-                tesTask.IsTaskDeletionRequired = true;
-                tesTask.State = TesState.CANCELEDEnum;
-                return true;
+                //return true;
             }
-            //TODO: catch exception returned if the task was already completed.
+            catch (BatchException exc) when (BatchErrorCodeStrings.TaskNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
+            {
+                //return true;
+            }
             catch (Exception exc)
             {
                 logger.LogError(exc, "Exception terminating batch task with tesTask.Id: {TesTaskId}", tesTask?.Id);
                 throw;
             }
+
+            try
+            {
+                await taskExecutionScriptingManager.TryUploadServerTesTask(tesTask, "server-tes-task-completed.json", cancellationToken);
+            }
+            catch (Exception exc)
+            {
+                logger.LogError(exc, "Exception uploading task with tesTask.Id: {TesTaskId}", tesTask?.Id);
+            }
+            return true;
         }
 
         /// <summary>
@@ -440,21 +480,26 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<TesTaskTask<bool>> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken)
+        public IAsyncEnumerable<RelatedTask<TesTask, bool>> ProcessTesTaskBatchStatesAsync(IEnumerable<TesTask> tesTasks, AzureBatchTaskState[] taskStates, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(tesTasks);
             ArgumentNullException.ThrowIfNull(taskStates);
 
             return taskStates.Zip(tesTasks, (TaskState, TesTask) => (TaskState, TesTask))
                 .Where(entry => entry.TesTask?.IsActiveState() ?? false) // Removes already terminal (and null) TesTasks from being further processed.
-                .Select(entry => new TesTaskTask<bool>(WrapHandleTesTaskTransitionAsync(entry.TesTask, entry.TaskState, cancellationToken), entry.TesTask))
+                .Select(entry => new RelatedTask<TesTask, bool>(WrapHandleTesTaskTransitionAsync(entry.TesTask, entry.TaskState, cancellationToken), entry.TesTask))
                 .WhenEach(cancellationToken, tesTaskTask => tesTaskTask.Task);
 
             async Task<bool> WrapHandleTesTaskTransitionAsync(TesTask tesTask, AzureBatchTaskState azureBatchTaskState, CancellationToken cancellationToken)
                 => await HandleTesTaskTransitionAsync(tesTask, azureBatchTaskState, cancellationToken);
+        }
 
-            //Task<bool> WrapHandleTesTaskTransitionAsync(TesTask tesTask, AzureBatchTaskState azureBatchTaskState, CancellationToken cancellationToken)
-            //    => Task.Run(async () => await HandleTesTaskTransitionAsync(tesTask, azureBatchTaskState, cancellationToken));
+        /// <inheritdoc/>
+        public IAsyncEnumerable<RelatedTask<CloudTaskId, bool>> DeleteCloudTasksAsync(IAsyncEnumerable<CloudTaskId> cloudTasks, CancellationToken cancellationToken)
+        {
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+            return cloudTasks.SelectAwaitWithCancellation(async (task, cancellationToken) => new RelatedTask<CloudTaskId, bool>(DeleteTerminatedTaskAsync(task.TaskId, task.JobId, task.Created, cancellationToken), task));
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
         }
 
         private static string GetCromwellExecutionDirectoryPathAsUrl(TesTask task)
@@ -538,7 +583,7 @@ namespace TesApi.Web
             => (inputFile.Name?.Equals("commandScript") ?? false) && (inputFile.Description?.EndsWith(".commandScript") ?? false) && inputFile.Type == TesFileType.FILEEnum && inputFile.Path.EndsWith($"/{CromwellScriptFileName}");
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<TesTaskTask<bool>> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<RelatedTask<TesTask, bool>> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var tasksMetadataByPoolKey = new Dictionary<string, List<(TesTask TesTask, VirtualMachineInformation VirtualMachineInfo, (BatchModels.ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic) ContainerMetadata, IEnumerable<string> Identities, string PoolDisplayName)>>();
             var poolKeyByTaskIds = new Dictionary<string, string>(); // Reverse lookup of 'tasksMetadataByPoolKey'
@@ -935,7 +980,7 @@ namespace TesApi.Web
             var globalStartTaskConfigured = !string.IsNullOrWhiteSpace(globalStartTaskPath);
 
             var startTaskSasUrl = globalStartTaskConfigured
-                ? await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, storageAccessProvider.DefaultBlobPermissions, cancellationToken, sasTokenDuration: BatchPoolService.RunInterval.Multiply(2).Add(poolLifetime).Add(TimeSpan.FromMinutes(15)))
+                ? await storageAccessProvider.MapLocalPathToSasUrlAsync(globalStartTaskPath, storageAccessProvider.DefaultBlobPermissions, cancellationToken, sasTokenDuration: PoolScheduler.RunInterval.Multiply(2).Add(poolLifetime).Add(TimeSpan.FromMinutes(15)))
                 : default;
 
             if (startTaskSasUrl is not null)

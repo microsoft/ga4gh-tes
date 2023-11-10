@@ -10,7 +10,7 @@ using static TesApi.Web.AzureBatchTaskState;
 namespace TesApi.Web
 {
     /// <summary>
-    /// Combined state of the progression of an attempt to run a <see cref="TesTask"/>
+    /// Snapshot state of the progression of an attempt to run a <see cref="TesTask"/>
     /// </summary>
     /// <param name="State">Task state. Also see <seealso cref="TesState"/>.</param>
     /// <param name="OutputFileLogs">File details after the task has completed successfully, for logging purposes.</param>
