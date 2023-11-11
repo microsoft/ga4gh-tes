@@ -2,12 +2,10 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Azure.Batch;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
 using Tes.Repository;
@@ -98,67 +96,82 @@ namespace TesApi.Web
                     "Service Batch Pools",
                     async (pool, token) =>
                     {
+                        var now = DateTime.UtcNow;
                         await pool.ServicePoolAsync(token);
-                        await ProcessCloudTaskStatesAsync(pool.Id, pool.GetCloudTaskStatesAsync(token), token);
-                        await ProcessDeletedTasks(pool.GetTasksToDelete(token), token);
+                        await ProcessCloudTaskStatesAsync(pool.Id, pool.GetCloudTaskStatesAsync(now, token), token);
+                        await ProcessDeletedTasks(pool.GetTasksToDelete(now, token), token);
                     },
                     cancellationToken);
-            }, stoppingToken);
+            },
+            stoppingToken);
+        }
 
-            async ValueTask ProcessCloudTaskStatesAsync(string poolId, IAsyncEnumerable<CloudTaskBatchTaskState> states, CancellationToken cancellationToken)
+        /// <summary>
+        /// Updates each task based on the provided states.
+        /// </summary>
+        /// <param name="poolId">The batch pool/job from which the state was obtained.</param>
+        /// <param name="states">The states with which to update the associated tes tasks.</param>
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        private async ValueTask ProcessCloudTaskStatesAsync(string poolId, IAsyncEnumerable<CloudTaskBatchTaskState> states, CancellationToken cancellationToken)
+        {
+            var list = new List<(TesTask TesTask, AzureBatchTaskState State)>();
+
+            await foreach (var (cloudTaskId, state) in states.WithCancellation(cancellationToken))
             {
-                var list = new List<(TesTask TesTask, AzureBatchTaskState State)>();
-
-                await foreach (var (cloudTaskId, state) in states.WithCancellation(cancellationToken))
+                TesTask tesTask = default;
+                if (await repository.TryGetItemAsync(batchScheduler.GetTesTaskIdFromCloudTaskId(cloudTaskId), cancellationToken, task => tesTask = task) && tesTask is not null)
                 {
-                    TesTask tesTask = default;
-                    if (await repository.TryGetItemAsync(batchScheduler.GetTesTaskIdFromCloudTaskId(cloudTaskId), cancellationToken, task => tesTask = task) && tesTask is not null)
-                    {
-                        list.Add((tesTask, state));
-                    }
-                    else
-                    {
-                        logger.LogDebug(@"Unable to locate TesTask for CloudTask '{CloudTask}' with action state {ActionState}.", cloudTaskId, state.State);
-                    }
-                }
-
-                if (list.Count != 0)
-                {
-                    await OrchestrateTesTasksOnBatchAsync(
-                        $"NodeState ({poolId})",
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-                        async _ => list.Select(t => t.TesTask).ToAsyncEnumerable(),
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
-                        (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, list.Select(t => t.State).ToArray(), token),
-                        cancellationToken);
+                    list.Add((tesTask, state));
                 }
                 else
                 {
-                    logger.LogDebug("No task state changes from pool/node information this time: PoolId: {PoolId}.", poolId);
+                    logger.LogDebug(@"Unable to locate TesTask for CloudTask '{CloudTask}' with action state {ActionState}.", cloudTaskId, state.State);
                 }
             }
 
-            async ValueTask ProcessDeletedTasks(IAsyncEnumerable<IBatchScheduler.CloudTaskId> tasks, CancellationToken cancellationToken)
+            if (list.Count != 0)
             {
-                await foreach (var taskResult in batchScheduler.DeleteCloudTasksAsync(tasks, cancellationToken).WithCancellation(cancellationToken))
-                {
-                    try
-                    {
-                        switch (await taskResult)
-                        {
-                            case true:
-                                logger.LogDebug(@"Azure task {CloudTask} was deleted.", taskResult.Related.TaskId);
-                                break;
+                await OrchestrateTesTasksOnBatchAsync(
+                    $"NodeState ({poolId})",
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+                    async _ => list.Select(t => t.TesTask).ToAsyncEnumerable(),
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+                    (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, list.Select(t => t.State).ToArray(), token),
+                    cancellationToken);
+            }
+            else
+            {
+                logger.LogDebug("No task state changes from pool/node information this time: PoolId: {PoolId}.", poolId);
+            }
+        }
 
-                            case false:
-                                logger.LogDebug(@"Azure task {CloudTask} was NOT deleted.", taskResult.Related.TaskId);
-                                break;
-                        }
-                    }
-                    catch (Exception exc)
+        /// <summary>
+        /// Deletes cloud tasks.
+        /// </summary>
+        /// <param name="tasks">Tasks to delete.</param>
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        private async ValueTask ProcessDeletedTasks(IAsyncEnumerable<IBatchScheduler.CloudTaskId> tasks, CancellationToken cancellationToken)
+        {
+            await foreach (var taskResult in batchScheduler.DeleteCloudTasksAsync(tasks, cancellationToken).WithCancellation(cancellationToken))
+            {
+                try
+                {
+                    switch (await taskResult)
                     {
-                        logger.LogError(exc, @"Failed to delete azure task '{CloudTask}': '{ExceptionType}': '{ExceptionMessage}'", taskResult.Related.TaskId, exc.GetType().FullName, exc.Message);
+                        case true:
+                            logger.LogDebug(@"Azure task {CloudTask} was deleted.", taskResult.Related.TaskId);
+                            break;
+
+                        case false:
+                            logger.LogDebug(@"Azure task {CloudTask} was NOT deleted.", taskResult.Related.TaskId);
+                            break;
                     }
+                }
+                catch (Exception exc)
+                {
+                    logger.LogError(exc, @"Failed to delete azure task '{CloudTask}': '{ExceptionType}': '{ExceptionMessage}'", taskResult.Related.TaskId, exc.GetType().FullName, exc.Message);
                 }
             }
         }

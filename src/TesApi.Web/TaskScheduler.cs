@@ -124,83 +124,89 @@ namespace TesApi.Web
         private Task ExecuteUpdateTesTaskFromEventBlobAsync(CancellationToken stoppingToken)
         {
             return ExecuteActionOnIntervalAsync(blobRunInterval,
-                UpdateTesTasksFromEventBlobsAsync,
+                async cancellationToken =>
+                    await UpdateTesTasksFromAvailableEventsAsync(
+                        await ParseAvailableEvents(cancellationToken),
+                        cancellationToken),
                 stoppingToken);
         }
 
         /// <summary>
-        /// Retrieves all event blobs from storage and updates the resultant state.
+        /// Determines the <see cref="AzureBatchTaskState"/>s from each event available for processing and their associated <see cref="TesTask"/>s.
         /// </summary>
-        /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
-        /// <returns></returns>
-        async ValueTask UpdateTesTasksFromEventBlobsAsync(CancellationToken stoppingToken)
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns><see cref="TesTask"/>s and <see cref="AzureBatchTaskState"/>s from all events.</returns>
+        async ValueTask<IEnumerable<(TesTask Task, AzureBatchTaskState State, Func<CancellationToken, Task> MarkProcessedAsync)>> ParseAvailableEvents(CancellationToken cancellationToken)
         {
-            var markEventsProcessedList = new ConcurrentBag<Func<CancellationToken, Task>>();
-            Func<IEnumerable<(TesTask Task, AzureBatchTaskState State)>> getEventsInOrder;
+            var messages = new ConcurrentBag<(RunnerEventsMessage Message, TesTask Task, AzureBatchTaskState State, Func<CancellationToken, Task> MarkProcessedAsync)>();
 
+            // Get and parse event blobs
+            await Parallel.ForEachAsync(batchScheduler.GetEventMessagesAsync(cancellationToken), cancellationToken, async (eventMessage, cancellationToken) =>
             {
-                var messages = new ConcurrentBag<(RunnerEventsMessage Message, TesTask Task, AzureBatchTaskState State)>();
+                var tesTask = await GetTesTaskAsync(eventMessage.Tags["task-id"], eventMessage.Tags["event-name"]);
 
-                // Get and parse event blobs
-                await Parallel.ForEachAsync(batchScheduler.GetEventMessagesAsync(stoppingToken), stoppingToken, async (eventMessage, cancellationToken) =>
+                if (tesTask is null)
                 {
-                    var tesTask = await GetTesTaskAsync(eventMessage.Tags["task-id"], eventMessage.Tags["event-name"]);
+                    return;
+                }
 
-                    if (tesTask is null)
-                    {
-                        return;
-                    }
+                try
+                {
+                    nodeEventProcessor.ValidateMessageMetadata(eventMessage);
+                    eventMessage = await nodeEventProcessor.DownloadAndValidateMessageContentAsync(eventMessage, cancellationToken);
+                    var state = await nodeEventProcessor.GetMessageBatchStateAsync(eventMessage, tesTask, cancellationToken);
+                    messages.Add((eventMessage, tesTask, state, token => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, token)));
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, @"Downloading and parsing event failed: {ErrorMessage}", ex.Message);
 
-                    try
-                    {
-                        nodeEventProcessor.ValidateMessageMetadata(eventMessage);
-                        eventMessage = await nodeEventProcessor.DownloadAndValidateMessageContentAsync(eventMessage, cancellationToken);
-                        var state = await nodeEventProcessor.GetMessageBatchStateAsync(eventMessage, tesTask, cancellationToken);
-                        messages.Add((eventMessage, tesTask, state));
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, @"Downloading and parsing event failed: {ErrorMessage}", ex.Message);
-                        messages.Add((eventMessage, tesTask, new(AzureBatchTaskState.TaskState.InfoUpdate, Warning: new List<string>
+                    messages.Add((
+                        eventMessage,
+                        tesTask,
+                        new(AzureBatchTaskState.TaskState.InfoUpdate, Warning: new List<string>
                         {
                             "EventParsingFailed",
-                            $"{ex.GetType().FullName}: {ex.Message}",
-                        })));
+                            $"{ex.GetType().FullName}: {ex.Message}"
+                        }),
+                        (ex is System.Diagnostics.UnreachableException || ex is RunnerEventsProcessor.AssertException)
+                            ? token => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, token) // Don't retry this event
+                            : default));  // Retry this event.
 
-                        if (ex is System.Diagnostics.UnreachableException || ex is RunnerEventsProcessor.AssertException) // Don't retry this event.
-                        {
-                            markEventsProcessedList.Add(token => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, token));
-                        }
+                    return;
+                }
 
-                        return;
-                    }
-
-                    markEventsProcessedList.Add(token => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, token));
-
-                    // Helpers
-                    async ValueTask<TesTask> GetTesTaskAsync(string id, string @event)
+                // Helpers
+                async ValueTask<TesTask> GetTesTaskAsync(string id, string @event)
+                {
+                    TesTask tesTask = default;
+                    if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
                     {
-                        TesTask tesTask = default;
-                        if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
-                        {
-                            logger.LogDebug("Completing event '{TaskEvent}' for task {TesTask}.", @event, tesTask.Id);
-                            return tesTask;
-                        }
-                        else
-                        {
-                            logger.LogDebug("Could not find task {TesTask} for event '{TaskEvent}'.", id, @event);
-                            return null;
-                        }
+                        logger.LogDebug("Completing event '{TaskEvent}' for task {TesTask}.", @event, tesTask.Id);
+                        return tesTask;
                     }
-                });
+                    else
+                    {
+                        logger.LogDebug("Could not find task {TesTask} for event '{TaskEvent}'.", id, @event);
+                        return null;
+                    }
+                }
+            });
 
-                getEventsInOrder = () => nodeEventProcessor.OrderProcessedByExecutorSequence(messages, item => item.Message).Select(item => (item.Task, item.State));
-            }
+            return nodeEventProcessor.OrderProcessedByExecutorSequence(messages, @event => @event.Message).Select(@event => (@event.Task, @event.State, @event.MarkProcessedAsync));
+        }
 
-            // Ensure the IEnumerable is only enumerated one time.
-            var orderedMessageList = getEventsInOrder().ToList();
+        /// <summary>
+        /// Updates each task based on the provided states.
+        /// </summary>
+        /// <param name="eventStates">A collection of associated <see cref="TesTask"/>s, <see cref="AzureBatchTaskState"/>s, and a method to mark the source event processed.</param>
+        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        async ValueTask UpdateTesTasksFromAvailableEventsAsync(IEnumerable<(TesTask Task, AzureBatchTaskState State, Func<CancellationToken, Task> MarkProcessedAsync)> eventStates, CancellationToken cancellationToken)
+        {
+            eventStates = eventStates.ToList();
 
-            if (!orderedMessageList.Any())
+            if (!eventStates.Any())
             {
                 return;
             }
@@ -209,29 +215,23 @@ namespace TesApi.Web
             await OrchestrateTesTasksOnBatchAsync(
                 "NodeEvent",
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-                async _ => GetTesTasks(),
+                async _ => eventStates.Select(@event => @event.Task).ToAsyncEnumerable(),
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
-                (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, orderedMessageList.Select(t => t.State).ToArray(), token),
-                stoppingToken,
+                (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, eventStates.Select(@event => @event.State).ToArray(), token),
+                cancellationToken,
                 "events");
 
-            await Parallel.ForEachAsync(markEventsProcessedList, stoppingToken, async (markEventProcessed, cancellationToken) =>
-                {
-                    try
-                    {
-                        await markEventProcessed(cancellationToken);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, @"Failed to tag event processed.");
-                    }
-                });
-
-            // Helpers
-            IAsyncEnumerable<TesTask> GetTesTasks()
+            await Parallel.ForEachAsync(eventStates.Select(@event => @event.MarkProcessedAsync).Where(func => func is not null), cancellationToken, async (markEventProcessed, cancellationToken) =>
             {
-                return orderedMessageList.Select(t => t.Task).ToAsyncEnumerable();
-            }
+                try
+                {
+                    await markEventProcessed(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, @"Failed to tag event as processed.");
+                }
+            });
         }
     }
 }

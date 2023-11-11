@@ -61,16 +61,18 @@ namespace TesApi.Web
         /// <summary>
         /// Gets compute node related task state information.
         /// </summary>
-        /// <param name="cancellationToken"></param>
+        /// <param name="now">Reference time.</param>
         /// <returns></returns>
-        IAsyncEnumerable<CloudTaskBatchTaskState> GetCloudTaskStatesAsync(CancellationToken cancellationToken = default);
+        /// <param name="cancellationToken"></param>
+        IAsyncEnumerable<CloudTaskBatchTaskState> GetCloudTaskStatesAsync(DateTime now, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets batch tasks that need to be deleted.
         /// </summary>
-        /// <param name="cancellationToken"></param>
+        /// <param name="now">Reference time.</param>
         /// <returns></returns>
-        IAsyncEnumerable<IBatchScheduler.CloudTaskId> GetTasksToDelete(CancellationToken cancellationToken = default);
+        /// <param name="cancellationToken"></param>
+        IAsyncEnumerable<IBatchScheduler.CloudTaskId> GetTasksToDelete(DateTime now, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets the last time the pool's compute node list was changed.

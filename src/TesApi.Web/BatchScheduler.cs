@@ -353,7 +353,7 @@ namespace TesApi.Web
             }.AsReadOnly();
         }
 
-        private async Task<bool> DeleteTerminatedTaskAsync(string taskId, string jobId, DateTime taskCreated, CancellationToken cancellationToken)
+        private async Task<bool> DeleteCompletedTaskAsync(string taskId, string jobId, DateTime taskCreated, CancellationToken cancellationToken)
         {
             // https://learn.microsoft.com/azure/batch/best-practices#manage-task-lifetime
             var mins10 = TimeSpan.FromMinutes(10);
@@ -498,7 +498,7 @@ namespace TesApi.Web
         public IAsyncEnumerable<RelatedTask<CloudTaskId, bool>> DeleteCloudTasksAsync(IAsyncEnumerable<CloudTaskId> cloudTasks, CancellationToken cancellationToken)
         {
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-            return cloudTasks.SelectAwaitWithCancellation(async (task, cancellationToken) => new RelatedTask<CloudTaskId, bool>(DeleteTerminatedTaskAsync(task.TaskId, task.JobId, task.Created, cancellationToken), task));
+            return cloudTasks.SelectAwaitWithCancellation(async (task, cancellationToken) => new RelatedTask<CloudTaskId, bool>(DeleteCompletedTaskAsync(task.TaskId, task.JobId, task.Created, cancellationToken), task));
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
         }
 

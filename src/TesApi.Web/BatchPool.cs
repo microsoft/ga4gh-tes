@@ -624,14 +624,16 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<IBatchScheduler.CloudTaskId> GetTasksToDelete(CancellationToken cancellationToken)
+        public IAsyncEnumerable<IBatchScheduler.CloudTaskId> GetTasksToDelete(DateTime now, CancellationToken cancellationToken)
         {
-            return GetTasksAsync("creationTime,id", $"state eq 'completed' and creationTime lt datetime'{DateTimeOffset.UtcNow - TimeSpan.FromMinutes(10):O}'").Select(task => new IBatchScheduler.CloudTaskId(Id, task.Id, task.CreationTime.Value));
+            now = now.ToUniversalTime();
+            return GetTasksAsync("creationTime,id", $"state eq 'completed' and creationTime lt datetime'{now - TimeSpan.FromMinutes(10):O}' and stateTransitionTime gt datetime'{now + TimeSpan.FromMinutes(3)}'").Select(task => new IBatchScheduler.CloudTaskId(Id, task.Id, task.CreationTime.Value));
         }
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<CloudTaskBatchTaskState> GetCloudTaskStatesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<CloudTaskBatchTaskState> GetCloudTaskStatesAsync(DateTime now, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
+            now = now.ToUniversalTime();
             List<CloudTask> taskListWithComputeNodeInfo; // To check if the task was running when its node became preempted or unusable
             List<CloudTask> activeTaskList; // These are candidates to be the victim of resizes or starttask failures
             List<CloudTask> completedTaskList; // Backstop if events don't provide timely task completion information in a timely manner
@@ -640,7 +642,7 @@ namespace TesApi.Web
                 var taskList = await GetTasksAsync("executionInfo,id,nodeInfo,state,stateTransitionTime", null).ToListAsync(cancellationToken);
                 taskListWithComputeNodeInfo = taskList.Where(task => !TaskState.Completed.Equals(task.State) && !string.IsNullOrEmpty(task.ComputeNodeInformation?.ComputeNodeId)).ToList();
                 activeTaskList = taskList.Where(task => TaskState.Active.Equals(task.State)).OrderByDescending(task => task.StateTransitionTime).ToList();
-                completedTaskList = taskList.Where(task => TaskState.Completed.Equals(task.State) && task.StateTransitionTime < DateTime.UtcNow - TimeSpan.FromMinutes(2)).ToList();
+                completedTaskList = taskList.Where(task => TaskState.Completed.Equals(task.State) && task.StateTransitionTime < now - TimeSpan.FromMinutes(2)).ToList();
             }
 
             await foreach (var node in _azureProxy.ListComputeNodesAsync(Id, new ODATADetailLevel(filterClause: @"state eq 'preempted' or state eq 'unusable'", selectClause: @"errors,id,state")).WithCancellation(cancellationToken))
