@@ -23,7 +23,7 @@ public class CacheAndRetryHandlerTest
         var mockOptions = new Mock<IOptions<RetryPolicyOptions>>();
         appCache = new MemoryCache(new MemoryCacheOptions());
         mockInstanceToRetry = new Mock<object>();
-        mockOptions.SetupGet(x => x.Value).Returns(new RetryPolicyOptions() { ExponentialBackOffExponent = 1, MaxRetryCount = MaxRetryCount });
+        mockOptions.SetupGet(x => x.Value).Returns(new RetryPolicyOptions { ExponentialBackOffExponent = 1, MaxRetryCount = MaxRetryCount });
         cachingRetryHandler = new(appCache, mockOptions.Object);
     }
 
@@ -38,7 +38,7 @@ public class CacheAndRetryHandlerTest
     {
         mockInstanceToRetry.Setup(o => o.ToString()).Throws<Exception>();
 
-        await Assert.ThrowsExceptionAsync<Exception>(() => cachingRetryHandler.ExecuteWithRetryAsync(_ => Task.Run(() => mockInstanceToRetry.Object.ToString()), System.Threading.CancellationToken.None));
+        await Assert.ThrowsExceptionAsync<Exception>(() => cachingRetryHandler.ExecuteWithRetryAsync(_ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None));
         mockInstanceToRetry.Verify(o => o.ToString(), Times.Exactly(MaxRetryCount + 1)); // 3 retries (MaxRetryCount), plus original call
     }
 
@@ -47,7 +47,7 @@ public class CacheAndRetryHandlerTest
     {
         mockInstanceToRetry.Setup(o => o.ToString()).Returns("foo");
 
-        var value = await cachingRetryHandler.ExecuteWithRetryAsync(ct => Task.Run(() => mockInstanceToRetry.Object.ToString()), System.Threading.CancellationToken.None);
+        var value = await cachingRetryHandler.ExecuteWithRetryAsync(_ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None);
         mockInstanceToRetry.Verify(o => o.ToString(), Times.Once);
         Assert.AreEqual("foo", value);
     }
@@ -58,8 +58,8 @@ public class CacheAndRetryHandlerTest
         var cacheKey = Guid.NewGuid().ToString();
         mockInstanceToRetry.Setup(o => o.ToString()).Returns("foo");
 
-        var first = await cachingRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, _ => Task.Run(() => mockInstanceToRetry.Object.ToString()), System.Threading.CancellationToken.None);
-        var second = await cachingRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, _ => Task.Run(() => mockInstanceToRetry.Object.ToString()), System.Threading.CancellationToken.None);
+        var first = await cachingRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, _ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None);
+        var second = await cachingRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, _ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None);
 
         mockInstanceToRetry.Verify(o => o.ToString(), Times.Once);
         Assert.AreEqual("foo", first);
@@ -73,9 +73,9 @@ public class CacheAndRetryHandlerTest
         var cacheKey = Guid.NewGuid().ToString();
         mockInstanceToRetry.Setup(o => o.ToString()).Throws<Exception>();
 
-        await Assert.ThrowsExceptionAsync<Exception>(() => cachingRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, _ => Task.Run(() => mockInstanceToRetry.Object.ToString()), System.Threading.CancellationToken.None));
+        await Assert.ThrowsExceptionAsync<Exception>(() => cachingRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, _ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None));
 
-        Assert.IsFalse(appCache.TryGetValue(cacheKey, out string _));
+        Assert.IsFalse(appCache.TryGetValue(cacheKey, out string? _));
     }
 
     [TestMethod]
@@ -94,7 +94,7 @@ public class CacheAndRetryHandlerTest
         var response =
             await cachingRetryHandler.ExecuteHttpRequestWithRetryAsync(_ =>
                 mockFactory.Object.CreateResponseAsync(),
-                System.Threading.CancellationToken.None);
+                CancellationToken.None);
 
         mockFactory.Verify(f => f.CreateResponseAsync(), Times.Exactly(numberOfTimes));
         Assert.AreEqual(response.StatusCode, statusCode);

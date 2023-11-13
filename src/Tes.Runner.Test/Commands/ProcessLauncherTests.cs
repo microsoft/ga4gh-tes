@@ -12,7 +12,7 @@ namespace Tes.Runner.Test.Commands
     public class ProcessLauncherTests
     {
         private ProcessLauncher processLauncher = null!;
-        private Mock<IStreamLogReader> streamLogReaderMock;
+        private Mock<IStreamLogReader> streamLogReaderMock = null!;
 
         [TestInitialize]
         public void SetUp()
