@@ -245,9 +245,9 @@ namespace Tes.ApiClients
             return httpRequest;
         }
 
-        protected async Task<string> ReadResponseBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+        protected static async Task<string> ReadResponseBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
         {
-            return await cachingRetryHandler.ExecuteWithRetryAsync(response.Content.ReadAsStringAsync, cancellationToken, RetryHandler.LogRetryErrorOnRetryHandler(Logger));
+            return await response.Content.ReadAsStringAsync(cancellationToken);
         }
 
         private async Task AddAuthorizationHeaderToRequestAsync(HttpRequestMessage requestMessage, CancellationToken cancellationToken)
