@@ -101,6 +101,7 @@ namespace TesApi.Web.Storage
             {
                 path = $"/{storageOptions.DefaultAccountName}{path}";
             }
+
             //TODO: refactor this to throw an exception instead of logging and error and returning null.
             if (!StorageAccountUrlSegments.TryCreate(path, out var pathSegments))
             {
@@ -114,52 +115,68 @@ namespace TesApi.Web.Storage
             }
             else
             {
-                StorageAccountInfo storageAccountInfo = null;
+                return (await AddSasTokenAsync(pathSegments, cancellationToken, sasTokenDuration, getContainerSas, path))?.ToUriString();
+            }
+        }
 
-                if (!await TryGetStorageAccountInfoAsync(pathSegments.AccountName, cancellationToken, info => storageAccountInfo = info))
+        /// <summary>
+        /// Generates SAS token for both blobs and containers.
+        /// </summary>
+        /// <param name="pathSegments"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="sasTokenDuration">Duration SAS should be valid.</param>
+        /// <param name="getContainerSas">Get the container SAS even if path is longer than two parts</param>
+        /// <param name="path">The file path to convert. Two-part path is treated as container path. Paths with three or more parts are treated as blobs.</param>
+        /// <returns></returns>
+        private async Task<StorageAccountUrlSegments> AddSasTokenAsync(StorageAccountUrlSegments pathSegments, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false, string path = default)
+        {
+            StorageAccountInfo storageAccountInfo = null;
+
+            if (!await TryGetStorageAccountInfoAsync(pathSegments.AccountName, cancellationToken, info => storageAccountInfo = info))
+            {
+                Logger.LogError($"Could not find storage account '{pathSegments.AccountName}' corresponding to path '{path}'. Either the account does not exist or the TES app service does not have permission to it.");
+                return null;
+            }
+
+            try
+            {
+                var accountKey = await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, cancellationToken);
+                var resultPathSegments = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName);
+
+                if (pathSegments.IsContainer || getContainerSas)
                 {
-                    Logger.LogError($"Could not find storage account '{pathSegments.AccountName}' corresponding to path '{path}'. Either the account does not exist or the TES app service does not have permission to it.");
-                    return null;
-                }
-
-                try
-                {
-                    var accountKey = await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, cancellationToken);
-                    var resultPathSegments = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName);
-
-                    if (pathSegments.IsContainer || getContainerSas)
+                    var policy = new SharedAccessBlobPolicy()
                     {
-                        var policy = new SharedAccessBlobPolicy()
-                        {
-                            Permissions = SharedAccessBlobPermissions.Add | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.List | SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.Write,
-                            SharedAccessExpiryTime = DateTime.Now.Add((sasTokenDuration ?? TimeSpan.Zero) + SasTokenDuration)
-                        };
+                        Permissions = SharedAccessBlobPermissions.Add | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.List | SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.Write,
+                        SharedAccessExpiryTime = DateTime.Now.Add((sasTokenDuration ?? TimeSpan.Zero) + SasTokenDuration)
+                    };
 
-                        var containerUri = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName).ToUri();
-                        resultPathSegments.SasToken = new CloudBlobContainer(containerUri, new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, SharedAccessProtocol.HttpsOnly, null);
-                    }
-                    else
-                    {
-                        var policy = new SharedAccessBlobPolicy() { Permissions = SharedAccessBlobPermissions.Read, SharedAccessExpiryTime = DateTime.Now.Add((sasTokenDuration ?? TimeSpan.Zero) + SasTokenDuration) };
-                        resultPathSegments.SasToken = new CloudBlob(resultPathSegments.ToUri(), new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, null, SharedAccessProtocol.HttpsOnly, null);
-                    }
-
-                    return resultPathSegments.ToUriString();
+                    var containerUri = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName).ToUri();
+                    resultPathSegments.SasToken = new CloudBlobContainer(containerUri, new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, SharedAccessProtocol.HttpsOnly, null);
                 }
-                catch (Exception ex)
+                else
                 {
-                    Logger.LogError(ex, $"Could not get the key of storage account '{pathSegments.AccountName}'. Make sure that the TES app service has Contributor access to it.");
-                    return null;
+                    var policy = new SharedAccessBlobPolicy() { Permissions = SharedAccessBlobPermissions.Read, SharedAccessExpiryTime = DateTime.Now.Add((sasTokenDuration ?? TimeSpan.Zero) + SasTokenDuration) };
+                    resultPathSegments.SasToken = new CloudBlob(resultPathSegments.ToUri(), new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, null, SharedAccessProtocol.HttpsOnly, null);
                 }
+
+                return resultPathSegments;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, $"Could not get the key of storage account '{pathSegments.AccountName}'. Make sure that the TES app service has Contributor access to it.");
+                return null;
             }
         }
 
         /// <inheritdoc />
         public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken)
         {
-            var normalizedBlobPath = NormalizedBlobPath(blobPath);
+            var pathSegments = StorageAccountUrlSegments.Create(GetInternalTesBlobUrlWithoutSasToken(blobPath));
 
-            return await MapLocalPathToSasUrlAsync($"/{storageOptions.DefaultAccountName}{TesExecutionsPathPrefix}{normalizedBlobPath}", cancellationToken, getContainerSas: true);
+            var resultPathSegments = await AddSasTokenAsync(pathSegments, cancellationToken, getContainerSas: true);
+
+            return resultPathSegments.ToUriString();
         }
 
 
@@ -172,16 +189,23 @@ namespace TesApi.Web.Storage
         public override string GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath)
         {
             var normalizedBlobPath = NormalizedBlobPath(blobPath);
-            var blobPathWithPrefix = $"{task.Id}{normalizedBlobPath}";
+            var blobPathWithPrefix = $"{TesExecutionsPathPrefix}/{task.Id}{normalizedBlobPath}";
+
             if (task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters
                     .internal_path_prefix) == true)
             {
                 blobPathWithPrefix =
                     $"{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}{normalizedBlobPath}";
+
+                if (storageOptions.ExecutionsContainerName is not null &&
+                    !blobPathWithPrefix.StartsWith(storageOptions.ExecutionsContainerName, StringComparison.OrdinalIgnoreCase))
+                {
+                    blobPathWithPrefix = $"{storageOptions.ExecutionsContainerName}/{blobPathWithPrefix}";
+                }
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new Uri($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net{TesExecutionsPathPrefix}/{blobPathWithPrefix.TrimStart('/')}"));
+            var builder = new BlobUriBuilder(new Uri($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net/{blobPathWithPrefix.TrimStart('/')}"));
 
             return builder.ToUri().ToString();
         }
@@ -200,25 +224,11 @@ namespace TesApi.Web.Storage
         /// <inheritdoc />
         public override async Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken)
         {
-            var normalizedBlobPath = NormalizedBlobPath(blobPath);
+            var pathSegments = StorageAccountUrlSegments.Create(GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath));
 
-            if (task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters
-                    .internal_path_prefix) == true)
-            {
-                var internalPath = $"{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}{normalizedBlobPath}";
+            var resultPathSegments = await AddSasTokenAsync(pathSegments, cancellationToken, getContainerSas: true);
 
-                if (storageOptions.ExecutionsContainerName is not null &&
-                    !internalPath.StartsWith(storageOptions.ExecutionsContainerName, StringComparison.OrdinalIgnoreCase))
-                {
-                    internalPath = $"{storageOptions.ExecutionsContainerName}/{internalPath}";
-                }
-
-                var blobPathWithPathPrefix =
-                    $"/{storageOptions.DefaultAccountName}/{internalPath}";
-                return await MapLocalPathToSasUrlAsync(blobPathWithPathPrefix, cancellationToken, getContainerSas: true);
-            }
-
-            return await GetInternalTesBlobUrlAsync($"/{task.Id}{normalizedBlobPath}", cancellationToken);
+            return resultPathSegments.ToUriString();
         }
 
         private async Task<bool> TryGetStorageAccountInfoAsync(string accountName, CancellationToken cancellationToken, Action<StorageAccountInfo> onSuccess = null)
