@@ -57,16 +57,16 @@ namespace TesApi.Web.Extensions
         /// <param name="asyncRetryPolicy">Policy retrying calls made while enumerating results returned by <paramref name="func"/>.</param>
         /// <param name="func">Method returning <see cref="IAsyncEnumerable{T}"/>.</param>
         /// <param name="retryPolicy">Policy retrying call to <paramref name="func"/>.</param>
-        /// <param name="ctx">An optional <see cref="Polly.Context"/>.</param>
+        /// <param name="onRetry"><see cref="Tes.ApiClients.RetryHandler.OnRetryHandler"/> to use. Defaults to none. Assumes policies configured like the ones in <see cref="Tes.ApiClients.RetryHandler"/>.</param>
         /// <returns></returns>
-        public static IAsyncEnumerable<T> ExecuteAsync<T>(this AsyncRetryPolicy asyncRetryPolicy, Func<IAsyncEnumerable<T>> func, RetryPolicy retryPolicy, Polly.Context ctx = default)
+        public static IAsyncEnumerable<T> ExecuteAsync<T>(this AsyncRetryPolicy asyncRetryPolicy, Func<IAsyncEnumerable<T>> func, RetryPolicy retryPolicy, Tes.ApiClients.RetryHandler.OnRetryHandler onRetry = default)
         {
             ArgumentNullException.ThrowIfNull(asyncRetryPolicy);
             ArgumentNullException.ThrowIfNull(func);
             ArgumentNullException.ThrowIfNull(retryPolicy);
 
-            ctx ??= new();
-            return new PollyAsyncEnumerable<T>((retryPolicy).Execute(() => func()), asyncRetryPolicy, ctx);
+            var ctx = Tes.ApiClients.RetryHandler.PrepareContext(onRetry);
+            return new PollyAsyncEnumerable<T>(retryPolicy.Execute(_ => func(), ctx), asyncRetryPolicy, ctx);
         }
 
         #region Implementation classes

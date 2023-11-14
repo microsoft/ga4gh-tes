@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Net;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Extensions.Http;
@@ -18,6 +19,18 @@ public class RetryHandler
     private readonly RetryPolicy retryPolicy = null!;
     private readonly AsyncRetryPolicy asyncRetryPolicy = null!;
     private readonly AsyncRetryPolicy<HttpResponseMessage> asyncHttpRetryPolicy = null!;
+
+    /// <summary>
+    /// An opinionated generic logging retry handler.
+    /// </summary>
+    /// <param name="logger"><see cref="ILogger"/> to use.</param>
+    /// <param name="caller">Name of method originating the retriable operation.</param>
+    /// <returns></returns>
+    public static OnRetryHandler LogRetryErrorOnRetryHandler(ILogger logger, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+    {
+        return new((exception, timeSpan, retryCount, correlationId) =>
+            logger?.LogError(exception, @"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId}", caller, retryCount, timeSpan, correlationId.ToString("D")));
+    }
 
     /// <summary>
     /// The key in <see cref="Context"/> where <see cref="OnRetry(Exception, TimeSpan, int, Context)"/> or <see cref="OnRetry{T}(DelegateResult{T}, TimeSpan, int, Context)"/> is stored.
@@ -68,7 +81,7 @@ public class RetryHandler
             .OrResult(r => r.StatusCode == HttpStatusCode.TooManyRequests)
             .WaitAndRetryAsync(retryPolicyOptions.Value.MaxRetryCount,
                 (attempt) => TimeSpan.FromSeconds(Math.Pow(retryPolicyOptions.Value.ExponentialBackOffExponent,
-                    attempt)), OnRetry<HttpResponseMessage>);
+                    attempt)), OnRetry);
     }
 
     public static void OnRetry<T>(DelegateResult<T> result, TimeSpan span, int retryCount, Context ctx)
@@ -92,17 +105,52 @@ public class RetryHandler
     public virtual AsyncRetryPolicy AsyncRetryPolicy => asyncRetryPolicy;
 
     /// <summary>
+    /// Configures <see cref="Context"/> to use <paramref name="onRetry"/> if provided.
+    /// </summary>
+    /// <typeparam name="TResult">Return type of asynchronous delegate.</typeparam>
+    /// <param name="onRetry"><see cref="OnRetryHandler{TResult}"/> to use. Defaults to none.</param>
+    /// <returns></returns>
+    public static Context PrepareContext<TResult>(OnRetryHandler<TResult> onRetry = default)
+    {
+        var context = new Context();
+
+        if (onRetry is not null)
+        {
+            context.SetOnRetryHandler(onRetry);
+        }
+
+        return context;
+    }
+
+    /// <summary>
+    /// Configures <see cref="Context"/> to use <paramref name="onRetry"/> if provided.
+    /// </summary>
+    /// <param name="onRetry"><see cref="OnRetryHandler"/> to use. Defaults to none.</param>
+    /// <returns><see cref="Context"/> for the retriable operation.</returns>
+    public static Context PrepareContext(OnRetryHandler onRetry = default)
+    {
+        var context = new Context();
+
+        if (onRetry is not null)
+        {
+            context.SetOnRetryHandler(onRetry);
+        }
+
+        return context;
+    }
+
+    /// <summary>
     /// Executes a delegate with the specified policy.
     /// </summary>
-    /// <param name="action">Action to execute</param>
-    /// <param name="context"></param>
+    /// <param name="action">Action to execute.</param>
+    /// <param name="onRetry"><see cref="OnRetryHandler"/> to use. Defaults to none.</param>
     /// <typeparam name="TResult">Result type</typeparam>
     /// <returns>Result instance</returns>
-    public TResult ExecuteWithRetry<TResult>(Func<TResult> action, Context? context = default)
+    public TResult ExecuteWithRetry<TResult>(Func<TResult> action, OnRetryHandler onRetry = default)
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        return retryPolicy.Execute(_ => action(), context ?? new());
+        return retryPolicy.Execute(_ => action(), PrepareContext(onRetry));
     }
 
     /// <summary>
@@ -110,14 +158,14 @@ public class RetryHandler
     /// </summary>
     /// <param name="action">Action to execute</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-    /// <param name="context"></param>
+    /// <param name="onRetry"><see cref="OnRetryHandler"/> to use. Defaults to none.</param>
     /// <typeparam name="TResult">Result type</typeparam>
     /// <returns>Result instance</returns>
-    public virtual Task<TResult> ExecuteWithRetryAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, Context? context = default)
+    public virtual Task<TResult> ExecuteWithRetryAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, OnRetryHandler onRetry = default)
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        return asyncRetryPolicy.ExecuteAsync((_, ct) => action(ct), context ?? new(), cancellationToken);
+        return asyncRetryPolicy.ExecuteAsync((_, ct) => action(ct), PrepareContext(onRetry), cancellationToken);
     }
 
     /// <summary>
@@ -125,13 +173,13 @@ public class RetryHandler
     /// </summary>
     /// <param name="action">Action to execute</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-    /// <param name="context"></param>
+    /// <param name="onRetry"><see cref="OnRetryHandler"/> to use. Defaults to none.</param>
     /// <returns>Result instance</returns>
-    public async Task ExecuteWithRetryAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken, Context? context = default)
+    public async Task ExecuteWithRetryAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken, OnRetryHandler onRetry = default)
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        await asyncRetryPolicy.ExecuteAsync((_, ct) => action(ct), context ?? new(), cancellationToken);
+        await asyncRetryPolicy.ExecuteAsync((_, ct) => action(ct), PrepareContext(onRetry), cancellationToken);
     }
 
     /// <summary>
@@ -139,13 +187,13 @@ public class RetryHandler
     /// </summary>
     /// <param name="action">Action to execute</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-    /// <param name="context"></param>
+    /// <param name="onRetry"><see cref="OnRetryHandler{HttpResponseMessage}"/> to use. Defaults to none.</param>
     /// <returns>Result HttpResponse</returns>
-    public virtual async Task<HttpResponseMessage> ExecuteWithRetryAsync(Func<CancellationToken, Task<HttpResponseMessage>> action, CancellationToken cancellationToken, Context? context = default)
+    public virtual async Task<HttpResponseMessage> ExecuteWithRetryAsync(Func<CancellationToken, Task<HttpResponseMessage>> action, CancellationToken cancellationToken, OnRetryHandler<HttpResponseMessage> onRetry = default)
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        return await asyncHttpRetryPolicy.ExecuteAsync((_, ct) => action(ct), context ?? new(), cancellationToken);
+        return await asyncHttpRetryPolicy.ExecuteAsync((_, ct) => action(ct), PrepareContext(onRetry), cancellationToken);
     }
 }
 
@@ -156,7 +204,7 @@ public static class RetryHandlerExtensions
         context[RetryHandler.OnRetryHandlerKey] = onRetry;
     }
 
-    public static RetryHandler.OnRetryHandler<T>? GetOnRetryHandler<T>(this Context context)
+    public static RetryHandler.OnRetryHandler<T> GetOnRetryHandler<T>(this Context context)
     {
         return context.TryGetValue(RetryHandler.OnRetryHandlerKey, out var handler) ? (RetryHandler.OnRetryHandler<T>)handler : default;
     }
@@ -166,7 +214,7 @@ public static class RetryHandlerExtensions
         context[RetryHandler.OnRetryHandlerKey] = onRetry;
     }
 
-    public static RetryHandler.OnRetryHandler? GetOnRetryHandler(this Context context)
+    public static RetryHandler.OnRetryHandler GetOnRetryHandler(this Context context)
     {
         return context.TryGetValue(RetryHandler.OnRetryHandlerKey, out var handler) ? (RetryHandler.OnRetryHandler)handler : default;
     }

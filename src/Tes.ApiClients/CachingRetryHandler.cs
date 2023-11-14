@@ -3,7 +3,6 @@
 
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
-using Polly;
 using Tes.ApiClients.Options;
 
 namespace Tes.ApiClients
@@ -44,13 +43,13 @@ namespace Tes.ApiClients
         /// <param name="cacheKey"></param>
         /// <param name="action">Action to execute</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="context"></param>
+        /// <param name="onRetry"><see cref="RetryHandler.OnRetryHandler"/> to use. Defaults to none.</param>
         /// <returns></returns>
-        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, Context? context = default)
+        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, OnRetryHandler onRetry = default)
         {
             ValidateArgs(cacheKey, action);
 
-            return await ExecuteWithCacheAsync(cacheKey, () => ExecuteWithRetryAsync(action, cancellationToken, context));
+            return await ExecuteWithCacheAsync(cacheKey, () => ExecuteWithRetryAsync(action, cancellationToken, onRetry));
         }
 
         /// <summary>
@@ -60,14 +59,14 @@ namespace Tes.ApiClients
         /// <param name="action">Action to execute</param>
         /// <param name="cachesExpires"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="context"></param>
+        /// <param name="onRetry"><see cref="RetryHandler.OnRetryHandler"/> to use. Defaults to none.</param>
         /// <typeparam name="TResult"></typeparam>
         /// <returns></returns>
-        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, DateTimeOffset cachesExpires, CancellationToken cancellationToken, Context? context = default)
+        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, DateTimeOffset cachesExpires, CancellationToken cancellationToken, OnRetryHandler onRetry = default)
         {
             ValidateArgs(cacheKey, action);
 
-            return await ExecuteWithCacheAsync(cacheKey, () => ExecuteWithRetryAsync(action, cancellationToken, context), cachesExpires);
+            return await ExecuteWithCacheAsync(cacheKey, () => ExecuteWithRetryAsync(action, cancellationToken, onRetry), cachesExpires);
         }
 
         private static void ValidateArgs(string cacheKey, Func<CancellationToken, Task> action)
@@ -81,13 +80,13 @@ namespace Tes.ApiClients
         }
 
         private async Task<TResult> ExecuteWithCacheAsync<TResult>(string cacheKey, Func<Task<TResult>> action)
-            => (await appCache.GetOrCreateAsync(cacheKey, _ => action()))!;
+            => await appCache.GetOrCreateAsync(cacheKey, _ => action());
 
         private async Task<TResult> ExecuteWithCacheAsync<TResult>(string cacheKey, Func<Task<TResult>> action, DateTimeOffset cacheExpires)
-            => (await appCache.GetOrCreateAsync(cacheKey, entry =>
+            => await appCache.GetOrCreateAsync(cacheKey, entry =>
             {
                 entry.AbsoluteExpiration = cacheExpires;
                 return action();
-            }))!;
+            });
     }
 }

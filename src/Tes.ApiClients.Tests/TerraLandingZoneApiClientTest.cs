@@ -33,11 +33,11 @@ namespace Tes.ApiClients.Tests
             var body = terraApiStubData.GetResourceQuotaApiResponseInJson();
 
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(
-                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
+                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<RetryHandler.OnRetryHandler<HttpResponseMessage>>()))
                 .ReturnsAsync(new HttpResponseMessage());
 
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(
-                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
+                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<RetryHandler.OnRetryHandler>()))
                 .ReturnsAsync(body);
 
             var quota = await terraLandingZoneApiClient.GetResourceQuotaAsync(terraApiStubData.LandingZoneId, terraApiStubData.BatchAccountId, cacheResults: true, cancellationToken: CancellationToken.None);
@@ -64,11 +64,11 @@ namespace Tes.ApiClients.Tests
             var body = terraApiStubData.GetResourceApiResponseInJson();
 
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(
-                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
+                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<RetryHandler.OnRetryHandler<HttpResponseMessage>>()))
                 .ReturnsAsync(new HttpResponseMessage());
 
             cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(
-                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<Polly.Context>()))
+                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<RetryHandler.OnRetryHandler>()))
                 .ReturnsAsync(body);
 
             var resources = await terraLandingZoneApiClient.GetLandingZoneResourcesAsync(terraApiStubData.LandingZoneId, CancellationToken.None);

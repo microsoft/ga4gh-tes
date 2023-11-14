@@ -99,11 +99,7 @@ namespace TesApi.Web.Management
 
         private async Task<ContainerRegistryInfo> LookUpAndAddToCacheContainerRegistryInfoAsync(string imageName, CancellationToken cancellationToken)
         {
-            var ctx = new Polly.Context();
-            ctx.SetOnRetryHandler((exception, timespan, retryCount, correlationId) =>
-                Logger.LogError(exception, @"Retrying in {Method} due to '{Message}': RetryCount: {RetryCount} RetryCount: {TimeSpan} CorrelationId: {CorrelationId}",
-                    nameof(LookUpAndAddToCacheContainerRegistryInfoAsync), exception.Message, retryCount, timespan.ToString("c"), correlationId.ToString("D")));
-            var repositories = await CachingRetryHandler.ExecuteWithRetryAsync(GetAccessibleContainerRegistriesAsync, cancellationToken: cancellationToken, context: ctx);
+            var repositories = await CachingRetryHandler.ExecuteWithRetryAsync(GetAccessibleContainerRegistriesAsync, cancellationToken, RetryHandler.LogRetryErrorOnRetryHandler(Logger));
 
             var requestedRepo = repositories?.FirstOrDefault(reg =>
                 reg.RegistryServer.Equals(imageName.Split('/').FirstOrDefault(), StringComparison.OrdinalIgnoreCase));
