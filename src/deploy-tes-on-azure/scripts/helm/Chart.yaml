@@ -1,4 +1,4 @@
 name: tes-on-azure
 description: A GA4GH TES implementation designed to run on Microsoft Azure
-version: 4.8.0
+version: 5.0.0
 apiVersion: v1
