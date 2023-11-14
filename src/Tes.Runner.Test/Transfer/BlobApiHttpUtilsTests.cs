@@ -246,7 +246,7 @@ namespace Tes.Runner.Test.Transfer
             }
             else
             {
-                Assert.AreEqual(expectedContent, await request?.Content?.ReadAsStringAsync());
+                Assert.AreEqual(expectedContent, await request?.Content?.ReadAsStringAsync()!);
             }
 
 
