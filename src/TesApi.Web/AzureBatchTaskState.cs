@@ -44,7 +44,7 @@ namespace TesApi.Web
             /// <summary>
             /// The event does not represent any change in the task's state.
             /// </summary>
-            NoChange,
+            NoChange = 1,
 
             /// <summary>
             /// The event provides task state without changing the task's <see cref="TesTask.State"/>.
@@ -92,9 +92,9 @@ namespace TesApi.Web
             NodePreempted,
 
             /// <summary>
-            /// node in an Unusable state detected
+            /// Node failed during the startup task
             /// </summary>
-            NodeUnusable,
+            NodeStartTaskFailed,
 
             /// <summary>
             /// Node failed during startup or task execution (for example, ContainerInvalidImage, DiskFull)
@@ -125,8 +125,8 @@ namespace TesApi.Web
         /// <summary>
         /// SystemLog-appending copy constructor
         /// </summary>
-        /// <param name="original"></param>
-        /// <param name="appendToSystemLog"></param>
+        /// <param name="original"><see cref="AzureBatchTaskState"/> to copy</param>
+        /// <param name="appendToSystemLog">Text to add to the SystemLog in the copy</param>
         protected AzureBatchTaskState(AzureBatchTaskState original, string appendToSystemLog)
             : this(original)
         {

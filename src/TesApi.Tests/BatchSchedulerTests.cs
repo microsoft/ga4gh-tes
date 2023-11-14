@@ -270,6 +270,7 @@ namespace TesApi.Tests
         public async Task TesTaskFailsWhenBatchNodeDiskIsFull()
         {
             var tesTask = GetTesTask();
+            tesTask.State = TesState.INITIALIZINGEnum;
 
             (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask, BatchTaskStates.NodeDiskFull);
 
@@ -786,48 +787,38 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task TaskStateTransitionsFromRunningState()
         {
-            //Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.TaskActive));
-            Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.TaskPreparing));
+            Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.TaskActive));
+            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.TaskPreparing));
             Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.TaskRunning));
             Assert.AreEqual(TesState.COMPLETEEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.TaskCompletedSuccessfully));
             Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.TaskFailed));
-            //Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.JobNotFound));
-            //Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.TaskNotFound));
-            //Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.MoreThanOneJobFound));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.NodeDiskFull)); // TODO: Should be ExecutorError, but this currently falls into the bucket of NodeFailedDuringStartupOrExecution, which also covers StartTask failures, which are more correctly SystemError.
-            //Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.ActiveJobWithMissingAutoPool));
+            Assert.AreEqual(TesState.CANCELEDEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.CancellationRequested));
+            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.NodeDiskFull));
+            Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.UploadOrDownloadFailed));
             Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.NodePreempted));
         }
 
         [TestMethod]
         public async Task TaskStateTransitionsFromInitializingState()
         {
-            //Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.TaskActive));
+            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.TaskActive));
             Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.TaskPreparing));
             Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.TaskRunning));
             Assert.AreEqual(TesState.COMPLETEEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.TaskCompletedSuccessfully));
             Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.TaskFailed));
-            //Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.JobNotFound));
-            //Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.TaskNotFound));
-            //Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.MoreThanOneJobFound));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.NodeDiskFull)); // TODO: Should be ExecutorError, but this currently falls into the bucket of NodeFailedDuringStartupOrExecution, which also covers StartTask failures, which are more correctly SystemError.
+            Assert.AreEqual(TesState.CANCELEDEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.CancellationRequested));
+            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.NodeDiskFull));
+            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.UploadOrDownloadFailed));
+            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.NodeStartTaskFailed));
             Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.NodeAllocationFailed));
-            //Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.ImageDownloadFailed));
-            //Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.ActiveJobWithMissingAutoPool));
             Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.NodePreempted));
         }
 
         [TestMethod]
         public async Task TaskStateTransitionsFromQueuedState()
         {
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchTaskStates.TaskActive));
-            //Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchTaskStates.TaskPreparing));
-            Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchTaskStates.TaskRunning));
-            Assert.AreEqual(TesState.COMPLETEEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchTaskStates.TaskCompletedSuccessfully));
-            Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchTaskStates.TaskFailed));
-            //Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchTaskStates.MoreThanOneJobFound));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchTaskStates.NodeDiskFull)); // TODO: Should be ExecutorError, but this currently falls into the bucket of NodeFailedDuringStartupOrExecution, which also covers StartTask failures, which are more correctly SystemError.
-            //Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchTaskStates.TaskNotFound));
+            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum));
+            Assert.AreEqual(TesState.CANCELEDEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchTaskStates.CancellationRequested));
         }
 
         [TestMethod]
@@ -883,10 +874,10 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task TaskGetsCancelled()
         {
-            var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELINGEnum };
+            var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELINGEnum, Logs = new() { new() } };
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            azureProxyReturnValues.BatchTaskState = BatchTaskStates.Terminated;
+            azureProxyReturnValues.BatchTaskState = BatchTaskStates.CancellationRequested;
             Mock<IAzureProxy> azureProxy = default;
             var azureProxySetter = new Action<Mock<IAzureProxy>>(mock =>
             {
@@ -943,6 +934,7 @@ namespace TesApi.Tests
         public async Task SuccessfullyCompletedTaskContainsBatchNodeMetrics()
         {
             var tesTask = GetTesTask();
+            tesTask.State = TesState.INITIALIZINGEnum;
 
             var metricsFileContent = @"
                 BlobXferPullStart=2020-10-08T02:30:39+00:00
@@ -994,6 +986,7 @@ namespace TesApi.Tests
         public async Task SuccessfullyCompletedTaskContainsCromwellResultCode()
         {
             var tesTask = GetTesTask();
+            tesTask.State = TesState.INITIALIZINGEnum;
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
             azureProxyReturnValues.BatchTaskState = BatchTaskStates.TaskCompletedSuccessfully;
@@ -1844,21 +1837,17 @@ namespace TesApi.Tests
 
         private struct BatchTaskStates
         {
-            public static AzureBatchTaskState TaskActive => default;
+            public static AzureBatchTaskState TaskActive => new(AzureBatchTaskState.TaskState.InfoUpdate);
             public static AzureBatchTaskState TaskPreparing => new(AzureBatchTaskState.TaskState.Initializing, CloudTaskCreationTime: DateTimeOffset.UtcNow);
             public static AzureBatchTaskState TaskRunning => new(AzureBatchTaskState.TaskState.Running, CloudTaskCreationTime: DateTimeOffset.UtcNow - TimeSpan.FromMinutes(6));
             public static AzureBatchTaskState TaskCompletedSuccessfully => new(AzureBatchTaskState.TaskState.CompletedSuccessfully, BatchTaskExitCode: 0);
             public static AzureBatchTaskState TaskFailed => new(AzureBatchTaskState.TaskState.CompletedWithErrors, BatchTaskExitCode: -1);
-            //public static AzureBatchTaskState JobNotFound => new() { JobState = null };
-            //public static AzureBatchTaskState TaskNotFound => new() { JobState = JobState.Active, TaskState = null };
-            //public static AzureBatchTaskState MoreThanOneJobFound => new() { MoreThanOneActiveJobOrTaskFound = true };
+            public static AzureBatchTaskState NodeDiskFull => new(AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, Failure: new("DiskFull", new[] { "Error message." }));
+            public static AzureBatchTaskState UploadOrDownloadFailed => new(AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed);
             public static AzureBatchTaskState NodeAllocationFailed => new(AzureBatchTaskState.TaskState.NodeAllocationFailed, Failure: new(AzureBatchTaskState.TaskState.NodeAllocationFailed.ToString(), new[] { "Error message." }));
             public static AzureBatchTaskState NodePreempted => new(AzureBatchTaskState.TaskState.NodePreempted);
-            public static AzureBatchTaskState NodeDiskFull => new(AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, Failure: new("DiskFull", new[] { "Error message." }));
-
-            public static AzureBatchTaskState Terminated => new(AzureBatchTaskState.TaskState.CancellationRequested, CloudTaskCreationTime: DateTimeOffset.UtcNow - TimeSpan.FromMinutes(12));
-            //public static AzureBatchTaskState ActiveJobWithMissingAutoPool => new() { ActiveJobWithMissingAutoPool = true };
-            //public static AzureBatchTaskState ImageDownloadFailed => new() { JobState = JobState.Active, NodeErrorCode = "ContainerInvalidImage" };
+            public static AzureBatchTaskState NodeStartTaskFailed => new(AzureBatchTaskState.TaskState.NodeStartTaskFailed);
+            public static AzureBatchTaskState CancellationRequested => new(AzureBatchTaskState.TaskState.CancellationRequested, CloudTaskCreationTime: DateTimeOffset.UtcNow - TimeSpan.FromMinutes(12));
         }
 
         private class AzureProxyReturnValues

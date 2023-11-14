@@ -172,31 +172,31 @@ namespace TesApi.Web
 
             logger.LogInformation(@"usePreemptibleVmsOnly: {UsePreemptibleVmsOnly}", usePreemptibleVmsOnly);
 
-            static bool tesTaskIsQueuedInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum || tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
             static bool tesTaskIsInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
-            static bool tesTaskIsQueuedOrInitializing(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum || tesTask.State == TesState.INITIALIZINGEnum;
-            static bool tesTaskIsQueued(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum;
+            static bool tesTaskIsInitializing(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum;
 
             var setTaskStateLock = new object();
 
             async Task<bool> SetTaskStateAndLog(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
                 {
-                    var newData = System.Text.Json.JsonSerializer.Serialize(
-                        batchInfo,
+                    var newData = new CombinedBatchTaskInfo(batchInfo, false);
+                    if (newData.Failure is null) { newData.AlternateSystemLogItem = null; }
+                    var newDataText = System.Text.Json.JsonSerializer.Serialize(
+                        newData,
                         new System.Text.Json.JsonSerializerOptions()
                         {
                             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
                             Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
                         });
 
-                    if ("{}".Equals(newData) && newTaskState == tesTask.State)
+                    if ("{}".Equals(newDataText) && newTaskState == tesTask.State)
                     {
                         logger.LogDebug(@"For task {TesTask} there's nothing to change.", tesTask.Id);
                         return false;
                     }
 
-                    logger.LogDebug(@"Setting task {TesTask} with metadata {Metadata}.", tesTask.Id, newData);
+                    logger.LogDebug(@"Setting task {TesTask} with metadata {Metadata}.", tesTask.Id, newDataText);
                 }
 
                 var (batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode) = newTaskState == TesState.COMPLETEEnum
@@ -317,14 +317,14 @@ namespace TesApi.Web
 
             bool HandlePreemptedNode(TesTask tesTask, CombinedBatchTaskInfo batchInfo)
             {
-                // TODO: Keep track of the number of times Azure Batch retried this task and fail it as preempted if it is too many times. Waiting on Cromwell to support preempted tasks to do this.
+                // TODO: Keep track of the number of times Azure Batch retried this task and terminate it as preempted if it is too many times. Are we waiting on Cromwell to support preempted tasks to do this?
                 var oldLog = tesTask.GetOrAddTesTaskLog();
                 var newLog = tesTask.AddTesTaskLog();
-                oldLog.Warning = "ComputeNode was preempted. The task will be automatically rescheduled.";
+                oldLog.Warning = "ComputeNode was preempted. The task was automatically rescheduled.";
                 newLog.VirtualMachineInfo = oldLog.VirtualMachineInfo;
                 newLog.StartTime = DateTimeOffset.UtcNow;
                 tesTask.State = TesState.INITIALIZINGEnum;
-                logger.LogInformation("The TesTask {TesTask}'s node was preempted. It will be automatically rescheduled.", tesTask.Id);
+                logger.LogInformation("The TesTask {TesTask}'s node was preempted. It was automatically rescheduled.", tesTask.Id);
                 return true;
             }
 
@@ -336,19 +336,15 @@ namespace TesApi.Web
             tesTaskStateTransitions = new List<TesTaskStateTransition>()
             {
                 new TesTaskStateTransition(condition: null, AzureBatchTaskState.TaskState.CancellationRequested, alternateSystemLogItem: null, TerminateBatchTaskAsync),
-                new TesTaskStateTransition(tesTaskIsQueued, AzureBatchTaskState.TaskState.Initializing, alternateSystemLogItem: null, (tesTask, _) => { tesTask.State = TesState.INITIALIZINGEnum; return true; }),
-                new TesTaskStateTransition(tesTaskIsQueuedOrInitializing, AzureBatchTaskState.TaskState.NodeAllocationFailed, alternateSystemLogItem: null, RequeueTaskAfterFailureAsync),
-                new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.Running, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, TesState.RUNNINGEnum, info, ct)),
-                //new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.MoreThanOneActiveJobOrTaskFound, BatchTaskState.MoreThanOneActiveJobOrTaskFound.ToString(), DeleteBatchJobAndSetTaskSystemErrorAsync),
-                new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedSuccessfully, alternateSystemLogItem: null, SetTaskCompleted),
-                new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedWithErrors, "Please open an issue. There should have been an error reported here.", SetTaskExecutorError),
-                //new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.ActiveJobWithMissingAutoPool, alternateSystemLogItem: null, DeleteBatchJobAndRequeueTaskAsync),
-                new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, "Please open an issue. There should have been an error reported here.", SetTaskSystemError),
-                new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.NodeUnusable, "Please open an issue. There should have been an error reported here.", SetTaskExecutorError),
-                //new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.JobNotFound, BatchTaskState.JobNotFound.ToString(), SetTaskSystemError),
-                //new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.MissingBatchTask, BatchTaskState.MissingBatchTask.ToString(), DeleteBatchJobAndSetTaskSystemErrorAsync),
+                new TesTaskStateTransition(tesTaskIsInitializing, AzureBatchTaskState.TaskState.NodeAllocationFailed, alternateSystemLogItem: null, RequeueTaskAfterFailureAsync),
+                new TesTaskStateTransition(tesTaskIsInitializing, AzureBatchTaskState.TaskState.NodeStartTaskFailed, "Please open an issue. There should have been an error reported here.", SetTaskSystemError),
+                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.Initializing, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, TesState.INITIALIZINGEnum, info, ct)),
+                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.Running, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, TesState.RUNNINGEnum, info, ct)),
+                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedSuccessfully, alternateSystemLogItem: null, SetTaskCompleted),
+                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedWithErrors, "Please open an issue. There should have been an error reported here.", SetTaskExecutorError),
+                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, "Please open an issue. There should have been an error reported here.", SetTaskSystemError),
                 new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodePreempted, alternateSystemLogItem: null, HandlePreemptedNode),
-                new TesTaskStateTransition(tesTaskIsQueuedInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed, alternateSystemLogItem: null, HandleInfoUpdate),
+                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed, alternateSystemLogItem: null, HandleInfoUpdate),
                 new TesTaskStateTransition(condition: null, AzureBatchTaskState.TaskState.InfoUpdate, alternateSystemLogItem: null, HandleInfoUpdate),
             }.AsReadOnly();
         }
@@ -383,7 +379,7 @@ namespace TesApi.Web
                 {
                     case AzureBatchTaskState.TaskState.CompletedSuccessfully:
                     case AzureBatchTaskState.TaskState.CompletedWithErrors:
-                        return false; // Let it finish on its own
+                        return false; // It's already finished
 
 
                     case AzureBatchTaskState.TaskState.CancellationRequested:
@@ -393,14 +389,18 @@ namespace TesApi.Web
                         }
 
                         tesTask.State = TesState.CANCELEDEnum;
+
+                        if (!(tesTask.Logs?.Any() ?? false))
+                        {
+                            return true; // It was never scheduled
+                        }
+
                         goto default;
 
                     default:
-                        break;
+                        await azureProxy.TerminateBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
+                        break;//return true;
                 }
-
-                await azureProxy.TerminateBatchTaskAsync(tesTask.Id, tesTask.PoolId, cancellationToken);
-                //return true;
             }
             catch (BatchException exc) when (BatchErrorCodeStrings.TaskNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             {
@@ -412,7 +412,7 @@ namespace TesApi.Web
                 throw;
             }
 
-            try
+            try // TODO: remove (and undo changes to taskExecutionScriptingManager)
             {
                 await taskExecutionScriptingManager.TryUploadServerTesTask(tesTask, "server-tes-task-completed.json", cancellationToken);
             }
@@ -1410,13 +1410,13 @@ namespace TesApi.Web
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError($"Failed to parse metrics for task {tesTask.Id}. Error: {ex.Message}");
+                        logger.LogError(@"Failed to parse metrics for task {TesTask}. Error: {ExceptionMessage}", tesTask.Id, ex.Message);
                     }
                 }
             }
             catch (Exception ex)
             {
-                logger.LogError($"Failed to get batch node metrics for task {tesTask.Id}. Error: {ex.Message}");
+                logger.LogError(@"Failed to get batch node metrics for task {TesTask}. Error: {ExceptionMessage}", tesTask.Id, ex.Message);
             }
 
             return (batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode);
@@ -1524,19 +1524,40 @@ namespace TesApi.Web
 
         private record CombinedBatchTaskInfo : AzureBatchTaskState
         {
-            public CombinedBatchTaskInfo(CombinedBatchTaskInfo state, string additionalSystemLogItem)
-                : base(state, additionalSystemLogItem)
+            /// <summary>
+            /// Copy constructor that defaults <see cref="AzureBatchTaskState.State"/> (to enable hiding if serialized)
+            /// </summary>
+            /// <param name="original"><see cref="CombinedBatchTaskInfo"/> to copy</param>
+            /// <param name="_1">Parameter that exists to not override the default copy constructor</param>
+            public CombinedBatchTaskInfo(CombinedBatchTaskInfo original, bool _1)
+                : this(original)
             {
-                AlternateSystemLogItem = state.AlternateSystemLogItem;
+                State = default;
             }
 
+            /// <summary>
+            /// SystemLog-appending copy constructor
+            /// </summary>
+            /// <param name="original"><see cref="CombinedBatchTaskInfo"/> to copy</param>
+            /// <param name="additionalSystemLogItem">Text to add to the SystemLog in the copy</param>
+            public CombinedBatchTaskInfo(CombinedBatchTaskInfo original, string additionalSystemLogItem)
+                : base(original, additionalSystemLogItem)
+            {
+                AlternateSystemLogItem = original.AlternateSystemLogItem; // reattach this property
+            }
+
+            /// <summary>
+            /// Constructor
+            /// </summary>
+            /// <param name="state"><see cref="AzureBatchTaskState"/> to extend</param>
+            /// <param name="alternateSystemLogItem"><see cref="TesTaskStateTransition.AlternateSystemLogItem"/> from the selected Action</param>
             public CombinedBatchTaskInfo(AzureBatchTaskState state, string alternateSystemLogItem)
                 : base(state)
             {
                 AlternateSystemLogItem = alternateSystemLogItem;
             }
 
-            public string AlternateSystemLogItem { get; }
+            public string AlternateSystemLogItem { get; set; }
         }
     }
 }

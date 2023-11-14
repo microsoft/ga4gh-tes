@@ -25,6 +25,16 @@ namespace TesApi.Web
         string Id { get; }
 
         /// <summary>
+        /// Failures from nodes in <see cref="Microsoft.Azure.Batch.Common.ComputeNodeState.StartTaskFailed"/>.
+        /// </summary>
+        Queue<TaskFailureInformation> StartTaskFailures { get; }
+
+        /// <summary>
+        /// Pool allocation failures that impact task execution ability to be successful.
+        /// </summary>
+        Queue<ResizeError> ResizeErrors { get; }
+
+        /// <summary>
         /// Creates an Azure Batch pool and associated job in the Batch Account.
         /// </summary>
         /// <param name="pool"></param>
@@ -59,20 +69,16 @@ namespace TesApi.Web
         ValueTask ServicePoolAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Gets compute node related task state information.
+        /// Lists <see cref="CloudTask"/>s running in pool's job.
         /// </summary>
-        /// <param name="now">Reference time.</param>
         /// <returns></returns>
-        /// <param name="cancellationToken"></param>
-        IAsyncEnumerable<CloudTaskBatchTaskState> GetCloudTaskStatesAsync(DateTime now, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<CloudTask> ListCloudTasksAsync();
 
         /// <summary>
-        /// Gets batch tasks that need to be deleted.
+        /// Lists <see cref="ComputeNode"/>s that are <see cref="Microsoft.Azure.Batch.Common.ComputeNodeState.Preempted"/> or <see cref="Microsoft.Azure.Batch.Common.ComputeNodeState.Unusable"/>.
         /// </summary>
-        /// <param name="now">Reference time.</param>
         /// <returns></returns>
-        /// <param name="cancellationToken"></param>
-        IAsyncEnumerable<IBatchScheduler.CloudTaskId> GetTasksToDelete(DateTime now, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<ComputeNode> ListLostComputeNodesAsync();
 
         /// <summary>
         /// Gets the last time the pool's compute node list was changed.

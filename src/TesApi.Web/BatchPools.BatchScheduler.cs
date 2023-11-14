@@ -203,7 +203,7 @@ namespace TesApi.Web
                     .Take(neededPools.Count)
                     .WithCancellation(cancellationToken))
                 {
-                    await DeletePoolAsync(pool, cancellationToken);
+                    await DeletePoolAndJobAsync(pool, cancellationToken);
                     _ = RemovePoolFromList(pool);
                 }
             }
@@ -214,7 +214,7 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken)
+        public Task DeletePoolAndJobAsync(IBatchPool pool, CancellationToken cancellationToken)
         {
             // TODO: Consider moving any remaining tasks to another pool, or failing tasks explicitly
             logger.LogDebug(@"Deleting pool and job {PoolId}", pool.Id);

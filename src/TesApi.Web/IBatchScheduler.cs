@@ -72,7 +72,7 @@ namespace TesApi.Web
         /// <param name="pool"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        Task DeletePoolAsync(IBatchPool pool, CancellationToken cancellationToken);
+        Task DeletePoolAndJobAsync(IBatchPool pool, CancellationToken cancellationToken);
 
         /// <summary>
         /// Removes pool from list of managed pools.

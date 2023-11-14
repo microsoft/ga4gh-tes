@@ -54,14 +54,8 @@ namespace TesApi.Web
             _batchPools = batchScheduler as BatchScheduler ?? throw new ArgumentException("batchScheduler must be of type BatchScheduler", nameof(batchScheduler));
         }
 
-        private Queue<TaskFailureInformation> StartTaskFailures { get; } = new();
-        private Queue<ResizeError> ResizeErrors { get; } = new();
-
         private IAsyncEnumerable<CloudTask> GetTasksAsync(string select, string filter)
             => _removedFromService ? AsyncEnumerable.Empty<CloudTask>() : _azureProxy.ListTasksAsync(Id, new ODATADetailLevel { SelectClause = select, FilterClause = filter });
-
-        internal IAsyncEnumerable<CloudTask> GetTasksAsync(bool includeCompleted)
-            => GetTasksAsync("id,stateTransitionTime", includeCompleted ? default : "state ne 'completed'");
 
         private async ValueTask RemoveNodesAsync(IList<ComputeNode> nodesToRemove, CancellationToken cancellationToken)
         {
@@ -380,7 +374,7 @@ namespace TesApi.Web
                     case ScalingMode.RemovingFailedNodes:
                         _scalingMode = ScalingMode.RemovingFailedNodes;
                         _logger.LogInformation(@"Switching pool {PoolId} back to autoscale.", Id);
-                        await _azureProxy.EnableBatchPoolAutoScaleAsync(Id, !IsDedicated, AutoScaleEvaluationInterval, AutoPoolFormula, GetTaskCountAsync, cancellationToken);
+                        await _azureProxy.EnableBatchPoolAutoScaleAsync(Id, !IsDedicated, AutoScaleEvaluationInterval, AutoPoolFormula, _ => ValueTask.FromResult(GetTasks(includeCompleted: false).Count()), cancellationToken);
                         _autoScaleWaitTime = DateTime.UtcNow + (3 * AutoScaleEvaluationInterval) + (PoolScheduler.RunInterval / 2);
                         _scalingMode = _resetAutoScalingRequired ? ScalingMode.WaitingForAutoScale : ScalingMode.SettingAutoScale;
                         _resetAutoScalingRequired = false;
@@ -398,22 +392,7 @@ namespace TesApi.Web
                         _logger.LogInformation(@"Pool {PoolId} is back to normal resize and monitoring status.", Id);
                         break;
                 }
-
-                async ValueTask<int> GetTaskCountAsync(int @default) // Used to make reenabling auto-scale more performant by attempting to gather the current number of "pending" tasks, falling back on the current target.
-                {
-                    try
-                    {
-                        return await GetTasksAsync(includeCompleted: false).CountAsync(cancellationToken);
-                    }
-                    catch
-                    {
-                        return @default;
-                    }
-                }
             }
-
-            IAsyncEnumerable<ComputeNode> GetNodesToRemove(bool withState)
-                => _azureProxy.ListComputeNodesAsync(Id, new ODATADetailLevel(filterClause: @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'", selectClause: withState ? @"id,state,startTaskInfo" : @"id"));
         }
 
         private bool DetermineIsAvailable(DateTime? creation)
@@ -436,10 +415,10 @@ namespace TesApi.Web
                 // Get current node counts
                 var (_, _, _, _, lowPriorityNodes, _, dedicatedNodes) = await _azureProxy.GetFullAllocationStateAsync(Id, cancellationToken);
 
-                if (lowPriorityNodes.GetValueOrDefault(0) == 0 && dedicatedNodes.GetValueOrDefault(0) == 0 && !await GetTasksAsync(includeCompleted: true).AnyAsync(cancellationToken))
+                if (lowPriorityNodes.GetValueOrDefault() == 0 && dedicatedNodes.GetValueOrDefault() == 0 && !GetTasks(includeCompleted: true).Any())
                 {
                     _ = _batchPools.RemovePoolFromList(this);
-                    await _batchPools.DeletePoolAsync(this, cancellationToken);
+                    await _batchPools.DeletePoolAndJobAsync(this, cancellationToken);
                 }
             }
         }
@@ -486,6 +465,12 @@ namespace TesApi.Web
         public string Id { get; private set; }
 
         /// <inheritdoc/>
+        public Queue<TaskFailureInformation> StartTaskFailures { get; } = new();
+
+        /// <inheritdoc/>
+        public Queue<ResizeError> ResizeErrors { get; } = new();
+
+        /// <inheritdoc/>
         public async ValueTask<bool> CanBeDeletedAsync(CancellationToken cancellationToken = default)
         {
             if (_removedFromService)
@@ -493,24 +478,24 @@ namespace TesApi.Web
                 return true;
             }
 
-            if (await GetTasksAsync(includeCompleted: true).AnyAsync(cancellationToken))
+            if (await GetTasksAsync("id", default).AnyAsync(cancellationToken))
             {
                 return false;
             }
 
-            await foreach (var node in _azureProxy.ListComputeNodesAsync(Id, new ODATADetailLevel(selectClause: "state")).WithCancellation(cancellationToken))
-            {
-                switch (node.State)
-                {
-                    case ComputeNodeState.Rebooting:
-                    case ComputeNodeState.Reimaging:
-                    case ComputeNodeState.Running:
-                    case ComputeNodeState.Creating:
-                    case ComputeNodeState.Starting:
-                    case ComputeNodeState.WaitingForStartTask:
-                        return false;
-                }
-            }
+            //await foreach (var node in _azureProxy.ListComputeNodesAsync(Id, new ODATADetailLevel(selectClause: "state")).WithCancellation(cancellationToken))
+            //{
+            //    switch (node.State)
+            //    {
+            //        case ComputeNodeState.Rebooting:
+            //        case ComputeNodeState.Reimaging:
+            //        case ComputeNodeState.Running:
+            //        case ComputeNodeState.Creating:
+            //        case ComputeNodeState.Starting:
+            //        case ComputeNodeState.WaitingForStartTask:
+            //            return false;
+            //    }
+            //}
 
             return true;
         }
@@ -549,9 +534,32 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async ValueTask ServicePoolAsync(CancellationToken cancellationToken)
         {
+            async ValueTask StandupQueries()
+            {
+                // List tasks from batch just one time each time we service the pool when called from PoolScheduler
+                _foundTasks = await GetTasksAsync("creationTime,executionInfo,id,nodeInfo,state,stateTransitionTime", null).ToListAsync(cancellationToken);
+
+                // List nodes from Batch at most one time each time we service the pool
+                if (_foundTasks.Where(PoolScheduler.TaskListWithComputeNodeInfoPredicate).Any())
+                {
+                    var nodes = (await _azureProxy.ListComputeNodesAsync(Id,
+                                new ODATADetailLevel(filterClause: @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'", selectClause: @"errors,id,state,startTaskInfo"))
+                            .ToListAsync(cancellationToken))
+                        .ToAsyncEnumerable();
+                    _lazyComputeNodes = _ => new(nodes);
+                }
+                else
+                {
+                    _lazyComputeNodes = withState => new(_azureProxy.ListComputeNodesAsync(Id,
+                        new ODATADetailLevel(filterClause: @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'", selectClause: withState.Value ? @"id,state,startTaskInfo" : @"id")));
+                }
+            }
+
             var exceptions = new List<Exception>();
 
-            _ = await PerformTask(ServicePoolAsync(ServiceKind.GetResizeErrors, cancellationToken), cancellationToken) &&
+            // Run each servicing task serially and accumulate the exception, except whenever the pool or the job are not found
+            _ = await PerformTask(StandupQueries(), cancellationToken) &&
+            await PerformTask(ServicePoolAsync(ServiceKind.GetResizeErrors, cancellationToken), cancellationToken) &&
             await PerformTask(ServicePoolAsync(ServiceKind.ManagePoolScaling, cancellationToken), cancellationToken) &&
             await PerformTask(ServicePoolAsync(ServiceKind.Rotate, cancellationToken), cancellationToken) &&
             await PerformTask(ServicePoolAsync(ServiceKind.RemovePoolIfEmpty, cancellationToken), cancellationToken);
@@ -588,24 +596,26 @@ namespace TesApi.Web
                     catch (Exception ex)
                     {
                         exceptions.Add(ex);
-                        return await RemoveMissingPoolsAsync(ex, cancellationToken);
+                        return !await RemoveMissingPoolsAsync(ex, cancellationToken);
                     }
                 }
 
                 return false;
             }
 
-            // Returns false when pool/job was removed because it was not found. Returns true otherwise.
+            // Returns true when pool/job was removed because it was not found. Returns false otherwise.
             async ValueTask<bool> RemoveMissingPoolsAsync(Exception ex, CancellationToken cancellationToken)
             {
                 switch (ex)
                 {
                     case AggregateException aggregateException:
-                        var result = true;
+                        var result = false;
+
                         foreach (var e in aggregateException.InnerExceptions)
                         {
-                            result &= await RemoveMissingPoolsAsync(e, cancellationToken);
+                            result |= await RemoveMissingPoolsAsync(e, cancellationToken);
                         }
+
                         return result;
 
                     case BatchException batchException:
@@ -614,143 +624,37 @@ namespace TesApi.Web
                         {
                             _logger.LogError(ex, "Batch pool and/or job {PoolId} is missing. Removing them from TES's active pool list.", Id);
                             _ = _batchPools.RemovePoolFromList(this);
-                            await _batchPools.DeletePoolAsync(this, cancellationToken);
-                            return false;
+                            await _batchPools.DeletePoolAndJobAsync(this, cancellationToken);
+                            return true;
                         }
+
                         break;
                 }
-                return true;
+
+                return false;
             }
         }
 
+        private IEnumerable<CloudTask> _foundTasks = Enumerable.Empty<CloudTask>();
+
+        private Func<bool?, Lazy<IAsyncEnumerable<ComputeNode>>> _lazyComputeNodes;
+
+        private IAsyncEnumerable<ComputeNode> GetNodesToRemove(bool withState)
+            => _lazyComputeNodes(withState).Value;
+
         /// <inheritdoc/>
-        public IAsyncEnumerable<IBatchScheduler.CloudTaskId> GetTasksToDelete(DateTime now, CancellationToken cancellationToken)
+        public IAsyncEnumerable<ComputeNode> ListLostComputeNodesAsync()
         {
-            now = now.ToUniversalTime();
-            return GetTasksAsync("creationTime,id", $"state eq 'completed' and creationTime lt datetime'{now - TimeSpan.FromMinutes(10):O}' and stateTransitionTime gt datetime'{now + TimeSpan.FromMinutes(3)}'").Select(task => new IBatchScheduler.CloudTaskId(Id, task.Id, task.CreationTime.Value));
+            return _lazyComputeNodes(null).Value.Where(node => !ComputeNodeState.StartTaskFailed.Equals(node.State));
         }
 
+        private IEnumerable<CloudTask> GetTasks(bool includeCompleted)
+            => _foundTasks.Where(task => includeCompleted || !TaskState.Completed.Equals(task.State));
+
         /// <inheritdoc/>
-        public async IAsyncEnumerable<CloudTaskBatchTaskState> GetCloudTaskStatesAsync(DateTime now, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        public IAsyncEnumerable<CloudTask> ListCloudTasksAsync()
         {
-            now = now.ToUniversalTime();
-            List<CloudTask> taskListWithComputeNodeInfo; // To check if the task was running when its node became preempted or unusable
-            List<CloudTask> activeTaskList; // These are candidates to be the victim of resizes or starttask failures
-            List<CloudTask> completedTaskList; // Backstop if events don't provide timely task completion information in a timely manner
-
-            {
-                var taskList = await GetTasksAsync("executionInfo,id,nodeInfo,state,stateTransitionTime", null).ToListAsync(cancellationToken);
-                taskListWithComputeNodeInfo = taskList.Where(task => !TaskState.Completed.Equals(task.State) && !string.IsNullOrEmpty(task.ComputeNodeInformation?.ComputeNodeId)).ToList();
-                activeTaskList = taskList.Where(task => TaskState.Active.Equals(task.State)).OrderByDescending(task => task.StateTransitionTime).ToList();
-                completedTaskList = taskList.Where(task => TaskState.Completed.Equals(task.State) && task.StateTransitionTime < now - TimeSpan.FromMinutes(2)).ToList();
-            }
-
-            await foreach (var node in _azureProxy.ListComputeNodesAsync(Id, new ODATADetailLevel(filterClause: @"state eq 'preempted' or state eq 'unusable'", selectClause: @"errors,id,state")).WithCancellation(cancellationToken))
-            {
-                foreach (var task in taskListWithComputeNodeInfo.Where(task => node.Id.Equals(task.ComputeNodeInformation.ComputeNodeId, StringComparison.InvariantCultureIgnoreCase)))
-                {
-                    yield return new(task.Id, node.State switch
-                    {
-                        ComputeNodeState.Preempted => new(AzureBatchTaskState.TaskState.NodePreempted),
-                        ComputeNodeState.Unusable => new(AzureBatchTaskState.TaskState.NodeUnusable, Failure: ParseComputeNodeErrors(node.Errors)),
-                        _ => throw new System.Diagnostics.UnreachableException(),
-                    });
-
-                    _ = activeTaskList.Remove(task);
-                }
-            }
-
-            await foreach (var state in activeTaskList.ToAsyncEnumerable().Zip(GetFailures(cancellationToken),
-                    (cloud, state) => new CloudTaskBatchTaskState(cloud.Id, state))
-                .WithCancellation(cancellationToken))
-            {
-                yield return state;
-            }
-
-            foreach (var task in completedTaskList)
-            {
-                yield return new(task.Id, GetCompletedBatchState(task));
-            }
-
-            yield break;
-
-            static AzureBatchTaskState.FailureInformation ParseComputeNodeErrors(IReadOnlyList<ComputeNodeError> nodeErrors)
-            {
-                var totalList = nodeErrors.Select(nodeError => Enumerable.Empty<string>().Append(nodeError.Code).Append(nodeError.Message)
-                    .Concat(nodeError.ErrorDetails.Select(errorDetail => Enumerable.Empty<string>().Append(errorDetail.Name).Append(errorDetail.Value)).SelectMany(s => s)))
-                    .SelectMany(s => s).ToList();
-
-                if (totalList.Contains(TaskFailureInformationCodes.DiskFull))
-                {
-                    return new(TaskFailureInformationCodes.DiskFull, totalList);
-                }
-                else
-                {
-                    return new(BatchErrorCodeStrings.NodeStateUnusable, totalList);
-                }
-            }
-
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-            async IAsyncEnumerable<AzureBatchTaskState> GetFailures([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
-            {
-                for (var failure = PopNextStartTaskFailure(); failure is not null; failure = PopNextStartTaskFailure())
-                {
-                    yield return ConvertFromStartTask(failure);
-                    cancellationToken.ThrowIfCancellationRequested();
-                }
-
-                for (var failure = PopNextResizeError(); failure is not null; failure = PopNextResizeError())
-                {
-                    yield return ConvertFromResize(failure);
-                    cancellationToken.ThrowIfCancellationRequested();
-                }
-
-                yield break;
-            }
-
-            AzureBatchTaskState ConvertFromResize(ResizeError failure)
-                => new(AzureBatchTaskState.TaskState.NodeAllocationFailed, Failure: new(failure.Code, Enumerable.Empty<string>()
-                    .Append(failure.Message)
-                    .Concat(failure.Values.Select(t => t.Value))));
-
-            AzureBatchTaskState ConvertFromStartTask(TaskFailureInformation failure)
-                => new(AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, Failure: new(failure.Code, Enumerable.Empty<string>()
-                    .Append(failure.Message)
-                    .Append($"Start task failed ({failure.Category})")
-                    .Concat(failure.Details.Select(t => t.Value))));
-
-            ResizeError PopNextResizeError()
-                => ResizeErrors.TryDequeue(out var resizeError) ? resizeError : default;
-
-            TaskFailureInformation PopNextStartTaskFailure()
-                => StartTaskFailures.TryDequeue(out var failure) ? failure : default;
-
-            AzureBatchTaskState GetCompletedBatchState(CloudTask task)
-            {
-                _logger.LogDebug("Getting batch task state from completed task {TesTask}.", _batchPools.GetTesTaskIdFromCloudTaskId(task.Id));
-                return task.ExecutionInformation.Result switch
-                {
-                    TaskExecutionResult.Success => new(
-                        AzureBatchTaskState.TaskState.CompletedSuccessfully,
-                        BatchTaskStartTime: task.ExecutionInformation.StartTime,
-                        BatchTaskEndTime: task.ExecutionInformation.EndTime,
-                        BatchTaskExitCode: task.ExecutionInformation.ExitCode),
-
-                    TaskExecutionResult.Failure => new(
-                        AzureBatchTaskState.TaskState.CompletedWithErrors,
-                        Failure: new(task.ExecutionInformation.FailureInformation.Code,
-                        Enumerable.Empty<string>()
-                            .Append(task.ExecutionInformation.FailureInformation.Message)
-                            .Append($"Batch task ExitCode: {task.ExecutionInformation?.ExitCode}, Failure message: {task.ExecutionInformation?.FailureInformation?.Message}")
-                            .Concat(task.ExecutionInformation.FailureInformation.Details.Select(pair => pair.Value))),
-                        BatchTaskStartTime: task.ExecutionInformation.StartTime,
-                        BatchTaskEndTime: task.ExecutionInformation.EndTime,
-                        BatchTaskExitCode: task.ExecutionInformation.ExitCode),
-
-                    _ => throw new System.Diagnostics.UnreachableException(),
-                };
-            }
+            return _foundTasks.ToAsyncEnumerable();
         }
 
         /// <inheritdoc/>
@@ -773,7 +677,7 @@ namespace TesApi.Web
             {
                 var exception = ex.Flatten();
                 // If there is only one contained exception, we don't need an AggregateException, and we have a simple path to success (following this if block)
-                // In the extremely unlikely event that there are no innerexceptions, we don't want to change the existing code flow nor do we want to complicate the (less than 2) path.
+                // In the extremely unlikely event that there are no innerexceptions, we don't want to change the existing code flow nor do we want to complicate the (less than 2 inner exceptions) path.
                 if (exception.InnerExceptions?.Count != 1)
                 {
                     throw new AggregateException(exception.Message, exception.InnerExceptions?.Select(HandleException) ?? Enumerable.Empty<Exception>());
@@ -788,13 +692,13 @@ namespace TesApi.Web
 
             Exception HandleException(Exception ex)
             {
-                // When the batch management API creating the pool times out, it may or may not have created the pool. Add an inactive record to delete it if it did get created and try again later. That record will be removed later whether or not the pool was created.
+                // When the batch management API creating the pool times out, it may or may not have created the pool. Add an inactive record to delete it if it did get created and try again later. That record will be removed when servicing whether or not the pool was really created.
                 Id ??= poolModel.Name;
                 _ = _batchPools.AddPool(this);
                 return ex switch
                 {
-                    OperationCanceledException => ex.InnerException is null ? ex : new AzureBatchPoolCreationException(ex.Message, true, ex),
-                    var x when x is RequestFailedException rfe && rfe.Status == 0 && rfe.InnerException is System.Net.WebException webException && webException.Status == System.Net.WebExceptionStatus.Timeout => new AzureBatchPoolCreationException(ex.Message, true, ex),
+                    OperationCanceledException => ex.InnerException is null ? ex : new AzureBatchPoolCreationException(ex.Message, isTimeout: true, ex),
+                    var x when x is RequestFailedException rfe && rfe.Status == 0 && rfe.InnerException is System.Net.WebException webException && webException.Status == System.Net.WebExceptionStatus.Timeout => new AzureBatchPoolCreationException(ex.Message, isTimeout: true, ex),
                     var x when IsInnermostExceptionSocketException(x) => new AzureBatchPoolCreationException(ex.Message, ex),
                     _ => new AzureBatchPoolCreationException(ex.Message, ex),
                 };
@@ -855,12 +759,10 @@ namespace TesApi.Web
     }
 
     /// <content>
-    /// Used for unit/module testing.
+    /// Used only for unit/module testing.
     /// </content>
     public sealed partial class BatchPool
     {
-        internal int TestPendingReservationsCount => GetTasksAsync(includeCompleted: false).CountAsync().AsTask().Result;
-
         internal int? TestTargetDedicated => _azureProxy.GetFullAllocationStateAsync(Id, CancellationToken.None).Result.TargetDedicated;
         internal int? TestTargetLowPriority => _azureProxy.GetFullAllocationStateAsync(Id, CancellationToken.None).Result.TargetLowPriority;
 

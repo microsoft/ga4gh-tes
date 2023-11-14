@@ -2,10 +2,13 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Azure.Batch.Common;
+using Microsoft.Azure.Batch;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
 using Tes.Repository;
@@ -90,21 +93,69 @@ namespace TesApi.Web
         /// <returns></returns>
         private Task ServiceBatchPoolsAsync(CancellationToken stoppingToken)
         {
-            return ExecuteActionOnIntervalAsync(RunInterval, async cancellationToken =>
-            {
+            return ExecuteActionOnIntervalAsync(
+                RunInterval,
+                async token =>
                 await ExecuteActionOnPoolsAsync(
                     "Service Batch Pools",
-                    async (pool, token) =>
+                    async (pool, cancellationToken) =>
                     {
-                        var now = DateTime.UtcNow;
-                        await pool.ServicePoolAsync(token);
-                        await ProcessCloudTaskStatesAsync(pool.Id, pool.GetCloudTaskStatesAsync(now, token), token);
-                        await ProcessDeletedTasks(pool.GetTasksToDelete(now, token), token);
+                        await pool.ServicePoolAsync(cancellationToken);
+                        await ProcessTasksAsync(pool, DateTime.UtcNow, pool.ListCloudTasksAsync(), cancellationToken);
                     },
-                    cancellationToken);
-            },
-            stoppingToken);
+                    token),
+                stoppingToken);
         }
+
+        /// <summary>
+        /// Processes tasks to manage state.
+        /// </summary>
+        /// <param name="pool"></param>
+        /// <param name="now">Reference time.</param>
+        /// <param name="tasks"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        private async ValueTask ProcessTasksAsync(IBatchPool pool, DateTime now, IAsyncEnumerable<CloudTask> tasks, CancellationToken cancellationToken)
+        {
+            var batchStateCandidateTasks = AsyncEnumerable.Empty<CloudTask>();
+            var deletionCandidateTasks = AsyncEnumerable.Empty<IBatchScheduler.CloudTaskId>();
+
+            var deletionCandidateCreationCutoff = now - TimeSpan.FromMinutes(10);
+            var stateTransitionTimeCutoff = now + TimeSpan.FromMinutes(3);
+
+            await foreach (var task in tasks.WithCancellation(cancellationToken))
+            {
+
+                if (TaskListWithComputeNodeInfoPredicate(task) || ActiveTaskListPredicate(task) || CompletedTaskListPredicate(task, now))
+                {
+                    batchStateCandidateTasks = batchStateCandidateTasks.Append(task);
+                }
+
+                if (TaskState.Completed.Equals(task.State) && task.CreationTime < deletionCandidateCreationCutoff && task.StateTransitionTime > stateTransitionTimeCutoff)
+                {
+                    deletionCandidateTasks = deletionCandidateTasks.Append(new IBatchScheduler.CloudTaskId(pool.Id, task.Id, task.CreationTime.Value));
+                }
+            }
+
+            await ProcessCloudTaskStatesAsync(pool.Id, GetCloudTaskStatesAsync(pool, now, batchStateCandidateTasks, cancellationToken), cancellationToken);
+
+            await ProcessDeletedTasks(deletionCandidateTasks, cancellationToken);
+        }
+
+        /// <summary>
+        /// Shared between <see cref="ProcessTasksAsync"/> and <see cref="GetCloudTaskStatesAsync"/>.
+        /// </summary>
+        internal static bool TaskListWithComputeNodeInfoPredicate(CloudTask task) => !TaskState.Completed.Equals(task.State) && !string.IsNullOrEmpty(task.ComputeNodeInformation?.ComputeNodeId);
+
+        /// <summary>
+        /// Shared between <see cref="ProcessTasksAsync"/> and <see cref="GetCloudTaskStatesAsync"/>.
+        /// </summary>
+        private static bool ActiveTaskListPredicate(CloudTask task) => !TaskState.Active.Equals(task.State);
+
+        /// <summary>
+        /// Shared between <see cref="ProcessTasksAsync"/> and <see cref="GetCloudTaskStatesAsync"/>.
+        /// </summary>
+        private static bool CompletedTaskListPredicate(CloudTask task, DateTime now) => !TaskState.Completed.Equals(task.State) && task.StateTransitionTime < now - TimeSpan.FromMinutes(2);
 
         /// <summary>
         /// Updates each task based on the provided states.
@@ -115,22 +166,22 @@ namespace TesApi.Web
         /// <returns></returns>
         private async ValueTask ProcessCloudTaskStatesAsync(string poolId, IAsyncEnumerable<CloudTaskBatchTaskState> states, CancellationToken cancellationToken)
         {
-            var list = new List<(TesTask TesTask, AzureBatchTaskState State)>();
+            var list = new ConcurrentBag<(TesTask TesTask, AzureBatchTaskState State)>();
 
-            await foreach (var (cloudTaskId, state) in states.WithCancellation(cancellationToken))
+            await Parallel.ForEachAsync(states, cancellationToken, async (state, token) =>
             {
                 TesTask tesTask = default;
-                if (await repository.TryGetItemAsync(batchScheduler.GetTesTaskIdFromCloudTaskId(cloudTaskId), cancellationToken, task => tesTask = task) && tesTask is not null)
+                if (await repository.TryGetItemAsync(batchScheduler.GetTesTaskIdFromCloudTaskId(state.CloudTaskId), token, task => tesTask = task) && tesTask is not null)
                 {
-                    list.Add((tesTask, state));
+                    list.Add((tesTask, state.TaskState));
                 }
                 else
                 {
-                    logger.LogDebug(@"Unable to locate TesTask for CloudTask '{CloudTask}' with action state {ActionState}.", cloudTaskId, state.State);
+                    logger.LogError(@"Unable to locate TesTask for CloudTask '{CloudTask}' with action state {ActionState}.", state.CloudTaskId, state.TaskState.State);
                 }
-            }
+            });
 
-            if (list.Count != 0)
+            if (!list.IsEmpty)
             {
                 await OrchestrateTesTasksOnBatchAsync(
                     $"NodeState ({poolId})",
@@ -173,6 +224,138 @@ namespace TesApi.Web
                 {
                     logger.LogError(exc, @"Failed to delete azure task '{CloudTask}': '{ExceptionType}': '{ExceptionMessage}'", taskResult.Related.TaskId, exc.GetType().FullName, exc.Message);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Obtains <see cref="CloudTaskBatchTaskState"/> for tasks in specific conditions.
+        /// </summary>
+        /// <param name="pool"></param>
+        /// <param name="now"></param>
+        /// <param name="tasks"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        private async IAsyncEnumerable<CloudTaskBatchTaskState> GetCloudTaskStatesAsync(IBatchPool pool, DateTime now, IAsyncEnumerable<CloudTask> tasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            List<CloudTask> taskListWithComputeNodeInfo; // To check if the task was running when its node became preempted or unusable
+            List<CloudTask> activeTaskList; // These are candidates to be the victim of resizes or starttask failures
+            List<CloudTask> completedTaskList; // Backstop if events don't provide timely task completion information in a timely manner
+
+            {
+                var taskList = await tasks.ToListAsync(cancellationToken);
+                taskListWithComputeNodeInfo = taskList.Where(TaskListWithComputeNodeInfoPredicate).ToList();
+                activeTaskList = taskList.Where(ActiveTaskListPredicate).OrderByDescending(task => task.StateTransitionTime).ToList();
+                completedTaskList = taskList.Where(task => CompletedTaskListPredicate(task, now)).ToList();
+            }
+
+            if (taskListWithComputeNodeInfo.Count > 0)
+            {
+                await foreach (var node in pool.ListLostComputeNodesAsync().WithCancellation(cancellationToken))
+                {
+                    foreach (var task in taskListWithComputeNodeInfo.Where(task => node.Id.Equals(task.ComputeNodeInformation.ComputeNodeId, StringComparison.InvariantCultureIgnoreCase)))
+                    {
+                        yield return new(task.Id, node.State switch
+                        {
+                            ComputeNodeState.Preempted => new(AzureBatchTaskState.TaskState.NodePreempted),
+                            ComputeNodeState.Unusable => new(AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, Failure: ParseComputeNodeErrors(node.Errors)),
+                            _ => throw new System.Diagnostics.UnreachableException(),
+                        });
+
+                        _ = activeTaskList.Remove(task);
+                    }
+                }
+            }
+
+            await foreach (var state in activeTaskList.ToAsyncEnumerable().Zip(GetFailures(cancellationToken),
+                    (cloud, state) => new CloudTaskBatchTaskState(cloud.Id, state))
+                .WithCancellation(cancellationToken))
+            {
+                yield return state;
+            }
+
+            foreach (var task in completedTaskList)
+            {
+                yield return new(task.Id, GetCompletedBatchState(task));
+            }
+
+            yield break;
+
+            static AzureBatchTaskState.FailureInformation ParseComputeNodeErrors(IReadOnlyList<ComputeNodeError> nodeErrors)
+            {
+                var totalList = nodeErrors.Select(nodeError => Enumerable.Empty<string>().Append(nodeError.Code).Append(nodeError.Message)
+                    .Concat(nodeError.ErrorDetails.Select(errorDetail => Enumerable.Empty<string>().Append(errorDetail.Name).Append(errorDetail.Value)).SelectMany(s => s)))
+                    .SelectMany(s => s).ToList();
+
+                if (totalList.Contains(TaskFailureInformationCodes.DiskFull))
+                {
+                    return new(TaskFailureInformationCodes.DiskFull, totalList);
+                }
+                else
+                {
+                    return new(BatchErrorCodeStrings.NodeStateUnusable, totalList);
+                }
+            }
+
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+            async IAsyncEnumerable<AzureBatchTaskState> GetFailures([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+            {
+                for (var failure = PopNextStartTaskFailure(); failure is not null; failure = PopNextStartTaskFailure())
+                {
+                    yield return ConvertFromStartTask(failure);
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                for (var failure = PopNextResizeError(); failure is not null; failure = PopNextResizeError())
+                {
+                    yield return ConvertFromResize(failure);
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                yield break;
+            }
+
+            AzureBatchTaskState ConvertFromResize(ResizeError failure)
+                => new(AzureBatchTaskState.TaskState.NodeAllocationFailed, Failure: new(failure.Code, Enumerable.Empty<string>()
+                    .Append(failure.Message)
+                    .Concat(failure.Values.Select(t => t.Value))));
+
+            AzureBatchTaskState ConvertFromStartTask(TaskFailureInformation failure)
+                => new(AzureBatchTaskState.TaskState.NodeStartTaskFailed, Failure: new(failure.Code, Enumerable.Empty<string>()
+                    .Append(failure.Message)
+                    .Append($"Start task failed ({failure.Category})")
+                    .Concat(failure.Details.Select(t => t.Value))));
+
+            ResizeError PopNextResizeError()
+                => pool.ResizeErrors.TryDequeue(out var resizeError) ? resizeError : default;
+
+            TaskFailureInformation PopNextStartTaskFailure()
+                => pool.StartTaskFailures.TryDequeue(out var failure) ? failure : default;
+
+            AzureBatchTaskState GetCompletedBatchState(CloudTask task)
+            {
+                logger.LogDebug("Getting batch task state from completed task {TesTask}.", batchScheduler.GetTesTaskIdFromCloudTaskId(task.Id));
+                return task.ExecutionInformation.Result switch
+                {
+                    TaskExecutionResult.Success => new(
+                        AzureBatchTaskState.TaskState.CompletedSuccessfully,
+                        BatchTaskStartTime: task.ExecutionInformation.StartTime,
+                        BatchTaskEndTime: task.ExecutionInformation.EndTime,
+                        BatchTaskExitCode: task.ExecutionInformation.ExitCode),
+
+                    TaskExecutionResult.Failure => new(
+                        AzureBatchTaskState.TaskState.CompletedWithErrors,
+                        Failure: new(task.ExecutionInformation.FailureInformation.Code,
+                        Enumerable.Empty<string>()
+                            .Append(task.ExecutionInformation.FailureInformation.Message)
+                            .Append($"Batch task ExitCode: {task.ExecutionInformation?.ExitCode}, Failure message: {task.ExecutionInformation?.FailureInformation?.Message}")
+                            .Concat(task.ExecutionInformation.FailureInformation.Details.Select(pair => pair.Value))),
+                        BatchTaskStartTime: task.ExecutionInformation.StartTime,
+                        BatchTaskEndTime: task.ExecutionInformation.EndTime,
+                        BatchTaskExitCode: task.ExecutionInformation.ExitCode),
+
+                    _ => throw new System.Diagnostics.UnreachableException(),
+                };
             }
         }
     }

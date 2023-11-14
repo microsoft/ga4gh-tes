@@ -238,7 +238,7 @@ namespace TesApi.Web.Events
 
             var state = (nodeMessage.Name ?? message.Event) switch
             {
-                Tes.Runner.Events.EventsPublisher.DownloadStartEvent => new AzureBatchTaskState(AzureBatchTaskState.TaskState.InfoUpdate,
+                Tes.Runner.Events.EventsPublisher.DownloadStartEvent => new AzureBatchTaskState(AzureBatchTaskState.TaskState.Initializing,
                     BatchTaskStartTime: nodeMessage.Created),
 
                 Tes.Runner.Events.EventsPublisher.DownloadEndEvent => nodeMessage.StatusMessage switch
