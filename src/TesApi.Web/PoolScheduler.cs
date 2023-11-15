@@ -121,7 +121,7 @@ namespace TesApi.Web
             var deletionCandidateTasks = AsyncEnumerable.Empty<IBatchScheduler.CloudTaskId>();
 
             var deletionCandidateCreationCutoff = now - TimeSpan.FromMinutes(10);
-            var stateTransitionTimeCutoff = now + TimeSpan.FromMinutes(3);
+            var stateTransitionTimeCutoffForDeletions = now - TimeSpan.FromMinutes(3); // the value of the timespan should be larger than the corresponding value in CompletedTaskListPredicate, but doesn't have to be
 
             await foreach (var task in tasks.WithCancellation(cancellationToken))
             {
@@ -131,7 +131,7 @@ namespace TesApi.Web
                     batchStateCandidateTasks = batchStateCandidateTasks.Append(task);
                 }
 
-                if (TaskState.Completed.Equals(task.State) && task.CreationTime < deletionCandidateCreationCutoff && task.StateTransitionTime > stateTransitionTimeCutoff)
+                if (TaskState.Completed.Equals(task.State) && task.CreationTime < deletionCandidateCreationCutoff && task.StateTransitionTime > stateTransitionTimeCutoffForDeletions)
                 {
                     deletionCandidateTasks = deletionCandidateTasks.Append(new IBatchScheduler.CloudTaskId(pool.Id, task.Id, task.CreationTime.Value));
                 }
@@ -150,12 +150,12 @@ namespace TesApi.Web
         /// <summary>
         /// Shared between <see cref="ProcessTasksAsync"/> and <see cref="GetCloudTaskStatesAsync"/>.
         /// </summary>
-        private static bool ActiveTaskListPredicate(CloudTask task) => !TaskState.Active.Equals(task.State);
+        private static bool ActiveTaskListPredicate(CloudTask task) => TaskState.Active.Equals(task.State);
 
         /// <summary>
         /// Shared between <see cref="ProcessTasksAsync"/> and <see cref="GetCloudTaskStatesAsync"/>.
         /// </summary>
-        private static bool CompletedTaskListPredicate(CloudTask task, DateTime now) => !TaskState.Completed.Equals(task.State) && task.StateTransitionTime < now - TimeSpan.FromMinutes(2);
+        private static bool CompletedTaskListPredicate(CloudTask task, DateTime now) => TaskState.Completed.Equals(task.State) && task.StateTransitionTime < now - TimeSpan.FromMinutes(2);
 
         /// <summary>
         /// Updates each task based on the provided states.
