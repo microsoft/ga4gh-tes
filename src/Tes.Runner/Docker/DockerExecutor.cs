@@ -63,9 +63,10 @@ namespace Tes.Runner.Docker
 
             await streamLogReader.WaitUntilAsync(TimeSpan.FromSeconds(LogStreamingMaxWaitTimeInSeconds));
 
+            await DeleteImageAsync(imageName, tag);
+
             return new ContainerExecutionResult(createResponse.ID, runResponse.Error?.Message, runResponse.StatusCode);
         }
-
 
         private async Task<MultiplexedStream> StartContainerWithStreamingOutput(CreateContainerResponse createResponse)
         {
@@ -133,6 +134,25 @@ namespace Tes.Runner.Docker
                     authConfig,
                     new Progress<JSONMessage>(message => logger.LogDebug(message.Status)));
             });
+        }
+
+        private async Task DeleteImageAsync(string imageName, string? imageTag)
+        {
+            var imageWithTag = ToImageNameWithTag(imageName, imageTag);
+
+            logger.LogInformation($"Deleting image name: {imageWithTag}");
+
+            try
+            {
+                await dockerClient.Images.DeleteImageAsync(imageName, new ImageDeleteParameters { Force = true });
+
+                logger.LogInformation($"Successfully deleted the image: {imageWithTag}");
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, $"Failed to delete the image after execution: {imageWithTag}");
+                throw;
+            }
         }
 
         /// <summary>
