@@ -191,12 +191,12 @@ namespace TesApi.Controllers
             {
                 if (tesTask.Resources.CpuCores.HasValue && tesTask.Resources.CpuCores.Value <= 0)
                 {
-                    return BadRequest("ram_gb must be greater than zero");
+                    return BadRequest("cpu_cores must be greater than zero");
                 }
 
                 if (tesTask.Resources.DiskGb.HasValue && tesTask.Resources.DiskGb.Value <= 0.0)
                 {
-                    return BadRequest("ram_gb must be greater than zero");
+                    return BadRequest("disk_gb must be greater than zero");
                 }
 
                 if (tesTask.Resources.RamGb.HasValue && tesTask.Resources.RamGb.Value <= 0.0)
