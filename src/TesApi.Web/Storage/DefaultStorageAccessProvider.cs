@@ -148,7 +148,7 @@ namespace TesApi.Web.Storage
                     var policy = new SharedAccessBlobPolicy()
                     {
                         Permissions = SharedAccessBlobPermissions.Add | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.List | SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.Write,
-                        SharedAccessExpiryTime = DateTime.Now.Add((sasTokenDuration ?? TimeSpan.Zero) + SasTokenDuration)
+                        SharedAccessExpiryTime = DateTimeOffset.UtcNow.Add(sasTokenDuration ?? SasTokenDuration)
                     };
 
                     var containerUri = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName).ToUri();
@@ -156,7 +156,7 @@ namespace TesApi.Web.Storage
                 }
                 else
                 {
-                    var policy = new SharedAccessBlobPolicy() { Permissions = SharedAccessBlobPermissions.Read, SharedAccessExpiryTime = DateTime.Now.Add((sasTokenDuration ?? TimeSpan.Zero) + SasTokenDuration) };
+                    var policy = new SharedAccessBlobPolicy() { Permissions = SharedAccessBlobPermissions.Read, SharedAccessExpiryTime = DateTimeOffset.UtcNow.Add(sasTokenDuration ?? SasTokenDuration) };
                     resultPathSegments.SasToken = new CloudBlob(resultPathSegments.ToUri(), new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, null, SharedAccessProtocol.HttpsOnly, null);
                 }
 
