@@ -855,7 +855,7 @@ namespace TesApi.Web
             var cloudTask = new CloudTask(taskId, batchRunCommand)
             {
                 Constraints = new(maxWallClockTime: poolLifetime, retentionTime: TimeSpan.Zero, maxTaskRetryCount: 0),
-                UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
+                UserIdentity = new(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
             };
 
             return cloudTask;
