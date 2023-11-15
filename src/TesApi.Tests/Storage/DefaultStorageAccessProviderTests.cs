@@ -31,7 +31,7 @@ namespace TesApi.Tests.Storage
         public void Setup()
         {
             azureProxyMock = new Mock<IAzureProxy>();
-            storageOptions = new StorageOptions() { DefaultAccountName = DefaultStorageAccountName };
+            storageOptions = new StorageOptions() { DefaultAccountName = DefaultStorageAccountName, ExecutionsContainerName = StorageAccessProvider.TesExecutionsPathPrefix };
             var subscriptionId = Guid.NewGuid().ToString();
             storageAccountInfo = new StorageAccountInfo()
             {
@@ -82,7 +82,7 @@ namespace TesApi.Tests.Storage
 
             Assert.IsNotNull(url);
             var uri = new Uri(url);
-            Assert.AreEqual($"{StorageAccountBlobEndpoint}/{internalPathPrefix}/{blobName.TrimStart('/')}", ToHostWithAbsolutePathOnly(uri));
+            Assert.AreEqual($"{StorageAccountBlobEndpoint}{StorageAccessProvider.TesExecutionsPathPrefix}/{internalPathPrefix}/{blobName.TrimStart('/')}", ToHostWithAbsolutePathOnly(uri));
         }
 
         private static TesTask CreateNewTesTask()
