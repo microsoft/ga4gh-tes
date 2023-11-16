@@ -175,7 +175,7 @@ namespace TesApi.Web
                         {
                             tesTask.State = TesState.SYSTEMERROREnum;
                             tesTask.EndTime = DateTimeOffset.UtcNow;
-                            tesTask.SetFailureReason("UnknownError", exc.Message, exc.StackTrace);
+                            tesTask.SetFailureReason(AzureBatchTaskState.UnknownError, exc.Message, exc.StackTrace);
                         }
 
                         if (exc is Microsoft.Azure.Batch.Common.BatchException batchException)
@@ -261,7 +261,7 @@ namespace TesApi.Web
                 //    else
                 //    {
                 //        logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw {exc.GetType().FullName}: '{exc.Message}'. Stack trace: {exc.StackTrace}");
-                //        currentTesTask?.SetWarning("UnknownError", exc.Message, exc.StackTrace);
+                //        currentTesTask?.SetWarning(AzureBatchTaskState.UnknownError, exc.Message, exc.StackTrace);
                 //    }
 
                 //    if (currentTesTask is not null)

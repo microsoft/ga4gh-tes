@@ -24,7 +24,6 @@ using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
 using TesApi.Web.Storage;
-using static TesApi.Web.Management.IBatchQuotaVerifier;
 
 namespace TesApi.Tests
 {
@@ -272,7 +271,7 @@ namespace TesApi.Tests
             var tesTask = GetTesTask();
             tesTask.State = TesState.INITIALIZINGEnum;
 
-            (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask, BatchTaskStates.NodeDiskFull);
+            (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask, BatchTaskStates.NodeDiskFull[0]);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
@@ -817,7 +816,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task TaskStateTransitionsFromQueuedState()
         {
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum));
+            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, new AzureBatchTaskState[] { default }));
             Assert.AreEqual(TesState.CANCELEDEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchTaskStates.CancellationRequested));
         }
 
@@ -837,13 +836,13 @@ namespace TesApi.Tests
             };
 
             await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
-            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed)));
+            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0])));
             await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
-            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed)));
+            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0])));
             await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
-            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed)));
+            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0])));
             await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
-            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed)));
+            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0])));
         }
 
         [TestMethod]
@@ -852,11 +851,11 @@ namespace TesApi.Tests
             var tesTask = GetTesTask();
 
             await GetNewTesTaskStateAsync(tesTask);
-            await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed);
+            await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0]);
             var firstAttemptVmSize = tesTask.Logs[0].VirtualMachineInfo.VmSize;
 
             await GetNewTesTaskStateAsync(tesTask);
-            await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed);
+            await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0]);
             var secondAttemptVmSize = tesTask.Logs[1].VirtualMachineInfo.VmSize;
 
             GuardAssertsWithTesTask(tesTask, () => Assert.AreNotEqual(firstAttemptVmSize, secondAttemptVmSize));
@@ -877,7 +876,7 @@ namespace TesApi.Tests
             var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELINGEnum, Logs = new() { new() } };
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            azureProxyReturnValues.BatchTaskState = BatchTaskStates.CancellationRequested;
+            azureProxyReturnValues.BatchTaskState = BatchTaskStates.CancellationRequested[0];
             Mock<IAzureProxy> azureProxy = default;
             var azureProxySetter = new Action<Mock<IAzureProxy>>(mock =>
             {
@@ -954,7 +953,7 @@ namespace TesApi.Tests
                 DiskUsedInKiB=1000000".Replace(" ", string.Empty);
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            azureProxyReturnValues.BatchTaskState = BatchTaskStates.TaskCompletedSuccessfully;
+            azureProxyReturnValues.BatchTaskState = BatchTaskStates.TaskCompletedSuccessfully[0];
             azureProxyReturnValues.DownloadedBlobContent = metricsFileContent;
 
             _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
@@ -989,7 +988,7 @@ namespace TesApi.Tests
             tesTask.State = TesState.INITIALIZINGEnum;
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            azureProxyReturnValues.BatchTaskState = BatchTaskStates.TaskCompletedSuccessfully;
+            azureProxyReturnValues.BatchTaskState = BatchTaskStates.TaskCompletedSuccessfully[0];
             azureProxyReturnValues.DownloadedBlobContent = "2";
             var azureProxy = GetMockAzureProxy(azureProxyReturnValues);
 
@@ -1638,8 +1637,18 @@ namespace TesApi.Tests
             return tesTask.State;
         }
 
-        private static Task<TesState> GetNewTesTaskStateAsync(TesState currentTesTaskState, AzureBatchTaskState batchTaskState = default)
-            => GetNewTesTaskStateAsync(new TesTask { Id = "test", State = currentTesTaskState, Executors = new() { new() { Image = "imageName1", Command = new() { "command" } } } }, batchTaskState);
+        private static async Task<TesState> GetNewTesTaskStateAsync(TesState currentTesTaskState, IEnumerable<AzureBatchTaskState> batchTaskStates)
+        {
+            var tesTask = new TesTask { Id = "test", State = currentTesTaskState, Executors = new() { new() { Image = "imageName1", Command = new() { "command" } } } };
+            TesState result = default;
+
+            foreach (var batchTaskState in batchTaskStates)
+            {
+                result = await GetNewTesTaskStateAsync(tesTask, batchTaskState);
+            }
+
+            return result;
+        }
 
         private static Task<TesState> GetNewTesTaskStateAsync(TesTask tesTask, AzureBatchTaskState batchTaskState = default)
         {
@@ -1837,17 +1846,21 @@ namespace TesApi.Tests
 
         private struct BatchTaskStates
         {
-            public static AzureBatchTaskState TaskActive => new(AzureBatchTaskState.TaskState.InfoUpdate);
-            public static AzureBatchTaskState TaskPreparing => new(AzureBatchTaskState.TaskState.Initializing, CloudTaskCreationTime: DateTimeOffset.UtcNow);
-            public static AzureBatchTaskState TaskRunning => new(AzureBatchTaskState.TaskState.Running, CloudTaskCreationTime: DateTimeOffset.UtcNow - TimeSpan.FromMinutes(6));
-            public static AzureBatchTaskState TaskCompletedSuccessfully => new(AzureBatchTaskState.TaskState.CompletedSuccessfully, BatchTaskExitCode: 0);
-            public static AzureBatchTaskState TaskFailed => new(AzureBatchTaskState.TaskState.CompletedWithErrors, BatchTaskExitCode: -1);
-            public static AzureBatchTaskState NodeDiskFull => new(AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, Failure: new("DiskFull", new[] { "Error message." }));
-            public static AzureBatchTaskState UploadOrDownloadFailed => new(AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed);
-            public static AzureBatchTaskState NodeAllocationFailed => new(AzureBatchTaskState.TaskState.NodeAllocationFailed, Failure: new(AzureBatchTaskState.TaskState.NodeAllocationFailed.ToString(), new[] { "Error message." }));
-            public static AzureBatchTaskState NodePreempted => new(AzureBatchTaskState.TaskState.NodePreempted);
-            public static AzureBatchTaskState NodeStartTaskFailed => new(AzureBatchTaskState.TaskState.NodeStartTaskFailed);
-            public static AzureBatchTaskState CancellationRequested => new(AzureBatchTaskState.TaskState.CancellationRequested, CloudTaskCreationTime: DateTimeOffset.UtcNow - TimeSpan.FromMinutes(12));
+            public static AzureBatchTaskState[] TaskActive => new[] { new AzureBatchTaskState(AzureBatchTaskState.TaskState.InfoUpdate) };
+            public static AzureBatchTaskState[] TaskPreparing => new[] { new AzureBatchTaskState(AzureBatchTaskState.TaskState.Initializing, CloudTaskCreationTime: DateTimeOffset.UtcNow) };
+            public static AzureBatchTaskState[] TaskRunning => new[] { new AzureBatchTaskState(AzureBatchTaskState.TaskState.Running, CloudTaskCreationTime: DateTimeOffset.UtcNow - TimeSpan.FromMinutes(6)) };
+            public static AzureBatchTaskState[] TaskCompletedSuccessfully => new[] { new AzureBatchTaskState(AzureBatchTaskState.TaskState.CompletedSuccessfully, BatchTaskExitCode: 0) };
+            public static AzureBatchTaskState[] TaskFailed => new[]
+            {
+                new AzureBatchTaskState(AzureBatchTaskState.TaskState.InfoUpdate, Failure: new(AzureBatchTaskState.ExecutorError, new[] { TaskFailureInformationCodes.FailureExitCode, @"1" }), ExecutorExitCode: 1),
+                new AzureBatchTaskState(AzureBatchTaskState.TaskState.CompletedWithErrors, Failure: new(AzureBatchTaskState.SystemError, new[] { TaskFailureInformationCodes.FailureExitCode, @"1" }), BatchTaskExitCode: 1)
+            };
+            public static AzureBatchTaskState[] NodeDiskFull => new[] { new AzureBatchTaskState(AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, Failure: new("DiskFull", new[] { "Error message." })) };
+            public static AzureBatchTaskState[] UploadOrDownloadFailed => new[] { new AzureBatchTaskState(AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed) };
+            public static AzureBatchTaskState[] NodeAllocationFailed => new[] { new AzureBatchTaskState(AzureBatchTaskState.TaskState.NodeAllocationFailed, Failure: new(AzureBatchTaskState.TaskState.NodeAllocationFailed.ToString(), new[] { "Error message." })) };
+            public static AzureBatchTaskState[] NodePreempted => new[] { new AzureBatchTaskState(AzureBatchTaskState.TaskState.NodePreempted) };
+            public static AzureBatchTaskState[] NodeStartTaskFailed => new[] { new AzureBatchTaskState(AzureBatchTaskState.TaskState.NodeStartTaskFailed) };
+            public static AzureBatchTaskState[] CancellationRequested => new[] { new AzureBatchTaskState(AzureBatchTaskState.TaskState.CancellationRequested, CloudTaskCreationTime: DateTimeOffset.UtcNow - TimeSpan.FromMinutes(12)) };
         }
 
         private class AzureProxyReturnValues

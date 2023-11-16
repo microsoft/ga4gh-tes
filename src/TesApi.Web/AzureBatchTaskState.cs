@@ -23,6 +23,7 @@ namespace TesApi.Web
     /// <param name="BatchTaskEndTime"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.EndTime"/>.</param>
     /// <param name="BatchTaskExitCode"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.ExitCode"/>.</param>
     /// <param name="Warning">Warning. First item in enumeration is the Warning code, rest of items are additional system log entries.</param>
+    /// <param name="ReplaceBatchTaskStartTime">Replace previous logged value of the task start time with <paramref name="BatchTaskStartTime"/>.</param>
     public record class AzureBatchTaskState(
         TaskState State,
         IEnumerable<OutputFileLog> OutputFileLogs = default,
@@ -34,8 +35,25 @@ namespace TesApi.Web
         int? ExecutorExitCode = default,
         DateTimeOffset? BatchTaskEndTime = default,
         int? BatchTaskExitCode = default,
-        IEnumerable<string> Warning = default)
+        IEnumerable<string> Warning = default,
+        bool ReplaceBatchTaskStartTime = default)
     {
+        /// <summary>
+        /// Unknown error. Either an exception or a missing reason.
+        /// </summary>
+        public const string UnknownError = @"UnknownError";
+
+        /// <summary>
+        /// <see cref="TesState.EXECUTORERROREnum"/>.
+        /// </summary>
+        public const string ExecutorError = @"ExecutorError";
+
+
+        /// <summary>
+        /// <see cref="TesState.SYSTEMERROREnum"/>.
+        /// </summary>
+        public const string SystemError = @"SystemError";
+
         /// <summary>
         /// TesTask's state
         /// </summary>
@@ -132,9 +150,9 @@ namespace TesApi.Web
         {
             Failure = original.Failure switch
             {
-                null => new("UnknownError", Enumerable.Empty<string>().Append(appendToSystemLog)),
-                { SystemLogs: null } => new(original.Failure?.Reason ?? "UnknownError", Enumerable.Empty<string>().Append(appendToSystemLog)),
-                _ => new(original.Failure?.Reason ?? "UnknownError", original.Failure?.SystemLogs.Append(appendToSystemLog)),
+                null => new(UnknownError, Enumerable.Empty<string>().Append(appendToSystemLog)),
+                { SystemLogs: null } => new(original.Failure.Value.Reason ?? UnknownError, Enumerable.Empty<string>().Append(appendToSystemLog)),
+                _ => new(original.Failure.Value.Reason ?? UnknownError, original.Failure.Value.SystemLogs.Append(appendToSystemLog)),
             };
         }
     }

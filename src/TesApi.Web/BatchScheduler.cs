@@ -39,10 +39,10 @@ namespace TesApi.Web
     public partial class BatchScheduler : IBatchScheduler
     {
         /// <summary>
-        /// Time tasks must live before being deleted
+        /// Minimum lifetime of a <see cref="CloudTask"/>.
         /// </summary>
         // https://learn.microsoft.com/azure/batch/best-practices#manage-task-lifetime
-        public static TimeSpan BatchDeleteNewTaskWorkaroundTimeSpan = TimeSpan.FromMinutes(10);
+        public static TimeSpan BatchDeleteNewTaskWorkaroundTimeSpan { get; } = TimeSpan.FromMinutes(10);
         internal const string PoolHostName = "CoA-TES-HostName";
         internal const string PoolIsDedicated = "CoA-TES-IsDedicated";
 
@@ -184,15 +184,7 @@ namespace TesApi.Web
             async Task<bool> SetTaskStateAndLog(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
                 {
-                    var newData = new CombinedBatchTaskInfo(batchInfo, false);
-                    if (newData.Failure is null) { newData.AlternateSystemLogItem = null; }
-                    var newDataText = System.Text.Json.JsonSerializer.Serialize(
-                        newData,
-                        new System.Text.Json.JsonSerializerOptions()
-                        {
-                            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
-                            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
-                        });
+                    var newDataText = SerializeToString(new CombinedBatchTaskInfo(batchInfo, false));
 
                     if ("{}".Equals(newDataText) && newTaskState == tesTask.State)
                     {
@@ -200,35 +192,45 @@ namespace TesApi.Web
                         return false;
                     }
 
-                    logger.LogDebug(@"Setting task {TesTask} with metadata {Metadata}.", tesTask.Id, newDataText);
+                    logger.LogDebug(@"Setting task {TesTask} with metadata {BatchTaskState} {Metadata}.", tesTask.Id, batchInfo.State, newDataText);
                 }
 
                 var (batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode) = newTaskState == TesState.COMPLETEEnum
                     ? await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask, cancellationToken)
                 : default;
 
+                var taskAsString = SerializeToString(tesTask);
+
                 lock (setTaskStateLock)
                 {
                     tesTask.State = newTaskState;
 
                     var tesTaskLog = tesTask.GetOrAddTesTaskLog();
-                    var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog();
+                    tesTaskLog.BatchNodeMetrics ??= batchNodeMetrics;
+                    tesTaskLog.CromwellResultCode ??= cromwellRcCode;
+                    tesTaskLog.EndTime ??= batchInfo.BatchTaskEndTime ?? taskEndTime;
 
-                    tesTaskLog.BatchNodeMetrics = batchNodeMetrics;
-                    tesTaskLog.CromwellResultCode = cromwellRcCode;
-                    tesTaskLog.EndTime ??= taskEndTime ?? batchInfo.BatchTaskEndTime;
-                    tesTaskLog.StartTime ??= taskStartTime ?? batchInfo.BatchTaskStartTime;
-                    tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorStartTime;
-                    tesTaskExecutorLog.EndTime ??= batchInfo.ExecutorEndTime;
-                    tesTaskExecutorLog.ExitCode ??= batchInfo.ExecutorExitCode;
-
-                    if (tesTaskLog.Outputs is null)
+                    if (batchInfo.ExecutorEndTime is not null || batchInfo.ExecutorStartTime is not null || batchInfo.ExecutorExitCode is not null)
                     {
-                        tesTaskLog.Outputs = batchInfo.OutputFileLogs?.Select(ConvertOutputFileLogToTesOutputFileLog).ToList();
+                        var tesTaskExecutorLog = tesTaskLog.GetOrAddExecutorLog();
+                        tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorStartTime;
+                        tesTaskExecutorLog.EndTime ??= batchInfo.ExecutorEndTime;
+                        tesTaskExecutorLog.ExitCode ??= batchInfo.ExecutorExitCode;
                     }
-                    else if (!tesTaskLog.Outputs.Any())
+
+                    if (batchInfo.ReplaceBatchTaskStartTime)
                     {
-                        tesTaskLog.Outputs.AddRange(batchInfo.OutputFileLogs?.Select(ConvertOutputFileLogToTesOutputFileLog) ?? Enumerable.Empty<Tes.Models.TesOutputFileLog>());
+                        tesTaskLog.StartTime = batchInfo.BatchTaskStartTime ?? taskStartTime;
+                    }
+                    else
+                    {
+                        tesTaskLog.StartTime ??= batchInfo.BatchTaskStartTime ?? taskStartTime;
+                    }
+
+                    if (batchInfo.OutputFileLogs is not null)
+                    {
+                        tesTaskLog.Outputs ??= new();
+                        tesTaskLog.Outputs.AddRange(batchInfo.OutputFileLogs.Select(ConvertOutputFileLogToTesOutputFileLog));
                     }
 
                     // Only accurate when the task completes successfully, otherwise it's the Batch time as reported from Batch
@@ -251,18 +253,14 @@ namespace TesApi.Web
                         }
                     }
 
-                    if (batchInfo.Failure is not null)
+                    if (batchInfo.Failure.HasValue)
                     {
-                        tesTask.SetFailureReason(batchInfo.Failure?.Reason);
-
-                        if (batchInfo.Failure?.SystemLogs is not null)
-                        {
-                            tesTask.AddToSystemLog(batchInfo.Failure?.SystemLogs);
-                        }
-                        else if (!string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem))
-                        {
-                            tesTask.AddToSystemLog(new[] { batchInfo.AlternateSystemLogItem });
-                        }
+                        tesTask.SetFailureReason(
+                            batchInfo.Failure.Value.Reason,
+                            (batchInfo.Failure.Value.SystemLogs ?? (string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem)
+                                    ? Enumerable.Empty<string>()
+                                    : Enumerable.Empty<string>().Append(batchInfo.AlternateSystemLogItem))
+                                ).ToArray());
                     }
                 }
 
@@ -272,7 +270,7 @@ namespace TesApi.Web
                     await taskExecutionScriptingManager.TryUploadServerTesTask(tesTask, "server-tes-task-completed.json", cancellationToken);
                 }
 
-                return true;
+                return !taskAsString.Equals(SerializeToString(tesTask));
 
                 Tes.Models.TesOutputFileLog ConvertOutputFileLogToTesOutputFileLog(AzureBatchTaskState.OutputFileLog fileLog)
                 {
@@ -283,12 +281,24 @@ namespace TesApi.Web
                         Url = fileLog.Url.AbsoluteUri
                     };
                 }
+
+                static string SerializeToString<T>(T item)
+                    => System.Text.Json.JsonSerializer.Serialize(item, new System.Text.Json.JsonSerializerOptions()
+                    {
+                        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
+                        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
+                    });
             }
 
-            async Task<bool> SetTaskExecutorError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
+            async Task<bool> SetCompletedWithErrors(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                // TODO: check task's log to ensure that the error was actually an executor error. Return the correct error state.
-                return await SetTaskStateAndLog(tesTask, TesState.EXECUTORERROREnum, batchInfo, cancellationToken);
+                var newTaskState = tesTask.FailureReason switch
+                {
+                    AzureBatchTaskState.ExecutorError => TesState.EXECUTORERROREnum,
+                    _ => TesState.SYSTEMERROREnum,
+                };
+
+                return await SetTaskStateAndLog(tesTask, newTaskState, batchInfo, cancellationToken);
             }
 
             async Task<bool> SetTaskSystemError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
@@ -309,9 +319,7 @@ namespace TesApi.Web
                     : SetTaskStateAfterFailureAsync(tesTask, TesState.QUEUEDEnum, batchInfo, cancellationToken);
 
             Task<bool> AddSystemLogAndSetTaskSystemErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, string additionalSystemLogItem, CancellationToken cancellationToken)
-            {
-                return SetTaskSystemError(tesTask, new(batchInfo, additionalSystemLogItem), cancellationToken);
-            }
+                => SetTaskSystemError(tesTask, new(batchInfo, additionalSystemLogItem), cancellationToken);
 
             bool HandlePreemptedNode(TesTask tesTask, CombinedBatchTaskInfo batchInfo)
             {
@@ -326,24 +334,21 @@ namespace TesApi.Web
                 return true;
             }
 
-            Task<bool> HandleInfoUpdate(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
-            {
-                return SetTaskStateAndLog(tesTask, tesTask.State, batchInfo, cancellationToken);
-            }
+            const string alternateSystemLogMissingFailure = @"Please open an issue at https://github.com/microsoft/ga4gh-tes/issues. There should have been a failure reported here.";
 
             tesTaskStateTransitions = new List<TesTaskStateTransition>()
             {
                 new(condition: null, AzureBatchTaskState.TaskState.CancellationRequested, alternateSystemLogItem: null, TerminateBatchTaskAsync),
                 new(tesTaskIsInitializing, AzureBatchTaskState.TaskState.NodeAllocationFailed, alternateSystemLogItem: null, RequeueTaskAfterFailureAsync),
-                new(tesTaskIsInitializing, AzureBatchTaskState.TaskState.NodeStartTaskFailed, "Please open an issue. There should have been an error reported here.", SetTaskSystemError),
+                new(tesTaskIsInitializing, AzureBatchTaskState.TaskState.NodeStartTaskFailed, alternateSystemLogMissingFailure, SetTaskSystemError),
                 new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.Initializing, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, TesState.INITIALIZINGEnum, info, ct)),
                 new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.Running, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, TesState.RUNNINGEnum, info, ct)),
                 new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedSuccessfully, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, TesState.COMPLETEEnum, info, ct)),
-                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedWithErrors, "Please open an issue. There should have been an error reported here.", SetTaskExecutorError),
-                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, "Please open an issue. There should have been an error reported here.", SetTaskSystemError),
+                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedWithErrors, alternateSystemLogMissingFailure, SetCompletedWithErrors),
+                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, alternateSystemLogMissingFailure, SetTaskSystemError),
                 new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodePreempted, alternateSystemLogItem: null, HandlePreemptedNode),
-                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed, alternateSystemLogItem: null, HandleInfoUpdate),
-                new(condition: null, AzureBatchTaskState.TaskState.InfoUpdate, alternateSystemLogItem: null, HandleInfoUpdate),
+                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, tesTask.State, info, ct)),
+                new(condition: null, AzureBatchTaskState.TaskState.InfoUpdate, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, tesTask.State, info, ct)),
             }.AsReadOnly();
         }
 
@@ -371,11 +376,6 @@ namespace TesApi.Web
             {
                 switch (batchInfo.State)
                 {
-                    case AzureBatchTaskState.TaskState.CompletedSuccessfully:
-                    case AzureBatchTaskState.TaskState.CompletedWithErrors:
-                        return false; // It's already finished
-
-
                     case AzureBatchTaskState.TaskState.CancellationRequested:
                         if (!TesTask.ActiveStates.Contains(tesTask.State))
                         {
@@ -408,7 +408,7 @@ namespace TesApi.Web
 
             try // TODO: remove (and undo changes to taskExecutionScriptingManager)
             {
-                await taskExecutionScriptingManager.TryUploadServerTesTask(tesTask, "server-tes-task-completed.json", cancellationToken);
+                if (TesState.CANCELEDEnum.Equals(tesTask.State)) { await taskExecutionScriptingManager.TryUploadServerTesTask(tesTask, "server-tes-task-completed.json", cancellationToken); }
             }
             catch (Exception exc)
             {
@@ -814,7 +814,7 @@ namespace TesApi.Web
 
                     default:
                         tesTask.State = TesState.SYSTEMERROREnum;
-                        tesTask.SetFailureReason("UnknownError", $"{exception?.GetType().FullName}: {exception?.Message}", exception?.StackTrace);
+                        tesTask.SetFailureReason(AzureBatchTaskState.UnknownError, $"{exception?.GetType().FullName}: {exception?.Message}", exception?.StackTrace);
                         logger.LogError(exception, "TES task: {TesTask} Exception: {ExceptionType}: {ExceptionMessage}", tesTask.Id, exception?.GetType().FullName, exception?.Message);
                         break;
                 }
@@ -1425,8 +1425,8 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async IAsyncEnumerable<RunnerEventsMessage> GetEventMessagesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken, string @event)
         {
-            const string eventsFolderName = "events";
-            var prefix = eventsFolderName + "/";
+            const string eventsFolderName = "events/";
+            var prefix = eventsFolderName;
 
             if (!string.IsNullOrWhiteSpace(@event))
             {
@@ -1435,7 +1435,7 @@ namespace TesApi.Web
 
             var tesInternalSegments = StorageAccountUrlSegments.Create(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(string.Empty));
             var eventsStartIndex = (string.IsNullOrEmpty(tesInternalSegments.BlobName) ? string.Empty : (tesInternalSegments.BlobName + "/")).Length;
-            var eventsEndIndex = eventsStartIndex + eventsFolderName.Length + 1;
+            var eventsEndIndex = eventsStartIndex + eventsFolderName.Length;
 
             await foreach (var blobItem in azureProxy.ListBlobsWithTagsAsync(
                     new(await storageAccessProvider.GetInternalTesBlobUrlAsync(
@@ -1519,7 +1519,7 @@ namespace TesApi.Web
         private record CombinedBatchTaskInfo : AzureBatchTaskState
         {
             /// <summary>
-            /// Copy constructor that defaults <see cref="AzureBatchTaskState.State"/> (to enable hiding if serialized)
+            /// Copy constructor that defaults <see cref="AzureBatchTaskState.State"/> (to enable hiding when serialized)
             /// </summary>
             /// <param name="original"><see cref="CombinedBatchTaskInfo"/> to copy</param>
             /// <param name="_1">Parameter that exists to not override the default copy constructor</param>

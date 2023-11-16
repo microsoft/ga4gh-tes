@@ -236,7 +236,7 @@ namespace TesApi.Web.Events
             var nodeMessage = message.RunnerEventMessage;
             logger.LogDebug("Getting batch task state from event {EventName} for {TesTask}.", nodeMessage.Name ?? message.Event, nodeMessage.EntityId);
 
-            var state = (nodeMessage.Name ?? message.Event) switch
+            return (nodeMessage.Name ?? message.Event) switch
             {
                 Tes.Runner.Events.EventsPublisher.DownloadStartEvent => new AzureBatchTaskState(AzureBatchTaskState.TaskState.Initializing,
                     BatchTaskStartTime: nodeMessage.Created),
@@ -247,7 +247,7 @@ namespace TesApi.Web.Events
 
                     Tes.Runner.Events.EventsPublisher.FailedStatus => new(
                         AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed,
-                        Failure: new("SystemError",
+                        Failure: new(AzureBatchTaskState.SystemError,
                         Enumerable.Empty<string>()
                             .Append("Download failed.")
                             .Append(nodeMessage.EventData["errorMessage"])
@@ -268,7 +268,7 @@ namespace TesApi.Web.Events
 
                     Tes.Runner.Events.EventsPublisher.FailedStatus => new(
                         AzureBatchTaskState.TaskState.InfoUpdate,
-                        Failure: new("ExecutorError",
+                        Failure: new(AzureBatchTaskState.ExecutorError,
                         Enumerable.Empty<string>()
                             .Append(nodeMessage.EventData["errorMessage"])
                             .Concat(await AddProcessLogsIfAvailable(nodeMessage, tesTask, cancellationToken))),
@@ -288,7 +288,7 @@ namespace TesApi.Web.Events
 
                     Tes.Runner.Events.EventsPublisher.FailedStatus => new(
                         AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed,
-                        Failure: new("SystemError",
+                        Failure: new(AzureBatchTaskState.SystemError,
                         Enumerable.Empty<string>()
                             .Append("Upload failed.")
                             .Append(nodeMessage.EventData["errorMessage"])
@@ -301,15 +301,17 @@ namespace TesApi.Web.Events
                 {
                     Tes.Runner.Events.EventsPublisher.SuccessStatus => new(
                         AzureBatchTaskState.TaskState.CompletedSuccessfully,
+                        ReplaceBatchTaskStartTime: true,
                         BatchTaskStartTime: nodeMessage.Created - TimeSpan.Parse(nodeMessage.EventData["duration"]),
                         BatchTaskEndTime: nodeMessage.Created),
 
                     Tes.Runner.Events.EventsPublisher.FailedStatus => new(
                         AzureBatchTaskState.TaskState.CompletedWithErrors,
-                        Failure: new("SystemError",
+                        Failure: new(AzureBatchTaskState.SystemError,
                         Enumerable.Empty<string>()
                             .Append("Node script failed.")
                             .Append(nodeMessage.EventData["errorMessage"])),
+                        ReplaceBatchTaskStartTime: true,
                         BatchTaskStartTime: nodeMessage.Created - TimeSpan.Parse(nodeMessage.EventData["duration"]),
                         BatchTaskEndTime: nodeMessage.Created),
 
@@ -319,17 +321,15 @@ namespace TesApi.Web.Events
                 _ => throw new System.Diagnostics.UnreachableException(),
             };
 
-            return state;
-
             // Helpers
             static IEnumerable<AzureBatchTaskState.OutputFileLog> GetOutputFileLogs(IDictionary<string, string> eventData)
             {
-                if (eventData is null || !eventData.ContainsKey("fileLog-Count"))
+                if (eventData is null || !eventData.TryGetValue("fileLog-Count", out var fileCount))
                 {
                     yield break;
                 }
 
-                var numberOfFiles = int.Parse(eventData["fileLog-Count"], System.Globalization.CultureInfo.InvariantCulture);
+                var numberOfFiles = int.Parse(fileCount, System.Globalization.CultureInfo.InvariantCulture);
 
                 for (var i = 0; i < numberOfFiles; ++i)
                 {
@@ -369,7 +369,7 @@ namespace TesApi.Web.Events
 
                 await foreach (var uri in azureProxy.ListBlobsAsync(new(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken)), cancellationToken)
                     .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.Split('/').Last().StartsWith(blobNameStartsWith))
-                    .OrderBy(blob => blob.BlobName) // Not perfect ordering, but reasonable. This is more likely to be read by people rather then machines. Perfect would involve regex.
+                    .OrderBy(blob => blob.BlobName) // Not perfect ordering, but reasonable. The final results are more likely to be interpreted by people rather then machines. Perfect would involve regex.
                     .Select(blob => blob.BlobUri)
                     .WithCancellation(cancellationToken))
                 {

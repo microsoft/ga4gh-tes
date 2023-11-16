@@ -38,66 +38,77 @@ namespace Tes.Models
         /// <summary>
         /// Enum UNKNOWNEnum for UNKNOWN
         /// </summary>
+        /// <remarks>The state of the task is unknown.  This provides a safe default for messages where this field is missing, for example, so that a missing field does not accidentally imply that the state is QUEUED.</remarks>
         [EnumMember(Value = "UNKNOWN")]
         UNKNOWNEnum = 1,
 
         /// <summary>
         /// Enum QUEUEDEnum for QUEUED
         /// </summary>
+        /// <remarks>The task is queued.</remarks>
         [EnumMember(Value = "QUEUED")]
         QUEUEDEnum = 2,
 
         /// <summary>
         /// Enum INITIALIZINGEnum for INITIALIZING
         /// </summary>
+        /// <remarks>The task has been assigned to a worker and is currently preparing to run. For example, the worker may be turning on, downloading input files, etc.</remarks>
         [EnumMember(Value = "INITIALIZING")]
         INITIALIZINGEnum = 3,
 
         /// <summary>
         /// Enum RUNNINGEnum for RUNNING
         /// </summary>
+        /// <remarks>The task is running. Input files are downloaded and the first Executor has been started.</remarks>
         [EnumMember(Value = "RUNNING")]
         RUNNINGEnum = 4,
 
         /// <summary>
         /// Enum PAUSEDEnum for PAUSED
         /// </summary>
+        /// <remarks>The task is paused.  An implementation may have the ability to pause a task, but this is not required.</remarks>
         [EnumMember(Value = "PAUSED")]
         PAUSEDEnum = 5,
 
         /// <summary>
         /// Enum COMPLETEEnum for COMPLETE
         /// </summary>
+        /// <remarks>The task has completed running. Executors have exited without error and output files have been successfully uploaded.</remarks>
         [EnumMember(Value = "COMPLETE")]
         COMPLETEEnum = 6,
 
         /// <summary>
         /// Enum EXECUTORERROREnum for EXECUTOR_ERROR
         /// </summary>
+        /// <remarks>The task encountered an error in one of the Executor processes. Generally, this means that an Executor exited with a non-zero exit code.</remarks>
         [EnumMember(Value = "EXECUTOR_ERROR")]
         EXECUTORERROREnum = 7,
 
         /// <summary>
         /// Enum SYSTEMERROREnum for SYSTEM_ERROR
         /// </summary>
+        /// <remarks>The task was stopped due to a system error, but not from an Executor, for example an upload failed due to network issues, the worker's ran out of disk space, etc.</remarks>
         [EnumMember(Value = "SYSTEM_ERROR")]
         SYSTEMERROREnum = 8,
 
         /// <summary>
         /// Enum CANCELEDEnum for CANCELED
         /// </summary>
+        /// <remarks>The task was canceled by the user.</remarks>
         [EnumMember(Value = "CANCELED")]
         CANCELEDEnum = 9,
 
         /// <summary>
         /// Enum PREEMPTEDEnum for PREEMPTED
         /// </summary>
+        /// <remarks>The task is stopped (preempted) by the system. The reasons for this would be tied to the specific system running the job. Generally, this means that the system reclaimed the compute capacity for reallocation.</remarks>
         [EnumMember(Value = "PREEMPTED")]
         PREEMPTEDEnum = 10,
 
         /// <summary>
         /// Enum CANCELINGEnum for CANCELING
         /// </summary>
+        /// <remarks>The task was canceled by the user, but the downstream resources are still awaiting deletion.</remarks>
         [EnumMember(Value = "CANCELING")]
         CANCELINGEnum = 11,
     }

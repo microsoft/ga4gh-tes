@@ -285,8 +285,9 @@ namespace TesApi.Web
 
             static AzureBatchTaskState.FailureInformation ParseComputeNodeErrors(IReadOnlyList<ComputeNodeError> nodeErrors)
             {
-                var totalList = nodeErrors.Select(nodeError => Enumerable.Empty<string>().Append(nodeError.Code).Append(nodeError.Message)
-                    .Concat(nodeError.ErrorDetails.Select(errorDetail => Enumerable.Empty<string>().Append(errorDetail.Name).Append(errorDetail.Value)).SelectMany(s => s)))
+                var totalList = nodeErrors.Select(nodeError => Enumerable.Empty<string>()
+                    .Append(nodeError.Code).Append(nodeError.Message)
+                    .Concat(nodeError.ErrorDetails.Select(FormatNameValuePair)))
                     .SelectMany(s => s).ToList();
 
                 if (totalList.Contains(TaskFailureInformationCodes.DiskFull))
@@ -321,13 +322,13 @@ namespace TesApi.Web
             AzureBatchTaskState ConvertFromResize(ResizeError failure)
                 => new(AzureBatchTaskState.TaskState.NodeAllocationFailed, Failure: new(failure.Code, Enumerable.Empty<string>()
                     .Append(failure.Message)
-                    .Concat(failure.Values.Select(t => t.Value))));
+                    .Concat(failure.Values.Select(FormatNameValuePair))));
 
             AzureBatchTaskState ConvertFromStartTask(TaskFailureInformation failure)
                 => new(AzureBatchTaskState.TaskState.NodeStartTaskFailed, Failure: new(failure.Code, Enumerable.Empty<string>()
                     .Append(failure.Message)
                     .Append($"Start task failed ({failure.Category})")
-                    .Concat(failure.Details.Select(t => t.Value))));
+                    .Concat(failure.Details.Select(FormatNameValuePair))));
 
             ResizeError PopNextResizeError()
                 => pool.ResizeErrors.TryDequeue(out var resizeError) ? resizeError : default;
@@ -352,7 +353,7 @@ namespace TesApi.Web
                         Enumerable.Empty<string>()
                             .Append(task.ExecutionInformation.FailureInformation.Message)
                             .Append($"Batch task ExitCode: {task.ExecutionInformation?.ExitCode}, Failure message: {task.ExecutionInformation?.FailureInformation?.Message}")
-                            .Concat(task.ExecutionInformation.FailureInformation.Details.Select(pair => pair.Value))),
+                            .Concat(task.ExecutionInformation.FailureInformation.Details.Select(FormatNameValuePair))),
                         BatchTaskStartTime: task.ExecutionInformation.StartTime,
                         BatchTaskEndTime: task.ExecutionInformation.EndTime,
                         BatchTaskExitCode: task.ExecutionInformation.ExitCode),
@@ -360,6 +361,9 @@ namespace TesApi.Web
                     _ => throw new System.Diagnostics.UnreachableException(),
                 };
             }
+
+            static string FormatNameValuePair(NameValuePair pair)
+                => $"{pair.Name}: {pair.Value}";
         }
     }
 }
