@@ -65,12 +65,16 @@ namespace Tes.Repository
                         case TaskStatus.RanToCompletion:
                             Logger.LogCritical("Repository WriterWorkerAsync unexpectedly completed.");
                             break;
+                        case TaskStatus.Canceled:
+                            return; // This is the normal exit for WriterWorkerAsync
+                        default:
+                            Logger.LogCritical(new System.Diagnostics.UnreachableException($"Repository WriterWorkerAsync ended with task status '{task.Status}'"), @"Repository WriterWorkerAsync ended with task status '{TaskStatus}'.", task.Status);
+                            break;
                     }
 
                     await Task.Delay(50); // Give the logger time to flush.
                     hostApplicationLifetime?.StopApplication();
-                },
-                TaskContinuationOptions.NotOnCanceled);
+                }, TaskContinuationOptions.ExecuteSynchronously);
         }
 
         /// <summary>
@@ -233,6 +237,8 @@ namespace Tes.Repository
                     }
                     catch (OperationCanceledException ex) when (writerWorkerCancellationTokenSource.Token == ex.CancellationToken)
                     { } // Expected return from Wait().
+
+                    writerWorkerCancellationTokenSource.Dispose();
                 }
 
                 _disposedValue = true;
