@@ -147,18 +147,18 @@ namespace Tes.Runner.Docker
                     try
                     {
                         await dockerClient.Images.DeleteImageAsync(image.ID, new ImageDeleteParameters { Force = true });
-                        Console.WriteLine($"Deleted Docker image with ID: {image.ID}");
+                        logger.LogInformation($"Deleted Docker image with ID: {image.ID}");
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine($"Failed to delete image with ID: {image.ID}. Error: {e.Message}");
+                        logger.LogInformation($"Failed to delete image with ID: {image.ID}. Error: {e.Message}");
                         throw;
                     }
                 }
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Unhandled exception in DeleteAllImagesAsync");
+                logger.LogError(e, $"Exception in DeleteAllImagesAsync");
                 throw;
             }
         }
