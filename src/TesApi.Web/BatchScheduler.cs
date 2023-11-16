@@ -349,7 +349,7 @@ namespace TesApi.Web
 
         private async Task<bool> DeleteCompletedTaskAsync(string taskId, string jobId, DateTime taskCreated, CancellationToken cancellationToken)
         {
-            if (!(DateTimeOffset.UtcNow < taskCreated.ToUniversalTime() + BatchDeleteNewTaskWorkaroundTimeSpan))
+            if (DateTimeOffset.UtcNow <= taskCreated.ToUniversalTime() + BatchDeleteNewTaskWorkaroundTimeSpan)
             {
                 return false;
             }
