@@ -231,5 +231,10 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task EnableBatchPoolAutoScaleAsync(string poolId, bool preemptable, TimeSpan interval, IAzureProxy.BatchPoolAutoScaleFormulaFactory formulaFactory, CancellationToken cancellationToken) => azureProxy.EnableBatchPoolAutoScaleAsync(poolId, preemptable, interval, formulaFactory, cancellationToken);
+
+        public Task UploadBlockToTesTasksAppendBlobAsync(Uri containerAbsoluteUri, string content, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
