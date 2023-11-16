@@ -12,7 +12,7 @@ using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
 using Tes.Repository;
-using static TesApi.Web.IBatchPool;
+using CloudTaskBatchTaskState = TesApi.Web.IBatchPool.CloudTaskBatchTaskState;
 
 namespace TesApi.Web
 {
@@ -27,6 +27,9 @@ namespace TesApi.Web
         /// Interval between each call to <see cref="IBatchPool.ServicePoolAsync(CancellationToken)"/>.
         /// </summary>
         public static readonly TimeSpan RunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs uses a 30 second polling interval
+
+        private static readonly TimeSpan StateTransitionTimeForDeletionTimeSpan = 0.75 * BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
+        private static readonly TimeSpan CompletedTaskListTimeSpan = 0.5 * BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
 
         /// <summary>
         /// Default constructor
@@ -120,8 +123,8 @@ namespace TesApi.Web
             var batchStateCandidateTasks = AsyncEnumerable.Empty<CloudTask>();
             var deletionCandidateTasks = AsyncEnumerable.Empty<IBatchScheduler.CloudTaskId>();
 
-            var deletionCandidateCreationCutoff = now - TimeSpan.FromMinutes(10);
-            var stateTransitionTimeCutoffForDeletions = now - TimeSpan.FromMinutes(3); // the value of the timespan should be larger than the corresponding value in CompletedTaskListPredicate, but doesn't have to be
+            var deletionCandidateCreationCutoff = now - BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
+            var stateTransitionTimeCutoffForDeletions = now - StateTransitionTimeForDeletionTimeSpan;
 
             await foreach (var task in tasks.WithCancellation(cancellationToken))
             {
@@ -131,7 +134,7 @@ namespace TesApi.Web
                     batchStateCandidateTasks = batchStateCandidateTasks.Append(task);
                 }
 
-                if (TaskState.Completed.Equals(task.State) && task.CreationTime < deletionCandidateCreationCutoff && task.StateTransitionTime > stateTransitionTimeCutoffForDeletions)
+                if (TaskState.Completed.Equals(task.State) && task.CreationTime < deletionCandidateCreationCutoff && task.StateTransitionTime < stateTransitionTimeCutoffForDeletions)
                 {
                     deletionCandidateTasks = deletionCandidateTasks.Append(new IBatchScheduler.CloudTaskId(pool.Id, task.Id, task.CreationTime.Value));
                 }
@@ -155,7 +158,7 @@ namespace TesApi.Web
         /// <summary>
         /// Shared between <see cref="ProcessTasksAsync"/> and <see cref="GetCloudTaskStatesAsync"/>.
         /// </summary>
-        private static bool CompletedTaskListPredicate(CloudTask task, DateTime now) => TaskState.Completed.Equals(task.State) && task.StateTransitionTime < now - TimeSpan.FromMinutes(2);
+        private static bool CompletedTaskListPredicate(CloudTask task, DateTime now) => TaskState.Completed.Equals(task.State) && task.StateTransitionTime < now - CompletedTaskListTimeSpan;
 
         /// <summary>
         /// Updates each task based on the provided states.

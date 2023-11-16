@@ -15,15 +15,14 @@ using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.Extensions;
-using Tes.Models;
 using TesApi.Web.Events;
 using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
 using TesApi.Web.Runner;
 using TesApi.Web.Storage;
-using static TesApi.Web.IBatchScheduler;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
+using CloudTaskId = TesApi.Web.IBatchScheduler.CloudTaskId;
 using TesException = Tes.Models.TesException;
 using TesFileType = Tes.Models.TesFileType;
 using TesInput = Tes.Models.TesInput;
@@ -39,6 +38,11 @@ namespace TesApi.Web
     /// </summary>
     public partial class BatchScheduler : IBatchScheduler
     {
+        /// <summary>
+        /// Time tasks must live before being deleted
+        /// </summary>
+        // https://learn.microsoft.com/azure/batch/best-practices#manage-task-lifetime
+        public static TimeSpan BatchDeleteNewTaskWorkaroundTimeSpan = TimeSpan.FromMinutes(10);
         internal const string PoolHostName = "CoA-TES-HostName";
         internal const string PoolIsDedicated = "CoA-TES-IsDedicated";
 
@@ -63,7 +67,7 @@ namespace TesApi.Web
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly IBatchQuotaVerifier quotaVerifier;
         private readonly IBatchSkuInformationProvider skuInformationProvider;
-        private readonly IList<TesTaskStateTransition> tesTaskStateTransitions;
+        private readonly IReadOnlyList<TesTaskStateTransition> tesTaskStateTransitions;
         private readonly bool usePreemptibleVmsOnly;
         private readonly string batchNodesSubnetId;
         private readonly bool disableBatchNodesPublicIpAddress;
@@ -281,15 +285,9 @@ namespace TesApi.Web
                 }
             }
 
-            async Task<bool> SetTaskCompleted(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
-            {
-                await TerminateBatchTaskAsync(tesTask, batchInfo, cancellationToken);
-                return await SetTaskStateAndLog(tesTask, TesState.COMPLETEEnum, batchInfo, cancellationToken);
-            }
-
             async Task<bool> SetTaskExecutorError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await TerminateBatchTaskAsync(tesTask, batchInfo, cancellationToken);
+                // TODO: check task's log to ensure that the error was actually an executor error. Return the correct error state.
                 return await SetTaskStateAndLog(tesTask, TesState.EXECUTORERROREnum, batchInfo, cancellationToken);
             }
 
@@ -335,27 +333,23 @@ namespace TesApi.Web
 
             tesTaskStateTransitions = new List<TesTaskStateTransition>()
             {
-                new TesTaskStateTransition(condition: null, AzureBatchTaskState.TaskState.CancellationRequested, alternateSystemLogItem: null, TerminateBatchTaskAsync),
-                new TesTaskStateTransition(tesTaskIsInitializing, AzureBatchTaskState.TaskState.NodeAllocationFailed, alternateSystemLogItem: null, RequeueTaskAfterFailureAsync),
-                new TesTaskStateTransition(tesTaskIsInitializing, AzureBatchTaskState.TaskState.NodeStartTaskFailed, "Please open an issue. There should have been an error reported here.", SetTaskSystemError),
-                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.Initializing, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, TesState.INITIALIZINGEnum, info, ct)),
-                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.Running, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, TesState.RUNNINGEnum, info, ct)),
-                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedSuccessfully, alternateSystemLogItem: null, SetTaskCompleted),
-                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedWithErrors, "Please open an issue. There should have been an error reported here.", SetTaskExecutorError),
-                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, "Please open an issue. There should have been an error reported here.", SetTaskSystemError),
-                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodePreempted, alternateSystemLogItem: null, HandlePreemptedNode),
-                new TesTaskStateTransition(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed, alternateSystemLogItem: null, HandleInfoUpdate),
-                new TesTaskStateTransition(condition: null, AzureBatchTaskState.TaskState.InfoUpdate, alternateSystemLogItem: null, HandleInfoUpdate),
+                new(condition: null, AzureBatchTaskState.TaskState.CancellationRequested, alternateSystemLogItem: null, TerminateBatchTaskAsync),
+                new(tesTaskIsInitializing, AzureBatchTaskState.TaskState.NodeAllocationFailed, alternateSystemLogItem: null, RequeueTaskAfterFailureAsync),
+                new(tesTaskIsInitializing, AzureBatchTaskState.TaskState.NodeStartTaskFailed, "Please open an issue. There should have been an error reported here.", SetTaskSystemError),
+                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.Initializing, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, TesState.INITIALIZINGEnum, info, ct)),
+                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.Running, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, TesState.RUNNINGEnum, info, ct)),
+                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedSuccessfully, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, TesState.COMPLETEEnum, info, ct)),
+                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedWithErrors, "Please open an issue. There should have been an error reported here.", SetTaskExecutorError),
+                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, "Please open an issue. There should have been an error reported here.", SetTaskSystemError),
+                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodePreempted, alternateSystemLogItem: null, HandlePreemptedNode),
+                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFilesUploadOrDownloadFailed, alternateSystemLogItem: null, HandleInfoUpdate),
+                new(condition: null, AzureBatchTaskState.TaskState.InfoUpdate, alternateSystemLogItem: null, HandleInfoUpdate),
             }.AsReadOnly();
         }
 
         private async Task<bool> DeleteCompletedTaskAsync(string taskId, string jobId, DateTime taskCreated, CancellationToken cancellationToken)
         {
-            // https://learn.microsoft.com/azure/batch/best-practices#manage-task-lifetime
-            var mins10 = TimeSpan.FromMinutes(10);
-            var now = DateTimeOffset.UtcNow;
-
-            if (!(now - taskCreated > mins10))
+            if (!(DateTimeOffset.UtcNow < taskCreated.ToUniversalTime() + BatchDeleteNewTaskWorkaroundTimeSpan))
             {
                 return false;
             }
