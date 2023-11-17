@@ -63,7 +63,7 @@ namespace Tes.Runner.Docker
 
             await streamLogReader.WaitUntilAsync(TimeSpan.FromSeconds(LogStreamingMaxWaitTimeInSeconds));
 
-            await DeleteAllImagesAsync();
+            await DeleteImageByNameAsync(imageName);
 
             return new ContainerExecutionResult(createResponse.ID, runResponse.Error?.Message, runResponse.StatusCode);
         }
@@ -136,29 +136,17 @@ namespace Tes.Runner.Docker
             });
         }
 
-        private async Task DeleteAllImagesAsync()
+        private async Task DeleteImageByNameAsync(string imageName)
         {
             try
             {
-                var images = await dockerClient.Images.ListImagesAsync(new ImagesListParameters { All = true });
-
-                foreach (var image in images)
-                {
-                    try
-                    {
-                        await dockerClient.Images.DeleteImageAsync(image.ID, new ImageDeleteParameters { Force = true });
-                        logger.LogInformation($"Deleted Docker image with ID: {image.ID}");
-                    }
-                    catch (Exception e)
-                    {
-                        logger.LogInformation($"Failed to delete image with ID: {image.ID}. Error: {e.Message}");
-                        throw;
-                    }
-                }
+                imageName = imageName.Contains(':') ? imageName.Split(':')[0] : imageName;
+                await dockerClient.Images.DeleteImageAsync(imageName, new ImageDeleteParameters { Force = true });
+                logger.LogInformation($"Deleted Docker image with name: {imageName}");
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Exception in DeleteAllImagesAsync");
+                logger.LogError(e, $"Failed to delete image {imageName}. Error: {e.Message}");
                 throw;
             }
         }
