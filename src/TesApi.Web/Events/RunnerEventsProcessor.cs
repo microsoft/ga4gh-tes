@@ -91,7 +91,7 @@ namespace TesApi.Web.Events
         /// </summary>
         /// <param name="message">Tes runner event message metadata.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <exception cref="AssertException">Validation exceptions.</exception>
+        /// <exception cref="DownloadOrParseException">Validation exceptions.</exception>
         /// <returns>A <see cref="RunnerEventsMessage"/> containing the associated <seealso cref="Tes.Runner.Events.EventMessage"/>.</returns>
         /// <remarks>This method assumes <paramref name="message"/> was successfully validated by <see cref="ValidateMessageMetadata(RunnerEventsMessage)"/>.</remarks>
         public async Task<RunnerEventsMessage> DownloadAndValidateMessageContentAsync(RunnerEventsMessage message, CancellationToken cancellationToken)
@@ -102,84 +102,105 @@ namespace TesApi.Web.Events
             {
                 var messageText = await azureProxy.DownloadBlobAsync(message.BlobUri, cancellationToken);
                 content = System.Text.Json.JsonSerializer.Deserialize<Tes.Runner.Events.EventMessage>(messageText)
-                    ?? throw new InvalidOperationException("Deserialize() returned null.");
+                    ?? throw new DownloadOrParseException("Deserialize() returned null.");
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"Event message blob is malformed. {ex.GetType().FullName}:{ex.Message}", ex);
+                throw new DownloadOrParseException($"Event message blob is malformed. {ex.GetType().FullName}:{ex.Message}", ex);
             }
 
             message = new(message, content);
 
             // Validate content
-            Assert(Guid.TryParse(content.Id, out _),
+            Validate(Guid.TryParse(content.Id, out _),
                 $"{nameof(content.Id)}('{content.Id}')  is malformed.");
-            Assert(Tes.Runner.Events.EventsPublisher.EventVersion.Equals(content.EventVersion, StringComparison.Ordinal),
+            Validate(Tes.Runner.Events.EventsPublisher.EventVersion.Equals(content.EventVersion, StringComparison.Ordinal),
                 $"{nameof(content.EventVersion)}('{content.EventVersion}')  is not recognized.");
-            Assert(Tes.Runner.Events.EventsPublisher.EventDataVersion.Equals(content.EventDataVersion, StringComparison.Ordinal),
+            Validate(Tes.Runner.Events.EventsPublisher.EventDataVersion.Equals(content.EventDataVersion, StringComparison.Ordinal),
                 $"{nameof(content.EventDataVersion)}('{content.EventDataVersion}')  is not recognized.");
-            Assert(Tes.Runner.Events.EventsPublisher.TesTaskRunnerEntityType.Equals(content.EntityType, StringComparison.Ordinal),
+            Validate(Tes.Runner.Events.EventsPublisher.TesTaskRunnerEntityType.Equals(content.EntityType, StringComparison.Ordinal),
                 $"{nameof(content.EntityType)}('{content.EntityType}')  is not recognized.");
 
-            Assert(message.TesTaskId.Equals(content.EntityId, StringComparison.Ordinal),
+            Validate(message.TesTaskId.Equals(content.EntityId, StringComparison.Ordinal),
                 $"{nameof(content.EntityId)}('{content.EntityId}') does not match the expected value of '{message.TesTaskId}'.");
-            Assert(message.Tags["task-id"].Equals(content.EntityId, StringComparison.Ordinal),
+            Validate(message.Tags["task-id"].Equals(content.EntityId, StringComparison.Ordinal),
                 $"{nameof(content.EntityId)}('{content.EntityId}') does not match the expected value of '{message.Tags["task-id"]}' from the tags..");
-            Assert(message.Event.Equals(content.Name, StringComparison.OrdinalIgnoreCase),
+            Validate(message.Event.Equals(content.Name, StringComparison.OrdinalIgnoreCase),
                 $"{nameof(content.Name)}('{content.Name}') does not match the expected value of '{message.Event}' from the blob path.");
-            Assert(message.Tags["event-name"].Equals(content.Name, StringComparison.Ordinal),
+            Validate(message.Tags["event-name"].Equals(content.Name, StringComparison.Ordinal),
                 $"{nameof(content.Name)}('{content.Name}') does not match the expected value of '{message.Tags["event-name"]}' from the tags.");
 
-            // Event type specific validations
+            // Event type specific content validations
             switch (content.Name)
             {
                 case Tes.Runner.Events.EventsPublisher.DownloadStartEvent:
-                    Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(content.StatusMessage, StringComparison.Ordinal),
+                    Validate(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(content.StatusMessage, StringComparison.Ordinal),
                         $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
+                    ValidateCreated();
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.DownloadEndEvent:
-                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(content.StatusMessage),
+                    Validate(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(content.StatusMessage),
                         $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
+                    ValidateFailedStatus();
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.UploadStartEvent:
-                    Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(content.StatusMessage, StringComparison.Ordinal),
+                    Validate(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(content.StatusMessage, StringComparison.Ordinal),
                         $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.UploadEndEvent:
-                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(content.StatusMessage),
+                    Validate(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(content.StatusMessage),
                         $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
+                    ValidateFailedStatus();
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.ExecutorStartEvent:
-                    Assert(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(content.StatusMessage, StringComparison.Ordinal),
+                    Validate(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(content.StatusMessage, StringComparison.Ordinal),
                         $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
+                    ValidateCreated();
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.ExecutorEndEvent:
-                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(content.StatusMessage),
+                    Validate(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(content.StatusMessage),
                         $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
+                    ValidateFailedStatus();
+                    ValidateCreated();
+                    Validate(content.EventData.ContainsKey("exitCode"), $"{nameof(content.Name)}('{content.Name}') does not contain 'exitCode'");
                     break;
 
                 case Tes.Runner.Events.EventsPublisher.TaskCompletionEvent:
-                    Assert(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(content.StatusMessage),
+                    Validate(new[] { Tes.Runner.Events.EventsPublisher.SuccessStatus, Tes.Runner.Events.EventsPublisher.FailedStatus }.Contains(content.StatusMessage),
                         $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match one of the expected valued of '{Tes.Runner.Events.EventsPublisher.SuccessStatus}' or '{Tes.Runner.Events.EventsPublisher.FailedStatus}'.");
+                    ValidateFailedStatus();
+                    ValidateCreated();
+                    Validate(content.EventData.ContainsKey("duration"), $"{nameof(content.Name)}('{content.Name}') does not contain 'duration'");
                     break;
 
                 default:
-                    Assert(false, $"{nameof(content.Name)}('{content.Name}') is not recognized.");
+                    Validate(false, $"{nameof(content.Name)}('{content.Name}') is not recognized.");
                     break;
             }
 
             return message;
 
-            static void Assert([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool condition, string message)
+            void ValidateFailedStatus()
+            {
+                if (Tes.Runner.Events.EventsPublisher.FailedStatus.Equals(content.StatusMessage))
+                {
+                    Validate(content.EventData.ContainsKey("errorMessage"), $"{nameof(content.Name)}('{content.Name}' with {nameof(Tes.Runner.Events.EventsPublisher.FailedStatus)}) does not contain 'errorMessage'");
+                }
+            }
+
+            void ValidateCreated()
+                => Validate(content.Created != default, $"{nameof(content.Name)}('{content.Name}') {nameof(content.Created)} was not set.");
+
+            static void Validate([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool condition, string message)
             {
                 if (!condition)
                 {
-                    throw new AssertException(message);
+                    throw new DownloadOrParseException(message);
                 }
             }
         }
@@ -379,7 +400,7 @@ namespace TesApi.Web.Events
         }
 
         /// <summary>
-        /// Marks this event message processed.
+        /// Marks the event message as processed.
         /// </summary>
         /// <param name="message">Tes runner event message metadata.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
@@ -396,14 +417,31 @@ namespace TesApi.Web.Events
         }
 
         /// <summary>
-        /// Validation assert failed.
+        /// Prevents the message from being reprocessed by removing the 'task-id' tag. Used for malformed blobs.
         /// </summary>
-        public class AssertException : InvalidOperationException
+        /// <param name="message">Tes runner event message metadata.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        /// <remarks>This method assumes <paramref name="message"/>'s <see cref="RunnerEventsMessage.Tags"/> and <see cref="RunnerEventsMessage.BlobUri"/> are intact and correct.</remarks>
+        public async Task RemoveMessageFromReattemptsAsync(RunnerEventsMessage message, CancellationToken cancellationToken)
+        {
+            message.Tags.Remove("task-id");
+            await azureProxy.SetBlobTags(
+                message.BlobUri,
+                message.Tags,
+                cancellationToken);
+        }
+
+        /// <summary>
+        /// The exception that is thrown when an event message is malformed.
+        /// </summary>
+        public class DownloadOrParseException : InvalidOperationException
         {
             /// <inheritdoc/>
-            public AssertException(string message) : base(message)
-            {
-            }
+            public DownloadOrParseException(string message) : base(message) { }
+
+            /// <inheritdoc/>
+            public DownloadOrParseException(string message, Exception exception) : base(message, exception) { }
         }
     }
 }

@@ -15,9 +15,7 @@ using Tes.Repository;
 namespace TesApi.Web
 {
     /// <summary>
-    /// A background service template that schedules TES tasks in the batch system, orchestrates their lifecycle, and updates their state.
-    /// This should only be used to build system-wide singleton services.  This class does not support scale-out on multiple machines,
-    /// nor does it implement a leasing mechanism.  In the future, consider using the Lease Blob operation.
+    /// Common functionality for <see cref="IHostedService"/>s that perform operations in the batch system, including common functionality for services using <see cref="BackgroundService"/>.
     /// </summary>
     internal abstract class OrchestrateOnBatchSchedulerServiceBase : BackgroundService
     {
@@ -30,9 +28,9 @@ namespace TesApi.Web
         /// Default constructor
         /// </summary>
         /// <param name="hostApplicationLifetime">Used for requesting termination of the current application. Pass null to allow this service to stop during initialization without taking down the application.</param>
-        /// <param name="repository">The main TES task database repository implementation</param>
-        /// <param name="batchScheduler">The batch scheduler implementation</param>
-        /// <param name="logger">The logger instance</param>
+        /// <param name="repository">The main TES task database repository implementation.</param>
+        /// <param name="batchScheduler">The batch scheduler implementation.</param>
+        /// <param name="logger">The logger instance.</param>
         protected OrchestrateOnBatchSchedulerServiceBase(IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger logger)
         {
             this.hostApplicationLifetime = hostApplicationLifetime;
@@ -44,7 +42,7 @@ namespace TesApi.Web
         /// <summary>
         /// Prepends the log message with the ultimately derived class's name.
         /// </summary>
-        /// <param name="message"></param>
+        /// <param name="message">Log message tail.</param>
         /// <returns><paramref name="message"/> prepended with the class name.</returns>
         protected string MarkLogMessage(string message)
         {
@@ -53,16 +51,18 @@ namespace TesApi.Web
 
         /// <inheritdoc />
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2254:Template should be a static expression", Justification = "Used to provide service's name in log message.")]
-        public override Task StopAsync(CancellationToken cancellationToken)
+        public override async Task StopAsync(CancellationToken cancellationToken)
         {
             logger.LogInformation(MarkLogMessage("stopping..."));
-            return base.StopAsync(cancellationToken);
+            await base.StopAsync(cancellationToken);
         }
 
         /// <inheritdoc />
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2254:Template should be a static expression", Justification = "Used to provide service's name in log message.")]
         protected sealed override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            logger.LogInformation(MarkLogMessage("starting..."));
+
             try
             {
                 // The order of these two calls is critical.
@@ -86,33 +86,34 @@ namespace TesApi.Web
         /// This method is called when the <see cref="IHostedService"/> starts. The implementation should return a task that represents
         /// the lifetime of the long running operation(s) being performed.
         /// </summary>
-        /// <param name="stoppingToken">Triggered when <see cref="IHostedService.StopAsync(CancellationToken)"/> is called.</param>
-        /// <returns>A <see cref="Task"/> that represents the long running operations.</returns>
+        /// <param name="cancellationToken">Triggered when <see cref="IHostedService.StopAsync(CancellationToken)"/> is called.</param>
+        /// <returns>A <see cref="ValueTask"/> that represents the long running operations.</returns>
         /// <remarks>See <see href="https://docs.microsoft.com/dotnet/core/extensions/workers">Worker Services in .NET</see> for implementation guidelines.</remarks>
-        protected abstract Task ExecuteCoreAsync(CancellationToken stoppingToken);
+        protected abstract ValueTask ExecuteCoreAsync(CancellationToken cancellationToken);
 
         /// <summary>
         /// This method is called right before <see cref="ExecuteCoreAsync(CancellationToken)"/>. It can be used to prepare the service or the system before the service's operations begin.
         /// </summary>
-        /// <param name="stoppingToken">Triggered when <see cref="IHostedService.StopAsync(CancellationToken)"/> is called.</param>
+        /// <param name="cancellationToken">Triggered when <see cref="IHostedService.StopAsync(CancellationToken)"/> is called.</param>
         /// <returns>A <see cref="Task"/> that represents this method's operations.</returns>
-        protected virtual Task ExecuteSetupAsync(CancellationToken stoppingToken) => Task.CompletedTask;
+        /// <remarks>This method runs right after <see cref="ExecuteSetup(CancellationToken)"/>.</remarks>
+        protected virtual ValueTask ExecuteSetupAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
 
         /// <summary>
         /// This method is called right before <see cref="ExecuteCoreAsync(CancellationToken)"/>. It can be used to prepare the service or the system before the service's operations begin.
         /// </summary>
-        /// <param name="stoppingToken">Triggered when <see cref="IHostedService.StopAsync(CancellationToken)"/> is called.</param>
+        /// <param name="cancellationToken">Triggered when <see cref="IHostedService.StopAsync(CancellationToken)"/> is called.</param>
         /// <remarks>This method's lifetime will delay the exit of <see cref="IHostedService.StartAsync(CancellationToken)"/> in the base class, thus delaying the start of subsequent services in the system.</remarks>
-        protected virtual void ExecuteSetup(CancellationToken stoppingToken) { }
+        protected virtual void ExecuteSetup(CancellationToken cancellationToken) { }
 
         /// <summary>
         /// Runs <paramref name="action"/> repeatedly at an interval of <paramref name="runInterval"/>.
         /// </summary>
         /// <param name="runInterval">Interval to rerun <paramref name="action"/>.</param>
         /// <param name="action">Action to repeatedly run.</param>
-        /// <param name="stoppingToken">Triggered when <see cref="IHostedService.StopAsync(CancellationToken)"/> is called.</param>
-        /// <returns>A System.Threading.Tasks.Task that represents the long running operations.</returns>
-        protected async Task ExecuteActionOnIntervalAsync(TimeSpan runInterval, Func<CancellationToken, ValueTask> action, CancellationToken stoppingToken)
+        /// <param name="cancellationToken">Triggered when <see cref="IHostedService.StopAsync(CancellationToken)"/> is called.</param>
+        /// <returns>A <see cref="ValueTask"/> that represents this method's operations.</returns>
+        protected async ValueTask ExecuteActionOnIntervalAsync(TimeSpan runInterval, Func<CancellationToken, ValueTask> action, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(action);
 
@@ -124,9 +125,9 @@ namespace TesApi.Web
                 {
                     try
                     {
-                        await action(stoppingToken);
+                        await action(cancellationToken);
                     }
-                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                     {
                         break;
                     }
@@ -135,19 +136,24 @@ namespace TesApi.Web
                         logger.LogError(exc, "{Message}", exc.Message);
                     }
                 }
-                while (await timer.WaitForNextTickAsync(stoppingToken));
+                while (await timer.WaitForNextTickAsync(cancellationToken));
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             { }
         }
 
         /// <summary>
-        /// Retrieves provided actionable TES tasks from the database using <paramref name="tesTaskGetter"/>, performs an action in the batch system using <paramref name="tesTaskProcessor"/>, and updates the resultant state
+        /// Retrieves provided actionable TES tasks from the database using <paramref name="tesTaskGetter"/>, performs an action in the batch system using <paramref name="tesTaskProcessor"/>, and updates the resultant state in the repository.
         /// </summary>
-        /// <returns>A System.Threading.Tasks.ValueTask that represents the long running operations.</returns>
-        protected async ValueTask OrchestrateTesTasksOnBatchAsync(string pollName, Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter, Func<TesTask[], CancellationToken, IAsyncEnumerable<RelatedTask<TesTask, bool>>> tesTaskProcessor, CancellationToken stoppingToken, string unitsLabel = "tasks")
+        /// <param name="pollName">Tag to disambiguate the state and/or action workflow performed in log messages.</param>
+        /// <param name="tesTaskGetter">Provides array of <see cref="TesTask"/>s on which to perform actions through <paramref name="tesTaskProcessor"/>.</param>
+        /// <param name="tesTaskProcessor">Method operating on <paramref name="tesTaskGetter"/> returning <see cref="RelatedTask{TRelated, TResult}"/> indicating if each <see cref="TesTask"/> needs updating into the repository.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="unitsLabel">Tag to indicate the underlying unit quantity of items processed in log messages.</param>
+        /// <returns>A <see cref="ValueTask"/> that represents this method's operations.</returns>
+        protected async ValueTask OrchestrateTesTasksOnBatchAsync(string pollName, Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>> tesTaskGetter, Func<TesTask[], CancellationToken, IAsyncEnumerable<RelatedTask<TesTask, bool>>> tesTaskProcessor, CancellationToken cancellationToken, string unitsLabel = "tasks")
         {
-            var tesTasks = await (await tesTaskGetter(stoppingToken)).ToArrayAsync(stoppingToken);
+            var tesTasks = await (await tesTaskGetter(cancellationToken)).ToArrayAsync(cancellationToken);
 
             if (tesTasks.All(task => task is null))
             {
@@ -157,7 +163,7 @@ namespace TesApi.Web
 
             var startTime = DateTime.UtcNow;
 
-            await foreach (var tesTaskTask in tesTaskProcessor(tesTasks, stoppingToken).WithCancellation(stoppingToken))
+            await foreach (var tesTaskTask in tesTaskProcessor(tesTasks, cancellationToken).WithCancellation(cancellationToken))
             {
                 var tesTask = tesTaskTask.Related;
 
@@ -204,7 +210,7 @@ namespace TesApi.Web
                         }
 
                         logger.LogError(exc, "TES task: {TesTask} threw an exception in OrchestrateTesTasksOnBatch({Poll}).", tesTask.Id, pollName);
-                        await repository.UpdateItemAsync(tesTask, stoppingToken);
+                        await repository.UpdateItemAsync(tesTask, cancellationToken);
                     }
 
                     if (isModified)
@@ -239,7 +245,7 @@ namespace TesApi.Web
                             logger.LogDebug("{TesTask} failed, state: {TesTaskState}, reason: {TesTaskFailureReason}", tesTask.Id, tesTask.State, tesTask.FailureReason);
                         }
 
-                        await repository.UpdateItemAsync(tesTask, stoppingToken);
+                        await repository.UpdateItemAsync(tesTask, cancellationToken);
                     }
                 }
                 catch (RepositoryCollisionException exc)
@@ -277,8 +283,8 @@ namespace TesApi.Web
 
             if (batchScheduler.NeedPoolFlush)
             {
-                var pools = (await repository.GetItemsAsync(task => task.State == TesState.INITIALIZINGEnum || task.State == TesState.RUNNINGEnum, stoppingToken)).Select(task => task.PoolId).Distinct();
-                await batchScheduler.FlushPoolsAsync(pools, stoppingToken);
+                var pools = (await repository.GetItemsAsync(task => task.State == TesState.INITIALIZINGEnum || task.State == TesState.RUNNINGEnum, cancellationToken)).Select(task => task.PoolId).Distinct();
+                await batchScheduler.FlushPoolsAsync(pools, cancellationToken);
             }
 
             logger.LogDebug("OrchestrateTesTasksOnBatch({Poll}) for {TaskCount} {UnitsLabel} completed in {TotalSeconds} seconds.", pollName, tesTasks.Where(task => task is not null).Count(), unitsLabel, DateTime.UtcNow.Subtract(startTime).TotalSeconds);

@@ -15,7 +15,7 @@ using TesApi.Web.Events;
 namespace TesApi.Web
 {
     /// <summary>
-    /// A background service that schedules TES tasks in the batch system, orchestrates their lifecycle, and updates their state.
+    /// A background service that schedules <see cref="TesTask"/>s in the batch system, orchestrates their lifecycle, and updates their state.
     /// This should only be used as a system-wide singleton service.  This class does not support scale-out on multiple machines,
     /// nor does it implement a leasing mechanism.  In the future, consider using the Lease Blob operation.
     /// </summary>
@@ -30,27 +30,22 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="nodeEventProcessor">The task node event processor.</param>
         /// <param name="hostApplicationLifetime">Used for requesting termination of the current application during initialization.</param>
-        /// <param name="repository">The main TES task database repository implementation</param>
-        /// <param name="batchScheduler">The batch scheduler implementation</param>
-        /// <param name="logger">The logger instance</param>
+        /// <param name="repository">The main TES task database repository implementation.</param>
+        /// <param name="batchScheduler">The batch scheduler implementation.</param>
+        /// <param name="logger">The logger instance.</param>
         public TaskScheduler(RunnerEventsProcessor nodeEventProcessor, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<TaskScheduler> logger)
             : base(hostApplicationLifetime, repository, batchScheduler, logger)
         {
             this.nodeEventProcessor = nodeEventProcessor;
         }
 
-
-        /// <summary>
-        /// The main thread that continuously schedules TES tasks in the batch system
-        /// </summary>
-        /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
-        /// <returns>A System.Threading.Tasks.Task that represents the long running operations.</returns>
-        protected override async Task ExecuteSetupAsync(CancellationToken stoppingToken)
+        /// <inheritdoc />
+        protected override async ValueTask ExecuteSetupAsync(CancellationToken cancellationToken)
         {
             try
             {
-                // Delay "starting" Scheduler until this completes to finish initializing BatchScheduler.
-                await batchScheduler.UploadTaskRunnerIfNeeded(stoppingToken);
+                // Delay "starting" TaskScheduler until this completes to finish initializing BatchScheduler.
+                await batchScheduler.UploadTaskRunnerIfNeeded(cancellationToken);
             }
             catch (Exception exc)
             {
@@ -59,76 +54,72 @@ namespace TesApi.Web
             }
         }
 
-        /// <summary>
-        /// The main thread that continuously schedules TES tasks in the batch system
-        /// </summary>
-        /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
-        /// <returns>A System.Threading.Tasks.Task that represents the long running operations.</returns>
-        protected override Task ExecuteCoreAsync(CancellationToken stoppingToken)
+        /// <inheritdoc />
+        protected override async ValueTask ExecuteCoreAsync(CancellationToken cancellationToken)
         {
-            return Task.WhenAll(
-                ExecuteCancelledTesTasksOnBatchAsync(stoppingToken),
-                ExecuteQueuedTesTasksOnBatchAsync(stoppingToken),
-                ExecuteUpdateTesTaskFromEventBlobAsync(stoppingToken));
+            await Task.WhenAll(
+                ExecuteCancelledTesTasksOnBatchAsync(cancellationToken),
+                ExecuteQueuedTesTasksOnBatchAsync(cancellationToken),
+                ExecuteUpdateTesTaskFromEventBlobAsync(cancellationToken));
         }
 
         /// <summary>
         /// Retrieves all queued TES tasks from the database, performs an action in the batch system, and updates the resultant state
         /// </summary>
         /// <returns></returns>
-        private Task ExecuteQueuedTesTasksOnBatchAsync(CancellationToken stoppingToken)
+        private async Task ExecuteQueuedTesTasksOnBatchAsync(CancellationToken cancellationToken)
         {
             var query = new Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>>(
-                async cancellationToken => (await repository.GetItemsAsync(
+                async token => (await repository.GetItemsAsync(
                     predicate: t => t.State == TesState.QUEUEDEnum,
-                    cancellationToken: cancellationToken))
+                    cancellationToken: token))
                 .OrderBy(t => t.CreationTime)
                 .ToAsyncEnumerable());
 
-            return ExecuteActionOnIntervalAsync(batchRunInterval,
-                cancellationToken => OrchestrateTesTasksOnBatchAsync("Queued", query, batchScheduler.ProcessQueuedTesTasksAsync, cancellationToken),
-                stoppingToken);
+            await ExecuteActionOnIntervalAsync(batchRunInterval,
+                token => OrchestrateTesTasksOnBatchAsync("Queued", query, batchScheduler.ProcessQueuedTesTasksAsync, token),
+                cancellationToken);
         }
 
         /// <summary>
         /// Retrieves all cancelled TES tasks from the database, performs an action in the batch system, and updates the resultant state
         /// </summary>
-        /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
+        /// <param name="cancellationToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
         /// <returns></returns>
-        private Task ExecuteCancelledTesTasksOnBatchAsync(CancellationToken stoppingToken)
+        private async Task ExecuteCancelledTesTasksOnBatchAsync(CancellationToken cancellationToken)
         {
             var query = new Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>>(
-                async cancellationToken => (await repository.GetItemsAsync(
+                async token => (await repository.GetItemsAsync(
                     predicate: t => t.State == TesState.CANCELINGEnum,
-                    cancellationToken: cancellationToken))
+                    cancellationToken: token))
                 .OrderByDescending(t => t.CreationTime)
                 .ToAsyncEnumerable());
 
-            return ExecuteActionOnIntervalAsync(batchRunInterval,
-                cancellationToken => OrchestrateTesTasksOnBatchAsync(
+            await ExecuteActionOnIntervalAsync(batchRunInterval,
+                token => OrchestrateTesTasksOnBatchAsync(
                     "Cancelled",
                     query,
-                    (tasks, cancellationToken) => batchScheduler.ProcessTesTaskBatchStatesAsync(
+                    (tasks, ct) => batchScheduler.ProcessTesTaskBatchStatesAsync(
                         tasks,
                         Enumerable.Repeat<AzureBatchTaskState>(new(AzureBatchTaskState.TaskState.CancellationRequested), tasks.Length).ToArray(),
-                        cancellationToken),
-                    cancellationToken),
-                stoppingToken);
+                        ct),
+                    token),
+                cancellationToken);
         }
 
         /// <summary>
         /// Retrieves all event blobs from storage and updates the resultant state.
         /// </summary>
-        /// <param name="stoppingToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
+        /// <param name="cancellationToken">Triggered when Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken) is called.</param>
         /// <returns></returns>
-        private Task ExecuteUpdateTesTaskFromEventBlobAsync(CancellationToken stoppingToken)
+        private async Task ExecuteUpdateTesTaskFromEventBlobAsync(CancellationToken cancellationToken)
         {
-            return ExecuteActionOnIntervalAsync(blobRunInterval,
-                async cancellationToken =>
+            await ExecuteActionOnIntervalAsync(blobRunInterval,
+                async token =>
                     await UpdateTesTasksFromAvailableEventsAsync(
-                        await ParseAvailableEvents(cancellationToken),
-                        cancellationToken),
-                stoppingToken);
+                        await ParseAvailableEvents(token),
+                        token),
+                cancellationToken);
         }
 
         /// <summary>
@@ -136,12 +127,12 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         /// <returns><see cref="TesTask"/>s and <see cref="AzureBatchTaskState"/>s from all events.</returns>
-        async ValueTask<IEnumerable<(TesTask Task, AzureBatchTaskState State, Func<CancellationToken, Task> MarkProcessedAsync)>> ParseAvailableEvents(CancellationToken cancellationToken)
+        private async ValueTask<IEnumerable<(TesTask Task, AzureBatchTaskState State, Func<CancellationToken, Task> MarkProcessedAsync)>> ParseAvailableEvents(CancellationToken cancellationToken)
         {
             var messages = new ConcurrentBag<(RunnerEventsMessage Message, TesTask Task, AzureBatchTaskState State, Func<CancellationToken, Task> MarkProcessedAsync)>();
 
             // Get and parse event blobs
-            await Parallel.ForEachAsync(batchScheduler.GetEventMessagesAsync(cancellationToken), cancellationToken, async (eventMessage, cancellationToken) =>
+            await Parallel.ForEachAsync(batchScheduler.GetEventMessagesAsync(cancellationToken), cancellationToken, async (eventMessage, token) =>
             {
                 var tesTask = await GetTesTaskAsync(eventMessage.Tags["task-id"], eventMessage.Tags["event-name"]);
 
@@ -153,9 +144,23 @@ namespace TesApi.Web
                 try
                 {
                     nodeEventProcessor.ValidateMessageMetadata(eventMessage);
-                    eventMessage = await nodeEventProcessor.DownloadAndValidateMessageContentAsync(eventMessage, cancellationToken);
-                    var state = await nodeEventProcessor.GetMessageBatchStateAsync(eventMessage, tesTask, cancellationToken);
-                    messages.Add((eventMessage, tesTask, state, token => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, token)));
+                    eventMessage = await nodeEventProcessor.DownloadAndValidateMessageContentAsync(eventMessage, token);
+                    var state = await nodeEventProcessor.GetMessageBatchStateAsync(eventMessage, tesTask, token);
+                    messages.Add((eventMessage, tesTask, state, ct => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, ct)));
+                }
+                catch (ArgumentException ex)
+                {
+                    logger.LogError(ex, @"Verifying event metadata failed: {ErrorMessage}", ex.Message);
+
+                    messages.Add((
+                        eventMessage,
+                        tesTask,
+                        new(AzureBatchTaskState.TaskState.InfoUpdate, Warning: new List<string>
+                        {
+                            "EventParsingFailed",
+                            $"{ex.GetType().FullName}: {ex.Message}"
+                        }),
+                        ct => nodeEventProcessor.RemoveMessageFromReattemptsAsync(eventMessage, ct)));
                 }
                 catch (Exception ex)
                 {
@@ -169,18 +174,16 @@ namespace TesApi.Web
                             "EventParsingFailed",
                             $"{ex.GetType().FullName}: {ex.Message}"
                         }),
-                        (ex is System.Diagnostics.UnreachableException || ex is RunnerEventsProcessor.AssertException)
-                            ? token => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, token) // Don't retry this event
+                        (ex is System.Diagnostics.UnreachableException || ex is RunnerEventsProcessor.DownloadOrParseException)
+                            ? ct => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, ct) // Mark event processed to prevent retries
                             : default));  // Retry this event.
-
-                    return;
                 }
 
                 // Helpers
                 async ValueTask<TesTask> GetTesTaskAsync(string id, string @event)
                 {
                     TesTask tesTask = default;
-                    if (await repository.TryGetItemAsync(id, cancellationToken, task => tesTask = task) && tesTask is not null)
+                    if (await repository.TryGetItemAsync(id, token, task => tesTask = task) && tesTask is not null)
                     {
                         logger.LogDebug("Completing event '{TaskEvent}' for task {TesTask}.", @event, tesTask.Id);
                         return tesTask;
@@ -197,12 +200,12 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Updates each task based on the provided states.
+        /// Updates each task based on the provided state.
         /// </summary>
         /// <param name="eventStates">A collection of associated <see cref="TesTask"/>s, <see cref="AzureBatchTaskState"/>s, and a method to mark the source event processed.</param>
         /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        async ValueTask UpdateTesTasksFromAvailableEventsAsync(IEnumerable<(TesTask Task, AzureBatchTaskState State, Func<CancellationToken, Task> MarkProcessedAsync)> eventStates, CancellationToken cancellationToken)
+        private async ValueTask UpdateTesTasksFromAvailableEventsAsync(IEnumerable<(TesTask Task, AzureBatchTaskState State, Func<CancellationToken, Task> MarkProcessedAsync)> eventStates, CancellationToken cancellationToken)
         {
             eventStates = eventStates.ToList();
 
@@ -221,11 +224,11 @@ namespace TesApi.Web
                 cancellationToken,
                 "events");
 
-            await Parallel.ForEachAsync(eventStates.Select(@event => @event.MarkProcessedAsync).Where(func => func is not null), cancellationToken, async (markEventProcessed, cancellationToken) =>
+            await Parallel.ForEachAsync(eventStates.Select(@event => @event.MarkProcessedAsync).Where(func => func is not null), cancellationToken, async (markEventProcessed, token) =>
             {
                 try
                 {
-                    await markEventProcessed(cancellationToken);
+                    await markEventProcessed(token);
                 }
                 catch (Exception ex)
                 {

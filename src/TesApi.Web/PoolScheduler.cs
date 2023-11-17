@@ -17,7 +17,7 @@ using CloudTaskBatchTaskState = TesApi.Web.IBatchPool.CloudTaskBatchTaskState;
 namespace TesApi.Web
 {
     /// <summary>
-    /// A background service that montitors CloudPools in the batch system, orchestrates their lifecycle, and updates their state.
+    /// A background service that montitors <see cref="CloudPool"/>s in the batch system, orchestrates their lifecycle, and updates their state.
     /// This should only be used as a system-wide singleton service.  This class does not support scale-out on multiple machines,
     /// nor does it implement a leasing mechanism.  In the future, consider using the Lease Blob operation.
     /// </summary>
@@ -32,36 +32,62 @@ namespace TesApi.Web
         private static readonly TimeSpan CompletedTaskListTimeSpan = 0.5 * BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
 
         /// <summary>
+        /// Predicate to obtain <see cref="CloudTask"/>s (recently) running on <see cref="ComputeNode"/>s. Used to connect tasks and nodes together.
+        /// </summary>
+        /// <remarks>Shared between <see cref="ProcessTasksAsync"/>, <see cref="GetCloudTaskStatesAsync"/>, and <see cref="BatchPool.ServicePoolAsync(CancellationToken)"/> to limit Batch API requests to a minimum.</remarks>
+        internal static bool TaskListWithComputeNodeInfoPredicate(CloudTask task) => !TaskState.Completed.Equals(task.State) && !string.IsNullOrEmpty(task.ComputeNodeInformation?.ComputeNodeId);
+
+        /// <summary>
+        /// Predicate to obtain <see cref="CloudTask"/>s pending in Azure Batch.
+        /// </summary>
+        /// <remarks>Shared between <see cref="ProcessTasksAsync"/> and <see cref="GetCloudTaskStatesAsync"/>.</remarks>
+        private static bool ActiveTaskListPredicate(CloudTask task) => TaskState.Active.Equals(task.State);
+
+        /// <summary>
+        /// Predicate used to obtain <see cref="CloudTask"/>s to backstop completing <see cref="TesTask"/>s in case of problems with the <see cref="Tes.Runner.Events.EventsPublisher.TaskCompletionEvent"/>.
+        /// </summary>
+        /// <remarks>Shared between <see cref="ProcessTasksAsync"/> and <see cref="GetCloudTaskStatesAsync"/>.</remarks>
+        private static bool CompletedTaskListPredicate(CloudTask task, DateTime now) => TaskState.Completed.Equals(task.State) && task.StateTransitionTime < now - CompletedTaskListTimeSpan;
+
+        /// <summary>
         /// Default constructor
         /// </summary>
         /// <param name="hostApplicationLifetime">Used for requesting termination of the current application during initialization.</param>
-        /// <param name="repository">The main TES task database repository implementation</param>
-        /// <param name="batchScheduler"></param>
-        /// <param name="logger"></param>
+        /// <param name="repository">The main TES task database repository implementation.</param>
+        /// <param name="batchScheduler">The batch scheduler implementation.</param>
+        /// <param name="logger">The logger instance.</param>
         /// <exception cref="ArgumentNullException"></exception>
         public PoolScheduler(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<PoolScheduler> logger)
             : base(hostApplicationLifetime, repository, batchScheduler, logger) { }
 
         /// <inheritdoc />
-        protected override void ExecuteSetup(CancellationToken stoppingToken)
+        protected override void ExecuteSetup(CancellationToken cancellationToken)
         {
-            batchScheduler.LoadExistingPoolsAsync(stoppingToken).Wait(stoppingToken); // Delay starting Scheduler until this completes to finish initializing BatchScheduler.
+            batchScheduler.LoadExistingPoolsAsync(cancellationToken).Wait(cancellationToken); // Delay starting TaskScheduler until this completes to finish initializing the shared parts of BatchScheduler.
         }
 
         /// <inheritdoc />
-        protected override Task ExecuteCoreAsync(CancellationToken stoppingToken)
+        protected override ValueTask ExecuteCoreAsync(CancellationToken cancellationToken)
         {
-            return ServiceBatchPoolsAsync(stoppingToken);
+            return ExecuteActionOnIntervalAsync(
+                RunInterval,
+                async token => await ExecuteActionOnPoolsAsync(
+                    async (pool, token) =>
+                    {
+                        await pool.ServicePoolAsync(token);
+                        await ProcessTasksAsync(pool, DateTime.UtcNow, pool.ListCloudTasksAsync(), token);
+                    },
+                    token),
+                cancellationToken);
         }
 
         /// <summary>
         /// Performs an action on each batch pool.
         /// </summary>
-        /// <param name="pollName"></param>
-        /// <param name="action"></param>
-        /// <param name="stoppingToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="action">Method performing operations on a <see cref="IBatchPool"/>.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        private async ValueTask ExecuteActionOnPoolsAsync(string pollName, Func<IBatchPool, CancellationToken, ValueTask> action, CancellationToken stoppingToken)
+        private async ValueTask ExecuteActionOnPoolsAsync(Func<IBatchPool, CancellationToken, ValueTask> action, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(action);
 
@@ -74,7 +100,7 @@ namespace TesApi.Web
 
             var startTime = DateTime.UtcNow;
 
-            await Parallel.ForEachAsync(pools, stoppingToken, async (pool, token) =>
+            await Parallel.ForEachAsync(pools, cancellationToken, async (pool, token) =>
             {
                 try
                 {
@@ -82,41 +108,20 @@ namespace TesApi.Web
                 }
                 catch (Exception exc)
                 {
-                    logger.LogError(exc, @"Batch pool {PoolId} threw an exception in {Poll}.", pool.Id, pollName);
+                    logger.LogError(exc, @"Batch pool {PoolId} threw an exception when serviced.", pool.Id);
                 }
             });
 
-            logger.LogDebug(@"{Poll} for {PoolsCount} pools completed in {TotalSeconds} seconds.", pollName, pools.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
+            logger.LogDebug(@"Service Batch Pools for {PoolsCount} pools completed in {TotalSeconds} seconds.", pools.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
         }
 
         /// <summary>
-        /// Repeatedly services all batch pools associated with this TES instance, including updating tasks.
+        /// Processes tasks connected to a pool to manage state.
         /// </summary>
-        /// <param name="stoppingToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        private Task ServiceBatchPoolsAsync(CancellationToken stoppingToken)
-        {
-            return ExecuteActionOnIntervalAsync(
-                RunInterval,
-                async token =>
-                await ExecuteActionOnPoolsAsync(
-                    "Service Batch Pools",
-                    async (pool, cancellationToken) =>
-                    {
-                        await pool.ServicePoolAsync(cancellationToken);
-                        await ProcessTasksAsync(pool, DateTime.UtcNow, pool.ListCloudTasksAsync(), cancellationToken);
-                    },
-                    token),
-                stoppingToken);
-        }
-
-        /// <summary>
-        /// Processes tasks to manage state.
-        /// </summary>
-        /// <param name="pool"></param>
+        /// <param name="pool">The <see cref="IBatchPool"/> associated with <paramref name="tasks"/>.</param>
         /// <param name="now">Reference time.</param>
-        /// <param name="tasks"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="tasks"><see cref="CloudTask"/>s requiring attention.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         private async ValueTask ProcessTasksAsync(IBatchPool pool, DateTime now, IAsyncEnumerable<CloudTask> tasks, CancellationToken cancellationToken)
         {
@@ -146,26 +151,11 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Shared between <see cref="ProcessTasksAsync"/> and <see cref="GetCloudTaskStatesAsync"/>.
-        /// </summary>
-        internal static bool TaskListWithComputeNodeInfoPredicate(CloudTask task) => !TaskState.Completed.Equals(task.State) && !string.IsNullOrEmpty(task.ComputeNodeInformation?.ComputeNodeId);
-
-        /// <summary>
-        /// Shared between <see cref="ProcessTasksAsync"/> and <see cref="GetCloudTaskStatesAsync"/>.
-        /// </summary>
-        private static bool ActiveTaskListPredicate(CloudTask task) => TaskState.Active.Equals(task.State);
-
-        /// <summary>
-        /// Shared between <see cref="ProcessTasksAsync"/> and <see cref="GetCloudTaskStatesAsync"/>.
-        /// </summary>
-        private static bool CompletedTaskListPredicate(CloudTask task, DateTime now) => TaskState.Completed.Equals(task.State) && task.StateTransitionTime < now - CompletedTaskListTimeSpan;
-
-        /// <summary>
         /// Updates each task based on the provided states.
         /// </summary>
-        /// <param name="poolId">The batch pool/job from which the state was obtained.</param>
-        /// <param name="states">The states with which to update the associated tes tasks.</param>
-        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="poolId">The batch pool from which the state was obtained.</param>
+        /// <param name="states">The states with which to update the associated <see cref="TesTask"/>s.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         private async ValueTask ProcessCloudTaskStatesAsync(string poolId, IAsyncEnumerable<CloudTaskBatchTaskState> states, CancellationToken cancellationToken)
         {
@@ -201,10 +191,10 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Deletes cloud tasks.
+        /// Deletes completed <see cref="CloudTask"/>s.
         /// </summary>
         /// <param name="tasks">Tasks to delete.</param>
-        /// <param name="cancellationToken">A System.Threading.CancellationToken for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         private async ValueTask ProcessDeletedTasks(IAsyncEnumerable<IBatchScheduler.CloudTaskId> tasks, CancellationToken cancellationToken)
         {
@@ -231,12 +221,12 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Obtains <see cref="CloudTaskBatchTaskState"/> for tasks in specific conditions.
+        /// Obtains <see cref="CloudTaskBatchTaskState"/> for updating <see cref="TesTask"/>s.
         /// </summary>
-        /// <param name="pool"></param>
-        /// <param name="now"></param>
-        /// <param name="tasks"></param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="pool">The <see cref="IBatchPool"/> associated with <paramref name="tasks"/>.</param>
+        /// <param name="now">Reference time.</param>
+        /// <param name="tasks"><see cref="CloudTask"/>s which need <see cref="CloudTaskBatchTaskState"/>s for further processing.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         private async IAsyncEnumerable<CloudTaskBatchTaskState> GetCloudTaskStatesAsync(IBatchPool pool, DateTime now, IAsyncEnumerable<CloudTask> tasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
@@ -247,7 +237,7 @@ namespace TesApi.Web
             {
                 var taskList = await tasks.ToListAsync(cancellationToken);
                 taskListWithComputeNodeInfo = taskList.Where(TaskListWithComputeNodeInfoPredicate).ToList();
-                activeTaskList = taskList.Where(ActiveTaskListPredicate).OrderByDescending(task => task.StateTransitionTime).ToList();
+                activeTaskList = taskList.Where(ActiveTaskListPredicate).OrderByDescending(task => task.StateTransitionTime?.ToUniversalTime()).ToList();
                 completedTaskList = taskList.Where(task => CompletedTaskListPredicate(task, now)).ToList();
             }
 
@@ -269,8 +259,8 @@ namespace TesApi.Web
                 }
             }
 
-            await foreach (var state in activeTaskList.ToAsyncEnumerable().Zip(GetFailures(cancellationToken),
-                    (cloud, state) => new CloudTaskBatchTaskState(cloud.Id, state))
+            await foreach (var state in activeTaskList.ToAsyncEnumerable()
+                .Zip(GetFailures(cancellationToken), (cloud, state) => new CloudTaskBatchTaskState(cloud.Id, state))
                 .WithCancellation(cancellationToken))
             {
                 yield return state;
@@ -304,13 +294,13 @@ namespace TesApi.Web
             async IAsyncEnumerable<AzureBatchTaskState> GetFailures([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
             {
-                for (var failure = PopNextStartTaskFailure(); failure is not null; failure = PopNextStartTaskFailure())
+                foreach (var failure in RepeatUntil(PopNextStartTaskFailure, failure => failure is null))
                 {
                     yield return ConvertFromStartTask(failure);
                     cancellationToken.ThrowIfCancellationRequested();
                 }
 
-                for (var failure = PopNextResizeError(); failure is not null; failure = PopNextResizeError())
+                foreach (var failure in RepeatUntil(PopNextResizeError, failure => failure is null))
                 {
                     yield return ConvertFromResize(failure);
                     cancellationToken.ThrowIfCancellationRequested();
@@ -364,6 +354,22 @@ namespace TesApi.Web
 
             static string FormatNameValuePair(NameValuePair pair)
                 => $"{pair.Name}: {pair.Value}";
+
+            static IEnumerable<T> RepeatUntil<T>(Func<T> func, Predicate<T> stop)
+            {
+                do
+                {
+                    var t = func();
+
+                    if (stop(t))
+                    {
+                        yield break;
+                    }
+
+                    yield return t;
+                }
+                while (true);
+            }
         }
     }
 }

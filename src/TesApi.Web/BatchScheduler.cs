@@ -1399,8 +1399,8 @@ namespace TesApi.Web
                             VmCpuModelName = metrics.GetValueOrDefault("VmCpuModelName")
                         };
 
-                        taskStartTime = TryGetValueAsDateTimeOffset(metrics, "BlobXferPullStart", out var startTime) ? (DateTimeOffset?)startTime : null;
-                        taskEndTime = TryGetValueAsDateTimeOffset(metrics, "UploadEnd", out var endTime) ? (DateTimeOffset?)endTime : null;
+                        taskStartTime = TryGetValueAsDateTimeOffset(metrics, "BlobXferPullStart", out var startTime) ? startTime : null;
+                        taskEndTime = TryGetValueAsDateTimeOffset(metrics, "UploadEnd", out var endTime) ? endTime : null;
                     }
                     catch (Exception ex)
                     {
@@ -1417,8 +1417,8 @@ namespace TesApi.Web
         }
 
         private static Dictionary<string, string> DelimitedTextToDictionary(string text, string fieldDelimiter = "=", string rowDelimiter = "\n")
-            => text.Split(rowDelimiter)
-                .Select(line => { var parts = line.Split(fieldDelimiter); return new KeyValuePair<string, string>(parts[0], parts[1]); })
+            => text.Split(rowDelimiter, StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => { var parts = line.Split(fieldDelimiter, 2); return new KeyValuePair<string, string>(parts[0].Trim(), parts.Length < 2 ? string.Empty : parts[1]); })
                 .ToDictionary(kv => kv.Key, kv => kv.Value);
 
 
