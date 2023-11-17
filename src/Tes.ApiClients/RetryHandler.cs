@@ -111,7 +111,7 @@ public class RetryHandler
     /// <param name="context"></param>
     /// <typeparam name="TResult">Result type</typeparam>
     /// <returns>Result instance</returns>
-    public TResult ExecuteWithRetry<TResult>(Func<TResult> action, Context? context = default)
+    public TResult ExecuteWithRetry<TResult>(Func<TResult> action, Context context = default)
     {
         ArgumentNullException.ThrowIfNull(action);
 
@@ -140,7 +140,7 @@ public class RetryHandler
     /// <param name="context"></param>
     /// <typeparam name="TResult">Result type</typeparam>
     /// <returns>Result instance</returns>
-    public virtual Task<TResult> ExecuteWithRetryAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, Context? context = default)
+    public virtual Task<TResult> ExecuteWithRetryAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, Context context = default)
     {
         ArgumentNullException.ThrowIfNull(action);
 
@@ -154,7 +154,7 @@ public class RetryHandler
     /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
     /// <param name="context"></param>
     /// <returns>Result instance</returns>
-    public async Task ExecuteWithRetryAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken, Context? context = default)
+    public async Task ExecuteWithRetryAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken, Context context = default)
     {
         ArgumentNullException.ThrowIfNull(action);
 
@@ -168,7 +168,7 @@ public class RetryHandler
     /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
     /// <param name="context"></param>
     /// <returns>Result HttpResponse</returns>
-    public virtual async Task<HttpResponseMessage> ExecuteWithRetryAsync(Func<CancellationToken, Task<HttpResponseMessage>> action, CancellationToken cancellationToken, Context? context = default)
+    public virtual async Task<HttpResponseMessage> ExecuteWithRetryAsync(Func<CancellationToken, Task<HttpResponseMessage>> action, CancellationToken cancellationToken, Context context = default)
     {
         ArgumentNullException.ThrowIfNull(action);
 
@@ -183,7 +183,7 @@ public static class RetryHandlerExtensions
         context[RetryHandler.OnRetryHandlerKey] = onRetry;
     }
 
-    public static RetryHandler.OnRetryHandler<T>? GetOnRetryHandler<T>(this Context context)
+    public static RetryHandler.OnRetryHandler<T> GetOnRetryHandler<T>(this Context context)
     {
         return context.TryGetValue(RetryHandler.OnRetryHandlerKey, out var handler) ? (RetryHandler.OnRetryHandler<T>)handler : default;
     }
@@ -193,7 +193,7 @@ public static class RetryHandlerExtensions
         context[RetryHandler.OnRetryHandlerKey] = onRetry;
     }
 
-    public static RetryHandler.OnRetryHandler? GetOnRetryHandler(this Context context)
+    public static RetryHandler.OnRetryHandler GetOnRetryHandler(this Context context)
     {
         return context.TryGetValue(RetryHandler.OnRetryHandlerKey, out var handler) ? (RetryHandler.OnRetryHandler)handler : default;
     }

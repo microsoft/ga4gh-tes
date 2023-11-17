@@ -74,7 +74,7 @@ namespace Tes.ApiClients
         /// </summary>
         /// <param name="caller">Calling method name.</param>
         /// <returns><see cref="RetryHandler.OnRetryHandler"/></returns>
-        private RetryHandler.OnRetryHandler LogRetryErrorOnRetryHandler([System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
+        private RetryHandler.OnRetryHandler LogRetryErrorOnRetryHandler([System.Runtime.CompilerServices.CallerMemberName] string caller = default)
             => new((exception, timeSpan, retryCount, correlationId) =>
             {
                 Logger?.LogError(exception, @"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
@@ -86,7 +86,7 @@ namespace Tes.ApiClients
         /// <typeparam name="TResult">See <see cref="PolicyBuilder{TResult}"/></typeparam>
         /// <param name="caller">Calling method name.</param>
         /// <returns><see cref="RetryHandler.OnRetryHandler{TResult}"/></returns>
-        private RetryHandler.OnRetryHandler<TResult> LogRetryErrorOnRetryHandler<TResult>([System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
+        private RetryHandler.OnRetryHandler<TResult> LogRetryErrorOnRetryHandler<TResult>([System.Runtime.CompilerServices.CallerMemberName] string caller = default)
             => new((result, timeSpan, retryCount, correlationId) =>
             {
                 if (result.Exception is null)

@@ -46,7 +46,7 @@ namespace Tes.ApiClients
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="context"></param>
         /// <returns></returns>
-        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, Context? context = default)
+        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, Context context = default)
         {
             ValidateArgs(cacheKey, action);
 
@@ -63,7 +63,7 @@ namespace Tes.ApiClients
         /// <param name="context"></param>
         /// <typeparam name="TResult"></typeparam>
         /// <returns></returns>
-        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, DateTimeOffset cachesExpires, CancellationToken cancellationToken, Context? context = default)
+        public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, DateTimeOffset cachesExpires, CancellationToken cancellationToken, Context context = default)
         {
             ValidateArgs(cacheKey, action);
 
