@@ -314,12 +314,8 @@ namespace TesApi.Web
 
                 switch (_scalingMode)
                 {
-                    case ScalingMode.AutoScaleEnabled when autoScaleEnabled != true:
-                        _scalingMode = ScalingMode.RemovingFailedNodes;
-                        break;
-
-                    case ScalingMode.AutoScaleEnabled when autoScaleEnabled == true:
-                        if (_resetAutoScalingRequired || await GetNodesToRemove(false).AnyAsync(cancellationToken))
+                    case ScalingMode.AutoScaleEnabled:
+                        if (_resetAutoScalingRequired || await (await GetNodesToRemove()).AnyAsync(cancellationToken))
                         {
                             _logger.LogInformation(@"Switching pool {PoolId} to manual scale to clear resize errors and/or compute nodes in invalid states.", Id);
                             await _azureProxy.DisableBatchPoolAutoScaleAsync(Id, cancellationToken);
@@ -332,7 +328,7 @@ namespace TesApi.Web
                             var nodesToRemove = Enumerable.Empty<ComputeNode>();
 
                             // It's documented that a max of 100 nodes can be removed at a time. Excess eligible nodes will be removed in a future call to this method.
-                            await foreach (var node in GetNodesToRemove(true).Take(MaxComputeNodesToRemoveAtOnce).WithCancellation(cancellationToken))
+                            await foreach (var node in (await GetNodesToRemove()).Take(MaxComputeNodesToRemoveAtOnce).WithCancellation(cancellationToken))
                             {
                                 switch (node.State)
                                 {
@@ -534,25 +530,34 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async ValueTask ServicePoolAsync(CancellationToken cancellationToken)
         {
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
             async ValueTask StandupQueries()
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
             {
+                _taskPreviousComputeNodeIds.Clear();
+                _foundTasks.ForEach(task =>
+                {
+                    if (PoolScheduler.TaskListWithComputeNodeInfoPredicate(task))
+                    {
+                        _taskPreviousComputeNodeIds.Add(task.Id, task.ComputeNodeInformation.ComputeNodeId);
+                    }
+                });
+
                 // List tasks from batch just one time each time we service the pool when called from PoolScheduler
-                _foundTasks = await GetTasksAsync("creationTime,executionInfo,id,nodeInfo,state,stateTransitionTime", null).ToListAsync(cancellationToken);
+                _foundTasks.Clear();
+                _foundTasks.AddRange(GetTasksAsync("creationTime,executionInfo,id,nodeInfo,state,stateTransitionTime", null).ToBlockingEnumerable(cancellationToken));
+                _logger.LogDebug("{PoolId}: {TaskCount} tasks discovered.", Id, _foundTasks.Count);
 
                 // List nodes from Batch at most one time each time we service the pool
-                if (_foundTasks.Where(PoolScheduler.TaskListWithComputeNodeInfoPredicate).Any())
-                {
-                    var nodes = (await _azureProxy.ListComputeNodesAsync(Id,
-                                new ODATADetailLevel(filterClause: @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'", selectClause: @"errors,id,state,startTaskInfo"))
+                _lazyComputeNodes = _taskPreviousComputeNodeIds.Count == 0
+
+                    ? new(() => Task.FromResult(_azureProxy.ListComputeNodesAsync(Id,
+                                new ODATADetailLevel(filterClause: EjectableComputeNodesFilterClause, selectClause: EjectableComputeNodesSelectClause()))))
+
+                    : new(async () => (await _azureProxy.ListComputeNodesAsync(Id,
+                                new ODATADetailLevel(filterClause: EjectableComputeNodesFilterClause, selectClause: EjectableComputeNodesSelectClause()))
                             .ToListAsync(cancellationToken))
-                        .ToAsyncEnumerable();
-                    _lazyComputeNodes = _ => new(nodes);
-                }
-                else
-                {
-                    _lazyComputeNodes = withState => new(_azureProxy.ListComputeNodesAsync(Id,
-                        new ODATADetailLevel(filterClause: @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'", selectClause: withState.Value ? @"id,state,startTaskInfo" : @"id")));
-                }
+                        .ToAsyncEnumerable());
             }
 
             var exceptions = new List<Exception>();
@@ -635,26 +640,38 @@ namespace TesApi.Web
             }
         }
 
-        private IEnumerable<CloudTask> _foundTasks = Enumerable.Empty<CloudTask>();
+        private readonly List<CloudTask> _foundTasks = new();
+        private readonly Dictionary<string, string> _taskPreviousComputeNodeIds = new();
 
-        private Func<bool?, Lazy<IAsyncEnumerable<ComputeNode>>> _lazyComputeNodes;
+        private Lazy<Task<IAsyncEnumerable<ComputeNode>>> _lazyComputeNodes;
+        private const string EjectableComputeNodesFilterClause = @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'";
+        private string EjectableComputeNodesSelectClause()
+            => ScalingMode.AutoScaleDisabled.Equals(_scalingMode) switch
+            {
+                false => _taskPreviousComputeNodeIds.Count == 0 // Not removing compute nodes
+                    ? @"id" // Not servicing tasks by compute node
+                    : @"errors,id,state", // Servicing tasks by compute node
+                true => _taskPreviousComputeNodeIds.Count == 0 // Possibly removing compute nodes
+                    ? @"id,state,startTaskInfo" // Not servicing tasks by compute node
+                    : @"errors,id,state,startTaskInfo", // Servicing tasks by compute node
+            };
 
-        private IAsyncEnumerable<ComputeNode> GetNodesToRemove(bool withState)
-            => _lazyComputeNodes(withState).Value;
+        private async ValueTask<IAsyncEnumerable<ComputeNode>> GetNodesToRemove()
+            => await _lazyComputeNodes.Value;
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<ComputeNode> ListLostComputeNodesAsync()
+        public async Task<IAsyncEnumerable<ComputeNode>> ListEjectableComputeNodesAsync()
         {
-            return _lazyComputeNodes(null).Value.Where(node => !ComputeNodeState.StartTaskFailed.Equals(node.State));
+            return (await _lazyComputeNodes.Value).Where(node => !ComputeNodeState.StartTaskFailed.Equals(node.State));
         }
 
         private IEnumerable<CloudTask> GetTasks(bool includeCompleted)
             => _foundTasks.Where(task => includeCompleted || !TaskState.Completed.Equals(task.State));
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<CloudTask> ListCloudTasksAsync()
+        public IEnumerable<CloudTaskWithPreviousComputeNodeId> ListCloudTasksAsync()
         {
-            return _foundTasks.ToAsyncEnumerable();
+            return _foundTasks.Select(task => new CloudTaskWithPreviousComputeNodeId(task, _taskPreviousComputeNodeIds.TryGetValue(task.Id, out var nodeId) ? nodeId : default));
         }
 
         /// <inheritdoc/>

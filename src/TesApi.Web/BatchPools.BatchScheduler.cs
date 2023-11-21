@@ -27,7 +27,7 @@ namespace TesApi.Web
 
         internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
-        private (string PoolKey, string DisplayName) GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, BatchModels.ContainerConfiguration containerConfiguration, IList<string> identities, CancellationToken cancellationToken)
+        private (string PoolKey, string DisplayName) GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, BatchModels.ContainerConfiguration containerConfiguration, IList<string> identities)
         {
             var identityResourceIds = "<none>";
 

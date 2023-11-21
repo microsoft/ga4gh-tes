@@ -72,13 +72,13 @@ namespace TesApi.Web
         /// Lists <see cref="CloudTask"/>s running in pool's job.
         /// </summary>
         /// <returns></returns>
-        IAsyncEnumerable<CloudTask> ListCloudTasksAsync();
+        IEnumerable<CloudTaskWithPreviousComputeNodeId> ListCloudTasksAsync();
 
         /// <summary>
         /// Lists <see cref="ComputeNode"/>s that are <see cref="Microsoft.Azure.Batch.Common.ComputeNodeState.Preempted"/> or <see cref="Microsoft.Azure.Batch.Common.ComputeNodeState.Unusable"/>.
         /// </summary>
         /// <returns></returns>
-        IAsyncEnumerable<ComputeNode> ListLostComputeNodesAsync();
+        Task<IAsyncEnumerable<ComputeNode>> ListEjectableComputeNodesAsync();
 
         /// <summary>
         /// Gets the last time the pool's compute node list was changed.
@@ -88,10 +88,10 @@ namespace TesApi.Web
         ValueTask<DateTime> GetAllocationStateTransitionTimeAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// A <see cref="CloudTask"/> not yet assigned a compute nodes to remove due to a nonrecoverable compute node or pool resize error.
+        /// A <see cref="CloudTask"/> with a compute node id.
         /// </summary>
-        /// <param name="CloudTaskId">A <see cref="CloudTask"/>s not yet assigned a compute node.</param>
-        /// <param name="TaskState">A compute node and/or pool resize error.</param>
-        public record CloudTaskBatchTaskState(string CloudTaskId, AzureBatchTaskState TaskState);
+        /// <param name="CloudTask">A <see cref="CloudTask"/>.</param>
+        /// <param name="PreviousComputeNodeId">A compute node id or null.</param>
+        public record CloudTaskWithPreviousComputeNodeId(CloudTask CloudTask, string PreviousComputeNodeId);
     }
 }
