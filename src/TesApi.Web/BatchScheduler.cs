@@ -656,7 +656,7 @@ namespace TesApi.Web
                 if (requiredNewPools > 1)
                 {
                     for (var (excess, exception) = await quotaVerifier.CheckBatchAccountPoolAndJobQuotasAsync(requiredNewPools, cancellationToken);
-                        excess > 0; )
+                        excess > 0;)
                     {
                         var key = tasksMetadataByPoolKey.Keys.Last();
                         if (tasksMetadataByPoolKey.TryRemove(key, out var listOfTaskMetadata))
@@ -673,79 +673,6 @@ namespace TesApi.Web
             }
 
             logger.LogDebug(@"Obtaining {PoolQuantity} batch pool identifiers for {QueuedTasks} tasks.", tasksMetadataByPoolKey.Count, tasksMetadataByPoolKey.Values.Sum(l => l.Length));
-
-            // TODO: Consider parallelizing this expression. Doing so would require making GetOrAddPoolAsync multi-threaded safe.
-            var tasksMetadata = tasksMetadataByPoolKey.ToAsyncEnumerable().SelectAwaitWithCancellation(async (pair, token) =>
-                    (pair.Key, Id: await GetPoolIdAsync(pair.Key, pair.Value, token), TaskMetadata: pair.Value))
-                    .Where(tuple => tuple.Id is not null)
-                    .SelectMany(tuple => tuple.TaskMetadata.ToAsyncEnumerable().Select(metadata => (metadata.TesTask, metadata.VirtualMachineInfo, tuple.Key, tuple.Id)))
-                    .ToBlockingEnumerable(cancellationToken);
-
-            // Return any results that are ready
-            foreach (var result in results)
-            {
-                yield return result;
-            }
-
-            if (!tasksMetadata.Any())
-            {
-                yield break;
-            }
-
-            results.Clear();
-
-            logger.LogDebug(@"Creating batch tasks.");
-
-            // Obtain assigned pool and create and assign the cloudtask for each task.
-            await Parallel.ForEachAsync(tasksMetadata, cancellationToken, async (metadata, token) =>
-            {
-                var (tesTask, virtualMachineInfo, poolKey, poolId) = metadata;
-
-                try
-                {
-                    var tesTaskLog = tesTask.AddTesTaskLog();
-                    tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
-                    var cloudTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
-                    tesTask.PoolId = poolId;
-                    var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(cloudTaskId, tesTask, cancellationToken);
-
-                    logger.LogInformation(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VmSize);
-                    await azureProxy.AddBatchTaskAsync(tesTask.Id, cloudTask, poolId, cancellationToken);
-
-                    tesTaskLog.StartTime = DateTimeOffset.UtcNow;
-                    tesTask.State = TesState.INITIALIZINGEnum;
-                    results.Add(new(Task.FromResult(true), tesTask));
-                }
-                catch (AggregateException aggregateException)
-                {
-                    var exceptions = new List<Exception>();
-
-                    foreach (var partResult in aggregateException.Flatten().InnerExceptions
-                        .Select(ex => HandleExceptionAsync(ex, poolKey, tesTask)))
-                    {
-                        if (partResult.IsFaulted)
-                        {
-                            exceptions.Add(partResult.Exception);
-                        }
-                    }
-
-                    results.Add(new(exceptions.Count == 0
-                        ? Task.FromResult(true)
-                        : Task.FromException<bool>(new AggregateException(exceptions)),
-                        tesTask));
-                }
-                catch (Exception exception)
-                {
-                    results.Add(new(HandleExceptionAsync(exception, poolKey, tesTask), tesTask));
-                }
-            });
-
-            foreach (var result in results)
-            {
-                yield return result;
-            }
-
-            yield break;
 
             async ValueTask<string> GetPoolIdAsync(string poolKey, IEnumerable<QueuedTaskMetadata> metadata, CancellationToken cancellationToken)
             {
@@ -805,6 +732,81 @@ namespace TesApi.Web
                 return null;
             }
 
+            // TODO: Consider parallelizing this expression. Doing so would require making GetOrAddPoolAsync multi-threaded safe.
+            var tasksMetadata = tasksMetadataByPoolKey.ToAsyncEnumerable().SelectAwaitWithCancellation(async (pair, token) =>
+                    (pair.Key, Id: await GetPoolIdAsync(pair.Key, pair.Value, token), TaskMetadata: pair.Value))
+                    .Where(tuple => tuple.Id is not null)
+                    .SelectMany(tuple => tuple.TaskMetadata.ToAsyncEnumerable().Select(metadata => (metadata.TesTask, metadata.VirtualMachineInfo, tuple.Key, tuple.Id)))
+                    .ToBlockingEnumerable(cancellationToken);
+
+            tasksMetadata = tasksMetadata.ToList();
+
+            // Return any results that are ready
+            foreach (var result in results)
+            {
+                yield return result;
+            }
+
+            if (!tasksMetadata.Any())
+            {
+                yield break;
+            }
+
+            results.Clear();
+
+            logger.LogDebug(@"Creating batch tasks for {QueuedTasks} tasks.", tasksMetadata.Count());
+
+            // Obtain assigned pool and create and assign the cloudtask for each task.
+            await Parallel.ForEachAsync(tasksMetadata, cancellationToken, async (metadata, token) =>
+            {
+                var (tesTask, virtualMachineInfo, poolKey, poolId) = metadata;
+
+                try
+                {
+                    var tesTaskLog = tesTask.AddTesTaskLog();
+                    tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
+                    var cloudTaskId = $"{tesTask.Id}-{tesTask.Logs.Count}";
+                    tesTask.PoolId = poolId;
+                    var cloudTask = await ConvertTesTaskToBatchTaskUsingRunnerAsync(cloudTaskId, tesTask, cancellationToken);
+
+                    logger.LogInformation(@"Creating batch task for TES task {TesTaskId}. Using VM size {VmSize}.", tesTask.Id, virtualMachineInfo.VmSize);
+                    await azureProxy.AddBatchTaskAsync(tesTask.Id, cloudTask, poolId, cancellationToken);
+
+                    tesTaskLog.StartTime = DateTimeOffset.UtcNow;
+                    tesTask.State = TesState.INITIALIZINGEnum;
+                    results.Add(new(Task.FromResult(true), tesTask));
+                }
+                catch (AggregateException aggregateException)
+                {
+                    var exceptions = new List<Exception>();
+
+                    foreach (var partResult in aggregateException.Flatten().InnerExceptions
+                        .Select(ex => HandleExceptionAsync(ex, poolKey, tesTask)))
+                    {
+                        if (partResult.IsFaulted)
+                        {
+                            exceptions.Add(partResult.Exception);
+                        }
+                    }
+
+                    results.Add(new(exceptions.Count == 0
+                        ? Task.FromResult(true)
+                        : Task.FromException<bool>(new AggregateException(exceptions)),
+                        tesTask));
+                }
+                catch (Exception exception)
+                {
+                    results.Add(new(HandleExceptionAsync(exception, poolKey, tesTask), tesTask));
+                }
+            });
+
+            foreach (var result in results)
+            {
+                yield return result;
+            }
+
+            yield break;
+
             Task<bool> HandleExceptionAsync(Exception exception, string poolKey, TesTask tesTask)
             {
                 switch (exception)
@@ -826,8 +828,7 @@ namespace TesApi.Web
                                 Microsoft.Rest.Azure.CloudException cloudException => cloudException.Body.Message,
                                 var e when e is BatchException batchException && batchException.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException batchErrorException => batchErrorException.Body.Message.Value,
                                 _ => "Unknown reason",
-                            },
-                                Array.Empty<string>());
+                            });
                         }
 
                         break;
