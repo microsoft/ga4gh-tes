@@ -53,7 +53,7 @@ namespace TesApi.Web
         private const string CromwellScriptFileName = "script";
         private const string StartTaskScriptFilename = "start-task.sh";
         private const string NodeTaskRunnerFilename = "tes-runner";
-        private const string NodeTaskRunnerMD5HashFilename = "tes-runnerMD5hash.txt";
+        private const string NodeTaskRunnerMD5HashFilename = NodeTaskRunnerFilename + ".md5";
         private static readonly Regex queryStringRegex = GetQueryStringRegex();
         private readonly string dockerInDockerImageName;
         private readonly string cromwellDrsLocalizerImageName;

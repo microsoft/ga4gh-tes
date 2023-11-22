@@ -5,6 +5,10 @@
     <TargetFramework>net7.0</TargetFramework>
     <!-- Avoids "Couldn't find a valid ICU package installed on the system." error. -->
     <InvariantGlobalization Condition="'$(Configuration)' == 'linux'">true</InvariantGlobalization>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <PropertyGroup>
