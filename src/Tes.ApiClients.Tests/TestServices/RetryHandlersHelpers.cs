@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 using Moq;
-using Polly.Retry;
 using Polly;
+using Polly.Retry;
 using static Tes.ApiClients.CachingRetryHandler;
 using static Tes.ApiClients.RetryHandler;
 
