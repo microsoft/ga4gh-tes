@@ -9,6 +9,7 @@ using Microsoft.Azure.Batch;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Rest.Azure;
 using Polly.Retry;
+using Tes.ApiClients;
 
 // TODO: move this to Common.csproj?
 namespace TesApi.Web.Extensions
@@ -57,15 +58,15 @@ namespace TesApi.Web.Extensions
         /// <param name="asyncRetryPolicy">Policy retrying calls made while enumerating results returned by <paramref name="func"/>.</param>
         /// <param name="func">Method returning <see cref="IAsyncEnumerable{T}"/>.</param>
         /// <param name="retryPolicy">Policy retrying call to <paramref name="func"/>.</param>
-        /// <param name="onRetry"><see cref="Tes.ApiClients.RetryHandler.OnRetryHandler"/> to use. Defaults to none. Assumes policies configured like the ones in <see cref="Tes.ApiClients.RetryHandler"/>.</param>
+        /// <param name="caller">Name of method originating the retriable operation.</param>
         /// <returns></returns>
-        public static IAsyncEnumerable<T> ExecuteAsync<T>(this AsyncRetryPolicy asyncRetryPolicy, Func<IAsyncEnumerable<T>> func, RetryPolicy retryPolicy, Tes.ApiClients.RetryHandler.OnRetryHandler onRetry = default)
+        public static IAsyncEnumerable<T> ExecuteAsync<T>(this Polly.IAsyncPolicy asyncRetryPolicy, Func<IAsyncEnumerable<T>> func, Polly.ISyncPolicy retryPolicy, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
         {
             ArgumentNullException.ThrowIfNull(asyncRetryPolicy);
             ArgumentNullException.ThrowIfNull(func);
             ArgumentNullException.ThrowIfNull(retryPolicy);
 
-            var ctx = Tes.ApiClients.RetryHandler.PrepareContext(onRetry);
+            var ctx = new Polly.Context { [RetryHandler.CallerMemberNameKey] = caller };
             return new PollyAsyncEnumerable<T>(retryPolicy.Execute(_ => func(), ctx), asyncRetryPolicy, ctx);
         }
 
@@ -102,10 +103,10 @@ namespace TesApi.Web.Extensions
         private sealed class PollyAsyncEnumerable<T> : IAsyncEnumerable<T>
         {
             private readonly IAsyncEnumerable<T> _source;
-            private readonly AsyncRetryPolicy _retryPolicy;
+            private readonly Polly.IAsyncPolicy _retryPolicy;
             private readonly Polly.Context _ctx;
 
-            public PollyAsyncEnumerable(IAsyncEnumerable<T> source, AsyncRetryPolicy retryPolicy, Polly.Context ctx)
+            public PollyAsyncEnumerable(IAsyncEnumerable<T> source, Polly.IAsyncPolicy retryPolicy, Polly.Context ctx)
             {
                 ArgumentNullException.ThrowIfNull(source);
                 ArgumentNullException.ThrowIfNull(retryPolicy);
@@ -123,11 +124,11 @@ namespace TesApi.Web.Extensions
         private sealed class PollyAsyncEnumerator<T> : IAsyncEnumerator<T>
         {
             private readonly IAsyncEnumerator<T> _source;
-            private readonly AsyncRetryPolicy _retryPolicy;
+            private readonly Polly.IAsyncPolicy _retryPolicy;
             private readonly CancellationToken _cancellationToken;
             private readonly Polly.Context _ctx;
 
-            public PollyAsyncEnumerator(IAsyncEnumerator<T> source, AsyncRetryPolicy retryPolicy, Polly.Context ctx, CancellationToken cancellationToken)
+            public PollyAsyncEnumerator(IAsyncEnumerator<T> source, Polly.IAsyncPolicy retryPolicy, Polly.Context ctx, CancellationToken cancellationToken)
             {
                 ArgumentNullException.ThrowIfNull(source);
                 ArgumentNullException.ThrowIfNull(retryPolicy);

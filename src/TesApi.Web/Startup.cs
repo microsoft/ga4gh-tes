@@ -99,6 +99,7 @@ namespace TesApi.Web
                     .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
                     .AddSingleton<ContainerRegistryProvider>()
                     .AddSingleton<CachingRetryHandler>()
+                    .AddSingleton<RetryHandler>(s => s.GetRequiredService<CachingRetryHandler>())
                     .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton<PriceApiClient>()

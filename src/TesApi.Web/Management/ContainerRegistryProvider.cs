@@ -65,7 +65,7 @@ namespace TesApi.Web.Management
                 return null;
             }
 
-            var containerRegistryInfo = CachingRetryHandler.AppCache.Get<ContainerRegistryInfo>($"{nameof(ContainerRegistryProvider)}:{imageName}");
+            var containerRegistryInfo = CachingAsyncRetryPolicy.AppCache.Get<ContainerRegistryInfo>($"{nameof(ContainerRegistryProvider)}:{imageName}");
 
             if (containerRegistryInfo is not null)
             {
@@ -99,7 +99,7 @@ namespace TesApi.Web.Management
 
         private async Task<ContainerRegistryInfo> LookUpAndAddToCacheContainerRegistryInfoAsync(string imageName, CancellationToken cancellationToken)
         {
-            var repositories = await CachingRetryHandler.ExecuteWithRetryAsync(GetAccessibleContainerRegistriesAsync, cancellationToken, RetryHandler.LogRetryErrorOnRetryHandler(Logger));
+            var repositories = await CachingAsyncRetryPolicy.ExecuteWithRetryAsync(GetAccessibleContainerRegistriesAsync, cancellationToken);
 
             var requestedRepo = repositories?.FirstOrDefault(reg =>
                 reg.RegistryServer.Equals(imageName.Split('/').FirstOrDefault(), StringComparison.OrdinalIgnoreCase));
@@ -107,7 +107,7 @@ namespace TesApi.Web.Management
             if (requestedRepo is not null)
             {
                 Logger.LogInformation(@"Requested repository: {DockerImage} was found.", imageName);
-                CachingRetryHandler.AppCache.Set($"{nameof(ContainerRegistryProvider)}:{imageName}", requestedRepo, DateTimeOffset.UtcNow.AddHours(options.RegistryInfoCacheExpirationInHours));
+                CachingAsyncRetryPolicy.AppCache.Set($"{nameof(ContainerRegistryProvider)}:{imageName}", requestedRepo, DateTimeOffset.UtcNow.AddHours(options.RegistryInfoCacheExpirationInHours));
             }
             else
             {

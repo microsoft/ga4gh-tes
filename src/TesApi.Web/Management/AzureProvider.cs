@@ -12,14 +12,14 @@ namespace TesApi.Web.Management
     /// </summary>
     public abstract class AzureProvider
     {
-        private protected readonly CachingRetryHandler CachingRetryHandler;
+        private protected readonly CachingRetryHandler.ICachingAsyncPolicy CachingAsyncRetryPolicy;
         private protected readonly AzureManagementClientsFactory ManagementClientsFactory;
         private protected readonly ILogger Logger;
 
         /// <summary>
         /// Protected constructor AzureProvider
         /// </summary>
-        /// <param name="cachingRetryHandler"><see cref="CachingRetryHandler"/></param>
+        /// <param name="cachingRetryHandler"><see cref="CachingAsyncRetryPolicy"/></param>
         /// <param name="managementClientsFactory"><see cref="ManagementClientsFactory"/></param>
         /// <param name="logger"><see cref="ILogger{TCategoryName}"/>></param>
         protected AzureProvider(CachingRetryHandler cachingRetryHandler, AzureManagementClientsFactory managementClientsFactory, ILogger logger)
@@ -28,9 +28,13 @@ namespace TesApi.Web.Management
             ArgumentNullException.ThrowIfNull(managementClientsFactory);
             ArgumentNullException.ThrowIfNull(logger);
 
-            this.CachingRetryHandler = cachingRetryHandler;
             this.ManagementClientsFactory = managementClientsFactory;
             this.Logger = logger;
+            this.CachingAsyncRetryPolicy = cachingRetryHandler
+                .RetryDefaultPolicyBuilder()
+                .SetOnRetryBehavior(this.Logger)
+                .AddCaching()
+                .BuildAsync();
         }
 
         /// <summary>

@@ -13,6 +13,8 @@ namespace Tes.ApiClients.Tests
         private TerraLandingZoneApiClient terraLandingZoneApiClient = null!;
         private Mock<TokenCredential> tokenCredential = null!;
         private Mock<CachingRetryHandler> cacheAndRetryHandler = null!;
+        private Lazy<Mock<CachingRetryHandler.ICachingAsyncPolicy>> asyncRetryPolicy = null!;
+        private Lazy<Mock<CachingRetryHandler.ICachingAsyncPolicy<HttpResponseMessage>>> asyncResponseRetryPolicy = null!;
         private TerraApiStubData terraApiStubData = null!;
 
         [TestInitialize]
@@ -24,6 +26,8 @@ namespace Tes.ApiClients.Tests
             var cache = new Mock<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
             cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(new Mock<Microsoft.Extensions.Caching.Memory.ICacheEntry>().Object);
             cacheAndRetryHandler.SetupGet(c => c.AppCache).Returns(cache.Object);
+            asyncResponseRetryPolicy = new(TestServices.RetryHandlersHelpers.GetCachingHttpResponseMessageAsyncRetryPolicyMock(cacheAndRetryHandler));
+            asyncRetryPolicy = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock(cacheAndRetryHandler));
             terraLandingZoneApiClient = new TerraLandingZoneApiClient(TerraApiStubData.LandingZoneApiHost, tokenCredential.Object, cacheAndRetryHandler.Object, NullLogger<TerraLandingZoneApiClient>.Instance);
         }
 
@@ -32,12 +36,12 @@ namespace Tes.ApiClients.Tests
         {
             var body = terraApiStubData.GetResourceQuotaApiResponseInJson();
 
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(
-                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<RetryHandler.OnRetryHandler<HttpResponseMessage>>()))
+            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteAsync(
+                    It.IsAny<Func<Polly.Context, CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new HttpResponseMessage());
 
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(
-                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<RetryHandler.OnRetryHandler>()))
+            asyncRetryPolicy.Value.Setup(c => c.ExecuteAsync(
+                    It.IsAny<Func<Polly.Context, CancellationToken, Task<string>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(body);
 
             var quota = await terraLandingZoneApiClient.GetResourceQuotaAsync(terraApiStubData.LandingZoneId, terraApiStubData.BatchAccountId, cacheResults: true, cancellationToken: CancellationToken.None);
@@ -63,12 +67,12 @@ namespace Tes.ApiClients.Tests
         {
             var body = terraApiStubData.GetResourceApiResponseInJson();
 
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(
-                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<RetryHandler.OnRetryHandler<HttpResponseMessage>>()))
+            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteAsync(
+                    It.IsAny<Func<Polly.Context, CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new HttpResponseMessage());
 
-            cacheAndRetryHandler.Setup(c => c.ExecuteWithRetryAsync(
-                    It.IsAny<Func<CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<RetryHandler.OnRetryHandler>()))
+            asyncRetryPolicy.Value.Setup(c => c.ExecuteAsync(
+                    It.IsAny<Func<Polly.Context, CancellationToken, Task<string>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(body);
 
             var resources = await terraLandingZoneApiClient.GetLandingZoneResourcesAsync(terraApiStubData.LandingZoneId, CancellationToken.None);

@@ -13,7 +13,8 @@ namespace Tes.ApiClients.Tests;
 public class CacheAndRetryHandlerTest
 {
     private IMemoryCache appCache = null!;
-    private CachingRetryHandler cachingRetryHandler = null!;
+    private CachingRetryHandler.ICachingAsyncPolicy cachingAsyncPolicy = null!;
+    private CachingRetryHandler.ICachingAsyncPolicy<HttpResponseMessage> cachingAsyncHttpResponseMessagePolicy = null!;
     private Mock<object> mockInstanceToRetry = null!;
     private const int MaxRetryCount = 3;
 
@@ -24,7 +25,19 @@ public class CacheAndRetryHandlerTest
         appCache = new MemoryCache(new MemoryCacheOptions());
         mockInstanceToRetry = new Mock<object>();
         mockOptions.SetupGet(x => x.Value).Returns(new RetryPolicyOptions { ExponentialBackOffExponent = 1, MaxRetryCount = MaxRetryCount });
-        cachingRetryHandler = new(appCache, mockOptions.Object);
+        var cachingRetryHandler = new CachingRetryHandler(appCache, mockOptions.Object);
+
+        cachingAsyncHttpResponseMessagePolicy = cachingRetryHandler
+            .RetryDefaultHttpResponseMessagePolicyBuilder()
+            .SetOnRetryBehavior()
+            .AddCaching()
+            .BuildAsync();
+
+        cachingAsyncPolicy = cachingRetryHandler
+            .RetryDefaultPolicyBuilder()
+            .SetOnRetryBehavior()
+            .AddCaching()
+            .BuildAsync();
     }
 
     [TestCleanup]
@@ -38,7 +51,7 @@ public class CacheAndRetryHandlerTest
     {
         mockInstanceToRetry.Setup(o => o.ToString()).Throws<Exception>();
 
-        await Assert.ThrowsExceptionAsync<Exception>(() => cachingRetryHandler.ExecuteWithRetryAsync(_ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None));
+        await Assert.ThrowsExceptionAsync<Exception>(() => cachingAsyncPolicy.ExecuteWithRetryAsync(_ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None));
         mockInstanceToRetry.Verify(o => o.ToString(), Times.Exactly(MaxRetryCount + 1)); // 3 retries (MaxRetryCount), plus original call
     }
 
@@ -47,7 +60,7 @@ public class CacheAndRetryHandlerTest
     {
         mockInstanceToRetry.Setup(o => o.ToString()).Returns("foo");
 
-        var value = await cachingRetryHandler.ExecuteWithRetryAsync(_ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None);
+        var value = await cachingAsyncPolicy.ExecuteWithRetryAsync(_ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None);
         mockInstanceToRetry.Verify(o => o.ToString(), Times.Once);
         Assert.AreEqual("foo", value);
     }
@@ -58,8 +71,8 @@ public class CacheAndRetryHandlerTest
         var cacheKey = Guid.NewGuid().ToString();
         mockInstanceToRetry.Setup(o => o.ToString()).Returns("foo");
 
-        var first = await cachingRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, _ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None);
-        var second = await cachingRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, _ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None);
+        var first = await cachingAsyncPolicy.ExecuteWithRetryAndCachingAsync(cacheKey, _ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None);
+        var second = await cachingAsyncPolicy.ExecuteWithRetryAndCachingAsync(cacheKey, _ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None);
 
         mockInstanceToRetry.Verify(o => o.ToString(), Times.Once);
         Assert.AreEqual("foo", first);
@@ -73,7 +86,7 @@ public class CacheAndRetryHandlerTest
         var cacheKey = Guid.NewGuid().ToString();
         mockInstanceToRetry.Setup(o => o.ToString()).Throws<Exception>();
 
-        await Assert.ThrowsExceptionAsync<Exception>(() => cachingRetryHandler.ExecuteWithRetryAndCachingAsync(cacheKey, _ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None));
+        await Assert.ThrowsExceptionAsync<Exception>(() => cachingAsyncPolicy.ExecuteWithRetryAndCachingAsync(cacheKey, _ => Task.Run(() => mockInstanceToRetry.Object.ToString()), CancellationToken.None));
 
         Assert.IsFalse(appCache.TryGetValue(cacheKey, out string? _));
     }
@@ -92,7 +105,7 @@ public class CacheAndRetryHandlerTest
         mockFactory.Setup(f => f.CreateResponseAsync()).Returns(CreateResponseAsync(statusCode));
 
         var response =
-            await cachingRetryHandler.ExecuteWithRetryAsync(_ =>
+            await cachingAsyncHttpResponseMessagePolicy.ExecuteWithRetryAsync(_ =>
                 mockFactory.Object.CreateResponseAsync(),
                 CancellationToken.None);
 

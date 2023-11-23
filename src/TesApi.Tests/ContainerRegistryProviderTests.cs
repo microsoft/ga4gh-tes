@@ -22,7 +22,7 @@ namespace TesApi.Tests
     {
         private ContainerRegistryProvider containerRegistryProvider;
         private ContainerRegistryOptions containerRegistryOptions;
-        private Mock<CachingRetryHandler> retryHandlerMock;
+        private Lazy<Mock<CachingRetryHandler.ICachingAsyncPolicy>> asyncRetryPolicy = null!;
         private Mock<IMemoryCache> appCacheMock;
         private Mock<IOptions<ContainerRegistryOptions>> containerRegistryOptionsMock;
         private Mock<ILogger<ContainerRegistryProvider>> loggerMock;
@@ -34,13 +34,14 @@ namespace TesApi.Tests
         public void Setup()
         {
             appCacheMock = new Mock<IMemoryCache>();
-            retryHandlerMock = new Mock<CachingRetryHandler>();
+            var retryHandlerMock = new Mock<CachingRetryHandler>();
             retryHandlerMock.Setup(r => r.AppCache).Returns(appCacheMock.Object);
             clientFactoryMock = new Mock<AzureManagementClientsFactory>();
             containerRegistryOptionsMock = new Mock<IOptions<ContainerRegistryOptions>>();
             containerRegistryOptions = new ContainerRegistryOptions();
             containerRegistryOptionsMock.Setup(o => o.Value).Returns(containerRegistryOptions);
             loggerMock = new Mock<ILogger<ContainerRegistryProvider>>();
+            asyncRetryPolicy = new(Tes.ApiClients.Tests.TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock(retryHandlerMock));
             containerRegistryProvider = new ContainerRegistryProvider(containerRegistryOptionsMock.Object,
                 retryHandlerMock.Object, clientFactoryMock.Object, loggerMock.Object);
         }
@@ -50,11 +51,11 @@ namespace TesApi.Tests
         {
             var server = "registry.com";
             var image = $"{server}/image";
-            retryHandlerMock.Setup(r =>
-                    r.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(), It.IsAny<System.Threading.CancellationToken>(), It.IsAny<RetryHandler.OnRetryHandler>()))
+            asyncRetryPolicy.Value.Setup(r =>
+                    r.ExecuteAsync(It.IsAny<Func<Polly.Context, System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(), It.IsAny<Polly.Context>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(new List<ContainerRegistryInfo>()
                 {
-                    new ContainerRegistryInfo() { RegistryServer = server }
+                    new() { RegistryServer = server }
                 });
             appCacheMock.Setup(c => c.CreateEntry(It.IsAny<object>()))
                 .Returns(new Mock<ICacheEntry>().Object);
@@ -80,8 +81,8 @@ namespace TesApi.Tests
             Assert.IsNotNull(container);
             Assert.AreEqual(server, container.RegistryServer);
             appCacheMock.Verify(c => c.TryGetValue(It.Is<object>(v => $"{nameof(ContainerRegistryProvider)}:{image}".Equals(v)), out It.Ref<object>.IsAny), Times.Once());
-            retryHandlerMock.Verify(r =>
-                r.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(), It.IsAny<System.Threading.CancellationToken>(), It.IsAny<RetryHandler.OnRetryHandler>()), Times.Never);
+            asyncRetryPolicy.Value.Verify(r =>
+                r.ExecuteAsync(It.IsAny<Func<Polly.Context, System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(), It.IsAny<Polly.Context>(), It.IsAny<System.Threading.CancellationToken>()), Times.Never);
         }
 
         [TestMethod]
@@ -100,13 +101,13 @@ namespace TesApi.Tests
         {
             var server = "registry";
             var image = $"{server}_other/image";
-            retryHandlerMock.Setup(r =>
-                    r.ExecuteWithRetryAsync(
-                        It.IsAny<Func<System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(),
-                        It.IsAny<System.Threading.CancellationToken>(), It.IsAny<RetryHandler.OnRetryHandler>()))
+            asyncRetryPolicy.Value.Setup(r =>
+                    r.ExecuteAsync(
+                        It.IsAny<Func<Polly.Context, System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(),
+                        It.IsAny<Polly.Context>(), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(new List<ContainerRegistryInfo>()
                 {
-                    new ContainerRegistryInfo() { RegistryServer = server }
+                    new() { RegistryServer = server }
                 });
 
             var container = await containerRegistryProvider.GetContainerRegistryInfoAsync(image, System.Threading.CancellationToken.None);
