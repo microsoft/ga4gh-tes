@@ -176,10 +176,9 @@ namespace Tes.ApiClients
 
         private partial class CachingRetryPolicy : IRetryPolicy, ICachingSyncPolicy
         {
-            [BeaKona.AutoInterface]
+            [BeaKona.AutoInterface(typeof(ISyncPolicy), IncludeBaseInterfaces = true)]
+            [BeaKona.AutoInterface(typeof(IRetryPolicy), IncludeBaseInterfaces = true)]
             private readonly ISyncPolicy policy;
-            [BeaKona.AutoInterface]
-            private readonly IsPolicy retryPolicy;
             private readonly CachingRetryHandler handler;
 
             public IMemoryCache AppCache => handler.AppCache;
@@ -188,7 +187,6 @@ namespace Tes.ApiClients
             public CachingRetryPolicy(CachingRetryHandler handler, ISyncPolicy policy)
             {
                 ArgumentNullException.ThrowIfNull(policy);
-                retryPolicy = (IRetryPolicy)policy;
                 this.policy = policy;
                 this.handler = handler;
             }
@@ -196,10 +194,10 @@ namespace Tes.ApiClients
 
         private partial class CachingRetryPolicy<TResult> : IRetryPolicy<TResult>, ICachingSyncPolicy<TResult>
         {
-            [BeaKona.AutoInterface]
+            [BeaKona.AutoInterface(IncludeBaseInterfaces = true)]
             private readonly ISyncPolicy<TResult> policy;
-            [BeaKona.AutoInterface]
-            private readonly IsPolicy retryPolicy;
+            [BeaKona.AutoInterface(IncludeBaseInterfaces = true)]
+            private readonly IRetryPolicy<TResult> retryPolicy;
             private readonly CachingRetryHandler handler;
 
             public IMemoryCache AppCache => handler.AppCache;
@@ -208,26 +206,7 @@ namespace Tes.ApiClients
             public CachingRetryPolicy(CachingRetryHandler handler, ISyncPolicy<TResult> policy)
             {
                 ArgumentNullException.ThrowIfNull(policy);
-                retryPolicy = (IRetryPolicy)policy;
-                this.policy = policy;
-                this.handler = handler;
-            }
-        }
-
-        private partial class CachingAsyncRetryPolicy<TResult> : IRetryPolicy<TResult>, ICachingAsyncPolicy<TResult>
-        {
-            [BeaKona.AutoInterface]
-            private readonly IAsyncPolicy<TResult> policy;
-            [BeaKona.AutoInterface]
-            private readonly IsPolicy retryPolicy;
-            private readonly CachingRetryHandler handler;
-
-            public IMemoryCache AppCache => handler.AppCache;
-            CachingRetryHandler ICachingPolicy.Handler => handler;
-
-            public CachingAsyncRetryPolicy(CachingRetryHandler handler, IAsyncPolicy<TResult> policy)
-            {
-                retryPolicy = (IRetryPolicy)policy;
+                retryPolicy = (IRetryPolicy<TResult>)policy;
                 this.policy = policy;
                 this.handler = handler;
             }
@@ -235,10 +214,9 @@ namespace Tes.ApiClients
 
         private partial class CachingAsyncRetryPolicy : IRetryPolicy, ICachingAsyncPolicy
         {
-            [BeaKona.AutoInterface]
+            [BeaKona.AutoInterface(typeof(IAsyncPolicy), IncludeBaseInterfaces = true)]
+            [BeaKona.AutoInterface(typeof(IRetryPolicy), IncludeBaseInterfaces = true)]
             private readonly IAsyncPolicy policy;
-            [BeaKona.AutoInterface]
-            private readonly IsPolicy retryPolicy;
             private readonly CachingRetryHandler handler;
 
             public IMemoryCache AppCache => handler.AppCache;
@@ -247,7 +225,25 @@ namespace Tes.ApiClients
             public CachingAsyncRetryPolicy(CachingRetryHandler handler, IAsyncPolicy policy)
             {
                 ArgumentNullException.ThrowIfNull(policy);
-                retryPolicy = (IRetryPolicy)policy;
+                this.policy = policy;
+                this.handler = handler;
+            }
+        }
+
+        private partial class CachingAsyncRetryPolicy<TResult> : IRetryPolicy<TResult>, ICachingAsyncPolicy<TResult>
+        {
+            [BeaKona.AutoInterface(IncludeBaseInterfaces = true)]
+            private readonly IAsyncPolicy<TResult> policy;
+            [BeaKona.AutoInterface(IncludeBaseInterfaces = true)]
+            private readonly IRetryPolicy<TResult> retryPolicy;
+            private readonly CachingRetryHandler handler;
+
+            public IMemoryCache AppCache => handler.AppCache;
+            CachingRetryHandler ICachingPolicy.Handler => handler;
+
+            public CachingAsyncRetryPolicy(CachingRetryHandler handler, IAsyncPolicy<TResult> policy)
+            {
+                retryPolicy = (IRetryPolicy<TResult>)policy;
                 this.policy = policy;
                 this.handler = handler;
             }
