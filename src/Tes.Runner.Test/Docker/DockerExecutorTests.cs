@@ -74,7 +74,7 @@ public class DockerExecutorTests
     }
 
     [TestMethod]
-    public async Task RunOnContainerAsync_NotAzureContainerRegistryImage_AuthInfoIsProvided()
+    public async Task RunOnContainerAsync_NotAzureContainerRegistryImage_AuthInfoNull()
     {
         var execOptions =
             new ExecutionOptions(ImageName: "test.docker.io/test", Tag: null, CommandsToExecute: new List<string>() { "echo 'hello'" }, VolumeBindings: null, WorkingDir: null, new RuntimeOptions());
