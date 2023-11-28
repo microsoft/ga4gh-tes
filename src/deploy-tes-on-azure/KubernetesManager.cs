@@ -414,7 +414,6 @@ namespace TesDeployer
             var batchAccount = GetObjectFromConfig(values, "batchAccount") ?? new Dictionary<string, string>();
             var batchNodes = GetObjectFromConfig(values, "batchNodes") ?? new Dictionary<string, string>();
             var batchScheduling = GetObjectFromConfig(values, "batchScheduling") ?? new Dictionary<string, string>();
-            var nodeImages = GetObjectFromConfig(values, "nodeImages") ?? new Dictionary<string, string>();
             var batchImageGen2 = GetObjectFromConfig(values, "batchImageGen2") ?? new Dictionary<string, string>();
             var batchImageGen1 = GetObjectFromConfig(values, "batchImageGen1") ?? new Dictionary<string, string>();
             var martha = GetObjectFromConfig(values, "martha") ?? new Dictionary<string, string>();
@@ -427,7 +426,6 @@ namespace TesDeployer
             values.Config["coaNamespace"] = GetValueOrDefault(settings, "AksCoANamespace");
             batchNodes["disablePublicIpAddress"] = GetValueOrDefault(settings, "DisableBatchNodesPublicIpAddress");
             batchScheduling["usePreemptibleVmsOnly"] = GetValueOrDefault(settings, "UsePreemptibleVmsOnly");
-            nodeImages["docker"] = GetValueOrDefault(settings, "DockerInDockerImageName");
             batchImageGen2["offer"] = GetValueOrDefault(settings, "Gen2BatchImageOffer");
             batchImageGen2["publisher"] = GetValueOrDefault(settings, "Gen2BatchImagePublisher");
             batchImageGen2["sku"] = GetValueOrDefault(settings, "Gen2BatchImageSku");
@@ -461,7 +459,6 @@ namespace TesDeployer
             values.Config["batchAccount"] = batchAccount;
             values.Config["batchNodes"] = batchNodes;
             values.Config["batchScheduling"] = batchScheduling;
-            values.Config["nodeImages"] = nodeImages;
             values.Config["batchImageGen2"] = batchImageGen2;
             values.Config["batchImageGen1"] = batchImageGen1;
             values.Config["martha"] = martha;
@@ -478,7 +475,6 @@ namespace TesDeployer
             var batchAccount = GetObjectFromConfig(values, "batchAccount") ?? new Dictionary<string, string>();
             var batchNodes = GetObjectFromConfig(values, "batchNodes") ?? new Dictionary<string, string>();
             var batchScheduling = GetObjectFromConfig(values, "batchScheduling") ?? new Dictionary<string, string>();
-            var nodeImages = GetObjectFromConfig(values, "nodeImages") ?? new Dictionary<string, string>();
             var batchImageGen2 = GetObjectFromConfig(values, "batchImageGen2") ?? new Dictionary<string, string>();
             var batchImageGen1 = GetObjectFromConfig(values, "batchImageGen1") ?? new Dictionary<string, string>();
             var martha = GetObjectFromConfig(values, "martha") ?? new Dictionary<string, string>();
@@ -493,7 +489,6 @@ namespace TesDeployer
                 ["AksCoANamespace"] = GetValueOrDefault(values.Config, "coaNamespace") as string,
                 ["DisableBatchNodesPublicIpAddress"] = GetValueOrDefault(batchNodes, "disablePublicIpAddress"),
                 ["UsePreemptibleVmsOnly"] = GetValueOrDefault(batchScheduling, "usePreemptibleVmsOnly"),
-                ["DockerInDockerImageName"] = GetValueOrDefault(nodeImages, "docker"),
                 ["Gen2BatchImageOffer"] = GetValueOrDefault(batchImageGen2, "offer"),
                 ["Gen2BatchImagePublisher"] = GetValueOrDefault(batchImageGen2, "publisher"),
                 ["Gen2BatchImageSku"] = GetValueOrDefault(batchImageGen2, "sku"),
