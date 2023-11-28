@@ -68,7 +68,7 @@ public class DockerExecutorTests
         await dockerExecutor.RunOnContainerAsync(execOptions);
 
         Assert.IsNotNull(captureAuthConfig);
-        Assert.AreEqual("test.azurecr.io", captureAuthConfig!.ServerAddress);
+        Assert.AreEqual("https://test.azurecr.io", captureAuthConfig!.ServerAddress);
         Assert.AreEqual(DockerExecutor.ManagedIdentityUserName, captureAuthConfig.Username);
         Assert.AreEqual(accessToken.Token, captureAuthConfig.Password);
     }

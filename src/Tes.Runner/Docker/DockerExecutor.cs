@@ -83,7 +83,7 @@ namespace Tes.Runner.Docker
                 //https://learn.microsoft.com/en-us/azure/container-registry/container-registry-authentication?tabs=azure-cli#az-acr-login-with---expose-token
                 Username = ManagedIdentityUserName,
                 Password = token.Token,
-                ServerAddress = registry
+                ServerAddress = $"https://{registry}"
             };
 
         }
