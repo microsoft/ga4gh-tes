@@ -1,39 +1,50 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Azure.Core;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.ApiClients;
 using Tes.ApiClients.Options;
+using Tes.Runner.Authentication;
 using Tes.Runner.Logs;
+using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Docker
 {
     public class DockerExecutor
     {
+        const string AzureContainerRegistryHostSuffix = ".azurecr.io";
+        //https://learn.microsoft.com/en-us/azure/container-registry/container-registry-authentication?tabs=azure-cli#az-acr-login-with---expose-token
+        public const string ManagedIdentityUserName = "00000000-0000-0000-0000-000000000000";
+
+
         private readonly IDockerClient dockerClient = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
         private readonly NetworkUtility networkUtility = new NetworkUtility();
         private readonly RetryHandler retryHandler = new RetryHandler(Options.Create(new RetryPolicyOptions()));
         private readonly IStreamLogReader streamLogReader = null!;
+        private readonly CredentialsManager tokenCredentialsManager = null!;
 
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
         public DockerExecutor(Uri dockerHost) : this(new DockerClientConfiguration(dockerHost)
-            .CreateClient(), new ConsoleStreamLogPublisher())
+            .CreateClient(), new ConsoleStreamLogPublisher(), new CredentialsManager())
         {
         }
 
-        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader)
+        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, CredentialsManager tokenCredentialsManager)
         {
             ArgumentNullException.ThrowIfNull(dockerClient);
             ArgumentNullException.ThrowIfNull(streamLogReader);
+            ArgumentNullException.ThrowIfNull(tokenCredentialsManager);
 
             this.dockerClient = dockerClient;
             this.streamLogReader = streamLogReader;
+            this.tokenCredentialsManager = tokenCredentialsManager;
         }
 
         /// <summary>
@@ -44,16 +55,62 @@ namespace Tes.Runner.Docker
 
         }
 
-        public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(string? imageName, string? tag, List<string>? commandsToExecute, List<string>? volumeBindings, string? workingDir)
+        private async Task<AuthConfig?> TryGetAuthConfigForAzureContainerRegistryAsync(string? imageName, RuntimeOptions runtimeOptions)
         {
-            ArgumentException.ThrowIfNullOrEmpty(imageName);
-            ArgumentNullException.ThrowIfNull(commandsToExecute);
+            if (string.IsNullOrWhiteSpace(imageName))
+            {
+                return null;
+            }
 
-            await PullImageWithRetriesAsync(imageName, tag);
+            var registry = imageName.Split('/').FirstOrDefault();
+
+            if (registry == null)
+            {
+                return null;
+            }
+
+            if (!IsAzureContainerRegistry(registry))
+            {
+                return null;
+            }
+
+            var token = await tokenCredentialsManager.GetTokenCredential(runtimeOptions)
+                .GetTokenAsync(new TokenRequestContext(new[] { "https://management.azure.com/.default" }), CancellationToken.None);
+
+
+            return new AuthConfig
+            {
+                //https://learn.microsoft.com/en-us/azure/container-registry/container-registry-authentication?tabs=azure-cli#az-acr-login-with---expose-token
+                Username = ManagedIdentityUserName,
+                Password = token.Token,
+                ServerAddress = registry
+            };
+
+        }
+
+        private bool IsAzureContainerRegistry(string registry)
+        {
+            if (string.IsNullOrWhiteSpace(registry))
+            {
+                return false;
+            }
+
+            return registry.EndsWith(AzureContainerRegistryHostSuffix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(ExecutionOptions executionOptions)
+        {
+            ArgumentNullException.ThrowIfNull(executionOptions);
+            ArgumentException.ThrowIfNullOrEmpty(executionOptions.ImageName);
+            ArgumentNullException.ThrowIfNull(executionOptions.CommandsToExecute);
+
+            var authConfig = await TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.RuntimeOptions);
+
+            await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag, authConfig);
 
             await ConfigureNetworkAsync();
 
-            var createResponse = await CreateContainerAsync(imageName, tag, commandsToExecute, volumeBindings, workingDir);
+            var createResponse = await CreateContainerAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.CommandsToExecute, executionOptions.VolumeBindings, executionOptions.WorkingDir);
 
             var logs = await StartContainerWithStreamingOutput(createResponse);
 
@@ -142,6 +199,11 @@ namespace Tes.Runner.Docker
             {
                 var images = await dockerClient.Images.ListImagesAsync(new ImagesListParameters { All = true });
 
+                if (images is null)
+                {
+                    return;
+                }
+
                 foreach (var image in images)
                 {
                     try
@@ -181,4 +243,7 @@ namespace Tes.Runner.Docker
             await networkUtility.BlockIpAddressAsync(imdsIpAddress);
         }
     }
+
+    public record ExecutionOptions(string? ImageName, string? Tag, List<string>? CommandsToExecute,
+        List<string>? VolumeBindings, string? WorkingDir, RuntimeOptions RuntimeOptions);
 }

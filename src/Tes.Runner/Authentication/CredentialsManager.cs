@@ -35,7 +35,7 @@ namespace Tes.Runner.Authentication
             return duration;
         }
 
-        public TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions)
+        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions)
         {
             return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions));
         }
