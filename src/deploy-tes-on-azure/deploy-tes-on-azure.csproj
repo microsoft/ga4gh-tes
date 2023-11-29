@@ -5,6 +5,9 @@
     <TargetFramework>net7.0</TargetFramework>
     <!-- Avoids "Couldn't find a valid ICU package installed on the system." error. -->
     <InvariantGlobalization Condition="'$(Configuration)' == 'linux'">true</InvariantGlobalization>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -73,10 +76,6 @@
     <EmbeddedResource Include="scripts\helm\templates\persistence.yaml" />
     <EmbeddedResource Include="scripts\helm\templates\service.yaml" />
     <EmbeddedResource Include="scripts\helm\templates\tes-deployment.yaml" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Properties\PublishProfiles\" />
   </ItemGroup>
 
   <ItemGroup>
