@@ -30,7 +30,7 @@ namespace Tes.ApiClients.Tests
             var cache = new Mock<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
             cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(new Mock<Microsoft.Extensions.Caching.Memory.ICacheEntry>().Object);
             cacheAndRetryHandler.SetupGet(c => c.AppCache).Returns(cache.Object);
-            asyncResponseRetryPolicy = new(TestServices.RetryHandlersHelpers.GetCachingHttpResponseMessageAsyncRetryPolicyMock(cacheAndRetryHandler));
+            asyncResponseRetryPolicy = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock(cacheAndRetryHandler, retryHandler => retryHandler.RetryDefaultHttpResponseMessagePolicyBuilder()));
             asyncRetryPolicy = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock(cacheAndRetryHandler));
             terraWsmApiClient = new TerraWsmApiClient(TerraApiStubData.WsmApiHost, tokenCredential.Object,
                 cacheAndRetryHandler.Object, NullLogger<TerraWsmApiClient>.Instance);
