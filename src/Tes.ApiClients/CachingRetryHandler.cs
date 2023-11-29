@@ -128,28 +128,20 @@ namespace Tes.ApiClients
 
         #region Builder interface implementations
         ICachingPolicyBuilderBuild ICachingPolicyBuilderHandler.CachingPolicyBuilder(IPolicyBuilderBuild policyBuilder)
-            => new CachingPolicyBuilderBuild<IPolicyBuilderBuild>(policyBuilder, this);
+            => new CachingPolicyBuilderBuild(policyBuilder, this);
 
         ICachingPolicyBuilderBuild<TResult> ICachingPolicyBuilderHandler.CachingPolicyBuilder<TResult>(IPolicyBuilderBuild<TResult> policyBuilder)
             => new CachingPolicyBuilderBuild<TResult>(policyBuilder, this);
 
-        private readonly struct CachingPolicyBuilderBuild<TResult> : ICachingPolicyBuilderBuild, ICachingPolicyBuilderBuild<TResult>
+        private readonly struct CachingPolicyBuilderBuild : ICachingPolicyBuilderBuild
         {
             private readonly IPolicyBuilderBuild policyBuilder;
-            private readonly IPolicyBuilderBuild<TResult> genericPolicyBuilder;
             private readonly CachingRetryHandler cachingHandler;
 
             public CachingPolicyBuilderBuild(IPolicyBuilderBuild policyBuilder, CachingRetryHandler handler)
             {
                 ArgumentNullException.ThrowIfNull(policyBuilder);
                 this.policyBuilder = policyBuilder;
-                this.cachingHandler = handler;
-            }
-
-            public CachingPolicyBuilderBuild(IPolicyBuilderBuild<TResult> policyBuilder, CachingRetryHandler handler)
-            {
-                ArgumentNullException.ThrowIfNull(policyBuilder);
-                this.genericPolicyBuilder = policyBuilder;
                 this.cachingHandler = handler;
             }
 
@@ -162,15 +154,28 @@ namespace Tes.ApiClients
             {
                 return new CachingAsyncRetryPolicy(cachingHandler, policyBuilder.BuildAsync());
             }
+        }
+
+        private readonly struct CachingPolicyBuilderBuild<TResult> : ICachingPolicyBuilderBuild<TResult>
+        {
+            private readonly IPolicyBuilderBuild<TResult> policyBuilder;
+            private readonly CachingRetryHandler cachingHandler;
+
+            public CachingPolicyBuilderBuild(IPolicyBuilderBuild<TResult> policyBuilder, CachingRetryHandler handler)
+            {
+                ArgumentNullException.ThrowIfNull(policyBuilder);
+                this.policyBuilder = policyBuilder;
+                this.cachingHandler = handler;
+            }
 
             ICachingSyncPolicy<TResult> ICachingPolicyBuilderBuild<TResult>.Build()
             {
-                return new CachingRetryPolicy<TResult>(cachingHandler, genericPolicyBuilder.Build());
+                return new CachingRetryPolicy<TResult>(cachingHandler, policyBuilder.Build());
             }
 
             ICachingAsyncPolicy<TResult> ICachingPolicyBuilderBuild<TResult>.BuildAsync()
             {
-                return new CachingAsyncRetryPolicy<TResult>(cachingHandler, genericPolicyBuilder.BuildAsync());
+                return new CachingAsyncRetryPolicy<TResult>(cachingHandler, policyBuilder.BuildAsync());
             }
         }
 
