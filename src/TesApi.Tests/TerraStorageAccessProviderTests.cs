@@ -75,7 +75,7 @@ namespace TesApi.Tests
 
             var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input, CancellationToken.None);
 
-            Assert.IsNotNull(terraApiStubData.GetWsmSasTokenApiResponse().Url, result);
+            Assert.IsNotNull(terraApiStubData.GetWsmSasTokenApiResponse().Url, result?.AbsoluteUri);
         }
 
         private void SetUpTerraApiClient()
@@ -105,7 +105,7 @@ namespace TesApi.Tests
             var result = await terraStorageAccessProvider.MapLocalPathToSasUrlAsync(input + blobPath, CancellationToken.None, getContainerSas: true);
 
             Assert.IsNotNull(result);
-            Assert.AreEqual($"{expected}?sv={TerraApiStubData.SasToken}", result);
+            Assert.AreEqual($"{expected}?sv={TerraApiStubData.SasToken}", result.AbsoluteUri);
         }
 
         [TestMethod]
@@ -129,11 +129,9 @@ namespace TesApi.Tests
             SetUpTerraApiClient();
 
             var blobInfo = new TerraBlobInfo(terraApiStubData.GetWorkspaceIdFromContainerName(WorkspaceStorageContainerName), terraApiStubData.ContainerResourceId, TerraApiStubData.WorkspaceStorageContainerName, "blobName");
-            var url = await terraStorageAccessProvider.GetMappedSasUrlFromWsmAsync(blobInfo, CancellationToken.None);
+            var uri = await terraStorageAccessProvider.GetMappedSasUrlFromWsmAsync(blobInfo, CancellationToken.None);
 
-            Assert.IsNotNull(url);
-            var uri = new Uri(url);
-
+            Assert.IsNotNull(uri);
             Assert.AreEqual(uri.AbsolutePath, $"/{TerraApiStubData.WorkspaceStorageContainerName}/blobName");
         }
 
@@ -145,10 +143,9 @@ namespace TesApi.Tests
         {
             SetUpTerraApiClient();
 
-            var url = await terraStorageAccessProvider.GetInternalTesBlobUrlAsync(blobName, CancellationToken.None);
+            var uri = await terraStorageAccessProvider.GetInternalTesBlobUrlAsync(blobName, CancellationToken.None);
 
-            Assert.IsNotNull(url);
-            var uri = new Uri(url);
+            Assert.IsNotNull(uri);
             Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{batchSchedulingOptions.Prefix}{StorageAccessProvider.TesExecutionsPathPrefix}/{blobName.TrimStart('/')}", uri.AbsolutePath);
         }
 
@@ -161,10 +158,9 @@ namespace TesApi.Tests
         {
             SetUpTerraApiClient();
             var task = new TesTask { Name = "taskName", Id = Guid.NewGuid().ToString() };
-            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
+            var uri = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
 
-            Assert.IsNotNull(url);
-            var uri = new Uri(url);
+            Assert.IsNotNull(uri);
             Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{batchSchedulingOptions.Prefix}{StorageAccessProvider.TesExecutionsPathPrefix}/{task.Id}{expectedBlobName}", uri.AbsolutePath);
         }
 
@@ -184,10 +180,10 @@ namespace TesApi.Tests
             {
                 { TesResources.SupportedBackendParameters.internal_path_prefix.ToString(), internalPathPrefix }
             };
-            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
 
-            Assert.IsNotNull(url);
-            var uri = new Uri(url);
+            var uri = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
+
+            Assert.IsNotNull(uri);
             Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{internalPathPrefix}{expectedBlobName}", uri.AbsolutePath);
         }
 
@@ -207,9 +203,10 @@ namespace TesApi.Tests
             {
                 { TesResources.SupportedBackendParameters.internal_path_prefix.ToString(), internalPrefix }
             };
-            var url = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobPath, CancellationToken.None);
 
-            Assert.IsNotNull(url);
+            var uri = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobPath, CancellationToken.None);
+
+            Assert.IsNotNull(uri);
             Assert.AreNotEqual('/', capturedTokenApiParameters.SasBlobName[0]);
         }
 
@@ -219,9 +216,9 @@ namespace TesApi.Tests
         public void GetInternalTesBlobUrlWithoutSasToken_BlobPathIsProvided_ExpectedUrl(string blobPath,
             string expectedUrl)
         {
-            var url = terraStorageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath);
+            var uri = terraStorageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath);
 
-            Assert.AreEqual(expectedUrl, url);
+            Assert.AreEqual(expectedUrl, uri.AbsoluteUri);
         }
     }
 }

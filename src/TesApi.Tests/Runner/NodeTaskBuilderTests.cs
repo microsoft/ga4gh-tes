@@ -160,7 +160,7 @@ namespace TesApi.Tests.Runner
         public void WithStorageEventSink_Called_StorageSinkIsSet()
         {
             var url = "https://foo.blob.core.windows.net/cont";
-            nodeTaskBuilder.WithStorageEventSink(url);
+            nodeTaskBuilder.WithStorageEventSink(new(url));
             var nodeTask = nodeTaskBuilder.Build();
             Assert.AreEqual(url, nodeTask.RuntimeOptions.StorageEventSink!.TargetUrl);
             Assert.AreEqual(TransformationStrategy.CombinedAzureResourceManager, nodeTask.RuntimeOptions.StorageEventSink.TransformationStrategy);
@@ -171,7 +171,7 @@ namespace TesApi.Tests.Runner
         public void WithLogPublisher_Called_LogStorageIsSet()
         {
             var url = "https://foo.blob.core.windows.net/cont/log";
-            nodeTaskBuilder.WithLogPublisher(url);
+            nodeTaskBuilder.WithLogPublisher(new(url));
             var nodeTask = nodeTaskBuilder.Build();
             Assert.AreEqual(url, nodeTask.RuntimeOptions.StreamingLogPublisher!.TargetUrl);
             Assert.AreEqual(TransformationStrategy.CombinedAzureResourceManager, nodeTask.RuntimeOptions.StreamingLogPublisher.TransformationStrategy);
@@ -181,7 +181,7 @@ namespace TesApi.Tests.Runner
         public void WithLogPublisher_CalledThenSetUpTerraRuntimeEnv_LogTargetUrlTransformationStrategyIsTerra()
         {
             var url = "https://foo.blob.core.windows.net/cont/log";
-            nodeTaskBuilder.WithLogPublisher(url)
+            nodeTaskBuilder.WithLogPublisher(new(url))
                 .WithTerraAsRuntimeEnvironment("http://wsm.terra.foo", "http://lz.terra.foo", sasAllowedIpRange: null);
             var nodeTask = nodeTaskBuilder.Build();
 

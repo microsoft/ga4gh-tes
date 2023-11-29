@@ -70,10 +70,10 @@ namespace TesApi.Web
         /// <param name="runnerBinaryUrl"></param>
         /// <param name="runnerTaskInfoUrl"></param>
         /// <returns></returns>
-        public BatchNodeScriptBuilder WithRunnerFilesDownloadUsingWget(string runnerBinaryUrl, string runnerTaskInfoUrl)
+        public BatchNodeScriptBuilder WithRunnerFilesDownloadUsingWget(Uri runnerBinaryUrl, Uri runnerTaskInfoUrl)
         {
-            ArgumentException.ThrowIfNullOrEmpty(runnerBinaryUrl, nameof(runnerBinaryUrl));
-            ArgumentException.ThrowIfNullOrEmpty(runnerTaskInfoUrl, nameof(runnerTaskInfoUrl));
+            ArgumentNullException.ThrowIfNull(runnerBinaryUrl);
+            ArgumentNullException.ThrowIfNull(runnerTaskInfoUrl);
 
             if (useMetricsFile)
             {
@@ -148,14 +148,9 @@ namespace TesApi.Web
         /// <param name="localFilePathDownloadLocation">Filename for the output file</param>
         /// <param name="setExecutable">Whether the file should be made executable or not</param>
         /// <returns>The command to execute</returns>
-        public static string CreateWgetDownloadCommand(string urlToDownload, string localFilePathDownloadLocation, bool setExecutable = false)
+        public static string CreateWgetDownloadCommand(Uri urlToDownload, string localFilePathDownloadLocation, bool setExecutable = false)
         {
-            if (!Uri.TryCreate(urlToDownload, UriKind.Absolute, out var _))
-            {
-                throw new ArgumentException($"Invalid URL: {urlToDownload}", nameof(urlToDownload));
-            }
-
-            string command = $"wget --https-only --no-verbose --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload}'";
+            var command = $"wget --https-only --no-verbose --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload.AbsoluteUri}'";
 
             if (setExecutable)
             {

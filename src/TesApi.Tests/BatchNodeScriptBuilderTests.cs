@@ -21,7 +21,7 @@ namespace TesApi.Tests
         [TestMethod]
         public void CreateWgetDownloadCommand_ValidUrl_ReturnsCommand()
         {
-            var url = "https://foo.bar";
+            Uri url = new("https://foo.bar");
             var local = "/local";
             var expectedCommand = $"wget --https-only --no-verbose --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {local} '{url}'";
 
@@ -33,9 +33,9 @@ namespace TesApi.Tests
         [TestMethod]
         public void CreateWgetDownloadCommand_InvalidUrl_ThrowsArgumentException()
         {
-            var url = "foo.bar";
+            Uri url = null;
             var local = "/local";
-            Assert.ThrowsException<ArgumentException>(() => BatchNodeScriptBuilder.CreateWgetDownloadCommand(url, local));
+            Assert.ThrowsException<ArgumentNullException>(() => BatchNodeScriptBuilder.CreateWgetDownloadCommand(url, local));
         }
 
 
@@ -52,11 +52,11 @@ namespace TesApi.Tests
         [TestMethod]
         public void WithRunnerFilesDownloadUsingWget_BuildCalled_WgetCallsAreCreated()
         {
-            var expectedLine1 = BatchNodeScriptBuilder.CreateWgetDownloadCommand("https://foo.bar1", $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{BatchNodeScriptBuilder.NodeTaskRunnerFilename}", setExecutable: true);
-            var expectedLine2 = BatchNodeScriptBuilder.CreateWgetDownloadCommand("https://foo.bar2", $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{BatchNodeScriptBuilder.NodeRunnerTaskDefinitionFilename}", setExecutable: false);
+            var expectedLine1 = BatchNodeScriptBuilder.CreateWgetDownloadCommand(new("https://foo.bar1"), $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{BatchNodeScriptBuilder.NodeTaskRunnerFilename}", setExecutable: true);
+            var expectedLine2 = BatchNodeScriptBuilder.CreateWgetDownloadCommand(new("https://foo.bar2"), $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{BatchNodeScriptBuilder.NodeRunnerTaskDefinitionFilename}", setExecutable: false);
 
             var result = builder
-                .WithRunnerFilesDownloadUsingWget("https://foo.bar1", "https://foo.bar2")
+                .WithRunnerFilesDownloadUsingWget(new("https://foo.bar1"), new("https://foo.bar2"))
                 .Build();
 
             Assert.IsTrue(result.Contains(expectedLine1));
