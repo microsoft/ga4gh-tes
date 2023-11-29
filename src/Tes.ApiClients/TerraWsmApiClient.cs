@@ -179,6 +179,66 @@ namespace Tes.ApiClients
             return builder.Uri.AbsoluteUri;
         }
 
+        /// <summary>
+        /// Returns a parsed URL to get quota of a resource using the Terra Workspace Manager API.
+        /// </summary>
+        /// <param name="workspaceId">Workspace id</param>
+        /// <param name="resourceId">Fully qualified Azure resource id</param>
+        /// <returns></returns>
+        public Uri GetQuotaApiUrl(Guid workspaceId, string resourceId)
+        {
+            var uriBuilder = GetWsmUriBuilder(workspaceId, "/resources/controlled/azure/landingzone/quota");
+            uriBuilder.Query = $@"azureResourceId={Uri.EscapeDataString(resourceId)}";
+            return uriBuilder.Uri;
+        }
+
+        /// <summary>
+        /// Gets quota information for a given resource. 
+        /// </summary>
+        /// <param name="workspaceId">workspace id</param>
+        /// <param name="resourceId">The fully qualified ID of the Azure resource, including the resource name and resource type.
+        /// Use the format, /subscriptions/{guid}/resourceGroups/{resource-group-name}/{resource-provider-namespace}/{resource-type}/{resource-name}.</param>
+        /// <param name="cacheResults"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        public virtual async Task<QuotaApiResponse> GetResourceQuotaAsync(Guid workspaceId, string resourceId, bool cacheResults, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(workspaceId);
+            ArgumentException.ThrowIfNullOrEmpty(resourceId);
+
+            var url = GetQuotaApiUrl(workspaceId, resourceId);
+
+            return await HttpGetRequestAsync<QuotaApiResponse>(url, setAuthorizationHeader: true, cacheResults: cacheResults, cancellationToken: cancellationToken);
+        }
+
+        /// <summary>
+        /// Returns a parsed URL to get resources in a landing zone using the Terra Workspace Manager API.
+        /// </summary>
+        /// <param name="workspaceId">workspace id</param>
+        /// <returns></returns>
+        public Uri GetLandingZoneResourcesApiUrl(Guid workspaceId)
+        {
+            var uriBuilder = GetWsmUriBuilder(workspaceId, "/resources/controlled/azure/landingzone");
+            return uriBuilder.Uri;
+        }
+
+        /// <summary>
+        /// List the resources in a landing zone. 
+        /// </summary>
+        /// <param name="workspaceId"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="cacheResults"></param>
+        /// <returns></returns>
+        public virtual async Task<LandingZoneResourcesApiResponse> GetLandingZoneResourcesAsync(Guid workspaceId, CancellationToken cancellationToken, bool cacheResults = true)
+        {
+            ArgumentNullException.ThrowIfNull(workspaceId);
+
+            var url = GetLandingZoneResourcesApiUrl(workspaceId);
+
+            return await HttpGetRequestAsync<LandingZoneResourcesApiResponse>(url, setAuthorizationHeader: true, cacheResults: cacheResults, cancellationToken: cancellationToken);
+        }
+
+
         private async Task LogResponseContentAsync(HttpResponseMessage response, string errMessage, Exception ex, CancellationToken cancellationToken)
         {
             var responseContent = string.Empty;

@@ -162,11 +162,11 @@ namespace TesApi.Web
 
                 logger.LogInformation("Attempting to create a Batch Quota Provider");
 
-                if (!string.IsNullOrEmpty(terraOptions?.Value.LandingZoneApiHost))
+                if (!string.IsNullOrEmpty(terraOptions?.Value.WsmApiHost))
                 {
-                    logger.LogInformation("Terra Landing Zone API Host is set. Using the Terra Quota Provider.");
+                    logger.LogInformation("Terra WSM API Host is set. Using the Terra Quota Provider.");
 
-                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraLandingZoneApiClient>(services, terraOptions.Value.LandingZoneApiHost);
+                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, terraOptions.Value.WsmApiHost);
 
                     return new TerraQuotaProvider(terraApiClient, terraOptions);
                 }
