@@ -6,9 +6,7 @@ using System.Web;
 using Azure.Core;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using Polly;
 using Tes.ApiClients.Models.Terra;
-using TesApi.Web.Management.Models.Terra;
 using static Tes.ApiClients.CachingRetryHandler;
 
 namespace Tes.ApiClients.Tests
@@ -159,6 +157,81 @@ namespace Tes.ApiClients.Tests
             Assert.IsNotNull(url);
             var expectedUrl = $"{TerraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/batchpool/{wsmResourceId}";
             Assert.AreEqual(expectedUrl, url);
+        }
+
+        [TestMethod]
+        public async Task GetResourceQuotaAsync_ValidResourceIdReturnsQuotaInformationAndGetsAuthToken()
+        {
+            var body = terraApiStubData.GetResourceQuotaApiResponseInJson();
+
+            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteAsync(
+                    It.IsAny<Func<Polly.Context, CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new HttpResponseMessage());
+
+            asyncRetryPolicy.Value.Setup(c => c.ExecuteAsync(
+                    It.IsAny<Func<Polly.Context, CancellationToken, Task<string>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(body);
+
+            var quota = await terraWsmApiClient.GetResourceQuotaAsync(terraApiStubData.WorkspaceId, terraApiStubData.BatchAccountId, cacheResults: true, cancellationToken: CancellationToken.None);
+
+            Assert.IsNotNull(quota);
+            Assert.AreEqual(terraApiStubData.LandingZoneId, quota.LandingZoneId);
+            Assert.AreEqual(terraApiStubData.BatchAccountId, quota.AzureResourceId);
+            Assert.AreEqual("Microsoft.Batch/batchAccounts", quota.ResourceType);
+            Assert.AreEqual(100, quota.QuotaValues.PoolQuota);
+            Assert.IsTrue(quota.QuotaValues.DedicatedCoreQuotaPerVmFamilyEnforced);
+            Assert.AreEqual(300, quota.QuotaValues.ActiveJobAndJobScheduleQuota);
+            Assert.AreEqual(350, quota.QuotaValues.DedicatedCoreQuota);
+            Assert.AreEqual(59, quota.QuotaValues.DedicatedCoreQuotaPerVmFamily.Count);
+            Assert.AreEqual("standardLSv2Family", quota.QuotaValues.DedicatedCoreQuotaPerVmFamily.Keys.First());
+            Assert.AreEqual(0, quota.QuotaValues.DedicatedCoreQuotaPerVmFamily.Values.First());
+            tokenCredential.Verify(t => t.GetTokenAsync(It.IsAny<TokenRequestContext>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
+
+        [TestMethod]
+        public async Task GetLandingZoneResourcesAsync_ListOfLandingZoneResourcesAndGetsAuthToken()
+        {
+            var body = terraApiStubData.GetResourceApiResponseInJson();
+
+            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteAsync(
+                    It.IsAny<Func<Polly.Context, CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new HttpResponseMessage());
+
+            asyncRetryPolicy.Value.Setup(c => c.ExecuteAsync(
+                    It.IsAny<Func<Polly.Context, CancellationToken, Task<string>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(body);
+
+            var resources = await terraWsmApiClient.GetLandingZoneResourcesAsync(terraApiStubData.WorkspaceId, CancellationToken.None);
+
+            Assert.IsNotNull(resources);
+            Assert.AreEqual(terraApiStubData.LandingZoneId, resources.Id);
+            Assert.AreEqual(5, resources.Resources.Length);
+            tokenCredential.Verify(t => t.GetTokenAsync(It.IsAny<TokenRequestContext>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
+
+        }
+
+        [TestMethod]
+        public void GetLandingZoneResourcesApiUrl_CorrectUrlIsParsed()
+        {
+            var url = terraWsmApiClient.GetLandingZoneResourcesApiUrl(terraApiStubData.WorkspaceId);
+            var expectedUrl = $"{TerraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/landingzone";
+
+            Assert.AreEqual(expectedUrl, url.ToString());
+
+        }
+
+        [TestMethod]
+        public void GetQuotaApiUrl_CorrectUrlIsParsed()
+        {
+            var url = terraWsmApiClient.GetQuotaApiUrl(terraApiStubData.WorkspaceId, terraApiStubData.BatchAccountId);
+            var expectedUrl = $"{TerraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/landingzone/quota?azureResourceId={Uri.EscapeDataString(terraApiStubData.BatchAccountId)}";
+
+            Assert.AreEqual(expectedUrl, url.ToString());
+
         }
 
     }
