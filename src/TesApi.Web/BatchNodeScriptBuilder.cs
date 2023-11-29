@@ -150,6 +150,9 @@ namespace TesApi.Web
         /// <returns>The command to execute</returns>
         public static string CreateWgetDownloadCommand(Uri urlToDownload, string localFilePathDownloadLocation, bool setExecutable = false)
         {
+            ArgumentNullException.ThrowIfNull(urlToDownload);
+            ArgumentException.ThrowIfNullOrEmpty(localFilePathDownloadLocation);
+
             var command = $"wget --https-only --no-verbose --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload.AbsoluteUri}'";
 
             if (setExecutable)

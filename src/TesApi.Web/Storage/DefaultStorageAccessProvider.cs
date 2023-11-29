@@ -203,7 +203,7 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new Uri($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net/{blobPathWithPrefix.TrimStart('/')}"));
+            var builder = new BlobUriBuilder(new($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net/{blobPathWithPrefix.TrimStart('/')}"));
 
             return builder.ToUri();
         }
@@ -214,7 +214,7 @@ namespace TesApi.Web.Storage
             var normalizedBlobPath = NormalizedBlobPath(blobPath);
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new Uri($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net{TesExecutionsPathPrefix}{normalizedBlobPath}"));
+            var builder = new BlobUriBuilder(new($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net{TesExecutionsPathPrefix}{normalizedBlobPath}"));
 
             return builder.ToUri();
         }

@@ -154,7 +154,7 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new Uri($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}/{blobInfo.BlobName.TrimStart('/')}"));
+            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}/{blobInfo.BlobName.TrimStart('/')}"));
 
             return builder.ToUri();
         }
@@ -172,7 +172,7 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new Uri($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}{blobName}"));
+            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}{blobName}"));
 
             return builder.ToUri();
         }

@@ -82,7 +82,7 @@ namespace TesApi.Tests.Runner
         [DataRow("https://foo.bar/com?", "https://foo.bar/com")]
         public void RemoveQueryStringFromUrl_ValidInput_RemovesQueryString(string input, string expectedUrl)
         {
-            var result = StorageUrlUtils.RemoveQueryStringFromUrl(new Uri(input));
+            var result = StorageUrlUtils.RemoveQueryStringFromUrl(new(input));
 
             Assert.AreEqual(expectedUrl, result);
         }
