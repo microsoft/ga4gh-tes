@@ -17,7 +17,7 @@ namespace Tes.Runner.Docker
         private readonly IDockerClient dockerClient = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
         private readonly NetworkUtility networkUtility = new();
-        private readonly Polly.IAsyncPolicy asyncRetryPolicy =
+        private readonly RetryHandler.AsyncRetryHandlerPolicy asyncRetryPolicy =
             new RetryHandler(Options.Create(new RetryPolicyOptions()))
                 .RetryDefaultPolicyBuilder().SetOnRetryBehavior().BuildAsync();
         private readonly IStreamLogReader streamLogReader = null!;
@@ -129,13 +129,13 @@ namespace Tes.Runner.Docker
         {
             logger.LogInformation($"Pulling image name: {imageName} image tag: {tag}");
 
-            await asyncRetryPolicy.ExecuteAsync(async () =>
+            await asyncRetryPolicy.ExecuteWithRetryAsync(async _ =>
             {
                 await dockerClient.Images.CreateImageAsync(
                     new ImagesCreateParameters() { FromImage = imageName, Tag = tag },
                     authConfig,
                     new Progress<JSONMessage>(message => logger.LogDebug(message.Status)));
-            });
+            }, CancellationToken.None);
         }
 
         private async Task DeleteAllImagesAsync()

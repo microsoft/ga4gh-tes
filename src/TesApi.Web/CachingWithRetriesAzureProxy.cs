@@ -25,10 +25,10 @@ namespace TesApi.Web
     {
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
-        private readonly CachingRetryHandler.ICachingSyncPolicy cachingRetry;
-        private readonly CachingRetryHandler.ICachingAsyncPolicy cachingAsyncRetry;
-        private readonly CachingRetryHandler.ICachingAsyncPolicy cachingAsyncRetryExceptWhenExists;
-        private readonly CachingRetryHandler.ICachingAsyncPolicy cachingAsyncRetryExceptWhenNotFound;
+        private readonly CachingRetryHandler.CachingRetryHandlerPolicy cachingRetry;
+        private readonly CachingRetryHandler.CachingAsyncRetryHandlerPolicy cachingAsyncRetry;
+        private readonly CachingRetryHandler.CachingAsyncRetryHandlerPolicy cachingAsyncRetryExceptWhenExists;
+        private readonly CachingRetryHandler.CachingAsyncRetryHandlerPolicy cachingAsyncRetryExceptWhenNotFound;
 
         /// <summary>
         /// Contructor to create a cache of <see cref="IAzureProxy"/>
@@ -345,13 +345,13 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public IAsyncEnumerable<ComputeNode> ListComputeNodesAsync(string poolId, DetailLevel detailLevel)
         {
-            return cachingAsyncRetry.ExecuteAsync(() => azureProxy.ListComputeNodesAsync(poolId, detailLevel), cachingRetry);
+            return cachingAsyncRetry.ExecuteWithRetryAsync(() => azureProxy.ListComputeNodesAsync(poolId, detailLevel), cachingRetry);
         }
 
         /// <inheritdoc/>
         public IAsyncEnumerable<CloudTask> ListTasksAsync(string jobId, DetailLevel detailLevel)
         {
-            return cachingAsyncRetry.ExecuteAsync(() => azureProxy.ListTasksAsync(jobId, detailLevel), cachingRetry);
+            return cachingAsyncRetry.ExecuteWithRetryAsync(() => azureProxy.ListTasksAsync(jobId, detailLevel), cachingRetry);
         }
 
         /// <inheritdoc/>

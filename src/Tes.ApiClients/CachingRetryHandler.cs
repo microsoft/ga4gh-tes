@@ -6,77 +6,19 @@ using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
 using Tes.ApiClients.Options;
-using static Tes.ApiClients.CachingRetryHandler;
 
 namespace Tes.ApiClients
 {
     /// <summary>
-    /// Extension methods for <see cref="CachingRetryHandler"/>
+    /// Contains an App Cache instances and retry policies.
     /// </summary>
-    public static class CachingRetryHandlerExtensions
-    {
-        /// <summary>
-        /// Executes a delegate with the specified async retry policy and persisting the result in a cache.
-        /// </summary>
-        /// <param name="retryPolicy">Asynchronous caching retry policy</param>
-        /// <param name="cacheKey"></param>
-        /// <param name="action">Action to execute</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="caller">Name of method originating the retriable operation.</param>
-        /// <returns></returns>
-        public static Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(this ICachingAsyncPolicy retryPolicy, string cacheKey, Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
-        {
-            ArgumentNullException.ThrowIfNull(retryPolicy);
-            ValidateArgs(cacheKey, action);
-
-            return retryPolicy.Handler.ExecuteWithCacheAsync(cacheKey, () => retryPolicy.ExecuteWithRetryAsync(action, cancellationToken, caller));
-        }
-
-        /// <summary>
-        ///  Executes a delegate with the specified async retry policy and persisting the result in a cache.
-        /// </summary>
-        /// <param name="retryPolicy">Asynchronous caching retry policy</param>
-        /// <param name="cacheKey"></param>
-        /// <param name="action">Action to execute</param>
-        /// <param name="cachesExpires"></param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="caller">Name of method originating the retriable operation.</param>
-        /// <typeparam name="TResult"></typeparam>
-        /// <returns></returns>
-        public static Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(this ICachingAsyncPolicy retryPolicy, string cacheKey, Func<CancellationToken, Task<TResult>> action, DateTimeOffset cachesExpires, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
-        {
-            ArgumentNullException.ThrowIfNull(retryPolicy);
-            ValidateArgs(cacheKey, action);
-
-            return retryPolicy.Handler.ExecuteWithCacheAsync(cacheKey, () => retryPolicy.ExecuteWithRetryAsync(action, cancellationToken, caller), cachesExpires);
-        }
-
-        public static ICachingPolicyBuilderBuild AddCaching(this RetryHandler.IPolicyBuilderBuild policyBuilder)
-        {
-            return ((ICachingPolicyBuilderHandler)policyBuilder.PolicyBuilderBase).CachingPolicyBuilder(policyBuilder);
-        }
-
-        public static ICachingPolicyBuilderBuild<TResult> AddCaching<TResult>(this RetryHandler.IPolicyBuilderBuild<TResult> policyBuilder)
-        {
-            return ((ICachingPolicyBuilderHandler)policyBuilder.PolicyBuilderBase).CachingPolicyBuilder(policyBuilder);
-        }
-    }
-
-
-    /// <summary>
-    /// Contains an App Cache instances and retry policies. 
-    /// </summary>
-    public partial class CachingRetryHandler : RetryHandler, ICachingPolicyBuilderHandler
+    public partial class CachingRetryHandler : RetryHandler, CachingRetryHandler.ICachingPolicyBuilderHandler
     {
         private readonly IMemoryCache appCache = null!;
-
-        /// <summary>
-        /// App cache instance.
-        /// </summary>
         public virtual IMemoryCache AppCache => appCache;
 
         /// <summary>
-        /// Contains an App Cache instances and retry policies. 
+        /// Contains an App Cache instances and retry policies.
         /// </summary>
         /// <param name="appCache"><see cref="IMemoryCache"/>></param>
         /// <param name="retryPolicyOptions"><see cref="RetryPolicyOptions"/></param>
@@ -92,36 +34,233 @@ namespace Tes.ApiClients
         /// </summary>
         protected CachingRetryHandler() { }
 
+        #region CachingRetryHandlerPolicies
+
+        public class CachingRetryHandlerPolicy : RetryHandlerPolicy, ICachingPolicy
+        {
+            private readonly IMemoryCache appCache;
+
+            public CachingRetryHandlerPolicy(ISyncPolicy retryPolicy, IMemoryCache appCache)
+                : base(retryPolicy)
+                => this.appCache = appCache;
+
+            /// <remarks>For mocking</remarks>
+            public CachingRetryHandlerPolicy() { }
+
+
+            /// <summary>
+            /// App cache instance.
+            /// </summary>
+            public virtual IMemoryCache AppCache => appCache;
+
+            /// <summary>
+            /// Executes a delegate with the specified policy.
+            /// </summary>
+            /// <param name="retryPolicy">Synchronous retry policy.</param>
+            /// <param name="action">Action to execute.</param>
+            /// <param name="caller">Name of method originating the retriable operation.</param>
+            /// <returns><typeparamref name="TResult"/> instance.</returns>
+            public TResult ExecuteWithRetryAndCaching<TResult>(string cacheKey, Func<TResult> action, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+            {
+                ArgumentNullException.ThrowIfNull(action);
+
+                return appCache.GetOrCreate(cacheKey, _ => ExecuteWithRetry(action, caller));
+            }
+        }
+
+        public class CachingAsyncRetryHandlerPolicy : AsyncRetryHandlerPolicy, ICachingPolicy
+        {
+            private readonly IMemoryCache appCache;
+
+            public CachingAsyncRetryHandlerPolicy(IAsyncPolicy retryPolicy, IMemoryCache appCache)
+                : base(retryPolicy)
+                => this.appCache = appCache;
+
+            /// <remarks>For mocking</remarks>
+            public CachingAsyncRetryHandlerPolicy() { }
+
+
+            /// <summary>
+            /// App cache instance.
+            /// </summary>
+            public virtual IMemoryCache AppCache => appCache;
+
+            /// <summary>
+            /// Executes a delegate with the specified async retry policy and persisting the result in a cache.
+            /// </summary>
+            /// <param name="cacheKey"></param>
+            /// <param name="action">Action to execute</param>
+            /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+            /// <param name="caller">Name of method originating the retriable operation.</param>
+            /// <returns></returns>
+            public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+            {
+                ValidateArgs(cacheKey, action);
+
+                return await ExecuteWithCacheAsync(appCache, cacheKey, () => ExecuteWithRetryAsync(action, cancellationToken, caller));
+            }
+
+            /// <summary>
+            ///  Executes a delegate with the specified async retry policy and persisting the result in a cache.
+            /// </summary>
+            /// <param name="cacheKey"></param>
+            /// <param name="action">Action to execute</param>
+            /// <param name="cachesExpires"></param>
+            /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+            /// <typeparam name="TResult"></typeparam>
+            /// <returns></returns>
+            public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync<TResult>(string cacheKey, Func<CancellationToken, Task<TResult>> action, DateTimeOffset cachesExpires, CancellationToken cancellationToken)
+            {
+                ValidateArgs(cacheKey, action);
+
+                return await ExecuteWithCacheAsync(appCache, cacheKey, () => ExecuteWithRetryAsync(action, cancellationToken), cachesExpires);
+            }
+        }
+
+        //public class CachingRetryHandlerPolicy<TResult> : RetryHandlerPolicy<TResult>, ICachingPolicy
+        //{
+        //    private readonly IMemoryCache appCache;
+
+        //    public CachingRetryHandlerPolicy(ISyncPolicy<TResult> retryPolicy, IMemoryCache appCache)
+        //        : base(retryPolicy)
+        //        => this.appCache = appCache;
+
+        //    /// <remarks>For mocking</remarks>
+        //    public CachingRetryHandlerPolicy() { }
+
+
+        //    /// <summary>
+        //    /// App cache instance.
+        //    /// </summary>
+        //    public virtual IMemoryCache AppCache => appCache;
+        //}
+
+        public class CachingAsyncRetryHandlerPolicy<TResult> : AsyncRetryHandlerPolicy<TResult>, ICachingPolicy
+        {
+            private readonly IMemoryCache appCache;
+
+            public CachingAsyncRetryHandlerPolicy(IAsyncPolicy<TResult> retryPolicy, IMemoryCache appCache)
+                : base(retryPolicy)
+                => this.appCache = appCache;
+
+            /// <remarks>For mocking</remarks>
+            public CachingAsyncRetryHandlerPolicy() { }
+
+
+            /// <summary>
+            /// App cache instance.
+            /// </summary>
+            public virtual IMemoryCache AppCache => appCache;
+
+            /// <summary>
+            /// Executes a delegate with the specified async retry policy and persisting the result in a cache.
+            /// </summary>
+            /// <param name="cacheKey"></param>
+            /// <param name="action">Action to execute</param>
+            /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+            /// <param name="caller">Name of method originating the retriable operation.</param>
+            /// <returns></returns>
+            public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync(string cacheKey, Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+            {
+                ValidateArgs(cacheKey, action);
+
+                return await ExecuteWithCacheAsync(appCache, cacheKey, () => ExecuteWithRetryAsync(action, cancellationToken, caller));
+            }
+
+            /// <summary>
+            ///  Executes a delegate with the specified async retry policy and persisting the result in a cache.
+            /// </summary>
+            /// <param name="cacheKey"></param>
+            /// <param name="action">Action to execute</param>
+            /// <param name="cachesExpires"></param>
+            /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+            /// <returns></returns>
+            public virtual async Task<TResult> ExecuteWithRetryAndCachingAsync(string cacheKey, Func<CancellationToken, Task<TResult>> action, DateTimeOffset cachesExpires, CancellationToken cancellationToken)
+            {
+                ValidateArgs(cacheKey, action);
+
+                return await ExecuteWithCacheAsync(appCache, cacheKey, () => ExecuteWithRetryAsync(action, cancellationToken), cachesExpires);
+            }
+
+            /// <summary>
+            /// Executes a delegate with the specified async retry policy and persisting the result in a cache.
+            /// </summary>
+            /// <typeparam name="T">Final return type</typeparam>
+            /// <param name="cacheKey"></param>
+            /// <param name="action">Action to execute</param>
+            /// <param name="convert">Method to convert</param>
+            /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+            /// <param name="caller">Name of method originating the retriable operation.</param>
+            /// <returns></returns>
+            public virtual async Task<T> ExecuteWithRetryAndCachingAsync<T>(string cacheKey, Func<CancellationToken, Task<TResult>> action, Func<TResult, CancellationToken, Task<T>> convert, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+            {
+                ValidateArgs(cacheKey, action);
+
+                return await ExecuteWithCacheAsync(appCache, cacheKey, async () => await convert(await ExecuteWithRetryAsync(action, cancellationToken, caller), cancellationToken));
+            }
+
+            /// <summary>
+            ///  Executes a delegate with the specified async retry policy and persisting the result in a cache.
+            /// </summary>
+            /// <typeparam name="T">Final return type</typeparam>
+            /// <param name="cacheKey"></param>
+            /// <param name="action">Action to execute</param>
+            /// <param name="convert">Method to convert</param>
+            /// <param name="cachesExpires"></param>
+            /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+            /// <param name="caller">Name of method originating the retriable operation.</param>
+            /// <returns></returns>
+            public virtual async Task<T> ExecuteWithRetryAndCachingAsync<T>(string cacheKey, Func<CancellationToken, Task<TResult>> action, Func<TResult, CancellationToken, Task<T>> convert, DateTimeOffset cachesExpires, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+            {
+                ValidateArgs(cacheKey, action);
+
+                return await ExecuteWithCacheAsync(appCache, cacheKey, async () => await convert(await ExecuteWithRetryAsync(action, cancellationToken, caller), cancellationToken), cachesExpires);
+            }
+        }
+        #endregion
+
         #region Builder interfaces
         public interface ICachingPolicy
         {
             IMemoryCache AppCache { get; }
-
-            /// <remarks>Used internally and for testing.</remarks>
-            public CachingRetryHandler Handler { get; }
         }
-
-        public interface ICachingSyncPolicy : ICachingPolicy, ISyncPolicy { }
-        public interface ICachingSyncPolicy<TResult> : ICachingPolicy, ISyncPolicy<TResult> { }
-        public interface ICachingAsyncPolicy : ICachingPolicy, IAsyncPolicy { }
-        public interface ICachingAsyncPolicy<TResult> : ICachingPolicy, IAsyncPolicy<TResult> { }
 
         public interface ICachingPolicyBuilderBuild
         {
-            ICachingSyncPolicy Build();
-            ICachingAsyncPolicy BuildAsync();
+            /// <summary>
+            /// Builds <see cref="RetryPolicy"/> with caching.
+            /// </summary>
+            /// <returns>Caching retry policy.</returns>
+            CachingRetryHandlerPolicy Build();
+
+            /// <summary>
+            /// Builds <see cref="AsyncRetryPolicy"/> with caching.
+            /// </summary>
+            /// <returns>Caching retry policy.</returns>
+            CachingAsyncRetryHandlerPolicy BuildAsync();
         }
 
         public interface ICachingPolicyBuilderBuild<TResult>
         {
-            ICachingSyncPolicy<TResult> Build();
-            ICachingAsyncPolicy<TResult> BuildAsync();
+            ///// <summary>
+            ///// Builds <see cref="RetryPolicy"/> with caching.
+            ///// </summary>
+            ///// <returns>Caching retry policy.</returns>
+            //CachingRetryHandlerPolicy<TResult> Build();
+
+            /// <summary>
+            /// Builds <see cref="AsyncRetryPolicy"/> with caching.
+            /// </summary>
+            /// <returns>Caching retry policy.</returns>
+            CachingAsyncRetryHandlerPolicy<TResult> BuildAsync();
         }
 
         /// <remarks>Used internally and for testing.</remarks>
         public interface ICachingPolicyBuilderHandler
         {
+            /// <remarks>Used internally and for testing.</remarks>
             ICachingPolicyBuilderBuild CachingPolicyBuilder(IPolicyBuilderBuild policyBuilder);
+            /// <remarks>Used internally and for testing.</remarks>
             ICachingPolicyBuilderBuild<TResult> CachingPolicyBuilder<TResult>(IPolicyBuilderBuild<TResult> policyBuilder);
         }
         #endregion
@@ -145,14 +284,14 @@ namespace Tes.ApiClients
                 this.cachingHandler = handler;
             }
 
-            public ICachingSyncPolicy Build()
+            CachingRetryHandlerPolicy ICachingPolicyBuilderBuild.Build()
             {
-                return new CachingRetryPolicy(cachingHandler, policyBuilder.Build());
+                return new(policyBuilder.BuildPolicy(), cachingHandler.AppCache);
             }
 
-            public ICachingAsyncPolicy BuildAsync()
+            CachingAsyncRetryHandlerPolicy ICachingPolicyBuilderBuild.BuildAsync()
             {
-                return new CachingAsyncRetryPolicy(cachingHandler, policyBuilder.BuildAsync());
+                return new(policyBuilder.BuildAsyncPolicy(), cachingHandler.AppCache);
             }
         }
 
@@ -168,89 +307,14 @@ namespace Tes.ApiClients
                 this.cachingHandler = handler;
             }
 
-            ICachingSyncPolicy<TResult> ICachingPolicyBuilderBuild<TResult>.Build()
+            //CachingRetryHandlerPolicy<TResult> ICachingPolicyBuilderBuild<TResult>.Build()
+            //{
+            //    return new(policyBuilder.BuildPolicy(), cachingHandler.AppCache);
+            //}
+
+            CachingAsyncRetryHandlerPolicy<TResult> ICachingPolicyBuilderBuild<TResult>.BuildAsync()
             {
-                return new CachingRetryPolicy<TResult>(cachingHandler, policyBuilder.Build());
-            }
-
-            ICachingAsyncPolicy<TResult> ICachingPolicyBuilderBuild<TResult>.BuildAsync()
-            {
-                return new CachingAsyncRetryPolicy<TResult>(cachingHandler, policyBuilder.BuildAsync());
-            }
-        }
-
-        private partial class CachingRetryPolicy : IRetryPolicy, ICachingSyncPolicy
-        {
-            [BeaKona.AutoInterface(typeof(ISyncPolicy), IncludeBaseInterfaces = true)]
-            [BeaKona.AutoInterface(typeof(IRetryPolicy), IncludeBaseInterfaces = true)]
-            private readonly ISyncPolicy policy;
-            private readonly CachingRetryHandler handler;
-
-            public IMemoryCache AppCache => handler.AppCache;
-            CachingRetryHandler ICachingPolicy.Handler => handler;
-
-            public CachingRetryPolicy(CachingRetryHandler handler, ISyncPolicy policy)
-            {
-                ArgumentNullException.ThrowIfNull(policy);
-                this.policy = policy;
-                this.handler = handler;
-            }
-        }
-
-        private partial class CachingRetryPolicy<TResult> : IRetryPolicy<TResult>, ICachingSyncPolicy<TResult>
-        {
-            [BeaKona.AutoInterface(IncludeBaseInterfaces = true)]
-            private readonly ISyncPolicy<TResult> policy;
-            [BeaKona.AutoInterface(IncludeBaseInterfaces = true)]
-            private readonly IRetryPolicy<TResult> retryPolicy;
-            private readonly CachingRetryHandler handler;
-
-            public IMemoryCache AppCache => handler.AppCache;
-            CachingRetryHandler ICachingPolicy.Handler => handler;
-
-            public CachingRetryPolicy(CachingRetryHandler handler, ISyncPolicy<TResult> policy)
-            {
-                ArgumentNullException.ThrowIfNull(policy);
-                retryPolicy = (IRetryPolicy<TResult>)policy;
-                this.policy = policy;
-                this.handler = handler;
-            }
-        }
-
-        private partial class CachingAsyncRetryPolicy : IRetryPolicy, ICachingAsyncPolicy
-        {
-            [BeaKona.AutoInterface(typeof(IAsyncPolicy), IncludeBaseInterfaces = true)]
-            [BeaKona.AutoInterface(typeof(IRetryPolicy), IncludeBaseInterfaces = true)]
-            private readonly IAsyncPolicy policy;
-            private readonly CachingRetryHandler handler;
-
-            public IMemoryCache AppCache => handler.AppCache;
-            CachingRetryHandler ICachingPolicy.Handler => handler;
-
-            public CachingAsyncRetryPolicy(CachingRetryHandler handler, IAsyncPolicy policy)
-            {
-                ArgumentNullException.ThrowIfNull(policy);
-                this.policy = policy;
-                this.handler = handler;
-            }
-        }
-
-        private partial class CachingAsyncRetryPolicy<TResult> : IRetryPolicy<TResult>, ICachingAsyncPolicy<TResult>
-        {
-            [BeaKona.AutoInterface(IncludeBaseInterfaces = true)]
-            private readonly IAsyncPolicy<TResult> policy;
-            [BeaKona.AutoInterface(IncludeBaseInterfaces = true)]
-            private readonly IRetryPolicy<TResult> retryPolicy;
-            private readonly CachingRetryHandler handler;
-
-            public IMemoryCache AppCache => handler.AppCache;
-            CachingRetryHandler ICachingPolicy.Handler => handler;
-
-            public CachingAsyncRetryPolicy(CachingRetryHandler handler, IAsyncPolicy<TResult> policy)
-            {
-                retryPolicy = (IRetryPolicy<TResult>)policy;
-                this.policy = policy;
-                this.handler = handler;
+                return new(policyBuilder.BuildAsyncPolicy(), cachingHandler.AppCache);
             }
         }
         #endregion
@@ -265,14 +329,40 @@ namespace Tes.ApiClients
             }
         }
 
-        internal async Task<TResult> ExecuteWithCacheAsync<TResult>(string cacheKey, Func<Task<TResult>> action)
+        private static async Task<TResult> ExecuteWithCacheAsync<TResult>(IMemoryCache appCache, string cacheKey, Func<Task<TResult>> action)
             => await appCache.GetOrCreateAsync(cacheKey, _ => action());
 
-        internal async Task<TResult> ExecuteWithCacheAsync<TResult>(string cacheKey, Func<Task<TResult>> action, DateTimeOffset cacheExpires)
+        private static async Task<TResult> ExecuteWithCacheAsync<TResult>(IMemoryCache appCache, string cacheKey, Func<Task<TResult>> action, DateTimeOffset cacheExpires)
             => await appCache.GetOrCreateAsync(cacheKey, entry =>
             {
                 entry.AbsoluteExpiration = cacheExpires;
                 return action();
             });
+    }
+
+    /// <summary>
+    /// Extension methods for <see cref="CachingRetryHandler"/>
+    /// </summary>
+    public static class CachingRetryHandlerExtensions
+    {
+        /// <summary>
+        /// Default caching policy.
+        /// </summary>
+        /// <param name="policyBuilder"><see cref="RetryHandler"/> policy builder.</param>
+        /// <returns>OnRetry builder</returns>
+        public static CachingRetryHandler.ICachingPolicyBuilderBuild AddCaching(this RetryHandler.IPolicyBuilderBuild policyBuilder)
+        {
+            return ((CachingRetryHandler.ICachingPolicyBuilderHandler)policyBuilder.PolicyBuilderBase).CachingPolicyBuilder(policyBuilder);
+        }
+
+        /// <summary>
+        /// Default caching policy.
+        /// </summary>
+        /// <param name="policyBuilder"><see cref="RetryHandler"/> policy builder.</param>
+        /// <returns>OnRetry builder</returns>
+        public static CachingRetryHandler.ICachingPolicyBuilderBuild<TResult> AddCaching<TResult>(this RetryHandler.IPolicyBuilderBuild<TResult> policyBuilder)
+        {
+            return ((CachingRetryHandler.ICachingPolicyBuilderHandler)policyBuilder.PolicyBuilderBase).CachingPolicyBuilder(policyBuilder);
+        }
     }
 }

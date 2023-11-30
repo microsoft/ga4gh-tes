@@ -13,8 +13,8 @@ namespace Tes.ApiClients.Tests;
 public class CacheAndRetryHandlerTest
 {
     private IMemoryCache appCache = null!;
-    private CachingRetryHandler.ICachingAsyncPolicy cachingAsyncPolicy = null!;
-    private CachingRetryHandler.ICachingAsyncPolicy<HttpResponseMessage> cachingAsyncHttpResponseMessagePolicy = null!;
+    private CachingRetryHandler.CachingAsyncRetryHandlerPolicy cachingAsyncPolicy = null!;
+    private RetryHandler.AsyncRetryHandlerPolicy<HttpResponseMessage> cachingAsyncHttpResponseMessagePolicy = null!;
     private Mock<object> mockInstanceToRetry = null!;
     private const int MaxRetryCount = 3;
 
@@ -30,7 +30,7 @@ public class CacheAndRetryHandlerTest
         cachingAsyncHttpResponseMessagePolicy = cachingRetryHandler
             .RetryDefaultHttpResponseMessagePolicyBuilder()
             .SetOnRetryBehavior()
-            .AddCaching()
+            //.AddCaching()
             .BuildAsync();
 
         cachingAsyncPolicy = cachingRetryHandler

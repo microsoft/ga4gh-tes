@@ -22,7 +22,7 @@ namespace TesApi.Tests
     {
         private ContainerRegistryProvider containerRegistryProvider;
         private ContainerRegistryOptions containerRegistryOptions;
-        private Lazy<Mock<CachingRetryHandler.ICachingAsyncPolicy>> asyncRetryPolicy = null!;
+        private Lazy<Mock<CachingRetryHandler.CachingAsyncRetryHandlerPolicy>> asyncRetryPolicy = null!;
         private Mock<IMemoryCache> appCacheMock;
         private Mock<IOptions<ContainerRegistryOptions>> containerRegistryOptionsMock;
         private Mock<ILogger<ContainerRegistryProvider>> loggerMock;
@@ -52,7 +52,7 @@ namespace TesApi.Tests
             var server = "registry.com";
             var image = $"{server}/image";
             asyncRetryPolicy.Value.Setup(r =>
-                    r.ExecuteAsync(It.IsAny<Func<Polly.Context, System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(), It.IsAny<Polly.Context>(), It.IsAny<System.Threading.CancellationToken>()))
+                    r.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(), It.IsAny<System.Threading.CancellationToken>(), It.IsAny<string>()))
                 .ReturnsAsync(new List<ContainerRegistryInfo>()
                 {
                     new() { RegistryServer = server }
@@ -82,7 +82,7 @@ namespace TesApi.Tests
             Assert.AreEqual(server, container.RegistryServer);
             appCacheMock.Verify(c => c.TryGetValue(It.Is<object>(v => $"{nameof(ContainerRegistryProvider)}:{image}".Equals(v)), out It.Ref<object>.IsAny), Times.Once());
             asyncRetryPolicy.Value.Verify(r =>
-                r.ExecuteAsync(It.IsAny<Func<Polly.Context, System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(), It.IsAny<Polly.Context>(), It.IsAny<System.Threading.CancellationToken>()), Times.Never);
+                r.ExecuteWithRetryAsync(It.IsAny<Func<System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(), It.IsAny<System.Threading.CancellationToken>(), It.IsAny<string>()), Times.Never);
         }
 
         [TestMethod]
@@ -102,9 +102,9 @@ namespace TesApi.Tests
             var server = "registry";
             var image = $"{server}_other/image";
             asyncRetryPolicy.Value.Setup(r =>
-                    r.ExecuteAsync(
-                        It.IsAny<Func<Polly.Context, System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(),
-                        It.IsAny<Polly.Context>(), It.IsAny<System.Threading.CancellationToken>()))
+                    r.ExecuteWithRetryAsync(
+                        It.IsAny<Func<System.Threading.CancellationToken, Task<IEnumerable<ContainerRegistryInfo>>>>(),
+                        It.IsAny<System.Threading.CancellationToken>(), It.IsAny<string>()))
                 .ReturnsAsync(new List<ContainerRegistryInfo>()
                 {
                     new() { RegistryServer = server }

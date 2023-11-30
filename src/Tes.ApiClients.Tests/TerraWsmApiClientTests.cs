@@ -17,8 +17,7 @@ namespace Tes.ApiClients.Tests
         private TerraWsmApiClient terraWsmApiClient = null!;
         private Mock<TokenCredential> tokenCredential = null!;
         private Mock<CachingRetryHandler> cacheAndRetryHandler = null!;
-        private Lazy<Mock<ICachingAsyncPolicy>> asyncRetryPolicy = null!;
-        private Lazy<Mock<ICachingAsyncPolicy<HttpResponseMessage>>> asyncResponseRetryPolicy = null!;
+        private Lazy<Mock<CachingAsyncRetryHandlerPolicy<HttpResponseMessage>>> asyncResponseRetryPolicy = null!;
         private TerraApiStubData terraApiStubData = null!;
 
         [TestInitialize]
@@ -30,8 +29,7 @@ namespace Tes.ApiClients.Tests
             var cache = new Mock<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
             cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(new Mock<Microsoft.Extensions.Caching.Memory.ICacheEntry>().Object);
             cacheAndRetryHandler.SetupGet(c => c.AppCache).Returns(cache.Object);
-            asyncResponseRetryPolicy = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock(cacheAndRetryHandler, retryHandler => retryHandler.RetryDefaultHttpResponseMessagePolicyBuilder()));
-            asyncRetryPolicy = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock(cacheAndRetryHandler));
+            asyncResponseRetryPolicy = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock<HttpResponseMessage>(cacheAndRetryHandler, c => c.RetryDefaultHttpResponseMessagePolicyBuilder()));
             terraWsmApiClient = new TerraWsmApiClient(TerraApiStubData.WsmApiHost, tokenCredential.Object,
                 cacheAndRetryHandler.Object, NullLogger<TerraWsmApiClient>.Instance);
         }
@@ -96,11 +94,8 @@ namespace Tes.ApiClients.Tests
                 Content = new StringContent(terraApiStubData.GetWsmSasTokenApiResponseInJson())
             };
 
-            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteAsync(It.IsAny<Func<Polly.Context, CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
+            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
                 .ReturnsAsync(response);
-
-            asyncRetryPolicy.Value.Setup(c => c.ExecuteAsync(It.IsAny<Func<Polly.Context, CancellationToken, Task<string>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
-                .Returns((Func<Polly.Context, CancellationToken, Task<string>> action, Polly.Context context, CancellationToken cancellationToken) => action(context, cancellationToken));
 
             var apiResponse = await terraWsmApiClient.GetSasTokenAsync(terraApiStubData.WorkspaceId,
                 terraApiStubData.ContainerResourceId, null!, CancellationToken.None);
@@ -119,12 +114,8 @@ namespace Tes.ApiClients.Tests
             };
 
             asyncResponseRetryPolicy.Value
-                .Setup(c => c.ExecuteAsync(It.IsAny<Func<Polly.Context, CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
+                .Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
                 .ReturnsAsync(response);
-
-            asyncRetryPolicy.Value
-                .Setup(c => c.ExecuteAsync(It.IsAny<Func<Polly.Context, CancellationToken, Task<string>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
-                .Returns((Func<Polly.Context, CancellationToken, Task<string>> action, Polly.Context context, CancellationToken cancellationToken) => action(context, cancellationToken));
 
             var apiResponse = await terraWsmApiClient.GetContainerResourcesAsync(terraApiStubData.WorkspaceId,
                 offset: 0, limit: 10, CancellationToken.None);
@@ -141,7 +132,7 @@ namespace Tes.ApiClients.Tests
             var response = new HttpResponseMessage(HttpStatusCode.NoContent);
 
             asyncResponseRetryPolicy.Value
-                .Setup(c => c.ExecuteAsync(It.IsAny<Func<Polly.Context, CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
+                .Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
                 .ReturnsAsync(response);
 
             await terraWsmApiClient.DeleteBatchPoolAsync(terraApiStubData.WorkspaceId, wsmResourceId, CancellationToken.None);
@@ -164,12 +155,8 @@ namespace Tes.ApiClients.Tests
         {
             var body = terraApiStubData.GetResourceQuotaApiResponseInJson();
 
-            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteAsync(
-                    It.IsAny<Func<Polly.Context, CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new HttpResponseMessage());
-
-            asyncRetryPolicy.Value.Setup(c => c.ExecuteAsync(
-                    It.IsAny<Func<Polly.Context, CancellationToken, Task<string>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
+            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
+                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
                 .ReturnsAsync(body);
 
             var quota = await terraWsmApiClient.GetResourceQuotaAsync(terraApiStubData.WorkspaceId, terraApiStubData.BatchAccountId, cacheResults: true, cancellationToken: CancellationToken.None);
@@ -195,12 +182,8 @@ namespace Tes.ApiClients.Tests
         {
             var body = terraApiStubData.GetResourceApiResponseInJson();
 
-            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteAsync(
-                    It.IsAny<Func<Polly.Context, CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new HttpResponseMessage());
-
-            asyncRetryPolicy.Value.Setup(c => c.ExecuteAsync(
-                    It.IsAny<Func<Polly.Context, CancellationToken, Task<string>>>(), It.IsAny<Polly.Context>(), It.IsAny<CancellationToken>()))
+            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
+                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
                 .ReturnsAsync(body);
 
             var resources = await terraWsmApiClient.GetLandingZoneResourcesAsync(terraApiStubData.WorkspaceId, CancellationToken.None);

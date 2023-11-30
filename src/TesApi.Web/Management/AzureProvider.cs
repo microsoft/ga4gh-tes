@@ -12,7 +12,7 @@ namespace TesApi.Web.Management
     /// </summary>
     public abstract class AzureProvider
     {
-        private protected readonly CachingRetryHandler.ICachingAsyncPolicy CachingAsyncRetryPolicy;
+        private protected readonly CachingRetryHandler.CachingAsyncRetryHandlerPolicy CachingAsyncRetryPolicy;
         private protected readonly AzureManagementClientsFactory ManagementClientsFactory;
         private protected readonly ILogger Logger;
 
