@@ -34,7 +34,7 @@ namespace TesApi.Web.Management
                 .DefaultRetryPolicyBuilder()
                 .SetOnRetryBehavior(this.Logger)
                 .AddCaching()
-                .BuildAsync();
+                .AsyncBuild();
         }
 
         /// <summary>

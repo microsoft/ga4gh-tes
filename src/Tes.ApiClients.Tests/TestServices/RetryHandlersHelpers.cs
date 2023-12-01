@@ -20,7 +20,7 @@ namespace Tes.ApiClients.Tests.TestServices
             var cachingAsyncRetryPolicy = new Mock<CachingAsyncRetryHandlerPolicy>();
             _ = cachingAsyncRetryPolicy.As<IAsyncPolicy>();
             var cachingPolicyBuild = new Mock<ICachingPolicyBuilderBuild>();
-            cachingPolicyBuild.Setup(policy => policy.BuildAsync())
+            cachingPolicyBuild.Setup(policy => policy.AsyncBuild())
                 .Returns(cachingAsyncRetryPolicy.Object);
             cachingRetryHandler.As<ICachingPolicyBuilderHandler>().Setup(policy => policy.CachingPolicyBuilder(It.IsAny<IPolicyBuilderBuild>()))
                 .Returns(cachingPolicyBuild.Object);
@@ -48,7 +48,7 @@ namespace Tes.ApiClients.Tests.TestServices
             var cachingAsyncRetryPolicy = new Mock<CachingAsyncRetryHandlerPolicy<TResult>>();
             _ = cachingAsyncRetryPolicy.As<IAsyncPolicy<TResult>>();
             var cachingPolicyBuild = new Mock<ICachingPolicyBuilderBuild<TResult>>();
-            cachingPolicyBuild.Setup(policy => policy.BuildAsync())
+            cachingPolicyBuild.Setup(policy => policy.AsyncBuild())
                 .Returns(cachingAsyncRetryPolicy.Object);
             cachingRetryHandler.As<ICachingPolicyBuilderHandler>().Setup(policy => policy.CachingPolicyBuilder(It.IsAny<IPolicyBuilderBuild<TResult>>()))
                 .Returns(cachingPolicyBuild.Object);

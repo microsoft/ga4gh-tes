@@ -231,13 +231,13 @@ namespace Tes.ApiClients
             /// Builds <see cref="RetryPolicy"/> with caching.
             /// </summary>
             /// <returns>Caching retry policy.</returns>
-            CachingRetryHandlerPolicy Build();
+            CachingRetryHandlerPolicy SyncBuild();
 
             /// <summary>
             /// Builds <see cref="AsyncRetryPolicy"/> with caching.
             /// </summary>
             /// <returns>Caching retry policy.</returns>
-            CachingAsyncRetryHandlerPolicy BuildAsync();
+            CachingAsyncRetryHandlerPolicy AsyncBuild();
         }
 
         public interface ICachingPolicyBuilderBuild<TResult>
@@ -246,13 +246,13 @@ namespace Tes.ApiClients
             ///// Builds <see cref="RetryPolicy"/> with caching.
             ///// </summary>
             ///// <returns>Caching retry policy.</returns>
-            //CachingRetryHandlerPolicy<TResult> Build();
+            //CachingRetryHandlerPolicy<TResult> SyncBuild();
 
             /// <summary>
             /// Builds <see cref="AsyncRetryPolicy"/> with caching.
             /// </summary>
             /// <returns>Caching retry policy.</returns>
-            CachingAsyncRetryHandlerPolicy<TResult> BuildAsync();
+            CachingAsyncRetryHandlerPolicy<TResult> AsyncBuild();
         }
 
         /// <remarks>Used internally and for testing.</remarks>
@@ -284,12 +284,12 @@ namespace Tes.ApiClients
                 this.cachingHandler = handler;
             }
 
-            CachingRetryHandlerPolicy ICachingPolicyBuilderBuild.Build()
+            CachingRetryHandlerPolicy ICachingPolicyBuilderBuild.SyncBuild()
             {
                 return new(policyBuilder.SyncBuildPolicy(), cachingHandler.AppCache);
             }
 
-            CachingAsyncRetryHandlerPolicy ICachingPolicyBuilderBuild.BuildAsync()
+            CachingAsyncRetryHandlerPolicy ICachingPolicyBuilderBuild.AsyncBuild()
             {
                 return new(policyBuilder.AsyncBuildPolicy(), cachingHandler.AppCache);
             }
@@ -307,12 +307,12 @@ namespace Tes.ApiClients
                 this.cachingHandler = handler;
             }
 
-            //CachingRetryHandlerPolicy<TResult> ICachingPolicyBuilderBuild<TResult>.Build()
+            //CachingRetryHandlerPolicy<TResult> ICachingPolicyBuilderBuild<TResult>.SyncBuild()
             //{
-            //    return new(policyBuilder.BuildPolicy(), cachingHandler.AppCache);
+            //    return new(policyBuilder.SyncBuildPolicy(), cachingHandler.AppCache);
             //}
 
-            CachingAsyncRetryHandlerPolicy<TResult> ICachingPolicyBuilderBuild<TResult>.BuildAsync()
+            CachingAsyncRetryHandlerPolicy<TResult> ICachingPolicyBuilderBuild<TResult>.AsyncBuild()
             {
                 return new(policyBuilder.AsyncBuildPolicy(), cachingHandler.AppCache);
             }

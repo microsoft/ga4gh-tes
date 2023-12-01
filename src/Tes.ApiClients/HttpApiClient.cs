@@ -49,7 +49,7 @@ namespace Tes.ApiClients
                 .DefaultRetryHttpResponseMessagePolicyBuilder()
                 .SetOnRetryBehavior(onRetry: LogRetryErrorOnRetryHttpResponseMessageHandler())
                 .AddCaching()
-                .BuildAsync();
+                .AsyncBuild();
         }
 
         /// <summary>

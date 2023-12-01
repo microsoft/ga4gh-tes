@@ -84,16 +84,16 @@ namespace TesApi.Web
                 throw new InvalidOperationException("The batch account name is missing from the the configuration.");
             }
 
-            var builder = retryHandler.PolicyBuilder
-                .OpinionatedRetryPolicy(Policy.Handle<BatchException>())
-                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup((attempt, exception) => (exception as BatchException)?.RequestInformation?.RetryAfter, true);
-
-            batchRetryPolicyWhenJobNotFound = builder
-                .SetOnRetryBehavior(onRetry: OnRetryMicrosoftAzureBatchCommonBatchExceptionWhenJobNotFound(LogRetryErrorOnRetryHandler()))
+            batchRetryPolicyWhenJobNotFound = retryHandler.PolicyBuilder
+                .OpinionatedRetryPolicy(Policy.Handle<BatchException>(ex => BatchErrorCodeStrings.JobNotFound.Equals(ex.RequestInformation.BatchError.Code, StringComparison.OrdinalIgnoreCase)))
+                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup((attempt, exception) => (exception as BatchException)?.RequestInformation?.RetryAfter, backupSkipProvidedIncrements: true)
+                .SetOnRetryBehavior(onRetry: LogRetryErrorOnRetryHandler())
                 .AsyncBuild();
 
-            batchRetryPolicyWhenNodeNotReady = builder
-                .SetOnRetryBehavior(onRetry: OnRetryMicrosoftAzureBatchCommonBatchExceptionWhenNodeNotReady(LogRetryErrorOnRetryHandler()))
+            batchRetryPolicyWhenNodeNotReady = retryHandler.PolicyBuilder
+                .OpinionatedRetryPolicy(Policy.Handle<BatchException>(ex => "NodeNotReady".Equals(ex.RequestInformation.BatchError.Code, StringComparison.OrdinalIgnoreCase)))
+                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup((attempt, exception) => (exception as BatchException)?.RequestInformation?.RetryAfter, backupSkipProvidedIncrements: true)
+                .SetOnRetryBehavior(onRetry: LogRetryErrorOnRetryHandler())
                 .AsyncBuild();
 
             if (!string.IsNullOrWhiteSpace(batchAccountOptions.Value.AppKey))
@@ -125,37 +125,7 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Rethrows exception if exception is <see cref="BatchException"/> and the Batch API Error Code returned <see cref="BatchErrorCodeStrings.JobNotFound"/> otherwise invokes <paramref name="OnRetry"/>.
-        /// </summary>
-        /// <param name="OnRetry">Polly retry handler.</param>
-        /// <returns><see cref="RetryHandler.OnRetryHandler"/></returns>
-        private static RetryHandler.OnRetryHandler OnRetryMicrosoftAzureBatchCommonBatchExceptionWhenJobNotFound(RetryHandler.OnRetryHandler OnRetry)
-            => new((outcome, timespan, retryCount, correlationId, caller) =>
-            {
-                if (outcome is BatchException batchException && batchException.RequestInformation?.BatchError?.Code != BatchErrorCodeStrings.JobNotFound)
-                {
-                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(outcome).Throw();
-                }
-                OnRetry?.Invoke(outcome, timespan, retryCount, correlationId, caller);
-            });
-
-        /// <summary>
-        /// Rethrows exception if exception is <see cref="BatchException"/> and the Batch API Error Code returned "NodeNotReady" otherwise invokes <paramref name="OnRetry"/>.
-        /// </summary>
-        /// <param name="OnRetry">Polly retry handler.</param>
-        /// <returns><see cref="RetryHandler.OnRetryHandler"/></returns>
-        private static RetryHandler.OnRetryHandler OnRetryMicrosoftAzureBatchCommonBatchExceptionWhenNodeNotReady(RetryHandler.OnRetryHandler OnRetry)
-            => new((outcome, timespan, retryCount, correlationId, caller) =>
-            {
-                if (outcome is BatchException batchException && !"NodeNotReady".Equals(batchException.RequestInformation?.BatchError?.Code, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(outcome).Throw();
-                }
-                OnRetry?.Invoke(outcome, timespan, retryCount, correlationId, caller);
-            });
-
-        /// <summary>
-        /// A logging Polly retry handler.
+        /// A logging retry handler.
         /// </summary>
         /// <returns><see cref="RetryHandler.OnRetryHandler"/></returns>
         private RetryHandler.OnRetryHandler LogRetryErrorOnRetryHandler()
@@ -163,8 +133,8 @@ namespace TesApi.Web
             {
                 var requestId = (exception as BatchException)?.RequestInformation?.ServiceRequestId ?? "n/a";
                 var reason = (exception.InnerException as Microsoft.Azure.Batch.Protocol.Models.BatchErrorException)?.Response?.ReasonPhrase ?? "n/a";
-                logger?.LogError(exception, @"Retrying in {Method}: RetryCount: {RetryCount} RetryCount: {TimeSpan} BatchErrorCode: '{BatchErrorCode}', ApiStatusCode '{ApiStatusCode}', Reason: '{ReasonPhrase}' ServiceRequestId: '{ServiceRequestId}', CorrelationId: {CorrelationId}",
-                    caller, retryCount, timeSpan.ToString("c"), (exception as BatchException)?.RequestInformation?.BatchError?.Code ?? "n/a", (exception as BatchException)?.RequestInformation?.HttpStatusCode?.ToString("G") ?? "n/a", reason, requestId, correlationId.ToString("D"));
+                logger?.LogError(exception, @"Retrying in {Method}: RetryCount: {RetryCount} RetryCount: {TimeSpan:c} BatchErrorCode: '{BatchErrorCode}', ApiStatusCode '{ApiStatusCode}', Reason: '{ReasonPhrase}' ServiceRequestId: '{ServiceRequestId}', CorrelationId: {CorrelationId:D}",
+                    caller, retryCount, timeSpan, (exception as BatchException)?.RequestInformation?.BatchError?.Code ?? "n/a", (exception as BatchException)?.RequestInformation?.HttpStatusCode?.ToString("G") ?? "n/a", reason, requestId, correlationId);
             });
 
         // TODO: Static method because the instrumentation key is needed in both Program.cs and Startup.cs and we wanted to avoid intializing the batch client twice.

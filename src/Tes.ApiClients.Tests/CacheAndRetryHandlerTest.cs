@@ -14,7 +14,7 @@ public class CacheAndRetryHandlerTest
 {
     private IMemoryCache appCache = null!;
     private CachingRetryHandler.CachingAsyncRetryHandlerPolicy cachingAsyncPolicy = null!;
-    private RetryHandler.AsyncRetryHandlerPolicy<HttpResponseMessage> cachingAsyncHttpResponseMessagePolicy = null!;
+    private CachingRetryHandler.CachingAsyncRetryHandlerPolicy<HttpResponseMessage> cachingAsyncHttpResponseMessagePolicy = null!;
     private Mock<object> mockInstanceToRetry = null!;
     private const int MaxRetryCount = 3;
 
@@ -30,14 +30,14 @@ public class CacheAndRetryHandlerTest
         cachingAsyncHttpResponseMessagePolicy = cachingRetryHandler
             .DefaultRetryHttpResponseMessagePolicyBuilder()
             .SetOnRetryBehavior()
-            //.AddCaching()
+            .AddCaching()
             .AsyncBuild();
 
         cachingAsyncPolicy = cachingRetryHandler
             .DefaultRetryPolicyBuilder()
             .SetOnRetryBehavior()
             .AddCaching()
-            .BuildAsync();
+            .AsyncBuild();
     }
 
     [TestCleanup]
@@ -105,62 +105,63 @@ public class CacheAndRetryHandlerTest
         mockFactory.Setup(f => f.CreateResponseAsync()).Returns(CreateResponseAsync(statusCode));
 
         var response =
-            await cachingAsyncHttpResponseMessagePolicy.ExecuteWithRetryAsync(
-                mockFactory.Object.CreateResponseAsync);
+            await cachingAsyncHttpResponseMessagePolicy.ExecuteWithRetryAsync(_ =>
+                mockFactory.Object.CreateResponseAsync(),
+                CancellationToken.None);
 
         mockFactory.Verify(f => f.CreateResponseAsync(), Times.Exactly(numberOfTimes));
         Assert.AreEqual(response.StatusCode, statusCode);
     }
 
-    // [TestMethod]
-    // [DataRow(HttpStatusCode.OK)]
-    // [DataRow(HttpStatusCode.Created)]
-    // [DataRow(HttpStatusCode.Accepted)]
-    // [DataRow(HttpStatusCode.PartialContent)]
-    // [DataRow(HttpStatusCode.NoContent)]
-    // public async Task ExecuteHttpRequestWithRetryAndCachingAsync_CallOnceCachesOnSuccess(HttpStatusCode statusCode)
-    // {
-    //     var cacheKey = Guid.NewGuid().ToString();
-    //     var mockFactory = new Mock<ITestHttpResponseMessageFactory>();
-    //     mockFactory.Setup(f => f.CreateResponseAsync()).Returns(CreateResponseAsync(statusCode));
-    //
-    //     var first =
-    //         await cacheAndRetryHandler.ExecuteHttpRequestWithRetryAndCachingAsync(cacheKey, _ =>
-    //             mockFactory.Object.CreateResponseAsync(),
-    //             System.Threading.CancellationToken.None);
-    // 
-    //     var second =
-    //         await cacheAndRetryHandler.ExecuteHttpRequestWithRetryAndCachingAsync(cacheKey, _ =>
-    //             mockFactory.Object.CreateResponseAsync(),
-    //             System.Threading.CancellationToken.None);
-    // 
-    //     mockFactory.Verify(f => f.CreateResponseAsync(), Times.Once);
-    //     Assert.AreEqual(first.StatusCode, statusCode);
-    //     Assert.AreEqual(second.StatusCode, statusCode);
-    //     Assert.IsTrue(appCache.TryGetValue(cacheKey, out HttpResponseMessage? cachedResponse));
-    //     Assert.AreEqual(first.StatusCode, cachedResponse!.StatusCode);
-    // }
+    [TestMethod]
+    [DataRow(HttpStatusCode.OK)]
+    [DataRow(HttpStatusCode.Created)]
+    [DataRow(HttpStatusCode.Accepted)]
+    [DataRow(HttpStatusCode.PartialContent)]
+    [DataRow(HttpStatusCode.NoContent)]
+    public async Task ExecuteHttpRequestWithRetryAndCachingAsync_CallOnceCachesOnSuccess(HttpStatusCode statusCode)
+    {
+        var cacheKey = Guid.NewGuid().ToString();
+        var mockFactory = new Mock<ITestHttpResponseMessageFactory>();
+        mockFactory.Setup(f => f.CreateResponseAsync()).Returns(CreateResponseAsync(statusCode));
 
-    // [TestMethod]
-    // [DataRow(HttpStatusCode.Forbidden, 1)] //bad codes but not retriable
-    // [DataRow(HttpStatusCode.BadRequest, 1)]
-    // [DataRow(HttpStatusCode.NotFound, 1)]
-    // [DataRow(HttpStatusCode.Conflict, 1)]
-    // [DataRow(HttpStatusCode.BadGateway, MaxRetryCount + 1)] //retriable codes
-    // [DataRow(HttpStatusCode.TooManyRequests, MaxRetryCount + 1)]
-    // [DataRow(HttpStatusCode.ServiceUnavailable, MaxRetryCount + 1)]
-    // [DataRow(HttpStatusCode.InternalServerError, MaxRetryCount + 1)]
-    // public async Task ExecuteHttpRequestWithRetryAndCachingAsync_RetriesThrowsAndNotCachedOnFailure(HttpStatusCode statusCode, int numberOfTimes)
-    // {
-    //     var cacheKey = Guid.NewGuid().ToString();
-    //     var mockFactory = new Mock<ITestHttpResponseMessageFactory>();
-    //     mockFactory.Setup(f => f.CreateResponseAsync()).Returns(CreateResponseAsync(statusCode));
-    // 
-    //     await Assert.ThrowsExceptionAsync<HttpRequestException>(() => cacheAndRetryHandler.ExecuteHttpRequestWithRetryAndCachingAsync(cacheKey, _ => mockFactory.Object.CreateResponseAsync(), System.Threading.CancellationToken.None));
-    // 
-    //     mockFactory.Verify(f => f.CreateResponseAsync(), Times.Exactly(numberOfTimes));
-    //     Assert.IsFalse(appCache.TryGetValue(cacheKey, out HttpResponseMessage _));
-    // }
+        var first =
+            await cachingAsyncHttpResponseMessagePolicy.ExecuteWithRetryAndCachingAsync(cacheKey, _ =>
+                mockFactory.Object.CreateResponseAsync(),
+                CancellationToken.None);
+
+        var second =
+            await cachingAsyncHttpResponseMessagePolicy.ExecuteWithRetryAndCachingAsync(cacheKey, _ =>
+                mockFactory.Object.CreateResponseAsync(),
+                CancellationToken.None);
+
+        mockFactory.Verify(f => f.CreateResponseAsync(), Times.Once);
+        Assert.AreEqual(first.StatusCode, statusCode);
+        Assert.AreEqual(second.StatusCode, statusCode);
+        Assert.IsTrue(appCache.TryGetValue(cacheKey, out HttpResponseMessage? cachedResponse));
+        Assert.AreEqual(first.StatusCode, cachedResponse!.StatusCode);
+    }
+
+    [TestMethod]
+    [DataRow(HttpStatusCode.Forbidden, 1)] //bad codes but not retriable
+    [DataRow(HttpStatusCode.BadRequest, 1)]
+    [DataRow(HttpStatusCode.NotFound, 1)]
+    [DataRow(HttpStatusCode.Conflict, 1)]
+    [DataRow(HttpStatusCode.BadGateway, MaxRetryCount + 1)] //retriable codes
+    [DataRow(HttpStatusCode.TooManyRequests, MaxRetryCount + 1)]
+    [DataRow(HttpStatusCode.ServiceUnavailable, MaxRetryCount + 1)]
+    [DataRow(HttpStatusCode.InternalServerError, MaxRetryCount + 1)]
+    public async Task ExecuteHttpRequestWithRetryAndCachingAsync_RetriesThrowsAndNotCachedOnFailure(HttpStatusCode statusCode, int numberOfTimes)
+    {
+        var cacheKey = Guid.NewGuid().ToString();
+        var mockFactory = new Mock<ITestHttpResponseMessageFactory>();
+        mockFactory.Setup(f => f.CreateResponseAsync()).Returns(CreateResponseAsync(statusCode));
+
+        await Assert.ThrowsExceptionAsync<HttpRequestException>(() => cachingAsyncHttpResponseMessagePolicy.ExecuteWithRetryConversionAndCachingAsync(cacheKey, _ => mockFactory.Object.CreateResponseAsync(), (m, _) => Task.FromResult(m.EnsureSuccessStatusCode()), CancellationToken.None));
+
+        mockFactory.Verify(f => f.CreateResponseAsync(), Times.Exactly(numberOfTimes));
+        Assert.IsFalse(appCache.TryGetValue(cacheKey, out HttpResponseMessage? _));
+    }
 
     private static Task<HttpResponseMessage> CreateResponseAsync(HttpStatusCode statusCode)
         => Task.FromResult<HttpResponseMessage>(new(statusCode));
