@@ -16,34 +16,30 @@ namespace Tes.Runner.Docker
 {
     public class DockerExecutor
     {
-        const string AzureContainerRegistryHostSuffix = ".azurecr.io";
-        //https://learn.microsoft.com/en-us/azure/container-registry/container-registry-authentication?tabs=azure-cli#az-acr-login-with---expose-token
-        public const string ManagedIdentityUserName = "00000000-0000-0000-0000-000000000000";
-
 
         private readonly IDockerClient dockerClient = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
         private readonly NetworkUtility networkUtility = new NetworkUtility();
         private readonly RetryHandler retryHandler = new RetryHandler(Options.Create(new RetryPolicyOptions()));
         private readonly IStreamLogReader streamLogReader = null!;
-        private readonly CredentialsManager tokenCredentialsManager = null!;
+        private readonly ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager = null!;
 
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
         public DockerExecutor(Uri dockerHost) : this(new DockerClientConfiguration(dockerHost)
-            .CreateClient(), new ConsoleStreamLogPublisher(), new CredentialsManager())
+            .CreateClient(), new ConsoleStreamLogPublisher(), new ContainerRegistryAuthorizationManager(new CredentialsManager()))
         {
         }
 
-        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, CredentialsManager tokenCredentialsManager)
+        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager)
         {
             ArgumentNullException.ThrowIfNull(dockerClient);
             ArgumentNullException.ThrowIfNull(streamLogReader);
-            ArgumentNullException.ThrowIfNull(tokenCredentialsManager);
+            ArgumentNullException.ThrowIfNull(containerRegistryAuthorizationManager);
 
             this.dockerClient = dockerClient;
             this.streamLogReader = streamLogReader;
-            this.tokenCredentialsManager = tokenCredentialsManager;
+            this.containerRegistryAuthorizationManager = containerRegistryAuthorizationManager;
         }
 
         /// <summary>
@@ -54,65 +50,13 @@ namespace Tes.Runner.Docker
 
         }
 
-        private async Task<AuthConfig?> TryGetAuthConfigForAzureContainerRegistryAsync(string? image, string? tag, RuntimeOptions runtimeOptions)
-        {
-            if (string.IsNullOrWhiteSpace(image))
-            {
-                return null;
-            }
-
-            var imageParts = image.Split('/', 2);
-            var registry = imageParts.FirstOrDefault();
-
-            if (registry is null)
-            {
-                return null;
-            }
-
-            if (!IsAzureContainerRegistry(registry))
-            {
-                return null;
-            }
-
-            var serverAddress = $"https://{registry}";
-            var imageName = imageParts.Last();
-            var acrAccessToken = string.Empty;
-
-            // Get the manifest to the image to be pulled. If authentication is needed, this will derive it from the mananaged identity using the pull-image scope.
-            var client = tokenCredentialsManager.GetContainerRegistryContentClient(new(serverAddress), imageName, runtimeOptions, token => acrAccessToken = token);
-            var manifest = (await client.GetManifestAsync(tag ?? "latest")).Value;
-
-            if (string.IsNullOrWhiteSpace(acrAccessToken))
-            {
-                return null; // image is available anonymously
-            }
-
-            return new AuthConfig
-            {
-                //https://learn.microsoft.com/en-us/azure/container-registry/container-registry-authentication?tabs=azure-cli#az-acr-login-with---expose-token
-                Username = ManagedIdentityUserName,
-                Password = acrAccessToken,
-                ServerAddress = serverAddress
-            };
-        }
-
-        private static bool IsAzureContainerRegistry(string registry)
-        {
-            if (string.IsNullOrWhiteSpace(registry))
-            {
-                return false;
-            }
-
-            return registry.EndsWith(AzureContainerRegistryHostSuffix, StringComparison.OrdinalIgnoreCase);
-        }
-
         public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(ExecutionOptions executionOptions)
         {
             ArgumentNullException.ThrowIfNull(executionOptions);
             ArgumentException.ThrowIfNullOrEmpty(executionOptions.ImageName);
             ArgumentNullException.ThrowIfNull(executionOptions.CommandsToExecute);
 
-            var authConfig = await TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.RuntimeOptions);
+            var authConfig = await containerRegistryAuthorizationManager.TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.RuntimeOptions);
 
             await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag, authConfig);
 
