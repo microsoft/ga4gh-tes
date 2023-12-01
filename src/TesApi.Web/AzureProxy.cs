@@ -90,11 +90,11 @@ namespace TesApi.Web
 
             batchRetryPolicyWhenJobNotFound = builder
                 .SetOnRetryBehavior(onRetry: OnRetryMicrosoftAzureBatchCommonBatchExceptionWhenJobNotFound(LogRetryErrorOnRetryHandler()))
-                .BuildAsync();
+                .AsyncBuild();
 
             batchRetryPolicyWhenNodeNotReady = builder
                 .SetOnRetryBehavior(onRetry: OnRetryMicrosoftAzureBatchCommonBatchExceptionWhenNodeNotReady(LogRetryErrorOnRetryHandler()))
-                .BuildAsync();
+                .AsyncBuild();
 
             if (!string.IsNullOrWhiteSpace(batchAccountOptions.Value.AppKey))
             {

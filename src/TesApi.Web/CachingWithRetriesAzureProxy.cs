@@ -44,7 +44,7 @@ namespace TesApi.Web
             this.azureProxy = azureProxy;
             this.logger = logger;
 
-            var builder = cachingRetryHandler.RetryDefaultPolicyBuilder();
+            var builder = cachingRetryHandler.DefaultRetryPolicyBuilder();
             this.cachingRetry = builder.SetOnRetryBehavior(this.logger).AddCaching().Build();
             this.cachingAsyncRetry = builder.SetOnRetryBehavior(this.logger).AddCaching().BuildAsync();
             this.cachingAsyncRetryExceptWhenExists = builder

@@ -46,7 +46,7 @@ namespace Tes.ApiClients
             this.Logger = logger;
 
             AsyncCachingHttpResponseMessageRetryPolicy = cachingRetryHandler
-                .RetryDefaultHttpResponseMessagePolicyBuilder()
+                .DefaultRetryHttpResponseMessagePolicyBuilder()
                 .SetOnRetryBehavior(onRetry: LogRetryErrorOnRetryHttpResponseMessageHandler())
                 .AddCaching()
                 .BuildAsync();
@@ -163,7 +163,7 @@ namespace Tes.ApiClients
         {
             var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader, cancellationToken);
 
-            return (await AsyncCachingHttpResponseMessageRetryPolicy.ExecuteWithRetryAndCachingAsync(cacheKey,
+            return (await AsyncCachingHttpResponseMessageRetryPolicy.ExecuteWithRetryConversionAndCachingAsync(cacheKey,
                 async ct =>
                 {
                     //request must be recreated in every retry.

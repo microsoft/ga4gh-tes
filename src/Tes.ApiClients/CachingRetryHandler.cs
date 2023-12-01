@@ -101,7 +101,7 @@ namespace Tes.ApiClients
             }
 
             /// <summary>
-            ///  Executes a delegate with the specified async retry policy and persisting the result in a cache.
+            /// Executes a delegate with the specified async retry policy and persisting the result in a cache.
             /// </summary>
             /// <param name="cacheKey"></param>
             /// <param name="action">Action to execute</param>
@@ -168,7 +168,7 @@ namespace Tes.ApiClients
             }
 
             /// <summary>
-            ///  Executes a delegate with the specified async retry policy and persisting the result in a cache.
+            /// Executes a delegate with the specified async retry policy and persisting the result in a cache.
             /// </summary>
             /// <param name="cacheKey"></param>
             /// <param name="action">Action to execute</param>
@@ -185,24 +185,24 @@ namespace Tes.ApiClients
             /// <summary>
             /// Executes a delegate with the specified async retry policy and persisting the result in a cache.
             /// </summary>
-            /// <typeparam name="T">Final return type</typeparam>
+            /// <typeparam name="T">Instance type in cache</typeparam>
             /// <param name="cacheKey"></param>
             /// <param name="action">Action to execute</param>
             /// <param name="convert">Method to convert</param>
             /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
             /// <param name="caller">Name of method originating the retriable operation.</param>
             /// <returns></returns>
-            public virtual async Task<T> ExecuteWithRetryAndCachingAsync<T>(string cacheKey, Func<CancellationToken, Task<TResult>> action, Func<TResult, CancellationToken, Task<T>> convert, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+            public virtual async Task<T> ExecuteWithRetryConversionAndCachingAsync<T>(string cacheKey, Func<CancellationToken, Task<TResult>> action, Func<TResult, CancellationToken, Task<T>> convert, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
             {
                 ValidateArgs(cacheKey, action);
 
-                return await ExecuteWithCacheAsync(appCache, cacheKey, async () => await convert(await ExecuteWithRetryAsync(action, cancellationToken, caller), cancellationToken));
+                return await ExecuteWithCacheAsync(appCache, cacheKey, () => ExecuteWithRetryAndConversionAsync(action, convert, cancellationToken, caller));
             }
 
             /// <summary>
-            ///  Executes a delegate with the specified async retry policy and persisting the result in a cache.
+            /// Executes a delegate with the specified async retry policy and persisting the result in a cache.
             /// </summary>
-            /// <typeparam name="T">Final return type</typeparam>
+            /// <typeparam name="T">Instance type in cache</typeparam>
             /// <param name="cacheKey"></param>
             /// <param name="action">Action to execute</param>
             /// <param name="convert">Method to convert</param>
@@ -210,11 +210,11 @@ namespace Tes.ApiClients
             /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
             /// <param name="caller">Name of method originating the retriable operation.</param>
             /// <returns></returns>
-            public virtual async Task<T> ExecuteWithRetryAndCachingAsync<T>(string cacheKey, Func<CancellationToken, Task<TResult>> action, Func<TResult, CancellationToken, Task<T>> convert, DateTimeOffset cachesExpires, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+            public virtual async Task<T> ExecuteWithRetryConversionAndCachingAsync<T>(string cacheKey, Func<CancellationToken, Task<TResult>> action, Func<TResult, CancellationToken, Task<T>> convert, DateTimeOffset cachesExpires, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
             {
                 ValidateArgs(cacheKey, action);
 
-                return await ExecuteWithCacheAsync(appCache, cacheKey, async () => await convert(await ExecuteWithRetryAsync(action, cancellationToken, caller), cancellationToken), cachesExpires);
+                return await ExecuteWithCacheAsync(appCache, cacheKey, () => ExecuteWithRetryAndConversionAsync(action, convert, cancellationToken, caller), cachesExpires);
             }
         }
         #endregion
@@ -286,12 +286,12 @@ namespace Tes.ApiClients
 
             CachingRetryHandlerPolicy ICachingPolicyBuilderBuild.Build()
             {
-                return new(policyBuilder.BuildPolicy(), cachingHandler.AppCache);
+                return new(policyBuilder.SyncBuildPolicy(), cachingHandler.AppCache);
             }
 
             CachingAsyncRetryHandlerPolicy ICachingPolicyBuilderBuild.BuildAsync()
             {
-                return new(policyBuilder.BuildAsyncPolicy(), cachingHandler.AppCache);
+                return new(policyBuilder.AsyncBuildPolicy(), cachingHandler.AppCache);
             }
         }
 
@@ -314,7 +314,7 @@ namespace Tes.ApiClients
 
             CachingAsyncRetryHandlerPolicy<TResult> ICachingPolicyBuilderBuild<TResult>.BuildAsync()
             {
-                return new(policyBuilder.BuildAsyncPolicy(), cachingHandler.AppCache);
+                return new(policyBuilder.AsyncBuildPolicy(), cachingHandler.AppCache);
             }
         }
         #endregion

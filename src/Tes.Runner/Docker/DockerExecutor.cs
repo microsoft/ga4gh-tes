@@ -17,9 +17,7 @@ namespace Tes.Runner.Docker
         private readonly IDockerClient dockerClient = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
         private readonly NetworkUtility networkUtility = new();
-        private readonly RetryHandler.AsyncRetryHandlerPolicy asyncRetryPolicy =
-            new RetryHandler(Options.Create(new RetryPolicyOptions()))
-                .RetryDefaultPolicyBuilder().SetOnRetryBehavior().BuildAsync();
+        private readonly RetryHandler.AsyncRetryHandlerPolicy asyncRetryPolicy = null!;
         private readonly IStreamLogReader streamLogReader = null!;
 
         const int LogStreamingMaxWaitTimeInSeconds = 30;
@@ -30,6 +28,7 @@ namespace Tes.Runner.Docker
         }
 
         public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader)
+            : this() // Add logging to retries
         {
             ArgumentNullException.ThrowIfNull(dockerClient);
             ArgumentNullException.ThrowIfNull(streamLogReader);
@@ -43,7 +42,9 @@ namespace Tes.Runner.Docker
         /// </summary>
         protected DockerExecutor()
         {
-
+            this.asyncRetryPolicy =
+                new RetryHandler(Options.Create(new RetryPolicyOptions()))
+                    .DefaultRetryPolicyBuilder().SetOnRetryBehavior(logger).AsyncBuild();
         }
 
         public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(string? imageName, string? tag, List<string>? commandsToExecute, List<string>? volumeBindings, string? workingDir)
@@ -129,13 +130,13 @@ namespace Tes.Runner.Docker
         {
             logger.LogInformation($"Pulling image name: {imageName} image tag: {tag}");
 
-            await asyncRetryPolicy.ExecuteWithRetryAsync(async _ =>
+            await asyncRetryPolicy.ExecuteWithRetryAsync(async () =>
             {
                 await dockerClient.Images.CreateImageAsync(
                     new ImagesCreateParameters() { FromImage = imageName, Tag = tag },
                     authConfig,
                     new Progress<JSONMessage>(message => logger.LogDebug(message.Status)));
-            }, CancellationToken.None);
+            });
         }
 
         private async Task DeleteAllImagesAsync()

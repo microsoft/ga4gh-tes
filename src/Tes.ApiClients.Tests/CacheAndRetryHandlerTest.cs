@@ -28,13 +28,13 @@ public class CacheAndRetryHandlerTest
         var cachingRetryHandler = new CachingRetryHandler(appCache, mockOptions.Object);
 
         cachingAsyncHttpResponseMessagePolicy = cachingRetryHandler
-            .RetryDefaultHttpResponseMessagePolicyBuilder()
+            .DefaultRetryHttpResponseMessagePolicyBuilder()
             .SetOnRetryBehavior()
             //.AddCaching()
-            .BuildAsync();
+            .AsyncBuild();
 
         cachingAsyncPolicy = cachingRetryHandler
-            .RetryDefaultPolicyBuilder()
+            .DefaultRetryPolicyBuilder()
             .SetOnRetryBehavior()
             .AddCaching()
             .BuildAsync();
@@ -105,9 +105,8 @@ public class CacheAndRetryHandlerTest
         mockFactory.Setup(f => f.CreateResponseAsync()).Returns(CreateResponseAsync(statusCode));
 
         var response =
-            await cachingAsyncHttpResponseMessagePolicy.ExecuteWithRetryAsync(_ =>
-                mockFactory.Object.CreateResponseAsync(),
-                CancellationToken.None);
+            await cachingAsyncHttpResponseMessagePolicy.ExecuteWithRetryAsync(
+                mockFactory.Object.CreateResponseAsync);
 
         mockFactory.Verify(f => f.CreateResponseAsync(), Times.Exactly(numberOfTimes));
         Assert.AreEqual(response.StatusCode, statusCode);

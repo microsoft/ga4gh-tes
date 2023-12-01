@@ -31,7 +31,7 @@ namespace TesApi.Web.Management
             this.ManagementClientsFactory = managementClientsFactory;
             this.Logger = logger;
             this.CachingAsyncRetryPolicy = cachingRetryHandler
-                .RetryDefaultPolicyBuilder()
+                .DefaultRetryPolicyBuilder()
                 .SetOnRetryBehavior(this.Logger)
                 .AddCaching()
                 .BuildAsync();

@@ -28,13 +28,13 @@ namespace Tes.ApiClients.Tests.TestServices
             var builderBuild = new Mock<IPolicyBuilderBuild>();
             builderBuild.Setup(policy => policy.PolicyBuilderBase)
                 .Returns(cachingRetryHandler.Object);
-            builderBuild.Setup(c => c.BuildAsyncPolicy())
+            builderBuild.Setup(c => c.AsyncBuildPolicy())
                 .Returns((IAsyncPolicy)cachingAsyncRetryPolicy.Object);
             var builderWait = new Mock<IPolicyBuilderWait>();
             builderWait.Setup(c => c.SetOnRetryBehavior(It.IsAny<Microsoft.Extensions.Logging.ILogger>(), It.IsAny<OnRetryHandler>(), It.IsAny<OnRetryHandlerAsync>()))
                 .Returns(builderBuild.Object);
 
-            cachingRetryHandler.Setup(c => c.RetryDefaultPolicyBuilder())
+            cachingRetryHandler.Setup(c => c.DefaultRetryPolicyBuilder())
                 .Returns(builderWait.Object);
 
             cachingAsyncRetryPolicy.Setup(c => c.AppCache)
@@ -56,7 +56,7 @@ namespace Tes.ApiClients.Tests.TestServices
             var builderBuild = new Mock<IPolicyBuilderBuild<TResult>>();
             builderBuild.Setup(policy => policy.PolicyBuilderBase)
                 .Returns(cachingRetryHandler.Object);
-            builderBuild.Setup(c => c.BuildAsyncPolicy())
+            builderBuild.Setup(c => c.AsyncBuildPolicy())
                 .Returns((IAsyncPolicy<TResult>)cachingAsyncRetryPolicy.Object);
             var builderWait = new Mock<IPolicyBuilderWait<TResult>>();
             builderWait.Setup(c => c.SetOnRetryBehavior(It.IsAny<Microsoft.Extensions.Logging.ILogger>(), It.IsAny<OnRetryHandler<TResult>>(), It.IsAny<OnRetryHandlerAsync<TResult>>()))

@@ -15,8 +15,13 @@ namespace Tes.ApiClients;
 /// </summary>
 public class RetryHandler
 {
-    // Keys used by this implementation in Polly Contexts
+    /// <summary>
+    /// Polly Context key for caller method name
+    /// </summary>
     public const string CallerMemberNameKey = $"Tes.ApiClients.{nameof(RetryHandler)}.CallerMemberName";
+    /// <summary>
+    /// Polly Context key for backup skip increment setting
+    /// </summary>
     public const string BackupSkipProvidedIncrementKey = $"Tes.ApiClients.{nameof(RetryHandler)}.BackupSkipProvidedIncrementCount";
 
     /// <summary>
@@ -31,14 +36,14 @@ public class RetryHandler
         Polly.Extensions.Http.HttpPolicyExtensions.HandleTransientHttpError()
                 .OrResult(r => r.StatusCode == HttpStatusCode.TooManyRequests);
 
-    /// <remarks>Shortcut starting point for testing.</remarks>
-    public virtual IPolicyBuilderWait RetryDefaultPolicyBuilder()
+    /// <remarks>Shortcut starting point for testing. Can be used in production as well.</remarks>
+    public virtual IPolicyBuilderWait DefaultRetryPolicyBuilder()
         => PolicyBuilder
             .OpinionatedRetryPolicy()
             .WithRetryPolicyOptionsWait();
 
-    /// <remarks>Shortcut starting point for testing.</remarks>
-    public virtual IPolicyBuilderWait<HttpResponseMessage> RetryDefaultHttpResponseMessagePolicyBuilder()
+    /// <remarks>Shortcut starting point for testing. Can be used in production as well.</remarks>
+    public virtual IPolicyBuilderWait<HttpResponseMessage> DefaultRetryHttpResponseMessagePolicyBuilder()
         => PolicyBuilder
             .OpinionatedRetryPolicy(DefaultHttpResponseMessagePolicyBuilder)
             .WithRetryPolicyOptionsWait();
@@ -66,6 +71,7 @@ public class RetryHandler
     {
         private readonly ISyncPolicy retryPolicy;
 
+        /// <remarks>For extensions</remarks>
         public ISyncPolicy RetryPolicy => retryPolicy;
 
         /// <summary>
@@ -85,6 +91,18 @@ public class RetryHandler
         /// <summary>
         /// Executes a delegate with the configured policy.
         /// </summary>
+        /// <param name="action">Action to execute.</param>
+        /// <param name="caller">Name of method originating the retriable operation.</param>
+        public virtual void ExecuteWithRetry(Action action, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            retryPolicy.Execute(_ => action(), PrepareContext(caller));
+        }
+
+        /// <summary>
+        /// Executes a delegate with the configured policy.
+        /// </summary>
         /// <typeparam name="TResult">Result type.</typeparam>
         /// <param name="action">Action to execute.</param>
         /// <param name="caller">Name of method originating the retriable operation.</param>
@@ -93,44 +111,15 @@ public class RetryHandler
         {
             ArgumentNullException.ThrowIfNull(action);
 
-            return retryPolicy.Execute(_ => action(), RetryHandler.PrepareContext(caller));
+            return retryPolicy.Execute(_ => action(), PrepareContext(caller));
         }
     }
 
+    // TODO: if/when needed
     ///// <summary>
     ///// Generic synchronous retry policy
     ///// </summary>
     //public class RetryHandlerPolicy<TResult>
-    //{
-    //    private readonly ISyncPolicy<TResult> retryPolicy;
-
-    //    /// <summary>
-    //    /// Public constructor
-    //    /// </summary>
-    //    /// <param name="retryPolicy">Synchronous retry policy.</param>
-    //    public RetryHandlerPolicy(ISyncPolicy<TResult> retryPolicy)
-    //    {
-    //        ArgumentNullException.ThrowIfNull(retryPolicy);
-    //        this.retryPolicy = retryPolicy;
-    //    }
-
-    //    /// <remarks>For mocking</remarks>
-    //    public RetryHandlerPolicy() { }
-
-
-    //    /// <summary>
-    //    /// Executes a delegate with the configured policy.
-    //    /// </summary>
-    //    /// <param name="action">Action to execute.</param>
-    //    /// <param name="caller">Name of method originating the retriable operation.</param>
-    //    /// <returns></returns>
-    //    public virtual TResult ExecuteWithRetry(Func<TResult> action, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
-    //    {
-    //        ArgumentNullException.ThrowIfNull(action);
-
-    //        return retryPolicy.Execute(_ => action(), PrepareContext(caller));
-    //    }
-    //}
 
     /// <summary>
     /// Non-generic asynchronous retry policy
@@ -139,6 +128,7 @@ public class RetryHandler
     {
         private readonly IAsyncPolicy retryPolicy;
 
+        /// <remarks>For extensions</remarks>
         public IAsyncPolicy RetryPolicy => retryPolicy;
 
         /// <summary>
@@ -158,16 +148,14 @@ public class RetryHandler
         /// <summary>
         /// Executes a delegate with the configured async policy.
         /// </summary>
-        /// <typeparam name="TResult">Result type.</typeparam>
         /// <param name="action">Action to execute.</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="caller">Name of method originating the retriable operation.</param>
-        /// <returns><typeparamref name="TResult"/> instance.</returns>
-        public virtual Task<TResult> ExecuteWithRetryAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+        /// <returns></returns>
+        public virtual Task ExecuteWithRetryAsync(Func<Task> action, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
         {
             ArgumentNullException.ThrowIfNull(action);
 
-            return retryPolicy.ExecuteAsync((_, ct) => action(ct), PrepareContext(caller), cancellationToken);
+            return retryPolicy.ExecuteAsync((_, _) => action(), PrepareContext(caller), CancellationToken.None);
         }
 
         /// <summary>
@@ -183,6 +171,35 @@ public class RetryHandler
 
             return retryPolicy.ExecuteAsync((_, ct) => action(ct), PrepareContext(caller), cancellationToken);
         }
+
+        /// <summary>
+        /// Executes a delegate with the configured async policy.
+        /// </summary>
+        /// <typeparam name="TResult">Result type.</typeparam>
+        /// <param name="action">Action to execute.</param>
+        /// <param name="caller">Name of method originating the retriable operation.</param>
+        /// <returns><typeparamref name="TResult"/> instance.</returns>
+        public virtual Task<TResult> ExecuteWithRetryAsync<TResult>(Func<Task<TResult>> action, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            return retryPolicy.ExecuteAsync((_, _) => action(), PrepareContext(caller), CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Executes a delegate with the configured async policy.
+        /// </summary>
+        /// <typeparam name="TResult">Result type.</typeparam>
+        /// <param name="action">Action to execute.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="caller">Name of method originating the retriable operation.</param>
+        /// <returns><typeparamref name="TResult"/> instance.</returns>
+        public virtual Task<TResult> ExecuteWithRetryAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            return retryPolicy.ExecuteAsync((_, ct) => action(ct), PrepareContext(caller), cancellationToken);
+        }
     }
 
     /// <summary>
@@ -191,6 +208,9 @@ public class RetryHandler
     public class AsyncRetryHandlerPolicy<TResult>
     {
         private readonly IAsyncPolicy<TResult> retryPolicy;
+
+        /// <remarks>For extensions</remarks>
+        public IAsyncPolicy<TResult> RetryPolicy => retryPolicy;
 
         /// <summary>
         /// Public constructor
@@ -210,6 +230,19 @@ public class RetryHandler
         /// Executes a delegate with the configured async policy.
         /// </summary>
         /// <param name="action">Action to execute</param>
+        /// <param name="caller">Name of method originating the retriable operation.</param>
+        /// <returns></returns>
+        public virtual Task<TResult> ExecuteWithRetryAsync(Func<Task<TResult>> action, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            return retryPolicy.ExecuteAsync((_, _) => action(), PrepareContext(caller), CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Executes a delegate with the configured async policy.
+        /// </summary>
+        /// <param name="action">Action to execute</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="caller">Name of method originating the retriable operation.</param>
         /// <returns></returns>
@@ -219,10 +252,29 @@ public class RetryHandler
 
             return retryPolicy.ExecuteAsync((_, ct) => action(ct), PrepareContext(caller), cancellationToken);
         }
+
+        /// <summary>
+        /// Executes a delegate with the configured async policy.
+        /// </summary>
+        /// <typeparam name="T">Return type</typeparam>
+        /// <param name="action">Action to execute</param>
+        /// <param name="convert">Method to convert</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="caller">Name of method originating the retriable operation.</param>
+        /// <returns></returns>
+        public virtual async Task<T> ExecuteWithRetryAndConversionAsync<T>(Func<CancellationToken, Task<TResult>> action, Func<TResult, CancellationToken, Task<T>> convert, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string caller = default)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            return await convert(await retryPolicy.ExecuteAsync((_, ct) => action(ct), PrepareContext(caller), cancellationToken), cancellationToken);
+        }
     }
     #endregion
 
     #region Builder interfaces
+    /// <summary>
+    /// Selects retry policy type.
+    /// </summary>
     public interface IPolicyBuilderPolicy
     {
         /// <summary>
@@ -247,6 +299,9 @@ public class RetryHandler
         IPolicyBuilderBase<TResult> OpinionatedRetryPolicy<TResult>(PolicyBuilder<TResult> policyBuilder);
     }
 
+    /// <summary>
+    /// Selects retry policy wait algorithm.
+    /// </summary>
     public interface IPolicyBuilderBase
     {
         /// <summary>
@@ -290,6 +345,9 @@ public class RetryHandler
         IPolicyBuilderWait WithExceptionBasedWaitWithRetryPolicyOptionsBackup(Func<int, Exception, TimeSpan?> waitDurationProvider, bool backupSkipProvidedIncrements);
     }
 
+    /// <summary>
+    /// Selects retry policy wait algorithm.
+    /// </summary>
     public interface IPolicyBuilderBase<TResult>
     {
         /// <summary>
@@ -304,7 +362,7 @@ public class RetryHandler
         /// <param name="maxRetryCount">Maximum number of retries.</param>
         /// <param name="exponentialBackOffExponent">Value in seconds which is raised by the power of the retry attempt.</param>
         /// <returns>OnRetry hander</returns>
-        IPolicyBuilderWait<TResult> WithExponentialBackoffWait(int retryCount, double exponentialBackOffExponent);
+        IPolicyBuilderWait<TResult> WithExponentialBackoffWait(int maxRetryCount, double exponentialBackOffExponent);
 
         /// <summary>
         /// Custom result-based policy.
@@ -342,6 +400,9 @@ public class RetryHandler
         IPolicyBuilderWait<TResult> WithExceptionBasedWaitWithRetryPolicyOptionsBackup(Func<int, Exception, TimeSpan?> waitDurationProvider, bool backupSkipProvidedIncrements);
     }
 
+    /// <summary>
+    /// Sets on-retry handlers.
+    /// </summary>
     public interface IPolicyBuilderWait
     {
         /// <summary>
@@ -354,6 +415,9 @@ public class RetryHandler
         IPolicyBuilderBuild SetOnRetryBehavior(ILogger logger = default, OnRetryHandler onRetry = default, OnRetryHandlerAsync onRetryAsync = default);
     }
 
+    /// <summary>
+    /// Sets on-retry handlers.
+    /// </summary>
     public interface IPolicyBuilderWait<TResult>
     {
         /// <summary>
@@ -372,25 +436,25 @@ public class RetryHandler
         /// Builds <see cref="RetryPolicy"/>.
         /// </summary>
         /// <returns>Retry policy.</returns>
-        RetryHandlerPolicy Build();
+        RetryHandlerPolicy SyncBuild();
 
         /// <summary>
         /// Builds <see cref="RetryPolicy"/> for extensions to the builder.
         /// </summary>
         /// <returns>Retry policy.</returns>
-        ISyncPolicy BuildPolicy();
+        ISyncPolicy SyncBuildPolicy();
 
         /// <summary>
         /// Builds <see cref="AsyncRetryPolicy"/>.
         /// </summary>
         /// <returns>Async retry policy.</returns>
-        AsyncRetryHandlerPolicy BuildAsync();
+        AsyncRetryHandlerPolicy AsyncBuild();
 
         /// <summary>
         /// Builds <see cref="AsyncRetryPolicy"/> for extensions to the builder.
         /// </summary>
         /// <returns>Async retry policy.</returns>
-        IAsyncPolicy BuildAsyncPolicy();
+        IAsyncPolicy AsyncBuildPolicy();
 
         /// <summary>
         /// Retrives the instance of the retryhandler to accomodate extensions to the builder
@@ -404,25 +468,25 @@ public class RetryHandler
         ///// Builds <see cref="RetryPolicy{TResult}"/>.
         ///// </summary>
         ///// <returns>Retry policy.</returns>
-        //RetryHandlerPolicy<TResult> Build();
+        //RetryHandlerPolicy<TResult> SyncBuild();
 
         ///// <summary>
         ///// Builds <see cref="RetryPolicy{TResult}"/> for extensions to the builder.
         ///// </summary>
         ///// <returns>Retry policy.</returns>
-        //ISyncPolicy<TResult> BuildPolicy();
+        //ISyncPolicy<TResult> SyncBuildPolicy();
 
         /// <summary>
         /// Builds <see cref="AsyncRetryPolicy{TResult}"/>.
         /// </summary>
         /// <returns>Async retry policy.</returns>
-        AsyncRetryHandlerPolicy<TResult> BuildAsync();
+        AsyncRetryHandlerPolicy<TResult> AsyncBuild();
 
         /// <summary>
         /// Builds <see cref="AsyncRetryPolicy{TResult}"/> for extensions to the builder.
         /// </summary>
         /// <returns>Async retry policy.</returns>
-        IAsyncPolicy<TResult> BuildAsyncPolicy();
+        IAsyncPolicy<TResult> AsyncBuildPolicy();
 
         /// <summary>
         /// Retrives the instance of the retryhandler to accomodate extensions to the builder
@@ -487,7 +551,7 @@ public class RetryHandler
         public readonly RetryPolicyOptions PolicyOptions;
         public readonly RetryHandler PolicyBuilderBase;
 
-        internal Defaults(RetryHandler retryHandler, RetryPolicyOptions options)
+        public Defaults(RetryHandler retryHandler, RetryPolicyOptions options)
         {
             ArgumentNullException.ThrowIfNull(options);
             PolicyOptions = options;
@@ -499,7 +563,7 @@ public class RetryHandler
     {
         private readonly Defaults Defaults;
 
-        internal PolicyBuilderPolicy(Defaults options)
+        public PolicyBuilderPolicy(Defaults options)
         {
             ArgumentNullException.ThrowIfNull(options);
             Defaults = options;
@@ -522,7 +586,7 @@ public class RetryHandler
             public readonly PolicyBuilder policyBuilder;
             public readonly Defaults Defaults;
 
-            internal PolicyBuilderBase(PolicyBuilder policyBuilder, Defaults defaults)
+            public PolicyBuilderBase(PolicyBuilder policyBuilder, Defaults defaults)
             {
                 ArgumentNullException.ThrowIfNull(policyBuilder);
                 ArgumentNullException.ThrowIfNull(defaults);
@@ -545,7 +609,7 @@ public class RetryHandler
 
                     TimeSpan AdjustAttemptIfNeeded()
                     {
-                        if (!ctx.TryGetValue(BackupSkipProvidedIncrementKey, out var value) || value is not int)
+                        if (!ctx.TryGetValue(BackupSkipProvidedIncrementKey, out var value) || value is not int || attempt < 2)
                         {
                             ctx[BackupSkipProvidedIncrementKey] = value = 0;
                         }
@@ -591,7 +655,7 @@ public class RetryHandler
             public readonly PolicyBuilder<TResult> policyBuilder;
             public readonly Defaults Defaults;
 
-            internal PolicyBuilderBase(PolicyBuilder<TResult> policyBuilder, Defaults defaults)
+            public PolicyBuilderBase(PolicyBuilder<TResult> policyBuilder, Defaults defaults)
             {
                 ArgumentNullException.ThrowIfNull(policyBuilder);
                 ArgumentNullException.ThrowIfNull(defaults);
@@ -612,8 +676,8 @@ public class RetryHandler
                 => new PolicyBuilderWait<TResult>(this, maxRetryCount, (attempt, outcome, _1) => sleepDurationProvider(attempt, outcome), default);
 
             /// <inheritdoc/>
-            IPolicyBuilderWait<TResult> IPolicyBuilderBase<TResult>.WithExponentialBackoffWait(int retryCount, double exponentialBackOffExponent)
-                => new PolicyBuilderWait<TResult>(this, retryCount, default, PolicyBuilderBase.ExponentialSleepDurationProvider(exponentialBackOffExponent));
+            IPolicyBuilderWait<TResult> IPolicyBuilderBase<TResult>.WithExponentialBackoffWait(int maxRetryCount, double exponentialBackOffExponent)
+                => new PolicyBuilderWait<TResult>(this, maxRetryCount, default, PolicyBuilderBase.ExponentialSleepDurationProvider(exponentialBackOffExponent));
 
             /// <inheritdoc/>
             IPolicyBuilderWait<TResult> IPolicyBuilderBase<TResult>.WithExceptionBasedWaitWithRetryPolicyOptionsBackup(Func<int, Exception, TimeSpan?> sleepDurationProvider, bool backupSkipProvidedIncrements)
@@ -628,13 +692,13 @@ public class RetryHandler
         {
             public readonly PolicyBuilderBase policyBuilder;
             public readonly Func<int, Exception, Context, TimeSpan> sleepDurationProvider;
-            public readonly int retryCount;
+            public readonly int maxRetryCount;
 
-            internal PolicyBuilderWait(PolicyBuilderBase policyBuilder, int retryCount, Func<int, Exception, Context, TimeSpan> sleepDurationProvider)
+            public PolicyBuilderWait(PolicyBuilderBase policyBuilder, int maxRetryCount, Func<int, Exception, Context, TimeSpan> sleepDurationProvider)
             {
                 ArgumentNullException.ThrowIfNull(sleepDurationProvider);
                 this.policyBuilder = policyBuilder;
-                this.retryCount = retryCount;
+                this.maxRetryCount = maxRetryCount;
                 this.sleepDurationProvider = sleepDurationProvider;
             }
 
@@ -648,12 +712,12 @@ public class RetryHandler
             public readonly PolicyBuilderBase<TResult> policyBuilder;
             public readonly Func<int, Exception, Context, TimeSpan> sleepDurationProvider;
             public readonly Func<int, DelegateResult<TResult>, Context, TimeSpan> genericSleepDurationProvider;
-            public readonly int retryCount;
+            public readonly int maxRetryCount;
 
-            private static Func<int, DelegateResult<TResult>, Context, TimeSpan> PickSetProvider(Func<int, DelegateResult<TResult>, Context, TimeSpan> tResultProvider, Func<int, Exception, Context, TimeSpan> exceptionProvider)
-                => (attempt, outcome, ctx) => tResultProvider is null ? exceptionProvider(attempt, outcome.Exception, ctx) : tResultProvider(attempt, outcome, ctx);
+            private static Func<int, DelegateResult<TResult>, Context, TimeSpan> PickSleepDurationProvider(Func<int, DelegateResult<TResult>, Context, TimeSpan> tResultProvider, Func<int, Exception, Context, TimeSpan> exceptionProvider)
+                => tResultProvider is null ? (attempt, outcome, ctx) => exceptionProvider(attempt, outcome.Exception, ctx) : tResultProvider;
 
-            internal PolicyBuilderWait(PolicyBuilderBase<TResult> policyBuilder, int retryCount, Func<int, DelegateResult<TResult>, Context, TimeSpan> sleepDurationProviderResult, Func<int, Exception, Context, TimeSpan> sleepDurationProviderException)
+            public PolicyBuilderWait(PolicyBuilderBase<TResult> policyBuilder, int maxRetryCount, Func<int, DelegateResult<TResult>, Context, TimeSpan> sleepDurationProviderResult, Func<int, Exception, Context, TimeSpan> sleepDurationProviderException)
             {
                 if (sleepDurationProviderException is null && sleepDurationProviderResult is null)
                 {
@@ -661,14 +725,14 @@ public class RetryHandler
                 }
 
                 this.policyBuilder = policyBuilder;
-                this.retryCount = retryCount;
+                this.maxRetryCount = maxRetryCount;
                 this.sleepDurationProvider = sleepDurationProviderException;
                 this.genericSleepDurationProvider = sleepDurationProviderResult;
             }
 
             /// <inheritdoc/>
             IPolicyBuilderBuild<TResult> IPolicyBuilderWait<TResult>.SetOnRetryBehavior(ILogger logger, OnRetryHandler<TResult> onRetry, OnRetryHandlerAsync<TResult> onRetryAsync)
-                => new PolicyBuilderBuild<TResult>(this, PickSetProvider(genericSleepDurationProvider, sleepDurationProvider), logger, onRetry, onRetryAsync);
+                => new PolicyBuilderBuild<TResult>(this, PickSleepDurationProvider(genericSleepDurationProvider, sleepDurationProvider), logger, onRetry, onRetryAsync);
         }
 
         private readonly struct PolicyBuilderBuild : IPolicyBuilderBuild
@@ -682,7 +746,7 @@ public class RetryHandler
             /// <inheritdoc/>
             public RetryHandler PolicyBuilderBase { get; }
 
-            internal PolicyBuilderBuild(PolicyBuilderWait policyBuilder, Func<int, Exception, Context, TimeSpan> sleepDurationProvider, ILogger logger, OnRetryHandler onRetry, OnRetryHandlerAsync onRetryAsync)
+            public PolicyBuilderBuild(PolicyBuilderWait policyBuilder, Func<int, Exception, Context, TimeSpan> sleepDurationProvider, ILogger logger, OnRetryHandler onRetry, OnRetryHandlerAsync onRetryAsync)
             {
                 ArgumentNullException.ThrowIfNull(sleepDurationProvider);
                 this.policyBuilder = policyBuilder;
@@ -727,30 +791,30 @@ public class RetryHandler
             }
 
             /// <inheritdoc/>
-            ISyncPolicy IPolicyBuilderBuild.BuildPolicy()
+            ISyncPolicy IPolicyBuilderBuild.SyncBuildPolicy()
             {
                 var waitProvider = sleepDurationProvider;
                 var onRetryProvider = OnRetryHandler(logger, onRetryHandler);
 
-                return policyBuilder.policyBuilder.policyBuilder.WaitAndRetry(policyBuilder.retryCount, (attempt, ctx) => waitProvider(attempt, default, ctx), onRetryProvider);
+                return policyBuilder.policyBuilder.policyBuilder.WaitAndRetry(policyBuilder.maxRetryCount, (attempt, ctx) => waitProvider(attempt, default, ctx), onRetryProvider);
             }
 
             /// <inheritdoc/>
-            IAsyncPolicy IPolicyBuilderBuild.BuildAsyncPolicy()
+            IAsyncPolicy IPolicyBuilderBuild.AsyncBuildPolicy()
             {
                 var waitProvider = sleepDurationProvider;
                 var onRetryProvider = OnRetryHandlerAsync(logger, onRetryHandler, onRetryHandlerAsync);
 
-                return policyBuilder.policyBuilder.policyBuilder.WaitAndRetryAsync(policyBuilder.retryCount, waitProvider, onRetryProvider);
+                return policyBuilder.policyBuilder.policyBuilder.WaitAndRetryAsync(policyBuilder.maxRetryCount, waitProvider, onRetryProvider);
             }
 
             /// <inheritdoc/>
-            RetryHandlerPolicy IPolicyBuilderBuild.Build()
-                => new(((IPolicyBuilderBuild)this).BuildPolicy());
+            RetryHandlerPolicy IPolicyBuilderBuild.SyncBuild()
+                => new(((IPolicyBuilderBuild)this).SyncBuildPolicy());
 
             /// <inheritdoc/>
-            AsyncRetryHandlerPolicy IPolicyBuilderBuild.BuildAsync()
-                => new(((IPolicyBuilderBuild)this).BuildAsyncPolicy());
+            AsyncRetryHandlerPolicy IPolicyBuilderBuild.AsyncBuild()
+                => new(((IPolicyBuilderBuild)this).AsyncBuildPolicy());
         }
 
         private readonly struct PolicyBuilderBuild<TResult> : IPolicyBuilderBuild<TResult>
@@ -764,7 +828,7 @@ public class RetryHandler
             /// <inheritdoc/>
             public RetryHandler PolicyBuilderBase { get; }
 
-            internal PolicyBuilderBuild(PolicyBuilderWait<TResult> policyBuilder, Func<int, DelegateResult<TResult>, Context, TimeSpan> sleepDurationProvider, ILogger logger, OnRetryHandler<TResult> onRetry, OnRetryHandlerAsync<TResult> onRetryAsync)
+            public PolicyBuilderBuild(PolicyBuilderWait<TResult> policyBuilder, Func<int, DelegateResult<TResult>, Context, TimeSpan> sleepDurationProvider, ILogger logger, OnRetryHandler<TResult> onRetry, OnRetryHandlerAsync<TResult> onRetryAsync)
             {
                 ArgumentNullException.ThrowIfNull(sleepDurationProvider);
                 this.policyBuilder = policyBuilder;
@@ -803,16 +867,16 @@ public class RetryHandler
 
             private static Func<DelegateResult<TResult>, TimeSpan, int, Context, Task> OnRetryHandlerAsync(ILogger logger, OnRetryHandler<TResult> onRetryHandler, OnRetryHandlerAsync<TResult> onRetryHandlerAsync)
             {
-                var genericHandler = onRetryHandler ?? new((outcome, timeSpan, retryCount, correlationId, caller) => { });
-                var genericHandlerAsync = onRetryHandlerAsync ?? new((outcome, timespan, retryCount, correlationId, caller) =>
+                var handler = onRetryHandler ?? new((outcome, timeSpan, retryCount, correlationId, caller) => { });
+                var asyncHandler = onRetryHandlerAsync ?? new((outcome, timespan, retryCount, correlationId, caller) =>
                 {
-                        genericHandler(outcome, timespan, retryCount, correlationId, caller);
-                        return Task.CompletedTask;
+                    handler(outcome, timespan, retryCount, correlationId, caller);
+                    return Task.CompletedTask;
                 });
 
                 return async (outcome, timespan, retryCount, ctx) =>
                 {
-                    await genericHandlerAsync(outcome, timespan, retryCount, ctx.CorrelationId, ctx[CallerMemberNameKey] as string);
+                    await asyncHandler(outcome, timespan, retryCount, ctx.CorrelationId, ctx[CallerMemberNameKey] as string);
                     Logger(logger)(outcome, timespan, retryCount, ctx);
                 };
             }
@@ -827,12 +891,12 @@ public class RetryHandler
             //}
 
             /// <inheritdoc/>
-            IAsyncPolicy<TResult> IPolicyBuilderBuild<TResult>.BuildAsyncPolicy()
+            IAsyncPolicy<TResult> IPolicyBuilderBuild<TResult>.AsyncBuildPolicy()
             {
                 var waitProvider = sleepDurationProvider;
                 var onRetryProvider = OnRetryHandlerAsync(logger, onRetryHandler, onRetryHandlerAsync);
 
-                return policyBuilder.policyBuilder.policyBuilder.WaitAndRetryAsync(policyBuilder.retryCount, waitProvider, onRetryProvider);
+                return policyBuilder.policyBuilder.policyBuilder.WaitAndRetryAsync(policyBuilder.maxRetryCount, waitProvider, onRetryProvider);
             }
 
             ///// <inheritdoc/>
@@ -840,8 +904,8 @@ public class RetryHandler
             //    => new(((IPolicyBuilderBuild<TResult>)this).BuildPolicy());
 
             /// <inheritdoc/>
-            AsyncRetryHandlerPolicy<TResult> IPolicyBuilderBuild<TResult>.BuildAsync()
-                => new(((IPolicyBuilderBuild<TResult>)this).BuildAsyncPolicy());
+            AsyncRetryHandlerPolicy<TResult> IPolicyBuilderBuild<TResult>.AsyncBuild()
+                => new(((IPolicyBuilderBuild<TResult>)this).AsyncBuildPolicy());
         }
     }
     #endregion

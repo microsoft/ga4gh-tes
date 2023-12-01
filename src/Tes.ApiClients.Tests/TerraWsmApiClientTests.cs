@@ -29,7 +29,7 @@ namespace Tes.ApiClients.Tests
             var cache = new Mock<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
             cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(new Mock<Microsoft.Extensions.Caching.Memory.ICacheEntry>().Object);
             cacheAndRetryHandler.SetupGet(c => c.AppCache).Returns(cache.Object);
-            asyncResponseRetryPolicy = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock<HttpResponseMessage>(cacheAndRetryHandler, c => c.RetryDefaultHttpResponseMessagePolicyBuilder()));
+            asyncResponseRetryPolicy = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock<HttpResponseMessage>(cacheAndRetryHandler, c => c.DefaultRetryHttpResponseMessagePolicyBuilder()));
             terraWsmApiClient = new TerraWsmApiClient(TerraApiStubData.WsmApiHost, tokenCredential.Object,
                 cacheAndRetryHandler.Object, NullLogger<TerraWsmApiClient>.Instance);
         }
@@ -155,7 +155,7 @@ namespace Tes.ApiClients.Tests
         {
             var body = terraApiStubData.GetResourceQuotaApiResponseInJson();
 
-            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
+            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteWithRetryConversionAndCachingAsync(It.IsAny<string>(),
                     It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
                 .ReturnsAsync(body);
 
@@ -182,7 +182,7 @@ namespace Tes.ApiClients.Tests
         {
             var body = terraApiStubData.GetResourceApiResponseInJson();
 
-            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteWithRetryAndCachingAsync(It.IsAny<string>(),
+            asyncResponseRetryPolicy.Value.Setup(c => c.ExecuteWithRetryConversionAndCachingAsync(It.IsAny<string>(),
                     It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
                 .ReturnsAsync(body);
 
