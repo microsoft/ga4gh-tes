@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Azure.Containers.ContainerRegistry;
 using Azure.Core;
 using Docker.DotNet;
 using Docker.DotNet.Models;
@@ -22,7 +23,8 @@ public class DockerExecutorTests
     private Mock<TokenCredential> mockCredentials = null!;
     private Mock<IContainerOperations> mockContainerOperations = null!;
     private Mock<IImageOperations> mockImageOperations = null!;
-    private readonly AccessToken accessToken = new AccessToken("abcdef123", DateTimeOffset.UtcNow);
+    private readonly AccessToken accessToken = new("abcdef123", DateTimeOffset.UtcNow);
+    private const string AcrAccessToken = "321fedcba";
     private AuthConfig? captureAuthConfig;
 
     [TestInitialize]
@@ -48,6 +50,14 @@ public class DockerExecutorTests
         mockDockerClient.Setup(c => c.Images).Returns(mockImageOperations.Object);
         mockDockerClient.Setup(c => c.Containers).Returns(mockContainerOperations.Object);
 
+        var mockResponseManifest = new Mock<Azure.Response<GetManifestResult>>();
+        mockResponseManifest.Setup(c => c.Value)
+            .Returns((GetManifestResult)null!);
+
+        var mockContainerRegistryContentClient = new Mock<ContainerRegistryContentClient>();
+        mockContainerRegistryContentClient.Setup(c => c.GetManifestAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(mockResponseManifest.Object);
+
         mockStreamLogReader = new Mock<IStreamLogReader>();
         mockCredentialsManager = new Mock<CredentialsManager>();
         mockCredentials = new Mock<TokenCredential>();
@@ -55,11 +65,15 @@ public class DockerExecutorTests
             .Returns(mockCredentials.Object);
         mockCredentials.Setup(c => c.GetTokenAsync(It.IsAny<TokenRequestContext>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(accessToken);
+        mockCredentialsManager.Setup(c => c.GetContainerRegistryContentClient(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<RuntimeOptions>(), It.IsAny<Action<string>>()))
+            .Callback((Uri _, string _, RuntimeOptions _, Action<string> action) => action(new(accessToken.Token.AsEnumerable().Reverse().ToArray())))
+            .Returns(mockContainerRegistryContentClient.Object);
 
         dockerExecutor = new DockerExecutor(mockDockerClient.Object, mockStreamLogReader.Object, mockCredentialsManager.Object);
     }
 
     [TestMethod]
+    [TestCategory("RequiresRoot")]
     public async Task RunOnContainerAsync_AzureContainerRegistryImage_AuthInfoIsProvided()
     {
         var execOptions =
@@ -70,10 +84,11 @@ public class DockerExecutorTests
         Assert.IsNotNull(captureAuthConfig);
         Assert.AreEqual("https://test.azurecr.io", captureAuthConfig!.ServerAddress);
         Assert.AreEqual(DockerExecutor.ManagedIdentityUserName, captureAuthConfig.Username);
-        Assert.AreEqual(accessToken.Token, captureAuthConfig.Password);
+        Assert.AreEqual(AcrAccessToken, captureAuthConfig.Password);
     }
 
     [TestMethod]
+    [TestCategory("RequiresRoot")]
     public async Task RunOnContainerAsync_NotAzureContainerRegistryImage_AuthInfoNull()
     {
         var execOptions =

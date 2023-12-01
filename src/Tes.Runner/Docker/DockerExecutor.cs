@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Azure.Core;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
@@ -55,16 +54,17 @@ namespace Tes.Runner.Docker
 
         }
 
-        private async Task<AuthConfig?> TryGetAuthConfigForAzureContainerRegistryAsync(string? imageName, RuntimeOptions runtimeOptions)
+        private async Task<AuthConfig?> TryGetAuthConfigForAzureContainerRegistryAsync(string? image, string? tag, RuntimeOptions runtimeOptions)
         {
-            if (string.IsNullOrWhiteSpace(imageName))
+            if (string.IsNullOrWhiteSpace(image))
             {
                 return null;
             }
 
-            var registry = imageName.Split('/').FirstOrDefault();
+            var imageParts = image.Split('/', 2);
+            var registry = imageParts.FirstOrDefault();
 
-            if (registry == null)
+            if (registry is null)
             {
                 return null;
             }
@@ -74,21 +74,29 @@ namespace Tes.Runner.Docker
                 return null;
             }
 
-            var token = await tokenCredentialsManager.GetTokenCredential(runtimeOptions)
-                .GetTokenAsync(new TokenRequestContext(new[] { "https://management.azure.com/.default" }), CancellationToken.None);
+            var serverAddress = $"https://{registry}";
+            var imageName = imageParts.Last();
+            var acrAccessToken = string.Empty;
 
+            // Get the manifest to the image to be pulled. If authentication is needed, this will derive it from the mananaged identity using the pull-image scope.
+            var client = tokenCredentialsManager.GetContainerRegistryContentClient(new(serverAddress), imageName, runtimeOptions, token => acrAccessToken = token);
+            var manifest = (await client.GetManifestAsync(tag ?? "latest")).Value;
+
+            if (string.IsNullOrWhiteSpace(acrAccessToken))
+            {
+                return null; // image is available anonymously
+            }
 
             return new AuthConfig
             {
                 //https://learn.microsoft.com/en-us/azure/container-registry/container-registry-authentication?tabs=azure-cli#az-acr-login-with---expose-token
                 Username = ManagedIdentityUserName,
-                Password = token.Token,
-                ServerAddress = $"https://{registry}"
+                Password = acrAccessToken,
+                ServerAddress = serverAddress
             };
-
         }
 
-        private bool IsAzureContainerRegistry(string registry)
+        private static bool IsAzureContainerRegistry(string registry)
         {
             if (string.IsNullOrWhiteSpace(registry))
             {
@@ -104,7 +112,7 @@ namespace Tes.Runner.Docker
             ArgumentException.ThrowIfNullOrEmpty(executionOptions.ImageName);
             ArgumentNullException.ThrowIfNull(executionOptions.CommandsToExecute);
 
-            var authConfig = await TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.RuntimeOptions);
+            var authConfig = await TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.RuntimeOptions);
 
             await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag, authConfig);
 
