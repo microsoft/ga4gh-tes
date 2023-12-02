@@ -27,7 +27,7 @@ namespace TesApi.Web
 
         internal delegate ValueTask<BatchModels.Pool> ModelPoolFactory(string poolId, CancellationToken cancellationToken);
 
-        private (string PoolKey, string DisplayName) GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, ContainerConfiguration containerConfiguration, List<string> identities, CancellationToken cancellationToken)
+        private (string PoolKey, string DisplayName) GetPoolKey(TesTask tesTask, VirtualMachineInformation virtualMachineInformation, List<string> identities, CancellationToken cancellationToken)
         {
             var identityResourceIds = "<none>";
 
@@ -37,20 +37,13 @@ namespace TesApi.Web
             }
 
             var executorImage = tesTask.Executors.First().Image;
-            string containerImageNames = null;
-
-            if (containerConfiguration?.ContainerImageNames?.Any() ?? false)
-            {
-                containerImageNames = string.Join(';', containerConfiguration.ContainerImageNames);
-            }
 
             var label = string.IsNullOrWhiteSpace(batchPrefix) ? "<none>" : batchPrefix;
             var vmSize = virtualMachineInformation.VmSize ?? "<none>";
             var isPreemptable = virtualMachineInformation.LowPriority;
-            containerImageNames ??= "<none>";
 
             // Generate hash of everything that differentiates this group of pools
-            var displayName = $"{label}:{vmSize}:{isPreemptable}:{containerImageNames}:{identityResourceIds}";
+            var displayName = $"{label}:{vmSize}:{isPreemptable}:{identityResourceIds}";
             var hash = CommonUtilities.Base32.ConvertToBase32(SHA1.HashData(Encoding.UTF8.GetBytes(displayName))).TrimEnd('=').ToLowerInvariant(); // This becomes 32 chars
 
             // Build a PoolName that is of legal length, while exposing the most important metadata without requiring user to find DisplayName

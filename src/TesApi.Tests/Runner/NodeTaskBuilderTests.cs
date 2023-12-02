@@ -112,9 +112,10 @@ namespace TesApi.Tests.Runner
         }
 
         [TestMethod]
+        [DataRow("foo", "foo", "latest")]
         [DataRow("foo:bar", "foo", "bar")]
         [DataRow("foo:bar", "foo", "bar")]
-        [DataRow("broadinstitute/gatk@sha256:f80d33060cb4872d29b9a248b193d267f838b1a636c5a6120aaa45b08a1f09e9", "broadinstitute/gatk@sha256:f80d33060cb4872d29b9a248b193d267f838b1a636c5a6120aaa45b08a1f09e9", null)]
+        [DataRow("broadinstitute/gatk@sha256:f80d33060cb4872d29b9a248b193d267f838b1a636c5a6120aaa45b08a1f09e9", "broadinstitute/gatk", "sha256:f80d33060cb4872d29b9a248b193d267f838b1a636c5a6120aaa45b08a1f09e9")]
         public void WithContainerImageTest_ImageInfoIsProvided_ImageInfoIsSet(string imageInfo, string expectedImage, string expectedTag)
         {
             nodeTaskBuilder.WithContainerImage(imageInfo);
