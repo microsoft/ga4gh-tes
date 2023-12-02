@@ -41,7 +41,6 @@ namespace TesApi.Tests.TestServices
             Action<Mock<IBatchSkuInformationProvider>> batchSkuInformationProvider = default,
             Action<Mock<IBatchQuotaProvider>> batchQuotaProvider = default,
             (Func<IServiceProvider, System.Linq.Expressions.Expression<Func<ArmBatchQuotaProvider>>> expression, Action<Mock<ArmBatchQuotaProvider>> action) armBatchQuotaProvider = default, //added so config utils gets the arm implementation, to be removed once config utils is refactored.
-            Action<Mock<ContainerRegistryProvider>> containerRegistryProviderSetup = default,
             Action<Mock<IAllowedVmSizesService>> allowedVmSizesServiceSetup = default,
             Action<IServiceCollection> additionalActions = default)
         {
@@ -49,15 +48,12 @@ namespace TesApi.Tests.TestServices
             provider = new ServiceCollection()
                         .AddSingleton<ConfigurationUtils>()
                         .AddSingleton(_ => GetAllowedVmSizesServiceProviderProvider(allowedVmSizesServiceSetup).Object)
-                        .AddSingleton(_ => GetContainerRegisterProvider(containerRegistryProviderSetup).Object)
                         .AddSingleton(Configuration)
                         .AddSingleton(BindHelper<BatchAccountOptions>(BatchAccountOptions.SectionName))
                         .AddSingleton(BindHelper<RetryPolicyOptions>(RetryPolicyOptions.SectionName))
                         .AddSingleton(BindHelper<TerraOptions>(TerraOptions.SectionName))
-                        .AddSingleton(BindHelper<ContainerRegistryOptions>(ContainerRegistryOptions.SectionName))
                         .AddSingleton(BindHelper<BatchImageGeneration1Options>(BatchImageGeneration1Options.SectionName))
                         .AddSingleton(BindHelper<BatchImageGeneration2Options>(BatchImageGeneration2Options.SectionName))
-                        .AddSingleton(BindHelper<BatchImageNameOptions>(BatchImageNameOptions.SectionName))
                         .AddSingleton(BindHelper<BatchNodesOptions>(BatchNodesOptions.SectionName))
                         .AddSingleton(BindHelper<BatchSchedulingOptions>(BatchSchedulingOptions.SectionName))
                         .AddSingleton(BindHelper<StorageOptions>(StorageOptions.SectionName))
@@ -108,7 +104,6 @@ namespace TesApi.Tests.TestServices
         internal Mock<ArmBatchQuotaProvider> ArmBatchQuotaProvider { get; private set; } //added so config utils gets the arm implementation, to be removed once config utils is refactored.
         internal Mock<IRepository<TesTask>> TesTaskRepository { get; private set; }
         internal Mock<IStorageAccessProvider> StorageAccessProvider { get; private set; }
-        internal Mock<ContainerRegistryProvider> ContainerRegistryProvider { get; private set; }
         internal Mock<IAllowedVmSizesService> AllowedVmSizesServiceProvider { get; private set; }
 
         internal T GetT()
@@ -177,13 +172,6 @@ namespace TesApi.Tests.TestServices
             var proxy = new Mock<IAllowedVmSizesService>();
             action?.Invoke(proxy);
             return AllowedVmSizesServiceProvider = proxy;
-        }
-
-        private Mock<ContainerRegistryProvider> GetContainerRegisterProvider(Action<Mock<ContainerRegistryProvider>> action)
-        {
-            var proxy = new Mock<ContainerRegistryProvider>();
-            action?.Invoke(proxy);
-            return ContainerRegistryProvider = proxy;
         }
 
         private Mock<IBatchSkuInformationProvider> GetBatchSkuInformationProvider(Action<Mock<IBatchSkuInformationProvider>> action)
