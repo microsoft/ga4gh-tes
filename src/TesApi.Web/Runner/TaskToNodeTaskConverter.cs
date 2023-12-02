@@ -356,7 +356,7 @@ namespace TesApi.Web.Runner
                     cancellationToken);
 
             //return the URL without the SAS token, the runner will add it using the transformation strategy
-            await storageAccessProvider.UploadBlobAsync(new Uri(inputFileUrl), content, cancellationToken);
+            await storageAccessProvider.UploadBlobAsync(inputFileUrl, content, cancellationToken);
 
             var inputUrl = StorageUrlUtils.RemoveQueryStringFromUrl(inputFileUrl);
 
