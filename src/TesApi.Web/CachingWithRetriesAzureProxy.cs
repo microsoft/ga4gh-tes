@@ -199,11 +199,11 @@ namespace TesApi.Web
             var cacheKey = $"{nameof(CachingWithRetriesAzureProxy)}:{storageAccountName}";
             var storageAccountInfo = cachingAsyncRetry.AppCache.Get<StorageAccountInfo>(cacheKey);
 
-            if (storageAccountInfo is null )
+            if (storageAccountInfo is null)
             {
                 storageAccountInfo = await cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.GetStorageAccountInfoAsync(storageAccountName, ct), cancellationToken);
 
-                if (storageAccountInfo is not null )
+                if (storageAccountInfo is not null)
                 {
                     cachingAsyncRetry.AppCache.Set(cacheKey, storageAccountInfo, DateTimeOffset.MaxValue);
                 }
