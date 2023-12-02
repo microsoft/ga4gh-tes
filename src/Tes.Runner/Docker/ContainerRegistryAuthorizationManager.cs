@@ -28,9 +28,9 @@ namespace Tes.Runner.Docker
 
         public async Task<AuthConfig?> TryGetAuthConfigForAzureContainerRegistryAsync(string imageName, string? imageTag, RuntimeOptions runtimeOptions)
         {
-            if (!TryParseAzureContainerRegisterParts(imageName, out var imageParts))
+            if (!TryParseAzureContainerRegisteryParts(imageName, out var imageParts))
             {
-                logger.LogInformation($"The image is not in ACR. Registry: {imageName}");
+                logger.LogInformation(@"The image is not in ACR. Registry: {ImageName}", imageName);
                 return null;
             }
 
@@ -41,15 +41,15 @@ namespace Tes.Runner.Docker
 
             // Get the manifest to the image to be pulled. If authentication is needed, this will derive it from the managed identity using the pull-image scope.
             var client = CreateContainerRegistryContentClientWithAcquireAuthTokenPolicy(new Uri(registryAddress), repositoryName, runtimeOptions, token => acrAccessToken = token);
-            await client.GetManifestAsync(imageTag);
+            _ = await client.GetManifestAsync(imageTag);
 
             if (string.IsNullOrWhiteSpace(acrAccessToken))
             {
-                logger.LogInformation($"The ACR instance is public. No authorization is required. Registry: {registryAddress}");
+                logger.LogInformation(@"The ACR instance is public. No authorization is required. Registry: {RegistryAddress}", registryAddress);
                 return null; // image is available anonymously
             }
 
-            logger.LogInformation($"The ACR instance is private. An access token was successfully obtained. Registry: {registryAddress}");
+            logger.LogInformation(@"The ACR instance is private. An access token was successfully obtained. Registry: {RegistryAddress}", registryAddress);
 
             return new AuthConfig
             {
@@ -59,7 +59,7 @@ namespace Tes.Runner.Docker
             };
         }
 
-        public bool TryParseAzureContainerRegisterParts(string imageName, out string[] imageParts)
+        public static bool TryParseAzureContainerRegisteryParts(string imageName, out string[] imageParts)
         {
             imageParts = Array.Empty<string>();
 
@@ -71,17 +71,7 @@ namespace Tes.Runner.Docker
             imageParts = imageName.Split('/', 2);
             var registry = imageParts.FirstOrDefault();
 
-            if (registry is null)
-            {
-                return false;
-            }
-
-            if (registry.EndsWith(AzureContainerRegistryHostSuffix, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            return false;
+            return registry?.EndsWith(AzureContainerRegistryHostSuffix, StringComparison.OrdinalIgnoreCase) ?? false;
         }
 
 
@@ -96,15 +86,15 @@ namespace Tes.Runner.Docker
         private sealed class AcquireDockerAuthTokenPipelinePolicy : Azure.Core.Pipeline.HttpPipelinePolicy
         {
             private const string Prefix = "Bearer ";
-            private readonly Action<string> action;
+            private readonly Action<string> OnCapture;
 
-            public AcquireDockerAuthTokenPipelinePolicy(Action<string> action)
+            public AcquireDockerAuthTokenPipelinePolicy(Action<string> onCapture)
             {
-                ArgumentNullException.ThrowIfNull(action);
-                this.action = action;
+                ArgumentNullException.ThrowIfNull(onCapture);
+                this.OnCapture = onCapture;
             }
 
-            private void Process(HttpMessage message)
+            private void CaptureToken(HttpMessage message)
             {
                 /*
                  * This method is called after calling the rest of the pipeline in order to inspect the final state of the request used to obtain the response.
@@ -123,7 +113,7 @@ namespace Tes.Runner.Docker
                 {
                     if (message.Request.Headers.TryGetValue(HttpHeader.Names.Authorization, out var header) && header.StartsWith(Prefix))
                     {
-                        action(header[Prefix.Length..]);
+                        OnCapture(header[Prefix.Length..]);
                     }
                 }
             }
@@ -131,13 +121,13 @@ namespace Tes.Runner.Docker
             public override void Process(HttpMessage message, ReadOnlyMemory<Azure.Core.Pipeline.HttpPipelinePolicy> pipeline)
             {
                 ProcessNext(message, pipeline);
-                Process(message);
+                CaptureToken(message);
             }
 
             public override async ValueTask ProcessAsync(HttpMessage message, ReadOnlyMemory<Azure.Core.Pipeline.HttpPipelinePolicy> pipeline)
             {
                 await ProcessNextAsync(message, pipeline);
-                Process(message);
+                CaptureToken(message);
             }
         }
     }

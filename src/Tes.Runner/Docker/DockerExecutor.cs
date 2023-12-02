@@ -129,7 +129,9 @@ namespace Tes.Runner.Docker
                 return imageName;
             }
 
-            return $"{imageName}:{imageTag}";
+            // https://docs.docker.com/engine/reference/commandline/tag/#description
+            var separator = imageTag.Contains(':') ? "@" : ":";
+            return $"{imageName}{separator}{imageTag}";
         }
 
         private async Task PullImageWithRetriesAsync(string imageName, string? tag, AuthConfig? authConfig = null)

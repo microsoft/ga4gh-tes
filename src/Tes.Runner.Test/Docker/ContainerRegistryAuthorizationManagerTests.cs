@@ -45,7 +45,7 @@ public class ContainerRegistryAuthorizationManagerTests
     [DataRow("azure-cli", false, new[] { "azure-cli" })]
     public void TryParseAzureContainerRegisterParts_ImageNameProvided_ReturnsExpectedResult(string imageName, bool expectedResult, string[] expectedParts)
     {
-        var result = containerRegistryAuthorizationManager.TryParseAzureContainerRegisterParts(imageName, out var imageParts);
+        var result = ContainerRegistryAuthorizationManager.TryParseAzureContainerRegisteryParts(imageName, out var imageParts);
 
         Assert.AreEqual(expectedResult, result);
         CollectionAssert.AreEqual(expectedParts, imageParts);
