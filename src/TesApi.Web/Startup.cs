@@ -3,24 +3,24 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Azure.Core;
 using Azure.Identity;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json.Converters;
-using Newtonsoft.Json.Serialization;
 using Tes.ApiClients;
 using Tes.ApiClients.Options;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Filters;
+using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Configuration;
@@ -75,6 +75,7 @@ namespace TesApi.Web
                     .Configure<BatchSchedulingOptions>(configuration.GetSection(BatchSchedulingOptions.SectionName))
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
                     .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
+                    .ConfigureAuthenticationAndControllers(configuration)
 
                     .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()
@@ -83,14 +84,6 @@ namespace TesApi.Web
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)
-
-                    .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
-                        .AddNewtonsoftJson(opts =>
-                        {
-                            opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
-                            opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
-                        })
-                    .Services
 
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
                     .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
@@ -264,37 +257,51 @@ namespace TesApi.Web
         /// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         /// </summary>
         /// <param name="app">An Microsoft.AspNetCore.Builder.IApplicationBuilder for the app to configure.</param>
-        public void Configure(IApplicationBuilder app)
-            => app.UseRouting()
-                .UseEndpoints(endpoints =>
-                {
-                    endpoints.MapControllers();
-                })
-
-                .UseHttpsRedirection()
-
-                .UseDefaultFiles()
-                .UseStaticFiles()
-                .UseSwagger(c =>
-                {
-                    c.RouteTemplate = "swagger/{documentName}/openapi.json";
-                })
-                .UseSwaggerUI(c =>
-                {
-                    c.SwaggerEndpoint($"/swagger/{tesVersion}/openapi.json", "Task Execution Service");
-                })
-
-                .IfThenElse(hostingEnvironment.IsDevelopment(),
+        public void Configure(IApplicationBuilder app) => app
+            .UseForwardedHeaders(new ForwardedHeadersOptions
+            {
+                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+            })
+            .UseDefaultFiles()
+            .UseStaticFiles()
+            .UseSwagger(c =>
+            {
+                c.RouteTemplate = "swagger/{documentName}/openapi.json";
+            })
+            .UseSwaggerUI(c =>
+            {
+                c.SwaggerEndpoint($"/swagger/{tesVersion}/openapi.json", "Task Execution Service");
+            })
+            .UseRouting()
+            .UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+            })
+            .IfThenElse(app
+                .ApplicationServices
+                .GetRequiredService<IOptions<Microsoft.AspNetCore.Authentication.AuthenticationOptions>>()
+                ?.Value
+                ?.Schemes
+                ?.Any() == true,
                     s =>
                     {
-                        var r = s.UseDeveloperExceptionPage();
-                        logger.LogInformation("Configuring for Development environment");
+                        app.UseAuthentication();
+                        app.UseAuthorization();
                     },
-                    s =>
-                    {
-                        var r = s.UseHsts();
-                        logger.LogInformation("Configuring for Production environment");
-                    });
+                    s => { })
+            .IfThenElse(hostingEnvironment.IsDevelopment(),
+                s =>
+                {
+                    s.UseDeveloperExceptionPage();
+                    logger.LogInformation("Configuring for Development environment");
+                },
+                s =>
+                {
+                    s.UseHttpsRedirection();
+                    s.UseHsts();
+                    logger.LogInformation("Configuring for Production environment");
+                });
+
     }
 
     internal static class BooleanMethodSelectorExtensions

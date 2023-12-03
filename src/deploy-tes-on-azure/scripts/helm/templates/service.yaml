@@ -43,6 +43,7 @@ metadata:
     nginx.ingress.kubernetes.io/auth-type: basic 
     nginx.ingress.kubernetes.io/auth-secret: tes-basic-auth 
     nginx.ingress.kubernetes.io/auth-realm: "Authentication required"
+    nginx.ingress.kubernetes.io/proxy-set-headers: "X-Real-IP $remote_addr, X-Forwarded-For $proxy_add_x_forwarded_for, X-Forwarded-Proto $scheme"
 spec:
   ingressClassName: nginx
   tls:
