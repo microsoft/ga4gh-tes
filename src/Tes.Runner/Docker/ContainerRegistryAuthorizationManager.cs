@@ -14,7 +14,7 @@ namespace Tes.Runner.Docker
     public class ContainerRegistryAuthorizationManager
     {
         const string AzureContainerRegistryHostSuffix = ".azurecr.io";
-        public const string NullGuid = "00000000-0000-0000-0000-000000000000";
+        public static readonly string NullGuid = Guid.Empty.ToString("D");
 
         private readonly ILogger logger = PipelineLoggerFactory.Create<ContainerRegistryAuthorizationManager>();
         private readonly CredentialsManager tokenCredentialsManager;
@@ -30,7 +30,6 @@ namespace Tes.Runner.Docker
         {
             if (!TryParseAzureContainerRegisteryParts(imageName, out var imageParts))
             {
-                logger.LogInformation(@"The image is not in ACR. Registry: {ImageName}", imageName);
                 return null;
             }
 
@@ -45,11 +44,11 @@ namespace Tes.Runner.Docker
 
             if (string.IsNullOrWhiteSpace(acrAccessToken))
             {
-                logger.LogInformation(@"The ACR instance is public. No authorization is required. Registry: {RegistryAddress}", registryAddress);
+                logger.LogInformation(@"The ACR instance is public. No authorization is required. Registry: {RegistryEndpoint}", registryAddress);
                 return null; // image is available anonymously
             }
 
-            logger.LogInformation(@"The ACR instance is private. An access token was successfully obtained. Registry: {RegistryAddress}", registryAddress);
+            logger.LogInformation(@"The ACR instance is private. An access token was successfully obtained. Registry: {RegistryEndpoint}", registryAddress);
 
             return new AuthConfig
             {
