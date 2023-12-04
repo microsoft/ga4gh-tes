@@ -55,7 +55,6 @@ namespace TesApi.Web
         private const string NodeTaskRunnerFilename = "tes-runner";
         private const string NodeTaskRunnerMD5HashFilename = NodeTaskRunnerFilename + ".md5";
         private static readonly Regex queryStringRegex = GetQueryStringRegex();
-        private readonly string dockerInDockerImageName;
         private readonly string cromwellDrsLocalizerImageName;
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
@@ -73,7 +72,6 @@ namespace TesApi.Web
         private readonly string defaultStorageAccountName;
         private readonly string globalStartTaskPath;
         private readonly string globalManagedIdentity;
-        private readonly ContainerRegistryProvider containerRegistryProvider;
         private readonly string batchPrefix;
         private readonly IBatchPoolFactory _batchPoolFactory;
         private readonly IAllowedVmSizesService allowedVmSizesService;
@@ -89,14 +87,12 @@ namespace TesApi.Web
         /// <param name="batchGen2Options">Configuration of <see cref="BatchImageGeneration2Options"/></param>
         /// <param name="marthaOptions">Configuration of <see cref="MarthaOptions"/></param>
         /// <param name="storageOptions">Configuration of <see cref="StorageOptions"/></param>
-        /// <param name="batchImageNameOptions">Configuration of <see cref="BatchImageNameOptions"/></param>
         /// <param name="batchNodesOptions">Configuration of <see cref="BatchNodesOptions"/></param>
         /// <param name="batchSchedulingOptions">Configuration of <see cref="BatchSchedulingOptions"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         /// <param name="storageAccessProvider">Storage access provider <see cref="IStorageAccessProvider"/></param>
         /// <param name="quotaVerifier">Quota verifier <see cref="IBatchQuotaVerifier"/>></param>
         /// <param name="skuInformationProvider">Sku information provider <see cref="IBatchSkuInformationProvider"/></param>
-        /// <param name="containerRegistryProvider">Container registry information <see cref="ContainerRegistryProvider"/></param>
         /// <param name="poolFactory">Batch pool factory <see cref="IBatchPoolFactory"/></param>
         /// <param name="allowedVmSizesService">Service to get allowed vm sizes.</param>
         /// <param name="taskExecutionScriptingManager"><see cref="taskExecutionScriptingManager"/></param>
@@ -106,14 +102,12 @@ namespace TesApi.Web
             IOptions<Options.BatchImageGeneration2Options> batchGen2Options,
             IOptions<Options.MarthaOptions> marthaOptions,
             IOptions<Options.StorageOptions> storageOptions,
-            IOptions<Options.BatchImageNameOptions> batchImageNameOptions,
             IOptions<Options.BatchNodesOptions> batchNodesOptions,
             IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions,
             IAzureProxy azureProxy,
             IStorageAccessProvider storageAccessProvider,
             IBatchQuotaVerifier quotaVerifier,
             IBatchSkuInformationProvider skuInformationProvider,
-            ContainerRegistryProvider containerRegistryProvider,
             IBatchPoolFactory poolFactory,
             IAllowedVmSizesService allowedVmSizesService,
             TaskExecutionScriptingManager taskExecutionScriptingManager)
@@ -123,7 +117,6 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(quotaVerifier);
             ArgumentNullException.ThrowIfNull(skuInformationProvider);
-            ArgumentNullException.ThrowIfNull(containerRegistryProvider);
             ArgumentNullException.ThrowIfNull(poolFactory);
             ArgumentNullException.ThrowIfNull(taskExecutionScriptingManager);
 
@@ -132,12 +125,9 @@ namespace TesApi.Web
             this.storageAccessProvider = storageAccessProvider;
             this.quotaVerifier = quotaVerifier;
             this.skuInformationProvider = skuInformationProvider;
-            this.containerRegistryProvider = containerRegistryProvider;
 
             this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
             this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
-            this.dockerInDockerImageName = batchImageNameOptions.Value.Docker;
-            if (string.IsNullOrWhiteSpace(this.dockerInDockerImageName)) { this.dockerInDockerImageName = Options.BatchImageNameOptions.DefaultDocker; }
             this.cromwellDrsLocalizerImageName = marthaOptions.Value.CromwellDrsLocalizer;
             if (string.IsNullOrWhiteSpace(this.cromwellDrsLocalizerImageName)) { this.cromwellDrsLocalizerImageName = Options.MarthaOptions.DefaultCromwellDrsLocalizer; }
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
@@ -518,8 +508,7 @@ namespace TesApi.Web
 
                 var virtualMachineInfo = await GetVmSizeAsync(tesTask, cancellationToken);
 
-                var containerMetadata = await GetContainerConfigurationIfNeededAsync(tesTask, cancellationToken);
-                (poolKey, var displayName) = enableBatchAutopool ? default : GetPoolKey(tesTask, virtualMachineInfo, containerMetadata.ContainerConfiguration, identities, cancellationToken);
+                (poolKey, var displayName) = enableBatchAutopool ? default : GetPoolKey(tesTask, virtualMachineInfo, identities, cancellationToken);
                 await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: enableBatchAutopool || !IsPoolAvailable(poolKey), needCoresUtilizationQuotaCheck: enableBatchAutopool, cancellationToken: cancellationToken);
 
                 var tesTaskLog = tesTask.AddTesTaskLog();
@@ -537,7 +526,6 @@ namespace TesApi.Web
                         autoscaled: false,
                         preemptable: virtualMachineInfo.LowPriority,
                         nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                        containerConfiguration: containerMetadata.ContainerConfiguration,
                         encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
                         cancellationToken: cancellationToken),
                     tesTaskId: tesTask.Id,
@@ -559,7 +547,6 @@ namespace TesApi.Web
                                 autoscaled: true,
                                 preemptable: virtualMachineInfo.LowPriority,
                                 nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                                containerConfiguration: containerMetadata.ContainerConfiguration,
                                 encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
                                 cancellationToken: ct)),
                         cancellationToken: cancellationToken)
@@ -1166,88 +1153,6 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Constructs an Azure Batch Container Configuration instance
-        /// </summary>
-        /// <param name="tesTask">The <see cref="TesTask"/> to schedule on Azure Batch</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        private async ValueTask<(ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic)> GetContainerConfigurationIfNeededAsync(TesTask tesTask, CancellationToken cancellationToken)
-        {
-            var drsImageNeeded = tesTask.Inputs?.Any(i => i?.Url?.StartsWith("drs://") ?? false) ?? false;
-            // TODO: Support for multiple executors. Cromwell has single executor per task.
-            var executorImage = tesTask.Executors.First().Image;
-
-            var dockerInDockerIsPublic = true;
-            var executorImageIsPublic = containerRegistryProvider.IsImagePublic(executorImage);
-            var cromwellDrsIsPublic = drsImageNeeded ? containerRegistryProvider.IsImagePublic(cromwellDrsLocalizerImageName) : true;
-
-            BatchModels.ContainerConfiguration result = default;
-
-            if (!executorImageIsPublic || !cromwellDrsIsPublic)
-            {
-                var neededImages = new List<string> { executorImage, dockerInDockerImageName };
-                if (drsImageNeeded)
-                {
-                    neededImages.Add(cromwellDrsLocalizerImageName);
-                }
-
-                // Download private images at node startup, since those cannot be downloaded in the main task that runs multiple containers.
-                // Doing this also requires that the main task runs inside a container, hence downloading the "docker" image (contains docker client) as well.
-                result = new BatchModels.ContainerConfiguration { ContainerImageNames = neededImages, ContainerRegistries = new List<BatchModels.ContainerRegistry>() };
-
-                if (!executorImageIsPublic)
-                {
-                    var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(executorImage, cancellationToken);
-                    if (containerRegistryInfo is not null)
-                    {
-                        result.ContainerRegistries.Add(new(
-                            userName: containerRegistryInfo.Username,
-                            registryServer: containerRegistryInfo.RegistryServer,
-                            password: containerRegistryInfo.Password));
-                    }
-                }
-
-                if (!cromwellDrsIsPublic)
-                {
-                    var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(cromwellDrsLocalizerImageName, cancellationToken);
-                    if (containerRegistryInfo is not null && !result.ContainerRegistries.Any(registry => registry.RegistryServer == containerRegistryInfo.RegistryServer))
-                    {
-                        result.ContainerRegistries.Add(new(
-                            userName: containerRegistryInfo.Username,
-                            registryServer: containerRegistryInfo.RegistryServer,
-                            password: containerRegistryInfo.Password));
-                    }
-                }
-
-                if (result.ContainerRegistries.Count != 0)
-                {
-                    var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(dockerInDockerImageName, cancellationToken);
-                    dockerInDockerIsPublic = containerRegistryInfo is null;
-                    if (containerRegistryInfo is not null && !result.ContainerRegistries.Any(registry => registry.RegistryServer == containerRegistryInfo.RegistryServer))
-                    {
-                        result.ContainerRegistries.Add(new(
-                            userName: containerRegistryInfo.Username,
-                            registryServer: containerRegistryInfo.RegistryServer,
-                            password: containerRegistryInfo.Password));
-                    }
-                }
-            }
-
-            return result is null || result.ContainerRegistries.Count == 0 ? (default, (true, true, true)) : (new()
-            {
-                ContainerImageNames = result.ContainerImageNames,
-                ContainerRegistries = result
-                                    .ContainerRegistries
-                                    .Select(r => new ContainerRegistry(
-                                        userName: r.UserName,
-                                        password: r.Password,
-                                        registryServer: r.RegistryServer,
-                                        identityReference: r.IdentityReference is null ? null : new() { ResourceId = r.IdentityReference.ResourceId }))
-                                    .ToList()
-            }, (executorImageIsPublic, dockerInDockerIsPublic, cromwellDrsIsPublic));
-        }
-
-        /// <summary>
         /// Constructs either an <see cref="AutoPoolSpecification"/> or a new pool in the batch account ready for a job to be attached.
         /// </summary>
         /// <param name="poolSpecification"></param>
@@ -1315,12 +1220,12 @@ namespace TesApi.Web
         /// <param name="autoscaled"></param>
         /// <param name="preemptable"></param>
         /// <param name="nodeInfo"></param>
-        /// <param name="containerConfiguration"></param>
         /// <param name="encryptionAtHostSupported">VM supports encryption at host.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// 
         /// <returns><see cref="PoolSpecification"/></returns>
         /// <remarks>We use the PoolSpecification for both the namespace of all the constituent parts and for the fact that it allows us to configure shared and autopools using the same code.</remarks>
-        private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, ContainerConfiguration containerConfiguration, bool encryptionAtHostSupported, CancellationToken cancellationToken)
+        private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, bool encryptionAtHostSupported, CancellationToken cancellationToken)
         {
             // Any changes to any properties set in this method will require corresponding changes to ConvertPoolSpecificationToModelsPool()
 
@@ -1330,10 +1235,7 @@ namespace TesApi.Web
                     nodeInfo.BatchImagePublisher,
                     nodeInfo.BatchImageSku,
                     nodeInfo.BatchImageVersion),
-                nodeAgentSkuId: nodeInfo.BatchNodeAgentSkuId)
-            {
-                ContainerConfiguration = containerConfiguration
-            };
+                nodeAgentSkuId: nodeInfo.BatchNodeAgentSkuId);
 
             if (encryptionAtHostSupported)
             {
@@ -1436,10 +1338,7 @@ namespace TesApi.Web
                 };
 
             static BatchModels.VirtualMachineConfiguration ConvertVirtualMachineConfiguration(VirtualMachineConfiguration virtualMachineConfiguration)
-                => virtualMachineConfiguration is null ? default : new(ConvertImageReference(virtualMachineConfiguration.ImageReference), virtualMachineConfiguration.NodeAgentSkuId, containerConfiguration: ConvertContainerConfiguration(virtualMachineConfiguration.ContainerConfiguration), diskEncryptionConfiguration: ConvertDiskEncryptionConfiguration(virtualMachineConfiguration.DiskEncryptionConfiguration));
-
-            static BatchModels.ContainerConfiguration ConvertContainerConfiguration(ContainerConfiguration containerConfiguration)
-                => containerConfiguration is null ? default : new(containerConfiguration.ContainerImageNames, containerConfiguration.ContainerRegistries?.Select(ConvertContainerRegistry).ToList());
+                => virtualMachineConfiguration is null ? default : new(ConvertImageReference(virtualMachineConfiguration.ImageReference), virtualMachineConfiguration.NodeAgentSkuId, diskEncryptionConfiguration: ConvertDiskEncryptionConfiguration(virtualMachineConfiguration.DiskEncryptionConfiguration));
 
             static BatchModels.StartTask ConvertStartTask(StartTask startTask)
                 => startTask is null ? default : new(startTask.CommandLine, startTask.ResourceFiles?.Select(ConvertResourceFile).ToList(), startTask.EnvironmentSettings?.Select(ConvertEnvironmentSetting).ToList(), ConvertUserIdentity(startTask.UserIdentity), startTask.MaxTaskRetryCount, startTask.WaitForSuccess, ConvertTaskContainerSettings(startTask.ContainerSettings));
@@ -1451,10 +1350,7 @@ namespace TesApi.Web
                 => autoUserSpecification is null ? default : new((BatchModels.AutoUserScope?)autoUserSpecification.Scope, (BatchModels.ElevationLevel?)autoUserSpecification.ElevationLevel);
 
             static BatchModels.TaskContainerSettings ConvertTaskContainerSettings(TaskContainerSettings containerSettings)
-                => containerSettings is null ? default : new(containerSettings.ImageName, containerSettings.ContainerRunOptions, ConvertContainerRegistry(containerSettings.Registry), (BatchModels.ContainerWorkingDirectory?)containerSettings.WorkingDirectory);
-
-            static BatchModels.ContainerRegistry ConvertContainerRegistry(ContainerRegistry containerRegistry)
-                => containerRegistry is null ? default : new(containerRegistry.UserName, containerRegistry.Password, containerRegistry.RegistryServer, ConvertComputeNodeIdentityReference(containerRegistry.IdentityReference));
+                => containerSettings is null ? default : new(containerSettings.ImageName, containerRunOptions: containerSettings.ContainerRunOptions, workingDirectory: (BatchModels.ContainerWorkingDirectory?)containerSettings.WorkingDirectory);
 
             static BatchModels.ResourceFile ConvertResourceFile(ResourceFile resourceFile)
                 => resourceFile is null ? default : new(resourceFile.AutoStorageContainerName, resourceFile.StorageContainerUrl, resourceFile.HttpUrl, resourceFile.BlobPrefix, resourceFile.FilePath, resourceFile.FileMode, ConvertComputeNodeIdentityReference(resourceFile.IdentityReference));
