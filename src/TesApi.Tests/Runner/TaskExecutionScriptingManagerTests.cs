@@ -29,7 +29,7 @@ namespace TesApi.Tests.Runner
         private Mock<IStorageAccessProvider> storageAccessProviderMock;
         private Mock<BatchNodeScriptBuilder> batchNodeScriptBuilderMock;
         private const string WgetOptions = "--https-only --no-verbose --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue";
-        private const string AssetUrl = "http://foo.bar/bar";
+        private static readonly Uri AssetUrl = new("http://foo.bar/bar");
         private TesTask tesTask;
         private NodeTask nodeTask;
 
@@ -67,7 +67,7 @@ namespace TesApi.Tests.Runner
             var scriptName = "batch_script";
             var scriptUrl = $"https://foo.bar/{scriptName}";
             var nodeTaskUrl = $"https://foo.bar/{scriptName}";
-            var scriptAssets = new BatchScriptAssetsInfo(scriptUrl, nodeTaskUrl, scriptName);
+            var scriptAssets = new BatchScriptAssetsInfo(new(scriptUrl), new(nodeTaskUrl), scriptName);
 
             var expectedCommand = $"/bin/bash -c \"wget {WgetOptions} -O ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} '{scriptUrl}' && chmod +x ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} && ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName}\"";
 

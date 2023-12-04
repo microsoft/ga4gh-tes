@@ -371,7 +371,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken)
         {
-            var blobUri = new Uri(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken));
+            var blobUri = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
             var blobProperties = await azureProxy.GetBlobPropertiesAsync(blobUri, cancellationToken);
             if (!(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, $"scripts/{NodeTaskRunnerMD5HashFilename}"), cancellationToken)).Trim().Equals(blobProperties?.ContentMD5, StringComparison.OrdinalIgnoreCase))
             {
@@ -1006,10 +1006,11 @@ namespace TesApi.Web
 
             var executionDirectoryUri = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectoryUrl,
                 cancellationToken, getContainerSas: true);
+
             if (executionDirectoryUri is not null)
             {
                 var blobsInExecutionDirectory =
-                    (await azureProxy.ListBlobsAsync(new Uri(executionDirectoryUri), cancellationToken)).ToList();
+                    (await azureProxy.ListBlobsAsync(executionDirectoryUri, cancellationToken)).ToList();
                 var scriptBlob =
                     blobsInExecutionDirectory.FirstOrDefault(b => b.Name.EndsWith($"/{CromwellScriptFileName}"));
                 var commandScript =
@@ -1033,15 +1034,14 @@ namespace TesApi.Web
                         .SelectAwait(async b => new TesInput
                         {
                             Path = b.Path,
-                            Url = await storageAccessProvider.MapLocalPathToSasUrlAsync(b.Uri.AbsoluteUri,
-                                cancellationToken, getContainerSas: true),
+                            Url = (await storageAccessProvider.MapLocalPathToSasUrlAsync(b.Uri.AbsoluteUri,
+                                cancellationToken, getContainerSas: true)).AbsoluteUri,
                             Name = Path.GetFileName(b.Path),
                             Type = TesFileType.FILEEnum
                         })
                         .ToListAsync(cancellationToken);
                 }
             }
-
 
             return additionalInputFiles;
         }
@@ -1095,7 +1095,7 @@ namespace TesApi.Web
 
             if (startTaskSasUrl is not null)
             {
-                if (!await azureProxy.BlobExistsAsync(new Uri(startTaskSasUrl), cancellationToken))
+                if (!await azureProxy.BlobExistsAsync(startTaskSasUrl, cancellationToken))
                 {
                     startTaskSasUrl = default;
                     globalStartTaskConfigured = false;
@@ -1132,7 +1132,7 @@ namespace TesApi.Web
 
                 if (globalStartTaskConfigured)
                 {
-                    startTask.CommandLine = $"({startTask.CommandLine} && {CreateWgetDownloadCommand(startTaskSasUrl, StartTaskScriptFilename, setExecutable: true)}) && ./{StartTaskScriptFilename}";
+                    startTask.CommandLine = $"({startTask.CommandLine} && {CreateWgetDownloadCommand(startTaskSasUrl.AbsoluteUri, StartTaskScriptFilename, setExecutable: true)}) && ./{StartTaskScriptFilename}";
                 }
 
                 return startTask;
@@ -1143,7 +1143,7 @@ namespace TesApi.Web
                 {
                     CommandLine = $"./{StartTaskScriptFilename}",
                     UserIdentity = new UserIdentity(new AutoUserSpecification(elevationLevel: ElevationLevel.Admin, scope: AutoUserScope.Pool)),
-                    ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(startTaskSasUrl, StartTaskScriptFilename) }
+                    ResourceFiles = new List<ResourceFile> { ResourceFile.FromUrl(startTaskSasUrl.AbsoluteUri, StartTaskScriptFilename) }
                 };
             }
             else

@@ -17,7 +17,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetStorageAccountKeyAsync_UsesCache()
         {
-            var storageAccountInfo = new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount/", SubscriptionId = "SubId" };
+            var storageAccountInfo = new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = new("https://defaultstorageaccount/"), SubscriptionId = "SubId" };
             var storageAccountKey = "key";
             using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
             {
@@ -37,7 +37,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task GetStorageAccountInfoAsync_UsesCache()
         {
-            var storageAccountInfo = new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount/", SubscriptionId = "SubId" };
+            var storageAccountInfo = new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = new("https://defaultstorageaccount/"), SubscriptionId = "SubId" };
             using var serviceProvider = new TestServices.TestServiceProvider<CachingWithRetriesAzureProxy>(azureProxy: a =>
             {
                 PrepareAzureProxy(a);
@@ -64,7 +64,7 @@ namespace TesApi.Tests
             var cachingAzureProxy = serviceProvider.GetT();
             var info1 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount", System.Threading.CancellationToken.None);
 
-            var storageAccountInfo = new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount/", SubscriptionId = "SubId" };
+            var storageAccountInfo = new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = new("https://defaultstorageaccount/"), SubscriptionId = "SubId" };
             serviceProvider.AzureProxy.Setup(a => a.GetStorageAccountInfoAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).Returns(Task.FromResult(storageAccountInfo));
             var info2 = await cachingAzureProxy.GetStorageAccountInfoAsync("defaultstorageaccount", System.Threading.CancellationToken.None);
 
