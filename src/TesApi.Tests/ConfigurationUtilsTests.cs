@@ -100,7 +100,7 @@ namespace TesApi.Tests
             var storageAccountInfos = new Dictionary<string, StorageAccountInfo> {
                 {
                     "defaultstorageaccount",
-                    new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount.blob.core.windows.net/", SubscriptionId = "SubId" }
+                    new StorageAccountInfo { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = new("https://defaultstorageaccount.blob.core.windows.net/"), SubscriptionId = "SubId" }
                 }
              };
 

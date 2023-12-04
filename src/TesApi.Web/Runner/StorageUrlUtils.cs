@@ -104,11 +104,10 @@ namespace TesApi.Web.Runner
         /// <summary>
         /// Removes the query string from a URL
         /// </summary>
-        /// <param name="url"></param>
+        /// <param name="uri"></param>
         /// <returns></returns>
-        public static string RemoveQueryStringFromUrl(string url)
+        public static string RemoveQueryStringFromUrl(Uri uri)
         {
-            var uri = new Uri(url);
             return uri.GetLeftPart(UriPartial.Path);
         }
 

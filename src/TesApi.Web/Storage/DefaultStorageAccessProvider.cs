@@ -62,9 +62,7 @@ namespace TesApi.Web.Storage
         /// <inheritdoc />
         public override async Task<bool> IsPublicHttpUrlAsync(string uriString, CancellationToken cancellationToken)
         {
-            var isHttpUrl = TryParseHttpUrlFromInput(uriString, out var uri);
-
-            if (!isHttpUrl)
+            if (!TryParseHttpUrlFromInput(uriString, out var uri))
             {
                 return false;
             }
@@ -91,7 +89,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false)
+        public override async Task<Uri> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false)
         {
             // TODO: Optional: If path is /container/... where container matches the name of the container in the default storage account, prepend the account name to the path.
             // This would allow the user to omit the account name for files stored in the default storage account
@@ -111,21 +109,21 @@ namespace TesApi.Web.Storage
 
             if (TryGetExternalStorageAccountInfo(pathSegments.AccountName, pathSegments.ContainerName, out var externalStorageAccountInfo))
             {
-                return new StorageAccountUrlSegments(externalStorageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName, externalStorageAccountInfo.SasToken).ToUriString();
+                return new StorageAccountUrlSegments(externalStorageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName, externalStorageAccountInfo.SasToken).ToUri();
             }
             else
             {
-                return (await AddSasTokenAsync(pathSegments, cancellationToken, sasTokenDuration, getContainerSas, path))?.ToUriString();
+                return (await AddSasTokenAsync(pathSegments, cancellationToken, sasTokenDuration, getContainerSas, path))?.ToUri();
             }
         }
 
         /// <summary>
         /// Generates SAS token for both blobs and containers.
         /// </summary>
-        /// <param name="pathSegments"></param>
+        /// <param name="pathSegments">Represents segments of Azure Blob Storage URL.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="sasTokenDuration">Duration SAS should be valid.</param>
-        /// <param name="getContainerSas">Get the container SAS even if path is longer than two parts</param>
+        /// <param name="getContainerSas">Get the container SAS even if path is longer than two parts.</param>
         /// <param name="path">The file path to convert. Two-part path is treated as container path. Paths with three or more parts are treated as blobs.</param>
         /// <returns></returns>
         private async Task<StorageAccountUrlSegments> AddSasTokenAsync(StorageAccountUrlSegments pathSegments, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false, string path = default)
@@ -170,13 +168,13 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken)
+        public override async Task<Uri> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken)
         {
-            var pathSegments = StorageAccountUrlSegments.Create(GetInternalTesBlobUrlWithoutSasToken(blobPath));
+            var pathSegments = StorageAccountUrlSegments.Create(GetInternalTesBlobUrlWithoutSasToken(blobPath).AbsoluteUri);
 
             var resultPathSegments = await AddSasTokenAsync(pathSegments, cancellationToken, getContainerSas: true);
 
-            return resultPathSegments.ToUriString();
+            return resultPathSegments.ToUri();
         }
 
 
@@ -186,7 +184,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override string GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath)
+        public override Uri GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath)
         {
             var normalizedBlobPath = NormalizedBlobPath(blobPath);
             var blobPathWithPrefix = $"{TesExecutionsPathPrefix}/{task.Id}{normalizedBlobPath}";
@@ -205,30 +203,30 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new Uri($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net/{blobPathWithPrefix.TrimStart('/')}"));
+            var builder = new BlobUriBuilder(new($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net/{blobPathWithPrefix.TrimStart('/')}"));
 
-            return builder.ToUri().ToString();
+            return builder.ToUri();
         }
 
         /// <inheritdoc />
-        public override string GetInternalTesBlobUrlWithoutSasToken(string blobPath)
+        public override Uri GetInternalTesBlobUrlWithoutSasToken(string blobPath)
         {
             var normalizedBlobPath = NormalizedBlobPath(blobPath);
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new Uri($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net{TesExecutionsPathPrefix}{normalizedBlobPath}"));
+            var builder = new BlobUriBuilder(new($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net{TesExecutionsPathPrefix}{normalizedBlobPath}"));
 
-            return builder.ToUri().ToString();
+            return builder.ToUri();
         }
 
         /// <inheritdoc />
-        public override async Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken)
+        public override async Task<Uri> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken)
         {
-            var pathSegments = StorageAccountUrlSegments.Create(GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath));
+            var pathSegments = StorageAccountUrlSegments.Create(GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath).AbsoluteUri);
 
             var resultPathSegments = await AddSasTokenAsync(pathSegments, cancellationToken, getContainerSas: true);
 
-            return resultPathSegments.ToUriString();
+            return resultPathSegments.ToUri();
         }
 
         private async Task<bool> TryGetStorageAccountInfoAsync(string accountName, CancellationToken cancellationToken, Action<StorageAccountInfo> onSuccess = null)
