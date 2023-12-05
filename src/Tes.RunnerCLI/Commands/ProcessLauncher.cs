@@ -4,7 +4,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
-using Tes.Runner.Authentication;
+using Tes.Runner.Exceptions;
 using Tes.Runner.Logs;
 using Tes.Runner.Transfer;
 
