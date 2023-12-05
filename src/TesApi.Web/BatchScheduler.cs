@@ -62,7 +62,6 @@ namespace TesApi.Web
         private const string NodeTaskRunnerFilename = "tes-runner";
         private const string NodeTaskRunnerMD5HashFilename = NodeTaskRunnerFilename + ".md5";
         private static readonly Regex queryStringRegex = GetQueryStringRegex();
-        private readonly string dockerInDockerImageName;
         private readonly string cromwellDrsLocalizerImageName;
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
@@ -79,7 +78,6 @@ namespace TesApi.Web
         private readonly string defaultStorageAccountName;
         private readonly string globalStartTaskPath;
         private readonly string globalManagedIdentity;
-        private readonly ContainerRegistryProvider containerRegistryProvider;
         private readonly string batchPrefix;
         private readonly Func<IBatchPool> batchPoolFactory;
         private readonly IAllowedVmSizesService allowedVmSizesService;
@@ -93,14 +91,12 @@ namespace TesApi.Web
         /// <param name="batchGen2Options">Configuration of <see cref="Options.BatchImageGeneration2Options"/>.</param>
         /// <param name="marthaOptions">Configuration of <see cref="Options.MarthaOptions"/>.</param>
         /// <param name="storageOptions">Configuration of <see cref="Options.StorageOptions"/>.</param>
-        /// <param name="batchImageNameOptions">Configuration of <see cref="Options.BatchImageNameOptions"/>.</param>
         /// <param name="batchNodesOptions">Configuration of <see cref="Options.BatchNodesOptions"/>.</param>
         /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/>.</param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/>.</param>
         /// <param name="storageAccessProvider">Storage access provider <see cref="IStorageAccessProvider"/>.</param>
         /// <param name="quotaVerifier">Quota verifier <see cref="IBatchQuotaVerifier"/>.</param>
         /// <param name="skuInformationProvider">Sku information provider <see cref="IBatchSkuInformationProvider"/>.</param>
-        /// <param name="containerRegistryProvider">Container registry information <see cref="ContainerRegistryProvider"/>.</param>
         /// <param name="poolFactory"><see cref="IBatchPool"/> factory.</param>
         /// <param name="allowedVmSizesService">Service to get allowed vm sizes.</param>
         /// <param name="taskExecutionScriptingManager"><see cref="TaskExecutionScriptingManager"/>.</param>
@@ -110,14 +106,12 @@ namespace TesApi.Web
             IOptions<Options.BatchImageGeneration2Options> batchGen2Options,
             IOptions<Options.MarthaOptions> marthaOptions,
             IOptions<Options.StorageOptions> storageOptions,
-            IOptions<Options.BatchImageNameOptions> batchImageNameOptions,
             IOptions<Options.BatchNodesOptions> batchNodesOptions,
             IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions,
             IAzureProxy azureProxy,
             IStorageAccessProvider storageAccessProvider,
             IBatchQuotaVerifier quotaVerifier,
             IBatchSkuInformationProvider skuInformationProvider,
-            ContainerRegistryProvider containerRegistryProvider,
             Func<IBatchPool> poolFactory,
             IAllowedVmSizesService allowedVmSizesService,
             TaskExecutionScriptingManager taskExecutionScriptingManager)
@@ -127,7 +121,6 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(quotaVerifier);
             ArgumentNullException.ThrowIfNull(skuInformationProvider);
-            ArgumentNullException.ThrowIfNull(containerRegistryProvider);
             ArgumentNullException.ThrowIfNull(poolFactory);
             ArgumentNullException.ThrowIfNull(taskExecutionScriptingManager);
 
@@ -136,12 +129,9 @@ namespace TesApi.Web
             this.storageAccessProvider = storageAccessProvider;
             this.quotaVerifier = quotaVerifier;
             this.skuInformationProvider = skuInformationProvider;
-            this.containerRegistryProvider = containerRegistryProvider;
 
             this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
             this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
-            this.dockerInDockerImageName = batchImageNameOptions.Value.Docker;
-            if (string.IsNullOrWhiteSpace(this.dockerInDockerImageName)) { this.dockerInDockerImageName = Options.BatchImageNameOptions.DefaultDocker; }
             this.cromwellDrsLocalizerImageName = marthaOptions.Value.CromwellDrsLocalizer;
             if (string.IsNullOrWhiteSpace(this.cromwellDrsLocalizerImageName)) { this.cromwellDrsLocalizerImageName = Options.MarthaOptions.DefaultCromwellDrsLocalizer; }
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
@@ -573,8 +563,7 @@ namespace TesApi.Web
         private static bool IsCromwellCommandScript(TesInput inputFile)
             => (inputFile.Name?.Equals("commandScript") ?? false) && (inputFile.Description?.EndsWith(".commandScript") ?? false) && inputFile.Type == TesFileType.FILEEnum && inputFile.Path.EndsWith($"/{CromwellScriptFileName}");
 
-        private record struct ContainerMetadata(BatchModels.ContainerConfiguration ContainerConfiguration, (bool ExecutorImage, bool DockerInDockerImage, bool CromwellDrsImage) IsPublic);
-        private record struct QueuedTaskMetadata(TesTask TesTask, VirtualMachineInformation VirtualMachineInfo, ContainerMetadata ContainerMetadata, IEnumerable<string> Identities, string PoolDisplayName);
+        private record struct QueuedTaskMetadata(TesTask TesTask, VirtualMachineInformation VirtualMachineInfo, IEnumerable<string> Identities, string PoolDisplayName);
 
         /// <inheritdoc/>
         public async IAsyncEnumerable<RelatedTask<TesTask, bool>> ProcessQueuedTesTasksAsync(TesTask[] tesTasks, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
@@ -604,15 +593,14 @@ namespace TesApi.Web
                     try
                     {
                         var virtualMachineInfo = await GetVmSizeAsync(tesTask, token);
-                        var containerMetadata = await GetContainerConfigurationIfNeededAsync(tesTask, token);
-                        (poolKey, var displayName) = GetPoolKey(tesTask, virtualMachineInfo, containerMetadata.ContainerConfiguration, identities);
+                        (poolKey, var displayName) = GetPoolKey(tesTask, virtualMachineInfo, identities);
                         await quotaVerifier.CheckBatchAccountQuotasAsync(virtualMachineInfo, needPoolOrJobQuotaCheck: !IsPoolAvailable(poolKey), cancellationToken: token);
 
                         try
                         {
                             _ = tasksMetadataByPoolKey.AddOrUpdate(poolKey,
-                            _1 => ImmutableArray<QueuedTaskMetadata>.Empty.Add(new(tesTask, virtualMachineInfo, containerMetadata, identities, displayName)),
-                            (_1, list) => list.Add(new(tesTask, virtualMachineInfo, containerMetadata, identities, displayName)));
+                            _1 => ImmutableArray<QueuedTaskMetadata>.Empty.Add(new(tesTask, virtualMachineInfo, identities, displayName)),
+                            (_1, list) => list.Add(new(tesTask, virtualMachineInfo, identities, displayName)));
                         }
                         catch (OverflowException)
                         {
@@ -673,10 +661,11 @@ namespace TesApi.Web
             {
                 metadata = metadata.ToList();
                 var tasks = metadata.Select(m => m.TesTask);
-                var (_, virtualMachineInfo, containerMetadata, identities, displayName) = metadata.First();
+                var (_, virtualMachineInfo, identities, displayName) = metadata.First();
 
                 try
                 {
+                    var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2");
                     return (await GetOrAddPoolAsync(
                         key: poolKey,
                         isPreemptable: virtualMachineInfo.LowPriority,
@@ -688,8 +677,7 @@ namespace TesApi.Web
                             autoscaled: true,
                             preemptable: virtualMachineInfo.LowPriority,
                             initialTarget: neededPoolNodesByPoolKey[poolKey],
-                            nodeInfo: (virtualMachineInfo.HyperVGenerations?.Contains("V2")).GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                            containerConfiguration: containerMetadata.ContainerConfiguration,
+                            nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                             encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
                             cancellationToken: ct),
                         cancellationToken: cancellationToken)).Id;
@@ -1093,73 +1081,6 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Constructs an Azure Batch Container Configuration instance
-        /// </summary>
-        /// <param name="tesTask">The <see cref="TesTask"/> to schedule on Azure Batch</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        // TODO: remove this as soon as the node runner can authenticate to container registries
-        private async ValueTask<ContainerMetadata> GetContainerConfigurationIfNeededAsync(TesTask tesTask, CancellationToken cancellationToken)
-        {
-            var drsImageNeeded = tesTask.Inputs?.Any(i => i?.Url?.StartsWith("drs://") ?? false) ?? false;
-            // TODO: Support for multiple executors. Cromwell has single executor per task.
-            var executorImage = tesTask.Executors.First().Image;
-
-            var dockerInDockerIsPublic = true;
-            var executorImageIsPublic = containerRegistryProvider.IsImagePublic(executorImage);
-            var cromwellDrsIsPublic = !drsImageNeeded || containerRegistryProvider.IsImagePublic(cromwellDrsLocalizerImageName);
-
-            BatchModels.ContainerConfiguration result = default;
-
-            if (!executorImageIsPublic || !cromwellDrsIsPublic)
-            {
-                var neededImages = new List<string> { executorImage, dockerInDockerImageName };
-                if (drsImageNeeded)
-                {
-                    neededImages.Add(cromwellDrsLocalizerImageName);
-                }
-
-                // Download private images at node startup, since those cannot be downloaded in the main task that runs multiple containers.
-                // Doing this also requires that the main task runs inside a container, hence downloading the "docker" image (contains docker client) as well.
-                result = new BatchModels.ContainerConfiguration { ContainerImageNames = neededImages, ContainerRegistries = new List<BatchModels.ContainerRegistry>() };
-
-                if (!executorImageIsPublic)
-                {
-                    _ = await AddRegistryIfNeeded(executorImage);
-                }
-
-                if (!cromwellDrsIsPublic)
-                {
-                    _ = await AddRegistryIfNeeded(cromwellDrsLocalizerImageName);
-                }
-
-                if (result.ContainerRegistries.Count != 0)
-                {
-                    dockerInDockerIsPublic = await AddRegistryIfNeeded(dockerInDockerImageName);
-                }
-            }
-
-            return result is null || result.ContainerRegistries.Count == 0 ? default : new(result, (executorImageIsPublic, dockerInDockerIsPublic, cromwellDrsIsPublic));
-
-            async ValueTask<bool> AddRegistryIfNeeded(string imageName)
-            {
-                var containerRegistryInfo = await containerRegistryProvider.GetContainerRegistryInfoAsync(imageName, cancellationToken);
-
-                if (containerRegistryInfo is not null && !result.ContainerRegistries.Any(registry => registry.RegistryServer == containerRegistryInfo.RegistryServer))
-                {
-                    result.ContainerRegistries.Add(new(
-                        userName: containerRegistryInfo.Username,
-                        registryServer: containerRegistryInfo.RegistryServer,
-                        password: containerRegistryInfo.Password));
-
-                    return true;
-                }
-
-                return false;
-            }
-        }
-
-        /// <summary>
         /// Generate the BatchPoolIdentity object
         /// </summary>
         /// <param name="identities"></param>
@@ -1178,14 +1099,13 @@ namespace TesApi.Web
         /// <param name="preemptable"></param>
         /// <param name="initialTarget"></param>
         /// <param name="nodeInfo"></param>
-        /// <param name="containerConfiguration"></param>
         /// <param name="encryptionAtHostSupported">VM supports encryption at host.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The specification for the pool.</returns>
         /// <remarks>
         /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the likely exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
         /// </remarks>
-        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, bool autoscaled, bool preemptable, int initialTarget, BatchNodeInfo nodeInfo, BatchModels.ContainerConfiguration containerConfiguration, bool encryptionAtHostSupported, CancellationToken cancellationToken)
+        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, bool autoscaled, bool preemptable, int initialTarget, BatchNodeInfo nodeInfo, bool encryptionAtHostSupported, CancellationToken cancellationToken)
         {
             ValidateString(name, 64);
             ValidateString(displayName, 1024);
@@ -1196,10 +1116,7 @@ namespace TesApi.Web
                     offer: nodeInfo.BatchImageOffer,
                     sku: nodeInfo.BatchImageSku,
                     version: nodeInfo.BatchImageVersion),
-                nodeAgentSkuId: nodeInfo.BatchNodeAgentSkuId)
-            {
-                ContainerConfiguration = containerConfiguration
-            };
+                nodeAgentSkuId: nodeInfo.BatchNodeAgentSkuId);
 
             if (encryptionAtHostSupported)
             {

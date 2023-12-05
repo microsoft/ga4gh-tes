@@ -70,8 +70,6 @@ spec:
               value: {{ .Values.config.batchScheduling.poolRotationForcedDays | quote }}
             - name: BatchScheduling__Prefix
               value: {{ .Values.config.batchScheduling.prefix | quote }}
-            - name: NodeImages__Docker
-              value: {{ .Values.config.nodeImages.docker }}
             - name: BatchImageGen2__Offer
               value: {{ .Values.config.batchImageGen2.offer }}
             - name: BatchImageGen2__Publisher

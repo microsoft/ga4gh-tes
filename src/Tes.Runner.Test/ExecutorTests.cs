@@ -150,7 +150,7 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task ExecuteNodeContainerTaskAsync_SuccessfulExecution_ReturnsContainerResult()
         {
-            dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<string>>(), It.IsAny<List<string>>(), It.IsAny<string?>()))
+            dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<ExecutionOptions>()))
                 .ReturnsAsync(new ContainerExecutionResult("taskId", Error: string.Empty, ExitCode: 0));
 
             var result = await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object);
@@ -163,7 +163,7 @@ namespace Tes.Runner.Test
         public async Task ExecuteNodeContainerTaskAsync_ExecutionFails_ReturnsContainerResult()
         {
 
-            dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<string>>(), It.IsAny<List<string>>(), It.IsAny<string?>()))
+            dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<ExecutionOptions>()))
                 .ReturnsAsync(new ContainerExecutionResult("taskId", Error: "Error", ExitCode: 1));
 
             var result = await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object);
@@ -175,7 +175,7 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task ExecuteNodeContainerTaskAsync_SuccessfulExecution_StartAndSuccessEventsArePublished()
         {
-            dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<string>>(), It.IsAny<List<string>>(), It.IsAny<string?>()))
+            dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<ExecutionOptions>()))
                 .ReturnsAsync(new ContainerExecutionResult("taskId", Error: string.Empty, ExitCode: 0));
 
             await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object);
@@ -187,7 +187,7 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task ExecuteNodeContainerTaskAsync_ExecutionFails_StartAndFailureEventsArePublished()
         {
-            dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<string>>(), It.IsAny<List<string>>(), It.IsAny<string?>()))
+            dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<ExecutionOptions>()))
                 .ReturnsAsync(new ContainerExecutionResult("taskId", Error: "Error", ExitCode: 1));
 
             await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object);
@@ -199,7 +199,7 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task ExecuteNodeContainerTaskAsync_ExecutionThrows_StartAndFailureEventsArePublished()
         {
-            dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<string>>(), It.IsAny<List<string>>(), It.IsAny<string?>()))
+            dockerExecutorMock.Setup(d => d.RunOnContainerAsync(It.IsAny<ExecutionOptions>()))
                 .ThrowsAsync(new Exception("Error"));
 
             await Assert.ThrowsExceptionAsync<Exception>(async () => await executor.ExecuteNodeContainerTaskAsync(dockerExecutorMock.Object));

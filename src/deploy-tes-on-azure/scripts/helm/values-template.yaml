@@ -19,8 +19,6 @@ config:
     usePreemptibleVmsOnly: RUNTIME_PARAMETER
     poolRotationForcedDays: "7"
     prefix: RUNTIME_PARAMETER
-  nodeImages:
-    docker: RUNTIME_PARAMETER
   batchImageGen2:
     offer: RUNTIME_PARAMETER
     publisher: RUNTIME_PARAMETER

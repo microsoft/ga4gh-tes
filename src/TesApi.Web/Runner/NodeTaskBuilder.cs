@@ -162,13 +162,15 @@ namespace TesApi.Web.Runner
             ArgumentException.ThrowIfNullOrEmpty(image);
 
             //check if the image name is a digest
-            if (image.Contains("@"))
+            if (image.Contains('@'))
             {
-                nodeTask.ImageName = image;
+                var splitByDigest = image.Split('@', 2);
+                nodeTask.ImageName = splitByDigest[0];
+                nodeTask.ImageTag = splitByDigest[1];
                 return this;
             }
 
-            var splitByTag = image.Split(':');
+            var splitByTag = image.Split(':', 2);
 
             nodeTask.ImageName = splitByTag[0];
             nodeTask.ImageTag = splitByTag.Length == 2 ? splitByTag[1] : defaultDockerImageTag;
