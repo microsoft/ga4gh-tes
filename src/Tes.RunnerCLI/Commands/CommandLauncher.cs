@@ -10,9 +10,6 @@ namespace Tes.RunnerCLI.Commands
     /// </summary>
     public class CommandLauncher
     {
-        public const int SuccessExitCode = 0;
-        public const int ErrorExitCode = 1;
-
         public static BlobPipelineOptions CreateBlobPipelineOptions(int blockSize, int writers, int readers,
             int bufferCapacity, string apiVersion)
         {
@@ -45,7 +42,7 @@ namespace Tes.RunnerCLI.Commands
         public static async Task LaunchTransferCommandAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
         {
             var processLauncher = await ProcessLauncher.CreateLauncherAsync(file, logNamePrefix: command);
-
+            
             var results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
 
             HandleResult(results, command);

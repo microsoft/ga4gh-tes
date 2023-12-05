@@ -16,7 +16,7 @@ namespace Tes.Runner.Authentication
         private readonly ILogger logger = PipelineLoggerFactory.Create<CredentialsManager>();
 
         private readonly RetryPolicy retryPolicy;
-        private const int MaxRetryCount = 5;
+        private const int MaxRetryCount = 7;
         private const int ExponentialBackOffExponent = 2;
 
         public CredentialsManager()
@@ -37,7 +37,14 @@ namespace Tes.Runner.Authentication
 
         public TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions)
         {
-            return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions));
+            try
+            {
+                return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions));
+            }
+            catch (CredentialUnavailableException)
+            {
+                throw new IdentityUnavailableException();
+            }
         }
         private TokenCredential GetTokenCredentialImpl(RuntimeOptions runtimeOptions)
         {

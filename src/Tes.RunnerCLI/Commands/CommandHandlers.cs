@@ -59,10 +59,10 @@ namespace Tes.RunnerCLI.Commands
             {
                 Logger.LogError(e, $"Failed to execute Node Task: {file.FullName}");
 
-                return CommandLauncher.ErrorExitCode;
+                return (int)ProcessExitCode.UncategorizedError;
             }
 
-            return CommandLauncher.SuccessExitCode;
+            return (int)ProcessExitCode.Success;
         }
         /// <summary>
         /// Executor (exec) command. Executes the executor operation as defined in the node task definition file.
@@ -174,13 +174,13 @@ namespace Tes.RunnerCLI.Commands
 
                 await transferOperation(executor);
 
-                return CommandLauncher.SuccessExitCode;
+                return (int)ProcessExitCode.Success;
             }
             catch (Exception e)
             {
                 Console.WriteLine($"Failed to perform transfer. Error: {e.Message} Operation: {transferOperation.Method.Name}");
                 Logger.LogError(e, $"Failed to perform transfer. Operation: {transferOperation}");
-                return CommandLauncher.ErrorExitCode;
+                return (int)ProcessExitCode.UncategorizedError;
             }
         }
     }

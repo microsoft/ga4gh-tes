@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
+using Tes.Runner.Authentication;
 using Tes.Runner.Logs;
 using Tes.Runner.Transfer;
 
@@ -96,9 +97,21 @@ namespace Tes.RunnerCLI.Commands
 
             var nodeTask = await NodeTaskUtils.DeserializeNodeTaskAsync(file.FullName);
 
-            var logPublisher = await LogPublisher.CreateStreamReaderLogPublisherAsync(nodeTask, logNamePrefix);
+            try
+            {
+                var logPublisher = await LogPublisher.CreateStreamReaderLogPublisherAsync(nodeTask, logNamePrefix);
+                return new ProcessLauncher(logReader: logPublisher);
+            }
+            catch (IdentityUnavailableException)
+            {
+                Exit(ProcessExitCode.IdentityUnavailable);
+                throw;
+            }
+        }
 
-            return new ProcessLauncher(logPublisher);
+        public static void Exit(ProcessExitCode exitCode)
+        {
+            Environment.Exit((int)exitCode);
         }
     }
 }
