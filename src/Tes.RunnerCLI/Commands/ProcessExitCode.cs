@@ -6,7 +6,7 @@ namespace Tes.RunnerCLI.Commands
     public enum ProcessExitCode
     {
         Success = 0,
-        UnspecifiedError = 10,
+        UncategorizedError = 10,
         IdentityUnavailable = 30,
 
         // TODO Implement all process exit codes
