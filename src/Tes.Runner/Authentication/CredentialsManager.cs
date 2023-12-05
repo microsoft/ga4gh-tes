@@ -6,6 +6,7 @@ using Azure.Identity;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
+using Tes.Runner.Exceptions;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
