@@ -19,7 +19,6 @@ namespace TesApi.Web.Storage
         /// </summary>
         public BlobSasPermissions DefaultContainerPermissions => BlobSasPermissions.Add | BlobSasPermissions.Create | BlobSasPermissions.List | BlobSasPermissions.Read | BlobSasPermissions.Write;
 
-
         /// <summary>
         /// SAS permissions previously given all blobs when container SAS was not requested.
         /// </summary>
@@ -40,27 +39,28 @@ namespace TesApi.Web.Storage
         /// </summary>
         public BlobSasPermissions BlobPermissionsWithWriteAndTag => BlobPermissionsWithWrite | BlobSasPermissions.Tag;
 
+
         /// <summary>
-        /// Retrieves file content
+        /// Retrieves blob content.
         /// </summary>
-        /// <param name="blobRelativePath">Path to the file in form of /storageaccountname/container/path</param>
+        /// <param name="blobRelativePath">Path to the blob in form of /storageaccountname/container/path.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The content of the file</returns>
         public Task<string> DownloadBlobAsync(string blobRelativePath, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Retrieves file content
+        /// Retrieves blob content.
         /// </summary>
-        /// <param name="blobAbsoluteUrl">Blob storage URL with a SAS token</param>
+        /// <param name="blobAbsoluteUrl">Blob storage URL with a SAS token.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>The content of the file</returns>
         public Task<string> DownloadBlobAsync(Uri blobAbsoluteUrl, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Updates the content of the file, creating the file if necessary
+        /// Updates the content of the blob, creating the blob if necessary.
         /// </summary>
-        /// <param name="blobRelativePath">Path to the file in form of /storageaccountname/container/path</param>
-        /// <param name="content">The new content</param>
+        /// <param name="blobRelativePath">Path to the blob in form of /storageaccountname/container/path.</param>
+        /// <param name="content">The new content.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public Task UploadBlobAsync(string blobRelativePath, string content, CancellationToken cancellationToken);
@@ -68,27 +68,27 @@ namespace TesApi.Web.Storage
         /// <summary>
         /// Uploads the content as Blob to the provided Blob URL
         /// </summary>
-        /// <param name="blobAbsoluteUrl">Absolute Blob Storage URL with a SAS token</param>
-        /// <param name="content">Blob content</param>
+        /// <param name="blobAbsoluteUrl">Absolute Blob Storage URL with a SAS token.</param>
+        /// <param name="content">Blob content.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public Task UploadBlobAsync(Uri blobAbsoluteUrl, string content, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Updates the content of the file, creating the file if necessary
+        /// Updates the content from the file, creating the blob if necessary.
         /// </summary>
-        /// <param name="blobRelativePath">Path to the file in form of /storageaccountname/container/path</param>
-        /// <param name="sourceLocalFilePath">Path to the local file to get the content from</param>
+        /// <param name="blobRelativePath">Path to the blob in form of /storageaccountname/container/path.</param>
+        /// <param name="sourceLocalFilePath">Path to the local file to get the content from.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Checks if the specified string represents a HTTP URL that is publicly accessible
+        /// Checks if the specified string represents a HTTP URL that is publicly accessible.
         /// </summary>
-        /// <param name="uriString">URI string</param>
+        /// <param name="uriString">URI string.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>True if the URL can be used as is, without adding SAS token to it</returns>
+        /// <returns>True if the URL can be used as is, without adding SAS token to it.</returns>
         public Task<bool> IsPublicHttpUrlAsync(string uriString, CancellationToken cancellationToken);
 
         /// <summary>
@@ -104,16 +104,16 @@ namespace TesApi.Web.Storage
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="sasTokenDuration">Duration SAS should be valid.</param>
         /// <returns>An Azure Block Blob or Container URL with SAS token</returns>
-        public Task<string> MapLocalPathToSasUrlAsync(string path, BlobSasPermissions sasPermissions, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default);
+        public Task<Uri> MapLocalPathToSasUrlAsync(string path, BlobSasPermissions sasPermissions, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default);
 
         /// <summary>
-        /// Returns an Azure Storage Blob URL with a SAS token for the specified blob path in the TES internal storage location
+        /// Returns an Azure Storage Blob URL with a SAS token for the specified blob path in the TES internal storage location.
         /// </summary>
         /// <param name="blobPath">A relative path within the blob storage space reserved for the TES server.</param>
         /// <param name="sasPermissions">Requested permissions to include in the SAS token.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>A blob storage URL with SAS token.</returns>
-        public Task<string> GetInternalTesBlobUrlAsync(string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken);
+        /// <returns>An Azure Block Blob or Container URL with SAS token</returns>
+        public Task<Uri> GetInternalTesBlobUrlAsync(string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken);
 
         /// <summary>
         /// Returns an Azure Storage Blob URL with a SAS token for the specified blob path in the TES task internal storage location.
@@ -122,22 +122,22 @@ namespace TesApi.Web.Storage
         /// <param name="blobPath">A relative path within the blob storage space reserved for the <paramref name="task"/>.</param>
         /// <param name="sasPermissions">Requested permissions to include in the SAS token.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>A blob storage URL with SAS token.</returns>
-        public Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken);
+        /// <returns>An Azure Block Blob storage URL with SAS token.</returns>
+        public Task<Uri> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken);
 
         /// <summary>
         /// Returns an Azure Storage Blob URL without a SAS token for the specified blob path in the TES task internal storage location.
         /// </summary>
         /// <param name="task">A <see cref="TesTask"/></param>
         /// <param name="blobPath">A relative path within the blob storage space reserved for the <paramref name="task"/>.</param>
-        /// <returns>A blob storage URL.</returns>
-        public string GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath);
+        /// <returns>An Azure Block Blob URL without SAS token in the area reserved for <paramref name="task"/>.</returns>
+        public Uri GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath);
 
         /// <summary>
         /// Returns an Azure Storage Blob URL without a SAS token for the specified blob path in the TES internal storage location.
         /// </summary>
         /// <param name="blobPath">A relative path within the blob storage space reserved for the TES server.</param>
-        /// <returns>A blob storage URL.</returns>
-        public string GetInternalTesBlobUrlWithoutSasToken(string blobPath);
+        /// <returns>An Azure Block Blob or Container URL without SAS token.</returns>
+        public Uri GetInternalTesBlobUrlWithoutSasToken(string blobPath);
     }
 }

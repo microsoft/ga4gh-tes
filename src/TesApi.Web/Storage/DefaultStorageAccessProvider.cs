@@ -59,9 +59,7 @@ namespace TesApi.Web.Storage
         /// <inheritdoc />
         public override async Task<bool> IsPublicHttpUrlAsync(string uriString, CancellationToken cancellationToken)
         {
-            var isHttpUrl = TryParseHttpUrlFromInput(uriString, out var uri);
-
-            if (!isHttpUrl)
+            if (!TryParseHttpUrlFromInput(uriString, out var uri))
             {
                 return false;
             }
@@ -88,7 +86,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> MapLocalPathToSasUrlAsync(string path, BlobSasPermissions sasPermissions, CancellationToken cancellationToken, TimeSpan? sasTokenDuration)
+        public override async Task<Uri> MapLocalPathToSasUrlAsync(string path, BlobSasPermissions sasPermissions, CancellationToken cancellationToken, TimeSpan? sasTokenDuration)
         {
             // TODO: Optional: If path is /container/... where container matches the name of the container in the default storage account, prepend the account name to the path.
             // This would allow the user to omit the account name for files stored in the default storage account
@@ -108,7 +106,7 @@ namespace TesApi.Web.Storage
 
             if (TryGetExternalStorageAccountInfo(pathSegments.AccountName, pathSegments.ContainerName, out var externalStorageAccountInfo))
             {
-                return new StorageAccountUrlSegments(externalStorageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName, externalStorageAccountInfo.SasToken).ToUriString();
+                return new StorageAccountUrlSegments(externalStorageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName, externalStorageAccountInfo.SasToken).ToUri();
             }
             else
             {
@@ -117,7 +115,7 @@ namespace TesApi.Web.Storage
                     var result = pathSegments.IsContainer
                         ? await AddSasTokenAsync(pathSegments, sasTokenDuration, ConvertSasPermissions(sasPermissions, nameof(sasPermissions)), path: path, cancellationToken: cancellationToken)
                         : await AddSasTokenAsync(pathSegments, sasTokenDuration, sasPermissions, path: path, cancellationToken: cancellationToken);
-                    return result.ToUriString();
+                    return result.ToUri();
                 }
                 catch
                 {
@@ -129,8 +127,8 @@ namespace TesApi.Web.Storage
         /// <summary>
         /// Generates SAS token for storage blobs.
         /// </summary>
-        /// <param name="pathSegments">Target of SAS token.</param>
-        /// <param name="sasTokenDuration">Length of time from now for which SAS token should remain valid.</param>
+        /// <param name="pathSegments">Represents segments of Azure Blob Storage URL.</param>
+        /// <param name="sasTokenDuration">Duration SAS should be valid.</param>
         /// <param name="blobPermissions">Requested permissions to be included in the returned token.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="path">Logging metadata for failures locating storage account.</param>
@@ -149,8 +147,8 @@ namespace TesApi.Web.Storage
         /// <summary>
         /// Generates SAS token for storage blob containers.
         /// </summary>
-        /// <param name="pathSegments">Target of SAS token.</param>
-        /// <param name="sasTokenDuration">Length of time from now for which SAS token should remain valid.</param>
+        /// <param name="pathSegments">Represents segments of Azure Blob Storage URL.</param>
+        /// <param name="sasTokenDuration">Duration SAS should be valid.</param>
         /// <param name="containerPermissions">Requested permissions to be included in the returned token.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="path">Logging metadata for failures locating storage account.</param>
@@ -169,11 +167,11 @@ namespace TesApi.Web.Storage
         /// <summary>
         /// Generates SAS token for both blobs and containers. Intended to be called from methods like <seealso cref="AddSasTokenAsync(StorageAccountUrlSegments, TimeSpan?, BlobSasPermissions, CancellationToken, string)"/> and <seealso cref="AddSasTokenAsync(StorageAccountUrlSegments, TimeSpan?, BlobContainerSasPermissions, CancellationToken, string)"/>.
         /// </summary>
-        /// <param name="pathSegments">Target of SAS token.</param>
-        /// <param name="sasTokenDuration">Length of time from now for which SAS token should remain valid.</param>
+        /// <param name="pathSegments">Represents segments of Azure Blob Storage URL.</param>
+        /// <param name="sasTokenDuration">Duration SAS should be valid.</param>
         /// <param name="createBuilder">A factory that generates a <see cref="BlobSasBuilder"/>. Receives the expiration time and the blobName, which should be set on the sas builder as appropriate.</param>
-        /// <param name="path">Logging metadata for failures locating storage account.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="path">Logging metadata for failures locating storage account.</param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
         private async Task<StorageAccountUrlSegments> AddSasTokenAsyncImpl(StorageAccountUrlSegments pathSegments, TimeSpan? sasTokenDuration, Func<DateTimeOffset, string, BlobSasBuilder> createBuilder, string path, CancellationToken cancellationToken)
@@ -208,14 +206,14 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken)
+        public override async Task<Uri> GetInternalTesBlobUrlAsync(string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken)
         {
-            var pathSegments = StorageAccountUrlSegments.Create(GetInternalTesBlobUrlWithoutSasToken(blobPath));
+            var pathSegments = StorageAccountUrlSegments.Create(GetInternalTesBlobUrlWithoutSasToken(blobPath).AbsoluteUri);
 
             var resultPathSegments = pathSegments.IsContainer
                 ? await AddSasTokenAsync(pathSegments, SasTokenDuration, ConvertSasPermissions(sasPermissions, nameof(sasPermissions)), cancellationToken)
                 : await AddSasTokenAsync(pathSegments, SasTokenDuration, sasPermissions, cancellationToken);
-            return resultPathSegments.ToUriString();
+            return resultPathSegments.ToUri();
         }
 
         private static BlobContainerSasPermissions ConvertSasPermissions(BlobSasPermissions sasPermissions, string paramName)
@@ -244,7 +242,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override string GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath)
+        public override Uri GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath)
         {
             var normalizedBlobPath = NormalizedBlobPath(blobPath);
             var blobPathWithPrefix = $"{TesExecutionsPathPrefix}/{task.Id}{normalizedBlobPath}";
@@ -263,31 +261,31 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new Uri($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net/{blobPathWithPrefix.TrimStart('/')}"));
+            var builder = new BlobUriBuilder(new($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net/{blobPathWithPrefix.TrimStart('/')}"));
 
-            return builder.ToUri().ToString();
+            return builder.ToUri();
         }
 
         /// <inheritdoc />
-        public override string GetInternalTesBlobUrlWithoutSasToken(string blobPath)
+        public override Uri GetInternalTesBlobUrlWithoutSasToken(string blobPath)
         {
             var normalizedBlobPath = NormalizedBlobPath(blobPath);
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new Uri($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net{TesExecutionsPathPrefix}{normalizedBlobPath}"));
+            var builder = new BlobUriBuilder(new($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net{TesExecutionsPathPrefix}{normalizedBlobPath}"));
 
-            return builder.ToUri().ToString();
+            return builder.ToUri();
         }
 
         /// <inheritdoc />
-        public override async Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken)
+        public override async Task<Uri> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken)
         {
-            var pathSegments = StorageAccountUrlSegments.Create(GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath));
+            var pathSegments = StorageAccountUrlSegments.Create(GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath).AbsoluteUri);
 
             var resultPathSegments = pathSegments.IsContainer
                 ? await AddSasTokenAsync(pathSegments, SasTokenDuration, ConvertSasPermissions(sasPermissions, nameof(sasPermissions)), cancellationToken)
                 : await AddSasTokenAsync(pathSegments, SasTokenDuration, sasPermissions, cancellationToken);
-            return resultPathSegments.ToUriString();
+            return resultPathSegments.ToUri();
         }
 
         private async Task<bool> TryGetStorageAccountInfoAsync(string accountName, CancellationToken cancellationToken, Action<StorageAccountInfo> onSuccess = null)

@@ -121,7 +121,7 @@ namespace TesApi.Web.Runner
             return sanitizedLogEntry;
         }
 
-        private async Task<string> CreateAndUploadBatchScriptAsync(TesTask tesTask, string nodeTaskUrl, CancellationToken cancellationToken)
+        private async Task<Uri> CreateAndUploadBatchScriptAsync(TesTask tesTask, Uri nodeTaskUrl, CancellationToken cancellationToken)
         {
             logger.LogInformation($"Creating and uploading Batch script for Task ID: {tesTask.Id}");
 
@@ -142,7 +142,7 @@ namespace TesApi.Web.Runner
             return batchNodeScriptUrl;
         }
 
-        private async Task<string> CreateAndUploadNodeTaskAsync(TesTask tesTask, NodeTaskConversionOptions nodeTaskConversionOptions, CancellationToken cancellationToken)
+        private async Task<Uri> CreateAndUploadNodeTaskAsync(TesTask tesTask, NodeTaskConversionOptions nodeTaskConversionOptions, CancellationToken cancellationToken)
         {
             logger.LogInformation($"Creating and uploading node task definition file for Task ID: {tesTask.Id}");
 
@@ -162,13 +162,13 @@ namespace TesApi.Web.Runner
             return nodeTaskUrl;
         }
 
-        private async Task<string> UploadContentAsBlobToInternalTesLocationAsync(TesTask tesTask,
+        private async Task<Uri> UploadContentAsBlobToInternalTesLocationAsync(TesTask tesTask,
             string content, string fileName, CancellationToken cancellationToken)
         {
             var blobUrl =
                 await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, fileName, storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
 
-            await storageAccessProvider.UploadBlobAsync(new Uri(blobUrl), content, cancellationToken);
+            await storageAccessProvider.UploadBlobAsync(blobUrl, content, cancellationToken);
             return blobUrl;
         }
     }
@@ -179,5 +179,5 @@ namespace TesApi.Web.Runner
     /// <param name="BatchScriptUrl"></param>
     /// <param name="NodeTaskUrl"></param>
     /// <param name="BatchScriptFileName"></param>
-    public record BatchScriptAssetsInfo(string BatchScriptUrl, string NodeTaskUrl, string BatchScriptFileName);
+    public record BatchScriptAssetsInfo(Uri BatchScriptUrl, Uri NodeTaskUrl, string BatchScriptFileName);
 }

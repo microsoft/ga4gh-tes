@@ -35,7 +35,7 @@ namespace TesApi.Tests.Storage
             var subscriptionId = Guid.NewGuid().ToString();
             storageAccountInfo = new StorageAccountInfo()
             {
-                BlobEndpoint = StorageAccountBlobEndpoint,
+                BlobEndpoint = new(StorageAccountBlobEndpoint),
                 Name = DefaultStorageAccountName,
                 Id = $"/subscriptions/{subscriptionId}/resourceGroups/mrg/providers/Microsoft.Storage/storageAccounts/{DefaultStorageAccountName}",
                 SubscriptionId = subscriptionId
@@ -52,10 +52,9 @@ namespace TesApi.Tests.Storage
             string blobName)
         {
             var task = new TesTask { Name = "taskName", Id = Guid.NewGuid().ToString() };
-            var url = await defaultStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None);
+            var uri = await defaultStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None);
 
-            Assert.IsNotNull(url);
-            var uri = new Uri(url);
+            Assert.IsNotNull(uri);
             Assert.AreEqual($"{StorageAccountBlobEndpoint}{StorageAccessProvider.TesExecutionsPathPrefix}/{task.Id}/{blobName.TrimStart('/')}", ToHostWithAbsolutePathOnly(uri));
         }
 
@@ -79,10 +78,9 @@ namespace TesApi.Tests.Storage
                 { TesResources.SupportedBackendParameters.internal_path_prefix.ToString(), internalPathPrefix }
             };
 
-            var url = await defaultStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None);
+            var uri = await defaultStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None);
 
-            Assert.IsNotNull(url);
-            var uri = new Uri(url);
+            Assert.IsNotNull(uri);
             Assert.AreEqual($"{StorageAccountBlobEndpoint}{StorageAccessProvider.TesExecutionsPathPrefix}/{internalPathPrefix}/{blobName.TrimStart('/')}", ToHostWithAbsolutePathOnly(uri));
         }
 
@@ -101,7 +99,7 @@ namespace TesApi.Tests.Storage
         {
             var url = defaultStorageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath);
 
-            Assert.AreEqual(expectedUrl, url);
+            Assert.AreEqual(expectedUrl, url.AbsoluteUri);
         }
 
         [DataTestMethod]
@@ -123,7 +121,7 @@ namespace TesApi.Tests.Storage
 
             var url = defaultStorageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath);
 
-            Assert.AreEqual(expectedUrl, url);
+            Assert.AreEqual(expectedUrl, url.AbsoluteUri);
         }
 
         [DataTestMethod]
@@ -139,7 +137,7 @@ namespace TesApi.Tests.Storage
 
             var url = defaultStorageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath);
 
-            Assert.AreEqual(expectedUrl, url);
+            Assert.AreEqual(expectedUrl, url.AbsoluteUri);
         }
 
         private static string GenerateRandomTestAzureStorageKey()

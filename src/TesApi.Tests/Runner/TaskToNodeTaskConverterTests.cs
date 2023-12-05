@@ -37,8 +37,8 @@ namespace TesApi.Tests.Runner
         private const string SasToken = "sv=2019-12-12&ss=bfqt&srt=sco&spr=https&st=2023-09-27T17%3A32%3A57Z&se=2023-09-28T17%3A32%3A57Z&sp=rwdlacupx&sig=SIGNATURE";
 
         const string DefaultStorageAccountName = "default";
-        const string InternalBlobUrl = "http://foo.bar/tes-internal";
-        const string InternalBlobUrlWithSas = $"{InternalBlobUrl}?{SasToken}";
+        static readonly Uri InternalBlobUrl = new("http://foo.bar/tes-internal");
+        static readonly Uri InternalBlobUrlWithSas = new($"{InternalBlobUrl}?{SasToken}");
         const string GlobalManagedIdentity = $@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/globalId";
 
 
@@ -85,7 +85,7 @@ namespace TesApi.Tests.Runner
             // Verify that the content input was uploaded and the node task has the correct url
             storageAccessProviderMock.Verify(x => x.UploadBlobAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(1));
             // The input must be uploaded to the internal blob url without a sas token.
-            Assert.AreEqual(InternalBlobUrl, nodeTask.Inputs!.Find(i => i.Path == $"{TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar}{contentInput!.Path}")!.SourceUrl);
+            Assert.AreEqual(InternalBlobUrl.AbsoluteUri, nodeTask.Inputs!.Find(i => i.Path == $"{TaskToNodeTaskConverter.BatchTaskWorkingDirEnvVar}{contentInput!.Path}")!.SourceUrl);
         }
 
         [DataTestMethod]

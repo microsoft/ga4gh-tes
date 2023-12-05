@@ -1383,7 +1383,7 @@ namespace TesApi.Tests
                 var storageAccessProvider = serviceProvider.GetServiceOrCreateInstance<IStorageAccessProvider>();
 
                 var commandScriptDir = new UriBuilder(commandScriptUri) { Path = Path.GetDirectoryName(commandScriptUri.AbsolutePath).Replace('\\', '/') }.Uri;
-                executionDirectoryUri = UrlMutableSASEqualityComparer.TrimUri(new Uri(storageAccessProvider.MapLocalPathToSasUrlAsync(commandScriptDir.IsFile ? commandScriptDir.AbsolutePath : commandScriptDir.AbsoluteUri, Azure.Storage.Sas.BlobSasPermissions.List, CancellationToken.None).Result));
+                executionDirectoryUri = UrlMutableSASEqualityComparer.TrimUri(storageAccessProvider.MapLocalPathToSasUrlAsync(commandScriptDir.IsFile ? commandScriptDir.AbsolutePath : commandScriptDir.AbsoluteUri, Azure.Storage.Sas.BlobSasPermissions.List, CancellationToken.None).Result);
 
                 serviceProvider.AzureProxy.Setup(p => p.ListBlobsAsync(It.Is(executionDirectoryUri, new UrlMutableSASEqualityComparer()), It.IsAny<CancellationToken>())).Returns(executionDirectoryBlobs.ToAsyncEnumerable());
 
@@ -1887,8 +1887,8 @@ namespace TesApi.Tests
                 AzureProxyDeleteBatchPoolIfExists = (poolId, cancellationToken) => { },
                 AzureProxyDeleteBatchPool = (poolId, cancellationToken) => { },
                 StorageAccountInfos = new() {
-                    { "defaultstorageaccount", new() { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = "https://defaultstorageaccount.blob.core.windows.net/", SubscriptionId = "SubId" } },
-                    { "storageaccount1", new() { Name = "storageaccount1", Id = "Id", BlobEndpoint = "https://storageaccount1.blob.core.windows.net/", SubscriptionId = "SubId" } }
+                    { "defaultstorageaccount", new() { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = new("https://defaultstorageaccount.blob.core.windows.net/"), SubscriptionId = "SubId" } },
+                    { "storageaccount1", new() { Name = "storageaccount1", Id = "Id", BlobEndpoint = new("https://storageaccount1.blob.core.windows.net/"), SubscriptionId = "SubId" } }
                 },
                 ContainerRegistryInfo = new() { RegistryServer = "registryServer1.io", Username = "default", Password = "placeholder" },
                 VmSizesAndPrices = new() {

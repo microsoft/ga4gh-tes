@@ -65,8 +65,8 @@ namespace TesApi.Web
         /// <returns></returns>
         public async Task<List<string>> ProcessAllowedVmSizesConfigurationFileAsync(CancellationToken cancellationToken)
         {
-            var supportedVmSizesUrl = new Uri(await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/supported-vm-sizes", storageAccessProvider.BlobPermissionsWithWrite, cancellationToken));
-            var allowedVmSizesUrl = new Uri(await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/allowed-vm-sizes", storageAccessProvider.BlobPermissionsWithWrite, cancellationToken));
+            var supportedVmSizesUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/supported-vm-sizes", storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
+            var allowedVmSizesUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync("/configuration/allowed-vm-sizes", storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
 
             var supportedVmSizes = (await skuInformationProvider.GetVmSizesAndPricesAsync(batchAccountResourceInformation.Region, cancellationToken)).ToList();
             var batchAccountQuotas = await quotaProvider.GetVmCoreQuotaAsync(lowPriority: false, cancellationToken: cancellationToken);

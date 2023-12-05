@@ -388,7 +388,7 @@ namespace TesApi.Web.Events
                     yield break;
                 }
 
-                await foreach (var uri in azureProxy.ListBlobsAsync(new(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken)), cancellationToken)
+                await foreach (var uri in azureProxy.ListBlobsAsync(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken), cancellationToken)
                     .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.Split('/').Last().StartsWith(blobNameStartsWith))
                     .OrderBy(blob => blob.BlobName) // Not perfect ordering, but reasonable. The final results are more likely to be interpreted by people rather then machines. Perfect would involve regex.
                     .Select(blob => blob.BlobUri)

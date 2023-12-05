@@ -312,14 +312,14 @@ namespace TesApi.Web.Runner
         /// </summary>
         /// <param name="targetUrl"></param>
         /// <returns></returns>
-        public NodeTaskBuilder WithStorageEventSink(string targetUrl)
+        public NodeTaskBuilder WithStorageEventSink(Uri targetUrl)
         {
-            ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
+            ArgumentNullException.ThrowIfNull(targetUrl);
 
             nodeTask.RuntimeOptions ??= new RuntimeOptions();
             nodeTask.RuntimeOptions.StorageEventSink = new StorageTargetLocation()
             {
-                TargetUrl = targetUrl,
+                TargetUrl = targetUrl.AbsoluteUri,
                 TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions()
             };
 
@@ -331,14 +331,14 @@ namespace TesApi.Web.Runner
         /// </summary>
         /// <param name="targetUrl"></param>
         /// <returns></returns>
-        public NodeTaskBuilder WithLogPublisher(string targetUrl)
+        public NodeTaskBuilder WithLogPublisher(Uri targetUrl)
         {
-            ArgumentException.ThrowIfNullOrEmpty(targetUrl, nameof(targetUrl));
+            ArgumentNullException.ThrowIfNull(targetUrl);
 
             nodeTask.RuntimeOptions ??= new RuntimeOptions();
             nodeTask.RuntimeOptions.StreamingLogPublisher = new StorageTargetLocation()
             {
-                TargetUrl = targetUrl,
+                TargetUrl = targetUrl.AbsoluteUri,
                 TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions()
             };
 

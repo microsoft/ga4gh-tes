@@ -354,17 +354,15 @@ namespace TesApi.Web
             return new(pool.AllocationState, pool.AllocationStateTransitionTime, pool.AutoScaleEnabled, pool.TargetLowPriorityComputeNodes, pool.CurrentLowPriorityComputeNodes, pool.TargetDedicatedComputeNodes, pool.CurrentDedicatedComputeNodes);
         }
 
-        private static async IAsyncEnumerable<StorageAccountInfo> GetAccessibleStorageAccountsAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        private static async Task<IAsyncEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync(CancellationToken cancellationToken)
         {
             var azureClient = await GetAzureManagementClientAsync(cancellationToken);
-
-            await foreach (var storageAccountInfo in (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable()
+            return (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken))
+                .ToAsyncEnumerable()
                 .Select(s => s.SubscriptionId).SelectManyAwait(async (subscriptionId, ct) =>
-                    (await azureClient.WithSubscription(subscriptionId).StorageAccounts.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable()
-                        .Select(a => new StorageAccountInfo { Id = a.Id, Name = a.Name, SubscriptionId = subscriptionId, BlobEndpoint = a.EndPoints.Primary.Blob })))
-            {
-                yield return storageAccountInfo;
-            }
+                    (await azureClient.WithSubscription(subscriptionId).StorageAccounts.ListAsync(cancellationToken: cancellationToken))
+                        .ToAsyncEnumerable()
+                        .Select(a => new StorageAccountInfo { Id = a.Id, Name = a.Name, SubscriptionId = subscriptionId, BlobEndpoint = new(a.EndPoints.Primary.Blob) }));
         }
 
         /// <inheritdoc/>
@@ -537,7 +535,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken)
-            => await GetAccessibleStorageAccountsAsync(cancellationToken)
+            => await (await GetAccessibleStorageAccountsAsync(cancellationToken))
                 .FirstOrDefaultAsync(storageAccount => storageAccount.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
 
         /// <inheritdoc/>

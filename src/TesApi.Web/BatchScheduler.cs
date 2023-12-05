@@ -426,9 +426,9 @@ namespace TesApi.Web
         /// <param name="localFilePathDownloadLocation">Filename for the output file</param>
         /// <param name="setExecutable">Whether the file should be made executable or not</param>
         /// <returns>The command to execute</returns>
-        private string CreateWgetDownloadCommand(string urlToDownload, string localFilePathDownloadLocation, bool setExecutable = false)
+        private string CreateWgetDownloadCommand(Uri urlToDownload, string localFilePathDownloadLocation, bool setExecutable = false)
         {
-            var command = $"wget --no-verbose --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload}'";
+            var command = $"wget --no-verbose --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload.AbsoluteUri}'";
 
             if (setExecutable)
             {
@@ -467,7 +467,7 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken)
         {
-            var blobUri = new Uri(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, storageAccessProvider.BlobPermissionsWithWrite, cancellationToken));
+            var blobUri = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
             var blobProperties = await azureProxy.GetBlobPropertiesAsync(blobUri, cancellationToken);
             if (!(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, $"scripts/{NodeTaskRunnerMD5HashFilename}"), cancellationToken)).Trim().Equals(blobProperties is null ? string.Empty : Convert.ToBase64String(blobProperties.ContentHash), StringComparison.OrdinalIgnoreCase))
             {
@@ -507,11 +507,6 @@ namespace TesApi.Web
                 var x when string.IsNullOrEmpty(x.Content) => GetParentUrl(commandScript.Url),
                 _ => GetParentPath(commandScript.Path).TrimStart('/')
             };
-        }
-
-        private static string GetCromwellExecutionDirectoryPathAsExecutionContainerPath(TesTask task)
-        {
-            return task.Inputs?.FirstOrDefault(IsCromwellCommandScript)?.Path;
         }
 
         private string GetStorageUploadPath(TesTask task)
@@ -941,39 +936,31 @@ namespace TesApi.Web
             // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
             // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
             // TODO: Verify whether this workaround is still needed.
-            var additionalInputs = new List<TesInput>();
 
-            if (cromwellExecutionDirectoryUrl is not null)
-            {
-                additionalInputs =
-                    await GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(task, cromwellExecutionDirectoryUrl,
-                        cancellationToken);
-            }
-
-            return additionalInputs;
+            return (string.IsNullOrWhiteSpace(cromwellExecutionDirectoryUrl)
+                    ? default
+                    : await GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(task, cromwellExecutionDirectoryUrl, cancellationToken))
+                ?? new();
         }
 
         private async ValueTask<List<TesInput>> GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(TesTask task,
             string cromwellExecutionDirectoryUrl, CancellationToken cancellationToken)
         {
-            List<TesInput> additionalInputFiles = default;
-            var scriptPath = GetCromwellExecutionDirectoryPathAsExecutionContainerPath(task);
+            var scriptInput = task.Inputs!.FirstOrDefault(IsCromwellCommandScript);
+            var scriptPath = scriptInput!.Path;
 
             if (!Uri.TryCreate(cromwellExecutionDirectoryUrl, UriKind.Absolute, out _))
             {
                 cromwellExecutionDirectoryUrl = $"/{cromwellExecutionDirectoryUrl}";
             }
 
-            var executionDirectoryUriString = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectoryUrl,
+            var executionDirectoryUri = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectoryUrl,
                 storageAccessProvider.DefaultContainerPermissions, cancellationToken);
-
-            var executionDirectoryUri = string.IsNullOrEmpty(executionDirectoryUriString) ? null : new Uri(executionDirectoryUriString);
 
             if (executionDirectoryUri is not null)
             {
                 var executionDirectoryBlobName = new Azure.Storage.Blobs.BlobUriBuilder(executionDirectoryUri).BlobName;
-                var startOfBlobNameIndex = scriptPath.IndexOf(executionDirectoryBlobName, StringComparison.OrdinalIgnoreCase);
-                var pathBlobPrefix = scriptPath[..startOfBlobNameIndex];
+                var pathBlobPrefix = scriptPath[..scriptPath.IndexOf(executionDirectoryBlobName, StringComparison.OrdinalIgnoreCase)];
 
                 var blobsInExecutionDirectory =
                     await azureProxy.ListBlobsAsync(executionDirectoryUri, cancellationToken)
@@ -981,11 +968,11 @@ namespace TesApi.Web
                         .ToListAsync(cancellationToken);
 
                 var scriptBlob =
-                    blobsInExecutionDirectory.FirstOrDefault(b => scriptPath.Equals(b.Path, StringComparison.OrdinalIgnoreCase));
+                    blobsInExecutionDirectory.FirstOrDefault(b => scriptPath.Equals(b.Path, StringComparison.Ordinal));
 
                 var expectedPathParts = scriptPath.Split('/').Length;
 
-                additionalInputFiles = blobsInExecutionDirectory
+                return blobsInExecutionDirectory
                     .Where(b => b != scriptBlob)
                     .Where(b => b.Path.Split('/').Length == expectedPathParts)
                     .Select(b => new TesInput
@@ -998,7 +985,7 @@ namespace TesApi.Web
                     .ToList();
             }
 
-            return additionalInputFiles ?? new();
+            return default;
         }
 
         private void ValidateTesTask(TesTask task)
@@ -1048,7 +1035,7 @@ namespace TesApi.Web
 
             if (startTaskSasUrl is not null)
             {
-                if (!await azureProxy.BlobExistsAsync(new Uri(startTaskSasUrl), cancellationToken))
+                if (!await azureProxy.BlobExistsAsync(startTaskSasUrl, cancellationToken))
                 {
                     startTaskSasUrl = default;
                     globalStartTaskConfigured = false;
@@ -1502,15 +1489,15 @@ namespace TesApi.Web
                 prefix += @event + "/";
             }
 
-            var tesInternalSegments = StorageAccountUrlSegments.Create(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(string.Empty));
+            var tesInternalSegments = StorageAccountUrlSegments.Create(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(string.Empty).AbsoluteUri);
             var eventsStartIndex = (string.IsNullOrEmpty(tesInternalSegments.BlobName) ? string.Empty : (tesInternalSegments.BlobName + "/")).Length;
             var eventsEndIndex = eventsStartIndex + eventsFolderName.Length;
 
             await foreach (var blobItem in azureProxy.ListBlobsWithTagsAsync(
-                    new(await storageAccessProvider.GetInternalTesBlobUrlAsync(
+                    await storageAccessProvider.GetInternalTesBlobUrlAsync(
                         string.Empty,
                         Azure.Storage.Sas.BlobSasPermissions.Read | Azure.Storage.Sas.BlobSasPermissions.Tag | Azure.Storage.Sas.BlobSasPermissions.List,
-                        cancellationToken)),
+                        cancellationToken),
                     prefix,
                     cancellationToken)
                 .WithCancellation(cancellationToken))
@@ -1525,7 +1512,7 @@ namespace TesApi.Web
                 var pathFromEventName = blobItem.Name[eventsEndIndex..];
                 var eventName = pathFromEventName[..pathFromEventName.IndexOf('/')];
 
-                yield return new(new(blobUrl), blobItem.Tags, eventName);
+                yield return new(blobUrl, blobItem.Tags, eventName);
             }
         }
 
