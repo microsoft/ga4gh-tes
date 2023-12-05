@@ -67,10 +67,8 @@ namespace TesApi.Web
                     .Configure<PostgreSqlOptions>(configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
                     .Configure<RetryPolicyOptions>(configuration.GetSection(RetryPolicyOptions.SectionName))
                     .Configure<TerraOptions>(configuration.GetSection(TerraOptions.SectionName))
-                    .Configure<ContainerRegistryOptions>(configuration.GetSection(ContainerRegistryOptions.SectionName))
                     .Configure<BatchImageGeneration1Options>(configuration.GetSection(BatchImageGeneration1Options.SectionName))
                     .Configure<BatchImageGeneration2Options>(configuration.GetSection(BatchImageGeneration2Options.SectionName))
-                    .Configure<BatchImageNameOptions>(configuration.GetSection(BatchImageNameOptions.SectionName))
                     .Configure<BatchNodesOptions>(configuration.GetSection(BatchNodesOptions.SectionName))
                     .Configure<BatchSchedulingOptions>(configuration.GetSection(BatchSchedulingOptions.SectionName))
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
@@ -97,7 +95,6 @@ namespace TesApi.Web
                     .AddSingleton<IRepository<TesTask>>(sp => ActivatorUtilities.CreateInstance<RepositoryRetryHandler<TesTask>>(sp, (IRepository<TesTask>)sp.GetRequiredService(typeof(TesTaskPostgreSqlRepository))))
 
                     .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
-                    .AddSingleton<ContainerRegistryProvider>()
                     .AddSingleton<CachingRetryHandler>()
                     .AddSingleton<RetryHandler>(s => s.GetRequiredService<CachingRetryHandler>())
                     .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()

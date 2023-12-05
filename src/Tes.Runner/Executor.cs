@@ -55,7 +55,9 @@ namespace Tes.Runner
 
                 var bindings = volumeBindingsGenerator.GenerateVolumeBindings(tesNodeTask.Inputs, tesNodeTask.Outputs);
 
-                var result = await dockerExecutor.RunOnContainerAsync(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings, tesNodeTask.ContainerWorkDir);
+                var executionOptions = CreateExecutionOptions(bindings);
+
+                var result = await dockerExecutor.RunOnContainerAsync(executionOptions);
 
                 await eventsPublisher.PublishExecutorEndEventAsync(tesNodeTask, result.ExitCode, ToStatusMessage(result), result.Error);
 
@@ -69,6 +71,11 @@ namespace Tes.Runner
 
                 throw;
             }
+        }
+
+        private ExecutionOptions CreateExecutionOptions(List<string> bindings)
+        {
+            return new ExecutionOptions(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings, tesNodeTask.ContainerWorkDir, tesNodeTask.RuntimeOptions);
         }
 
         private string ToStatusMessage(ContainerExecutionResult result)

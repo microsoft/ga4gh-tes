@@ -7,34 +7,40 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.ApiClients;
 using Tes.ApiClients.Options;
+using Tes.Runner.Authentication;
 using Tes.Runner.Logs;
+using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Docker
 {
     public class DockerExecutor
     {
+
         private readonly IDockerClient dockerClient = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
         private readonly NetworkUtility networkUtility = new();
         private readonly RetryHandler.AsyncRetryHandlerPolicy asyncRetryPolicy = null!;
         private readonly IStreamLogReader streamLogReader = null!;
+        private readonly ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager = null!;
 
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
         public DockerExecutor(Uri dockerHost) : this(new DockerClientConfiguration(dockerHost)
-            .CreateClient(), new ConsoleStreamLogPublisher())
+            .CreateClient(), new ConsoleStreamLogPublisher(), new ContainerRegistryAuthorizationManager(new CredentialsManager()))
         {
         }
 
-        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader)
+        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager)
             : this() // Add logging to retries
         {
             ArgumentNullException.ThrowIfNull(dockerClient);
             ArgumentNullException.ThrowIfNull(streamLogReader);
+            ArgumentNullException.ThrowIfNull(containerRegistryAuthorizationManager);
 
             this.dockerClient = dockerClient;
             this.streamLogReader = streamLogReader;
+            this.containerRegistryAuthorizationManager = containerRegistryAuthorizationManager;
         }
 
         /// <summary>
@@ -47,16 +53,19 @@ namespace Tes.Runner.Docker
                     .DefaultRetryPolicyBuilder().SetOnRetryBehavior(logger).AsyncBuild();
         }
 
-        public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(string? imageName, string? tag, List<string>? commandsToExecute, List<string>? volumeBindings, string? workingDir)
+        public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(ExecutionOptions executionOptions)
         {
-            ArgumentException.ThrowIfNullOrEmpty(imageName);
-            ArgumentNullException.ThrowIfNull(commandsToExecute);
+            ArgumentNullException.ThrowIfNull(executionOptions);
+            ArgumentException.ThrowIfNullOrEmpty(executionOptions.ImageName);
+            ArgumentNullException.ThrowIfNull(executionOptions.CommandsToExecute);
 
-            await PullImageWithRetriesAsync(imageName, tag);
+            var authConfig = await containerRegistryAuthorizationManager.TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.RuntimeOptions);
+
+            await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag, authConfig);
 
             await ConfigureNetworkAsync();
 
-            var createResponse = await CreateContainerAsync(imageName, tag, commandsToExecute, volumeBindings, workingDir);
+            var createResponse = await CreateContainerAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.CommandsToExecute, executionOptions.VolumeBindings, executionOptions.WorkingDir);
 
             var logs = await StartContainerWithStreamingOutput(createResponse);
 
@@ -123,7 +132,9 @@ namespace Tes.Runner.Docker
                 return imageName;
             }
 
-            return $"{imageName}:{imageTag}";
+            // https://docs.docker.com/engine/reference/commandline/tag/#description
+            var separator = imageTag.Contains(':') ? "@" : ":";
+            return $"{imageName}{separator}{imageTag}";
         }
 
         private async Task PullImageWithRetriesAsync(string imageName, string? tag, AuthConfig? authConfig = null)
@@ -144,6 +155,11 @@ namespace Tes.Runner.Docker
             try
             {
                 var images = await dockerClient.Images.ListImagesAsync(new ImagesListParameters { All = true });
+
+                if (images is null)
+                {
+                    return;
+                }
 
                 foreach (var image in images)
                 {
@@ -184,4 +200,7 @@ namespace Tes.Runner.Docker
             await networkUtility.BlockIpAddressAsync(imdsIpAddress);
         }
     }
+
+    public record ExecutionOptions(string? ImageName, string? Tag, List<string>? CommandsToExecute,
+        List<string>? VolumeBindings, string? WorkingDir, RuntimeOptions RuntimeOptions);
 }
