@@ -42,7 +42,7 @@ namespace Tes.Runner.Authentication
             {
                 return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions));
             }
-            catch (CredentialUnavailableException)
+            catch
             {
                 throw new IdentityUnavailableException();
             }
