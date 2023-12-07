@@ -2,18 +2,16 @@
 
 # To run from WSL (where 'user' is your username):
 # chmod +x /mnt/c/Users/user/Source/Repos/microsoft/ga4gh-tes/src/Tes.RunnerCLI/scripts/create-vm-run.sh
-# /mnt/c/Users/user/Source/Repos/microsoft/ga4gh-tes/src/Tes.RunnerCLI/scripts/create-vm-run.sh SUBSCRIPTION_ID REGION OWNER_TAG_VALUE IDENTITY_ID STORAGE_ACCOUNT_NAME
+# /mnt/c/Users/user/Source/Repos/microsoft/ga4gh-tes/src/Tes.RunnerCLI/scripts/create-vm-run.sh SUBSCRIPTION_ID REGION OWNER_TAG_VALUE
 
-if [ "$#" -ne 5 ]; then
-    echo "Usage: $0 SUBSCRIPTION_ID REGION OWNER_TAG_VALUE IDENTITY_ID STORAGE_ACCOUNT_NAME"
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 SUBSCRIPTION_ID REGION OWNER_TAG_VALUE"
     exit 1
 fi
 
 SUBSCRIPTION_ID=$1
 REGION=$2
 OWNER_TAG_VALUE=$3
-IDENTITY=$4
-STORAGE_ACCOUNT_NAME=$5
 
 generate_random_name() {
     cat /dev/urandom | tr -dc 'a-z' | fold -w ${1:-10} | head -n 1
@@ -22,6 +20,8 @@ generate_random_name() {
 RANDOM_NAME=$(generate_random_name)
 RESOURCE_GROUP_NAME="${OWNER_TAG_VALUE}-${RANDOM_NAME}"
 VM_NAME=$(generate_random_name)
+IDENTITY_NAME="${VM_NAME}-identity"
+STORAGE_ACCOUNT_NAME="${RANDOM_NAME}storage"
 
 cleanup() {
     echo
@@ -40,17 +40,21 @@ cleanup() {
 
 # Trap SIGINT (Ctrl+C) and call the cleanup function
 trap cleanup SIGINT
+
 az login
 echo "Setting subscription ID..."
-
 az account set --subscription $SUBSCRIPTION_ID
 
 echo "Creating resource group: $RESOURCE_GROUP_NAME in region: $REGION with owner tag: $OWNER_TAG_VALUE..."
-
 az group create --name $RESOURCE_GROUP_NAME --location $REGION --tags OWNER=$OWNER_TAG_VALUE
 
+echo "Creating user-assigned managed identity: $IDENTITY_NAME..."
+az identity create --name $IDENTITY_NAME --resource-group $RESOURCE_GROUP_NAME
+
+echo "Creating storage account: $STORAGE_ACCOUNT_NAME..."
+az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME --location $REGION --sku Standard_LRS
+
 echo "Creating virtual machine: $VM_NAME with Ubuntu 22.04..."
-# Create a virtual machine with Ubuntu 22.04
 az vm create \
     --resource-group $RESOURCE_GROUP_NAME \
     --name $VM_NAME \
@@ -58,12 +62,17 @@ az vm create \
     --admin-username azureuser \
     --generate-ssh-keys
 
-echo "Assigning the identity to $VM_NAME..."
-az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY
+IDENTITY_ID=$(az identity show --name $IDENTITY_NAME --resource-group $RESOURCE_GROUP_NAME --query id -o tsv)
+echo "Assigning the identity $IDENTITY_NAME to $VM_NAME..."
+az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY_ID
 
 echo "Opening port 22 for SSH access..."
-# Open port 22 for SSH access
 az vm open-port --port 22 --resource-group $RESOURCE_GROUP_NAME --name $VM_NAME
+
+# Remaining script actions (e.g., VM extension setting, script running, and output fetching) would remain the same.
+
+# Script end
+
 
 #echo "Running 'run.sh' on the VM..."
 # Run 'echo hello world' on the VM --scripts "echo hello world"
