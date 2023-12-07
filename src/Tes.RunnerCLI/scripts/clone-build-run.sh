@@ -1,11 +1,15 @@
 #!/bin/bash
+
+# Create a local user named "scriptuser"
+sudo useradd -m scriptuser
+sudo su - scriptuser
+
+# Check for correct number of arguments
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 IDENTITY STORAGE_ACCOUNT_NAME"
     exit 1
 fi
 
-export HOME=/tmp/scripthome
-mkdir -p $HOME
 IDENTITY=$1
 STORAGE_ACCOUNT_NAME=$2
 
@@ -29,7 +33,7 @@ check_dotnet_version() {
         # Add .NET 7 installation command based on OS
         wget https://dot.net/v1/dotnet-install.sh
         chmod +x dotnet-install.sh
-        ./dotnet-install.sh --channel 7.0 --install-dir $HOME
+        ./dotnet-install.sh --channel 7.0 --install-dir ~
     else
         echo ".NET 7 is already installed."
     fi
@@ -60,7 +64,7 @@ rm nuget.config
 
 # Build the solution
 echo "Building the solution..."
-$HOME/.dotnet/dotnet build $SOLUTION_FILE
+~/.dotnet/dotnet build $SOLUTION_FILE
 if [ $? -ne 0 ]; then
     echo "Failed to build the solution."
     exit 1
@@ -68,15 +72,12 @@ fi
 
 # Build the specified project to access the binary
 echo "Building the project to access the binary..."
-$HOME/.dotnet/dotnet build $PROJECT_FILE --output ./bin
+~/.dotnet/dotnet build $PROJECT_FILE --output ./bin
 if [ $? -ne 0 ]; then
     echo "Failed to build the project."
     exit 1
 fi
 
-#!/bin/bash
-
-#!/bin/bash
 TASK_ID=$(uuidgen)
 WORKFLOW_ID=$(uuidgen)
 
@@ -103,14 +104,13 @@ json_text="{
 }"
 
 echo "Writing logs to https://$STORAGE_ACCOUNT_NAME.blob.core.windows.net/tes-internal/$TASK_ID"
-echo "$json_text" > /tmp/runner-task.json
+echo "$json_text" > runner-task.json
 
 # The binary will be located in the 'bin' directory of the cloned repository
-
 TES_RUNNER_BINARY="$(pwd)/bin/tes-runner"
 echo "Binary: $TES_RUNNER_BINARY"
 chmod +x $TES_RUNNER_BINARY
-$TES_RUNNER_BINARY /tmp/runner-task.json
+$TES_RUNNER_BINARY runner-task.json
 echo "Done"
 
-# Script end
+# End of script
