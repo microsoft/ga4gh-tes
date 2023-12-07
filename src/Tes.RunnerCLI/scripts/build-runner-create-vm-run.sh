@@ -112,7 +112,6 @@ STORAGE_ACCOUNT_RESOURCE_ID=$(az storage account show --name $STORAGE_ACCOUNT_NA
 print_green "Assigning role to the managed identity..."
 az role assignment create --assignee $IDENTITY_PRINCIPAL_ID --role "Storage Blob Data Owner" --scope $STORAGE_ACCOUNT_RESOURCE_ID
 
-
 # Container creation
 print_green "Creating container 'tes-internal' in the storage account..."
 STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group $RESOURCE_GROUP_NAME --account-name $STORAGE_ACCOUNT_NAME --query '[0].value' -o tsv)
@@ -159,42 +158,34 @@ json_text="{
     }
 }"
 
-
 echo "$json_text" > /tmp/runner-task.json
-
 print_green "Uploading $TES_RUNNER_BINARY and /tmp/runner-task.json and executing them..."
+
 scp -o StrictHostKeyChecking=no $TES_RUNNER_BINARY azureuser@$VM_PUBLIC_IP:/tmp/tes-runner
 scp -o StrictHostKeyChecking=no /tmp/runner-task.json azureuser@$VM_PUBLIC_IP:/tmp/runner-task.json
-
 ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "curl -H 'Metadata: true' 'http://169.254.169.254/metadata/identity/info?api-version=2021-02-01'" > /tmp/vm_identity_info.json 2>/dev/null
-
 ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "chmod +x /tmp/tes-runner && /tmp/tes-runner -f /tmp/runner-task.json" > /tmp/output_and_error.txt 2>&1
-echo "Done. Final output from SSH stdout and stderr:"
+print_green "Done. Final output from SSH stdout and stderr:"
 print_blue "$(cat /tmp/output_and_error.txt)"
 print_green "Assigning the identity $IDENTITY_NAME to $VM_NAME..."
 az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY_ID
-print_green "Now sleeping then will try again..."
+print_green "Now sleeping and then try again..."
 sleep 300
-ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "curl -H 'Metadata: true' 'http://169.254.169.254/metadata/identity/info?api-version=2021-02-01'" > /tmp/vm_identity_info_delay.json 2>/dev/null
 
+ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "curl -H 'Metadata: true' 'http://169.254.169.254/metadata/identity/info?api-version=2021-02-01'" > /tmp/vm_identity_info_delay.json 2>/dev/null
 ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "chmod +x /tmp/tes-runner && /tmp/tes-runner -f /tmp/runner-task.json" > /tmp/output_and_error_delay.txt 2>&1
-echo "Done after sleep. Final output from SSH stdout and stderr:"
+
+print_green "Done after sleep. Final output from SSH stdout and stderr:"
 print_blue "$(cat /tmp/output_and_error_delay.txt)"
 print_green "Resource Group: $RESOURCE_GROUP_NAME"
 print_green "VM Name: $VM_NAME"
 print_green "Identity ID: $IDENTITY_ID"
-
-
 print_green "Example to run wget command on the VM: ssh azureuser@$VM_PUBLIC_IP \"/tmp/tes-runner -f /tmp/runner-task.json\""
-#print_green "To delete the resource group, run:"
-#print_green "az group delete --name $RESOURCE_GROUP_NAME --yes --no-wait"
 
-
-
-echo "*** DONE ***"
+print_blue "*** DONE ***"
 print_green "VM IMDS data:/tmp/vm_imds_data.json"
 print_green "stdout/err from tes-runner is here: /tmp/output_and_error.txt"
 print_green "VM IMDS data:/tmp/vm_imds_data_delay.json"
 print_green "stdout/err from tes-runner is here: /tmp/output_and_error_delay.txt"
 print_green "tes-runner logs are here: https://$STORAGE_ACCOUNT_NAME.blob.core.windows.net/tes-internal/$TASK_ID"
-echo "*** DONE ***"
+print_blue "*** DONE ***"
