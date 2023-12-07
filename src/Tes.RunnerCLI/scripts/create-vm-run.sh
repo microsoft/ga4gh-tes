@@ -57,8 +57,8 @@ az vm create \
     --image Ubuntu2204 \
     --admin-username azureuser \
     --generate-ssh-keys
-    --public-ip-sku Standard
 
+echo "Assigning the identity to $VM_NAME..."
 az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY
 
 echo "Opening port 22 for SSH access..."
@@ -73,7 +73,7 @@ az vm open-port --port 22 --resource-group $RESOURCE_GROUP_NAME --name $VM_NAME
 #    --resource-group $RESOURCE_GROUP_NAME \
 #    --script-file run.sh 
 
-echo "Uploading and running 'run.sh' script on the VM..."
+echo "Uploading and running 'clone-build-run.sh' script on the VM..."
 # Upload and run 'run.sh' script from the current directory
 az vm extension set \
     --resource-group $RESOURCE_GROUP_NAME \

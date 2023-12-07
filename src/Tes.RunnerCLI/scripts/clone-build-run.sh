@@ -4,6 +4,8 @@ if [ "$#" -ne 2 ]; then
     exit 1
 fi
 
+export HOME=/tmp/scripthome
+mkdir -p $HOME
 IDENTITY=$1
 STORAGE_ACCOUNT_NAME=$2
 
@@ -27,7 +29,7 @@ check_dotnet_version() {
         # Add .NET 7 installation command based on OS
         wget https://dot.net/v1/dotnet-install.sh
         chmod +x dotnet-install.sh
-        ./dotnet-install.sh --channel 7.0 --install-dir /tmp
+        ./dotnet-install.sh --channel 7.0 --install-dir $HOME
     else
         echo ".NET 7 is already installed."
     fi
@@ -58,7 +60,7 @@ rm nuget.config
 
 # Build the solution
 echo "Building the solution..."
-/tmp/.dotnet/dotnet build $SOLUTION_FILE
+$HOME/.dotnet/dotnet build $SOLUTION_FILE
 if [ $? -ne 0 ]; then
     echo "Failed to build the solution."
     exit 1
@@ -66,7 +68,7 @@ fi
 
 # Build the specified project to access the binary
 echo "Building the project to access the binary..."
-/tmp/.dotnet/dotnet build $PROJECT_FILE --output ./bin
+$HOME/.dotnet/dotnet build $PROJECT_FILE --output ./bin
 if [ $? -ne 0 ]; then
     echo "Failed to build the project."
     exit 1
