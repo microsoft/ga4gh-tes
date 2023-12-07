@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# Function to print text in green
 print_green() {
     local message="$1"
     echo -e "\033[0;32m${message}\033[0m"
@@ -87,9 +86,11 @@ az vm extension set \
     --publisher Microsoft.Azure.Extensions \
     --protected-settings "{\"fileUris\": [\"https://raw.githubusercontent.com/microsoft/ga4gh-tes/mattmcl4475/handleIdentityUnavailable/src/Tes.RunnerCLI/scripts/clone-build-run.sh\"],\"commandToExecute\": \"./clone-build-run.sh $IDENTITY $STORAGE_ACCOUNT_NAME\"}"
 
-# Continuously check script status
+elapsed_seconds=0
+
 while true; do
     print_green "Checking if script done..."
+
     script_status=$(az vm extension show --resource-group $RESOURCE_GROUP_NAME --vm-name $VM_NAME --name customScript --query 'instanceView.status' -o tsv)
     
     if [ "$script_status" == "Succeeded" ]; then
@@ -100,7 +101,10 @@ while true; do
         exit 1
     fi
 
-    sleep 2
+    print_green "Script status: $script_status"
+    print_green "Elapsed time: $elapsed_seconds seconds."
+    sleep 10
+    elapsed_seconds=$((elapsed_seconds + 10))
 done
 
 print_green "Downloading script output..."
