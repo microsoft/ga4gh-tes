@@ -20,6 +20,8 @@ namespace Tes.Runner.Authentication
         private const int MaxRetryCount = 7;
         private const int ExponentialBackOffExponent = 2;
 
+        private const string DefaultTokenScope = @"https://management.azure.com/.default";
+
         public CredentialsManager()
         {
             retryPolicy = Policy
@@ -51,16 +53,25 @@ namespace Tes.Runner.Authentication
         {
             try
             {
+                TokenCredential tokenCredential;
+
                 if (!string.IsNullOrWhiteSpace(runtimeOptions.NodeManagedIdentityResourceId))
                 {
                     logger.LogInformation($"Token credentials with Managed Identity and resource ID: {runtimeOptions.NodeManagedIdentityResourceId}");
 
-                    return new ManagedIdentityCredential(new ResourceIdentifier(runtimeOptions.NodeManagedIdentityResourceId));
+                    tokenCredential = new ManagedIdentityCredential(new ResourceIdentifier(runtimeOptions.NodeManagedIdentityResourceId));
+                }
+                else
+                {
+                    logger.LogInformation("Token credentials with DefaultAzureCredential");
+
+                    tokenCredential = new DefaultAzureCredential();
                 }
 
-                logger.LogInformation("Token credentials with DefaultAzureCredential");
+                //Get token to verify that credentials are valid
+                tokenCredential.GetToken(new TokenRequestContext(new[] { DefaultTokenScope }), CancellationToken.None);
 
-                return new DefaultAzureCredential();
+                return tokenCredential;
             }
             catch (Exception e)
             {
