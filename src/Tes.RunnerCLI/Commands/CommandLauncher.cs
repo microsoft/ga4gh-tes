@@ -38,7 +38,7 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="command">Transfer command to execute</param>
         /// <param name="file">Node task definition file</param>
         /// <param name="options">Transfer options</param>        
-        ///<exception cref = "CommandExecutionException" > Thrown when the process launcher of the sub-process fails.</exception>
+        ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
         public static async Task LaunchTransferCommandAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
         {
             ProcessExecutionResult results = null!;
@@ -73,7 +73,7 @@ namespace Tes.RunnerCLI.Commands
         /// </summary>
         /// <param name="file">Node task definition file</param>
         /// <param name="dockerUri">Docker API URI</param>
-        ///<exception cref = "CommandExecutionException" > Thrown when the process launcher of the sub-process fails.</exception>
+        ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
         public static async Task LaunchesExecutorCommandAsSubProcessAsync(FileInfo file, Uri dockerUri)
         {
             ProcessExecutionResult results = null!;
