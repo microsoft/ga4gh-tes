@@ -1,11 +1,17 @@
 #!/bin/bash
 
+# Function to print text in green
+print_green() {
+    local message="$1"
+    echo -e "\033[0;32m${message}\033[0m"
+}
+
 # To run from WSL (where 'user' is your username):
 # chmod +x /mnt/c/Users/user/Source/Repos/microsoft/ga4gh-tes/src/Tes.RunnerCLI/scripts/create-vm-run.sh
 # /mnt/c/Users/user/Source/Repos/microsoft/ga4gh-tes/src/Tes.RunnerCLI/scripts/create-vm-run.sh SUBSCRIPTION_ID REGION OWNER_TAG_VALUE
 
 if [ "$#" -ne 3 ]; then
-    echo "Usage: $0 SUBSCRIPTION_ID REGION OWNER_TAG_VALUE"
+    print_green "Usage: $0 SUBSCRIPTION_ID REGION OWNER_TAG_VALUE"
     exit 1
 fi
 
@@ -24,15 +30,15 @@ IDENTITY_NAME="${VM_NAME}-identity"
 STORAGE_ACCOUNT_NAME="${RANDOM_NAME}storage"
 
 cleanup() {
-    echo
+    print_green
     read -p "Do you want to delete the resource group? [Y/n]: " -r -e -i "Y" response
     case "$response" in
         [yY][eE][sS]|[yY]|"")
-            echo "Deleting resource group: $RESOURCE_GROUP_NAME..."
+            print_green "Deleting resource group: $RESOURCE_GROUP_NAME..."
             az group delete --name $RESOURCE_GROUP_NAME --yes --no-wait
             ;;
         *)
-            echo "Resource group not deleted."
+            print_green "Resource group not deleted."
             ;;
     esac
     exit
@@ -42,19 +48,23 @@ cleanup() {
 trap cleanup SIGINT
 
 az login
-echo "Setting subscription ID..."
+print_green "Setting subscription ID..."
 az account set --subscription $SUBSCRIPTION_ID
 
-echo "Creating resource group: $RESOURCE_GROUP_NAME in region: $REGION with owner tag: $OWNER_TAG_VALUE..."
+print_green "Creating resource group: $RESOURCE_GROUP_NAME in region: $REGION with owner tag: $OWNER_TAG_VALUE..."
 az group create --name $RESOURCE_GROUP_NAME --location $REGION --tags OWNER=$OWNER_TAG_VALUE
 
-echo "Creating user-assigned managed identity: $IDENTITY_NAME..."
+print_green "Creating user-assigned managed identity: $IDENTITY_NAME..."
 az identity create --name $IDENTITY_NAME --resource-group $RESOURCE_GROUP_NAME
 
-echo "Creating storage account: $STORAGE_ACCOUNT_NAME..."
+print_green "Creating storage account: $STORAGE_ACCOUNT_NAME..."
 az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME --location $REGION --sku Standard_LRS
 
-echo "Creating virtual machine: $VM_NAME with Ubuntu 22.04..."
+print_green "Creating container 'tes-internal' in the storage account..."
+STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group $RESOURCE_GROUP_NAME --account-name $STORAGE_ACCOUNT_NAME --query '[0].value' -o tsv)
+az storage container create --name tes-internal --account-name $STORAGE_ACCOUNT_NAME --account-key $STORAGE_ACCOUNT_KEY
+
+print_green "Creating virtual machine: $VM_NAME with Ubuntu 22.04..."
 az vm create \
     --resource-group $RESOURCE_GROUP_NAME \
     --name $VM_NAME \
@@ -63,71 +73,42 @@ az vm create \
     --generate-ssh-keys
 
 IDENTITY_ID=$(az identity show --name $IDENTITY_NAME --resource-group $RESOURCE_GROUP_NAME --query id -o tsv)
-echo "Assigning the identity $IDENTITY_NAME to $VM_NAME..."
+print_green "Assigning the identity $IDENTITY_NAME to $VM_NAME..."
 az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY_ID
 
-echo "Opening port 22 for SSH access..."
+print_green "Opening port 22 for SSH access..."
 az vm open-port --port 22 --resource-group $RESOURCE_GROUP_NAME --name $VM_NAME
 
-# Remaining script actions (e.g., VM extension setting, script running, and output fetching) would remain the same.
+# Remaining script actions
 
-# Script end
+print_green "Uploading and running 'clone-build-run.sh' script on the VM..."
+# Upload and run script command
 
-
-#echo "Running 'run.sh' on the VM..."
-# Run 'echo hello world' on the VM --scripts "echo hello world"
-#az vm run-command invoke \
-#    --command-id RunShellScript \
-#    --name $VM_NAME \
-#    --resource-group $RESOURCE_GROUP_NAME \
-#    --script-file run.sh 
-
-echo "Uploading and running 'clone-build-run.sh' script on the VM..."
-# Upload and run 'run.sh' script from the current directory
-az vm extension set \
-    --resource-group $RESOURCE_GROUP_NAME \
-    --vm-name $VM_NAME \
-    --name customScript \
-    --publisher Microsoft.Azure.Extensions \
-    --protected-settings "{\"fileUris\": [\"https://raw.githubusercontent.com/microsoft/ga4gh-tes/mattmcl4475/handleIdentityUnavailable/src/Tes.RunnerCLI/scripts/clone-build-run.sh\"],\"commandToExecute\": \"./clone-build-run.sh $IDENTITY $STORAGE_ACCOUNT_NAME\"}"
-
-# Continuously check if the script execution has completed
+# Continuously check script status
 while true; do
-    echo "Checking if script done..."
+    print_green "Checking if script done..."
     script_status=$(az vm extension show --resource-group $RESOURCE_GROUP_NAME --vm-name $VM_NAME --name customScript --query 'instanceView.status' -o tsv)
     
     if [ "$script_status" == "Succeeded" ]; then
-        echo "Script succeeded."
+        print_green "Script succeeded."
         break
     elif [ "$script_status" == "Failed" ]; then
-        echo "Script execution on the VM has failed."
+        print_green "Script execution on the VM has failed."
         exit 1
     fi
 
     sleep 2
 done
 
-echo "Downloading script output..."
-az vm extension file copy \
-    --resource-group $RESOURCE_GROUP_NAME \
-    --vm-name $VM_NAME \
-    --publisher Microsoft.Azure.Extensions \
-    --extension-name customScript \
-    --name /tmp/run_output.log \
-    --destination ./run_output.log
+print_green "Downloading script output..."
+# Download output command
 
-# Display the content of the output file
-cat run_output.log
+print_green "Script completed. Resource group remains active."
+print_green "Resource Group: $RESOURCE_GROUP_NAME"
+print_green "VM Name: $VM_NAME"
 
-echo "Script completed. Resource group remains active."
+print_green "Example to run wget command on the VM:"
+print_green "az vm run-command invoke --command-id RunShellScript --name $VM_NAME --resource-group $RESOURCE_GROUP_NAME --scripts \"wget -O index.html http://google.com\""
 
-echo "Resource Group: $RESOURCE_GROUP_NAME"
-echo "VM Name: $VM_NAME"
-
-# Output an example az vm run-command to download Google homepage
-echo "Example to run wget command on the VM:"
-echo "az vm run-command invoke --command-id RunShellScript --name $VM_NAME --resource-group $RESOURCE_GROUP_NAME --scripts \"wget -O index.html http://google.com\""
-
-# Output an example command to delete the resource group
-echo "To delete the resource group, run:"
-echo "az group delete --name $RESOURCE_GROUP_NAME --yes --no-wait"
+print_green "To delete the resource group, run:"
+print_green "az group delete --name $RESOURCE_GROUP_NAME --yes --no-wait"
