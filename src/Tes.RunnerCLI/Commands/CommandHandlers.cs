@@ -55,6 +55,12 @@ namespace Tes.RunnerCLI.Commands
                     throw;
                 }
             }
+            catch (CommandExecutionException e)
+            {
+                Logger.LogError(e, $"Failed to execute Node Task: {file.FullName}");
+
+                return e.ExitCode;
+            }
             catch (Exception e)
             {
                 Logger.LogError(e, $"Failed to execute Node Task: {file.FullName}");
