@@ -8,6 +8,7 @@ run_as_scriptuser_cmd() {
     cat <<'EOF'
     # Function to execute as scriptuser
     run_as_scriptuser() {
+        exec > /tmp/stdout.txt 2> /tmp/stderr.txt
         # Check for correct number of arguments
         if [ "\$#" -ne 2 ]; then
             echo "Usage: \$0 IDENTITY STORAGE_ACCOUNT_NAME"

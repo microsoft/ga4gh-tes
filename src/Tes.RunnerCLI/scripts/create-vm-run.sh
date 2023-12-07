@@ -109,9 +109,11 @@ while true; do
 done
 
 
-print_green "Downloading script output..."
-scp azureuser@$VM_PUBLIC_IP:/tmp/run_output.log ./run_output.log
-
+print_green "Downloading script outputs..."
+scp -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP:/tmp/stdout.txt ./stdout.txt
+scp -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP:/tmp/stderr.txt ./stderr.txt
+cat stdout.txt
+cat stderr.txt
 print_green "Script completed. Resource group remains active."
 print_green "Resource Group: $RESOURCE_GROUP_NAME"
 print_green "VM Name: $VM_NAME"
