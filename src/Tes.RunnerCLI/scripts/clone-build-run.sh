@@ -1,7 +1,10 @@
 #!/bin/bash
 
 # Create a local user named "scriptuser"
-sudo useradd -m scriptuser
+if ! id "scriptuser" &>/dev/null; then
+    sudo useradd -m scriptuser
+fi
+
 
 # Define a command to include the function and its execution
 run_as_scriptuser_cmd() {
