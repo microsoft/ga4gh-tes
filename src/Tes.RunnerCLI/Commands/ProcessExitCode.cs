@@ -9,6 +9,9 @@ namespace Tes.RunnerCLI.Commands
         UncategorizedError = 10,
         IdentityUnavailable = 30,
 
+
+
+
         // TODO Implement all process exit codes
         //AzureStorageNotResponding = 80,
         //AzureStorageNotAuthorizedManagedIdentityCredential = 81,
