@@ -1,17 +1,19 @@
 #!/bin/bash
 
-# To run from WSL (where 'mattmcl' is your username):
-# chmod +x /mnt/c/Users/mattmcl/Source/Repos/microsoft/ga4gh-tes/src/Tes.RunnerCLI/scripts/create-vm-run.sh
-# /mnt/c/Users/mattmcl/Source/Repos/microsoft/ga4gh-tes/src/Tes.RunnerCLI/scripts/create-vm-run.sh
+# To run from WSL (where 'user' is your username):
+# chmod +x /mnt/c/Users/user/Source/Repos/microsoft/ga4gh-tes/src/Tes.RunnerCLI/scripts/create-vm-run.sh
+# /mnt/c/Users/user/Source/Repos/microsoft/ga4gh-tes/src/Tes.RunnerCLI/scripts/create-vm-run.sh SUBSCRIPTION_ID REGION OWNER_TAG_VALUE IDENTITY_ID STORAGE_ACCOUNT_NAME
 
-if [ "$#" -ne 3 ]; then
-    echo "Usage: $0 SUBSCRIPTION_ID REGION OWNER_TAG_VALUE"
+if [ "$#" -ne 5 ]; then
+    echo "Usage: $0 SUBSCRIPTION_ID REGION OWNER_TAG_VALUE IDENTITY_ID STORAGE_ACCOUNT_NAME"
     exit 1
 fi
 
 SUBSCRIPTION_ID=$1
 REGION=$2
 OWNER_TAG_VALUE=$3
+IDENTITY=$4
+STORAGE_ACCOUNT_NAME=$5
 
 generate_random_name() {
     cat /dev/urandom | tr -dc 'a-z' | fold -w ${1:-10} | head -n 1
@@ -57,6 +59,8 @@ az vm create \
     --generate-ssh-keys
     --public-ip-sku Standard
 
+az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY
+
 echo "Opening port 22 for SSH access..."
 # Open port 22 for SSH access
 az vm open-port --port 22 --resource-group $RESOURCE_GROUP_NAME --name $VM_NAME
@@ -72,11 +76,11 @@ az vm open-port --port 22 --resource-group $RESOURCE_GROUP_NAME --name $VM_NAME
 echo "Uploading and running 'run.sh' script on the VM..."
 # Upload and run 'run.sh' script from the current directory
 az vm extension set \
-    --resource-group exttest \
-    --vm-name exttest \
+    --resource-group $RESOURCE_GROUP_NAME \
+    --vm-name $VM_NAME \
     --name customScript \
     --publisher Microsoft.Azure.Extensions \
-    --protected-settings '{"fileUris": ["https://raw.githubusercontent.com/microsoft/ga4gh-tes/5df9d9b478cb27ff2ac0c84e7e7a7c83a0b85ebd/src/Tes.RunnerCLI/scripts/clone-build-run.sh"],"commandToExecute": "./clone-build-run.sh"}'
+    --protected-settings "{\"fileUris\": [\"https://raw.githubusercontent.com/microsoft/ga4gh-tes/mattmcl4475/handleIdentityUnavailable/src/Tes.RunnerCLI/scripts/clone-build-run.sh\"],\"commandToExecute\": \"./clone-build-run.sh $IDENTITY $STORAGE_ACCOUNT_NAME\"}"
 
 # Continuously check if the script execution has completed
 while true; do
