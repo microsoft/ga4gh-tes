@@ -79,10 +79,13 @@ az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY
 print_green "Opening port 22 for SSH access..."
 az vm open-port --port 22 --resource-group $RESOURCE_GROUP_NAME --name $VM_NAME
 
-# Remaining script actions
-
 print_green "Uploading and running 'clone-build-run.sh' script on the VM..."
-# Upload and run script command
+az vm extension set \
+    --resource-group $RESOURCE_GROUP_NAME \
+    --vm-name $VM_NAME \
+    --name customScript \
+    --publisher Microsoft.Azure.Extensions \
+    --protected-settings "{\"fileUris\": [\"https://raw.githubusercontent.com/microsoft/ga4gh-tes/mattmcl4475/handleIdentityUnavailable/src/Tes.RunnerCLI/scripts/clone-build-run.sh\"],\"commandToExecute\": \"./clone-build-run.sh $IDENTITY $STORAGE_ACCOUNT_NAME\"}"
 
 # Continuously check script status
 while true; do
@@ -101,7 +104,13 @@ while true; do
 done
 
 print_green "Downloading script output..."
-# Download output command
+az vm extension file copy \
+    --resource-group $RESOURCE_GROUP_NAME \
+    --vm-name $VM_NAME \
+    --publisher Microsoft.Azure.Extensions \
+    --extension-name customScript \
+    --name /tmp/run_output.log \
+    --destination ./run_output.log
 
 print_green "Script completed. Resource group remains active."
 print_green "Resource Group: $RESOURCE_GROUP_NAME"
