@@ -168,7 +168,7 @@ scp -o StrictHostKeyChecking=no /tmp/runner-task.json azureuser@$VM_PUBLIC_IP:/t
 print_green "Installing Docker..."
 ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "sudo apt update && sudo apt install docker.io -y"
 
-print_green "Assigning identity to simulate a delayed assignment..."
+print_green "Assigning identity..."
 az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY_ID
 
 print_green "Checking IMDS identity..."
