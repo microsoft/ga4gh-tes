@@ -165,8 +165,8 @@ print_green "Uploading $TES_RUNNER_BINARY and /tmp/runner-task.json and executin
 
 scp -o StrictHostKeyChecking=no $TES_RUNNER_BINARY azureuser@$VM_PUBLIC_IP:/tmp/tes-runner
 scp -o StrictHostKeyChecking=no /tmp/runner-task.json azureuser@$VM_PUBLIC_IP:/tmp/runner-task.json
-ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "curl -H 'Metadata: true' 'http://169.254.169.254/metadata/identity/info?api-version=2021-02-01'" > /tmp/vm_identity_info.json 2>/dev/null
-ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "chmod +x /tmp/tes-runner && /tmp/tes-runner -f /tmp/runner-task.json" > /tmp/output_and_error.txt 2>&1
+ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "curl -H 'Metadata: true' 'http://169.254.169.254/metadata/identity/info?api-version=2021-02-01'" > /tmp/tes-runner-test-vm-imds-identity-info-1.json 2>/dev/null
+ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "chmod +x /tmp/tes-runner && /tmp/tes-runner -f /tmp/runner-task.json" > /tmp/tes-runner-test-out-err-1.txt 2>&1
 print_green "Done. Final output from SSH stdout and stderr:"
 print_blue "$(cat /tmp/output_and_error.txt)"
 print_green "Assigning the identity $IDENTITY_NAME to $VM_NAME..."
@@ -174,8 +174,8 @@ az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY
 print_green "Now sleeping for 300s to allow identity to propagate..."
 sleep 300
 
-ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "curl -H 'Metadata: true' 'http://169.254.169.254/metadata/identity/info?api-version=2021-02-01'" > /tmp/vm_identity_info_delay.json 2>/dev/null
-ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "chmod +x /tmp/tes-runner && /tmp/tes-runner -f /tmp/runner-task.json" > /tmp/output_and_error_delay.txt 2>&1
+ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "curl -H 'Metadata: true' 'http://169.254.169.254/metadata/identity/info?api-version=2021-02-01'" > /tmp/tes-runner-test-vm-imds-identity-info-2.json 2>/dev/null
+ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "chmod +x /tmp/tes-runner && /tmp/tes-runner -f /tmp/runner-task.json" > /tmp/tes-runner-test-out-err-2.txt 2>&1
 
 print_green "Done after sleep. Final output from SSH stdout and stderr:"
 print_blue "$(cat /tmp/output_and_error_delay.txt)"
@@ -185,9 +185,9 @@ print_green "Identity ID: $IDENTITY_ID"
 print_green "Example to run wget command on the VM: ssh azureuser@$VM_PUBLIC_IP \"/tmp/tes-runner -f /tmp/runner-task.json\""
 
 print_blue "*** DONE ***"
-print_green "VM IMDS data:/tmp/vm_imds_data.json"
-print_green "stdout/err from tes-runner is here: /tmp/output_and_error.txt"
-print_green "VM IMDS data:/tmp/vm_imds_data_delay.json"
-print_green "stdout/err from tes-runner is here: /tmp/output_and_error_delay.txt"
+print_green "VM IMDS identity info: /tmp/tes-runner-test-vm-imds-identity-info-1.json"
+print_green "stdout/err data: /tmp/tes-runner-test-out-err-1.txt"
+print_green "VM IMDS identity info: /tmp/tes-runner-test-vm-imds-identity-info-2json"
+print_green "stdout/err data: /tmp/tes-runner-test-out-err-2.txt"
 print_green "tes-runner logs are here: https://$STORAGE_ACCOUNT_NAME.blob.core.windows.net/tes-internal/$TASK_ID"
 print_blue "*** DONE ***"
