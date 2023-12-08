@@ -1,8 +1,19 @@
 #!/bin/bash
 
+if [ "$#" -ne 4 ]; then
+    print_green "Usage: $0 SUBSCRIPTION_ID REGION OWNER_TAG_VALUE BRANCH_NAME"
+    exit 1
+fi
+
+SUBSCRIPTION_ID=$1
+REGION=$2
+OWNER_TAG_VALUE=$3
+BRANCH_NAME=${4:-main}
+
 REPO_URL="https://github.com/microsoft/ga4gh-tes.git"
 SOLUTION_FILE="Microsoft.GA4GH.TES.sln"
 PROJECT_FILE="src/Tes.RunnerCLI/Tes.RunnerCLI.csproj"
+
 
 print_green() {
     echo -e "\033[0;32m${1}\033[0m"
@@ -55,15 +66,6 @@ trap cleanup EXIT
 TMP_DIR="/tmp/$(basename -s .git $REPO_URL)-$(date +%s)"
 print_green "Using temporary directory: $TMP_DIR"
 
-if [ "$#" -ne 3 ]; then
-    print_green "Usage: $0 SUBSCRIPTION_ID REGION OWNER_TAG_VALUE"
-    exit 1
-fi
-
-SUBSCRIPTION_ID=$1
-REGION=$2
-OWNER_TAG_VALUE=$3
-
 az login
 
 RESOURCE_GROUP_NAME="${OWNER_TAG_VALUE}-$(generate_random_name)"
@@ -72,7 +74,7 @@ IDENTITY_NAME="${VM_NAME}-identity"
 STORAGE_ACCOUNT_NAME="$(generate_random_name)storage"
 
 print_green "Cloning repository $REPO_URL into $TMP_DIR..."
-git clone $REPO_URL $TMP_DIR || { echo "Failed to clone the repository."; exit 1; }
+git clone -b $BRANCH_NAME $REPO_URL $TMP_DIR || { echo "Failed to clone the repository."; exit 1; }
 
 cd $TMP_DIR
 
@@ -169,7 +171,7 @@ print_green "Done. Final output from SSH stdout and stderr:"
 print_blue "$(cat /tmp/output_and_error.txt)"
 print_green "Assigning the identity $IDENTITY_NAME to $VM_NAME..."
 az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY_ID
-print_green "Now sleeping and then try again..."
+print_green "Now sleeping for 300s to allow identity to propagate..."
 sleep 300
 
 ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "curl -H 'Metadata: true' 'http://169.254.169.254/metadata/identity/info?api-version=2021-02-01'" > /tmp/vm_identity_info_delay.json 2>/dev/null
