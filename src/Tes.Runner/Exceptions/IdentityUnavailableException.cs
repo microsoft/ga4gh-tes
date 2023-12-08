@@ -3,7 +3,7 @@
 
 namespace Tes.Runner.Exceptions
 {
-    public class IdentityUnavailableException
+    public class IdentityUnavailableException : Exception
     {
     }
 }
