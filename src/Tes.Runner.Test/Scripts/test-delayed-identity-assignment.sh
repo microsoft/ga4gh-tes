@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# This script verifies that the tes-runner will wait and retry when an identity is not available
+# Creates a VM, Storage Account, tes-internal container, Identity, assigns Storage Blob Owner to the identity
+# Clones and builds a branch, uploads tes-runnner, constructs a runner-task.json, SCPs the binary and JSON to the VM
+# Runs the tes-runner, sleeps, assigns the identity, outputs all logs
+
 if [ "$#" -ne 4 ]; then
     print_green "Usage: $0 SUBSCRIPTION_ID REGION OWNER_TAG_VALUE BRANCH_NAME"
     exit 1

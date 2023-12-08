@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# This script:
+# Creates a VM, Storage Account, tes-internal container, Identity, assigns Storage Blob Owner to the identity, assigns the identity to the VM
+# Clones and builds a branch, uploads tes-runnner, constructs a runner-task.json, SCPs the binary and JSON to the VM
+# Runs the tes-runner, outputs stdout/err
+
 if [ "$#" -ne 4 ]; then
     print_green "Usage: $0 SUBSCRIPTION_ID REGION OWNER_TAG_VALUE BRANCH_NAME"
     exit 1
@@ -131,6 +136,9 @@ VM_PUBLIC_IP=$(az vm create \
 
 IDENTITY_ID=$(az identity show --name $IDENTITY_NAME --resource-group $RESOURCE_GROUP_NAME --query id -o tsv)
 
+print_green "Assigning identity..."
+az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY_ID
+
 print_green "Opening port 22 for SSH access..."
 az vm open-port --port 22 --resource-group $RESOURCE_GROUP_NAME --name $VM_NAME
 
@@ -167,9 +175,6 @@ scp -o StrictHostKeyChecking=no $TES_RUNNER_BINARY azureuser@$VM_PUBLIC_IP:/tmp/
 scp -o StrictHostKeyChecking=no /tmp/runner-task.json azureuser@$VM_PUBLIC_IP:/tmp/runner-task.json
 print_green "Installing Docker..."
 ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "sudo apt update && sudo apt install docker.io -y"
-
-print_green "Assigning identity..."
-az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY_ID
 
 print_green "Checking IMDS identity..."
 ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "curl -H 'Metadata: true' 'http://169.254.169.254/metadata/identity/info?api-version=2021-02-01'" > /tmp/tes-runner-test-vm-imds-identity-info-1a.json 2>/dev/null
