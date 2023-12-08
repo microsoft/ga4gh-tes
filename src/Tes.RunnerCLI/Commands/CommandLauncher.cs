@@ -37,7 +37,7 @@ namespace Tes.RunnerCLI.Commands
         /// </summary>
         /// <param name="command">Transfer command to execute</param>
         /// <param name="file">Node task definition file</param>
-        /// <param name="options">Transfer options</param>        
+        /// <param name="options">Transfer options</param>
         ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
         public static async Task LaunchTransferCommandAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
         {
