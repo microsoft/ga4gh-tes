@@ -92,8 +92,6 @@ print_green "Publishing the project as a self-contained application..."
 
 TES_RUNNER_BINARY="$TMP_DIR/bin/tes-runner"
 
-echo "$json_text" > runner-task.json
-
 print_green "Setting subscription ID..."
 az account set --subscription $SUBSCRIPTION_ID
 
