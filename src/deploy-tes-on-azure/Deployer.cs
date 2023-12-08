@@ -2351,6 +2351,14 @@ namespace TesDeployer
                 }
             }
 
+            void ValidateKubectlInstall(string kubectlPath, string featureName)
+            {
+                if (!File.Exists(kubectlPath))
+                {
+                    throw new ValidationException($"Kubectl must be installed and set with the {featureName} flag. You can find instructions for install Kubectl here: https://kubernetes.io/docs/tasks/tools/#kubectl");
+                }
+            }
+
             ThrowIfNotProvided(configuration.SubscriptionId, nameof(configuration.SubscriptionId));
 
             ThrowIfNotProvidedForInstall(configuration.RegionName, nameof(configuration.RegionName));
@@ -2375,6 +2383,11 @@ namespace TesDeployer
             if (!configuration.ManualHelmDeployment)
             {
                 ValidateHelmInstall(configuration.HelmBinaryPath, nameof(configuration.HelmBinaryPath));
+            }
+
+            if (!configuration.SkipTestWorkflow)
+            {
+                ValidateKubectlInstall(configuration.KubectlBinaryPath, nameof(configuration.KubectlBinaryPath));
             }
 
             ValidateDependantFeature(configuration.EnableIngress.GetValueOrDefault(), nameof(configuration.EnableIngress), !string.IsNullOrEmpty(configuration.LetsEncryptEmail), nameof(configuration.LetsEncryptEmail));
