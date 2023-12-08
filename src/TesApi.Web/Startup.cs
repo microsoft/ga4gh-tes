@@ -252,7 +252,7 @@ namespace TesApi.Web
                 }
 
                 //assume the information was provided via configuration
-                return new BatchAccountResourceInformation(options.Value.AccountName, options.Value.ResourceGroup, options.Value.SubscriptionId, options.Value.Region);
+                return new BatchAccountResourceInformation(options.Value.AccountName, options.Value.ResourceGroup, options.Value.SubscriptionId, options.Value.Region, options.Value.BaseUrl);
             }
         }
 

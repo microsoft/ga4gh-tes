@@ -15,7 +15,7 @@ namespace TesApi.Web.Management
     /// <summary>
     /// Provides utility methods to find resource information using the TES service identity
     /// </summary>
-    public class ArmResourceInformationFinder
+    public static class ArmResourceInformationFinder
     {
         /// <summary>
         /// Looks up the AppInsights instrumentation key in subscriptions the TES services has access to 
@@ -23,7 +23,7 @@ namespace TesApi.Web.Management
         /// <param name="accountName"></param>
         /// <returns></returns>
         /// <param name="cancellationToken"></param>
-        public static async Task<string> GetAppInsightsInstrumentationKeyAsync(string accountName, CancellationToken cancellationToken)
+        public static async Task<string> GetAppInsightsConnectionStringAsync(string accountName, CancellationToken cancellationToken)
         {
             var azureClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(cancellationToken);
             var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
@@ -32,8 +32,10 @@ namespace TesApi.Web.Management
 
             await foreach (var subscriptionId in subscriptionIds.WithCancellation(cancellationToken))
             {
-                var app = (await new ApplicationInsightsManagementClient(credentials) { SubscriptionId = subscriptionId }.Components.ListAsync(cancellationToken))
-                    .FirstOrDefault(a => a.ApplicationId.Equals(accountName, StringComparison.OrdinalIgnoreCase));
+                using var appInsightsClient = new ApplicationInsightsManagementClient(credentials) { SubscriptionId = subscriptionId };
+                var app = await (await appInsightsClient.Components.ListAsync(cancellationToken))
+                    .ToAsyncEnumerable(appInsightsClient.Components.ListNextAsync)
+                    .FirstOrDefaultAsync(a => a.ApplicationId.Equals(accountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
 
                 if (app is not null)
                 {
@@ -69,15 +71,14 @@ namespace TesApi.Web.Management
             await foreach (var subId in subscriptionIds.WithCancellation(cancellationToken))
             {
                 using var batchClient = new BatchManagementClient(tokenCredentials) { SubscriptionId = subId };
-                var batchAccountOperations = batchClient.BatchAccount;
 
-                var batchAccount = await (await batchAccountOperations.ListAsync(cancellationToken))
-                    .ToAsyncEnumerable(batchAccountOperations.ListNextAsync)
+                var batchAccount = await (await batchClient.BatchAccount.ListAsync(cancellationToken))
+                    .ToAsyncEnumerable(batchClient.BatchAccount.ListNextAsync)
                     .FirstOrDefaultAsync(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
 
                 if (batchAccount is not null)
                 {
-                    return BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id, batchAccount.Location);
+                    return BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id, batchAccount.Location, $"https://{batchAccount.AccountEndpoint}");
                 }
             }
 

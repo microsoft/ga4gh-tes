@@ -80,13 +80,10 @@ namespace TesUtils
             ArgumentException.ThrowIfNullOrEmpty(configuration.SubscriptionId);
             ArgumentException.ThrowIfNullOrEmpty(configuration.TestedVmSkus);
 
-            var vmPrices = JsonConvert.DeserializeObject<IEnumerable<VmPrice>>(File.ReadAllText(configuration.TestedVmSkus));
-            if (vmPrices is null)
-            {
-                throw new Exception($"Error parsing {configuration.TestedVmSkus}");
-            }
+            var vmPrices = JsonConvert.DeserializeObject<IEnumerable<VmPrice>>(File.ReadAllText(configuration.TestedVmSkus))
+                ?? throw new Exception($"Error parsing {configuration.TestedVmSkus}");
 
-            var validSet = vmPrices.Select(vm => vm.VmSize).ToHashSet();
+            var validSet = vmPrices.Select(vm => vm.VmSize).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var client = new ArmClient(new DefaultAzureCredential());
             var appCache = new MemoryCache(new MemoryCacheOptions());
@@ -98,20 +95,18 @@ namespace TesUtils
             static double ConvertMiBToGiB(int value) => Math.Round(value / 1024.0, 2);
             var subscription = client.GetSubscriptionResource(new ResourceIdentifier($"/subscriptions/{configuration.SubscriptionId}"));
 
-            var regionsForVm = new Dictionary<string, HashSet<string>>();
-            var sizeForVm = new Dictionary<string, VirtualMachineSize>();
-            var skuForVm = new Dictionary<string, ComputeResourceSku>();
-            var priceForVm = new Dictionary<string, PricingItem>();
-            var lowPrPriceForVm = new Dictionary<string, PricingItem>();
+            var regionsForVm = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            var sizeForVm = new Dictionary<string, VirtualMachineSize>(StringComparer.OrdinalIgnoreCase);
+            var skuForVm = new Dictionary<string, ComputeResourceSku>(StringComparer.OrdinalIgnoreCase);
+            var priceForVm = new Dictionary<string, PricingItem>(StringComparer.OrdinalIgnoreCase);
+            var lowPrPriceForVm = new Dictionary<string, PricingItem>(StringComparer.OrdinalIgnoreCase);
 
-            var pricesInWE = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(AzureLocation.WestEurope, CancellationToken.None).ToListAsync();
-            foreach (var price in pricesInWE.Where(p => p.effectiveStartDate < DateTime.UtcNow))
+            await foreach (var price in priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(AzureLocation.WestEurope, CancellationToken.None).Where(p => p.effectiveStartDate < DateTime.UtcNow))
             {
                 if (price.meterName.Contains("Low Priority", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (lowPrPriceForVm.ContainsKey(price.armSkuName))
+                    if (lowPrPriceForVm.TryGetValue(price.armSkuName, out var existing))
                     {
-                        var existing = lowPrPriceForVm[price.armSkuName];
                         if (price.effectiveStartDate > existing.effectiveStartDate)
                         {
                             lowPrPriceForVm[price.armSkuName] = price;
@@ -124,9 +119,8 @@ namespace TesUtils
                 }
                 else
                 {
-                    if (priceForVm.ContainsKey(price.armSkuName))
+                    if (priceForVm.TryGetValue(price.armSkuName, out var existing))
                     {
-                        var existing = priceForVm[price.armSkuName];
                         if (price.effectiveStartDate > existing.effectiveStartDate)
                         {
                             priceForVm[price.armSkuName] = price;
@@ -139,14 +133,11 @@ namespace TesUtils
                 }
             }
 
-            var regions = await subscription.GetLocationsAsync().Where(x => x.Metadata.RegionType == RegionType.Physical).ToListAsync();
-
-            foreach (var region in regions)
+            await foreach (var region in subscription.GetLocationsAsync().Where(x => x.Metadata.RegionType == RegionType.Physical))
             {
                 try
                 {
-                    var location = new AzureLocation(region.Name);
-                    var vms = await subscription.GetBatchSupportedVirtualMachineSkusAsync(location).Select(s => s.Name).ToListAsync();
+                    var vms = await subscription.GetBatchSupportedVirtualMachineSkusAsync(region).Select(s => s.Name).ToListAsync();
 
                     List<VirtualMachineSize>? sizes = null;
                     List<ComputeResourceSku>? skus = null;
@@ -164,7 +155,7 @@ namespace TesUtils
 
                         if (!sizeForVm.ContainsKey(vm))
                         {
-                            sizes ??= await subscription.GetVirtualMachineSizesAsync(location).ToListAsync();
+                            sizes ??= await subscription.GetVirtualMachineSizesAsync(region).ToListAsync();
                             sizeForVm[vm] = sizes.Single(vmsize => vmsize.Name.Equals(vm, StringComparison.OrdinalIgnoreCase));
                         }
 
@@ -183,77 +174,78 @@ namespace TesUtils
                 }
             }
 
-            var batchSupportedVmSet = regionsForVm.Keys.ToList();
+            var batchSupportedVmSet = regionsForVm.Keys;
             Console.WriteLine($"Superset supportedSkuCount:{batchSupportedVmSet.Count}");
 
-            var batchVmInfo = batchSupportedVmSet.SelectMany<string, VirtualMachineInformation>((s) =>
+            var batchVmInfo = batchSupportedVmSet.SelectMany((name) =>
             {
-                if (!validSet.Contains(s))
+                if (!validSet.Contains(name))
                 {
-                    Console.WriteLine($"Skipping {s} not in valid vm skus file.");
+                    Console.WriteLine($"Skipping {name} not in valid vm skus file.");
                     return new List<VirtualMachineInformation>();
                 }
 
-                var sizeInfo = sizeForVm[s];
-                var sku = skuForVm[s];
+                var sizeInfo = sizeForVm[name];
+                var sku = skuForVm[name];
 
                 if (sizeInfo is null || sizeInfo.MemoryInMB is null || sizeInfo.ResourceDiskSizeInMB is null)
                 {
-                    throw new Exception($"Size info is null for VM {s}");
+                    throw new Exception($"Size info is null for VM {name}");
                 }
 
                 if (sku is null)
                 {
-                    throw new Exception($"Sku info is null for VM {s}");
+                    throw new Exception($"Sku info is null for VM {name}");
                 }
 
                 var generationList = new List<string>();
-                var generation = sku?.Capabilities.Where(x => x.Name.Equals("HyperVGenerations")).SingleOrDefault()?.Value;
+                var generation = sku.Capabilities.Where(x => x.Name.Equals("HyperVGenerations")).SingleOrDefault()?.Value;
 
                 if (generation is not null)
                 {
                     generationList = generation.Split(",").ToList();
                 }
 
-                _ = int.TryParse(sku?.Capabilities.Where(x => x.Name.Equals("vCPUsAvailable")).SingleOrDefault()?.Value, out var vCpusAvailable);
-                _ = bool.TryParse(sku?.Capabilities.Where(x => x.Name.Equals("EncryptionAtHostSupported")).SingleOrDefault()?.Value, out var encryptionAtHostSupported);
+                _ = int.TryParse(sku.Capabilities.Where(x => x.Name.Equals("vCPUsAvailable")).SingleOrDefault()?.Value, out var vCpusAvailable);
+                _ = bool.TryParse(sku.Capabilities.Where(x => x.Name.Equals("EncryptionAtHostSupported")).SingleOrDefault()?.Value, out var encryptionAtHostSupported);
 
                 return new List<VirtualMachineInformation>() {
-                    new VirtualMachineInformation()
+                    new()
                     {
                         MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
                         MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB!.Value),
                         VCpusAvailable = vCpusAvailable,
                         ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB!.Value),
                         VmSize = sizeInfo.Name,
-                        VmFamily = sku?.Family,
+                        VmFamily = sku.Family,
                         LowPriority = false,
                         HyperVGenerations = generationList,
-                        RegionsAvailable = new List<string>(regionsForVm[s].Order()),
+                        RegionsAvailable = regionsForVm[name].Order().ToList(),
                         EncryptionAtHostSupported = encryptionAtHostSupported,
-                        PricePerHour = priceForVm.ContainsKey(s) ? (decimal?)priceForVm[s].retailPrice : null,
+                        PricePerHour = priceForVm.TryGetValue(name, out var priceItem) ? (decimal?)priceItem.retailPrice : null,
                     },
-                    new VirtualMachineInformation()
+                    new()
                     {
                         MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
                         MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB!.Value),
                         VCpusAvailable = vCpusAvailable,
                         ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB!.Value),
                         VmSize = sizeInfo.Name,
-                        VmFamily = sku?.Family,
+                        VmFamily = sku.Family,
                         LowPriority = true,
                         HyperVGenerations = generationList,
-                        RegionsAvailable = new List<string>(regionsForVm[s].Order()),
+                        RegionsAvailable = regionsForVm[name].Order().ToList(),
                         EncryptionAtHostSupported = encryptionAtHostSupported,
-                        PricePerHour = lowPrPriceForVm.ContainsKey(s) ? (decimal?)lowPrPriceForVm[s].retailPrice : null,
+                        PricePerHour = lowPrPriceForVm.TryGetValue(name, out var lowPrPriceItem) ? (decimal?)lowPrPriceItem.retailPrice : null,
                     },
                 };
-            }).Where(x => x is not null).OrderBy(x => x!.VmSize).ToList();
+            }).Where(x => x is not null).OrderBy(x => x!.VmSize).ThenBy(x => x!.LowPriority).ToList();
 
             var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.General)
             {
                 WriteIndented = true
             };
+
             var data = System.Text.Json.JsonSerializer.Serialize(batchVmInfo, options: jsonOptions);
             await File.WriteAllTextAsync(configuration.OutputFilePath!, data);
             return 0;
