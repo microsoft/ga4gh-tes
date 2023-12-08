@@ -167,14 +167,17 @@ scp -o StrictHostKeyChecking=no $TES_RUNNER_BINARY azureuser@$VM_PUBLIC_IP:/tmp/
 scp -o StrictHostKeyChecking=no /tmp/runner-task.json azureuser@$VM_PUBLIC_IP:/tmp/runner-task.json
 print_green "Installing Docker..."
 ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "sudo apt update && sudo apt install docker.io -y"
-
-print_green "Assigning identity to simulate a delayed assignment..."
-az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY_ID
-
 print_green "Checking IMDS identity..."
 ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "curl -H 'Metadata: true' 'http://169.254.169.254/metadata/identity/info?api-version=2021-02-01'" > /tmp/tes-runner-test-vm-imds-identity-info-1a.json 2>/dev/null
 print_green "Starting TES runner..."
 ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "chmod +x /tmp/tes-runner && /tmp/tes-runner -f /tmp/runner-task.json; echo $?" > /tmp/tes-runner-test-out-err-1.txt 2>&1 &
+print_green "Sleeping..."
+sleep 10
+print_green "Assigning identity to simulate a delayed assignment..."
+az vm identity assign -g $RESOURCE_GROUP_NAME -n $VM_NAME --identities $IDENTITY_ID
+print_green "Checking IMDS identity..."
+ssh -o StrictHostKeyChecking=no azureuser@$VM_PUBLIC_IP "curl -H 'Metadata: true' 'http://169.254.169.254/metadata/identity/info?api-version=2021-02-01'" > /tmp/tes-runner-test-vm-imds-identity-info-1b.json 2>/dev/null
+
 print_green "Done. Final output from SSH stdout and stderr:"
 print_blue "$(cat /tmp/tes-runner-test-out-err-1.txt)"
 
