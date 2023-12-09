@@ -98,7 +98,7 @@ namespace Tes.RunnerCLI.Commands
 
             var logPublisher = await LogPublisher.CreateStreamReaderLogPublisherAsync(nodeTask, logNamePrefix);
 
-            return new ProcessLauncher(logPublisher);
+            return new ProcessLauncher(logReader: logPublisher);
         }
     }
 }
