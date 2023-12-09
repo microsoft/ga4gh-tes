@@ -31,7 +31,7 @@ namespace TesApi.Web.Management
                 listNextAsync: (client, link, ct) => client.Components.ListNextAsync(link, ct),
                 predicate: a => a.ApplicationId.Equals(accountName, StringComparison.OrdinalIgnoreCase),
                 cancellationToken: cancellationToken,
-                finalize: a => a.InstrumentationKey);
+                finalize: a => a.ConnectionString);
         }
 
         /// <summary>
