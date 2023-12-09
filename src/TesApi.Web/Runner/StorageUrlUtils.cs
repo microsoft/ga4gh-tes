@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Azure.Storage.Blobs;
 using TesApi.Web.Options;
 using TesApi.Web.Storage;
 
@@ -13,7 +12,7 @@ namespace TesApi.Web.Runner
     /// <summary>
     /// Storage URL utility methods
     /// </summary>
-    public class StorageUrlUtils
+    public static class StorageUrlUtils
     {
         /// <summary>
         /// Blob endpoint Host name suffix
@@ -120,7 +119,6 @@ namespace TesApi.Web.Runner
         public static string SetOrAddSasTokenToQueryString(string existingQueryString,
             string sasToken)
         {
-
             if (string.IsNullOrWhiteSpace(sasToken))
             {
                 return existingQueryString;

@@ -144,7 +144,7 @@ namespace TesApi.Web
         private sealed class PageEnumerator<T> : EnumeratorEnumerator<T, IPage<T>>
         {
             public PageEnumerator(IPage<T> source, Func<string, CancellationToken, Task<IPage<T>>> nextPageFunc, CancellationToken cancellationToken)
-                : base(source, s => s.GetEnumerator(), (s, ct) => nextPageFunc(s.NextPageLink, ct), cancellationToken)
+                : base(source, s => s.GetEnumerator(), (s, ct) => s.NextPageLink is null ? Task.FromResult<IPage<T>>(null) : nextPageFunc(s.NextPageLink, ct), cancellationToken)
             { }
         }
 

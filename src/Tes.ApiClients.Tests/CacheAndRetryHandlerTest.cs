@@ -150,7 +150,7 @@ public class CacheAndRetryHandlerTest
     //     Assert.IsFalse(appCache.TryGetValue(cacheKey, out HttpResponseMessage _));
     // }
 
-    private Task<HttpResponseMessage> CreateResponseAsync(HttpStatusCode statusCode)
+    private static Task<HttpResponseMessage> CreateResponseAsync(HttpStatusCode statusCode)
         => Task.FromResult<HttpResponseMessage>(new(statusCode));
 
     public interface ITestHttpResponseMessageFactory

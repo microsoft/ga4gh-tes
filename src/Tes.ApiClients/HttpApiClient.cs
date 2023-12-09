@@ -167,7 +167,7 @@ namespace Tes.ApiClients
         /// <param name="name">parameter name</param>
         /// <param name="value">parameter value</param>
         /// <returns></returns>
-        protected string ParseQueryStringParameter(string name, string value)
+        protected static string ParseQueryStringParameter(string name, string value)
         {
             ArgumentException.ThrowIfNullOrEmpty(name);
 
@@ -184,7 +184,7 @@ namespace Tes.ApiClients
         /// </summary>
         /// <param name="arguments"></param>
         /// <returns></returns>
-        protected string AppendQueryStringParams(params string[] arguments)
+        protected static string AppendQueryStringParams(params string[] arguments)
         {
             if (arguments.Length == 0)
             {

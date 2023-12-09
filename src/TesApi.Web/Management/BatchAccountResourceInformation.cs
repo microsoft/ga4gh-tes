@@ -12,7 +12,8 @@ namespace TesApi.Web.Management
     /// <param name="ResourceGroupName">Name of the resource group.</param>
     /// <param name="SubscriptionId">Subscription id</param>
     /// <param name="Region">Region</param>
-    public record BatchAccountResourceInformation(string Name, string ResourceGroupName, string SubscriptionId, string Region)
+    /// <param name="BaseUrl">Base URL</param>
+    public record BatchAccountResourceInformation(string Name, string ResourceGroupName, string SubscriptionId, string Region, string BaseUrl)
     {
         private const int SubscriptionIdSegment = 2;
         private const int ResourceGroupNameSegment = 4;
@@ -21,15 +22,16 @@ namespace TesApi.Web.Management
         /// <summary>
         /// Creates a new instance of BatchAccountResourceInformation from a batch resource id. 
         /// </summary>
-        /// <param name="resourceId"></param>
-        /// <param name="region"></param>
+        /// <param name="resourceId">Resource Id</param>
+        /// <param name="region">Region</param>
+        /// <param name="baseUrl">Base URL</param>
         /// <returns></returns>
         /// <exception cref="ArgumentException"></exception>
-        public static BatchAccountResourceInformation FromBatchResourceId(string resourceId, string region)
+        public static BatchAccountResourceInformation FromBatchResourceId(string resourceId, string region, string baseUrl)
         {
             ArgumentException.ThrowIfNullOrEmpty(resourceId);
             ArgumentException.ThrowIfNullOrEmpty(region);
-
+            ArgumentException.ThrowIfNullOrEmpty(baseUrl);
 
             if (!resourceId.StartsWith('/'))
             {
@@ -44,7 +46,8 @@ namespace TesApi.Web.Management
             }
 
             return new BatchAccountResourceInformation(segments[ResourceNameSegment],
-                segments[ResourceGroupNameSegment], segments[SubscriptionIdSegment], region);
+                segments[ResourceGroupNameSegment], segments[SubscriptionIdSegment],
+                region, baseUrl);
         }
     }
 }

@@ -259,7 +259,7 @@ namespace Tes.ApiClients
             return builder.Uri.AbsoluteUri;
         }
 
-        private HttpContent GetBatchPoolRequestContent(ApiCreateBatchPoolRequest apiCreateBatchPool)
+        private static HttpContent GetBatchPoolRequestContent(ApiCreateBatchPoolRequest apiCreateBatchPool)
             => new StringContent(JsonSerializer.Serialize(apiCreateBatchPool,
                 new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }), Encoding.UTF8, "application/json");
 
