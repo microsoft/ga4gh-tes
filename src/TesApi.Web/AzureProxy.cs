@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
@@ -26,6 +25,7 @@ using Polly;
 using Tes.ApiClients;
 using Tes.Models;
 using TesApi.Web.Extensions;
+using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
@@ -52,10 +52,7 @@ namespace TesApi.Web
 
         private readonly ILogger logger;
         private readonly BatchClient batchClient;
-        //private readonly string subscriptionId;
         private readonly string location;
-        //private readonly string batchResourceGroupName;
-        private readonly string batchAccountName;
         //TODO: This dependency should be injected at a higher level (e.g. scheduler), but that requires significant refactoring that should be done separately.
         private readonly IBatchPoolManager batchPoolManager;
 
@@ -64,13 +61,16 @@ namespace TesApi.Web
         /// Constructor of AzureProxy
         /// </summary>
         /// <param name="batchAccountOptions">The Azure Batch Account options</param>
+        /// <param name="batchAccountInformation">The Azure Batch Account information</param>
         /// <param name="batchPoolManager"><inheritdoc cref="IBatchPoolManager"/></param>
         /// <param name="retryHandler">Retry builder</param>
         /// <param name="logger">The logger</param>
         /// <exception cref="InvalidOperationException"></exception>
-        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, IBatchPoolManager batchPoolManager, RetryHandler retryHandler, ILogger<AzureProxy> logger)
+        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, BatchAccountResourceInformation batchAccountInformation, IBatchPoolManager batchPoolManager, RetryHandler retryHandler, ILogger<AzureProxy> logger)
         {
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
+            ArgumentNullException.ThrowIfNull(batchAccountInformation);
+            ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(batchPoolManager);
             ArgumentNullException.ThrowIfNull(retryHandler);
             ArgumentNullException.ThrowIfNull(logger);
@@ -102,26 +102,12 @@ namespace TesApi.Web
                 batchClient = BatchClient.Open(new BatchSharedKeyCredentials(batchAccountOptions.Value.BaseUrl,
                     batchAccountOptions.Value.AccountName, batchAccountOptions.Value.AppKey));
                 location = batchAccountOptions.Value.Region;
-                //subscriptionId = batchAccountOptions.Value.SubscriptionId;
-                //batchResourceGroupName = batchAccountOptions.Value.ResourceGroup;
             }
             else
             {
-                batchAccountName = batchAccountOptions.Value.AccountName;
-                var (SubscriptionId, ResourceGroupName, Location, BatchAccountEndpoint) = FindBatchAccountAsync(batchAccountName, CancellationToken.None).Result;
-                //batchResourceGroupName = ResourceGroupName;
-                //subscriptionId = SubscriptionId;
-                location = Location;
-                batchClient = BatchClient.Open(new BatchTokenCredentials($"https://{BatchAccountEndpoint}", () => GetAzureAccessTokenAsync(CancellationToken.None, "https://batch.core.windows.net/")));
+                location = batchAccountInformation.Region;
+                batchClient = BatchClient.Open(new BatchTokenCredentials(batchAccountInformation.BaseUrl, () => GetAzureAccessTokenAsync(CancellationToken.None, "https://batch.core.windows.net/")));
             }
-
-            //azureOfferDurableId = batchAccountOptions.Value.AzureOfferDurableId;
-
-            //if (!AzureRegionUtils.TryGetBillingRegionName(location, out billingRegionName))
-            //{
-            //    logger.LogWarning($"Azure ARM location '{location}' does not have a corresponding Azure Billing Region.  Prices from the fallback billing region '{DefaultAzureBillingRegionName}' will be used instead.");
-            //    billingRegionName = DefaultAzureBillingRegionName;
-            //}
         }
 
         /// <summary>
@@ -137,42 +123,6 @@ namespace TesApi.Web
                     caller, retryCount, timeSpan, (exception as BatchException)?.RequestInformation?.BatchError?.Code ?? "n/a", (exception as BatchException)?.RequestInformation?.HttpStatusCode?.ToString("G") ?? "n/a", reason, requestId, correlationId);
             });
 
-        // TODO: Static method because the instrumentation key is needed in both Program.cs and Startup.cs and we wanted to avoid intializing the batch client twice.
-        // Can we skip initializing app insights with a instrumentation key in Program.cs? If yes, change this to an instance method.
-        /// <summary>
-        /// Gets the Application Insights instrumentation key
-        /// </summary>
-        /// <param name="appInsightsApplicationId">Application Insights application id</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns>Application Insights instrumentation key</returns>
-        public static async Task<string> GetAppInsightsConnectionStringAsync(string appInsightsApplicationId, CancellationToken cancellationToken)
-        {
-            var azureClient = await GetAzureManagementClientAsync(cancellationToken);
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
-
-            var credentials = new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken));
-
-            await foreach (var subscriptionId in subscriptionIds.WithCancellation(cancellationToken))
-            {
-                try
-                {
-                    var components = new ApplicationInsightsManagementClient(credentials) { SubscriptionId = subscriptionId }.Components;
-                    var app = await (await components.ListAsync(cancellationToken))
-                        .ToAsyncEnumerable(components.ListNextAsync)
-                        .FirstOrDefaultAsync(a => a.ApplicationId.Equals(appInsightsApplicationId, StringComparison.OrdinalIgnoreCase), cancellationToken);
-
-                    if (app is not null)
-                    {
-                        return app.ConnectionString;
-                    }
-                }
-                catch
-                {
-                }
-            }
-
-            return null;
-        }
 
         /// <inheritdoc/>
         public async Task<string> GetNextBatchJobIdAsync(string tesTaskId, CancellationToken cancellationToken)
@@ -786,36 +736,6 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
             => await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable, cancellationToken);
-
-        // https://learn.microsoft.com/azure/azure-resource-manager/management/move-resource-group-and-subscription#changed-resource-id
-        [GeneratedRegex("/*/resourceGroups/([^/]*)/*")]
-        private static partial Regex GetResourceGroupRegex();
-
-        private static async Task<(string SubscriptionId, string ResourceGroupName, string Location, string BatchAccountEndpoint)> FindBatchAccountAsync(string batchAccountName, CancellationToken cancellationToken)
-        {
-            var resourceGroupRegex = GetResourceGroupRegex();
-            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken));
-            var azureClient = await GetAzureManagementClientAsync(cancellationToken);
-
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
-
-            await foreach (var subId in subscriptionIds.WithCancellation(cancellationToken))
-            {
-                var batchAccountOperations = new BatchManagementClient(tokenCredentials) { SubscriptionId = subId }.BatchAccount;
-                var batchAccount = await (await batchAccountOperations.ListAsync(cancellationToken))
-                    .ToAsyncEnumerable(batchAccountOperations.ListNextAsync)
-                    .FirstOrDefaultAsync(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
-
-                if (batchAccount is not null)
-                {
-                    var resourceGroupName = resourceGroupRegex.Match(batchAccount.Id).Groups[1].Value;
-
-                    return (subId, resourceGroupName, batchAccount.Location, batchAccount.AccountEndpoint);
-                }
-            }
-
-            throw new Exception($"Batch account '{batchAccountName}' does not exist or the TES app service does not have Contributor role on the account.");
-        }
 
         /// <inheritdoc/>
         public async Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken)

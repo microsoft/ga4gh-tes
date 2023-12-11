@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Tes.Runner.Exceptions;
 using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
@@ -10,9 +11,6 @@ namespace Tes.RunnerCLI.Commands
     /// </summary>
     public class CommandLauncher
     {
-        public const int SuccessExitCode = 0;
-        public const int ErrorExitCode = 1;
-
         public static BlobPipelineOptions CreateBlobPipelineOptions(int blockSize, int writers, int readers,
             int bufferCapacity, string apiVersion)
         {
@@ -31,8 +29,7 @@ namespace Tes.RunnerCLI.Commands
         {
             if (results.ExitCode != 0)
             {
-                throw new Exception(
-                    $"Task operation failed. Command: {command}. Exit Code: {results.ExitCode}{Environment.NewLine}Process Name: {results.ProcessName}");
+                throw new CommandExecutionException(results.ExitCode, $"Failed to execute command: {command}. Exit code returned by sub-process: {results.ExitCode}");
             }
         }
         /// <summary>
@@ -41,36 +38,64 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="command">Transfer command to execute</param>
         /// <param name="file">Node task definition file</param>
         /// <param name="options">Transfer options</param>
-        /// <returns></returns>
+        ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
         public static async Task LaunchTransferCommandAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
         {
-            var processLauncher = await ProcessLauncher.CreateLauncherAsync(file, logNamePrefix: command);
-
-            var results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
+            ProcessExecutionResult results = null!;
+            try
+            {
+                var processLauncher = await ProcessLauncher.CreateLauncherAsync(file, logNamePrefix: command);
+                results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
+            }
+            catch (Exception ex)
+            {
+                HandleFatalLauncherError(command, ex);
+            }
 
             HandleResult(results, command);
         }
+
+        public static void HandleFatalLauncherError(string command, Exception ex)
+        {
+            var exitCode = ex switch
+            {
+                IdentityUnavailableException => (int)ProcessExitCode.IdentityUnavailable,
+                _ => (int)ProcessExitCode.UncategorizedError
+            };
+
+
+            throw new CommandExecutionException(exitCode, $"Failed to launch command: {command}", ex);
+        }
+
 
         /// <summary>
         /// Executes the exec (executor) command as a sub-process.
         /// </summary>
         /// <param name="file">Node task definition file</param>
         /// <param name="dockerUri">Docker API URI</param>
-        /// <returns></returns>
+        ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
         public static async Task LaunchesExecutorCommandAsSubProcessAsync(FileInfo file, Uri dockerUri)
         {
-            var processLauncher = await ProcessLauncher.CreateLauncherAsync(file, logNamePrefix: CommandFactory.ExecutorCommandName);
-
-            var args = new List<string>() {
-                CommandFactory.ExecutorCommandName,
-                $"--{CommandFactory.DockerUriOption} {dockerUri}" };
-
-            if (!string.IsNullOrEmpty(file.FullName))
+            ProcessExecutionResult results = null!;
+            try
             {
-                args.Add($"--{BlobPipelineOptionsConverter.FileOption} {file.FullName}");
-            }
+                var processLauncher = await ProcessLauncher.CreateLauncherAsync(file, logNamePrefix: CommandFactory.ExecutorCommandName);
 
-            var results = await processLauncher.LaunchProcessAndWaitAsync(args.ToArray());
+                var args = new List<string>() {
+                    CommandFactory.ExecutorCommandName,
+                    $"--{CommandFactory.DockerUriOption} {dockerUri}" };
+
+                if (!string.IsNullOrEmpty(file.FullName))
+                {
+                    args.Add($"--{BlobPipelineOptionsConverter.FileOption} {file.FullName}");
+                }
+
+                results = await processLauncher.LaunchProcessAndWaitAsync(args.ToArray());
+            }
+            catch (Exception ex)
+            {
+                HandleFatalLauncherError(CommandFactory.ExecutorCommandName, ex);
+            }
 
             HandleResult(results, CommandFactory.ExecutorCommandName);
         }

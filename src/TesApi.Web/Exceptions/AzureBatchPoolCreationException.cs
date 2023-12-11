@@ -59,7 +59,7 @@ namespace TesApi.Web
             IsPoolQuota = state.isPoolQuota;
             IsTimeout = state.isTimeout;
 
-            (bool isJobQuota, bool isPoolQuota, bool isTimeout) GetState(string code)
+            static (bool isJobQuota, bool isPoolQuota, bool isTimeout) GetState(string code)
                 => (IsJobQuotaException(code), IsPoolQuotaException(code), IsTimeoutException(code));
         }
 
