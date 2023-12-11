@@ -224,7 +224,7 @@ namespace TesApi.Tests
         }
 
         private static BatchAccountResourceInformation GetNewBatchResourceInfo()
-          => new("batchAccount", "mrg", "sub-id", "eastus");
+          => new("batchAccount", "mrg", "sub-id", "eastus", "batchAccount/endpoint");
 
         [TestMethod]
         public async Task TesTaskFailsWithSystemErrorWhenNoSuitableVmExists()
@@ -1786,21 +1786,7 @@ namespace TesApi.Tests
             var config = GetMockConfig()();
             return new(
                 wrapAzureProxy: true,
-                accountResourceInformation: new("defaultbatchaccount", "defaultresourcegroup", "defaultsubscription", "defaultregion"),
-                configuration: config,
-                azureProxy: GetMockAzureProxy(azureProxyReturn),
-                batchQuotaProvider: GetMockQuotaProvider(azureProxyReturn),
-                batchSkuInformationProvider: GetMockSkuInfoProvider(azureProxyReturn),
-                allowedVmSizesServiceSetup: GetMockAllowedVms(config));
-        }
-        private static TestServices.TestServiceProvider<IBatchScheduler> GetServiceProviderWithMockStorageProvider(AzureProxyReturnValues azureProxyReturn = default)
-        {
-            azureProxyReturn ??= AzureProxyReturnValues.Defaults;
-            var config = GetMockConfig()();
-            return new(
-                wrapAzureProxy: true,
-                mockStorageAccessProvider: true,
-                accountResourceInformation: new("defaultbatchaccount", "defaultresourcegroup", "defaultsubscription", "defaultregion"),
+                accountResourceInformation: new("defaultbatchaccount", "defaultresourcegroup", "defaultsubscription", "defaultregion", "defaultendpoint"),
                 configuration: config,
                 azureProxy: GetMockAzureProxy(azureProxyReturn),
                 batchQuotaProvider: GetMockQuotaProvider(azureProxyReturn),

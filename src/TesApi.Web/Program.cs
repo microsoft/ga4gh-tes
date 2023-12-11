@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.ApplicationInsights;
+using TesApi.Web.Management;
 
 namespace TesApi.Web
 {
@@ -64,7 +65,7 @@ namespace TesApi.Web
                         return applicationInsightsOptions;
                     }
 
-                    var connectionString = AzureProxy.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, System.Threading.CancellationToken.None).Result;
+                    var connectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, System.Threading.CancellationToken.None).Result;
                     if (!string.IsNullOrWhiteSpace(connectionString))
                     {
                         applicationInsightsOptions.ConnectionString = connectionString;

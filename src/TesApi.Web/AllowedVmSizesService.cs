@@ -83,6 +83,7 @@ namespace TesApi.Web
                 {
                     await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
                 }
+
                 await firstTask;
             }
 

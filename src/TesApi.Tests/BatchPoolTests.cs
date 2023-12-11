@@ -162,7 +162,7 @@ namespace TesApi.Tests
                 azureProxy: PrepareMockAzureProxy(azureProxyReturn),
                 batchQuotaProvider: GetMockQuotaProvider(azureProxyReturn),
                 batchSkuInformationProvider: GetMockSkuInfoProvider(azureProxyReturn),
-                accountResourceInformation: new("defaultbatchaccount", "defaultresourcegroup", "defaultsubscription", "defaultregion"));
+                accountResourceInformation: new("defaultbatchaccount", "defaultresourcegroup", "defaultsubscription", "defaultregion", "defaultendpoint"));
         }
 
         private static async Task<BatchPool> AddPool(BatchScheduler batchPools, bool isPreemtable)

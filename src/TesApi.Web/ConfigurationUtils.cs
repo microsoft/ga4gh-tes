@@ -42,12 +42,14 @@ namespace TesApi.Web
         {
             ArgumentNullException.ThrowIfNull(quotaProvider);
             ArgumentNullException.ThrowIfNull(batchAccountResourceInformation);
+
             if (string.IsNullOrEmpty(batchAccountResourceInformation.Region))
             {
                 throw new ArgumentException(
                     $"The batch information provided does not include region. Batch information:{batchAccountResourceInformation}",
                     nameof(batchAccountResourceInformation));
             }
+
             ArgumentNullException.ThrowIfNull(logger);
 
             this.storageAccessProvider = storageAccessProvider;
@@ -86,7 +88,7 @@ namespace TesApi.Web
             if (allowedVmSizesFileContent is null)
             {
                 logger.LogWarning($"Unable to read from {allowedVmSizesUrl.AbsolutePath}. All supported VM sizes will be eligible for Azure Batch task scheduling.");
-                return new List<string>();
+                return supportedVmSizes.Select(v => v.VmSize).Distinct().ToList();
             }
 
             // Read the allowed-vm-sizes configuration file and remove any previous warnings (those start with "<" following the VM size or family name)

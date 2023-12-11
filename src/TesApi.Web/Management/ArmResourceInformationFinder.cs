@@ -16,7 +16,7 @@ namespace TesApi.Web.Management
     /// <summary>
     /// Provides utility methods to find resource information using the TES service identity
     /// </summary>
-    public class ArmResourceInformationFinder
+    public static class ArmResourceInformationFinder
     {
         /// <summary>
         /// Looks up the AppInsights instrumentation key in subscriptions the TES services has access to 
@@ -24,31 +24,15 @@ namespace TesApi.Web.Management
         /// <param name="accountName"></param>
         /// <returns></returns>
         /// <param name="cancellationToken"></param>
-        public static async Task<string> GetAppInsightsInstrumentationKeyAsync(string accountName, CancellationToken cancellationToken)
+        public static Task<string> GetAppInsightsConnectionStringAsync(string accountName, CancellationToken cancellationToken)
         {
-            var azureClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(cancellationToken);
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
-
-            var credentials = new TokenCredentials(await GetAzureAccessTokenAsync());
-
-            await foreach (var subscriptionId in subscriptionIds.WithCancellation(cancellationToken))
-            {
-                var app = (await new ApplicationInsightsManagementClient(credentials) { SubscriptionId = subscriptionId }.Components.ListAsync(cancellationToken))
-                    .FirstOrDefault(a => a.ApplicationId.Equals(accountName, StringComparison.OrdinalIgnoreCase));
-
-                if (app is not null)
-                {
-                    return app.InstrumentationKey;
-                }
-            }
-
-            return null;
-        }
-
-        //TODO: refactor this to use Azure Identity token provider. 
-        private static Task<string> GetAzureAccessTokenAsync(string resource = "https://management.azure.com/")
-        {
-            return new AzureServiceTokenProvider().GetAccessTokenAsync(resource);
+            return GetAzureResourceAsync(
+                clientFactory: (tokenCredentials, subscription) => new ApplicationInsightsManagementClient(tokenCredentials) { SubscriptionId = subscription },
+                listAsync: (client, ct) => client.Components.ListAsync(ct),
+                listNextAsync: (client, link, ct) => client.Components.ListNextAsync(link, ct),
+                predicate: a => a.ApplicationId.Equals(accountName, StringComparison.OrdinalIgnoreCase),
+                cancellationToken: cancellationToken,
+                finalize: a => a.ConnectionString);
         }
 
         /// <summary>
@@ -58,31 +42,77 @@ namespace TesApi.Web.Management
         /// <param name="batchAccountName">batch account name</param>
         /// <returns></returns>
         /// <param name="cancellationToken"></param>
-        public static async Task<BatchAccountResourceInformation> TryGetResourceInformationFromAccountNameAsync(string batchAccountName, CancellationToken cancellationToken)
+        public static Task<BatchAccountResourceInformation> TryGetResourceInformationFromAccountNameAsync(string batchAccountName, CancellationToken cancellationToken)
         {
             //TODO: look if a newer version of the management SDK provides a simpler way to look for this information .
-            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync());
-            var azureClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(cancellationToken);
+            return GetAzureResourceAsync(
+                clientFactory: (tokenCredentials, subscription) => new BatchManagementClient(tokenCredentials) { SubscriptionId = subscription },
+                listAsync: (client, ct) => client.BatchAccount.ListAsync(ct),
+                listNextAsync: (client, link, ct) => client.BatchAccount.ListNextAsync(link, ct),
+                predicate: a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase),
+                cancellationToken: cancellationToken,
+                finalize: batchAccount => BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id, batchAccount.Location, $"https://{batchAccount.AccountEndpoint}"));
+        }
 
-            var subscriptionIds = (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken))
-                .ToAsyncEnumerable().Select(s => s.SubscriptionId);
+        //TODO: refactor this to use Azure Identity token provider. 
+        private static Task<string> GetAzureAccessTokenAsync(string resource = "https://management.azure.com/")
+        {
+            return new AzureServiceTokenProvider().GetAccessTokenAsync(resource);
+        }
 
-            await foreach (var subId in subscriptionIds.WithCancellation(cancellationToken))
+        /// <summary>
+        /// Looks up an Azure resource with management clients that use <see cref="Microsoft.Rest.Azure.IPage{T}"/> enumerators
+        /// </summary>
+        /// <typeparam name="TResult">Value to return</typeparam>
+        /// <typeparam name="TAzManagementClient">Type of Azure management client to use to locate resources of type <typeparamref name="TResource"/></typeparam>
+        /// <typeparam name="TResource">Type of Azure resource to enumerate/locate</typeparam>
+        /// <param name="clientFactory">Returns management client appropriate for enumerating resources of <typeparamref name="TResource"/>. A <see cref="TokenCredentials"/> and the <c>SubscriptionId</c> are passed to this method as parameters.</param>
+        /// <param name="listAsync"><c>ListAsync</c> method from operational parameter on <typeparamref name="TAzManagementClient"/>. Parameters are the <typeparamref name="TAzManagementClient"/> returned by <paramref name="clientFactory"/> and <paramref name="cancellationToken"/>.</param>
+        /// <param name="listNextAsync"><c>ListNextAsync</c> method from operational parameter on <typeparamref name="TAzManagementClient"/>. Parameters are the <typeparamref name="TAzManagementClient"/> returned by <paramref name="clientFactory"/>, the <see cref="Microsoft.Rest.Azure.IPage{T}.NextPageLink"/> from the previous server call, and <paramref name="cancellationToken"/>.</param>
+        /// <param name="predicate">Returns true when the desired <typeparamref name="TResource"/> is found.</param>
+        /// <param name="cancellationToken"></param>
+        /// <param name="finalize">Converts <typeparamref name="TResource"/> to <typeparamref name="TResult"/>. Required if <typeparamref name="TResource"/> is not <typeparamref name="TResult"/>.</param>
+        /// <returns>The <typeparamref name="TResult"/> derived from the first <typeparamref name="TResource"/> that satisfies the condition in <paramref name="predicate"/>, else <c>default</c>.</returns>
+        private static async Task<TResult> GetAzureResourceAsync<TResult, TAzManagementClient, TResource>(
+                Func<TokenCredentials, string, TAzManagementClient> clientFactory,
+                Func<TAzManagementClient, CancellationToken, Task<Microsoft.Rest.Azure.IPage<TResource>>> listAsync,
+                Func<TAzManagementClient, string, CancellationToken, Task<Microsoft.Rest.Azure.IPage<TResource>>> listNextAsync,
+                Predicate<TResource> predicate,
+                CancellationToken cancellationToken,
+                Func<TResource, TResult> finalize = default)
+            where TAzManagementClient : Microsoft.Rest.Azure.IAzureClient, IDisposable
+        {
+            if (typeof(TResult) == typeof(TResource))
             {
-                using var batchClient = new BatchManagementClient(tokenCredentials) { SubscriptionId = subId };
-                var batchAccountOperations = batchClient.BatchAccount;
+                finalize ??= new(a => (TResult)Convert.ChangeType(a, typeof(TResult)));
+            }
 
-                var batchAccount = await (await batchAccountOperations.ListAsync(cancellationToken))
-                    .ToAsyncEnumerable(batchAccountOperations.ListNextAsync)
-                    .FirstOrDefaultAsync(a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
+            ArgumentNullException.ThrowIfNull(clientFactory);
+            ArgumentNullException.ThrowIfNull(listAsync);
+            ArgumentNullException.ThrowIfNull(listNextAsync);
+            ArgumentNullException.ThrowIfNull(predicate);
+            ArgumentNullException.ThrowIfNull(finalize);
 
-                if (batchAccount is not null)
+            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync());
+            var azureManagementClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(cancellationToken);
+
+            var subscriptions = (await azureManagementClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
+
+            await foreach (var subId in subscriptions.WithCancellation(cancellationToken))
+            {
+                using var client = clientFactory(tokenCredentials, subId);
+
+                var item = await (await listAsync(client, cancellationToken))
+                    .ToAsyncEnumerable((page, ct) => listNextAsync(client, page, ct))
+                    .FirstOrDefaultAsync(a => predicate(a), cancellationToken);
+
+                if (item is not null)
                 {
-                    return BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id, batchAccount.Location);
+                    return finalize(item);
                 }
             }
 
-            return null;
+            return default;
         }
     }
 }

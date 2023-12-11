@@ -5,9 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-//using Microsoft.Extensions.Caching.Memory;
-//using Microsoft.Extensions.DependencyInjection;
-//using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
@@ -31,7 +28,6 @@ namespace TesApi.Tests
                 accountResourceInformation: GetResourceInformation(),
                 batchSkuInformationProvider: GetMockSkuInformationProvider());
 
-            //  armBatchQuotaProvider: (GetMockQuotaProviderExpression, GetMockQuotaProvider()));
             var configurationUtils = serviceProvider.GetT();
 
             await configurationUtils.ProcessAllowedVmSizesConfigurationFileAsync(System.Threading.CancellationToken.None);
@@ -47,13 +43,7 @@ namespace TesApi.Tests
         }
 
         private static BatchAccountResourceInformation GetResourceInformation()
-            => new("batchAccount", "mrg", "sub-id", "eastus");
-
-        //private static System.Linq.Expressions.Expression<Func<ArmBatchQuotaProvider>> GetMockQuotaProviderExpression(IServiceProvider provider)
-        //    => () => new ArmBatchQuotaProvider(
-        //        provider.GetRequiredService<IMemoryCache>(),
-        //        new AzureManagementClientsFactory(GetResourceInformation()),
-        //        provider.GetRequiredService<ILogger<ArmBatchQuotaProvider>>());
+            => new("batchAccount", "mrg", "sub-id", "eastus", "batchAccount/endpoint");
 
         private static Action<Mock<IBatchQuotaProvider>> GetMockQuotaProvider()
             => new(mockArmQuotaProvider =>
@@ -114,27 +104,27 @@ namespace TesApi.Tests
         {
             return new List<VirtualMachineInformation>
             {
-                new VirtualMachineInformation
+                new()
                 {
                     VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 3,
                     ResourceDiskSizeInGiB = 20, PricePerHour = 11
                 },
-                new VirtualMachineInformation
+                new()
                 {
                     VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = true, VCpusAvailable = 2, MemoryInGiB = 3,
                     ResourceDiskSizeInGiB = 20, PricePerHour = 22
                 },
-                new VirtualMachineInformation
+                new()
                 {
                     VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = false, VCpusAvailable = 4, MemoryInGiB = 6,
                     ResourceDiskSizeInGiB = 40, PricePerHour = 33
                 },
-                new VirtualMachineInformation
+                new()
                 {
                     VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = true, VCpusAvailable = 4, MemoryInGiB = 6,
                     ResourceDiskSizeInGiB = 40, PricePerHour = 44
                 },
-                new VirtualMachineInformation
+                new()
                 {
                     VmSize = "VmSize3", VmFamily = "VmFamily3", LowPriority = false, VCpusAvailable = 8, MemoryInGiB = 12,
                     ResourceDiskSizeInGiB = 80, PricePerHour = 55
@@ -146,9 +136,9 @@ namespace TesApi.Tests
         {
             var dedicatedCoreQuotaPerVmFamily = new List<BatchVmCoresPerFamily>()
             {
-                new BatchVmCoresPerFamily("VmFamily1", 100),
-                new BatchVmCoresPerFamily("VmFamily2", 0),
-                new BatchVmCoresPerFamily("VmFamily3", 300)
+                new("VmFamily1", 100),
+                new("VmFamily2", 0),
+                new("VmFamily3", 300)
             };
 
             var batchQuotas = new BatchVmCoreQuota
@@ -157,7 +147,7 @@ namespace TesApi.Tests
                 IsLowPriority: false,
                 IsDedicatedAndPerVmFamilyCoreQuotaEnforced: true,
                 DedicatedCoreQuotas: dedicatedCoreQuotaPerVmFamily,
-                AccountQuota: new AccountQuota(
+                AccountQuota: new(
                     ActiveJobAndJobScheduleQuota: 1,
                     DedicatedCoreQuota: 5,
                     PoolQuota: 1,
