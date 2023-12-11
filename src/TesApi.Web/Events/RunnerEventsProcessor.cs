@@ -388,9 +388,16 @@ namespace TesApi.Web.Events
                     yield break;
                 }
 
+                // See: Tes.Runner.Logs.AppendBlobLogPublisher constructor and GetBlobNameConsideringBlockCountCurrentState()
+                // There will be two or three underlines in the last path segment of each blob name, and the names will always have a ".txt" extension.
+                // If there are three underlines, between the last underline and the extension is an incrementing int. If not, the file is the first (and possibly only).
+
                 await foreach (var uri in azureProxy.ListBlobsAsync(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken), cancellationToken)
-                    .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.Split('/').Last().StartsWith(blobNameStartsWith))
-                    .OrderBy(blob => blob.BlobName) // Not perfect ordering, but reasonable. The final results are more likely to be interpreted by people rather then machines. Perfect would involve regex.
+                    .Select(blob => (blob.BlobUri, BlobName: blob.BlobName.Split('/').Last()))
+                    .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.StartsWith(blobNameStartsWith))
+                    .Select(blob => (blob.BlobUri, BlobNameParts: blob.BlobName.Split('_', 4)))
+                    .OrderBy(blob => string.Join('_', blob.BlobNameParts.Take(3)))
+                    .ThenBy(blob => blob.BlobNameParts.Length < 3 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture))
                     .Select(blob => blob.BlobUri)
                     .WithCancellation(cancellationToken))
                 {
