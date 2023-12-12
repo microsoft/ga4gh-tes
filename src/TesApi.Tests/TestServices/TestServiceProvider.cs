@@ -79,7 +79,7 @@ namespace TesApi.Tests.TestServices
                         .AddTransient<ILogger<TaskToNodeTaskConverter>>(_ => NullLogger<TaskToNodeTaskConverter>.Instance)
                         .AddTransient<ILogger<TaskExecutionScriptingManager>>(_ => NullLogger<TaskExecutionScriptingManager>.Instance)
                         .AddTransient<ILogger<BatchNodeScriptBuilder>>(_ => NullLogger<BatchNodeScriptBuilder>.Instance)
-                        .AddSingleton<TestRepositoryStorage>()
+                        .AddTransient<ILogger<CachingWithRetriesAzureProxy>>(_ => NullLogger<CachingWithRetriesAzureProxy>.Instance)
                         .AddSingleton<CachingRetryHandler>()
                         .AddSingleton<PriceApiClient>()
                         .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
@@ -222,11 +222,5 @@ namespace TesApi.Tests.TestServices
                 Dispose();
             return ValueTask.CompletedTask;
         }
-    }
-
-    internal sealed class TestRepository<T> : BaseRepository<T> where T : RepositoryItem<T>
-    {
-        public TestRepository(string endpoint, string key, string databaseId, string containerId, string partitionKeyValue, TestRepositoryStorage storage)
-            : base(endpoint, key, databaseId, containerId, partitionKeyValue, storage) { }
     }
 }

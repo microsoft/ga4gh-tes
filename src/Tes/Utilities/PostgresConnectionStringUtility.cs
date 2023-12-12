@@ -22,7 +22,7 @@ namespace Tes.Utilities
 
             if (options.Value.ServerName.Contains(options.Value.ServerNameSuffix, StringComparison.OrdinalIgnoreCase))
             {
-                throw new ArgumentException($"'{nameof(options.Value.ServerName)}' should only contain the name of the server like 'myserver' and NOT the full host name like 'myserver{options.Value.ServerNameSuffix}'", nameof(options.Value.ServerName));
+                throw new ArgumentException($"'{nameof(options.Value.ServerName)}' should only contain the name of the server like 'myserver' and NOT the full host name like 'myserver{options.Value.ServerNameSuffix}'", nameof(options));
             }
 
             var connectionStringBuilder = new StringBuilder();

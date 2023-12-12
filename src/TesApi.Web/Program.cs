@@ -49,7 +49,6 @@ namespace TesApi.Web
                 {
                     var applicationInsightsOptions = configuration.GetSection(Options.ApplicationInsightsOptions.SectionName).Get<Options.ApplicationInsightsOptions>();
                     var applicationInsightsAccountName = applicationInsightsOptions?.AccountName;
-                    Console.WriteLine($"ApplicationInsightsAccountName: {applicationInsightsAccountName}");
 
                     if (applicationInsightsAccountName is null || !string.IsNullOrWhiteSpace(applicationInsightsOptions?.ConnectionString))
                     {
@@ -58,17 +57,15 @@ namespace TesApi.Web
 
                     var applicationInsightsConnectionString = configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
 
+                    if (string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
+                    {
+                        applicationInsightsConnectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, System.Threading.CancellationToken.None).Result;
+                    }
+
                     if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
                     {
                         applicationInsightsOptions ??= new Options.ApplicationInsightsOptions();
                         applicationInsightsOptions.ConnectionString = applicationInsightsConnectionString;
-                        return applicationInsightsOptions;
-                    }
-
-                    var connectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, System.Threading.CancellationToken.None).Result;
-                    if (!string.IsNullOrWhiteSpace(connectionString))
-                    {
-                        applicationInsightsOptions.ConnectionString = connectionString;
                     }
 
                     return applicationInsightsOptions;
