@@ -627,29 +627,40 @@ namespace TesApi.Web
 
             results.Clear();
 
-            // Determine how many nodes in each new pool we might need for this group.
+            // Determine how many nodes in each possibly new pool we might need for this group of tasks.
             var neededPoolNodesByPoolKey = tasksMetadataByPoolKey.ToDictionary(t => t.Key, t => t.Value.Length);
 
             {
-                // Determine how many new pools/jobs we will need for this batch
-                var requiredNewPools = neededPoolNodesByPoolKey.Where(t => !IsPoolAvailable(t.Key)).Count();
+                // Determine how many new pools/jobs we need now
+                var requiredNewPools = neededPoolNodesByPoolKey.Keys.WhereNot(IsPoolAvailable).ToArray();
 
-                // Revisit pool/job quotas (the above loop already dealt with the possiblility of needing just one more pool/job).
+                // Revisit pool/job quotas (the above loop already dealt with the possiblility of needing just one more pool or job).
                 // This will remove pool keys we cannot accomodate due to quota, along with all of their associated tasks, from being queued into Batch.
-                if (requiredNewPools > 1)
+                if (requiredNewPools.Skip(1).Any())
                 {
-                    for (var (excess, exception) = await quotaVerifier.CheckBatchAccountPoolAndJobQuotasAsync(requiredNewPools, cancellationToken);
-                        excess > 0;)
+                    bool TryRemoveKeyAndTasks(string key, out (string Key, ImmutableArray<QueuedTaskMetadata> ListOfTaskMetadata) result)
                     {
-                        var key = tasksMetadataByPoolKey.Keys.Last();
+                        result = default;
+
                         if (tasksMetadataByPoolKey.TryRemove(key, out var listOfTaskMetadata))
                         {
-                            foreach (var task in listOfTaskMetadata.Select(m => m.TesTask))
-                            {
-                                yield return new(HandleExceptionAsync(exception, key, task), task);
-                            }
+                            result = (key, listOfTaskMetadata);
+                            return true;
+                        }
 
-                            excess--;
+                        return false;
+                    }
+
+                    var (excess, exception) = await quotaVerifier.CheckBatchAccountPoolAndJobQuotasAsync(requiredNewPools.Length, cancellationToken);
+
+                    foreach (var (key, listOfTaskMetadata) in requiredNewPools
+                        .Reverse() // TODO: do we want to favor earlier or later tasks?
+                        .SelectWhere<string, (string, ImmutableArray<QueuedTaskMetadata>)>(TryRemoveKeyAndTasks)
+                        .Take(excess))
+                    {
+                        foreach (var task in listOfTaskMetadata.Select(m => m.TesTask))
+                        {
+                            yield return new(HandleExceptionAsync(exception, key, task), task);
                         }
                     }
                 }
