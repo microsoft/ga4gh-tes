@@ -15,7 +15,6 @@ using Polly;
 using Polly.Retry;
 using Tes.ApiClients;
 using Tes.ApiClients.Options;
-using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 

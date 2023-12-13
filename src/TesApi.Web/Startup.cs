@@ -36,7 +36,7 @@ namespace TesApi.Web
     public class Startup
     {
         // TODO centralize in single location
-        private const string tesVersion = "5.0.1";
+        private const string TesVersion = "5.0.1";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -80,6 +80,7 @@ namespace TesApi.Web
                     .AddSingleton<AzureProxy>()
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
+                    .AddSingleton(CreateTerraApiClient)
                     .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
                     .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
@@ -112,9 +113,9 @@ namespace TesApi.Web
 
                     .AddSwaggerGen(c =>
                     {
-                        c.SwaggerDoc(tesVersion, new()
+                        c.SwaggerDoc(TesVersion, new()
                         {
-                            Version = tesVersion,
+                            Version = TesVersion,
                             Title = "GA4GH Task Execution Service",
                             Description = "Task Execution Service (ASP.NET Core 7.0)",
                             Contact = new()
@@ -142,11 +143,10 @@ namespace TesApi.Web
                     .AddHostedService<DeleteCompletedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedBatchJobsHostedService>()
                     .AddHostedService<DeleteOrphanedAutoPoolsHostedService>();
-                //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
             }
             catch (Exception exc)
             {
-                logger?.LogCritical(exc, $"TES could not start: {exc.Message}");
+                logger?.LogCritical(exc, @"TES could not start: {ExceptionMessage}", exc.Message);
                 Console.WriteLine($"TES could not start: {exc}");
                 throw;
             }
@@ -156,17 +156,13 @@ namespace TesApi.Web
 
             IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
             {
-                var terraOptions = services.GetService<IOptions<TerraOptions>>();
-
                 logger.LogInformation("Attempting to create a Batch Quota Provider");
 
-                if (!string.IsNullOrEmpty(terraOptions?.Value.WsmApiHost))
+                if (TerraOptionsAreConfigured(services))
                 {
-                    logger.LogInformation("Terra WSM API Host is set. Using the Terra Quota Provider.");
+                    logger.LogInformation("Using the Terra Quota Provider.");
 
-                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, terraOptions.Value.WsmApiHost);
-
-                    return new TerraQuotaProvider(terraApiClient, terraOptions);
+                    return ActivatorUtilities.CreateInstance<TerraQuotaProvider>(services);
                 }
 
                 logger.LogInformation("Using default ARM Quota Provider.");
@@ -176,17 +172,13 @@ namespace TesApi.Web
 
             IBatchPoolManager CreateBatchPoolManagerFromConfiguration(IServiceProvider services)
             {
-                var terraOptions = services.GetService<IOptions<TerraOptions>>();
-
                 logger.LogInformation("Attempting to create a Batch Pool Manager");
 
-                if (!string.IsNullOrEmpty(terraOptions?.Value.WsmApiHost))
+                if (TerraOptionsAreConfigured(services))
                 {
-                    logger.LogInformation("Terra WSM API Host is set. Using Terra Batch Pool Manager");
+                    logger.LogInformation("Using Terra Batch Pool Manager");
 
-                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, terraOptions.Value.WsmApiHost);
-
-                    return ActivatorUtilities.CreateInstance<TerraBatchPoolManager>(services, terraApiClient);
+                    return ActivatorUtilities.CreateInstance<TerraBatchPoolManager>(services);
                 }
 
                 logger.LogInformation("Using default Batch Pool Manager.");
@@ -196,25 +188,49 @@ namespace TesApi.Web
 
             IStorageAccessProvider CreateStorageAccessProviderFromConfiguration(IServiceProvider services)
             {
-                var options = services.GetRequiredService<IOptions<TerraOptions>>();
-
                 logger.LogInformation("Attempting to create a Storage Access Provider");
 
-                //if workspace id is set, then we are assuming we are running in terra
-                if (!string.IsNullOrEmpty(options.Value.WorkspaceId))
+                if (TerraOptionsAreConfigured(services))
                 {
-                    logger.LogInformation("Terra Workspace Id is set. Using Terra Storage Provider");
+                    logger.LogInformation("Using Terra Storage Provider");
 
-                    ValidateRequiredOptionsForTerraStorageProvider(options.Value);
-
-                    var terraApiClient = ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, options.Value.WsmApiHost);
-
-                    return ActivatorUtilities.CreateInstance<TerraStorageAccessProvider>(services, terraApiClient);
+                    return ActivatorUtilities.CreateInstance<TerraStorageAccessProvider>(services);
                 }
 
                 logger.LogInformation("Using Default Storage Provider");
 
                 return ActivatorUtilities.CreateInstance<DefaultStorageAccessProvider>(services);
+            }
+
+            bool TerraOptionsAreConfigured(IServiceProvider services)
+            {
+                var options = services.GetRequiredService<IOptions<TerraOptions>>();
+
+                //if workspace id is set, then we are assuming we are running in terra
+                if (!string.IsNullOrEmpty(options.Value.WorkspaceId))
+                {
+                    ValidateRequiredOptionsForTerraStorageProvider(options.Value);
+
+                    return true;
+                }
+
+                return false;
+            }
+
+            TerraWsmApiClient CreateTerraApiClient(IServiceProvider services)
+            {
+                logger.LogInformation("Attempting to create a Terra WSM API client");
+
+                if (TerraOptionsAreConfigured(services))
+                {
+                    var options = services.GetRequiredService<IOptions<TerraOptions>>();
+
+                    ValidateRequiredOptionsForTerraStorageProvider(options.Value);
+
+                    return ActivatorUtilities.CreateInstance<TerraWsmApiClient>(services, options.Value.WsmApiHost);
+                }
+
+                throw new InvalidOperationException("Terra WSM API Host is not configured.");
             }
 
             static void ValidateRequiredOptionsForTerraStorageProvider(TerraOptions terraOptions)
@@ -262,51 +278,53 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="app">An Microsoft.AspNetCore.Builder.IApplicationBuilder for the app to configure.</param>
         public void Configure(IApplicationBuilder app)
-            => app.UseRouting()
-                .UseEndpoints(endpoints =>
-                {
-                    endpoints.MapControllers();
-                })
-
-                .UseHttpsRedirection()
-
-                .UseDefaultFiles()
-                .UseStaticFiles()
-                .UseSwagger(c =>
-                {
-                    c.RouteTemplate = "swagger/{documentName}/openapi.json";
-                })
-                .UseSwaggerUI(c =>
-                {
-                    c.SwaggerEndpoint($"/swagger/{tesVersion}/openapi.json", "Task Execution Service");
-                })
-
-                .IfThenElse(hostingEnvironment.IsDevelopment(),
-                    s =>
+        {
+            try
+            {
+                app.UseRouting()
+                    .UseEndpoints(endpoints =>
                     {
-                        var r = s.UseDeveloperExceptionPage();
-                        logger.LogInformation("Configuring for Development environment");
-                    },
-                    s =>
+                        endpoints.MapControllers();
+                    })
+
+                    .UseHttpsRedirection()
+
+                    .UseDefaultFiles()
+                    .UseStaticFiles()
+                    .UseSwagger(c =>
                     {
-                        var r = s.UseHsts();
-                        logger.LogInformation("Configuring for Production environment");
-                    });
+                        c.RouteTemplate = "swagger/{documentName}/openapi.json";
+                    })
+                    .UseSwaggerUI(c =>
+                    {
+                        c.SwaggerEndpoint($"/swagger/{TesVersion}/openapi.json", "Task Execution Service");
+                    })
+
+                    .IfThenElse(hostingEnvironment.IsDevelopment(),
+                        s =>
+                        {
+                            logger.LogInformation("Configuring for Development environment");
+                            return s.UseDeveloperExceptionPage();
+                        },
+                        s =>
+                        {
+                            logger.LogInformation("Configuring for Production environment");
+                            return s.UseHsts();
+                        });
+            }
+            catch (Exception exc)
+            {
+                logger?.LogCritical(exc, @"TES could not start: {ExceptionMessage}", exc.Message);
+                Console.WriteLine($"TES could not start: {exc}");
+                throw;
+            }
+        }
     }
 
     internal static class BooleanMethodSelectorExtensions
     {
         public static IApplicationBuilder IfThenElse(this IApplicationBuilder builder, bool @if, Func<IApplicationBuilder, IApplicationBuilder> then, Func<IApplicationBuilder, IApplicationBuilder> @else)
             => @if ? then(builder) : @else(builder);
-
-        public static IApplicationBuilder IfThenElse(this IApplicationBuilder builder, bool @if, Action<IApplicationBuilder> then, Action<IApplicationBuilder> _else)
-            => builder.IfThenElse(@if, b => builder.Wrap(then), b => builder.Wrap(_else));
-
-        private static IApplicationBuilder Wrap(this IApplicationBuilder builder, Action<IApplicationBuilder> action)
-        {
-            action?.Invoke(builder);
-            return builder;
-        }
 
         public static IServiceCollection IfThenElse(this IServiceCollection services, bool @if, Func<IServiceCollection, IServiceCollection> then, Func<IServiceCollection, IServiceCollection> @else)
             => @if ? then(services) : @else(services);
