@@ -295,10 +295,6 @@ namespace TesApi.Web
                     {
                         c.RouteTemplate = "swagger/{documentName}/openapi.json";
                     })
-                    .UseSwaggerUI(c =>
-                    {
-                        c.SwaggerEndpoint($"/swagger/{TesVersion}/openapi.json", "Task Execution Service");
-                    })
 
                     .IfThenElse(hostingEnvironment.IsDevelopment(),
                         s =>
