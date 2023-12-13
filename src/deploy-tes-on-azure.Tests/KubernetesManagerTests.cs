@@ -12,8 +12,8 @@ namespace TesDeployer.Tests
         [TestMethod]
         public async Task ValuesTemplateSuccessfullyDeserializesTesdatabaseToYaml()
         {
-            _ = new KubernetesManager(null, null, System.Threading.CancellationToken.None);
-            var helmValues = await KubernetesManager.GetHelmValuesAsync(@"./cromwell-on-azure/helm/values-template.yaml");
+            var manager = new KubernetesManager(null, null, System.Threading.CancellationToken.None);
+            var helmValues = await manager.GetHelmValuesAsync(@"./cromwell-on-azure/helm/values-template.yaml");
             Assert.IsNotNull(helmValues.TesDatabase);
         }
     }

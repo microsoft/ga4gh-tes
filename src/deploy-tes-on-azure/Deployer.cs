@@ -23,7 +23,6 @@ using Azure.ResourceManager.Resources;
 using Azure.Security.KeyVault.Secrets;
 using Azure.Storage;
 using Azure.Storage.Blobs;
-using CommonUtilities;
 using k8s;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.Batch.Models;
@@ -148,7 +147,7 @@ namespace TesDeployer
 
                 await Execute("Connecting to Azure Services...", async () =>
                 {
-                    tokenProvider = new RefreshableAzureServiceTokenProvider("https://management.azure.com/");
+                    tokenProvider = new CommonUtilities.RefreshableAzureServiceTokenProvider("https://management.azure.com/");
                     tokenCredentials = new(tokenProvider);
                     azureCredentials = new(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
                     armClient = new ArmClient(new DefaultAzureCredential());
@@ -178,7 +177,7 @@ namespace TesDeployer
 
                 try
                 {
-                    var targetVersion = Utility.DelimitedTextToDictionary(Utility.GetFileContent("scripts", "env-00-tes-version.txt")).GetValueOrDefault("CromwellOnAzureVersion");
+                    var targetVersion = Utility.DelimitedTextToDictionary(Utility.GetFileContent("scripts", "env-00-tes-version.txt")).GetValueOrDefault("TesOnAzureVersion");
 
                     if (configuration.Update)
                     {
@@ -187,12 +186,7 @@ namespace TesDeployer
 
                         ConsoleEx.WriteLine($"Upgrading TES on Azure instance in resource group '{resourceGroup.Name}' to version {targetVersion}...");
 
-                        if (!string.IsNullOrEmpty(configuration.StorageAccountName))
-                        {
-                            storageAccount = await GetExistingStorageAccountAsync(configuration.StorageAccountName)
-                                ?? throw new ValidationException($"Storage account {configuration.StorageAccountName} does not exist in region {configuration.RegionName} or is not accessible to the current user.", displayExample: false);
-                        }
-                        else
+                        if (string.IsNullOrEmpty(configuration.StorageAccountName))
                         {
                             var storageAccounts = (await azureSubscriptionClient.StorageAccounts.ListByResourceGroupAsync(configuration.ResourceGroupName)).ToList();
 
@@ -203,15 +197,15 @@ namespace TesDeployer
                                 _ => throw new ValidationException($"Resource group {configuration.ResourceGroupName} contains multiple storage accounts. {nameof(configuration.StorageAccountName)} must be provided.", displayExample: false),
                             };
                         }
+                        else
+                        {
+                            storageAccount = await GetExistingStorageAccountAsync(configuration.StorageAccountName)
+                                ?? throw new ValidationException($"Storage account {configuration.StorageAccountName} does not exist in region {configuration.RegionName} or is not accessible to the current user.", displayExample: false);
+                        }
 
                         ManagedCluster existingAksCluster = default;
 
-                        if (!string.IsNullOrWhiteSpace(configuration.AksClusterName))
-                        {
-                            existingAksCluster = (await GetExistingAKSClusterAsync(configuration.AksClusterName))
-                                ?? throw new ValidationException($"AKS cluster {configuration.AksClusterName} does not exist in region {configuration.RegionName} or is not accessible to the current user.", displayExample: false);
-                        }
-                        else
+                        if (string.IsNullOrWhiteSpace(configuration.AksClusterName))
                         {
                             using var client = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
                             var aksClusters = (await client.ManagedClusters.ListByResourceGroupAsync(configuration.ResourceGroupName)).ToList();
@@ -224,6 +218,11 @@ namespace TesDeployer
                             };
 
                             configuration.AksClusterName = existingAksCluster.Name;
+                        }
+                        else
+                        {
+                            existingAksCluster = (await GetExistingAKSClusterAsync(configuration.AksClusterName))
+                                ?? throw new ValidationException($"AKS cluster {configuration.AksClusterName} does not exist in region {configuration.RegionName} or is not accessible to the current user.", displayExample: false);
                         }
 
                         var aksValues = await kubernetesManager.GetAKSSettingsAsync(storageAccount);
@@ -283,9 +282,12 @@ namespace TesDeployer
 
                         configuration.BatchAccountName = batchAccountName;
 
-                        // Note: Current behavior is to block switching from Docker MySQL to Azure PostgreSql on Update.
-                        // However we do ancitipate including this change, this code is here to facilitate this future behavior.
-                        configuration.PostgreSqlServerName = aksValues.GetValueOrDefault("PostgreSqlServerName");
+                        if (!aksValues.TryGetValue("PostgreSqlServerName", out var postgreSqlServerName))
+                        {
+                            throw new ValidationException($"Could not retrieve the PostgreSqlServer account name from stored configuration in {storageAccount.Name}.", displayExample: false);
+                        }
+
+                        configuration.PostgreSqlServerName = postgreSqlServerName;
 
                         if (aksValues.TryGetValue("CrossSubscriptionAKSDeployment", out var crossSubscriptionAKSDeployment))
                         {
@@ -342,7 +344,15 @@ namespace TesDeployer
                             waitForRoleAssignmentPropagation |= hasAssignedNetworkContributor || hasAssignedDataOwner;
                         }
 
-                        //if (installedVersion is null || installedVersion < new Version(4, 9))
+                        if (installedVersion is null || installedVersion < new Version(5, 0, 1))
+                        {
+                            if (string.IsNullOrWhiteSpace(settings["ExecutionsContainerName"]))
+                            {
+                                settings["ExecutionsContainerName"] = TesInternalContainerName;
+                            }
+                        }
+
+                        //if (installedVersion is null || installedVersion < new Version(5, 0, 2))
                         //{
                         //}
 
@@ -383,8 +393,8 @@ namespace TesDeployer
                             configuration.PostgreSqlServerName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
                         }
 
-                        configuration.PostgreSqlAdministratorPassword = PasswordGenerator.GeneratePassword();
-                        configuration.PostgreSqlTesUserPassword = PasswordGenerator.GeneratePassword();
+                        configuration.PostgreSqlAdministratorPassword = CommonUtilities.PasswordGenerator.GeneratePassword();
+                        configuration.PostgreSqlTesUserPassword = CommonUtilities.PasswordGenerator.GeneratePassword();
 
                         if (string.IsNullOrWhiteSpace(configuration.BatchAccountName))
                         {
@@ -408,7 +418,7 @@ namespace TesDeployer
 
                         if (string.IsNullOrWhiteSpace(configuration.TesPassword))
                         {
-                            configuration.TesPassword = PasswordGenerator.GeneratePassword();
+                            configuration.TesPassword = CommonUtilities.PasswordGenerator.GeneratePassword();
                         }
 
                         if (string.IsNullOrWhiteSpace(configuration.AksClusterName))
@@ -1867,7 +1877,7 @@ namespace TesDeployer
                     async ValueTask<string> GetUserObjectId()
                     {
                         const string graphUri = "https://graph.windows.net";
-                        var credentials = new AzureCredentials(default, new TokenCredentials(new RefreshableAzureServiceTokenProvider(graphUri)), tenantId, AzureEnvironment.AzureGlobalCloud);
+                        var credentials = new AzureCredentials(default, new TokenCredentials(new CommonUtilities.RefreshableAzureServiceTokenProvider(graphUri)), tenantId, AzureEnvironment.AzureGlobalCloud);
                         using GraphRbacManagementClient rbacClient = new(Configure().WithEnvironment(AzureEnvironment.AzureGlobalCloud).WithCredentials(credentials).WithBaseUri(graphUri).Build()) { TenantID = tenantId };
                         credentials.InitializeServiceClient(rbacClient);
                         return (await rbacClient.SignedInUser.GetAsync()).ObjectId;
