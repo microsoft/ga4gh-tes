@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
+using CommonUtilities;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Caching.Memory;

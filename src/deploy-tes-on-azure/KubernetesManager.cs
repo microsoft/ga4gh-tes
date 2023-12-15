@@ -604,13 +604,10 @@ namespace TesDeployer
 
         private static async Task<bool> WaitForWorkloadAsync(IKubernetes client, string deploymentName, string aksNamespace, CancellationToken cancellationToken)
         {
-            var deployments = await client.AppsV1.ListNamespacedDeploymentAsync(aksNamespace, cancellationToken: cancellationToken);
-            var deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-
             var result = await WorkloadReadyRetryPolicy.ExecuteAndCaptureAsync(async token =>
             {
-                deployments = await client.AppsV1.ListNamespacedDeploymentAsync(aksNamespace, cancellationToken: token);
-                deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                var deployments = await client.AppsV1.ListNamespacedDeploymentAsync(aksNamespace, cancellationToken: token);
+                var deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
 
                 if ((deployment?.Status?.ReadyReplicas ?? 0) < 1)
                 {
