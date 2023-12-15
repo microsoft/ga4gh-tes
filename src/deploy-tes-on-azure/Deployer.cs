@@ -593,165 +593,165 @@ namespace TesDeployer
                         await File.WriteAllTextAsync(credentialsPath, credentialsJson, cts.Token);
                         ConsoleEx.WriteLine($"TES credentials file written to: {credentialsPath}");
                     }
-                }
-                finally
-                {
-                    if (!configuration.ManualHelmDeployment)
+
+                    var maxPerFamilyQuota = batchAccount.DedicatedCoreQuotaPerVMFamilyEnforced ? batchAccount.DedicatedCoreQuotaPerVMFamily.Select(q => q.CoreQuota).Where(q => 0 != q) : Enumerable.Repeat(batchAccount.DedicatedCoreQuota ?? 0, 1);
+                    var isBatchQuotaAvailable = batchAccount.LowPriorityCoreQuota > 0 || (batchAccount.DedicatedCoreQuota > 0 && maxPerFamilyQuota.Append(0).Max() > 0);
+                    var isBatchPoolQuotaAvailable = batchAccount.PoolQuota > 0;
+                    var isBatchJobQuotaAvailable = batchAccount.ActiveJobAndJobScheduleQuota > 0;
+                    var insufficientQuotas = new List<string>();
+                    int exitCode;
+
+                    if (!isBatchQuotaAvailable) insufficientQuotas.Add("core");
+                    if (!isBatchPoolQuotaAvailable) insufficientQuotas.Add("pool");
+                    if (!isBatchJobQuotaAvailable) insufficientQuotas.Add("job");
+
+                    if (insufficientQuotas.Any())
                     {
-                        kubernetesManager.DeleteTempFiles();
-                    }
-                }
+                        if (!configuration.SkipTestWorkflow)
+                        {
+                            ConsoleEx.WriteLine("Could not run the test task.", ConsoleColor.Yellow);
+                        }
 
-                var maxPerFamilyQuota = batchAccount.DedicatedCoreQuotaPerVMFamilyEnforced ? batchAccount.DedicatedCoreQuotaPerVMFamily.Select(q => q.CoreQuota).Where(q => 0 != q) : Enumerable.Repeat(batchAccount.DedicatedCoreQuota ?? 0, 1);
-                var isBatchQuotaAvailable = batchAccount.LowPriorityCoreQuota > 0 || (batchAccount.DedicatedCoreQuota > 0 && maxPerFamilyQuota.Append(0).Max() > 0);
-                var isBatchPoolQuotaAvailable = batchAccount.PoolQuota > 0;
-                var isBatchJobQuotaAvailable = batchAccount.ActiveJobAndJobScheduleQuota > 0;
-                var insufficientQuotas = new List<string>();
-                int exitCode;
+                        var quotaMessage = string.Join(" and ", insufficientQuotas);
+                        var batchAccountName = configuration.BatchAccountName;
+                        ConsoleEx.WriteLine($"Deployment was successful, but Batch account {batchAccountName} does not have sufficient {quotaMessage} quota to run workflows.", ConsoleColor.Yellow);
+                        ConsoleEx.WriteLine($"Request Batch {quotaMessage} quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
+                        ConsoleEx.WriteLine("After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
 
-                if (!isBatchQuotaAvailable) insufficientQuotas.Add("core");
-                if (!isBatchPoolQuotaAvailable) insufficientQuotas.Add("pool");
-                if (!isBatchJobQuotaAvailable) insufficientQuotas.Add("job");
-
-                if (insufficientQuotas.Any())
-                {
-                    if (!configuration.SkipTestWorkflow)
-                    {
-                        ConsoleEx.WriteLine("Could not run the test task.", ConsoleColor.Yellow);
-                    }
-
-                    var quotaMessage = string.Join(" and ", insufficientQuotas);
-                    var batchAccountName = configuration.BatchAccountName;
-                    ConsoleEx.WriteLine($"Deployment was successful, but Batch account {batchAccountName} does not have sufficient {quotaMessage} quota to run workflows.", ConsoleColor.Yellow);
-                    ConsoleEx.WriteLine($"Request Batch {quotaMessage} quota: https://docs.microsoft.com/en-us/azure/batch/batch-quota-limit", ConsoleColor.Yellow);
-                    ConsoleEx.WriteLine("After receiving the quota, read the docs to run a test workflow and confirm successful deployment.", ConsoleColor.Yellow);
-
-                    exitCode = 2;
-                }
-                else
-                {
-                    if (configuration.SkipTestWorkflow)
-                    {
-                        exitCode = 0;
+                        exitCode = 2;
                     }
                     else
                     {
-                        using var tokenSource = new CancellationTokenSource();
-                        var release = cts.Token.Register(tokenSource.Cancel);
-                        var deleteResourceGroupTask = Task.CompletedTask;
-
-                        try
+                        if (configuration.SkipTestWorkflow)
                         {
-                            var startPortForward = new Func<CancellationToken, Task>(token =>
-                                kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true));
-
-                            var portForwardTask = startPortForward(tokenSource.Token);
-                            await Task.Delay(longRetryWaitTime * 2, tokenSource.Token); // Give enough time for kubectl to standup the port forwarding.
-                            var runTestTask = RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
-
-                            for (var task = await Task.WhenAny(portForwardTask, runTestTask);
-                                runTestTask != task;
-                                task = await Task.WhenAny(portForwardTask, runTestTask))
-                            {
-                                try
-                                {
-                                    await portForwardTask;
-                                }
-                                catch (Exception ex)
-                                {
-                                    ConsoleEx.WriteLine($"kubectl stopped unexpectedly ({ex.Message}).", ConsoleColor.Red);
-                                }
-
-                                ConsoleEx.WriteLine($"Restarting kubectl...");
-                                portForwardTask = startPortForward(tokenSource.Token);
-                            }
-
-                            var isTestWorkflowSuccessful = await runTestTask;
-                            exitCode = isTestWorkflowSuccessful ? 0 : 1;
-
-                            if (!isTestWorkflowSuccessful)
-                            {
-                                deleteResourceGroupTask = DeleteResourceGroupIfUserConsentsAsync();
-                            }
+                            exitCode = 0;
                         }
-                        catch (Exception e)
+                        else
                         {
-                            ConsoleEx.WriteLine("Exception occurred running test task.", ConsoleColor.Red);
-                            ConsoleEx.Write(e.Message, ConsoleColor.Red);
-                            exitCode = 1;
-                        }
-                        finally
-                        {
-                            _ = release.Unregister();
-                            tokenSource.Cancel();
-                            await deleteResourceGroupTask;
+                            using var tokenSource = new CancellationTokenSource();
+                            var release = cts.Token.Register(tokenSource.Cancel);
+                            var deleteResourceGroupTask = Task.CompletedTask;
+
+                            try
+                            {
+                                var startPortForward = new Func<CancellationToken, Task>(token =>
+                                    kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true));
+
+                                var portForwardTask = startPortForward(tokenSource.Token);
+                                await Task.Delay(longRetryWaitTime * 2, tokenSource.Token); // Give enough time for kubectl to standup the port forwarding.
+                                var runTestTask = RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+
+                                for (var task = await Task.WhenAny(portForwardTask, runTestTask);
+                                    runTestTask != task;
+                                    task = await Task.WhenAny(portForwardTask, runTestTask))
+                                {
+                                    try
+                                    {
+                                        await portForwardTask;
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        ConsoleEx.WriteLine($"kubectl stopped unexpectedly ({ex.Message}).", ConsoleColor.Red);
+                                    }
+
+                                    ConsoleEx.WriteLine($"Restarting kubectl...");
+                                    portForwardTask = startPortForward(tokenSource.Token);
+                                }
+
+                                var isTestWorkflowSuccessful = await runTestTask;
+                                exitCode = isTestWorkflowSuccessful ? 0 : 1;
+
+                                if (!isTestWorkflowSuccessful)
+                                {
+                                    deleteResourceGroupTask = DeleteResourceGroupIfUserConsentsAsync();
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                ConsoleEx.WriteLine("Exception occurred running test task.", ConsoleColor.Red);
+                                ConsoleEx.Write(e.Message, ConsoleColor.Red);
+                                exitCode = 1;
+                            }
+                            finally
+                            {
+                                _ = release.Unregister();
+                                tokenSource.Cancel();
+                                await deleteResourceGroupTask;
+                            }
                         }
                     }
-                }
 
-                ConsoleEx.WriteLine($"Completed in {mainTimer.Elapsed.TotalMinutes:n1} minutes.");
-                return exitCode;
-            }
-            catch (ValidationException validationException)
-            {
-                DisplayValidationExceptionAndExit(validationException);
-                return 1;
-            }
-            catch (Exception exc)
-            {
-                if (!(exc is OperationCanceledException && cts.Token.IsCancellationRequested))
+                    ConsoleEx.WriteLine($"Completed in {mainTimer.Elapsed.TotalMinutes:n1} minutes.");
+                    return exitCode;
+                }
+                catch (ValidationException validationException)
                 {
-                    ConsoleEx.WriteLine();
-                    ConsoleEx.WriteLine($"{exc.GetType().Name}: {exc.Message}", ConsoleColor.Red);
-
-                    if (configuration.DebugLogging)
+                    DisplayValidationExceptionAndExit(validationException);
+                    return 1;
+                }
+                catch (Exception exc)
+                {
+                    if (!(exc is OperationCanceledException && cts.Token.IsCancellationRequested))
                     {
-                        ConsoleEx.WriteLine(exc.StackTrace, ConsoleColor.Red);
+                        ConsoleEx.WriteLine();
+                        ConsoleEx.WriteLine($"{exc.GetType().Name}: {exc.Message}", ConsoleColor.Red);
 
-                        if (exc is KubernetesException kExc)
+                        if (configuration.DebugLogging)
                         {
-                            ConsoleEx.WriteLine($"Kubenetes Status: {kExc.Status}");
-                        }
+                            ConsoleEx.WriteLine(exc.StackTrace, ConsoleColor.Red);
 
-                        if (exc is WebSocketException wExc)
-                        {
-                            ConsoleEx.WriteLine($"WebSocket ErrorCode: {wExc.WebSocketErrorCode}");
-                        }
-
-                        if (exc is HttpOperationException hExc)
-                        {
-                            ConsoleEx.WriteLine($"HTTP Response: {hExc.Response.Content}");
-                        }
-
-                        if (exc is HttpRequestException rExc)
-                        {
-                            ConsoleEx.WriteLine($"HTTP Request StatusCode: {rExc.StatusCode}");
-                            if (rExc.InnerException is not null)
+                            if (exc is KubernetesException kExc)
                             {
-                                ConsoleEx.WriteLine($"InnerException: {rExc.InnerException.GetType().FullName}: {rExc.InnerException.Message}");
-                            }
-                        }
-
-                        if (exc is JsonReaderException jExc)
-                        {
-                            if (!string.IsNullOrEmpty(jExc.Path))
-                            {
-                                ConsoleEx.WriteLine($"JSON Path: {jExc.Path}");
+                                ConsoleEx.WriteLine($"Kubenetes Status: {kExc.Status}");
                             }
 
-                            if (jExc.Data.Contains("Body"))
+                            if (exc is WebSocketException wExc)
                             {
-                                ConsoleEx.WriteLine($"HTTP Response: {jExc.Data["Body"]}");
+                                ConsoleEx.WriteLine($"WebSocket ErrorCode: {wExc.WebSocketErrorCode}");
+                            }
+
+                            if (exc is HttpOperationException hExc)
+                            {
+                                ConsoleEx.WriteLine($"HTTP Response: {hExc.Response.Content}");
+                            }
+
+                            if (exc is HttpRequestException rExc)
+                            {
+                                ConsoleEx.WriteLine($"HTTP Request StatusCode: {rExc.StatusCode}");
+                                if (rExc.InnerException is not null)
+                                {
+                                    ConsoleEx.WriteLine($"InnerException: {rExc.InnerException.GetType().FullName}: {rExc.InnerException.Message}");
+                                }
+                            }
+
+                            if (exc is JsonReaderException jExc)
+                            {
+                                if (!string.IsNullOrEmpty(jExc.Path))
+                                {
+                                    ConsoleEx.WriteLine($"JSON Path: {jExc.Path}");
+                                }
+
+                                if (jExc.Data.Contains("Body"))
+                                {
+                                    ConsoleEx.WriteLine($"HTTP Response: {jExc.Data["Body"]}");
+                                }
                             }
                         }
                     }
-                }
 
-                ConsoleEx.WriteLine();
-                Debugger.Break();
-                WriteGeneralRetryMessageToConsole();
-                await DeleteResourceGroupIfUserConsentsAsync();
-                return 1;
+                    ConsoleEx.WriteLine();
+                    Debugger.Break();
+                    WriteGeneralRetryMessageToConsole();
+                    await DeleteResourceGroupIfUserConsentsAsync();
+                    return 1;
+                }
+            }
+            finally
+            {
+                if (!configuration.ManualHelmDeployment)
+                {
+                    kubernetesManager.DeleteTempFiles();
+                }
             }
         }
 
