@@ -31,7 +31,6 @@
     <PackageReference Include="KubernetesClient" Version="10.1.4" />
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.21.0" />
     <PackageReference Include="Microsoft.Azure.Management.KeyVault" Version="4.0.0-preview.1" />
-    <PackageReference Include="Microsoft.Azure.Management.Network" Version="25.0.0" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.15.0" />
     <PackageReference Include="Microsoft.Azure.Management.Batch" Version="15.0.0" />
     <PackageReference Include="Microsoft.Azure.Management.Fluent" Version="1.38.1" />
