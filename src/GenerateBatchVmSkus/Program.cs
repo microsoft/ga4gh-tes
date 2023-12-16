@@ -3,7 +3,6 @@
 
 using System.Reflection;
 using System.Text.Json;
-using CommonUtilities.Options;
 using Azure;
 using Azure.Core;
 using Azure.Identity;
@@ -12,6 +11,7 @@ using Azure.ResourceManager.Batch;
 using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.Compute.Models;
 using Azure.ResourceManager.Resources.Models;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;

@@ -4,8 +4,8 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using CommonUtilities.Options;
 using Azure.Core;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Tes.ApiClients.Models.Terra;

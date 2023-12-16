@@ -4,10 +4,10 @@
 using System;
 using System.IO;
 using System.Reflection;
-using CommonUtilities;
-using CommonUtilities.Options;
 using Azure.Core;
 using Azure.Identity;
+using CommonUtilities;
+using CommonUtilities.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Caching.Memory;

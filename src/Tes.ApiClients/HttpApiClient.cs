@@ -5,8 +5,8 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using CommonUtilities;
 using Azure.Core;
+using CommonUtilities;
 using Microsoft.Extensions.Logging;
 
 namespace Tes.ApiClients
