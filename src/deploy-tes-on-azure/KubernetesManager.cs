@@ -38,7 +38,6 @@ namespace TesDeployer
             .Handle<WebSocketException>(ex => ex.WebSocketErrorCode == WebSocketError.NotAWebSocket)
             .WaitAndRetryAsync(200, retryAttempt => TimeSpan.FromSeconds(5));
 
-        // "master" is used despite not being a best practice: https://github.com/kubernetes-sigs/blob-csi-driver/issues/783
         private const string NginxIngressRepo = "https://kubernetes.github.io/ingress-nginx";
         private const string NginxIngressVersion = "4.7.1";
         private const string CertManagerRepo = "https://charts.jetstack.io";
@@ -84,9 +83,9 @@ namespace TesDeployer
             var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
 
             // Write kubeconfig in the working directory, because KubernetesClientConfiguration needs to read from a file, TODO figure out how to pass this directly. 
-            var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(resourceGroup, configuration.AksClusterName);
+            var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(resourceGroup, configuration.AksClusterName, cancellationToken: cancellationToken);
             var kubeConfigFile = new FileInfo(kubeConfigPath);
-            await File.WriteAllTextAsync(kubeConfigFile.FullName, Encoding.Default.GetString(creds.Kubeconfigs.First().Value));
+            await File.WriteAllTextAsync(kubeConfigFile.FullName, Encoding.Default.GetString(creds.Kubeconfigs.First().Value), cancellationToken);
             kubeConfigFile.Refresh();
 
             if (!OperatingSystem.IsWindows())
@@ -253,9 +252,9 @@ namespace TesDeployer
             await WaitForWorkloadAsync(kubernetesClient, "tes", configuration.AksCoANamespace, cancellationToken);
         }
 
-        public static async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath)
+        public async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath)
         {
-            var templateText = await File.ReadAllTextAsync(valuesTemplatePath);
+            var templateText = await File.ReadAllTextAsync(valuesTemplatePath, cancellationToken);
             var values = KubernetesYaml.Deserialize<HelmValues>(templateText);
             return values;
         }
@@ -304,7 +303,7 @@ namespace TesDeployer
             }
 
             var valuesString = KubernetesYaml.Serialize(values);
-            await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString);
+            await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString, cancellationToken);
             await Deployer.UploadTextToStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cancellationToken);
         }
 
@@ -313,7 +312,7 @@ namespace TesDeployer
             var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", cancellationToken));
             UpdateValuesFromSettings(values, settings);
             var valuesString = KubernetesYaml.Serialize(values);
-            await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString);
+            await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString, cancellationToken);
             await Deployer.UploadTextToStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cancellationToken);
         }
 
@@ -325,52 +324,37 @@ namespace TesDeployer
 
         public async Task ExecuteCommandsOnPodAsync(IKubernetes client, string podName, IEnumerable<string[]> commands, string podNamespace)
         {
-            var printHandler = new ExecAsyncCallback(async (stdIn, stdOut, stdError) =>
+            async Task StreamHandler(Stream stream)
             {
-                using (var reader = new StreamReader(stdOut))
+                using var reader = new StreamReader(stream);
+                var line = await reader.ReadLineAsync(CancellationToken.None);
+
+                while (line is not null)
                 {
-                    var line = await reader.ReadLineAsync();
-
-                    while (line is not null)
+                    if (configuration.DebugLogging)
                     {
-                        if (configuration.DebugLogging)
-                        {
-                            ConsoleEx.WriteLine(podName + ": " + line);
-                        }
-                        line = await reader.ReadLineAsync();
+                        ConsoleEx.WriteLine(podName + ": " + line);
                     }
+                    line = await reader.ReadLineAsync(CancellationToken.None);
                 }
-
-                using (var reader = new StreamReader(stdError))
-                {
-                    var line = await reader.ReadLineAsync();
-
-                    while (line is not null)
-                    {
-                        if (configuration.DebugLogging)
-                        {
-                            ConsoleEx.WriteLine(podName + ": " + line);
-                        }
-                        line = await reader.ReadLineAsync();
-                    }
-                }
-            });
+            }
 
             if (!await WaitForWorkloadAsync(client, podName, podNamespace, cancellationToken))
             {
                 throw new Exception($"Timed out waiting for {podName} to start.");
             }
 
-            var pods = await client.CoreV1.ListNamespacedPodAsync(podNamespace);
+            var pods = await client.CoreV1.ListNamespacedPodAsync(podNamespace, cancellationToken: cancellationToken);
             var workloadPod = pods.Items.Where(x => x.Metadata.Name.Contains(podName)).FirstOrDefault();
 
             // Pod Exec can fail even after the pod is marked ready.
             // Retry on WebSocketExceptions for up to 40 secs.
-            var result = await KubeExecRetryPolicy.ExecuteAndCaptureAsync(async _ =>
+            var result = await KubeExecRetryPolicy.ExecuteAndCaptureAsync(async token =>
             {
                 foreach (var command in commands)
                 {
-                    await client.NamespacedPodExecAsync(workloadPod.Metadata.Name, podNamespace, podName, command, true, printHandler, CancellationToken.None);
+                    _ = await client.NamespacedPodExecAsync(workloadPod.Metadata.Name, podNamespace, podName, command, true,
+                        (stdIn, stdOut, stdError) => Task.WhenAll(StreamHandler(stdOut), StreamHandler(stdError)), CancellationToken.None);
                 }
             }, cancellationToken);
 
@@ -400,7 +384,7 @@ namespace TesDeployer
                 valuesTemplatePath = Path.Join(helmScriptsRootDirectory, "values-template.yaml");
                 Directory.CreateDirectory(helmScriptsRootDirectory);
                 Directory.CreateDirectory(Path.GetDirectoryName(kubeConfigPath));
-                await Utility.WriteEmbeddedFilesAsync(helmScriptsRootDirectory, "scripts", "helm");
+                await Utility.WriteEmbeddedFilesAsync(helmScriptsRootDirectory, cancellationToken, "scripts", "helm");
             }
             catch (Exception exc)
             {
@@ -578,8 +562,8 @@ namespace TesDeployer
                 process.StartInfo.RedirectStandardError = true;
                 process.StartInfo.FileName = binaryFullPath;
                 process.StartInfo.Arguments = command;
-                process.OutputDataReceived += new DataReceivedEventHandler(OutputHandler);
-                process.ErrorDataReceived += new DataReceivedEventHandler(OutputHandler);
+                process.OutputDataReceived += OutputHandler;
+                process.ErrorDataReceived += OutputHandler;
 
                 if (!string.IsNullOrWhiteSpace(workingDirectory))
                 {
@@ -620,19 +604,16 @@ namespace TesDeployer
 
         private static async Task<bool> WaitForWorkloadAsync(IKubernetes client, string deploymentName, string aksNamespace, CancellationToken cancellationToken)
         {
-            var deployments = await client.AppsV1.ListNamespacedDeploymentAsync(aksNamespace, cancellationToken: cancellationToken);
-            var deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-
-            var result = await WorkloadReadyRetryPolicy.ExecuteAndCaptureAsync(async () =>
+            var result = await WorkloadReadyRetryPolicy.ExecuteAndCaptureAsync(async token =>
             {
-                deployments = await client.AppsV1.ListNamespacedDeploymentAsync(aksNamespace, cancellationToken: cancellationToken);
-                deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                var deployments = await client.AppsV1.ListNamespacedDeploymentAsync(aksNamespace, cancellationToken: token);
+                var deployment = deployments.Items.Where(x => x.Metadata.Name.Equals(deploymentName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
 
                 if ((deployment?.Status?.ReadyReplicas ?? 0) < 1)
                 {
                     throw new Exception("Workload not ready.");
                 }
-            });
+            }, cancellationToken);
 
             return result.Outcome == OutcomeType.Successful;
         }

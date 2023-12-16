@@ -1,11 +1,12 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using CommonUtilities;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
-using Tes.ApiClients.Options;
 
 namespace Tes.ApiClients
 {

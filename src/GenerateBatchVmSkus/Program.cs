@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using System.Text.Json;
+using CommonUtilities.Options;
 using Azure;
 using Azure.Core;
 using Azure.Identity;
@@ -19,7 +20,6 @@ using Moq;
 using Newtonsoft.Json;
 using Tes.ApiClients;
 using Tes.ApiClients.Models.Pricing;
-using Tes.ApiClients.Options;
 using Tes.Models;
 
 namespace TesUtils

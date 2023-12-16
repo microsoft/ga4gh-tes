@@ -2,13 +2,13 @@
 // Licensed under the MIT License.
 
 using System.Net;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
-using Tes.ApiClients.Options;
 
-namespace Tes.ApiClients;
+namespace CommonUtilities;
 
 /// <summary>
 /// Utility class that facilitates the retry policy implementations for HTTP clients. 
@@ -910,7 +910,7 @@ public class RetryHandler
     }
     #endregion
 
-    public static Context PrepareContext(string caller) => new()
+    public static Context PrepareContext(string? caller) => new()
     {
         [CallerMemberNameKey] = caller
     };

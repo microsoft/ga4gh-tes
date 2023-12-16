@@ -5,8 +5,8 @@ using System;
 using System.Linq.Expressions;
 using Moq;
 using Polly;
+using static CommonUtilities.RetryHandler;
 using static Tes.ApiClients.CachingRetryHandler;
-using static Tes.ApiClients.RetryHandler;
 
 namespace Tes.ApiClients.Tests.TestServices
 {

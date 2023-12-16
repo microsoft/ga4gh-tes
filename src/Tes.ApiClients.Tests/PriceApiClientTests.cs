@@ -2,12 +2,12 @@
 // Licensed under the MIT License.
 
 using System.Text.Json;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Tes.ApiClients.Models.Pricing;
-using Tes.ApiClients.Options;
 
 namespace Tes.ApiClients.Tests
 {

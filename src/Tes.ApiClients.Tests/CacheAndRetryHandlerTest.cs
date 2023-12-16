@@ -2,10 +2,10 @@
 // Licensed under the MIT License.
 
 using System.Net;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Moq;
-using Tes.ApiClients.Options;
 
 namespace Tes.ApiClients.Tests;
 

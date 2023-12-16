@@ -3,13 +3,13 @@
 
 using System.Linq;
 using System.Threading.Tasks;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.ApiClients;
-using Tes.ApiClients.Options;
 using TesApi.Web.Management;
 
 namespace TesApi.Tests

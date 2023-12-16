@@ -3,9 +3,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
 using TesApi.Web.Management;
@@ -154,14 +156,14 @@ namespace TesApi.Web
                 {
                     v.VmInfoWithDedicatedPrice.VmSize,
                     v.VmInfoWithDedicatedPrice.VmFamily,
-                    PricePerHourDedicated = v.VmInfoWithDedicatedPrice.PricePerHour?.ToString("###0.000"),
-                    PricePerHourLowPri = v.PricePerHourLowPri is not null ? v.PricePerHourLowPri?.ToString("###0.000") : "N/A",
-                    MemoryInGiB = v.VmInfoWithDedicatedPrice.MemoryInGiB?.ToString(),
-                    NumberOfCores = v.VmInfoWithDedicatedPrice.VCpusAvailable.ToString(),
-                    ResourceDiskSizeInGiB = v.VmInfoWithDedicatedPrice.ResourceDiskSizeInGiB.ToString(),
+                    PricePerHourDedicated = v.VmInfoWithDedicatedPrice.PricePerHour?.ToString("###0.000", CultureInfo.InvariantCulture),
+                    PricePerHourLowPri = v.PricePerHourLowPri is not null ? v.PricePerHourLowPri?.ToString("###0.000", CultureInfo.InvariantCulture) : "N/A",
+                    MemoryInGiB = v.VmInfoWithDedicatedPrice.MemoryInGiB?.ToString(CultureInfo.InvariantCulture),
+                    NumberOfCores = NullableIntToString(v.VmInfoWithDedicatedPrice.VCpusAvailable),
+                    ResourceDiskSizeInGiB = NullableDoubleToString(v.VmInfoWithDedicatedPrice.ResourceDiskSizeInGiB),
                     DedicatedQuota = batchAccountQuotas.IsDedicatedAndPerVmFamilyCoreQuotaEnforced
-                        ? batchAccountQuotas.DedicatedCoreQuotas.FirstOrDefault(q => q.VmFamilyName.Equals(v.VmInfoWithDedicatedPrice.VmFamily, StringComparison.OrdinalIgnoreCase))?.CoreQuota.ToString() ?? "N/A"
-                        : batchAccountQuotas.NumberOfCores.ToString()
+                        ? batchAccountQuotas.DedicatedCoreQuotas.FirstOrDefault(q => q.VmFamilyName.Equals(v.VmInfoWithDedicatedPrice.VmFamily, StringComparison.OrdinalIgnoreCase))?.CoreQuota.ToString(CultureInfo.InvariantCulture) ?? "N/A"
+                        : batchAccountQuotas.NumberOfCores.ToString(CultureInfo.InvariantCulture)
                 });
 
             vmInfosAsStrings = vmInfosAsStrings.Prepend(new { VmSize = string.Empty, VmFamily = string.Empty, PricePerHourDedicated = "dedicated", PricePerHourLowPri = "low pri", MemoryInGiB = "(GiB)", NumberOfCores = string.Empty, ResourceDiskSizeInGiB = "(GiB)", DedicatedQuota = $"quota {(batchAccountQuotas.IsDedicatedAndPerVmFamilyCoreQuotaEnforced ? "(per fam.)" : "(total)")}" });
@@ -179,6 +181,12 @@ namespace TesApi.Web
             var fixedWidthVmInfos = vmInfosAsStrings.Select(v => $"{v.VmSize.PadRight(sizeColWidth)} {v.VmFamily.PadRight(seriesColWidth)} {v.PricePerHourDedicated.PadLeft(priceDedicatedColumnWidth)}  {v.PricePerHourLowPri.PadLeft(priceLowPriColumnWidth)}  {v.MemoryInGiB.PadLeft(memoryColumnWidth)}  {v.NumberOfCores.PadLeft(coresColumnWidth)}  {v.ResourceDiskSizeInGiB.PadLeft(diskColumnWidth)}  {v.DedicatedQuota.PadLeft(dedicatedQuotaColumnWidth)}");
 
             return string.Join('\n', fixedWidthVmInfos);
+
+            static string NullableDoubleToString(double? value)
+                => value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : string.Empty;
+
+            static string NullableIntToString(int? value)
+                => value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : string.Empty;
         }
     }
 }

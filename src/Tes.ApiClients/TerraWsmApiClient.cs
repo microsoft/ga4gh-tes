@@ -4,11 +4,11 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CommonUtilities.Options;
 using Azure.Core;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Tes.ApiClients.Models.Terra;
-using Tes.ApiClients.Options;
 using TesApi.Web.Management.Models.Terra;
 
 namespace Tes.ApiClients

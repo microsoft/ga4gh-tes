@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,7 +15,6 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Tes.ApiClients;
-using Tes.ApiClients.Options;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Web;
@@ -80,7 +80,6 @@ namespace TesApi.Tests.TestServices
                         .AddTransient<ILogger<TaskExecutionScriptingManager>>(_ => NullLogger<TaskExecutionScriptingManager>.Instance)
                         .AddTransient<ILogger<BatchNodeScriptBuilder>>(_ => NullLogger<BatchNodeScriptBuilder>.Instance)
                         .AddTransient<ILogger<CachingWithRetriesAzureProxy>>(_ => NullLogger<CachingWithRetriesAzureProxy>.Instance)
-                        .AddSingleton<TestRepositoryStorage>()
                         .AddSingleton<CachingRetryHandler>()
                         .AddSingleton<PriceApiClient>()
                         .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
@@ -223,11 +222,5 @@ namespace TesApi.Tests.TestServices
                 Dispose();
             return ValueTask.CompletedTask;
         }
-    }
-
-    internal sealed class TestRepository<T> : BaseRepository<T> where T : RepositoryItem<T>
-    {
-        public TestRepository(string endpoint, string key, string databaseId, string containerId, string partitionKeyValue, TestRepositoryStorage storage)
-            : base(endpoint, key, databaseId, containerId, partitionKeyValue, storage) { }
     }
 }

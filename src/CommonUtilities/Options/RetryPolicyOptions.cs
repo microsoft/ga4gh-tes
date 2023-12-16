@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-namespace Tes.ApiClients.Options
+namespace CommonUtilities.Options
 {
     /// <summary>
     /// Retry policy options
