@@ -28,7 +28,7 @@ namespace Tes.ApiClients
         /// <param name="tokenCredential"></param>
         /// <param name="cachingRetryHandler"></param>
         /// <param name="logger"></param>
-        public TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryHandler cachingRetryHandler,
+        public TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryPolicyBuilder cachingRetryHandler,
             ILogger<TerraWsmApiClient> logger) : base(apiUrl, tokenCredential, cachingRetryHandler, logger)
         {
 
@@ -37,7 +37,7 @@ namespace Tes.ApiClients
         public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl, TokenCredential tokenCredential)
         {
             var retryPolicyOptions = new RetryPolicyOptions();
-            var cacheRetryHandler = new CachingRetryHandler(sharedMemoryCache,
+            var cacheRetryHandler = new CachingRetryPolicyBuilder(sharedMemoryCache,
                  Microsoft.Extensions.Options.Options.Create(retryPolicyOptions));
 
             return new TerraWsmApiClient(apiUrl, tokenCredential, cacheRetryHandler, ApiClientsLoggerFactory.Create<TerraWsmApiClient>());
@@ -112,7 +112,7 @@ namespace Tes.ApiClients
             {
                 var uri = GetCreateBatchPoolUrl(workspaceId);
 
-                Logger.LogInformation($"Creating a batch pool using WSM for workspace: {workspaceId}");
+                Logger.LogInformation(@"Creating a batch pool using WSM for workspace: {WorkspaceId}", workspaceId);
 
                 response =
                     await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, uri) { Content = GetBatchPoolRequestContent(apiCreateBatchPool) },
@@ -120,7 +120,7 @@ namespace Tes.ApiClients
 
                 var apiResponse = await GetApiResponseContentAsync<ApiCreateBatchPoolResponse>(response, cancellationToken);
 
-                Logger.LogInformation($"Successfully created a batch pool using WSM for workspace: {workspaceId}");
+                Logger.LogInformation(@"Successfully created a batch pool using WSM for workspace: {WorkspaceId}", workspaceId);
 
                 return apiResponse;
             }
@@ -147,7 +147,7 @@ namespace Tes.ApiClients
             {
                 var uri = GetDeleteBatchPoolUrl(workspaceId, wsmBatchPoolResourceId);
 
-                Logger.LogInformation($"Deleting the Batch pool using WSM for workspace: {workspaceId} WSM resource ID: {wsmBatchPoolResourceId}");
+                Logger.LogInformation(@"Deleting the Batch pool using WSM for workspace: {WorkspaceId} WSM resource ID: {WsmBatchPoolResourceId}", workspaceId, wsmBatchPoolResourceId);
 
                 response =
                     await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Delete, uri),
@@ -155,7 +155,7 @@ namespace Tes.ApiClients
 
                 response.EnsureSuccessStatusCode();
 
-                Logger.LogInformation($"Successfully deleted Batch pool, WSM resource ID: {wsmBatchPoolResourceId} using WSM for workspace: {workspaceId}");
+                Logger.LogInformation(@"Successfully deleted Batch pool, WSM resource ID: {WsmBatchPoolResourceId} using WSM for workspace: {WorkspaceId}", wsmBatchPoolResourceId, workspaceId);
             }
             catch (Exception ex)
             {
@@ -248,7 +248,7 @@ namespace Tes.ApiClients
                 responseContent = await ReadResponseBodyAsync(response, cancellationToken);
             }
 
-            Logger.LogError(ex, $"{errMessage}. Response content:{responseContent}");
+            Logger.LogError(ex, @"{ErrorMessage}. Response content:{ResponseContent}", errMessage, responseContent);
         }
 
         private string GetCreateBatchPoolUrl(Guid workspaceId)

@@ -39,7 +39,7 @@ namespace Tes.ApiClients
         /// </summary>
         /// <param name="cachingRetryHandler"></param>
         /// <param name="logger"></param>
-        protected HttpApiClient(CachingRetryHandler cachingRetryHandler, ILogger logger)
+        protected HttpApiClient(CachingRetryPolicyBuilder cachingRetryHandler, ILogger logger)
         {
             ArgumentNullException.ThrowIfNull(cachingRetryHandler);
             ArgumentNullException.ThrowIfNull(logger);
@@ -61,7 +61,7 @@ namespace Tes.ApiClients
         /// <param name="tokenScope"></param>
         /// <param name="logger"></param>
         protected HttpApiClient(TokenCredential tokenCredential, string tokenScope,
-            CachingRetryHandler cachingRetryHandler, ILogger logger) : this(cachingRetryHandler, logger)
+            CachingRetryPolicyBuilder cachingRetryHandler, ILogger logger) : this(cachingRetryHandler, logger)
         {
             ArgumentNullException.ThrowIfNull(tokenCredential);
             ArgumentException.ThrowIfNullOrEmpty(tokenScope);
@@ -78,7 +78,7 @@ namespace Tes.ApiClients
         /// <summary>
         /// A logging Polly retry handler.
         /// </summary>
-        /// <returns><see cref="RetryHandler.OnRetryHandler{System.Net.Http.HttpResponseMessage}"/></returns>
+        /// <returns><see cref="RetryHandler.OnRetryHandler{HttpResponseMessage}"/></returns>
         private RetryHandler.OnRetryHandler<HttpResponseMessage> LogRetryErrorOnRetryHttpResponseMessageHandler()
             => new((result, timeSpan, retryCount, correlationId, caller) =>
             {
@@ -346,7 +346,7 @@ namespace Tes.ApiClients
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <typeparam name="T">Response's content deserialization type</typeparam>
         /// <returns></returns>
-        protected async Task<T> GetApiResponseContentAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
+        protected static async Task<T> GetApiResponseContentAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
         {
             response.EnsureSuccessStatusCode();
 

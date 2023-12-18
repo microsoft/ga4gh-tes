@@ -2,42 +2,23 @@
 // Licensed under the MIT License.
 
 using CommonUtilities;
-using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Options;
 using Polly;
-using Polly.Retry;
 
 namespace Tes.ApiClients
 {
     /// <summary>
     /// Contains an App Cache instances and retry policies.
     /// </summary>
-    public partial class CachingRetryHandler : RetryHandler, CachingRetryHandler.ICachingPolicyBuilderHandler
+    public static class CachingRetryHandler
     {
-        private readonly IMemoryCache appCache = null!;
-        public virtual IMemoryCache AppCache => appCache;
-
-        /// <summary>
-        /// Contains an App Cache instances and retry policies.
-        /// </summary>
-        /// <param name="appCache"><see cref="IMemoryCache"/>></param>
-        /// <param name="retryPolicyOptions"><see cref="RetryPolicyOptions"/></param>
-        public CachingRetryHandler(IMemoryCache appCache, IOptions<RetryPolicyOptions> retryPolicyOptions) : base(retryPolicyOptions)
+        public interface ICachingPolicy
         {
-            ArgumentNullException.ThrowIfNull(appCache);
-
-            this.appCache = appCache;
+            IMemoryCache AppCache { get; }
         }
 
-        /// <summary>
-        /// Protected parameter-less constructor for mocking
-        /// </summary>
-        protected CachingRetryHandler() { }
-
         #region CachingRetryHandlerPolicies
-
-        public class CachingRetryHandlerPolicy : RetryHandlerPolicy, ICachingPolicy
+        public class CachingRetryHandlerPolicy : RetryHandler.RetryHandlerPolicy, ICachingPolicy
         {
             private readonly IMemoryCache appCache;
 
@@ -69,7 +50,7 @@ namespace Tes.ApiClients
             }
         }
 
-        public class CachingAsyncRetryHandlerPolicy : AsyncRetryHandlerPolicy, ICachingPolicy
+        public class CachingAsyncRetryHandlerPolicy : RetryHandler.AsyncRetryHandlerPolicy, ICachingPolicy
         {
             private readonly IMemoryCache appCache;
 
@@ -118,7 +99,7 @@ namespace Tes.ApiClients
             }
         }
 
-        //public class CachingRetryHandlerPolicy<TResult> : RetryHandlerPolicy<TResult>, ICachingPolicy
+        //public class CachingRetryHandlerPolicy<TResult> : RetryHandler.RetryHandlerPolicy<TResult>, ICachingPolicy
         //{
         //    private readonly IMemoryCache appCache;
 
@@ -136,7 +117,7 @@ namespace Tes.ApiClients
         //    public virtual IMemoryCache AppCache => appCache;
         //}
 
-        public class CachingAsyncRetryHandlerPolicy<TResult> : AsyncRetryHandlerPolicy<TResult>, ICachingPolicy
+        public class CachingAsyncRetryHandlerPolicy<TResult> : RetryHandler.AsyncRetryHandlerPolicy<TResult>, ICachingPolicy
         {
             private readonly IMemoryCache appCache;
 
@@ -220,107 +201,7 @@ namespace Tes.ApiClients
         }
         #endregion
 
-        #region Builder interfaces
-        public interface ICachingPolicy
-        {
-            IMemoryCache AppCache { get; }
-        }
-
-        public interface ICachingPolicyBuilderBuild
-        {
-            /// <summary>
-            /// Builds <see cref="RetryPolicy"/> with caching.
-            /// </summary>
-            /// <returns>Caching retry policy.</returns>
-            CachingRetryHandlerPolicy SyncBuild();
-
-            /// <summary>
-            /// Builds <see cref="AsyncRetryPolicy"/> with caching.
-            /// </summary>
-            /// <returns>Caching retry policy.</returns>
-            CachingAsyncRetryHandlerPolicy AsyncBuild();
-        }
-
-        public interface ICachingPolicyBuilderBuild<TResult>
-        {
-            ///// <summary>
-            ///// Builds <see cref="RetryPolicy"/> with caching.
-            ///// </summary>
-            ///// <returns>Caching retry policy.</returns>
-            //CachingRetryHandlerPolicy<TResult> SyncBuild();
-
-            /// <summary>
-            /// Builds <see cref="AsyncRetryPolicy"/> with caching.
-            /// </summary>
-            /// <returns>Caching retry policy.</returns>
-            CachingAsyncRetryHandlerPolicy<TResult> AsyncBuild();
-        }
-
-        /// <remarks>Used internally and for testing.</remarks>
-        public interface ICachingPolicyBuilderHandler
-        {
-            /// <remarks>Used internally and for testing.</remarks>
-            ICachingPolicyBuilderBuild CachingPolicyBuilder(IPolicyBuilderBuild policyBuilder);
-            /// <remarks>Used internally and for testing.</remarks>
-            ICachingPolicyBuilderBuild<TResult> CachingPolicyBuilder<TResult>(IPolicyBuilderBuild<TResult> policyBuilder);
-        }
-        #endregion
-
-        #region Builder interface implementations
-        ICachingPolicyBuilderBuild ICachingPolicyBuilderHandler.CachingPolicyBuilder(IPolicyBuilderBuild policyBuilder)
-            => new CachingPolicyBuilderBuild(policyBuilder, this);
-
-        ICachingPolicyBuilderBuild<TResult> ICachingPolicyBuilderHandler.CachingPolicyBuilder<TResult>(IPolicyBuilderBuild<TResult> policyBuilder)
-            => new CachingPolicyBuilderBuild<TResult>(policyBuilder, this);
-
-        private readonly struct CachingPolicyBuilderBuild : ICachingPolicyBuilderBuild
-        {
-            private readonly IPolicyBuilderBuild policyBuilder;
-            private readonly CachingRetryHandler cachingHandler;
-
-            public CachingPolicyBuilderBuild(IPolicyBuilderBuild policyBuilder, CachingRetryHandler handler)
-            {
-                ArgumentNullException.ThrowIfNull(policyBuilder);
-                this.policyBuilder = policyBuilder;
-                this.cachingHandler = handler;
-            }
-
-            CachingRetryHandlerPolicy ICachingPolicyBuilderBuild.SyncBuild()
-            {
-                return new(policyBuilder.SyncBuildPolicy(), cachingHandler.AppCache);
-            }
-
-            CachingAsyncRetryHandlerPolicy ICachingPolicyBuilderBuild.AsyncBuild()
-            {
-                return new(policyBuilder.AsyncBuildPolicy(), cachingHandler.AppCache);
-            }
-        }
-
-        private readonly struct CachingPolicyBuilderBuild<TResult> : ICachingPolicyBuilderBuild<TResult>
-        {
-            private readonly IPolicyBuilderBuild<TResult> policyBuilder;
-            private readonly CachingRetryHandler cachingHandler;
-
-            public CachingPolicyBuilderBuild(IPolicyBuilderBuild<TResult> policyBuilder, CachingRetryHandler handler)
-            {
-                ArgumentNullException.ThrowIfNull(policyBuilder);
-                this.policyBuilder = policyBuilder;
-                this.cachingHandler = handler;
-            }
-
-            //CachingRetryHandlerPolicy<TResult> ICachingPolicyBuilderBuild<TResult>.SyncBuild()
-            //{
-            //    return new(policyBuilder.SyncBuildPolicy(), cachingHandler.AppCache);
-            //}
-
-            CachingAsyncRetryHandlerPolicy<TResult> ICachingPolicyBuilderBuild<TResult>.AsyncBuild()
-            {
-                return new(policyBuilder.AsyncBuildPolicy(), cachingHandler.AppCache);
-            }
-        }
-        #endregion
-
-        internal static void ValidateArgs(string cacheKey, Func<CancellationToken, Task> action)
+        private static void ValidateArgs(string cacheKey, Func<CancellationToken, Task> action)
         {
             ArgumentNullException.ThrowIfNull(action);
 
@@ -339,31 +220,5 @@ namespace Tes.ApiClients
                 entry.AbsoluteExpiration = cacheExpires;
                 return action();
             });
-    }
-
-    /// <summary>
-    /// Extension methods for <see cref="CachingRetryHandler"/>
-    /// </summary>
-    public static class CachingRetryHandlerExtensions
-    {
-        /// <summary>
-        /// Default caching policy.
-        /// </summary>
-        /// <param name="policyBuilder"><see cref="RetryHandler"/> policy builder.</param>
-        /// <returns>OnRetry builder</returns>
-        public static CachingRetryHandler.ICachingPolicyBuilderBuild AddCaching(this RetryHandler.IPolicyBuilderBuild policyBuilder)
-        {
-            return ((CachingRetryHandler.ICachingPolicyBuilderHandler)policyBuilder.PolicyBuilderBase).CachingPolicyBuilder(policyBuilder);
-        }
-
-        /// <summary>
-        /// Default caching policy.
-        /// </summary>
-        /// <param name="policyBuilder"><see cref="RetryHandler"/> policy builder.</param>
-        /// <returns>OnRetry builder</returns>
-        public static CachingRetryHandler.ICachingPolicyBuilderBuild<TResult> AddCaching<TResult>(this RetryHandler.IPolicyBuilderBuild<TResult> policyBuilder)
-        {
-            return ((CachingRetryHandler.ICachingPolicyBuilderHandler)policyBuilder.PolicyBuilderBase).CachingPolicyBuilder(policyBuilder);
-        }
     }
 }

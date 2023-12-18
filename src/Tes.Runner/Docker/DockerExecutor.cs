@@ -11,16 +11,16 @@ using Tes.Runner.Authentication;
 using Tes.Runner.Logs;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
+using static CommonUtilities.RetryHandler;
 
 namespace Tes.Runner.Docker
 {
     public class DockerExecutor
     {
-
         private readonly IDockerClient dockerClient = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
         private readonly NetworkUtility networkUtility = new();
-        private readonly RetryHandler.AsyncRetryHandlerPolicy asyncRetryPolicy = null!;
+        private readonly AsyncRetryHandlerPolicy retryHandler = null!;
         private readonly IStreamLogReader streamLogReader = null!;
         private readonly ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager = null!;
 
@@ -48,8 +48,8 @@ namespace Tes.Runner.Docker
         /// </summary>
         protected DockerExecutor()
         {
-            this.asyncRetryPolicy =
-                new RetryHandler(Options.Create(new RetryPolicyOptions()))
+            this.retryHandler =
+                new RetryPolicyBuilder(Options.Create(new RetryPolicyOptions()))
                     .DefaultRetryPolicyBuilder().SetOnRetryBehavior(logger).AsyncBuild();
         }
 
@@ -141,7 +141,7 @@ namespace Tes.Runner.Docker
         {
             logger.LogInformation($"Pulling image name: {imageName} image tag: {tag}");
 
-            await asyncRetryPolicy.ExecuteWithRetryAsync(async () =>
+            await retryHandler.ExecuteWithRetryAsync(async () =>
             {
                 await dockerClient.Images.CreateImageAsync(
                     new ImagesCreateParameters() { FromImage = imageName, Tag = tag },

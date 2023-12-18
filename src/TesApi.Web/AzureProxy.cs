@@ -20,13 +20,13 @@ using Microsoft.Rest;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
 using Polly;
-using Tes.ApiClients;
 using Tes.Models;
 using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
+using static CommonUtilities.RetryHandler;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 using CloudTask = Microsoft.Azure.Batch.CloudTask;
 using ComputeNodeState = Microsoft.Azure.Batch.Common.ComputeNodeState;
@@ -45,8 +45,8 @@ namespace TesApi.Web
     public partial class AzureProxy : IAzureProxy
     {
         private const char BatchJobAttemptSeparator = '-';
-        private readonly RetryHandler.AsyncRetryHandlerPolicy batchRetryPolicyWhenJobNotFound;
-        private readonly RetryHandler.AsyncRetryHandlerPolicy batchRetryPolicyWhenNodeNotReady;
+        private readonly AsyncRetryHandlerPolicy batchRetryPolicyWhenJobNotFound;
+        private readonly AsyncRetryHandlerPolicy batchRetryPolicyWhenNodeNotReady;
 
         private readonly ILogger logger;
         private readonly BatchClient batchClient;
@@ -64,7 +64,7 @@ namespace TesApi.Web
         /// <param name="retryHandler">Retry builder</param>
         /// <param name="logger">The logger</param>
         /// <exception cref="InvalidOperationException"></exception>
-        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, BatchAccountResourceInformation batchAccountInformation, IBatchPoolManager batchPoolManager, RetryHandler retryHandler, ILogger<AzureProxy> logger)
+        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, BatchAccountResourceInformation batchAccountInformation, IBatchPoolManager batchPoolManager, RetryPolicyBuilder retryHandler, ILogger<AzureProxy> logger)
         {
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
             ArgumentNullException.ThrowIfNull(batchAccountInformation);
@@ -111,8 +111,8 @@ namespace TesApi.Web
         /// <summary>
         /// A logging retry handler.
         /// </summary>
-        /// <returns><see cref="RetryHandler.OnRetryHandler"/></returns>
-        private RetryHandler.OnRetryHandler LogRetryErrorOnRetryHandler()
+        /// <returns><see cref="OnRetryHandler"/></returns>
+        private OnRetryHandler LogRetryErrorOnRetryHandler()
             => new((exception, timeSpan, retryCount, correlationId, caller) =>
             {
                 var requestId = (exception as BatchException)?.RequestInformation?.ServiceRequestId ?? "n/a";

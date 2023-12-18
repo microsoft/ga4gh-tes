@@ -3,6 +3,7 @@
 
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Rest.Azure;
+using static CommonUtilities.RetryHandler;
 
 namespace CommonUtilities
 {
@@ -42,13 +43,13 @@ namespace CommonUtilities
         /// <param name="retryPolicy">Policy retrying call to <paramref name="func"/>.</param>
         /// <param name="caller">Name of method originating the retriable operation.</param>
         /// <returns></returns>
-        public static IAsyncEnumerable<T> ExecuteWithRetryAsync<T>(this RetryHandler.AsyncRetryHandlerPolicy asyncRetryPolicy, Func<IAsyncEnumerable<T>> func, RetryHandler.RetryHandlerPolicy retryPolicy, [System.Runtime.CompilerServices.CallerMemberName] string? caller = default) // ExecuteWithRetryAsync
+        public static IAsyncEnumerable<T> ExecuteWithRetryAsync<T>(this AsyncRetryHandlerPolicy asyncRetryPolicy, Func<IAsyncEnumerable<T>> func, RetryHandlerPolicy retryPolicy, [System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
         {
             ArgumentNullException.ThrowIfNull(asyncRetryPolicy);
             ArgumentNullException.ThrowIfNull(func);
             ArgumentNullException.ThrowIfNull(retryPolicy);
 
-            var ctx = RetryHandler.PrepareContext(caller);
+            var ctx = PrepareContext(caller);
             return new PollyAsyncEnumerable<T>(retryPolicy.RetryPolicy.Execute(_ => func(), ctx), asyncRetryPolicy, ctx);
         }
 
@@ -56,17 +57,17 @@ namespace CommonUtilities
         /// Adapts calls returning <see cref="IAsyncEnumerable{T}"/> to <see cref="AsyncRetryPolicy"/>.
         /// </summary>
         /// <typeparam name="T">Type of results returned in <see cref="IAsyncEnumerable{T}"/> by <paramref name="func"/>.</typeparam>
-        /// <param name="asyncRetryPolicy">Policy retrying calls made while enumerating results returned by <paramref name="func"/>.</param>
+        /// <param name="asyncRetryPolicy">Policy retrying call to <paramref name="func"/> and calls made while enumerating results returned by <paramref name="func"/>.</param>
         /// <param name="func">Method returning <see cref="ValueTask{IAsyncEnumerable{T}}"/>.</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="caller">Name of method originating the retriable operation.</param>
         /// <returns></returns>
-        public static async ValueTask<IAsyncEnumerable<T>> ExecuteWithRetryAsync<T>(this RetryHandler.AsyncRetryHandlerPolicy asyncRetryPolicy, Func<CancellationToken, ValueTask<IAsyncEnumerable<T>>> func, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string? caller = default) // ExecuteWithRetryAsync
+        public static async ValueTask<IAsyncEnumerable<T>> ExecuteWithRetryAsync<T>(this AsyncRetryHandlerPolicy asyncRetryPolicy, Func<CancellationToken, ValueTask<IAsyncEnumerable<T>>> func, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
         {
             ArgumentNullException.ThrowIfNull(asyncRetryPolicy);
             ArgumentNullException.ThrowIfNull(func);
 
-            var ctx = RetryHandler.PrepareContext(caller);
+            var ctx = PrepareContext(caller);
             return new PollyAsyncEnumerable<T>(await asyncRetryPolicy.RetryPolicy.ExecuteAsync((_, ct) => func(ct).AsTask(), ctx, cancellationToken), asyncRetryPolicy, ctx);
         }
 
@@ -74,17 +75,17 @@ namespace CommonUtilities
         /// Adapts calls returning <see cref="IAsyncEnumerable{T}"/> to <see cref="AsyncRetryPolicy"/>.
         /// </summary>
         /// <typeparam name="T">Type of results returned in <see cref="IAsyncEnumerable{T}"/> by <paramref name="func"/>.</typeparam>
-        /// <param name="asyncRetryPolicy">Policy retrying calls made while enumerating results returned by <paramref name="func"/>.</param>
+        /// <param name="asyncRetryPolicy">Policy retrying call to <paramref name="func"/> and calls made while enumerating results returned by <paramref name="func"/>.</param>
         /// <param name="func">Method returning <see cref="Task{IAsyncEnumerable{T}}"/>.</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="caller">Name of method originating the retriable operation.</param>
         /// <returns></returns>
-        public static async Task<IAsyncEnumerable<T>> ExecuteWithRetryAsync<T>(this RetryHandler.AsyncRetryHandlerPolicy asyncRetryPolicy, Func<CancellationToken, Task<IAsyncEnumerable<T>>> func, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string? caller = default) // ExecuteWithRetryAsync
+        public static async Task<IAsyncEnumerable<T>> ExecuteWithRetryAsync<T>(this AsyncRetryHandlerPolicy asyncRetryPolicy, Func<CancellationToken, Task<IAsyncEnumerable<T>>> func, CancellationToken cancellationToken, [System.Runtime.CompilerServices.CallerMemberName] string? caller = default)
         {
             ArgumentNullException.ThrowIfNull(asyncRetryPolicy);
             ArgumentNullException.ThrowIfNull(func);
 
-            var ctx = RetryHandler.PrepareContext(caller);
+            var ctx = PrepareContext(caller);
             return new PollyAsyncEnumerable<T>(await asyncRetryPolicy.RetryPolicy.ExecuteAsync((_, ct) => func(ct), ctx, cancellationToken), asyncRetryPolicy, ctx);
         }
 

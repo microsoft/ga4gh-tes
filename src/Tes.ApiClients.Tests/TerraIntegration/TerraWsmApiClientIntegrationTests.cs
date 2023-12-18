@@ -24,7 +24,7 @@ namespace Tes.ApiClients.Tests.TerraIntegration
             var memoryCache = new MemoryCache(new MemoryCacheOptions());
 
             wsmApiClient = new TerraWsmApiClient(envInfo.WsmApiHost, new TestEnvTokenCredential(),
-                new CachingRetryHandler(memoryCache, retryOptions), TestLoggerFactory.Create<TerraWsmApiClient>());
+                new CachingRetryPolicyBuilder(memoryCache, retryOptions), TestLoggerFactory.Create<TerraWsmApiClient>());
 
         }
 

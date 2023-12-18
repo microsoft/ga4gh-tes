@@ -15,7 +15,7 @@ namespace Tes.ApiClients.Tests
     public class PriceApiClientTests
     {
         private PriceApiClient pricingApiClient = null!;
-        private CachingRetryHandler cachingRetryHandler = null!;
+        private CachingRetryPolicyBuilder cachingRetryHandler = null!;
         private IMemoryCache appCache = null!;
 
         [TestInitialize]
@@ -24,7 +24,7 @@ namespace Tes.ApiClients.Tests
             appCache = new MemoryCache(new MemoryCacheOptions());
             var options = new Mock<IOptions<RetryPolicyOptions>>();
             options.Setup(o => o.Value).Returns(new RetryPolicyOptions());
-            cachingRetryHandler = new CachingRetryHandler(appCache, options.Object);
+            cachingRetryHandler = new CachingRetryPolicyBuilder(appCache, options.Object);
             pricingApiClient = new PriceApiClient(cachingRetryHandler, new NullLogger<PriceApiClient>());
         }
 

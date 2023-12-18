@@ -367,7 +367,7 @@ namespace TesDeployer
                         {
                             var blob = new byte[5];
                             RandomNumberGenerator.Fill(blob);
-                            configuration.BatchPrefix = Base32.ConvertToBase32(blob).TrimEnd('=');
+                            configuration.BatchPrefix = blob.ConvertToBase32().TrimEnd('=');
                         }
 
                         ValidateRegionName(configuration.RegionName);

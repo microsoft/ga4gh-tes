@@ -13,6 +13,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Tes.ApiClients;
 using TesApi.Web.Storage;
+using static Tes.ApiClients.CachingRetryHandler;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
 namespace TesApi.Web
@@ -24,10 +25,10 @@ namespace TesApi.Web
     {
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
-        private readonly CachingRetryHandler.CachingRetryHandlerPolicy cachingRetry;
-        private readonly CachingRetryHandler.CachingAsyncRetryHandlerPolicy cachingAsyncRetry;
-        private readonly CachingRetryHandler.CachingAsyncRetryHandlerPolicy cachingAsyncRetryExceptWhenExists;
-        private readonly CachingRetryHandler.CachingAsyncRetryHandlerPolicy cachingAsyncRetryExceptWhenNotFound;
+        private readonly CachingRetryHandlerPolicy cachingRetry;
+        private readonly CachingAsyncRetryHandlerPolicy cachingAsyncRetry;
+        private readonly CachingAsyncRetryHandlerPolicy cachingAsyncRetryExceptWhenExists;
+        private readonly CachingAsyncRetryHandlerPolicy cachingAsyncRetryExceptWhenNotFound;
 
         /// <summary>
         /// Contructor to create a cache of <see cref="IAzureProxy"/>
@@ -35,7 +36,7 @@ namespace TesApi.Web
         /// <param name="azureProxy"><see cref="IAzureProxy"/></param>
         /// <param name="cachingRetryHandler"></param>
         /// <param name="logger"></param>
-        public CachingWithRetriesAzureProxy(IAzureProxy azureProxy, CachingRetryHandler cachingRetryHandler, ILogger<CachingWithRetriesAzureProxy> logger)
+        public CachingWithRetriesAzureProxy(IAzureProxy azureProxy, CachingRetryPolicyBuilder cachingRetryHandler, ILogger<CachingWithRetriesAzureProxy> logger)
         {
             ArgumentNullException.ThrowIfNull(azureProxy);
             ArgumentNullException.ThrowIfNull(cachingRetryHandler);

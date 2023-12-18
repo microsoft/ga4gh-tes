@@ -6,7 +6,8 @@ using System.Linq.Expressions;
 using Moq;
 using Polly;
 using static CommonUtilities.RetryHandler;
-using static Tes.ApiClients.CachingRetryHandler;
+using static CommonUtilities.RetryPolicyBuilder;
+using static Tes.ApiClients.CachingRetryPolicyBuilder;
 
 namespace Tes.ApiClients.Tests.TestServices
 {
@@ -15,9 +16,9 @@ namespace Tes.ApiClients.Tests.TestServices
         // TODO: Add ability to use a mocked ILogger with a mocked CachingRetryHandler where failures in the mocked retry handlers call the mocked ILogger.
         //    The opt-in would be an optional argument like this: "Microsoft.Extensions.Logging.ILogger logger".
 
-        internal static Mock<CachingAsyncRetryHandlerPolicy> GetCachingAsyncRetryPolicyMock(Mock<CachingRetryHandler> cachingRetryHandler)
+        internal static Mock<CachingRetryHandler.CachingAsyncRetryHandlerPolicy> GetCachingAsyncRetryPolicyMock(Mock<CachingRetryPolicyBuilder> cachingRetryHandler)
         {
-            var cachingAsyncRetryPolicy = new Mock<CachingAsyncRetryHandlerPolicy>();
+            var cachingAsyncRetryPolicy = new Mock<CachingRetryHandler.CachingAsyncRetryHandlerPolicy>();
             _ = cachingAsyncRetryPolicy.As<IAsyncPolicy>();
             var cachingPolicyBuild = new Mock<ICachingPolicyBuilderBuild>();
             cachingPolicyBuild.Setup(policy => policy.AsyncBuild())
@@ -43,9 +44,9 @@ namespace Tes.ApiClients.Tests.TestServices
             return cachingAsyncRetryPolicy;
         }
 
-        internal static Mock<CachingAsyncRetryHandlerPolicy<TResult>> GetCachingAsyncRetryPolicyMock<TResult>(Mock<CachingRetryHandler> cachingRetryHandler, Expression<Func<CachingRetryHandler, IPolicyBuilderWait<TResult>>> expression)
+        internal static Mock<CachingRetryHandler.CachingAsyncRetryHandlerPolicy<TResult>> GetCachingAsyncRetryPolicyMock<TResult>(Mock<CachingRetryPolicyBuilder> cachingRetryHandler, Expression<Func<CachingRetryPolicyBuilder, IPolicyBuilderWait<TResult>>> expression)
         {
-            var cachingAsyncRetryPolicy = new Mock<CachingAsyncRetryHandlerPolicy<TResult>>();
+            var cachingAsyncRetryPolicy = new Mock<CachingRetryHandler.CachingAsyncRetryHandlerPolicy<TResult>>();
             _ = cachingAsyncRetryPolicy.As<IAsyncPolicy<TResult>>();
             var cachingPolicyBuild = new Mock<ICachingPolicyBuilderBuild<TResult>>();
             cachingPolicyBuild.Setup(policy => policy.AsyncBuild())
