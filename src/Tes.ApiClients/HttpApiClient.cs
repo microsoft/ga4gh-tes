@@ -117,32 +117,6 @@ namespace Tes.ApiClients
             }, cancellationToken);
 
         /// <summary>
-        /// Sends an Http request to the URL and deserializes the body response to the specified type 
-        /// </summary>
-        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
-        /// <param name="httpRequestFactory">Factory that creates new http requests, in the event of retry the factory is called again
-        /// and must be idempotent</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
-        /// <returns></returns>
-        protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(
-            Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
-        {
-            return await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
-            {
-                var request = httpRequestFactory();
-
-                if (setAuthorizationHeader)
-                {
-                    await AddAuthorizationHeaderToRequestAsync(request, ct);
-                }
-
-                return await HttpClient.SendAsync(request, ct);
-            },
-            GetApiResponseContentAsync<TResponse>, cancellationToken);
-        }
-
-        /// <summary>
         /// Sends a Http Get request to the URL and deserializes the body response to the specified type
         /// </summary>
         /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
@@ -260,6 +234,32 @@ namespace Tes.ApiClients
             }
 
             return httpRequest;
+        }
+
+        /// <summary>
+        /// Sends an Http request to the URL and deserializes the body response to the specified type 
+        /// </summary>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
+        /// <param name="httpRequestFactory">Factory that creates new http requests, in the event of retry the factory is called again
+        /// and must be idempotent</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
+        /// <returns></returns>
+        protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(
+            Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
+        {
+            return await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
+            {
+                var request = httpRequestFactory();
+
+                if (setAuthorizationHeader)
+                {
+                    await AddAuthorizationHeaderToRequestAsync(request, ct);
+                }
+
+                return await HttpClient.SendAsync(request, ct);
+            },
+            GetApiResponseContentAsync<TResponse>, cancellationToken);
         }
 
         private async Task AddAuthorizationHeaderToRequestAsync(HttpRequestMessage requestMessage, CancellationToken cancellationToken)
