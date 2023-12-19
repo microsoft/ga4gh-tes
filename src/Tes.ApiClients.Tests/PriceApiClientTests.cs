@@ -48,11 +48,11 @@ namespace Tes.ApiClients.Tests
         {
             var page = await pricingApiClient.GetPricingInformationPageAsync(0, "westus2", CancellationToken.None, cacheResults: true);
             var cacheKey = await pricingApiClient.ToCacheKeyAsync(new Uri(page.RequestLink), false, CancellationToken.None);
-            var cachedPage = JsonSerializer.Deserialize<RetailPricingData>(appCache.Get<string>(cacheKey)!);
+            var cachedPage = appCache.Get<RetailPricingData>(cacheKey);
             Assert.IsNotNull(page);
             Assert.IsTrue(page.Items.Length > 0);
             Assert.IsNotNull(cachedPage);
-            Assert.IsTrue(page.Items.Length == cachedPage.Items.Length);
+            Assert.IsTrue(Enumerable.SequenceEqual(cachedPage.Items, page.Items));
         }
 
         [TestMethod]
