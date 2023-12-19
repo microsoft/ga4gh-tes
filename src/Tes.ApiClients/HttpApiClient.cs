@@ -27,7 +27,7 @@ namespace Tes.ApiClients
         private readonly SemaphoreSlim semaphore = new(1, 1);
         private AccessToken accessToken;
 
-        protected readonly CachingRetryHandler.CachingAsyncRetryHandlerPolicy<HttpResponseMessage> AsyncCachingHttpResponseMessageRetryPolicy;
+        protected readonly CachingRetryHandler.CachingAsyncRetryHandlerPolicy<HttpResponseMessage> cachingRetryHandler;
 
         /// <summary>
         /// Inner http client.
@@ -37,16 +37,16 @@ namespace Tes.ApiClients
         /// <summary>
         /// Constructor of base HttpApiClient
         /// </summary>
-        /// <param name="cachingRetryHandler"></param>
+        /// <param name="cachingRetryBuilder"></param>
         /// <param name="logger"></param>
-        protected HttpApiClient(CachingRetryPolicyBuilder cachingRetryHandler, ILogger logger)
+        protected HttpApiClient(CachingRetryPolicyBuilder cachingRetryBuilder, ILogger logger)
         {
-            ArgumentNullException.ThrowIfNull(cachingRetryHandler);
+            ArgumentNullException.ThrowIfNull(cachingRetryBuilder);
             ArgumentNullException.ThrowIfNull(logger);
 
             this.Logger = logger;
 
-            AsyncCachingHttpResponseMessageRetryPolicy = cachingRetryHandler
+            cachingRetryHandler = cachingRetryBuilder
                 .DefaultRetryHttpResponseMessagePolicyBuilder()
                 .SetOnRetryBehavior(onRetry: LogRetryErrorOnRetryHttpResponseMessageHandler())
                 .AddCaching()
@@ -105,7 +105,7 @@ namespace Tes.ApiClients
         protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(
             Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
-            return await AsyncCachingHttpResponseMessageRetryPolicy.ExecuteWithRetryAsync(async ct =>
+            return await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
             {
                 var request = httpRequestFactory();
                 if (setAuthorizationHeader)
@@ -129,7 +129,7 @@ namespace Tes.ApiClients
         protected async Task<T> HttpSendRequestWithRetryPolicyAsync<T>(
             Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
-            return await AsyncCachingHttpResponseMessageRetryPolicy.ExecuteWithRetryAndConversionAsync(async ct =>
+            return await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
             {
                 var request = httpRequestFactory();
                 if (setAuthorizationHeader)
@@ -188,7 +188,7 @@ namespace Tes.ApiClients
         {
             var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader, cancellationToken);
 
-            return (await AsyncCachingHttpResponseMessageRetryPolicy.ExecuteWithRetryConversionAndCachingAsync(cacheKey,
+            return (await cachingRetryHandler.ExecuteWithRetryConversionAndCachingAsync(cacheKey,
                 async ct =>
                 {
                     //request must be recreated in every retry.
@@ -210,7 +210,7 @@ namespace Tes.ApiClients
         protected async Task<string> HttpGetRequestWithRetryPolicyAsync(Uri requestUrl,
             CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
-            return await AsyncCachingHttpResponseMessageRetryPolicy.ExecuteWithRetryAndConversionAsync(async ct =>
+            return await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
             {
                 //request must be recreated in every retry.
                 var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
