@@ -116,50 +116,9 @@ namespace Tes.ApiClients
                 }, cancellationToken);
 
         /// <summary>
-        /// Sends request with a retry policy
+        /// Sends a Http Get request to the URL and deserializes the body response to the specified type
         /// </summary>
-        /// <typeparam name="T">Response's content deserialization type</typeparam>
-        /// <param name="httpRequestFactory">Factory that creates new http requests, in the event of retry the factory is called again
-        /// and must be idempotent.</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
-        /// <returns></returns>
-        protected async Task<T> HttpSendRequestWithRetryPolicyAsync<T>(
-            Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
-        {
-            return await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
-            {
-                var request = httpRequestFactory();
-                if (setAuthorizationHeader)
-                {
-                    await AddAuthorizationHeaderToRequestAsync(request, ct);
-                }
-
-                return await HttpClient.SendAsync(request, ct);
-            }, GetApiResponseContentAsync<T>, cancellationToken);
-        }
-
-        /// <summary>
-        /// Sends a Http Get request to the URL and returns body response as string 
-        /// </summary>
-        /// <param name="requestUrl"></param>
-        /// <param name="setAuthorizationHeader"></param>
-        /// <param name="cacheResults"></param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        protected async Task<string> HttpGetRequestAsync(Uri requestUrl, bool setAuthorizationHeader, bool cacheResults, CancellationToken cancellationToken)
-        {
-            if (cacheResults)
-            {
-                return await HttpGetRequestWithCachingAndRetryPolicyAsync(requestUrl, cancellationToken, setAuthorizationHeader);
-            }
-
-            return await HttpGetRequestWithRetryPolicyAsync(requestUrl, cancellationToken, setAuthorizationHeader);
-        }
-
-        /// <summary>
-        /// Sends a Http Get request to the URL and deserializes the body response to the specified type 
-        /// </summary>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <param name="requestUrl"></param>
         /// <param name="setAuthorizationHeader"></param>
         /// <param name="cacheResults"></param>
@@ -169,19 +128,49 @@ namespace Tes.ApiClients
         protected async Task<TResponse> HttpGetRequestAsync<TResponse>(Uri requestUrl, bool setAuthorizationHeader,
             bool cacheResults, CancellationToken cancellationToken)
         {
-            var content = await HttpGetRequestAsync(requestUrl, setAuthorizationHeader, cacheResults, cancellationToken);
+            if (cacheResults)
+            {
+                return await HttpGetRequestWithCachingAndRetryPolicyAsync<TResponse>(requestUrl, cancellationToken, setAuthorizationHeader);
+            }
 
-            return JsonSerializer.Deserialize<TResponse>(content)!;
+            return await HttpGetRequestWithRetryPolicyAsync<TResponse>(requestUrl, cancellationToken, setAuthorizationHeader);
+        }
+
+        /// <summary>
+        /// Sends an Http request to the URL and deserializes the body response to the specified type 
+        /// </summary>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
+        /// <param name="httpRequestFactory">Factory that creates new http requests, in the event of retry the factory is called again
+        /// and must be idempotent</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
+        /// <returns></returns>
+        protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(
+            Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
+        {
+            return await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
+            {
+                var request = httpRequestFactory();
+
+                if (setAuthorizationHeader)
+                {
+                    await AddAuthorizationHeaderToRequestAsync(request, ct);
+                }
+
+                return await HttpClient.SendAsync(request, ct);
+            },
+            GetApiResponseContentAsync<TResponse>, cancellationToken);
         }
 
         /// <summary>
         /// Checks the cache and if the request was not found, sends the GET request with a retry policy
         /// </summary>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <param name="requestUrl"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="setAuthorizationHeader"></param>
         /// <returns></returns>
-        protected async Task<string> HttpGetRequestWithCachingAndRetryPolicyAsync(Uri requestUrl,
+        protected async Task<TResponse> HttpGetRequestWithCachingAndRetryPolicyAsync<TResponse>(Uri requestUrl,
             CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
             var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader, cancellationToken);
@@ -192,29 +181,29 @@ namespace Tes.ApiClients
                     //request must be recreated in every retry.
                     var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
 
-                    var httpResponse = await HttpClient.SendAsync(httpRequest, ct);
-                    return httpResponse.EnsureSuccessStatusCode();
+                    return await HttpClient.SendAsync(httpRequest, ct);
                 },
-                ReadResponseBodyAsync, cancellationToken))!;
+                GetApiResponseContentAsync<TResponse>, cancellationToken))!;
         }
 
         /// <summary>
         /// Get request with retry policy
         /// </summary>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <param name="requestUrl"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="setAuthorizationHeader"></param>
         /// <returns></returns>
-        protected async Task<string> HttpGetRequestWithRetryPolicyAsync(Uri requestUrl,
+        protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(Uri requestUrl,
             CancellationToken cancellationToken, bool setAuthorizationHeader = false)
                 => await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
                 {
                     //request must be recreated in every retry.
                     var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
 
-                    var httpResponse = await HttpClient.SendAsync(httpRequest, ct);
-                    return httpResponse.EnsureSuccessStatusCode();
-                }, ReadResponseBodyAsync, cancellationToken);
+                    return await HttpClient.SendAsync(httpRequest, ct);
+                },
+                GetApiResponseContentAsync<TResponse>, cancellationToken);
 
         /// <summary>
         /// Returns an query string key-value, with the value escaped. If the value is null or empty returns an empty string

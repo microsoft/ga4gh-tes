@@ -141,11 +141,9 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetResourceQuotaAsync_ValidResourceIdReturnsQuotaInformationAndGetsAuthToken()
         {
-            var body = terraApiStubData.GetResourceQuotaApiResponseInJson();
-
             cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryConversionAndCachingAsync(It.IsAny<string>(),
-                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
-                .ReturnsAsync(body);
+                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<QuotaApiResponse>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+                .ReturnsAsync(System.Text.Json.JsonSerializer.Deserialize<QuotaApiResponse>(terraApiStubData.GetResourceQuotaApiResponseInJson())!);
 
             var quota = await terraWsmApiClient.GetResourceQuotaAsync(terraApiStubData.WorkspaceId, terraApiStubData.BatchAccountId, cacheResults: true, cancellationToken: CancellationToken.None);
 
@@ -168,11 +166,9 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetLandingZoneResourcesAsync_ListOfLandingZoneResourcesAndGetsAuthToken()
         {
-            var body = terraApiStubData.GetResourceApiResponseInJson();
-
             cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryConversionAndCachingAsync(It.IsAny<string>(),
-                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
-                .ReturnsAsync(body);
+                    It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<LandingZoneResourcesApiResponse>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+                .ReturnsAsync(System.Text.Json.JsonSerializer.Deserialize<LandingZoneResourcesApiResponse>(terraApiStubData.GetResourceApiResponseInJson())!);
 
             var resources = await terraWsmApiClient.GetLandingZoneResourcesAsync(terraApiStubData.WorkspaceId, CancellationToken.None);
 
