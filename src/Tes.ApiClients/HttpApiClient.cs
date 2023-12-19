@@ -119,12 +119,11 @@ namespace Tes.ApiClients
         /// <summary>
         /// Sends a Http Get request to the URL and deserializes the body response to the specified type
         /// </summary>
-        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <param name="requestUrl"></param>
         /// <param name="setAuthorizationHeader"></param>
         /// <param name="cacheResults"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <typeparam name="TResponse"></typeparam>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
         protected async Task<TResponse> HttpGetRequestAsync<TResponse>(Uri requestUrl, bool setAuthorizationHeader,
             bool cacheResults, CancellationToken cancellationToken)
@@ -140,10 +139,10 @@ namespace Tes.ApiClients
         /// <summary>
         /// Checks the cache and if the request was not found, sends the GET request with a retry policy
         /// </summary>
-        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <param name="requestUrl"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="setAuthorizationHeader"></param>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
         protected async Task<TResponse> HttpGetRequestWithCachingAndRetryPolicyAsync<TResponse>(Uri requestUrl,
             CancellationToken cancellationToken, bool setAuthorizationHeader = false)
@@ -163,10 +162,10 @@ namespace Tes.ApiClients
         /// <summary>
         /// Get request with retry policy
         /// </summary>
-        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <param name="requestUrl"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="setAuthorizationHeader"></param>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
         protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(Uri requestUrl,
             CancellationToken cancellationToken, bool setAuthorizationHeader = false)
@@ -239,11 +238,11 @@ namespace Tes.ApiClients
         /// <summary>
         /// Sends an Http request to the URL and deserializes the body response to the specified type 
         /// </summary>
-        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <param name="httpRequestFactory">Factory that creates new http requests, in the event of retry the factory is called again
         /// and must be idempotent</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
         protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(
             Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
@@ -346,13 +345,13 @@ namespace Tes.ApiClients
         /// </summary>
         /// <param name="response">Response</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <typeparam name="T">Response's content deserialization type</typeparam>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
-        protected static async Task<T> GetApiResponseContentAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
+        protected static async Task<TResponse> GetApiResponseContentAsync<TResponse>(HttpResponseMessage response, CancellationToken cancellationToken)
         {
             response.EnsureSuccessStatusCode();
 
-            return JsonSerializer.Deserialize<T>(await ReadResponseBodyAsync(response, cancellationToken))!;
+            return JsonSerializer.Deserialize<TResponse>(await ReadResponseBodyAsync(response, cancellationToken))!;
         }
 
         /// <summary>
