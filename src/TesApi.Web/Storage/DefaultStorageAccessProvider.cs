@@ -140,21 +140,17 @@ namespace TesApi.Web.Storage
             {
                 var accountKey = await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, cancellationToken);
                 var resultPathSegments = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName);
+                var policy = new SharedAccessBlobPolicy { SharedAccessExpiryTime = DateTimeOffset.UtcNow.Add(sasTokenDuration ?? SasTokenDuration) };
 
                 if (pathSegments.IsContainer || getContainerSas)
                 {
-                    var policy = new SharedAccessBlobPolicy()
-                    {
-                        Permissions = SharedAccessBlobPermissions.Add | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.List | SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.Write,
-                        SharedAccessExpiryTime = DateTimeOffset.UtcNow.Add(sasTokenDuration ?? SasTokenDuration)
-                    };
-
+                    policy.Permissions = SharedAccessBlobPermissions.Add | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.List | SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.Write;
                     var containerUri = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName).ToUri();
                     resultPathSegments.SasToken = new CloudBlobContainer(containerUri, new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, SharedAccessProtocol.HttpsOnly, null);
                 }
                 else
                 {
-                    var policy = new SharedAccessBlobPolicy() { Permissions = SharedAccessBlobPermissions.Read, SharedAccessExpiryTime = DateTimeOffset.UtcNow.Add(sasTokenDuration ?? SasTokenDuration) };
+                    policy.Permissions = SharedAccessBlobPermissions.Read;
                     resultPathSegments.SasToken = new CloudBlob(resultPathSegments.ToUri(), new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, null, SharedAccessProtocol.HttpsOnly, null);
                 }
 
