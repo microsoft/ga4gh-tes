@@ -60,10 +60,8 @@ namespace Tes.ApiClients
         {
             var url = GetContainerResourcesApiUrl(workspaceId, offset, limit);
 
-            var response = await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Get, url),
+            return await HttpSendRequestWithRetryPolicyAsync<WsmListContainerResourcesResponse>(() => new HttpRequestMessage(HttpMethod.Get, url),
                 cancellationToken, setAuthorizationHeader: true);
-
-            return await GetApiResponseContentAsync<WsmListContainerResourcesResponse>(response, cancellationToken);
         }
 
         private Uri GetContainerResourcesApiUrl(Guid workspaceId, int offset, int limit)
@@ -90,10 +88,8 @@ namespace Tes.ApiClients
         {
             var url = GetSasTokenApiUrl(workspaceId, resourceId, sasTokenApiParameters);
 
-            var response = await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, url),
+            return await HttpSendRequestWithRetryPolicyAsync<WsmSasTokenApiResponse>(() => new HttpRequestMessage(HttpMethod.Post, url),
                 cancellationToken, setAuthorizationHeader: true);
-
-            return await GetApiResponseContentAsync<WsmSasTokenApiResponse>(response, cancellationToken);
         }
 
         /// <summary>

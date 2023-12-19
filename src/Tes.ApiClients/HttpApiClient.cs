@@ -118,6 +118,30 @@ namespace Tes.ApiClients
         }
 
         /// <summary>
+        /// Sends request with a retry policy
+        /// </summary>
+        /// <typeparam name="T">Response's content deserialization type</typeparam>
+        /// <param name="httpRequestFactory">Factory that creates new http requests, in the event of retry the factory is called again
+        /// and must be idempotent.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
+        /// <returns></returns>
+        protected async Task<T> HttpSendRequestWithRetryPolicyAsync<T>(
+            Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
+        {
+            return await AsyncCachingHttpResponseMessageRetryPolicy.ExecuteWithRetryAndConversionAsync(async ct =>
+            {
+                var request = httpRequestFactory();
+                if (setAuthorizationHeader)
+                {
+                    await AddAuthorizationHeaderToRequestAsync(request, ct);
+                }
+
+                return await HttpClient.SendAsync(request, ct);
+            }, GetApiResponseContentAsync<T>, cancellationToken);
+        }
+
+        /// <summary>
         /// Sends a Http Get request to the URL and returns body response as string 
         /// </summary>
         /// <param name="requestUrl"></param>
@@ -186,16 +210,14 @@ namespace Tes.ApiClients
         protected async Task<string> HttpGetRequestWithRetryPolicyAsync(Uri requestUrl,
             CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
-            var response = await AsyncCachingHttpResponseMessageRetryPolicy.ExecuteWithRetryAsync(async ct =>
+            return await AsyncCachingHttpResponseMessageRetryPolicy.ExecuteWithRetryAndConversionAsync(async ct =>
             {
                 //request must be recreated in every retry.
                 var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
 
                 var httpResponse = await HttpClient.SendAsync(httpRequest, ct);
                 return httpResponse.EnsureSuccessStatusCode();
-            }, cancellationToken);
-
-            return await ReadResponseBodyAsync(response, cancellationToken);
+            }, ReadResponseBodyAsync, cancellationToken);
         }
 
         /// <summary>
