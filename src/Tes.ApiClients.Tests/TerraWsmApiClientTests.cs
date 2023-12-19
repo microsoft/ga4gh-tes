@@ -7,6 +7,7 @@ using Azure.Core;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.ApiClients.Models.Terra;
+using TesApi.Web.Management.Models.Terra;
 
 namespace Tes.ApiClients.Tests
 {
@@ -88,13 +89,8 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetSasTokenAsync_ValidRequest_ReturnsPayload()
         {
-            var response = new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(terraApiStubData.GetWsmSasTokenApiResponseInJson())
-            };
-
-            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
-                .ReturnsAsync(response);
+            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryAndConversionAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<WsmSasTokenApiResponse>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+                .ReturnsAsync(System.Text.Json.JsonSerializer.Deserialize<WsmSasTokenApiResponse>(terraApiStubData.GetWsmSasTokenApiResponseInJson())!);
 
             var apiResponse = await terraWsmApiClient.GetSasTokenAsync(terraApiStubData.WorkspaceId,
                 terraApiStubData.ContainerResourceId, null!, CancellationToken.None);
@@ -107,13 +103,8 @@ namespace Tes.ApiClients.Tests
         [TestMethod]
         public async Task GetContainerResourcesAsync_ValidRequest_ReturnsPayload()
         {
-            var response = new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(terraApiStubData.GetContainerResourcesApiResponseInJson())
-            };
-
-            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
-                .ReturnsAsync(response);
+            cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryAndConversionAsync(It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<WsmListContainerResourcesResponse>>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
+                .ReturnsAsync(System.Text.Json.JsonSerializer.Deserialize<WsmListContainerResourcesResponse>(terraApiStubData.GetContainerResourcesApiResponseInJson())!);
 
             var apiResponse = await terraWsmApiClient.GetContainerResourcesAsync(terraApiStubData.WorkspaceId,
                 offset: 0, limit: 10, CancellationToken.None);
