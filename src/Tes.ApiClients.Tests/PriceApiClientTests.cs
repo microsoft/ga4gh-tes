@@ -2,12 +2,12 @@
 // Licensed under the MIT License.
 
 using System.Text.Json;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Tes.ApiClients.Models.Pricing;
-using Tes.ApiClients.Options;
 
 namespace Tes.ApiClients.Tests
 {
@@ -15,7 +15,7 @@ namespace Tes.ApiClients.Tests
     public class PriceApiClientTests
     {
         private PriceApiClient pricingApiClient = null!;
-        private CachingRetryHandler cachingRetryHandler = null!;
+        private CachingRetryPolicyBuilder cachingRetryHandler = null!;
         private IMemoryCache appCache = null!;
 
         [TestInitialize]
@@ -24,7 +24,7 @@ namespace Tes.ApiClients.Tests
             appCache = new MemoryCache(new MemoryCacheOptions());
             var options = new Mock<IOptions<RetryPolicyOptions>>();
             options.Setup(o => o.Value).Returns(new RetryPolicyOptions());
-            cachingRetryHandler = new CachingRetryHandler(appCache, options.Object);
+            cachingRetryHandler = new CachingRetryPolicyBuilder(appCache, options.Object);
             pricingApiClient = new PriceApiClient(cachingRetryHandler, new NullLogger<PriceApiClient>());
         }
 
@@ -48,11 +48,11 @@ namespace Tes.ApiClients.Tests
         {
             var page = await pricingApiClient.GetPricingInformationPageAsync(0, "westus2", CancellationToken.None, cacheResults: true);
             var cacheKey = await pricingApiClient.ToCacheKeyAsync(new Uri(page.RequestLink), false, CancellationToken.None);
-            var cachedPage = JsonSerializer.Deserialize<RetailPricingData>(appCache.Get<string>(cacheKey)!);
+            var cachedPage = appCache.Get<RetailPricingData>(cacheKey);
             Assert.IsNotNull(page);
             Assert.IsTrue(page.Items.Length > 0);
             Assert.IsNotNull(cachedPage);
-            Assert.IsTrue(page.Items.Length == cachedPage.Items.Length);
+            Assert.IsTrue(Enumerable.SequenceEqual(cachedPage.Items, page.Items));
         }
 
         [TestMethod]

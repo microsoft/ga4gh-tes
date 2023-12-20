@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Azure.Core;
-using Microsoft.Extensions.Caching.Memory;
+using CommonUtilities;
 using Microsoft.Extensions.Logging;
 
 namespace Tes.ApiClients
@@ -18,15 +18,20 @@ namespace Tes.ApiClients
     {
         private static readonly HttpClient HttpClient = new();
         private readonly TokenCredential tokenCredential = null!;
-        private readonly CachingRetryHandler cachingRetryHandler = null!;
         private readonly SHA256 sha256 = SHA256.Create();
+        private readonly string tokenScope = null!;
+        private readonly SemaphoreSlim semaphore = new(1, 1);
+        private AccessToken accessToken;
+
         /// <summary>
         /// Logger instance
         /// </summary>
         protected readonly ILogger Logger = null!;
-        private readonly string tokenScope = null!;
-        private readonly SemaphoreSlim semaphore = new(1, 1);
-        private AccessToken accessToken;
+
+        /// <summary>
+        /// <see cref="HttpResponseMessage"/> retry handler
+        /// </summary>
+        protected readonly CachingRetryHandler.CachingAsyncRetryHandlerPolicy<HttpResponseMessage> cachingRetryHandler;
 
         /// <summary>
         /// Inner http client.
@@ -36,15 +41,20 @@ namespace Tes.ApiClients
         /// <summary>
         /// Constructor of base HttpApiClient
         /// </summary>
-        /// <param name="cachingRetryHandler"></param>
+        /// <param name="cachingRetryBuilder"></param>
         /// <param name="logger"></param>
-        protected HttpApiClient(CachingRetryHandler cachingRetryHandler, ILogger logger)
+        protected HttpApiClient(CachingRetryPolicyBuilder cachingRetryBuilder, ILogger logger)
         {
-            ArgumentNullException.ThrowIfNull(cachingRetryHandler);
+            ArgumentNullException.ThrowIfNull(cachingRetryBuilder);
             ArgumentNullException.ThrowIfNull(logger);
 
-            this.cachingRetryHandler = cachingRetryHandler;
             this.Logger = logger;
+
+            cachingRetryHandler = cachingRetryBuilder
+                .DefaultRetryHttpResponseMessagePolicyBuilder()
+                .SetOnRetryBehavior(onRetry: LogRetryErrorOnRetryHttpResponseMessageHandler())
+                .AddCaching()
+                .AsyncBuild();
         }
 
         /// <summary>
@@ -55,7 +65,7 @@ namespace Tes.ApiClients
         /// <param name="tokenScope"></param>
         /// <param name="logger"></param>
         protected HttpApiClient(TokenCredential tokenCredential, string tokenScope,
-            CachingRetryHandler cachingRetryHandler, ILogger logger) : this(cachingRetryHandler, logger)
+            CachingRetryPolicyBuilder cachingRetryHandler, ILogger logger) : this(cachingRetryHandler, logger)
         {
             ArgumentNullException.ThrowIfNull(tokenCredential);
             ArgumentException.ThrowIfNullOrEmpty(tokenScope);
@@ -72,32 +82,23 @@ namespace Tes.ApiClients
         /// <summary>
         /// A logging Polly retry handler.
         /// </summary>
-        /// <param name="caller">Calling method name.</param>
-        /// <returns><see cref="RetryHandler.OnRetryHandler"/></returns>
-        private RetryHandler.OnRetryHandler LogRetryErrorOnRetryHandler([System.Runtime.CompilerServices.CallerMemberName] string caller = default)
-            => new((exception, timeSpan, retryCount, correlationId) =>
-            {
-                Logger?.LogError(exception, @"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
-            });
-
-        /// <summary>
-        /// A logging Polly retry handler.
-        /// </summary>
-        /// <typeparam name="TResult">See <see cref="PolicyBuilder{TResult}"/></typeparam>
-        /// <param name="caller">Calling method name.</param>
-        /// <returns><see cref="RetryHandler.OnRetryHandler{TResult}"/></returns>
-        private RetryHandler.OnRetryHandler<TResult> LogRetryErrorOnRetryHandler<TResult>([System.Runtime.CompilerServices.CallerMemberName] string caller = default)
-            => new((result, timeSpan, retryCount, correlationId) =>
+        /// <returns><see cref="RetryHandler.OnRetryHandler{HttpResponseMessage}"/></returns>
+        private RetryHandler.OnRetryHandler<HttpResponseMessage> LogRetryErrorOnRetryHttpResponseMessageHandler()
+        {
+            return new((result, timeSpan, retryCount, correlationId, caller) =>
             {
                 if (result.Exception is null)
                 {
-                    Logger?.LogError(@"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
+                    Logger?.LogError(@"Retrying in {Method} due to HTTP status {HttpStatus}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId}",
+                        caller, result.Result.StatusCode.ToString("G"), retryCount, timeSpan.ToString("c"), correlationId.ToString("D"));
                 }
                 else
                 {
-                    Logger?.LogError(result.Exception, @"Retrying in {Method}: RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId:D}", caller, retryCount, timeSpan, correlationId);
+                    Logger?.LogError(result.Exception, @"Retrying in {Method} due to '{Message}': RetryCount: {RetryCount} TimeSpan: {TimeSpan} CorrelationId: {CorrelationId}",
+                        caller, result.Exception.Message, retryCount, timeSpan.ToString("c"), correlationId.ToString("D"));
                 }
             });
+        }
 
         /// <summary>
         /// Sends request with a retry policy
@@ -110,53 +111,37 @@ namespace Tes.ApiClients
         protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(
             Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
-            var ctx = new Polly.Context();
-            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler<HttpResponseMessage>());
             return await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
             {
                 var request = httpRequestFactory();
+
                 if (setAuthorizationHeader)
                 {
                     await AddAuthorizationHeaderToRequestAsync(request, ct);
                 }
 
                 return await HttpClient.SendAsync(request, ct);
-            }, cancellationToken, ctx);
+            }, cancellationToken);
         }
 
         /// <summary>
-        /// Sends a Http Get request to the URL and returns body response as string 
+        /// Sends a Http Get request to the URL and deserializes the body response to the specified type
         /// </summary>
         /// <param name="requestUrl"></param>
         /// <param name="setAuthorizationHeader"></param>
         /// <param name="cacheResults"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        protected async Task<string> HttpGetRequestAsync(Uri requestUrl, bool setAuthorizationHeader, bool cacheResults, CancellationToken cancellationToken)
-        {
-            if (cacheResults)
-            {
-                return await HttpGetRequestWithCachingAndRetryPolicyAsync(requestUrl, cancellationToken, setAuthorizationHeader);
-            }
-
-            return await HttpGetRequestWithRetryPolicyAsync(requestUrl, cancellationToken, setAuthorizationHeader);
-        }
-
-        /// <summary>
-        /// Sends a Http Get request to the URL and deserializes the body response to the specified type 
-        /// </summary>
-        /// <param name="requestUrl"></param>
-        /// <param name="setAuthorizationHeader"></param>
-        /// <param name="cacheResults"></param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <typeparam name="TResponse"></typeparam>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
         protected async Task<TResponse> HttpGetRequestAsync<TResponse>(Uri requestUrl, bool setAuthorizationHeader,
             bool cacheResults, CancellationToken cancellationToken)
         {
-            var content = await HttpGetRequestAsync(requestUrl, setAuthorizationHeader, cacheResults, cancellationToken);
+            if (cacheResults)
+            {
+                return await HttpGetRequestWithCachingAndRetryPolicyAsync<TResponse>(requestUrl, cancellationToken, setAuthorizationHeader);
+            }
 
-            return JsonSerializer.Deserialize<TResponse>(content)!;
+            return await HttpGetRequestWithRetryPolicyAsync<TResponse>(requestUrl, cancellationToken, setAuthorizationHeader);
         }
 
         /// <summary>
@@ -165,26 +150,21 @@ namespace Tes.ApiClients
         /// <param name="requestUrl"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="setAuthorizationHeader"></param>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
-        protected async Task<string> HttpGetRequestWithCachingAndRetryPolicyAsync(Uri requestUrl,
+        protected async Task<TResponse> HttpGetRequestWithCachingAndRetryPolicyAsync<TResponse>(Uri requestUrl,
             CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
             var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader, cancellationToken);
 
-            return (await cachingRetryHandler.AppCache.GetOrCreateAsync(cacheKey, async _ =>
+            return (await cachingRetryHandler.ExecuteWithRetryConversionAndCachingAsync(cacheKey, async ct =>
             {
-                var ctx = new Polly.Context();
-                ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler<HttpResponseMessage>());
-                var response = await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
-                {
-                    var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
+                //request must be recreated in every retry.
+                var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
 
-                    var httpResponse = await HttpClient.SendAsync(httpRequest, ct);
-                    return httpResponse.EnsureSuccessStatusCode();
-                }, cancellationToken, ctx);
-
-                return await ReadResponseBodyAsync(response, cancellationToken);
-            }))!;
+                return await HttpClient.SendAsync(httpRequest, ct);
+            },
+            GetApiResponseContentAsync<TResponse>, cancellationToken))!;
         }
 
         /// <summary>
@@ -193,22 +173,19 @@ namespace Tes.ApiClients
         /// <param name="requestUrl"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="setAuthorizationHeader"></param>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
-        protected async Task<string> HttpGetRequestWithRetryPolicyAsync(Uri requestUrl,
+        protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(Uri requestUrl,
             CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
-            var ctx = new Polly.Context();
-            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler<HttpResponseMessage>());
-            var response = await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
+            return await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
             {
                 //request must be recreated in every retry.
                 var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
 
-                var httpResponse = await HttpClient.SendAsync(httpRequest, ct);
-                return httpResponse.EnsureSuccessStatusCode();
-            }, cancellationToken, ctx);
-
-            return await ReadResponseBodyAsync(response, cancellationToken);
+                return await HttpClient.SendAsync(httpRequest, ct);
+            },
+            GetApiResponseContentAsync<TResponse>, cancellationToken);
         }
 
         /// <summary>
@@ -268,11 +245,30 @@ namespace Tes.ApiClients
             return httpRequest;
         }
 
-        protected async Task<string> ReadResponseBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+        /// <summary>
+        /// Sends an Http request to the URL and deserializes the body response to the specified type
+        /// </summary>
+        /// <param name="httpRequestFactory">Factory that creates new http requests, in the event of retry the factory is called again
+        /// and must be idempotent</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
+        /// <returns></returns>
+        protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(
+            Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
-            var ctx = new Polly.Context();
-            ctx.SetOnRetryHandler(LogRetryErrorOnRetryHandler());
-            return await cachingRetryHandler.ExecuteWithRetryAsync(response.Content.ReadAsStringAsync, cancellationToken, ctx);
+            return await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
+            {
+                var request = httpRequestFactory();
+
+                if (setAuthorizationHeader)
+                {
+                    await AddAuthorizationHeaderToRequestAsync(request, ct);
+                }
+
+                return await HttpClient.SendAsync(request, ct);
+            },
+            GetApiResponseContentAsync<TResponse>, cancellationToken);
         }
 
         private async Task AddAuthorizationHeaderToRequestAsync(HttpRequestMessage requestMessage, CancellationToken cancellationToken)
@@ -355,17 +351,28 @@ namespace Tes.ApiClients
         }
 
         /// <summary>
-        /// Returns the response content, the response is successful 
+        /// Returns the response content, the response is successful
         /// </summary>
         /// <param name="response">Response</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <typeparam name="T">Response's content deserialization type</typeparam>
+        /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
-        protected async Task<T> GetApiResponseContentAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
+        protected static async Task<TResponse> GetApiResponseContentAsync<TResponse>(HttpResponseMessage response, CancellationToken cancellationToken)
         {
             response.EnsureSuccessStatusCode();
 
-            return JsonSerializer.Deserialize<T>(await ReadResponseBodyAsync(response, cancellationToken))!;
+            return JsonSerializer.Deserialize<TResponse>(await ReadResponseBodyAsync(response, cancellationToken))!;
+        }
+
+        /// <summary>
+        /// Returns the response content, the response is successful
+        /// </summary>
+        /// <param name="response">Response</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        protected static async Task<string> ReadResponseBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+        {
+            return await response.Content.ReadAsStringAsync(cancellationToken);
         }
     }
 }

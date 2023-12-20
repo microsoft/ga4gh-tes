@@ -1,26 +1,26 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using CommonUtilities;
+using CommonUtilities.Options;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Tes.ApiClients;
-using Tes.ApiClients.Options;
 using Tes.Runner.Authentication;
 using Tes.Runner.Logs;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
+using static CommonUtilities.RetryHandler;
 
 namespace Tes.Runner.Docker
 {
     public class DockerExecutor
     {
-
         private readonly IDockerClient dockerClient = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
-        private readonly NetworkUtility networkUtility = new NetworkUtility();
-        private readonly RetryHandler retryHandler = new RetryHandler(Options.Create(new RetryPolicyOptions()));
+        private readonly NetworkUtility networkUtility = new();
+        private readonly AsyncRetryHandlerPolicy retryHandler = null!;
         private readonly IStreamLogReader streamLogReader = null!;
         private readonly ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager = null!;
 
@@ -32,6 +32,7 @@ namespace Tes.Runner.Docker
         }
 
         public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager)
+            : this() // Add logging to retries
         {
             ArgumentNullException.ThrowIfNull(dockerClient);
             ArgumentNullException.ThrowIfNull(streamLogReader);
@@ -47,7 +48,9 @@ namespace Tes.Runner.Docker
         /// </summary>
         protected DockerExecutor()
         {
-
+            this.retryHandler =
+                new RetryPolicyBuilder(Options.Create(new RetryPolicyOptions()))
+                    .DefaultRetryPolicyBuilder().SetOnRetryBehavior(logger).AsyncBuild();
         }
 
         public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(ExecutionOptions executionOptions)
@@ -138,7 +141,7 @@ namespace Tes.Runner.Docker
         {
             logger.LogInformation($"Pulling image name: {imageName} image tag: {tag}");
 
-            await retryHandler.AsyncRetryPolicy.ExecuteAsync(async () =>
+            await retryHandler.ExecuteWithRetryAsync(async () =>
             {
                 await dockerClient.Images.CreateImageAsync(
                     new ImagesCreateParameters() { FromImage = imageName, Tag = tag },

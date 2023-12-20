@@ -10,10 +10,10 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using CommonUtilities;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
-using Tes.Extensions;
 using Tes.Models;
 using static TesApi.Web.BatchScheduler.BatchPools;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
@@ -44,7 +44,7 @@ namespace TesApi.Web
 
             // Generate hash of everything that differentiates this group of pools
             var displayName = $"{label}:{vmSize}:{isPreemptable}:{identityResourceIds}";
-            var hash = CommonUtilities.Base32.ConvertToBase32(SHA1.HashData(Encoding.UTF8.GetBytes(displayName))).TrimEnd('=').ToLowerInvariant(); // This becomes 32 chars
+            var hash = SHA1.HashData(Encoding.UTF8.GetBytes(displayName)).ConvertToBase32().TrimEnd('=').ToLowerInvariant(); // This becomes 32 chars
 
             // Build a PoolName that is of legal length, while exposing the most important metadata without requiring user to find DisplayName
             // Note that the hash covers all necessary parts to make name unique, so limiting the size of the other parts is not expected to appreciably change the risk of collisions. Those other parts are for convenience
@@ -147,7 +147,7 @@ namespace TesApi.Web
 
                 var uniquifier = new byte[5]; // This always becomes 8 chars when converted to base32
                 RandomNumberGenerator.Fill(uniquifier);
-                var poolId = $"{key}-{CommonUtilities.Base32.ConvertToBase32(uniquifier).TrimEnd('=').ToLowerInvariant()}"; // embedded '-' is required by GetKeyFromPoolId()
+                var poolId = $"{key}-{uniquifier.ConvertToBase32().TrimEnd('=').ToLowerInvariant()}"; // embedded '-' is required by GetKeyFromPoolId()
                 var modelPool = await modelPoolFactory(poolId, cancellationToken);
                 modelPool.Metadata ??= new List<BatchModels.MetadataItem>();
                 modelPool.Metadata.Add(new(PoolHostName, this.batchPrefix));

@@ -11,6 +11,7 @@ using Azure.ResourceManager.Batch;
 using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.Compute.Models;
 using Azure.ResourceManager.Resources.Models;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,7 +20,6 @@ using Moq;
 using Newtonsoft.Json;
 using Tes.ApiClients;
 using Tes.ApiClients.Models.Pricing;
-using Tes.ApiClients.Options;
 using Tes.Models;
 
 namespace TesUtils
@@ -89,7 +89,7 @@ namespace TesUtils
             var appCache = new MemoryCache(new MemoryCacheOptions());
             var options = new Mock<IOptions<RetryPolicyOptions>>();
             options.Setup(o => o.Value).Returns(new RetryPolicyOptions());
-            var cacheAndRetryHandler = new CachingRetryHandler(appCache, options.Object);
+            var cacheAndRetryHandler = new CachingRetryPolicyBuilder(appCache, options.Object);
             var priceApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
 
             static double ConvertMiBToGiB(int value) => Math.Round(value / 1024.0, 2);
