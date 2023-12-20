@@ -188,9 +188,7 @@ namespace TesApi.Web.Storage
             {
                 var accountKey = await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, cancellationToken);
                 var resultPathSegments = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName);
-
-                var expiresOn = DateTimeOffset.UtcNow.Add(sasTokenDuration ?? SasTokenDuration);
-                var builder = createBuilder(expiresOn, resultPathSegments.BlobName);
+                var builder = createBuilder(DateTimeOffset.UtcNow.Add(sasTokenDuration ?? SasTokenDuration), resultPathSegments.BlobName);
 
                 builder.BlobContainerName = resultPathSegments.ContainerName;
                 builder.Protocol = SasProtocol.Https;
