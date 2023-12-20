@@ -134,7 +134,15 @@ namespace TesDeployer
 
             try
             {
-                ValidateInitialCommandLineArgs();
+                try
+                {
+                    ValidateInitialCommandLineArgs();
+                }
+                catch (ValidationException exc)
+                {
+                    ConsoleEx.WriteLine(exc.Reason, ConsoleColor.Red);
+                    return 1;
+                }
 
                 ConsoleEx.WriteLine("Running...");
 
@@ -750,7 +758,7 @@ namespace TesDeployer
             {
                 if (!configuration.ManualHelmDeployment)
                 {
-                    kubernetesManager.DeleteTempFiles();
+                    kubernetesManager?.DeleteTempFiles();
                 }
             }
         }
