@@ -360,117 +360,117 @@ namespace TesDeployer
                     await PerformHelmDeploymentAsync(resourceGroup);
                 }
 
-            if (!configuration.Update)
-            {
-                if (string.IsNullOrWhiteSpace(configuration.BatchPrefix))
+                if (!configuration.Update)
                 {
-                    var blob = new byte[5];
-                    RandomNumberGenerator.Fill(blob);
-                    configuration.BatchPrefix = blob.ConvertToBase32().TrimEnd('=');
-                }
+                    if (string.IsNullOrWhiteSpace(configuration.BatchPrefix))
+                    {
+                        var blob = new byte[5];
+                        RandomNumberGenerator.Fill(blob);
+                        configuration.BatchPrefix = blob.ConvertToBase32().TrimEnd('=');
+                    }
 
-                ValidateRegionName(configuration.RegionName);
-                ValidateMainIdentifierPrefix(configuration.MainIdentifierPrefix);
-                storageAccount = await ValidateAndGetExistingStorageAccountAsync();
-                batchAccount = await ValidateAndGetExistingBatchAccountAsync();
-                aksCluster = await ValidateAndGetExistingAKSClusterAsync();
-                postgreSqlFlexServer = await ValidateAndGetExistingPostgresqlServerAsync();
-                var keyVault = await ValidateAndGetExistingKeyVaultAsync();
+                    ValidateRegionName(configuration.RegionName);
+                    ValidateMainIdentifierPrefix(configuration.MainIdentifierPrefix);
+                    storageAccount = await ValidateAndGetExistingStorageAccountAsync();
+                    batchAccount = await ValidateAndGetExistingBatchAccountAsync();
+                    aksCluster = await ValidateAndGetExistingAKSClusterAsync();
+                    postgreSqlFlexServer = await ValidateAndGetExistingPostgresqlServerAsync();
+                    var keyVault = await ValidateAndGetExistingKeyVaultAsync();
 
-                if (aksCluster is null && !configuration.ManualHelmDeployment)
-                {
-                    await ValidateVmAsync();
-                }
+                    if (aksCluster is null && !configuration.ManualHelmDeployment)
+                    {
+                        await ValidateVmAsync();
+                    }
 
-                ConsoleEx.WriteLine($"Deploying TES on Azure version {targetVersion}...");
+                    ConsoleEx.WriteLine($"Deploying TES on Azure version {targetVersion}...");
 
-                // Configuration preferences not currently settable by user.
-                if (string.IsNullOrWhiteSpace(configuration.PostgreSqlServerName))
-                {
-                    configuration.PostgreSqlServerName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
-                }
+                    // Configuration preferences not currently settable by user.
+                    if (string.IsNullOrWhiteSpace(configuration.PostgreSqlServerName))
+                    {
+                        configuration.PostgreSqlServerName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
+                    }
 
-                configuration.PostgreSqlAdministratorPassword = PasswordGenerator.GeneratePassword();
-                configuration.PostgreSqlTesUserPassword = PasswordGenerator.GeneratePassword();
+                    configuration.PostgreSqlAdministratorPassword = PasswordGenerator.GeneratePassword();
+                    configuration.PostgreSqlTesUserPassword = PasswordGenerator.GeneratePassword();
 
-                if (string.IsNullOrWhiteSpace(configuration.BatchAccountName))
-                {
-                    configuration.BatchAccountName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}", 15);
-                }
+                    if (string.IsNullOrWhiteSpace(configuration.BatchAccountName))
+                    {
+                        configuration.BatchAccountName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}", 15);
+                    }
 
-                if (string.IsNullOrWhiteSpace(configuration.StorageAccountName))
-                {
-                    configuration.StorageAccountName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}", 24);
-                }
+                    if (string.IsNullOrWhiteSpace(configuration.StorageAccountName))
+                    {
+                        configuration.StorageAccountName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}", 24);
+                    }
 
-                //if (string.IsNullOrWhiteSpace(configuration.NetworkSecurityGroupName))
-                //{
-                //    configuration.NetworkSecurityGroupName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}", 15);
-                //}
+                    //if (string.IsNullOrWhiteSpace(configuration.NetworkSecurityGroupName))
+                    //{
+                    //    configuration.NetworkSecurityGroupName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}", 15);
+                    //}
 
-                if (string.IsNullOrWhiteSpace(configuration.ApplicationInsightsAccountName))
-                {
-                    configuration.ApplicationInsightsAccountName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
-                }
+                    if (string.IsNullOrWhiteSpace(configuration.ApplicationInsightsAccountName))
+                    {
+                        configuration.ApplicationInsightsAccountName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
+                    }
 
-                if (string.IsNullOrWhiteSpace(configuration.TesPassword))
-                {
-                    configuration.TesPassword = PasswordGenerator.GeneratePassword();
-                }
+                    if (string.IsNullOrWhiteSpace(configuration.TesPassword))
+                    {
+                        configuration.TesPassword = PasswordGenerator.GeneratePassword();
+                    }
 
-                if (string.IsNullOrWhiteSpace(configuration.AksClusterName))
-                {
-                    configuration.AksClusterName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 25);
-                }
+                    if (string.IsNullOrWhiteSpace(configuration.AksClusterName))
+                    {
+                        configuration.AksClusterName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 25);
+                    }
 
-                if (string.IsNullOrWhiteSpace(configuration.KeyVaultName))
-                {
-                    configuration.KeyVaultName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
-                }
+                    if (string.IsNullOrWhiteSpace(configuration.KeyVaultName))
+                    {
+                        configuration.KeyVaultName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
+                    }
 
-                await RegisterResourceProvidersAsync();
-                await RegisterResourceProviderFeaturesAsync();
+                    await RegisterResourceProvidersAsync();
+                    await RegisterResourceProviderFeaturesAsync();
 
-                if (batchAccount is null)
-                {
-                    await ValidateBatchAccountQuotaAsync();
-                }
+                    if (batchAccount is null)
+                    {
+                        await ValidateBatchAccountQuotaAsync();
+                    }
 
-                var vnetAndSubnet = await ValidateAndGetExistingVirtualNetworkAsync();
+                    var vnetAndSubnet = await ValidateAndGetExistingVirtualNetworkAsync();
 
-                if (string.IsNullOrWhiteSpace(configuration.ResourceGroupName))
-                {
-                    configuration.ResourceGroupName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
-                    resourceGroup = await CreateResourceGroupAsync();
-                    isResourceGroupCreated = true;
-                }
-                else
-                {
-                    resourceGroup = await azureSubscriptionClient.ResourceGroups.GetByNameAsync(configuration.ResourceGroupName, cts.Token);
-                }
+                    if (string.IsNullOrWhiteSpace(configuration.ResourceGroupName))
+                    {
+                        configuration.ResourceGroupName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
+                        resourceGroup = await CreateResourceGroupAsync();
+                        isResourceGroupCreated = true;
+                    }
+                    else
+                    {
+                        resourceGroup = await azureSubscriptionClient.ResourceGroups.GetByNameAsync(configuration.ResourceGroupName, cts.Token);
+                    }
 
-                // Derive TES ingress URL from resource group name
-                kubernetesManager.SetTesIngressNetworkingConfiguration(configuration.ResourceGroupName);
+                    // Derive TES ingress URL from resource group name
+                    kubernetesManager.SetTesIngressNetworkingConfiguration(configuration.ResourceGroupName);
 
-                managedIdentity = await CreateUserManagedIdentityAsync(resourceGroup);
+                    managedIdentity = await CreateUserManagedIdentityAsync(resourceGroup);
 
-                if (vnetAndSubnet is not null)
-                {
-                    ConsoleEx.WriteLine($"Creating VM in existing virtual network {vnetAndSubnet.Value.virtualNetwork.Name} and subnet {vnetAndSubnet.Value.vmSubnet.Name}");
-                }
+                    if (vnetAndSubnet is not null)
+                    {
+                        ConsoleEx.WriteLine($"Creating VM in existing virtual network {vnetAndSubnet.Value.virtualNetwork.Name} and subnet {vnetAndSubnet.Value.vmSubnet.Name}");
+                    }
 
-                if (storageAccount is not null)
-                {
-                    ConsoleEx.WriteLine($"Using existing Storage Account {storageAccount.Name}");
-                }
+                    if (storageAccount is not null)
+                    {
+                        ConsoleEx.WriteLine($"Using existing Storage Account {storageAccount.Name}");
+                    }
 
-                if (batchAccount is not null)
-                {
-                    ConsoleEx.WriteLine($"Using existing Batch Account {batchAccount.Name}");
-                }
+                    if (batchAccount is not null)
+                    {
+                        ConsoleEx.WriteLine($"Using existing Batch Account {batchAccount.Name}");
+                    }
 
-                await Task.WhenAll(new Task[]
-                {
+                    await Task.WhenAll(new Task[]
+                    {
                         Task.Run(async () =>
                         {
                             if (vnetAndSubnet is null)
@@ -506,26 +506,26 @@ namespace TesDeployer
                             await AssignManagedIdOperatorToResourceAsync(managedIdentity, resourceGroup);
                             await AssignMIAsNetworkContributorToResourceAsync(managedIdentity, resourceGroup);
                         }),
-                });
-
-                if (configuration.CrossSubscriptionAKSDeployment.GetValueOrDefault())
-                {
-                    await Task.Run(async () =>
-                    {
-                        keyVault ??= await CreateKeyVaultAsync(configuration.KeyVaultName, managedIdentity, vnetAndSubnet.Value.vmSubnet);
-                        keyVaultUri = keyVault.Properties.VaultUri;
-                        var keys = await storageAccount.GetKeysAsync();
-                        await SetStorageKeySecret(keyVaultUri, StorageAccountKeySecretName, keys[0].Value);
                     });
-                }
 
-                if (postgreSqlFlexServer is null)
-                {
-                    postgreSqlDnsZone = await CreatePrivateDnsZoneAsync(vnetAndSubnet.Value.virtualNetwork, $"privatelink.postgres.database.azure.com", "PostgreSQL Server");
-                }
+                    if (configuration.CrossSubscriptionAKSDeployment.GetValueOrDefault())
+                    {
+                        await Task.Run(async () =>
+                        {
+                            keyVault ??= await CreateKeyVaultAsync(configuration.KeyVaultName, managedIdentity, vnetAndSubnet.Value.vmSubnet);
+                            keyVaultUri = keyVault.Properties.VaultUri;
+                            var keys = await storageAccount.GetKeysAsync();
+                            await SetStorageKeySecret(keyVaultUri, StorageAccountKeySecretName, keys[0].Value);
+                        });
+                    }
 
-                await Task.WhenAll(new[]
-                {
+                    if (postgreSqlFlexServer is null)
+                    {
+                        postgreSqlDnsZone = await CreatePrivateDnsZoneAsync(vnetAndSubnet.Value.virtualNetwork, $"privatelink.postgres.database.azure.com", "PostgreSQL Server");
+                    }
+
+                    await Task.WhenAll(new[]
+                    {
                         Task.Run(async () =>
                         {
                             if (aksCluster is null && !configuration.ManualHelmDeployment)
@@ -548,38 +548,38 @@ namespace TesDeployer
                         })
                     });
 
-                var clientId = managedIdentity.ClientId;
-                var settings = ConfigureSettings(clientId);
+                    var clientId = managedIdentity.ClientId;
+                    var settings = ConfigureSettings(clientId);
 
-                await kubernetesManager.UpdateHelmValuesAsync(storageAccount, keyVaultUri, resourceGroup.Name, settings, managedIdentity);
-                await PerformHelmDeploymentAsync(resourceGroup,
-                    new[]
-                    {
+                    await kubernetesManager.UpdateHelmValuesAsync(storageAccount, keyVaultUri, resourceGroup.Name, settings, managedIdentity);
+                    await PerformHelmDeploymentAsync(resourceGroup,
+                        new[]
+                        {
                             "Run the following postgresql command to setup the database.",
                             $"\tPostgreSQL command: psql postgresql://{configuration.PostgreSqlAdministratorLogin}:{configuration.PostgreSqlAdministratorPassword}@{configuration.PostgreSqlServerName}.postgres.database.azure.com/{configuration.PostgreSqlTesDatabaseName} -c \"{GetCreateTesUserString()}\""
-                    },
-                    async kubernetesClient =>
-                    {
-                        await kubernetesManager.DeployCoADependenciesAsync();
-
-                        // Deploy an ubuntu pod to run PSQL commands, then delete it
-                        const string deploymentNamespace = "default";
-                        var (deploymentName, ubuntuDeployment) = KubernetesManager.GetUbuntuDeploymentTemplate();
-                        await kubernetesClient.AppsV1.CreateNamespacedDeploymentAsync(ubuntuDeployment, deploymentNamespace, cancellationToken: cts.Token);
-                        await ExecuteQueriesOnAzurePostgreSQLDbFromK8(kubernetesClient, deploymentName, deploymentNamespace);
-                        await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace, cancellationToken: cts.Token);
-
-
-                        if (configuration.EnableIngress.GetValueOrDefault())
+                        },
+                        async kubernetesClient =>
                         {
-                            await Execute(
-                                $"Enabling Ingress {kubernetesManager.TesHostname}",
-                                async () =>
-                                {
-                                    _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
-                                });
-                        }
-                    });
+                            await kubernetesManager.DeployCoADependenciesAsync();
+
+                            // Deploy an ubuntu pod to run PSQL commands, then delete it
+                            const string deploymentNamespace = "default";
+                            var (deploymentName, ubuntuDeployment) = KubernetesManager.GetUbuntuDeploymentTemplate();
+                            await kubernetesClient.AppsV1.CreateNamespacedDeploymentAsync(ubuntuDeployment, deploymentNamespace, cancellationToken: cts.Token);
+                            await ExecuteQueriesOnAzurePostgreSQLDbFromK8(kubernetesClient, deploymentName, deploymentNamespace);
+                            await kubernetesClient.AppsV1.DeleteNamespacedDeploymentAsync(deploymentName, deploymentNamespace, cancellationToken: cts.Token);
+
+
+                            if (configuration.EnableIngress.GetValueOrDefault())
+                            {
+                                await Execute(
+                                    $"Enabling Ingress {kubernetesManager.TesHostname}",
+                                    async () =>
+                                    {
+                                        _ = await kubernetesManager.EnableIngress(configuration.TesUsername, configuration.TesPassword, kubernetesClient);
+                                    });
+                            }
+                        });
                 }
 
                 if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
