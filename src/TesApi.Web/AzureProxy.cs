@@ -673,10 +673,6 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public bool LocalFileExists(string path)
-            => File.Exists(path);
-
-        /// <inheritdoc/>
         public bool TryReadCwlFile(string workflowId, out string content)
         {
             var fileName = $"cwl_temp_file_{workflowId}.cwl";

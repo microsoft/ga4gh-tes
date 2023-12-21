@@ -1475,41 +1475,6 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        [Ignore("Temporary disabled")]
-        public async Task LocalFilesInCromwellTmpDirectoryAreDiscoveredAndUploaded()
-        {
-            var tesTask = GetTesTask();
-
-            tesTask.Inputs = new()
-            {
-                new() { Url = null, Path = "/cromwell-executions/workflowpath/execution/script", Type = TesFileType.FILEEnum, Name = "commandScript", Description = "test.commandScript", Content = "echo hello" },
-                new() { Url = "file:///cromwell-tmp/tmp12345/blob1", Path = "/cromwell-executions/workflowpath/inputs/blob1", Type = TesFileType.FILEEnum, Name = "blob1", Content = null },
-            };
-
-            var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
-            azureProxyReturnValues.LocalFileExists = true;
-
-            Mock<IAzureProxy> azureProxy = default;
-            var azureProxySetter = new Action<Mock<IAzureProxy>>(mock =>
-            {
-                GetMockAzureProxy(azureProxyReturnValues)(mock);
-                azureProxy = mock;
-            });
-            _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig(false)(), azureProxySetter, azureProxyReturnValues);
-
-            var filesToDownload = GetFilesToDownload(azureProxy);
-
-            GuardAssertsWithTesTask(tesTask, () =>
-            {
-                Assert.AreEqual(2, filesToDownload.Count());
-                var inputFileUrl = filesToDownload.SingleOrDefault(f => f.StorageUrl.StartsWith("https://defaultstorageaccount.blob.core.windows.net/tes-internal/") && f.LocalPath.Equals("%AZ_BATCH_TASK_WORKING_DIR%/wd/cromwell-executions/workflowpath/inputs/blob1"))?.StorageUrl;
-                Assert.IsNotNull(inputFileUrl);
-                azureProxy.Verify(i => i.LocalFileExists("/cromwell-tmp/tmp12345/blob1"));
-                azureProxy.Verify(i => i.UploadBlobFromFileAsync(It.Is<Uri>(uri => uri.AbsoluteUri.StartsWith($"{new Uri(inputFileUrl).GetLeftPart(UriPartial.Path)}?sv=")), "/cromwell-tmp/tmp12345/blob1", It.IsAny<System.Threading.CancellationToken>()));
-            });
-        }
-
-        [TestMethod]
         public async Task PoolIsCreatedInSubnetWhenBatchNodesSubnetIdIsSet()
         {
             var config = GetMockConfig(true)()
@@ -1716,9 +1681,6 @@ namespace TesApi.Tests
                 azureProxy.Setup(a => a.DownloadBlobAsync(It.IsAny<Uri>(), It.IsAny<System.Threading.CancellationToken>()))
                     .Returns(Task.FromResult(azureProxyReturnValues.DownloadedBlobContent));
 
-                azureProxy.Setup(a => a.LocalFileExists(It.IsAny<string>()))
-                    .Returns(azureProxyReturnValues.LocalFileExists);
-
                 azureProxy.Setup(a => a.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<System.Threading.CancellationToken>()))
                     .Returns((Pool p, bool _1, System.Threading.CancellationToken _2) => Task.FromResult(azureProxyReturnValues.CreateBatchPoolImpl(p)));
 
@@ -1871,7 +1833,6 @@ namespace TesApi.Tests
             public string NextBatchJobId { get; set; }
             public string StorageAccountKey { get; set; }
             public string DownloadedBlobContent { get; set; }
-            public bool LocalFileExists { get; set; }
 
             public static AzureProxyReturnValues Defaults => new()
             {
@@ -1896,7 +1857,6 @@ namespace TesApi.Tests
                 NextBatchJobId = "JobId-1",
                 StorageAccountKey = "Key1",
                 DownloadedBlobContent = string.Empty,
-                LocalFileExists = true
             };
 
             public static AzureProxyReturnValues DefaultsPerVMFamilyEnforced => DefaultsPerVMFamilyEnforcedImpl();
