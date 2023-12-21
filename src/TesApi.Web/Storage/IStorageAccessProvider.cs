@@ -30,15 +30,6 @@ namespace TesApi.Web.Storage
         public Task<string> DownloadBlobAsync(Uri blobAbsoluteUrl, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Updates the content of the blob, creating the blob if necessary.
-        /// </summary>
-        /// <param name="blobRelativePath">Path to the blob in form of /storageaccountname/container/path.</param>
-        /// <param name="content">The new content.</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        public Task UploadBlobAsync(string blobRelativePath, string content, CancellationToken cancellationToken);
-
-        /// <summary>
         /// Uploads the content as Blob to the provided Blob URL
         /// </summary>
         /// <param name="blobAbsoluteUrl">Absolute Blob Storage URL with a SAS token.</param>
@@ -46,15 +37,6 @@ namespace TesApi.Web.Storage
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public Task UploadBlobAsync(Uri blobAbsoluteUrl, string content, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Updates the content from the file, creating the blob if necessary.
-        /// </summary>
-        /// <param name="blobRelativePath">Path to the blob in form of /storageaccountname/container/path.</param>
-        /// <param name="sourceLocalFilePath">Path to the local file to get the content from.</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        public Task UploadBlobFromFileAsync(string blobRelativePath, string sourceLocalFilePath, CancellationToken cancellationToken);
 
         /// <summary>
         /// Checks if the specified string represents a HTTP URL that is publicly accessible.

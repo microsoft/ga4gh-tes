@@ -278,13 +278,6 @@ namespace TesApi.Web
         Task<FullBatchPoolAllocationState> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Checks if a local file exists
-        /// </summary>
-        /// <param name="path"></param>
-        /// <returns>True if file was found</returns>
-        bool LocalFileExists(string path);
-
-        /// <summary>
         /// Reads the content of the Common Workflow Language (CWL) file associated with the parent workflow of the TES task
         /// </summary>
         /// <param name="workflowId">Parent workflow</param>

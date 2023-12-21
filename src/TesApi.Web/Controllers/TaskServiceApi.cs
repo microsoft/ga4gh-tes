@@ -143,6 +143,11 @@ namespace TesApi.Controllers
                 {
                     return BadRequest("Input paths in the container must be absolute paths.");
                 }
+
+                if (input.Url?.StartsWith("file://") ?? false)
+                {
+                    return BadRequest("Input URLs to the local file system are not supported.");
+                }
             }
 
             foreach (var output in tesTask.Outputs ?? Enumerable.Empty<TesOutput>())
