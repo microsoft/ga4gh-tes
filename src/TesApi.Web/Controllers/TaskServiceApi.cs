@@ -173,25 +173,6 @@ namespace TesApi.Controllers
             // Prefix the TES task id with first eight characters of root Cromwell job id to facilitate easier debugging
             tesTask.Id = tesTask.CreateId();
 
-            // For CWL workflows, if disk size is not specified in TES object (always), try to retrieve it from the corresponding workflow stored by Cromwell in /cromwell-tmp directory
-            // Also allow for TES-style "memory" and "cpu" hints in CWL.
-            if (tesTask.Name is not null
-                && tesTask.Inputs?.Any(i => i.Path.Contains(".cwl/")) == true
-                && tesTask.WorkflowId is not null
-                && azureProxy.TryReadCwlFile(tesTask.WorkflowId, out var cwlContent)
-                && CwlDocument.TryCreate(cwlContent, out var cwlDocument))
-            {
-                tesTask.Resources ??= new TesResources();
-                tesTask.Resources.DiskGb = tesTask.Resources.DiskGb ?? cwlDocument.DiskGb;
-                tesTask.Resources.CpuCores = tesTask.Resources.CpuCores ?? cwlDocument.Cpu;
-                tesTask.Resources.RamGb = tesTask.Resources.RamGb ?? cwlDocument.MemoryGb;
-
-                // Preemptible is not passed on from CWL workflows to Cromwell, so Cromwell sends the default (TRUE) to TES, 
-                // instead of NULL like the other values above.
-                // If CWL document has it specified, override the value sent by Cromwell
-                tesTask.Resources.Preemptible = cwlDocument.Preemptible ?? tesTask.Resources.Preemptible;
-            }
-
             if (tesTask?.Resources is not null)
             {
                 if (tesTask.Resources.CpuCores.HasValue && tesTask.Resources.CpuCores.Value <= 0)

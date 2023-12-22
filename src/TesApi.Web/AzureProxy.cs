@@ -672,30 +672,6 @@ namespace TesApi.Web
             return results;
         }
 
-        /// <inheritdoc/>
-        public bool TryReadCwlFile(string workflowId, out string content)
-        {
-            var fileName = $"cwl_temp_file_{workflowId}.cwl";
-
-            try
-            {
-                var filePath = Directory.GetFiles("/cromwell-tmp", fileName, SearchOption.AllDirectories).FirstOrDefault();
-
-                if (filePath is not null)
-                {
-                    content = File.ReadAllText(filePath);
-                    return true;
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, $"Error looking up or retrieving contents of CWL file '{fileName}'");
-            }
-
-            content = null;
-            return false;
-        }
-
         /// <inheritdoc />
         public string GetArmRegion()
             => location;
