@@ -171,17 +171,18 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task AddBatchTaskAsync(string tesTaskId, CloudTask cloudTask, string jobId, CancellationToken cancellationToken)
+        public async Task AddBatchTasksAsync(IEnumerable<CloudTask> cloudTasks, string jobId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrEmpty(jobId);
+            ArgumentNullException.ThrowIfNull(cloudTasks);
 
-            logger.LogInformation("TES task: {TesTask} - Adding task to job {BatchJob}", tesTaskId, jobId);
+            cloudTasks = cloudTasks.ToList();
+
             var job = await batchRetryPolicyWhenJobNotFound.ExecuteWithRetryAsync(ct =>
                     batchClient.JobOperations.GetJobAsync(jobId, cancellationToken: ct),
                     cancellationToken);
 
-            await job.AddTaskAsync(cloudTask, cancellationToken: cancellationToken);
-            logger.LogInformation("TES task: {TesTask} - Added task successfully", tesTaskId);
+            await job.AddTaskAsync(cloudTasks, new() { CancellationToken = cancellationToken, MaxDegreeOfParallelism = (int)Math.Ceiling((double)cloudTasks.Count() / Microsoft.Azure.Batch.Constants.MaxTasksInSingleAddTaskCollectionRequest) });
         }
 
         /// <inheritdoc/>

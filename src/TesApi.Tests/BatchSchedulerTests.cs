@@ -607,8 +607,8 @@ namespace TesApi.Tests
             return AddBatchTasksHandlesExceptions(TesState.SYSTEMERROREnum, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
-                => (default, azureProxy => azureProxy.Setup(b => b.AddBatchTaskAsync(It.IsAny<string>(), It.IsAny<CloudTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                    .Callback<string, CloudTask, string, CancellationToken>((_1, _2, _3, _4)
+                => (default, azureProxy => azureProxy.Setup(b => b.AddBatchTasksAsync(It.IsAny<IEnumerable<CloudTask>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                    .Callback<IEnumerable<CloudTask>, string, CancellationToken>((_1, _2, _3)
                         => throw typeof(BatchClientException)
                                 .GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
                                     new[] { typeof(string), typeof(Exception) })
@@ -740,10 +740,9 @@ namespace TesApi.Tests
             await foreach (var _ in batchScheduler.ProcessQueuedTesTasksAsync(new[] { tesTask }, CancellationToken.None)) { }
 
             var createBatchPoolAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateBatchPoolAsync));
-            var addBatchTaskAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.AddBatchTaskAsync));
+            var addBatchTaskAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.AddBatchTasksAsync));
 
-            var cloudTask = addBatchTaskAsyncInvocation?.Arguments[1] as CloudTask;
-            var poolId = addBatchTaskAsyncInvocation?.Arguments[2] as string;
+            var poolId = addBatchTaskAsyncInvocation?.Arguments[1] as string;
             var pool = createBatchPoolAsyncInvocation?.Arguments[0] as Pool;
 
             GuardAssertsWithTesTask(tesTask, () =>
@@ -793,7 +792,7 @@ namespace TesApi.Tests
             var tesTask = GetTesTask();
             tesTask.Resources.Preemptible = true;
 
-            (_, _, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
+            (_, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
@@ -809,7 +808,7 @@ namespace TesApi.Tests
             var tesTask = GetTesTask();
             tesTask.Resources.Preemptible = false;
 
-            (_, _, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
+            (_, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
@@ -825,7 +824,7 @@ namespace TesApi.Tests
             var tesTask = GetTesTask();
             tesTask.Resources.Preemptible = true;
 
-            (_, _, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.DefaultsPerVMFamilyEnforced), AzureProxyReturnValues.DefaultsPerVMFamilyEnforced);
+            (_, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.DefaultsPerVMFamilyEnforced), AzureProxyReturnValues.DefaultsPerVMFamilyEnforced);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
@@ -841,7 +840,7 @@ namespace TesApi.Tests
             var tesTask = GetTesTask();
             tesTask.Resources.Preemptible = false;
 
-            (_, _, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.DefaultsPerVMFamilyEnforced), AzureProxyReturnValues.DefaultsPerVMFamilyEnforced);
+            (_, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.DefaultsPerVMFamilyEnforced), AzureProxyReturnValues.DefaultsPerVMFamilyEnforced);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
@@ -861,7 +860,7 @@ namespace TesApi.Tests
             var azureProxyReturnValues = AzureProxyReturnValues.DefaultsPerVMFamilyEnforced;
             azureProxyReturnValues.VmSizesAndPrices.First(vm => vm.VmSize.Equals("VmSize3", StringComparison.OrdinalIgnoreCase)).PricePerHour = 44;
 
-            (_, _, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
+            (_, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(azureProxyReturnValues), azureProxyReturnValues);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
@@ -879,7 +878,7 @@ namespace TesApi.Tests
             var config = GetMockConfig()()
                 .Append(("BatchScheduling:UsePreemptibleVmsOnly", "true"));
 
-            (_, _, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
+            (_, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
 
             GuardAssertsWithTesTask(tesTask, () => Assert.IsTrue(pool.ScaleSettings.AutoScale.Formula.Contains("\n$TargetLowPriorityNodes = ")));
         }
@@ -895,7 +894,7 @@ namespace TesApi.Tests
                 var config = GetMockConfig()()
                     .Append(("AllowedVmSizes", allowedVmSizes));
 
-                (_, _, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
+                (_, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
 
                 GuardAssertsWithTesTask(tesTask, () =>
                 {
@@ -1422,7 +1421,7 @@ namespace TesApi.Tests
                 GetMockAzureProxy(AzureProxyReturnValues.Defaults)(mock);
                 azureProxy = mock;
             });
-            (_, var cloudTask, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, AzureProxyReturnValues.Defaults);
+            (_, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, AzureProxyReturnValues.Defaults);
             var batchScript = (string)azureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.UploadBlobAsync) && i.Arguments[0].ToString().Contains("/batch_script"))?.Arguments[1];
 
             GuardAssertsWithTesTask(tesTask, () =>
@@ -1447,7 +1446,7 @@ namespace TesApi.Tests
                 GetMockAzureProxy(AzureProxyReturnValues.Defaults)(mock);
                 azureProxy = mock;
             });
-            (_, var cloudTask, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, AzureProxyReturnValues.Defaults);
+            (_, var cloudTasks, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), azureProxySetter, AzureProxyReturnValues.Defaults);
             var batchScript = (string)azureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.UploadBlobAsync) && i.Arguments[0].ToString().Contains("/batch_script"))?.Arguments[1];
 
             GuardAssertsWithTesTask(tesTask, () =>
@@ -1464,12 +1463,12 @@ namespace TesApi.Tests
         {
             var tesTask = GetTesTask();
 
-            (_, var cloudTask, _, _) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
+            (_, var cloudTasks, _) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.IsNotNull(cloudTask.ContainerSettings);
-                Assert.AreEqual("docker", cloudTask.ContainerSettings.ImageName);
+                Assert.IsNotNull(cloudTasks.FirstOrDefault()?.ContainerSettings);
+                Assert.AreEqual("docker", cloudTasks.FirstOrDefault()?.ContainerSettings.ImageName);
             });
         }
 
@@ -1479,9 +1478,13 @@ namespace TesApi.Tests
             var tesTask = GetTesTask();
             tesTask.Executors.First().Image = "ubuntu";
 
-            (_, var cloudTask, _, _) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
+            (_, var cloudTasks, _) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
 
-            GuardAssertsWithTesTask(tesTask, () => Assert.IsNull(cloudTask.ContainerSettings));
+            GuardAssertsWithTesTask(tesTask, () =>
+            {
+                Assert.IsNotNull(cloudTasks.FirstOrDefault());
+                Assert.IsNull(cloudTasks.FirstOrDefault()?.ContainerSettings);
+            });
         }
 
         [DataTestMethod]
@@ -1593,7 +1596,7 @@ namespace TesApi.Tests
             var tesTask = GetTesTask();
             var azureProxy = GetMockAzureProxy(AzureProxyReturnValues.Defaults);
 
-            (_, _, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, azureProxy, AzureProxyReturnValues.Defaults);
+            (_, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, azureProxy, AzureProxyReturnValues.Defaults);
 
             var poolNetworkConfiguration = pool.NetworkConfiguration;
 
@@ -1614,7 +1617,7 @@ namespace TesApi.Tests
             var tesTask = GetTesTask();
             var azureProxy = GetMockAzureProxy(AzureProxyReturnValues.Defaults);
 
-            (_, _, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, azureProxy, AzureProxyReturnValues.Defaults);
+            (_, _, var pool) = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, config, azureProxy, AzureProxyReturnValues.Defaults);
 
             var poolNetworkConfiguration = pool.NetworkConfiguration;
 
@@ -1635,13 +1638,13 @@ namespace TesApi.Tests
             return (tesTask.Logs?.LastOrDefault()?.FailureReason, tesTask.Logs?.LastOrDefault()?.SystemLogs?.ToArray());
         }
 
-        private static Task<(string JobId, CloudTask CloudTask, PoolInformation PoolInformation, Pool batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync()
+        private static Task<(string JobId, IEnumerable<CloudTask> CloudTask, Pool batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync()
             => ProcessTesTaskAndGetBatchJobArgumentsAsync(GetTesTask(), GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
 
-        private static Task<(string JobId, CloudTask CloudTask, PoolInformation PoolInformation, Pool batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync(TesTask tesTask, IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, AzureProxyReturnValues azureProxyReturnValues, Action<IServiceCollection> additionalActions = default, Action<TestServices.TestServiceProvider<IBatchScheduler>> serviceProviderActions = default)
+        private static Task<(string JobId, IEnumerable<CloudTask> CloudTask, Pool batchModelsPool)> ProcessTesTaskAndGetBatchJobArgumentsAsync(TesTask tesTask, IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, AzureProxyReturnValues azureProxyReturnValues, Action<IServiceCollection> additionalActions = default, Action<TestServices.TestServiceProvider<IBatchScheduler>> serviceProviderActions = default)
             => ProcessTesTasksAndGetBatchJobArgumentsAsync(new[] { tesTask }, configuration, azureProxy, azureProxyReturnValues, additionalActions, serviceProviderActions);
 
-        private static async Task<(string JobId, CloudTask CloudTask, PoolInformation PoolInformation, Pool batchModelsPool)> ProcessTesTasksAndGetBatchJobArgumentsAsync(TesTask[] tesTasks, IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, AzureProxyReturnValues azureProxyReturnValues, Action<IServiceCollection> additionalActions = default, Action<TestServices.TestServiceProvider<IBatchScheduler>> serviceProviderActions = default)
+        private static async Task<(string JobId, IEnumerable<CloudTask> CloudTasks, Pool batchModelsPool)> ProcessTesTasksAndGetBatchJobArgumentsAsync(TesTask[] tesTasks, IEnumerable<(string Key, string Value)> configuration, Action<Mock<IAzureProxy>> azureProxy, AzureProxyReturnValues azureProxyReturnValues, Action<IServiceCollection> additionalActions = default, Action<TestServices.TestServiceProvider<IBatchScheduler>> serviceProviderActions = default)
         {
             using var serviceProvider = GetServiceProvider(
                 configuration,
@@ -1663,14 +1666,13 @@ namespace TesApi.Tests
             }
 
             var createBatchPoolAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.CreateBatchPoolAsync));
-            var addBatchTaskAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.AddBatchTaskAsync));
+            var addBatchTaskAsyncInvocation = serviceProvider.AzureProxy.Invocations.FirstOrDefault(i => i.Method.Name == nameof(IAzureProxy.AddBatchTasksAsync));
 
-            var jobId = (addBatchTaskAsyncInvocation?.Arguments[0]) as string;
-            var cloudTask = (addBatchTaskAsyncInvocation?.Arguments[1]) as CloudTask;
-            var poolInformation = (addBatchTaskAsyncInvocation?.Arguments[2]) as PoolInformation;
+            var jobId = (addBatchTaskAsyncInvocation?.Arguments[1]) as string;
+            var cloudTask = (addBatchTaskAsyncInvocation?.Arguments[0]) as IEnumerable<CloudTask>;
             var batchPoolsModel = createBatchPoolAsyncInvocation?.Arguments[0] as Pool;
 
-            return (jobId, cloudTask, poolInformation, batchPoolsModel);
+            return (jobId, cloudTask, batchPoolsModel);
         }
 
         private static Action<Mock<IAllowedVmSizesService>> GetMockAllowedVms(IEnumerable<(string Key, string Value)> configuration)

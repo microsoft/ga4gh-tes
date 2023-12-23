@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
+
 namespace TesApi.Web
 {
     /// <summary>
@@ -36,11 +38,10 @@ namespace TesApi.Web
         /// <see cref="System.Threading.Tasks.TaskStatus.Faulted">Faulted</see>, or
         /// <see cref="System.Threading.Tasks.TaskStatus.Canceled">Canceled</see>.
         /// </exception>
-#pragma warning disable CA1816 // Dispose methods should call SuppressFinalize
         public void Dispose()
-#pragma warning restore CA1816 // Dispose methods should call SuppressFinalize
         {
             Task.Dispose();
+            GC.SuppressFinalize(this);
         }
     }
 }

@@ -26,11 +26,10 @@ namespace TesApi.Web
         /// <summary>
         /// Adds a <see cref="CloudTask"/> to the <paramref name="jobId"/> job."/>
         /// </summary>
-        /// <param name="tesTaskId"></param>
-        /// <param name="cloudTask"></param>
+        /// <param name="cloudTasks"></param>
         /// <param name="jobId"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        Task AddBatchTaskAsync(string tesTaskId, CloudTask cloudTask, string jobId, CancellationToken cancellationToken);
+        Task AddBatchTasksAsync(IEnumerable<CloudTask> cloudTasks, string jobId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Terminates and deletes an Azure Batch job for <see cref="IBatchPool"/>

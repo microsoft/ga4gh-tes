@@ -271,10 +271,10 @@ namespace TesApi.Web
           This is accomplished by calling doubleVec's GetSample method, which returns some number of the most recent available samples of the related metric.
           Then, a function is used to extract a scaler from the list of scalers (measurements). NOTE: there does not seem to be a "last" function.
 
-          Whenever autoscaling is turned on, whether or not the pool waw just created, there are no sampled metrics available. Thus, we need to prevent the
+          Whenever autoscaling is turned on, whether or not the pool was just created, there are no sampled metrics available. Thus, we need to prevent the
           expected errors that would result from trying to extract the samples. Later on, if recent samples aren't available, we prefer that the formula fails
-          (1- so we can potentially capture that, and 2- so that we don't suddenly try to remove all nodes from the pool when there's still demand) so we use a
-          timed scheme to substitue an "initial value" (aka initialTarget).
+          (firstly, so we can potentially capture that, and secondly, so that we don't suddenly try to remove all nodes from the pool when there's still demand)
+          so we use a timed scheme to substitue an "initial value" (aka initialTarget).
 
           We set NodeDeallocationOption to taskcompletion to prevent wasting time/money by stopping a running task, only to requeue it onto another node, or worse,
           fail it, just because batch's last sample was taken longer ago than a task's assignment was made to a node, because the formula evaluations intervals are not coordinated
@@ -584,7 +584,7 @@ namespace TesApi.Web
             static IEnumerable<Exception> Flatten(Exception ex)
                 => ex switch
                 {
-                    AggregateException aggregateException => aggregateException.InnerExceptions,
+                    AggregateException aggregateException => aggregateException.Flatten().InnerExceptions,
                     _ => Enumerable.Empty<Exception>().Append(ex),
                 };
 
@@ -609,34 +609,50 @@ namespace TesApi.Web
             }
 
             // Returns true when pool/job was removed because it was not found. Returns false otherwise.
-            async ValueTask<bool> RemoveMissingPoolsAsync(Exception ex, CancellationToken cancellationToken)
+            ValueTask<bool> RemoveMissingPoolsAsync(Exception ex, CancellationToken cancellationToken)
             {
-                switch (ex)
+                return ex switch
                 {
-                    case AggregateException aggregateException:
-                        var result = false;
+                    AggregateException aggregateException => ParseAggregateException(aggregateException, cancellationToken),
+                    BatchException batchException => ParseBatchException(batchException, cancellationToken),
+                    _ => ParseException(ex, cancellationToken),
+                };
 
-                        foreach (var e in aggregateException.InnerExceptions)
-                        {
-                            result |= await RemoveMissingPoolsAsync(e, cancellationToken);
-                        }
+                ValueTask<bool> ParseException(Exception exception, CancellationToken cancellationToken)
+                {
+                    if (exception.InnerException is not null)
+                    {
+                        return RemoveMissingPoolsAsync(exception.InnerException, cancellationToken);
+                    }
 
-                        return result;
-
-                    case BatchException batchException:
-                        if (batchException.RequestInformation.BatchError.Code == BatchErrorCodeStrings.PoolNotFound ||
-                            batchException.RequestInformation.BatchError.Code == BatchErrorCodeStrings.JobNotFound)
-                        {
-                            _logger.LogError(ex, "Batch pool and/or job {PoolId} is missing. Removing them from TES's active pool list.", Id);
-                            _ = _batchPools.RemovePoolFromList(this);
-                            await _batchPools.DeletePoolAndJobAsync(this, cancellationToken);
-                            return true;
-                        }
-
-                        break;
+                    return ValueTask.FromResult(false);
                 }
 
-                return false;
+                async ValueTask<bool> ParseAggregateException(AggregateException aggregateException, CancellationToken cancellationToken)
+                {
+                    var result = false;
+
+                    foreach (var exception in aggregateException.InnerExceptions)
+                    {
+                        result |= await RemoveMissingPoolsAsync(exception, cancellationToken);
+                    }
+
+                    return result;
+                }
+
+                async ValueTask<bool> ParseBatchException(BatchException batchException, CancellationToken cancellationToken)
+                {
+                    if (batchException.RequestInformation.BatchError.Code == BatchErrorCodeStrings.PoolNotFound ||
+                        batchException.RequestInformation.BatchError.Code == BatchErrorCodeStrings.JobNotFound)
+                    {
+                        _logger.LogError(batchException, "Batch pool and/or job {PoolId} is missing. Removing them from TES's active pool list.", Id);
+                        _ = _batchPools.RemovePoolFromList(this);
+                        await _batchPools.DeletePoolAndJobAsync(this, cancellationToken);
+                        return true;
+                    }
+
+                    return false;
+                }
             }
         }
 
@@ -645,6 +661,7 @@ namespace TesApi.Web
 
         private Lazy<Task<IAsyncEnumerable<ComputeNode>>> _lazyComputeNodes;
         private const string EjectableComputeNodesFilterClause = @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'";
+
         private string EjectableComputeNodesSelectClause()
             => ScalingMode.AutoScaleDisabled.Equals(_scalingMode) switch
             {
