@@ -665,7 +665,7 @@ namespace TesApi.Web
 
                 logger.LogDebug(@"Obtaining {PoolQuantity} batch pool identifiers for {QueuedTasks} tasks.", tasksPoolMetadataByPoolKey.Count, tasksPoolMetadataByPoolKey.Values.Sum(l => l.Length));
 
-                await Parallel.ForEachAsync(tasksPoolMetadataByPoolKey, cancellationToken, async(pool, token) =>
+                await Parallel.ForEachAsync(tasksPoolMetadataByPoolKey, cancellationToken, async (pool, token) =>
                 {
                     var (_, virtualMachineInfo, identities, displayName) = pool.Value.First();
 
