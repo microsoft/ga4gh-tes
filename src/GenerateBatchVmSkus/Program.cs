@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Reflection;
 using System.Text.Json;
 using Azure;
@@ -15,8 +17,6 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Moq;
-using Newtonsoft.Json;
 using Tes.ApiClients;
 using Tes.ApiClients.Models.Pricing;
 using Tes.ApiClients.Options;
@@ -28,7 +28,7 @@ namespace TesUtils
     {
         public string? SubscriptionId { get; set; }
         public string? OutputFilePath { get; set; }
-        public string? TestedVmSkus { get; set; }
+        public string? BatchAccount { get; set; }
 
         public static Configuration BuildConfiguration(string[] args)
         {
@@ -55,6 +55,11 @@ namespace TesUtils
 
     internal class Program
     {
+        static Program()
+        {
+            Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+        }
+
         static async Task Main(string[] args)
         {
             Configuration? configuration = null;
@@ -71,37 +76,68 @@ namespace TesUtils
                 Environment.Exit(1);
             }
 
-            Environment.Exit(await RunAsync(configuration));
+            Environment.Exit(await new Program().RunAsync(configuration));
         }
 
-        static async Task<int> RunAsync(Configuration configuration)
+        private readonly ConcurrentDictionary<string, ImmutableHashSet<string>> regionsForVm = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, VirtualMachineSize> sizeForVm = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, ComputeResourceSku> skuForVm = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, PricingItem> priceForVm = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, PricingItem> lowPrPriceForVm = new(StringComparer.OrdinalIgnoreCase);
+        private readonly CancellationTokenSource cancellationTokenSource = new();
+        private AccessToken? accessToken;
+
+        private void CancelKeyPress(object? sender, ConsoleCancelEventArgs e)
+        {
+            e.Cancel = true;
+            cancellationTokenSource.Cancel();
+        }
+
+        private async Task<string> BatchTokenProvider(TokenCredential tokenCredential, CancellationToken cancellationToken)
+        {
+            if (accessToken?.ExpiresOn > DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(60)))
+            {
+                return accessToken.Value.Token;
+            }
+
+            accessToken = await tokenCredential.GetTokenAsync(
+                new(
+                    new[] { new UriBuilder("https://batch.core.windows.net/") { Path = ".default" }.Uri.AbsoluteUri },
+                    Guid.NewGuid().ToString("D")),
+                cancellationToken);
+            return accessToken.Value.Token;
+        }
+
+        private static double ConvertMiBToGiB(int value) => Math.Round(value / 1024.0, 2);
+
+        private async Task<int> RunAsync(Configuration configuration)
         {
             ArgumentException.ThrowIfNullOrEmpty(configuration.OutputFilePath);
             ArgumentException.ThrowIfNullOrEmpty(configuration.SubscriptionId);
-            ArgumentException.ThrowIfNullOrEmpty(configuration.TestedVmSkus);
+            ArgumentException.ThrowIfNullOrEmpty(configuration.BatchAccount);
 
-            var vmPrices = JsonConvert.DeserializeObject<IEnumerable<VmPrice>>(File.ReadAllText(configuration.TestedVmSkus))
-                ?? throw new Exception($"Error parsing {configuration.TestedVmSkus}");
+            Console.CancelKeyPress += CancelKeyPress;
 
-            var validSet = vmPrices.Select(vm => vm.VmSize).ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            var client = new ArmClient(new DefaultAzureCredential());
+            Console.WriteLine("Starting...");
+            TokenCredential tokenCredential = new DefaultAzureCredential();
+            var client = new ArmClient(tokenCredential);
             var appCache = new MemoryCache(new MemoryCacheOptions());
-            var options = new Mock<IOptions<RetryPolicyOptions>>();
-            options.Setup(o => o.Value).Returns(new RetryPolicyOptions());
-            var cacheAndRetryHandler = new CachingRetryHandler(appCache, options.Object);
+            var cacheAndRetryHandler = new CachingRetryHandler(appCache, Options.Create(new RetryPolicyOptions()));
             var priceApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
 
-            static double ConvertMiBToGiB(int value) => Math.Round(value / 1024.0, 2);
             var subscription = client.GetSubscriptionResource(new ResourceIdentifier($"/subscriptions/{configuration.SubscriptionId}"));
+            var batchAccount =
+                ((await (await subscription.GetBatchAccountsAsync(cancellationToken: cancellationTokenSource.Token).SingleOrDefaultAsync(r =>
+                    configuration.BatchAccount.Equals(r.Id.Name, StringComparison.OrdinalIgnoreCase),
+                    cancellationToken: cancellationTokenSource.Token))?.GetAsync(cancellationToken: cancellationTokenSource.Token)!)?.Value)
+                ?? throw new Exception($"Batch account {configuration.BatchAccount} not found.");
 
-            var regionsForVm = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-            var sizeForVm = new Dictionary<string, VirtualMachineSize>(StringComparer.OrdinalIgnoreCase);
-            var skuForVm = new Dictionary<string, ComputeResourceSku>(StringComparer.OrdinalIgnoreCase);
-            var priceForVm = new Dictionary<string, PricingItem>(StringComparer.OrdinalIgnoreCase);
-            var lowPrPriceForVm = new Dictionary<string, PricingItem>(StringComparer.OrdinalIgnoreCase);
+            var now = DateTime.UtcNow + TimeSpan.FromSeconds(60);
 
-            await foreach (var price in priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(AzureLocation.WestEurope, CancellationToken.None).Where(p => p.effectiveStartDate < DateTime.UtcNow))
+            Console.WriteLine("Getting pricing data...");
+            await foreach (var price in priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(AzureLocation.WestEurope, cancellationTokenSource.Token)
+                .Where(p => p.effectiveStartDate < now)
+                .WithCancellation(cancellationTokenSource.Token))
             {
                 if (price.meterName.Contains("Low Priority", StringComparison.OrdinalIgnoreCase))
                 {
@@ -133,134 +169,224 @@ namespace TesUtils
                 }
             }
 
-            await foreach (var region in subscription.GetLocationsAsync().Where(x => x.Metadata.RegionType == RegionType.Physical))
-            {
-                try
+            Console.WriteLine("Getting SKU information from each region in the subscription...");
+            await Parallel.ForEachAsync(subscription.GetLocationsAsync(cancellationToken: cancellationTokenSource.Token)
+                    .Where(x => x.Metadata.RegionType == RegionType.Physical),
+                cancellationTokenSource.Token,
+                async (region, token) =>
                 {
-                    var vms = await subscription.GetBatchSupportedVirtualMachineSkusAsync(region).Select(s => s.Name).ToListAsync();
-
-                    List<VirtualMachineSize>? sizes = null;
-                    List<ComputeResourceSku>? skus = null;
-
-                    foreach (var vm in vms)
+                    try
                     {
-                        if (regionsForVm.TryGetValue(vm, out var value))
+                        List<VirtualMachineSize>? sizes = null;
+                        List<ComputeResourceSku>? skus = null;
+                        var count = 0;
+
+                        await foreach (var vm in subscription.GetBatchSupportedVirtualMachineSkusAsync(region, cancellationToken: token).Select(s => s.Name).WithCancellation(token))
                         {
-                            value.Add(region.Name);
-                        }
-                        else
-                        {
-                            regionsForVm[vm] = new() { region.Name };
+                            ++count;
+                            _ = regionsForVm.AddOrUpdate(vm, _ => ImmutableHashSet<string>.Empty.Add(region.Name), (_, value) => value.Add(region.Name));
+
+                            sizes ??= await subscription.GetVirtualMachineSizesAsync(region, cancellationToken: token).ToListAsync(token);
+                            _ = sizeForVm.GetOrAdd(vm, vm =>
+                                sizes.Single(vmsize => vmsize.Name.Equals(vm, StringComparison.OrdinalIgnoreCase)));
+
+                            skus ??= await subscription.GetComputeResourceSkusAsync($"location eq '{region.Name}'", cancellationToken: token).ToListAsync(token);
+                            _ = skuForVm.GetOrAdd(vm, vm =>
+                                skus.Single(sku => sku.Name.Equals(vm, StringComparison.OrdinalIgnoreCase)));
                         }
 
-                        if (!sizeForVm.ContainsKey(vm))
-                        {
-                            sizes ??= await subscription.GetVirtualMachineSizesAsync(region).ToListAsync();
-                            sizeForVm[vm] = sizes.Single(vmsize => vmsize.Name.Equals(vm, StringComparison.OrdinalIgnoreCase));
-                        }
-
-                        if (!skuForVm.ContainsKey(vm))
-                        {
-                            skus ??= await subscription.GetComputeResourceSkusAsync($"location eq '{region.Name}'").ToListAsync();
-                            skuForVm[vm] = skus.Single(sku => sku.Name.Equals(vm, StringComparison.OrdinalIgnoreCase));
-                        }
+                        Console.WriteLine($"{region.Name} supportedSkuCount:{count}");
                     }
-
-                    Console.WriteLine($"{region.Name} supportedSkuCount:{vms.Count}");
-                }
-                catch (RequestFailedException e)
-                {
-                    Console.WriteLine($"No skus supported in {region.Name}. {e.ErrorCode}");
-                }
-            }
+                    catch (RequestFailedException e)
+                    {
+                        Console.WriteLine($"No skus supported in {region.Name}. {e.ErrorCode}");
+                    }
+                });
 
             var batchSupportedVmSet = regionsForVm.Keys;
             Console.WriteLine($"Superset supportedSkuCount:{batchSupportedVmSet.Count}");
 
-            var batchVmInfo = batchSupportedVmSet.SelectMany((name) =>
-            {
-                if (!validSet.Contains(name))
-                {
-                    Console.WriteLine($"Skipping {name} not in valid vm skus file.");
-                    return new List<VirtualMachineInformation>();
-                }
+            using var batchClient = Microsoft.Azure.Batch.BatchClient.Open(new Microsoft.Azure.Batch.Auth.BatchTokenCredentials(
+                new UriBuilder(Uri.UriSchemeHttps, batchAccount.Data.AccountEndpoint).Uri.AbsoluteUri,
+                async () => await BatchTokenProvider(tokenCredential, cancellationTokenSource.Token)));
 
-                var sizeInfo = sizeForVm[name];
-                var sku = skuForVm[name];
+            Console.WriteLine("Testing each SKU...");
+            ConcurrentBag<VirtualMachineInformation> vms = new();
+            count = batchSupportedVmSet.Count;
+            index = 0;
 
-                if (sizeInfo is null || sizeInfo.MemoryInMB is null || sizeInfo.ResourceDiskSizeInMB is null)
-                {
-                    throw new Exception($"Size info is null for VM {name}");
-                }
+            await Parallel.ForEachAsync(batchSupportedVmSet, new ParallelOptions { MaxDegreeOfParallelism = 3, CancellationToken = cancellationTokenSource.Token }, async (name, token) =>
+                await GetVirtualMachineInformationsAsync(name, batchClient, batchAccount.Data).ForEachAsync(vm => vms.Add(vm), token));
 
-                if (sku is null)
-                {
-                    throw new Exception($"Sku info is null for VM {name}");
-                }
+            var batchVmInfo = vms
+                .OrderBy(x => x!.VmSize).ThenBy(x => x!.LowPriority)
+                .ToList();
 
-                var generationList = new List<string>();
-                var generation = sku.Capabilities.Where(x => x.Name.Equals("HyperVGenerations")).SingleOrDefault()?.Value;
-
-                if (generation is not null)
-                {
-                    generationList = generation.Split(",").ToList();
-                }
-
-                _ = int.TryParse(sku.Capabilities.Where(x => x.Name.Equals("vCPUsAvailable")).SingleOrDefault()?.Value, out var vCpusAvailable);
-                _ = bool.TryParse(sku.Capabilities.Where(x => x.Name.Equals("EncryptionAtHostSupported")).SingleOrDefault()?.Value, out var encryptionAtHostSupported);
-
-                return new List<VirtualMachineInformation>() {
-                    new()
-                    {
-                        MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
-                        MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB!.Value),
-                        VCpusAvailable = vCpusAvailable,
-                        ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB!.Value),
-                        VmSize = sizeInfo.Name,
-                        VmFamily = sku.Family,
-                        LowPriority = false,
-                        HyperVGenerations = generationList,
-                        RegionsAvailable = regionsForVm[name].Order().ToList(),
-                        EncryptionAtHostSupported = encryptionAtHostSupported,
-                        PricePerHour = priceForVm.TryGetValue(name, out var priceItem) ? (decimal?)priceItem.retailPrice : null,
-                    },
-                    new()
-                    {
-                        MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
-                        MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB!.Value),
-                        VCpusAvailable = vCpusAvailable,
-                        ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB!.Value),
-                        VmSize = sizeInfo.Name,
-                        VmFamily = sku.Family,
-                        LowPriority = true,
-                        HyperVGenerations = generationList,
-                        RegionsAvailable = regionsForVm[name].Order().ToList(),
-                        EncryptionAtHostSupported = encryptionAtHostSupported,
-                        PricePerHour = lowPrPriceForVm.TryGetValue(name, out var lowPrPriceItem) ? (decimal?)lowPrPriceItem.retailPrice : null,
-                    },
-                };
-            }).Where(x => x is not null).OrderBy(x => x!.VmSize).ThenBy(x => x!.LowPriority).ToList();
+            Console.WriteLine($"SupportedSkuCount:{batchVmInfo.Count}");
 
             var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.General)
             {
                 WriteIndented = true
             };
 
-            var data = System.Text.Json.JsonSerializer.Serialize(batchVmInfo, options: jsonOptions);
-            await File.WriteAllTextAsync(configuration.OutputFilePath!, data);
+            var data = JsonSerializer.Serialize(batchVmInfo, options: jsonOptions);
+            await File.WriteAllTextAsync(configuration.OutputFilePath!, data, cancellationTokenSource.Token);
             return 0;
         }
-    }
 
-    public class VmPrice
-    {
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-        public string VmSize { get; set; }
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-        public decimal? PricePerHourDedicated { get; set; }
-        public decimal? PricePerHourLowPriority { get; set; }
+        private int index;
+        private int count;
 
-        [JsonIgnore]
-        public bool LowPriorityAvailable => PricePerHourLowPriority is not null;
+        private async IAsyncEnumerable<VirtualMachineInformation> GetVirtualMachineInformationsAsync(string name, Microsoft.Azure.Batch.BatchClient batchClient, BatchAccountData batchAccount)
+        {
+            if (name is null)
+            {
+                yield break;
+            }
+
+            Console.Write($"Testing {Interlocked.Increment(ref index)} out of {count}...\r");
+
+            var sizeInfo = sizeForVm[name];
+            var sku = skuForVm[name];
+
+            if (sizeInfo is null || sizeInfo.MemoryInMB is null || sizeInfo.ResourceDiskSizeInMB is null)
+            {
+                throw new Exception($"Size info is null for VM {name}");
+            }
+
+            if (sku is null)
+            {
+                throw new Exception($"Sku info is null for VM {name}");
+            }
+
+            var generations = sku.Capabilities.Where(x => x.Name.Equals("HyperVGenerations"))
+                .SingleOrDefault()?.Value?.Split(",").ToList() ?? new();
+
+            _ = int.TryParse(sku.Capabilities.Where(x => x.Name.Equals("vCPUsAvailable")).SingleOrDefault()?.Value, out var vCpusAvailable);
+            _ = bool.TryParse(sku.Capabilities.Where(x => x.Name.Equals("EncryptionAtHostSupported")).SingleOrDefault()?.Value, out var encryptionAtHostSupported);
+            _ = bool.TryParse(sku.Capabilities.Where(x => x.Name.Equals("LowPriorityCapable")).SingleOrDefault()?.Value, out var lowPriorityCapable);
+
+            if (regionsForVm[name].Contains(batchAccount.Location!.Value.Name))
+            {
+                var pool = batchClient.PoolOperations.CreatePool(sku.Name, sizeInfo.Name, GetMachineConfiguration(generations.Contains("V2"), encryptionAtHostSupported), targetDedicatedComputeNodes: lowPriorityCapable ? 0 : 1, targetLowPriorityComputeNodes: lowPriorityCapable ? 1 : 0);
+                pool.TargetNodeCommunicationMode = Microsoft.Azure.Batch.Common.NodeCommunicationMode.Simplified;
+                pool.ResizeTimeout = TimeSpan.FromMinutes(30);
+
+                try
+                {
+                    await pool.CommitAsync(cancellationToken: cancellationTokenSource.Token);
+
+                    do
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(30), cancellationTokenSource.Token);
+                        await pool.RefreshAsync(detailLevel: new Microsoft.Azure.Batch.ODATADetailLevel(selectClause: "allocationState,id,resizeErrors"), cancellationToken: cancellationTokenSource.Token);
+                    }
+                    while (Microsoft.Azure.Batch.Common.AllocationState.Steady != pool.AllocationState);
+
+                    if (pool.ResizeErrors?.Any() ?? false)
+                    {
+                        Console.WriteLine($"Skipping {name} because the batch account failed to allocate nodes into a pool due to '{string.Join("', '", pool.ResizeErrors.Select(e => e.Code))}'.");
+                        Console.WriteLine($"    Additional information: Message: '{string.Join("', '", pool.ResizeErrors.Select(e => e.Message))}'{Environment.NewLine}    Values: '{string.Join("', '", pool.ResizeErrors.SelectMany(e => e.Values ?? new List<Microsoft.Azure.Batch.NameValuePair>()).Select(new Func<Microsoft.Azure.Batch.NameValuePair, string>(detail => $"\"{detail.Name}\": \"{detail.Value}\"")))}'.");
+                        yield break;
+                    }
+
+                    List<Microsoft.Azure.Batch.ComputeNode> nodes;
+
+                    do
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(5), cancellationTokenSource.Token);
+                        nodes = await pool.ListComputeNodes(detailLevel: new Microsoft.Azure.Batch.ODATADetailLevel(selectClause: "id,state,errors")).ToAsyncEnumerable().ToListAsync(cancellationTokenSource.Token);
+
+                        if (nodes.Any(n => n.Errors?.Any() ?? false))
+                        {
+                            Console.WriteLine($"Skipping {name} because nodes failed to start in our batch account's pool due to '{string.Join("', '", nodes.SelectMany(n => n.Errors).Select(e => e.Code))}'.");
+                            yield break;
+                        }
+
+                        if (nodes.Any(n => Microsoft.Azure.Batch.Common.ComputeNodeState.Unusable == n.State))
+                        {
+                            Console.WriteLine($"Skipping {name} because nodes became unusable without ever being ready in our batch account's pool.");
+                            yield break;
+                        }
+                    }
+                    while (nodes.Any(n => Microsoft.Azure.Batch.Common.ComputeNodeState.Idle != n.State));
+                }
+                finally
+                {
+                    try
+                    {
+                        await pool.DeleteAsync(cancellationToken: CancellationToken.None);
+                    }
+                    catch (Microsoft.Azure.Batch.Common.BatchException exception)
+                    {
+                        switch (exception.RequestInformation.HttpStatusCode)
+                        {
+                            case System.Net.HttpStatusCode.Conflict:
+                                break;
+
+                            default:
+                                Console.WriteLine($"Failed to delete '{name}' pool: {exception.Message}");
+                                break;
+                        }
+                    }
+                    catch (InvalidOperationException exception)
+                    {
+                        Console.WriteLine($"Failed to delete '{name}' pool: {exception.Message}");
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine($"Skipping {name} because it is not available in this batch account's region.");
+                yield break;
+            }
+
+            yield return new()
+            {
+                MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
+                MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB!.Value),
+                VCpusAvailable = vCpusAvailable,
+                ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB!.Value),
+                VmSize = sizeInfo.Name,
+                VmFamily = sku.Family,
+                LowPriority = false,
+                HyperVGenerations = generations,
+                RegionsAvailable = regionsForVm[name].Order().ToList(),
+                EncryptionAtHostSupported = encryptionAtHostSupported,
+                PricePerHour = priceForVm.TryGetValue(name, out var priceItem) ? (decimal?)priceItem.retailPrice : null,
+            };
+
+            if (lowPriorityCapable)
+            {
+                yield return new()
+                {
+                    MaxDataDiskCount = sizeInfo.MaxDataDiskCount,
+                    MemoryInGiB = ConvertMiBToGiB(sizeInfo.MemoryInMB!.Value),
+                    VCpusAvailable = vCpusAvailable,
+                    ResourceDiskSizeInGiB = ConvertMiBToGiB(sizeInfo.ResourceDiskSizeInMB!.Value),
+                    VmSize = sizeInfo.Name,
+                    VmFamily = sku.Family,
+                    LowPriority = true,
+                    HyperVGenerations = generations,
+                    RegionsAvailable = regionsForVm[name].Order().ToList(),
+                    EncryptionAtHostSupported = encryptionAtHostSupported,
+                    PricePerHour = lowPrPriceForVm.TryGetValue(name, out var lowPrPriceItem) ? (decimal?)lowPrPriceItem.retailPrice : null,
+                };
+            }
+        }
+
+        private static Microsoft.Azure.Batch.VirtualMachineConfiguration GetMachineConfiguration(bool useV2, bool encryptionAtHostSupported)
+        {
+            return new(useV2 ? V2ImageReference : V1ImageReference, "batch.node.ubuntu 20.04")
+            {
+                DiskEncryptionConfiguration = encryptionAtHostSupported ? new Microsoft.Azure.Batch.DiskEncryptionConfiguration(targets: new List<Microsoft.Azure.Batch.Common.DiskEncryptionTarget> () { Microsoft.Azure.Batch.Common.DiskEncryptionTarget.OsDisk, Microsoft.Azure.Batch.Common.DiskEncryptionTarget.TemporaryDisk }) : null
+            };
+        }
+
+        private static Microsoft.Azure.Batch.ImageReference V1ImageReference
+            = new("ubuntu-server-container", "microsoft-azure-batch", "20-04-lts", "latest");
+
+        private static Microsoft.Azure.Batch.ImageReference V2ImageReference
+            = new("ubuntu-hpc", "microsoft-dsvm", "2004", "latest");
     }
 }
