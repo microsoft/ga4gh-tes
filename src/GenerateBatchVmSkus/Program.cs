@@ -379,7 +379,7 @@ namespace TesUtils
         {
             return new(useV2 ? V2ImageReference : V1ImageReference, "batch.node.ubuntu 20.04")
             {
-                DiskEncryptionConfiguration = encryptionAtHostSupported ? new Microsoft.Azure.Batch.DiskEncryptionConfiguration(targets: new List<Microsoft.Azure.Batch.Common.DiskEncryptionTarget> () { Microsoft.Azure.Batch.Common.DiskEncryptionTarget.OsDisk, Microsoft.Azure.Batch.Common.DiskEncryptionTarget.TemporaryDisk }) : null
+                DiskEncryptionConfiguration = encryptionAtHostSupported ? new Microsoft.Azure.Batch.DiskEncryptionConfiguration(targets: new List<Microsoft.Azure.Batch.Common.DiskEncryptionTarget>() { Microsoft.Azure.Batch.Common.DiskEncryptionTarget.OsDisk, Microsoft.Azure.Batch.Common.DiskEncryptionTarget.TemporaryDisk }) : null
             };
         }
 
