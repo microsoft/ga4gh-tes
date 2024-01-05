@@ -6,7 +6,7 @@
     },
     "GenerateBatchVmSkus": {
       "commandName": "Project",
-      "commandLineArgs": "--SubscriptionId 594bef42-33f3-42df-b056-e7399d6ae7a0\r\n--BatchAccount:0 msfttest52268c\r\n--BatchAccount:1 msftscfc205327\r\n--BatchAccount:2 coa48d3975849\r\n--OutputFilePath BatchSupportedVmSizeInformation.json"
+      "commandLineArgs": ""
     }
   }
 }
