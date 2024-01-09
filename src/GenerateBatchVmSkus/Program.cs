@@ -30,7 +30,8 @@ namespace TesUtils
     {
         public string? SubscriptionId { get; set; }
         public string? OutputFilePath { get; set; }
-        public string[]? BatchAccount { get; set; }
+        public string[]? BatchAccounts { get; set; }
+        public string[]? SubnetIds { get; set; }
 
         public static Configuration BuildConfiguration(string[] args)
         {
@@ -148,43 +149,60 @@ namespace TesUtils
 
         private static double? ConvertMiBToGiB(int? value) => value.HasValue ? Math.Round(value.Value / 1024.0, 2) : null;
 
-        private record struct NameWithIndex(string Name, int Index);
+        private record struct ItemWithIndex<T>(T Item, int Index);
         private record struct ItemWithName<T>(string Name, T Item);
 
         private static IAsyncEnumerable<BatchAccountInfo> GetBatchAccountsAsync(Azure.ResourceManager.Resources.SubscriptionResource subscription, TokenCredential credential, Configuration configuration, CancellationToken cancellationToken)
         {
-            ArgumentNullException.ThrowIfNull(configuration?.BatchAccount, nameof(configuration));
+            ArgumentNullException.ThrowIfNull(configuration?.BatchAccounts, nameof(configuration));
+            ArgumentNullException.ThrowIfNull(configuration?.SubnetIds, nameof(configuration));
 
-            var namesInOrder = configuration.BatchAccount.Select((a, i) => new NameWithIndex(a, i)).ToList();
-            if (namesInOrder.Any(account => string.IsNullOrWhiteSpace(account.Name)))
+            if (configuration.BatchAccounts.Length != configuration.SubnetIds.Length)
+            {
+                throw new ArgumentException("A subnet id is required for each batch account.", nameof(configuration));
+            }
+
+            if (configuration.SubnetIds.Distinct(StringComparer.OrdinalIgnoreCase).Count() != configuration.SubnetIds.Length)
+            {
+                throw new ArgumentException("Duplicate batch subnet ids provided.", nameof(configuration));
+            }
+
+            var accountsAndSubnetsInOrder = configuration.BatchAccounts.Zip(configuration.SubnetIds).Select((a, i) => new ItemWithIndex<(string BatchAccount, string SubnetId)>(a, i)).ToList();
+
+            if (accountsAndSubnetsInOrder.Any(account => string.IsNullOrWhiteSpace(account.Item.BatchAccount)))
             {
                 throw new ArgumentException("Batch account name is missing.", nameof(configuration));
             }
 
-            var groupedNames = namesInOrder
-                .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+            if (accountsAndSubnetsInOrder.Any(account => string.IsNullOrWhiteSpace(account.Item.SubnetId)))
+            {
+                throw new ArgumentException("Subnet Id is missing.", nameof(configuration));
+            }
+
+            var groupedAccountsAndSubnets = accountsAndSubnetsInOrder
+                .GroupBy(s => s.Item.BatchAccount, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            if (groupedNames.Any(group => group.Count() != 1))
+            if (groupedAccountsAndSubnets.Any(group => group.Count() != 1))
             {
                 throw new ArgumentException("Duplicate batch account names provided.", nameof(configuration));
             }
 
-            if (groupedNames.Count != namesInOrder.Count)
+            if (groupedAccountsAndSubnets.Count != accountsAndSubnetsInOrder.Count)
             {
                 throw new ArgumentException("Requested batch account not found.", nameof(configuration));
             }
 
-            var accountNames = groupedNames
-                .ToLookup(g => g.Key, g => g.Select(i => i.Index).Single(), StringComparer.OrdinalIgnoreCase);
+            var accountsAndSubnetsLookup = groupedAccountsAndSubnets
+                .ToLookup(g => g.Key, g => g.Single(), StringComparer.OrdinalIgnoreCase);
 
             try
             {
                 return subscription.GetBatchAccountsAsync(cancellationToken: cancellationToken)
-                    .Where(resource => accountNames.Contains(resource.Id.Name))
-                    .OrderBy(resource => accountNames[resource.Id.Name].Single())
+                    .Where(resource => accountsAndSubnetsLookup.Contains(resource.Id.Name))
+                    .OrderBy(resource => accountsAndSubnetsLookup[resource.Id.Name].Single().Index)
                     .SelectAwaitWithCancellation(async (resource, token) => new ItemWithName<Response<BatchAccountResource>>(resource.Id.Name, await resource.GetAsync(token)))
-                    .Select((resource, index) => new BatchAccountInfo(resource.Item.Value?.Data ?? throw new InvalidOperationException($"Batch account {resource.Name} not retrieved."), index, credential, cancellationToken));
+                    .Select((resource, index) => new BatchAccountInfo(resource.Item.Value?.Data ?? throw new InvalidOperationException($"Batch account {resource.Name} not retrieved."), accountsAndSubnetsLookup[resource.Name].Single().Item.SubnetId, index, credential, cancellationToken));
             }
             catch (InvalidOperationException exception)
             {
@@ -196,7 +214,7 @@ namespace TesUtils
         {
             ArgumentException.ThrowIfNullOrEmpty(configuration.OutputFilePath);
             ArgumentException.ThrowIfNullOrEmpty(configuration.SubscriptionId);
-            ArgumentNullException.ThrowIfNull(configuration.BatchAccount);
+            ArgumentNullException.ThrowIfNull(configuration.BatchAccounts);
 
             Console.CancelKeyPress += CancelKeyPress;
 
@@ -601,10 +619,10 @@ namespace TesUtils
 
             if (vm.RegionsAvailable.Contains(accountInfo.Location.Name))
             {
-                // TODO: locate?/add private network/subnet
                 var pool = accountInfo.Client.PoolOperations.CreatePool(name, name, GetMachineConfiguration(vm.HyperVGenerations.Contains("V2"), vm.EncryptionAtHostSupported ?? false), targetDedicatedComputeNodes: vm.LowPriority ? 0 : 1, targetLowPriorityComputeNodes: vm.LowPriority ? 1 : 0);
                 pool.TargetNodeCommunicationMode = Microsoft.Azure.Batch.Common.NodeCommunicationMode.Simplified;
                 pool.ResizeTimeout = TimeSpan.FromMinutes(30);
+                pool.NetworkConfiguration = new() { PublicIPAddressConfiguration = new(Microsoft.Azure.Batch.Common.IPAddressProvisioningType.BatchManaged), SubnetId = accountInfo.SubnetId };
 
                 try
                 {
@@ -751,27 +769,47 @@ namespace TesUtils
                 }
                 catch (Microsoft.Azure.Batch.Common.BatchException exception)
                 {
-                    if (System.Net.HttpStatusCode.InternalServerError == exception.RequestInformation.HttpStatusCode
-                        && (exception.StackTrace?.Contains(" at Microsoft.Azure.Batch.CloudPool.CommitAsync(IEnumerable`1 additionalBehaviors, CancellationToken cancellationToken)") ?? false))
+                    if (exception.StackTrace?.Contains(" at Microsoft.Azure.Batch.CloudPool.CommitAsync(IEnumerable`1 additionalBehaviors, CancellationToken cancellationToken)") ?? false)
                     {
-                        lock (lockObj)
-                        {
-                            Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine(linePrefix + $"Retrying {name} due to 'InternalServerError' failure when creating the pool.");
-                            linePrefix = string.Empty;
-                            var error = exception.RequestInformation.BatchError;
-                            Console.WriteLine($"    '{error.Code}'({error.Message.Language}): '{error.Message.Value}'");
+                        pool = default;
 
-                            foreach (var value in error.Values ?? Enumerable.Empty<Microsoft.Azure.Batch.BatchErrorDetail>())
+                        if (System.Net.HttpStatusCode.InternalServerError == exception.RequestInformation.HttpStatusCode)
+                        {
+                            lock (lockObj)
                             {
-                                Console.WriteLine($"    '{value.Key}': '{value.Value}'");
+                                Console.ForegroundColor = ConsoleColor.Yellow;
+                                Console.WriteLine(linePrefix + $"Retrying {name} due to 'InternalServerError' failure when creating the pool.");
+                                linePrefix = string.Empty;
+                                var error = exception.RequestInformation.BatchError;
+                                Console.WriteLine($"    '{error.Code}'({error.Message.Language}): '{error.Message.Value}'");
+
+                                foreach (var value in error.Values ?? Enumerable.Empty<Microsoft.Azure.Batch.BatchErrorDetail>())
+                                {
+                                    Console.WriteLine($"    '{value.Key}': '{value.Value}'");
+                                }
+
+                                Console.ResetColor();
                             }
 
-                            Console.ResetColor();
+                            return VerifyVMIResult.Retry;
                         }
+                        else if (exception.RequestInformation.HttpStatusCode is null || exception.RequestInformation.HttpStatusCode == System.Net.HttpStatusCode.GatewayTimeout)
+                        {
+                            return VerifyVMIResult.Retry;
+                        }
+                        else
+                        {
+                            lock (lockObj)
+                            {
+                                Console.ForegroundColor = ConsoleColor.Yellow;
+                                Console.WriteLine(linePrefix + $"Deferring {name} to next region due to '{exception.RequestInformation.HttpStatusCode}' failure when creating the pool.");
+                                linePrefix = string.Empty;
+                                Console.WriteLine("    Please check and delete pool manually.");
+                                Console.ResetColor();
+                            }
 
-                        pool = default;
-                        return VerifyVMIResult.Retry;
+                            return VerifyVMIResult.NextRegion;
+                        }
                     }
                 }
                 finally
@@ -902,8 +940,9 @@ namespace TesUtils
             private readonly BatchAccountData data;
             private AccessToken? accessToken;
 
-            public BatchAccountInfo(BatchAccountData data, int index, TokenCredential credential, CancellationToken cancellationToken)
+            public BatchAccountInfo(BatchAccountData data, string subnetId, int index, TokenCredential credential, CancellationToken cancellationToken)
             {
+                SubnetId = subnetId;
                 Index = index;
                 this.data = data;
                 batchClient = new Lazy<Microsoft.Azure.Batch.BatchClient>(() => ClientFactory(credential, cancellationToken));
@@ -912,6 +951,8 @@ namespace TesUtils
             public string Name => data.Name;
 
             public int Index { get; }
+
+            public string SubnetId { get; }
 
             public AzureLocation Location => data.Location!.Value;
 
