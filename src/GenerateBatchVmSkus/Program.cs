@@ -19,7 +19,6 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json.Linq;
 using Tes.ApiClients;
 using Tes.ApiClients.Models.Pricing;
 using Tes.ApiClients.Options;
@@ -306,7 +305,8 @@ namespace GenerateBatchVmSkus
 
             var batchSupportedVmSet = regionsForVm.Keys
                 .SelectMany(GetVirtualMachineInformations)
-                .GroupBy(i => i.VmSize).ToList();
+                .GroupBy(i => i.VmSize, StringComparer.OrdinalIgnoreCase)
+                .ToList();
             Console.WriteLine($"Superset supportedSkuCount:{batchSupportedVmSet.Count}");
 
             Console.WriteLine("Verifying SKUs in Azure Batch...");
@@ -321,11 +321,11 @@ namespace GenerateBatchVmSkus
                 var vmsToTest = vmsForNextRegion.ToList();
                 vmsForNextRegion.Clear();
 
-                // Move SKUs not in the account region to the next list
+                // Defer SKUs not in the account region to the next list
                 vmsForNextRegion.AddRange(vmsToTest.Where(vm => !vm.First().RegionsAvailable.Contains(batchAccount.Location.Name)));
                 vmsForNextRegion.ForEach(vm => _ = vmsToTest.Remove(vm));
 
-                Console.WriteLine(linePrefix + $"Verifying {vmsToTest.Count} SKUs with {batchAccount.Name}.");
+                Console.WriteLine(linePrefix + $"Verifying {vmsToTest.Count} SKUs with {batchAccount.Name} in {batchAccount.Location.DisplayName}.");
                 linePrefix = string.Empty;
 
                 var context = await GetTestQuotaContext(batchAccount, batchSupportedVmSet, cancellationTokenSource.Token);
@@ -468,10 +468,12 @@ namespace GenerateBatchVmSkus
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.WriteLine(linePrefix + "Due to either availability, capacity, quota, or other constraints, the following SKUs were not validated and will not be included:");
                 linePrefix = string.Empty;
-                vmsForNextRegion.Select(vmsize => vmsize.Key)
-                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-                    .ForEach(name => Console.WriteLine($"    '{name}' with available in regions '{string.Join("', '", regionsForVm[name])}'."));
+                vmsForNextRegion.Select(vmsize => (Name: vmsize.Key, vmsize.Last().LowPriority))
+                    .OrderBy(sku => sku.Name, StringComparer.OrdinalIgnoreCase)
+                    .ForEach(sku => Console.WriteLine($"    '{sku.Name}'{DedicatedMarker(sku.LowPriority)} with availability in regions '{string.Join("', '", regionsForVm[sku.Name].OrderBy(region => region, StringComparer.OrdinalIgnoreCase))}'."));
                 Console.ResetColor();
+
+                static string DedicatedMarker(bool hasLowPriority) => hasLowPriority ? string.Empty : " (dedicatedOnly)";
             }
 
             var batchVmInfo = vms
@@ -480,7 +482,7 @@ namespace GenerateBatchVmSkus
                 .ToList();
 
             Console.WriteLine(linePrefix + $"SupportedSkuCount:{batchVmInfo.Select(vm => vm.VmSize).Distinct(StringComparer.OrdinalIgnoreCase).Count()}");
-            Console.WriteLine(linePrefix + $"Writing {batchVmInfo.Count} records");
+            Console.WriteLine(linePrefix + $"Writing {batchVmInfo.Count} SKU price records");
             linePrefix = string.Empty;
 
             var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.General)
@@ -502,15 +504,13 @@ namespace GenerateBatchVmSkus
 
             var sku = skuForVm[name] ?? throw new Exception($"Sku info is null for VM {name}");
 
-            var generations = sku.Capabilities.Where(x => x.Name.Equals("HyperVGenerations"))
-                .SingleOrDefault()?.Value?.Split(",").ToList() ?? new();
-
-            var vCpusAvailable = TryParseInt32("vCPUsAvailable");
-            var encryptionAtHostSupported = TryParseBoolean("EncryptionAtHostSupported");
-            var lowPriorityCapable = TryParseBoolean("LowPriorityCapable") ?? false;
-            var maxDataDiskCount = TryParseInt32("MaxDataDiskCount");
-            var maxResourceVolumeMB = TryParseInt32("MaxResourceVolumeMB");
-            var memoryGB = TryParseDouble("MemoryGB");
+            var generations = AttemptParseString(name)?.Split(",").ToList() ?? new();
+            var vCpusAvailable = AttemptParseInt32("vCPUsAvailable");
+            var encryptionAtHostSupported = AttemptParseBoolean("EncryptionAtHostSupported");
+            var lowPriorityCapable = AttemptParseBoolean("LowPriorityCapable") ?? false;
+            var maxDataDiskCount = AttemptParseInt32("MaxDataDiskCount");
+            var maxResourceVolumeMB = AttemptParseInt32("MaxResourceVolumeMB");
+            var memoryGB = AttemptParseDouble("MemoryGB");
 
             yield return new()
             {
@@ -545,14 +545,17 @@ namespace GenerateBatchVmSkus
                 };
             }
 
-            bool? TryParseBoolean(string name)
-                => bool.TryParse(sku!.Capabilities.SingleOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Value, out var value) ? value : null;
+            string? AttemptParseString(string name)
+                => sku!.Capabilities.SingleOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Value;
 
-            int? TryParseInt32(string name)
-                => int.TryParse(sku!.Capabilities.SingleOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Value, System.Globalization.NumberFormatInfo.InvariantInfo, out var value) ? value : null;
+            bool? AttemptParseBoolean(string name)
+                => bool.TryParse(AttemptParseString(name), out var value) ? value : null;
 
-            double? TryParseDouble(string name)
-                => double.TryParse(sku!.Capabilities.SingleOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Value, System.Globalization.NumberFormatInfo.InvariantInfo, out var value) ? value : null;
+            int? AttemptParseInt32(string name)
+                => int.TryParse(AttemptParseString(name), System.Globalization.NumberFormatInfo.InvariantInfo, out var value) ? value : null;
+
+            double? AttemptParseDouble(string name)
+                => double.TryParse(AttemptParseString(name), System.Globalization.NumberFormatInfo.InvariantInfo, out var value) ? value : null;
         }
 
         private record class TestContext(int PoolQuota, int LowPriorityCoreQuota, int DedicatedCoreQuota, bool IsDedicatedCoreQuotaPerVmFamilyEnforced, Dictionary<string, int> DedicatedCoreQuotaPerVmFamily, Dictionary<string, int> DedicatedCoresInUseByVmFamily)
@@ -766,7 +769,7 @@ namespace GenerateBatchVmSkus
                         lock (lockObj)
                         {
                             Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine(linePrefix + $"Skipping {name} because the batch account failed to allocate nodes into a pool due to '{string.Join("', '", pool.ResizeErrors!.Select(e => e.Code))}'.");
+                            Console.WriteLine(linePrefix + $"Skipping {name} due to allocation failure(s): '{string.Join("', '", pool.ResizeErrors!.Select(e => e.Code))}'.");
                             linePrefix = string.Empty;
 
                             if (!isOverconstrainedAllocationRequest)
@@ -795,7 +798,7 @@ namespace GenerateBatchVmSkus
                         lock (lockObj)
                         {
                             Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine(linePrefix + $"Skipping {name} due to node(s) failing to start due to '{string.Join("', '", nodes.SelectMany(n => n.Errors).Select(e => e.Code))}'.");
+                            Console.WriteLine(linePrefix + $"Skipping {name} due to node startup failure(s): '{string.Join("', '", nodes.SelectMany(n => n.Errors).Select(e => e.Code))}'.");
                             linePrefix = string.Empty;
                             Console.WriteLine($"    Additional information: Message: '{string.Join("', '", nodes.SelectMany(n => n.Errors).Select(e => e.Message))}'");
                             nodes.SelectMany(n => n.Errors).SelectMany(e => e.ErrorDetails ?? Enumerable.Empty<Microsoft.Azure.Batch.NameValuePair>())
@@ -812,7 +815,7 @@ namespace GenerateBatchVmSkus
                         lock (lockObj)
                         {
                             Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine(linePrefix + $"Skipping {name} due to node(s) becoming unusable without providing errors.");
+                            Console.WriteLine(linePrefix + $"Skipping {name} due to node startup-to-unusable transition without errors (likely batch node agent startup failure).");
                             linePrefix = string.Empty;
                             Console.ResetColor();
                         }
@@ -844,11 +847,11 @@ namespace GenerateBatchVmSkus
 
                             if (isTimedOut)
                             {
-                                Console.WriteLine(linePrefix + $"Retrying {name} due to '{error?.Code ?? "[unknown]"}' failure when creating the pool.");
+                                Console.WriteLine(linePrefix + $"Retrying {name} due to pool creation failure(s): '{error?.Code ?? "[unknown]"}'.");
                             }
                             else
                             {
-                                Console.WriteLine(linePrefix + $"Deferring {name} to next region due to '{error?.Code ?? "[unknown]"}' failure when creating the pool.");
+                                Console.WriteLine(linePrefix + $"Deferring {name} due to pool creation failure(s): '{error?.Code ?? "[unknown]"}'.");
                             }
 
                             linePrefix = string.Empty;
@@ -887,11 +890,11 @@ namespace GenerateBatchVmSkus
 
                             if (isQuota)
                             {
-                                Console.WriteLine(linePrefix + $"Retrying {name} due to '{error?.Code ?? "[unknown]"}' failure when creating the pool.");
+                                Console.WriteLine(linePrefix + $"Retrying {name} due to due to pool creation failure(s):'{error?.Code ?? "[unknown]"}'.");
                             }
                             else
                             {
-                                Console.WriteLine(linePrefix + $"Deferring {name} to next region due to '{error?.Code ?? "[unknown]"}' failure when creating the pool.");
+                                Console.WriteLine(linePrefix + $"Deferring {name} due to due to pool creation failure(s):'{error?.Code ?? "[unknown]"}'.");
                             }
 
                             linePrefix = string.Empty;
@@ -913,7 +916,7 @@ namespace GenerateBatchVmSkus
                         lock (lockObj)
                         {
                             Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine(linePrefix + $"Deferring {name} to next region due to '{exception.RequestInformation.HttpStatusCode}' failure ('{exception.RequestInformation?.BatchError?.Code}' error) when creating the pool.");
+                            Console.WriteLine(linePrefix + $"Deferring {name} due to pool creation '{exception.RequestInformation.HttpStatusCode}' failure ('{exception.RequestInformation?.BatchError?.Code}' error).");
                             linePrefix = string.Empty;
                             Console.WriteLine("    Please check and delete pool manually.");
                             Console.ResetColor();
