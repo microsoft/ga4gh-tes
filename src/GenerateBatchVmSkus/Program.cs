@@ -4,9 +4,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Reflection;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Azure;
 using Azure.Core;
 using Azure.Identity;
@@ -286,7 +284,7 @@ namespace GenerateBatchVmSkus
 
             Console.WriteLine($"Superset supportedSkuCount:{batchSupportedVmSet.Count}");
 
-            Console.WriteLine("Verifying SKUs in Azure Batch...");
+            Console.WriteLine("Validating SKUs in Azure Batch...");
             var (verified, notVerified) = await AzureBatchSkuValidator.ValidateSkus(batchSupportedVmSet, batchAccounts, batchSupportedVmSet.Select(sku => sku.Sku).ToList(), cancellationTokenSource.Token);
 
             notVerified = notVerified.ToList();
