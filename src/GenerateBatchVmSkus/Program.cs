@@ -295,7 +295,7 @@ namespace GenerateBatchVmSkus
             {
                 Console.WriteLine(new string(Enumerable.Repeat(' ', 80).ToArray()));
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("Due to either availability, capacity, quota, or other constraints, the following SKUs were not validated and will not be included:");
+                Console.WriteLine($"Due to either availability, capacity, quota, or other constraints, the following {notVerified.Count()} SKUs were not validated and will not be included:");
                 notVerified.Select(vmsize => (vmsize.Name, vmsize.Sku.LowPriority))
                     .OrderBy(sku => sku.Name, StringComparer.OrdinalIgnoreCase)
                     .ForEach(sku => Console.WriteLine($"    '{sku.Name}'{DedicatedMarker(sku.LowPriority)} with availability in regions '{string.Join("', '", regionsForVm[sku.Name].OrderBy(region => region, StringComparer.OrdinalIgnoreCase))}'."));

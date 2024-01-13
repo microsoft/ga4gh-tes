@@ -75,7 +75,7 @@ namespace GenerateBatchVmSkus
                     var skus = await results.ToListAsync(cancellationToken);
                     // Keep the batch accounts around long enough to allow the batch pools to be deleted.
                     await Task.WhenAll(validatorTasks.Concat(validators.Select(v => v.ValidationTask!).Where(t => t is not null)).ToArray());
-                    Console.WriteLine(new string(Enumerable.Repeat(' ', linePrefix.Length).ToArray()));
+                    Console.Write(new string(Enumerable.Repeat(' ', linePrefix.Length - 1).Append('\r').ToArray()));
 
                     return new(
                         skus.Where(sku => sku.Validated).SelectMany(sku => sku.VmSku.Skus),
@@ -116,7 +116,7 @@ namespace GenerateBatchVmSkus
             {
                 lock (consoleLock)
                 {
-                    var line = $"SKU tests: Started: {started / (double)count:P2} / Completed: {completed / (double)count:P2}";
+                    var line = $"SKU validations: Started: {started / (double)count:P2} / Completed: {completed / (double)count:P2}";
                     var sb = new StringBuilder();
                     sb.Append(linePrefix);
                     sb.Append(line);
@@ -233,6 +233,9 @@ namespace GenerateBatchVmSkus
 
             private async ValueTask ValidateSkus(CancellationToken cancellationToken)
             {
+                var processed = 0;
+                var processedDeferred = 0;
+
                 try
                 {
                     var context = await GetTestQuotaContext(accountInfo, cancellationToken);
@@ -280,29 +283,33 @@ namespace GenerateBatchVmSkus
                                             try
                                             {
                                                 var (vmSize, result) = await validationTask;
-                                                RemoveTestFromQuota(vmSize, context!);
+                                                RemoveSkuMetadataFromQuota(vmSize, context!);
 
                                                 switch (result)
                                                 {
                                                     case VerifyVMIResult.Use:
+                                                        ++processed;
                                                         _ = retries.Remove(vmSize.VmSku.Name);
                                                         vmSize.Validated = true;
                                                         await ResultSkus.Writer.WriteAsync(vmSize, cancellationToken);
                                                         break;
 
                                                     case VerifyVMIResult.Skip:
+                                                        ++processed;
                                                         _ = retries.Remove(vmSize.VmSku.Name);
                                                         break;
 
                                                     case VerifyVMIResult.NextRegion:
+                                                        ++processed;
+                                                        ++processedDeferred;
                                                         _ = retries.Remove(vmSize.VmSku.Name);
                                                         await ResultSkus.Writer.WriteAsync(vmSize, cancellationToken);
                                                         break;
 
                                                     case VerifyVMIResult.Retry:
-                                                        _ = retries.TryGetValue(vmSize.VmSku.Name, out var lastRetry);
+                                                        ++processedDeferred;
 
-                                                        if (lastRetry.RetryCount < 3)
+                                                        if (!retries.TryGetValue(vmSize.VmSku.Name, out var lastRetry) || lastRetry.RetryCount < 3)
                                                         {
                                                             retries[vmSize.VmSku.Name] = (false, lastRetry.RetryCount + 1, DateTime.UtcNow + TimeSpan.FromMinutes(4), vmSize);
                                                             _ = Interlocked.Decrement(ref started);
@@ -317,6 +324,7 @@ namespace GenerateBatchVmSkus
                                                                 ResetColor();
                                                             }
 
+                                                            ++processed;
                                                             _ = retries.Remove(vmSize.VmSku.Name);
                                                         }
 
@@ -413,6 +421,8 @@ namespace GenerateBatchVmSkus
                                 }
                             },
                             cancellationToken);
+
+                            _ = Interlocked.Add(ref count, -skusToTest.Count);
                         }
                         catch (Exception e) // TODO: Flag somewhere to prevent any results from being produced.
                         {
@@ -434,7 +444,14 @@ namespace GenerateBatchVmSkus
 
                     ResultSkus.Writer.Complete();
 
-                    bool CanTestNow(WrappedVmSku sku) => AddTestToQuotaIfQuotaPermits(sku, context);
+                    lock (consoleLock)
+                    {
+                        SetForegroundColor(ConsoleColor.Green);
+                        ConsoleWriteLine($"Validated a net of {processed - processedDeferred} SKUs out of {processed} attempts.");
+                        ResetColor();
+                    }
+
+                    bool CanTestNow(WrappedVmSku sku) => AddSkuMetadataToQuotaIfQuotaPermits(sku, context);
                 }
                 catch (OperationCanceledException)
                 { }
@@ -494,7 +511,7 @@ namespace GenerateBatchVmSkus
                 var name = vmSize.VmSku.Name;
                 var vm = vmSize.VmSku.Sku;
 
-                var pool = accountInfo.Client.PoolOperations.CreatePool(poolId: name, virtualMachineSize: name, virtualMachineConfiguration: GetMachineConfiguration(vm.HyperVGenerations.Contains("V2"/*, StringComparer.OrdinalIgnoreCase*/), vm.EncryptionAtHostSupported ?? false));
+                var pool = accountInfo.Client.PoolOperations.CreatePool(poolId: name, virtualMachineSize: name, virtualMachineConfiguration: GetMachineConfiguration(vm.HyperVGenerations.Contains("V2", StringComparer.OrdinalIgnoreCase), vm.EncryptionAtHostSupported ?? false));
 
                 pool.TargetNodeCommunicationMode = Microsoft.Azure.Batch.Common.NodeCommunicationMode.Simplified;
                 pool.NetworkConfiguration = new() { PublicIPAddressConfiguration = new(Microsoft.Azure.Batch.Common.IPAddressProvisioningType.BatchManaged), SubnetId = accountInfo.SubnetId };
@@ -817,7 +834,7 @@ namespace GenerateBatchVmSkus
                                 lock (consoleLock)
                                 {
                                     SetForegroundColor(ConsoleColor.Red);
-                                    ConsoleWriteLine($"Failed to delete pool '{name}' on '{accountInfo.Name}'  due to '{firstStatusCode}' {exception.GetType().FullName}: {exception.Message}");
+                                    ConsoleWriteLine($"Failed to delete pool '{name}' on '{accountInfo.Name}' due to '{firstStatusCode}' {exception.GetType().FullName}: {exception.Message}");
                                     ConsoleWriteLine("Please check and delete pool manually.");
                                     ConsoleWriteLine();
                                     ResetColor();
@@ -889,7 +906,7 @@ namespace GenerateBatchVmSkus
                     || (!isLowPriority && context.IsDedicatedCoreQuotaPerVmFamilyEnforced && coresPerNode > (context.DedicatedCoreQuotaPerVmFamily.TryGetValue(family, out var quota) ? quota : 0)));
             }
 
-            private static bool AddTestToQuotaIfQuotaPermits(WrappedVmSku vmSize, TestContext context)
+            private static bool AddSkuMetadataToQuotaIfQuotaPermits(WrappedVmSku vmSize, TestContext context)
             {
                 var info = vmSize.VmSku.Sku;
                 var family = info.VmFamily;
@@ -926,7 +943,7 @@ namespace GenerateBatchVmSkus
                 return true;
             }
 
-            private static void RemoveTestFromQuota(WrappedVmSku vmSize, TestContext context)
+            private static void RemoveSkuMetadataFromQuota(WrappedVmSku vmSize, TestContext context)
             {
                 var info = vmSize.VmSku.Sku;
                 var family = info.VmFamily;
@@ -979,8 +996,10 @@ namespace GenerateBatchVmSkus
                 }
             }
 
+            // Quota stays the same for the entire session
             private sealed record class TestContext(int PoolQuota, int LowPriorityCoreQuota, int DedicatedCoreQuota, bool IsDedicatedCoreQuotaPerVmFamilyEnforced, Dictionary<string, int> DedicatedCoreQuotaPerVmFamily, Dictionary<string, int> DedicatedCoresInUseByVmFamily)
             {
+                // Calculated current values are adjusted for each SKU to help prevent exceeding quota
                 public int PoolCount { get; set; }
                 public int LowPriorityCoresInUse { get; set; }
                 public int DedicatedCoresInUse { get; set; }

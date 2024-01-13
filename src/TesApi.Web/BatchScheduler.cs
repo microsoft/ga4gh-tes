@@ -515,7 +515,7 @@ namespace TesApi.Web
                 tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
 
 
-                var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2");
+                var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2", StringComparer.OrdinalIgnoreCase);
                 string jobOrTaskId = default;
                 if (enableBatchAutopool)
                 {
