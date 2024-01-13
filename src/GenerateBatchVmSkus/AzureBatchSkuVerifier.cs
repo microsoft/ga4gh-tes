@@ -166,6 +166,7 @@ namespace GenerateBatchVmSkus
         private sealed class Validator : IDisposable
         {
             private readonly BatchAccountInfo accountInfo;
+            private readonly object consoleLock = new();
 
             public Validator(BatchAccountInfo batchAccount)
             {
@@ -191,9 +192,12 @@ namespace GenerateBatchVmSkus
                     else
                     {
                         await ResultSkus.Writer.WriteAsync(vm, cancellationToken);
-                        SetForegroundColor(ConsoleColor.Yellow);
-                        ConsoleWriteLine($"Deferring '{vm.VmSku.Name}' due to quota (start of processing).");
-                        ResetColor();
+                        //lock(consoleLock)
+                        //{
+                        //    SetForegroundColor(ConsoleColor.Yellow);
+                        //    ConsoleWriteLine($"Deferring '{vm.VmSku.Name}' due to quota (start of processing).");
+                        //    ResetColor();
+                        //}
                     }
                 }
 
@@ -306,9 +310,12 @@ namespace GenerateBatchVmSkus
                                                         }
                                                         else
                                                         {
-                                                            SetForegroundColor(ConsoleColor.Yellow);
-                                                            ConsoleWriteLine($"Skipping {vmSize.VmSku.Name} because retry attempts were exhausted.");
-                                                            ResetColor();
+                                                            lock (consoleLock)
+                                                            {
+                                                                SetForegroundColor(ConsoleColor.Yellow);
+                                                                ConsoleWriteLine($"Skipping {vmSize.VmSku.Name} because retry attempts were exhausted.");
+                                                                ResetColor();
+                                                            }
 
                                                             _ = retries.Remove(vmSize.VmSku.Name);
                                                         }
@@ -318,10 +325,13 @@ namespace GenerateBatchVmSkus
                                             }
                                             catch (Exception e)
                                             {
-                                                SetForegroundColor(ConsoleColor.Red);
-                                                ConsoleWriteLine("Due to the following failure, it is unknown which SKU this failure report is related to. This SKU will not be included in the final results.");
-                                                ConsoleWriteLine(e.ToString());
-                                                ResetColor();
+                                                lock (consoleLock)
+                                                {
+                                                    SetForegroundColor(ConsoleColor.Red);
+                                                    ConsoleWriteLine("Due to the following failure, it is unknown which SKU this failure report is related to. This SKU will not be included in the final results.");
+                                                    ConsoleWriteLine(e.ToString());
+                                                    ResetColor();
+                                                }
                                             }
                                         }
                                         break;
@@ -339,9 +349,12 @@ namespace GenerateBatchVmSkus
                                         }
                                         else
                                         {
-                                            SetForegroundColor(ConsoleColor.Yellow);
-                                            ConsoleWriteLine("Unexpected task completion. Contact developer.");
-                                            ResetColor();
+                                            lock (consoleLock)
+                                            {
+                                                SetForegroundColor(ConsoleColor.Yellow);
+                                                ConsoleWriteLine("Unexpected task completion. Contact developer.");
+                                                ResetColor();
+                                            }
                                         }
                                         break;
 
@@ -367,16 +380,22 @@ namespace GenerateBatchVmSkus
                                         }
                                         else
                                         {
-                                            SetForegroundColor(ConsoleColor.Yellow);
-                                            ConsoleWriteLine("Unexpected task completion. Contact developer.");
-                                            ResetColor();
+                                            lock (consoleLock)
+                                            {
+                                                SetForegroundColor(ConsoleColor.Yellow);
+                                                ConsoleWriteLine("Unexpected task completion. Contact developer.");
+                                                ResetColor();
+                                            }
                                         }
                                         break;
 
                                     default:
-                                        SetForegroundColor(ConsoleColor.Yellow);
-                                        ConsoleWriteLine("Unexpected task completion. Contact developer.");
-                                        ResetColor();
+                                        lock (consoleLock)
+                                        {
+                                            SetForegroundColor(ConsoleColor.Yellow);
+                                            ConsoleWriteLine("Unexpected task completion. Contact developer.");
+                                            ResetColor();
+                                        }
                                         break;
                                 }
 
@@ -386,18 +405,24 @@ namespace GenerateBatchVmSkus
                             await skusToTest.ToAsyncEnumerable().ForEachAwaitWithCancellationAsync(async (vmSize, token) =>
                             {
                                 await ResultSkus.Writer.WriteAsync(vmSize, token);
-                                SetForegroundColor(ConsoleColor.Yellow);
-                                ConsoleWriteLine($"Deferring '{vmSize.VmSku.Name}' due to quota (end of processing).");
-                                ResetColor();
+                                lock (consoleLock)
+                                {
+                                    SetForegroundColor(ConsoleColor.Yellow);
+                                    ConsoleWriteLine($"Deferring '{vmSize.VmSku.Name}' due to quota (end of processing).");
+                                    ResetColor();
+                                }
                             },
                             cancellationToken);
                         }
                         catch (Exception e) // TODO: Flag somewhere to prevent any results from being produced.
                         {
-                            SetForegroundColor(ConsoleColor.Red);
-                            ConsoleWriteLine(e.ToString());
-                            ConsoleWriteLine(Environment.NewLine + "This failure caused this batch account to not be used again in this session. This will probably cause incorrect results.");
-                            ResetColor();
+                            lock (consoleLock)
+                            {
+                                SetForegroundColor(ConsoleColor.Red);
+                                ConsoleWriteLine(e.ToString());
+                                ConsoleWriteLine(Environment.NewLine + "This failure caused this batch account to not be used again in this session. This will probably cause incorrect results.");
+                                ResetColor();
+                            }
                         }
                         finally
                         {
@@ -415,9 +440,12 @@ namespace GenerateBatchVmSkus
                 { }
                 catch (Exception e)
                 {
-                    SetForegroundColor(ConsoleColor.Red);
-                    ConsoleWriteLine($"'{accountInfo.Name}' is done processing its inputs due to an error.");
-                    ResetColor();
+                    lock (consoleLock)
+                    {
+                        SetForegroundColor(ConsoleColor.Red);
+                        ConsoleWriteLine($"'{accountInfo.Name}' is done processing its inputs due to an error.");
+                        ResetColor();
+                    }
                     ResultSkus.Writer.Complete(e);
                 }
                 finally
