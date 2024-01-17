@@ -15,8 +15,9 @@ using Tes.Models;
 using static GenerateBatchVmSkus.Program;
 
 /*
- * Notes:
- *   Whenever a resize of 'OverconstrainedAllocationRequestError' is received for any SKU in a VmFamily, it is returned for all members of that family.
+ * TODO considerations:
+ *   Currently, we consider a compute node in LeavingPool or Preempted states as a success. We may want to instead actually run a task on the node before calling it a success.
+ *   Whenever a resize error of 'OverconstrainedAllocationRequestError' is received for any SKU in a VmFamily, it is returned for all members of that family. Consider grouping by VmFamily and preemptively skipping all SKUs of same family.
  */
 
 namespace GenerateBatchVmSkus
@@ -48,7 +49,12 @@ namespace GenerateBatchVmSkus
 
         private static readonly int UnknownVCpuCores = 200; // TODO: should be maintained larger than the largest VCpusAvailable.
 
+        internal static bool WriteLogs { get; set; } = false;
+        internal static bool ShowCounts { get; set; } = false;
+
         public record struct ValidationResults(IEnumerable<VirtualMachineInformation> Verified, IEnumerable<VmSku> Unverifyable);
+
+        public record struct BatchSkuInfo(string VmFamily, int? VCpusAvailable);
 
         private record class WrappedVmSku(VmSku VmSku)
         {
@@ -60,19 +66,22 @@ namespace GenerateBatchVmSkus
         [GeneratedRegex("^(sort|process)\\-\\S+\\.txt$")]
         private static partial Regex ValidationLogFileRegex();
 
-        public static async ValueTask<ValidationResults> ValidateSkus(IEnumerable<VmSku> skus, IAsyncEnumerable<BatchAccountInfo> batchAccounts, List<VirtualMachineInformation> batchSkus, CancellationToken cancellationToken)
+        public static async ValueTask<ValidationResults> ValidateSkus(IEnumerable<VmSku> skus, IAsyncEnumerable<BatchAccountInfo> batchAccounts, IDictionary<string, BatchSkuInfo> batchSkus, CancellationToken cancellationToken)
         {
-            var regex = ValidationLogFileRegex(); // "sort-*.txt", "process-*.txt"
-            Directory.EnumerateFiles(Environment.CurrentDirectory)
-                .Where(path => regex.IsMatch(Path.GetFileName(path)))
-                .ForEach(File.Delete);
+            if (WriteLogs)
+            {
+                var regex = ValidationLogFileRegex(); // "sort-*.txt", "process-*.txt"
+                Directory.EnumerateFiles(Environment.CurrentDirectory)
+                    .Where(path => regex.IsMatch(Path.GetFileName(path)))
+                    .ForEach(File.Delete);
+            }
 
             var startTime = DateTimeOffset.UtcNow;
             ArgumentNullException.ThrowIfNull(skus);
             ArgumentNullException.ThrowIfNull(batchAccounts);
             ArgumentNullException.ThrowIfNull(batchSkus);
 
-            AzureBatchSkuValidator.batchSkus = batchSkus.ToDictionary(sku => sku.VmSize, StringComparer.OrdinalIgnoreCase);
+            AzureBatchSkuValidator.batchSkus = batchSkus;
             await using var batchAccountEnumerator = batchAccounts.GetAsyncEnumerator(cancellationToken);
             List<Validator> validators = new();
             var asyncSkus = skus.Select(WrappedVmSku.Create).ToAsyncEnumerable();
@@ -90,7 +99,11 @@ namespace GenerateBatchVmSkus
                 {
                     var skus = await results.ToListAsync(cancellationToken);
 
-                    //ConsoleWriteLine("Tally", ConsoleColor.Blue, $"Qty-in: {skus.Where(sku => sku.Validated).Count()} validated / {skus.Where(sku => !sku.Validated).Count()} nonvalidated. strt/cmpt/cnt {started}/{completed}/{count}");
+                    if (ShowCounts)
+                    {
+                        ConsoleWriteLine("Tally", ConsoleColor.Blue, $"Qty-in: {skus.Where(sku => sku.Validated).Count()} validated / {skus.Where(sku => !sku.Validated).Count()} nonvalidated. strt/cmpt/cnt {started}/{completed}/{count}");
+                    }
+
                     ConsoleWriteLine("SKU validation in Batch", ConsoleColor.Green, $"Completed in {DateTimeOffset.UtcNow - startTime:g}.");
 
                     return new(
@@ -120,7 +133,7 @@ namespace GenerateBatchVmSkus
             .Handle<IOException>()
             .WaitAndRetryForeverAsync(i => TimeSpan.FromSeconds(0.05));
 
-        private static IDictionary<string, VirtualMachineInformation>? batchSkus;
+        private static IDictionary<string, BatchSkuInfo>? batchSkus;
 
         private static long count = 0;
         private static long started = 0;
@@ -150,7 +163,7 @@ namespace GenerateBatchVmSkus
             }
         }
 
-        private static void ConsoleWriteLine(string name, ConsoleColor foreground, string? content = null)
+        internal static void ConsoleWriteLine(string name, ConsoleColor foreground, string? content = null)
         {
             var result = string.Empty;
 
@@ -198,6 +211,11 @@ namespace GenerateBatchVmSkus
             internal AzureLocation Location => accountInfo.Location;
             internal Task? ValidationTask = null;
 
+            private Func<CancellationToken, Task> WriteLog(string log, string action, WrappedVmSku sku)
+                => WriteLogs
+                    ? new(token => File.AppendAllTextAsync($"{log}-{accountInfo.Name}.txt", $"{action}\t{sku.VmSku.Name}{Environment.NewLine}", token))
+                    : token => Task.CompletedTask;
+
             private async ValueTask<IEnumerable<WrappedVmSku>> GetVmSkusAsync(TestContext context, CancellationToken cancellationToken)
             {
                 var result = Enumerable.Empty<WrappedVmSku>();
@@ -207,12 +225,12 @@ namespace GenerateBatchVmSkus
                     if (CanBatchAccountValidateSku(vm, context))
                     {
                         result = result.Append(vm);
-                        await asyncRetryPolicy.ExecuteAsync(token => File.AppendAllTextAsync($"sort-{accountInfo.Name}.txt", $"process\t{vm.VmSku.Name}{Environment.NewLine}", token), cancellationToken);
+                        await asyncRetryPolicy.ExecuteAsync(WriteLog("sort", "process", vm), cancellationToken);
                     }
                     else
                     {
                         await resultSkus.Writer.WriteAsync(vm, cancellationToken);
-                        await asyncRetryPolicy.ExecuteAsync(token => File.AppendAllTextAsync($"sort-{accountInfo.Name}.txt", $"forward\t{vm.VmSku.Name}{Environment.NewLine}", token), cancellationToken);
+                        await asyncRetryPolicy.ExecuteAsync(WriteLog("sort", "forward", vm), cancellationToken);
                     }
                 }
 
@@ -249,31 +267,35 @@ namespace GenerateBatchVmSkus
                 async ValueTask LoadValues()
                 {
                     var perFamilyQuota = accountInfo.DedicatedCoreQuotaPerVmFamily.ToDictionary(quota => quota.Name, quota => quota.CoreQuota ?? 0, StringComparer.OrdinalIgnoreCase);
-                    //var validatedCount = 0;
-                    //var nonvalidatedCount = 0;
-                    //var forwarded = 0;
-                    //var considered = 0;
+                    var validatedCount = 0;
+                    var nonvalidatedCount = 0;
+                    var forwarded = 0;
+                    var considered = 0;
 
                     await foreach (var sku in skus.WithCancellation(cancellationToken))
                     {
-                        //if (sku.Validated) { ++validatedCount; } else { ++nonvalidatedCount; }
+                        if (sku.Validated) { ++validatedCount; } else { ++nonvalidatedCount; }
 
                         if (sku.Validated ||
                             !sku.VmSku.Sku.RegionsAvailable.Contains(Location.Name) ||
                             ((!sku.VmSku.Sku.LowPriority) && perFamilyQuota.TryGetValue(sku.VmSku.Sku.VmFamily, out var quota) && quota < (sku.VmSku.Sku.VCpusAvailable ?? UnknownVCpuCores)))
                         {
-                            //++forwarded;
+                            ++forwarded;
                             await resultSkus.Writer.WriteAsync(sku, cancellationToken);
                         }
                         else
                         {
-                            //++considered;
+                            ++considered;
                             await candidateSkus.Writer.WriteAsync(sku, cancellationToken);
                             ValidationTask ??= StartValidation();
                         }
                     }
 
-                    //AzureBatchSkuValidator.ConsoleWriteLine(accountInfo.Name, ConsoleColor.Blue, $"Qty-in: {validatedCount} validated / {nonvalidatedCount} nonvalidated.{Environment.NewLine}Qty-sorted: {forwarded} forwarded / {considered} considered.");
+                    if (ShowCounts)
+                    {
+                        AzureBatchSkuValidator.ConsoleWriteLine(accountInfo.Name, ConsoleColor.Blue, $"Qty-in: {validatedCount} validated / {nonvalidatedCount} nonvalidated.{Environment.NewLine}Qty-sorted: {forwarded} forwarded / {considered} considered.");
+                    }
+
                     candidateSkus.Writer.Complete();
 
                     if (ValidationTask is null)
@@ -296,7 +318,7 @@ namespace GenerateBatchVmSkus
                     var StartLoadedTest = new Func<WrappedVmSku, Task<(WrappedVmSku vmSize, VerifyVMIResult result)>>(async vmSize =>
                     {
                         _ = Interlocked.Increment(ref started);
-                        await asyncRetryPolicy.ExecuteAsync(token => File.AppendAllTextAsync($"process-{accountInfo.Name}.txt", $"post\t{vmSize.VmSku.Name}{Environment.NewLine}", token), cancellationToken);
+                        await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "post", vmSize), cancellationToken);
                         return (vmSize, result: await TestVMSizeInBatchAsync(vmSize, cancellationToken));
                     });
 
@@ -315,7 +337,7 @@ namespace GenerateBatchVmSkus
                         {
                             List<WrappedVmSku> skusToTest = new(await GetVmSkusAsync(context, cancellationToken));
                             await skusToTest.ToAsyncEnumerable()
-                                .ForEachAwaitWithCancellationAsync(async (sku, token) => await asyncRetryPolicy.ExecuteAsync(ct => File.AppendAllTextAsync($"process-{accountInfo.Name}.txt", $"queue\t{sku.VmSku.Name}{Environment.NewLine}", ct), token), cancellationToken);
+                                .ForEachAwaitWithCancellationAsync(async (sku, token) => await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "queue", sku), token), cancellationToken);
                             var loadedTests = skusToTest.Where(CanTestNow).ToList();
 
                             for (tests = loadedTests.Select(StartLoadedTest).ToList();
@@ -347,20 +369,20 @@ namespace GenerateBatchVmSkus
                                                         _ = retries.Remove(vmSize.VmSku.Name);
                                                         vmSize.Validated = true;
                                                         await resultSkus.Writer.WriteAsync(vmSize, cancellationToken);
-                                                        await asyncRetryPolicy.ExecuteAsync(token => File.AppendAllTextAsync($"process-{accountInfo.Name}.txt", $"use\t{vmSize.VmSku.Name}{Environment.NewLine}", token), cancellationToken);
+                                                        await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "use", vmSize), cancellationToken);
                                                         break;
 
                                                     case VerifyVMIResult.Skip:
                                                         ++processed;
                                                         _ = retries.Remove(vmSize.VmSku.Name);
-                                                        await asyncRetryPolicy.ExecuteAsync(token => File.AppendAllTextAsync($"process-{accountInfo.Name}.txt", $"skip\t{vmSize.VmSku.Name}{Environment.NewLine}", token), cancellationToken);
+                                                        await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "skip", vmSize), cancellationToken);
                                                         break;
 
                                                     case VerifyVMIResult.NextRegion:
                                                         ++processedDeferred;
                                                         _ = retries.Remove(vmSize.VmSku.Name);
                                                         await resultSkus.Writer.WriteAsync(vmSize, cancellationToken);
-                                                        await asyncRetryPolicy.ExecuteAsync(token => File.AppendAllTextAsync($"process-{accountInfo.Name}.txt", $"forward\t{vmSize.VmSku.Name}{Environment.NewLine}", token), cancellationToken);
+                                                        await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "forward", vmSize), cancellationToken);
                                                         break;
 
                                                     case VerifyVMIResult.Retry:
@@ -370,7 +392,7 @@ namespace GenerateBatchVmSkus
                                                             retries[vmSize.VmSku.Name] = (false, lastRetry.RetryCount + 1, DateTime.UtcNow + AzureBatchSkuValidator.RetryWaitTime, vmSize);
                                                             _ = Interlocked.Decrement(ref started);
                                                             _ = Interlocked.Decrement(ref completed);
-                                                            await asyncRetryPolicy.ExecuteAsync(token => File.AppendAllTextAsync($"process-{accountInfo.Name}.txt", $"wait{lastRetry.RetryCount}\t{vmSize.VmSku.Name}{Environment.NewLine}", token), cancellationToken);
+                                                            await asyncRetryPolicy.ExecuteAsync(WriteLog("process", $"wait{lastRetry.RetryCount}", vmSize), cancellationToken);
                                                         }
                                                         else
                                                         {
@@ -383,7 +405,7 @@ namespace GenerateBatchVmSkus
 
                                                             ++processed;
                                                             _ = retries.Remove(vmSize.VmSku.Name);
-                                                            await asyncRetryPolicy.ExecuteAsync(token => File.AppendAllTextAsync($"process-{accountInfo.Name}.txt", $"skipRT\t{vmSize.VmSku.Name}{Environment.NewLine}", token), cancellationToken);
+                                                            await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "skipRT", vmSize), cancellationToken);
                                                         }
 
                                                         break;
@@ -410,7 +432,7 @@ namespace GenerateBatchVmSkus
                                                 skusToTest.AddRange(await (await GetVmSkusAsync(context, cancellationToken)).ToAsyncEnumerable()
                                                     .WhereAwaitWithCancellation(async (vmSize, token) =>
                                                     {
-                                                        await asyncRetryPolicy.ExecuteAsync(token => File.AppendAllTextAsync($"process-{accountInfo.Name}.txt", $"queue\t{vmSize.VmSku.Name}{Environment.NewLine}", token), cancellationToken);
+                                                        await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "queue", vmSize), cancellationToken);
                                                         return true;
                                                     })
                                                     .ToListAsync(cancellationToken));
@@ -427,7 +449,7 @@ namespace GenerateBatchVmSkus
                                             lock (consoleLock)
                                             {
                                                 SetForegroundColor(ConsoleColor.Yellow);
-                                                ConsoleWriteLine("Unexpected task completion. Contact developer.");
+                                                ConsoleWriteLine("Unexpected Task<bool> completion. Contact developer.");
                                                 ResetColor();
                                             }
                                         }
@@ -442,7 +464,7 @@ namespace GenerateBatchVmSkus
                                                 .ToAsyncEnumerable()
                                                 .WhereAwaitWithCancellation(async (vmSize, token) =>
                                                 {
-                                                    await asyncRetryPolicy.ExecuteAsync(token => File.AppendAllTextAsync($"process-{accountInfo.Name}.txt", $"queueRT\t{vmSize.VmSku.Name}{Environment.NewLine}", token), cancellationToken);
+                                                    await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "queueRT", vmSize), cancellationToken);
                                                     return true;
                                                 })
                                                 .ToListAsync(cancellationToken));
@@ -459,7 +481,7 @@ namespace GenerateBatchVmSkus
                                             lock (consoleLock)
                                             {
                                                 SetForegroundColor(ConsoleColor.Yellow);
-                                                ConsoleWriteLine("Unexpected task completion. Contact developer.");
+                                                ConsoleWriteLine("Unexpected Task completion. Contact developer.");
                                                 ResetColor();
                                             }
                                         }
@@ -469,7 +491,7 @@ namespace GenerateBatchVmSkus
                                         lock (consoleLock)
                                         {
                                             SetForegroundColor(ConsoleColor.Yellow);
-                                            ConsoleWriteLine("Unexpected task completion. Contact developer.");
+                                            ConsoleWriteLine("Unexpected task (unknown type) completion. Contact developer.");
                                             ResetColor();
                                         }
                                         break;
@@ -493,7 +515,7 @@ namespace GenerateBatchVmSkus
                             await skusToTest.ToAsyncEnumerable().ForEachAwaitWithCancellationAsync(async (vmSize, token) =>
                             {
                                 await resultSkus.Writer.WriteAsync(vmSize, token);
-                                await asyncRetryPolicy.ExecuteAsync(token => File.AppendAllTextAsync($"process-{accountInfo.Name}.txt", $"forward\t{vmSize.VmSku.Name}{Environment.NewLine}", token), cancellationToken);
+                                await asyncRetryPolicy.ExecuteAsync(WriteLog("process", "dump", vmSize), cancellationToken);
                                 lock (consoleLock)
                                 {
                                     SetForegroundColor(ConsoleColor.Yellow);
@@ -511,7 +533,7 @@ namespace GenerateBatchVmSkus
                             {
                                 SetForegroundColor(ConsoleColor.Red);
                                 ConsoleWriteLine(e.ToString());
-                                ConsoleWriteLine(Environment.NewLine + "This failure caused this batch account to not be used again in this session. This will probably cause incorrect results.");
+                                ConsoleWriteLine(Environment.NewLine + "This failure caused this batch account to not be used again in this session. This will probably produce incorrect results.");
                                 ResetColor();
                             }
                         }
@@ -525,12 +547,15 @@ namespace GenerateBatchVmSkus
 
                     resultSkus.Writer.Complete();
 
-                    //lock (consoleLock)
-                    //{
-                    //    SetForegroundColor(ConsoleColor.Green);
-                    //    ConsoleWriteLine($"Validated a net of {processed} SKUs out of {processed + processedDeferred + processedRetried} attempts.");
-                    //    ResetColor();
-                    //}
+                    if (ShowCounts)
+                    {
+                        lock (consoleLock)
+                        {
+                            SetForegroundColor(ConsoleColor.Green);
+                            ConsoleWriteLine($"Validated a net of {processed} SKUs out of {processed + processedDeferred + processedRetried} attempts.");
+                            ResetColor();
+                        }
+                    }
 
                     bool CanTestNow(WrappedVmSku sku) => AddSkuMetadataToQuotaIfQuotaPermits(sku, context);
                 }
@@ -541,7 +566,7 @@ namespace GenerateBatchVmSkus
                     lock (consoleLock)
                     {
                         SetForegroundColor(ConsoleColor.Red);
-                        ConsoleWriteLine($"'{accountInfo.Name}' is done processing its inputs due to an error.");
+                        ConsoleWriteLine($"'{accountInfo.Name}' has completed processing its inputs due to an error.");
                         ResetColor();
                     }
 
@@ -627,6 +652,13 @@ namespace GenerateBatchVmSkus
                     {
                         if (pool.ResizeErrors.Any(e => PoolResizeErrorCodes.UnsupportedVMSize.Equals(e.Code, StringComparison.OrdinalIgnoreCase)))
                         {
+                            lock (consoleLock)
+                            {
+                                SetForegroundColor(ConsoleColor.Yellow);
+                                ConsoleWriteLine($"Deferring {name} due to 'UnsupportedVMSize'");
+                                ResetColor();
+                            }
+
                             return VerifyVMIResult.NextRegion;
                         }
                         else if (pool.ResizeErrors.Any(e =>
@@ -635,7 +667,7 @@ namespace GenerateBatchVmSkus
                             PoolResizeErrorCodes.AccountSpotCoreQuotaReached.Equals(e.Code, StringComparison.OrdinalIgnoreCase) ||
                             (!vm.LowPriority && @"AccountVMSeriesCoreQuotaReached".Equals(e.Code, StringComparison.OrdinalIgnoreCase))))
                         {
-                            return VerifyVMIResult.Retry; // Either a timing issue or other concurrent use of the batch account. Try again.
+                            return VerifyVMIResult.Retry; // Either a timing race condition or other concurrent use of the batch account. Try again.
                         }
                         else
                         {

@@ -3,6 +3,8 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Globalization;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using Azure;
@@ -57,6 +59,11 @@ namespace GenerateBatchVmSkus
             return configuration;
         }
     }
+
+    /*
+     * TODO considerations:
+     *   Currently, we consider the Azure APIs to return the same values for each region where any given SKU exists, but that is not the case. Consider implementing a strategy where we, on a case-by-case basis, determine whether we want the "max" or the "min" of all the regions sampled for any given property.
+     */
 
     internal class Program
     {
@@ -193,14 +200,19 @@ namespace GenerateBatchVmSkus
 
             Console.WriteLine("Starting...");
             TokenCredential tokenCredential = new DefaultAzureCredential();
-            var client = new ArmClient(tokenCredential);
+            RetryPolicyOptions retryPolicyOptions = new();
+            var clientOptions = new ArmClientOptions();
+            clientOptions.Retry.Mode = RetryMode.Exponential;
+            clientOptions.Retry.MaxRetries = int.Max(clientOptions.Retry.MaxRetries, retryPolicyOptions.MaxRetryCount);
+            var client = new ArmClient(tokenCredential, default, clientOptions);
             var appCache = new MemoryCache(new MemoryCacheOptions());
-            var cacheAndRetryHandler = new CachingRetryHandler(appCache, Options.Create(new RetryPolicyOptions()));
+            var cacheAndRetryHandler = new CachingRetryHandler(appCache, Options.Create(retryPolicyOptions));
             var priceApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
 
             var subscription = client.GetSubscriptionResource(new ResourceIdentifier($"/subscriptions/{configuration.SubscriptionId}"));
             var batchAccounts = GetBatchAccountsAsync(subscription, tokenCredential, configuration, cancellationTokenSource.Token);
 
+            var startTime = DateTimeOffset.UtcNow;
             var metadataGetters = new List<Func<Task>>
             {
                 async () =>
@@ -283,28 +295,41 @@ namespace GenerateBatchVmSkus
                 .ToList();
 
             Console.WriteLine($"Superset supportedSkuCount:{batchSupportedVmSet.Count}");
+            AzureBatchSkuValidator.ConsoleWriteLine("Retrieving data from Azure", ConsoleColor.Green, $"Completed in {DateTimeOffset.UtcNow - startTime:g}.");
 
             Console.WriteLine("Validating SKUs in Azure Batch...");
-            var (verified, notVerified) = await AzureBatchSkuValidator.ValidateSkus(batchSupportedVmSet, batchAccounts, batchSupportedVmSet.Select(sku => sku.Sku).ToList(), cancellationTokenSource.Token);
+            var (verified, notVerified) = await AzureBatchSkuValidator.ValidateSkus(
+                batchSupportedVmSet,
+                batchAccounts,
+                skuForVm
+                    .Select(sku => (sku.Key, Info: new AzureBatchSkuValidator.BatchSkuInfo(
+                        sku.Value.Family,
+                        int.TryParse(sku.Value.Capabilities.SingleOrDefault(x => x.Name.Equals("vCPUsAvailable", StringComparison.OrdinalIgnoreCase))?.Value, NumberFormatInfo.InvariantInfo, out var vCpus) ? vCpus : null)))
+                    .ToDictionary(sku => sku.Key, sku => sku.Info, StringComparer.OrdinalIgnoreCase),
+                cancellationTokenSource.Token);
 
             notVerified = notVerified.ToList();
 
             if (notVerified.Any())
             {
-                Console.WriteLine(new string(Enumerable.Repeat(' ', 80).ToArray()));
+                var indent = 4;
+                string oneIndent = new(Enumerable.Repeat(' ', indent).ToArray());
+                string twoIndent = new(Enumerable.Repeat(' ', indent * 2).ToArray());
+                string threeIndent = new(Enumerable.Repeat(' ', indent * 3).ToArray());
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"Due to either availability, capacity, quota, or other constraints, the following {notVerified.Count()} SKUs were not validated and will not be included:");
-                notVerified.Select(vmsize => (vmsize.Sku.VmSize, vmsize.Sku.VmFamily, vmsize.Sku.LowPriority))
-                    .GroupBy(sku => sku.VmFamily, sku => (sku.VmSize, sku.LowPriority), StringComparer.OrdinalIgnoreCase)
+                Console.WriteLine($"Due to either availability, capacity, quota, or other constraints, the following {notVerified.Count()} SKUs were not validated and will not be included. Consider adding quota or additional regions as needed:");
+                Console.ResetColor();
+                notVerified.Select(vmsize => (vmsize.Sku.VmSize, vmsize.Sku.VmFamily, vmsize.Sku.LowPriority, vmsize.Sku.RegionsAvailable))
+                    .GroupBy(sku => sku.VmFamily, sku => (sku.VmSize, sku.LowPriority, sku.RegionsAvailable), StringComparer.OrdinalIgnoreCase)
                     .OrderBy(family => family.Key, StringComparer.OrdinalIgnoreCase)
                     .ForEach(family =>
                     {
-                        Console.WriteLine($"    Family: '{family.Key}'");
+                        Console.WriteLine($"{oneIndent}Family: '{family.Key}'");
                         family.OrderBy(sku => sku.VmSize)
                             .ThenBy(sku => sku.LowPriority)
-                            .ForEach(sku => Console.WriteLine($"        '{sku.VmSize}'{DedicatedMarker(sku.LowPriority)} available in regions:{Environment.NewLine}            '{string.Join($"'{Environment.NewLine}            '", regionsForVm[sku.VmSize].OrderBy(region => region, StringComparer.OrdinalIgnoreCase))}'."));
+                            .ForEach(sku => Console.WriteLine($"{twoIndent}'{sku.VmSize}'{DedicatedMarker(sku.LowPriority)} regions available:{Environment.NewLine}{threeIndent}'{string.Join($"'{Environment.NewLine}{threeIndent}'", sku.RegionsAvailable.OrderBy(region => region, StringComparer.OrdinalIgnoreCase))}'."));
                     });
-                Console.ResetColor();
+                Console.WriteLine();
 
                 static string DedicatedMarker(bool hasLowPriority) => hasLowPriority ? string.Empty : " (dedicatedOnly)";
             }
@@ -324,6 +349,7 @@ namespace GenerateBatchVmSkus
 
             var data = JsonSerializer.Serialize(batchVmInfo, options: jsonOptions);
             await File.WriteAllTextAsync(configuration.OutputFilePath!, data, cancellationTokenSource.Token);
+            AzureBatchSkuValidator.ConsoleWriteLine(Assembly.GetEntryAssembly()!.GetName().Name!, ConsoleColor.Green, $"Completed in {DateTimeOffset.UtcNow - startTime:g}.");
             return 0;
         }
 
@@ -415,8 +441,7 @@ namespace GenerateBatchVmSkus
                     new UriBuilder(Uri.UriSchemeHttps, data.AccountEndpoint).Uri.AbsoluteUri,
                     async () => await BatchTokenProvider(credential, cancellationToken)));
 
-                // TODO: Consider replacing default retry policy
-                result.CustomBehaviors.OfType<Microsoft.Azure.Batch.RetryPolicyProvider>().Single().Policy = new Microsoft.Azure.Batch.Common.ExponentialRetry(TimeSpan.FromSeconds(1), 11);
+                result.CustomBehaviors.OfType<Microsoft.Azure.Batch.RetryPolicyProvider>().Single().Policy = new Microsoft.Azure.Batch.Common.ExponentialRetry(TimeSpan.FromSeconds(1), 11, TimeSpan.FromMinutes(1));
                 return result;
             }
 
