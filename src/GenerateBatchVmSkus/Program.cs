@@ -294,9 +294,16 @@ namespace GenerateBatchVmSkus
                 Console.WriteLine(new string(Enumerable.Repeat(' ', 80).ToArray()));
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.WriteLine($"Due to either availability, capacity, quota, or other constraints, the following {notVerified.Count()} SKUs were not validated and will not be included:");
-                notVerified.Select(vmsize => (vmsize.Name, vmsize.Sku.LowPriority))
-                    .OrderBy(sku => sku.Name, StringComparer.OrdinalIgnoreCase)
-                    .ForEach(sku => Console.WriteLine($"    '{sku.Name}'{DedicatedMarker(sku.LowPriority)} with availability in regions '{string.Join("', '", regionsForVm[sku.Name].OrderBy(region => region, StringComparer.OrdinalIgnoreCase))}'."));
+                notVerified.Select(vmsize => (vmsize.Sku.VmSize, vmsize.Sku.VmFamily, vmsize.Sku.LowPriority))
+                    .GroupBy(sku => sku.VmFamily, sku => (sku.VmSize, sku.LowPriority), StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(family => family.Key, StringComparer.OrdinalIgnoreCase)
+                    .ForEach(family =>
+                    {
+                        Console.WriteLine($"    Family: '{family.Key}'");
+                        family.OrderBy(sku => sku.VmSize)
+                            .ThenBy(sku => sku.LowPriority)
+                            .ForEach(sku => Console.WriteLine($"        '{sku.VmSize}'{DedicatedMarker(sku.LowPriority)} available in regions:{Environment.NewLine}            '{string.Join($"'{Environment.NewLine}            '", regionsForVm[sku.VmSize].OrderBy(region => region, StringComparer.OrdinalIgnoreCase))}'."));
+                    });
                 Console.ResetColor();
 
                 static string DedicatedMarker(bool hasLowPriority) => hasLowPriority ? string.Empty : " (dedicatedOnly)";
@@ -329,7 +336,7 @@ namespace GenerateBatchVmSkus
 
             var sku = skuForVm[name] ?? throw new Exception($"Sku info is null for VM {name}");
 
-            var generations = AttemptParseString(name)?.Split(",").ToList() ?? new();
+            var generations = AttemptParseString("HyperVGenerations")?.Split(",").ToList() ?? new();
             var vCpusAvailable = AttemptParseInt32("vCPUsAvailable");
             var encryptionAtHostSupported = AttemptParseBoolean("EncryptionAtHostSupported");
             var lowPriorityCapable = AttemptParseBoolean("LowPriorityCapable") ?? false;
@@ -408,8 +415,8 @@ namespace GenerateBatchVmSkus
                     new UriBuilder(Uri.UriSchemeHttps, data.AccountEndpoint).Uri.AbsoluteUri,
                     async () => await BatchTokenProvider(credential, cancellationToken)));
 
-                // replace default retry policy
-                //result.CustomBehaviors.OfType<Microsoft.Azure.Batch.RetryPolicyProvider>().Single().Policy = new Microsoft.Azure.Batch.Common.ExponentialRetry(TimeSpan.FromSeconds(1), 9);
+                // TODO: Consider replacing default retry policy
+                result.CustomBehaviors.OfType<Microsoft.Azure.Batch.RetryPolicyProvider>().Single().Policy = new Microsoft.Azure.Batch.Common.ExponentialRetry(TimeSpan.FromSeconds(1), 11);
                 return result;
             }
 
