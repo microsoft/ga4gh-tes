@@ -262,6 +262,7 @@ namespace GenerateBatchVmSkus
                             try
                             {
                                 List<ComputeResourceSku>? skus = null;
+                                List<string>? skusInSkus = null;
                                 var count = 0;
 
                                 await foreach (var vm in subscription.GetBatchSupportedVirtualMachineSkusAsync(region, cancellationToken: token).Select(s => s.Name).WithCancellation(token))
@@ -270,6 +271,13 @@ namespace GenerateBatchVmSkus
                                     _ = regionsForVm.AddOrUpdate(vm, _ => ImmutableHashSet<string>.Empty.Add(region.Name), (_, value) => value.Add(region.Name));
 
                                     skus ??= await subscription.GetComputeResourceSkusAsync($"location eq '{region.Name}'", cancellationToken: token).ToListAsync(token);
+
+                                    skusInSkus ??= skus.Select(sku => sku.Name).ToList();
+                                    if (!skusInSkus.Contains(vm))
+                                    {
+                                        System.Diagnostics.Debugger.Break();
+                                    }
+
                                     _ = skuForVm.GetOrAdd(vm, vm =>
                                         skus.Single(sku => sku.Name.Equals(vm, StringComparison.OrdinalIgnoreCase)));
                                 }

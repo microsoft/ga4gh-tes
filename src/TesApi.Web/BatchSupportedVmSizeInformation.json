@@ -1,197 +1,5 @@
 [
   {
-    "VmSize": "Basic_A2",
-    "VmFamily": "basicAFamily",
-    "LowPriority": false,
-    "PricePerHour": 0.078,
-    "MemoryInGiB": 3.5,
-    "VCpusAvailable": 2,
-    "ResourceDiskSizeInGiB": 60,
-    "MaxDataDiskCount": 4,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiacentral",
-      "australiaeast",
-      "australiasoutheast",
-      "brazilsouth",
-      "canadacentral",
-      "canadaeast",
-      "centralindia",
-      "centralus",
-      "centraluseuap",
-      "eastasia",
-      "eastus",
-      "eastus2",
-      "eastus2euap",
-      "francecentral",
-      "japaneast",
-      "japanwest",
-      "koreacentral",
-      "koreasouth",
-      "northcentralus",
-      "northeurope",
-      "southafricanorth",
-      "southcentralus",
-      "southeastasia",
-      "southindia",
-      "uaenorth",
-      "uksouth",
-      "ukwest",
-      "westcentralus",
-      "westeurope",
-      "westindia",
-      "westus",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Basic_A3",
-    "VmFamily": "basicAFamily",
-    "LowPriority": false,
-    "PricePerHour": 0.204,
-    "MemoryInGiB": 7,
-    "VCpusAvailable": 4,
-    "ResourceDiskSizeInGiB": 120,
-    "MaxDataDiskCount": 8,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiacentral",
-      "australiaeast",
-      "australiasoutheast",
-      "brazilsouth",
-      "canadacentral",
-      "canadaeast",
-      "centralindia",
-      "centralus",
-      "centraluseuap",
-      "eastasia",
-      "eastus",
-      "eastus2",
-      "eastus2euap",
-      "francecentral",
-      "japaneast",
-      "japanwest",
-      "koreacentral",
-      "koreasouth",
-      "northcentralus",
-      "northeurope",
-      "southafricanorth",
-      "southcentralus",
-      "southeastasia",
-      "southindia",
-      "uaenorth",
-      "uksouth",
-      "ukwest",
-      "westcentralus",
-      "westeurope",
-      "westindia",
-      "westus",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Basic_A4",
-    "VmFamily": "basicAFamily",
-    "LowPriority": false,
-    "PricePerHour": 0.408,
-    "MemoryInGiB": 14,
-    "VCpusAvailable": 8,
-    "ResourceDiskSizeInGiB": 240,
-    "MaxDataDiskCount": 16,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiacentral",
-      "australiaeast",
-      "australiasoutheast",
-      "brazilsouth",
-      "canadacentral",
-      "canadaeast",
-      "centralindia",
-      "centralus",
-      "centraluseuap",
-      "eastasia",
-      "eastus",
-      "eastus2",
-      "eastus2euap",
-      "francecentral",
-      "japaneast",
-      "japanwest",
-      "koreacentral",
-      "koreasouth",
-      "northcentralus",
-      "northeurope",
-      "southafricanorth",
-      "southcentralus",
-      "southeastasia",
-      "southindia",
-      "uaenorth",
-      "uksouth",
-      "ukwest",
-      "westcentralus",
-      "westeurope",
-      "westindia",
-      "westus",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_A1",
-    "VmFamily": "standardA0_A7Family",
-    "LowPriority": false,
-    "PricePerHour": 0.06,
-    "MemoryInGiB": 1.75,
-    "VCpusAvailable": 1,
-    "ResourceDiskSizeInGiB": 70,
-    "MaxDataDiskCount": 2,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiacentral",
-      "australiaeast",
-      "australiasoutheast",
-      "brazilsouth",
-      "canadacentral",
-      "canadaeast",
-      "centralindia",
-      "centralus",
-      "centraluseuap",
-      "eastasia",
-      "eastus",
-      "eastus2",
-      "eastus2euap",
-      "francecentral",
-      "japaneast",
-      "japanwest",
-      "koreacentral",
-      "koreasouth",
-      "northcentralus",
-      "northeurope",
-      "southafricanorth",
-      "southcentralus",
-      "southeastasia",
-      "southindia",
-      "uaenorth",
-      "uksouth",
-      "ukwest",
-      "westcentralus",
-      "westeurope",
-      "westindia",
-      "westus",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
     "VmSize": "Standard_A1_v2",
     "VmFamily": "standardAv2Family",
     "LowPriority": false,
@@ -306,54 +114,6 @@
       "westus",
       "westus2",
       "westus3"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_A2",
-    "VmFamily": "standardA0_A7Family",
-    "LowPriority": false,
-    "PricePerHour": 0.12,
-    "MemoryInGiB": 3.5,
-    "VCpusAvailable": 2,
-    "ResourceDiskSizeInGiB": 135,
-    "MaxDataDiskCount": 4,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiacentral",
-      "australiaeast",
-      "australiasoutheast",
-      "brazilsouth",
-      "canadacentral",
-      "canadaeast",
-      "centralindia",
-      "centralus",
-      "centraluseuap",
-      "eastasia",
-      "eastus",
-      "eastus2",
-      "eastus2euap",
-      "francecentral",
-      "japaneast",
-      "japanwest",
-      "koreacentral",
-      "koreasouth",
-      "northcentralus",
-      "northeurope",
-      "southafricanorth",
-      "southcentralus",
-      "southeastasia",
-      "southindia",
-      "uaenorth",
-      "uksouth",
-      "ukwest",
-      "westcentralus",
-      "westeurope",
-      "westindia",
-      "westus",
-      "westus2"
     ],
     "EncryptionAtHostSupported": false
   },
@@ -594,102 +354,6 @@
     "EncryptionAtHostSupported": false
   },
   {
-    "VmSize": "Standard_A3",
-    "VmFamily": "standardA0_A7Family",
-    "LowPriority": false,
-    "PricePerHour": 0.24,
-    "MemoryInGiB": 7,
-    "VCpusAvailable": 4,
-    "ResourceDiskSizeInGiB": 285,
-    "MaxDataDiskCount": 8,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiacentral",
-      "australiaeast",
-      "australiasoutheast",
-      "brazilsouth",
-      "canadacentral",
-      "canadaeast",
-      "centralindia",
-      "centralus",
-      "centraluseuap",
-      "eastasia",
-      "eastus",
-      "eastus2",
-      "eastus2euap",
-      "francecentral",
-      "japaneast",
-      "japanwest",
-      "koreacentral",
-      "koreasouth",
-      "northcentralus",
-      "northeurope",
-      "southafricanorth",
-      "southcentralus",
-      "southeastasia",
-      "southindia",
-      "uaenorth",
-      "uksouth",
-      "ukwest",
-      "westcentralus",
-      "westeurope",
-      "westindia",
-      "westus",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_A4",
-    "VmFamily": "standardA0_A7Family",
-    "LowPriority": false,
-    "PricePerHour": 0.48,
-    "MemoryInGiB": 14,
-    "VCpusAvailable": 8,
-    "ResourceDiskSizeInGiB": 605,
-    "MaxDataDiskCount": 16,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiacentral",
-      "australiaeast",
-      "australiasoutheast",
-      "brazilsouth",
-      "canadacentral",
-      "canadaeast",
-      "centralindia",
-      "centralus",
-      "centraluseuap",
-      "eastasia",
-      "eastus",
-      "eastus2",
-      "eastus2euap",
-      "francecentral",
-      "japaneast",
-      "japanwest",
-      "koreacentral",
-      "koreasouth",
-      "northcentralus",
-      "northeurope",
-      "southafricanorth",
-      "southcentralus",
-      "southeastasia",
-      "southindia",
-      "uaenorth",
-      "uksouth",
-      "ukwest",
-      "westcentralus",
-      "westeurope",
-      "westindia",
-      "westus",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
     "VmSize": "Standard_A4_v2",
     "VmFamily": "standardAv2Family",
     "LowPriority": false,
@@ -922,102 +586,6 @@
       "westus",
       "westus2",
       "westus3"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_A5",
-    "VmFamily": "standardA0_A7Family",
-    "LowPriority": false,
-    "PricePerHour": 0.27,
-    "MemoryInGiB": 14,
-    "VCpusAvailable": 2,
-    "ResourceDiskSizeInGiB": 135,
-    "MaxDataDiskCount": 4,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiacentral",
-      "australiaeast",
-      "australiasoutheast",
-      "brazilsouth",
-      "canadacentral",
-      "canadaeast",
-      "centralindia",
-      "centralus",
-      "centraluseuap",
-      "eastasia",
-      "eastus",
-      "eastus2",
-      "eastus2euap",
-      "francecentral",
-      "japaneast",
-      "japanwest",
-      "koreacentral",
-      "koreasouth",
-      "northcentralus",
-      "northeurope",
-      "southafricanorth",
-      "southcentralus",
-      "southeastasia",
-      "southindia",
-      "uaenorth",
-      "uksouth",
-      "ukwest",
-      "westcentralus",
-      "westeurope",
-      "westindia",
-      "westus",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_A7",
-    "VmFamily": "standardA0_A7Family",
-    "LowPriority": false,
-    "PricePerHour": 1.08,
-    "MemoryInGiB": 56,
-    "VCpusAvailable": 8,
-    "ResourceDiskSizeInGiB": 605,
-    "MaxDataDiskCount": 16,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiacentral",
-      "australiaeast",
-      "australiasoutheast",
-      "brazilsouth",
-      "canadacentral",
-      "canadaeast",
-      "centralindia",
-      "centralus",
-      "centraluseuap",
-      "eastasia",
-      "eastus",
-      "eastus2",
-      "eastus2euap",
-      "francecentral",
-      "japaneast",
-      "japanwest",
-      "koreacentral",
-      "koreasouth",
-      "northcentralus",
-      "northeurope",
-      "southafricanorth",
-      "southcentralus",
-      "southeastasia",
-      "southindia",
-      "uaenorth",
-      "uksouth",
-      "ukwest",
-      "westcentralus",
-      "westeurope",
-      "westindia",
-      "westus",
-      "westus2"
     ],
     "EncryptionAtHostSupported": false
   },
@@ -9271,6 +8839,126 @@
       "ukwest",
       "westcentralus",
       "westeurope",
+      "westus",
+      "westus2",
+      "westus3"
+    ],
+    "EncryptionAtHostSupported": true
+  },
+  {
+    "VmSize": "Standard_D64s_v3",
+    "VmFamily": "standardDSv3Family",
+    "LowPriority": false,
+    "PricePerHour": null,
+    "MemoryInGiB": 256,
+    "VCpusAvailable": 64,
+    "ResourceDiskSizeInGiB": 512,
+    "MaxDataDiskCount": 32,
+    "HyperVGenerations": [
+      "V1",
+      "V2"
+    ],
+    "RegionsAvailable": [
+      "australiacentral",
+      "australiaeast",
+      "australiasoutheast",
+      "brazilsouth",
+      "brazilsoutheast",
+      "canadacentral",
+      "canadaeast",
+      "centralindia",
+      "centralus",
+      "centraluseuap",
+      "eastasia",
+      "eastus",
+      "eastus2",
+      "eastus2euap",
+      "francecentral",
+      "germanywestcentral",
+      "israelcentral",
+      "italynorth",
+      "japaneast",
+      "japanwest",
+      "jioindiawest",
+      "koreacentral",
+      "koreasouth",
+      "northcentralus",
+      "northeurope",
+      "norwayeast",
+      "polandcentral",
+      "qatarcentral",
+      "southafricanorth",
+      "southcentralus",
+      "southeastasia",
+      "southindia",
+      "swedencentral",
+      "switzerlandnorth",
+      "uaenorth",
+      "uksouth",
+      "ukwest",
+      "westcentralus",
+      "westeurope",
+      "westindia",
+      "westus",
+      "westus2",
+      "westus3"
+    ],
+    "EncryptionAtHostSupported": true
+  },
+  {
+    "VmSize": "Standard_D64s_v3",
+    "VmFamily": "standardDSv3Family",
+    "LowPriority": true,
+    "PricePerHour": null,
+    "MemoryInGiB": 256,
+    "VCpusAvailable": 64,
+    "ResourceDiskSizeInGiB": 512,
+    "MaxDataDiskCount": 32,
+    "HyperVGenerations": [
+      "V1",
+      "V2"
+    ],
+    "RegionsAvailable": [
+      "australiacentral",
+      "australiaeast",
+      "australiasoutheast",
+      "brazilsouth",
+      "brazilsoutheast",
+      "canadacentral",
+      "canadaeast",
+      "centralindia",
+      "centralus",
+      "centraluseuap",
+      "eastasia",
+      "eastus",
+      "eastus2",
+      "eastus2euap",
+      "francecentral",
+      "germanywestcentral",
+      "israelcentral",
+      "italynorth",
+      "japaneast",
+      "japanwest",
+      "jioindiawest",
+      "koreacentral",
+      "koreasouth",
+      "northcentralus",
+      "northeurope",
+      "norwayeast",
+      "polandcentral",
+      "qatarcentral",
+      "southafricanorth",
+      "southcentralus",
+      "southeastasia",
+      "southindia",
+      "swedencentral",
+      "switzerlandnorth",
+      "uaenorth",
+      "uksouth",
+      "ukwest",
+      "westcentralus",
+      "westeurope",
+      "westindia",
       "westus",
       "westus2",
       "westus3"
@@ -30438,120 +30126,6 @@
     "EncryptionAtHostSupported": true
   },
   {
-    "VmSize": "Standard_NC12",
-    "VmFamily": "standardNCFamily",
-    "LowPriority": false,
-    "PricePerHour": 2.333,
-    "MemoryInGiB": 112,
-    "VCpusAvailable": 12,
-    "ResourceDiskSizeInGiB": 680,
-    "MaxDataDiskCount": 48,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "eastus",
-      "northcentralus",
-      "northeurope",
-      "southcentralus",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_NC12",
-    "VmFamily": "standardNCFamily",
-    "LowPriority": true,
-    "PricePerHour": 0.467,
-    "MemoryInGiB": 112,
-    "VCpusAvailable": 12,
-    "ResourceDiskSizeInGiB": 680,
-    "MaxDataDiskCount": 48,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "eastus",
-      "northcentralus",
-      "northeurope",
-      "southcentralus",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_NC12_Promo",
-    "VmFamily": "standardNCPromoFamily",
-    "LowPriority": false,
-    "PricePerHour": null,
-    "MemoryInGiB": 112,
-    "VCpusAvailable": 12,
-    "ResourceDiskSizeInGiB": 680,
-    "MaxDataDiskCount": 48,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "eastus",
-      "northcentralus",
-      "northeurope",
-      "southcentralus",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_NC12s_v2",
-    "VmFamily": "standardNCSv2Family",
-    "LowPriority": false,
-    "PricePerHour": 5.364,
-    "MemoryInGiB": 224,
-    "VCpusAvailable": 12,
-    "ResourceDiskSizeInGiB": 1474,
-    "MaxDataDiskCount": 24,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus",
-      "southeastasia",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
-    "VmSize": "Standard_NC12s_v2",
-    "VmFamily": "standardNCSv2Family",
-    "LowPriority": true,
-    "PricePerHour": 1.0732,
-    "MemoryInGiB": 224,
-    "VCpusAvailable": 12,
-    "ResourceDiskSizeInGiB": 1474,
-    "MaxDataDiskCount": 24,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus",
-      "southeastasia",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
     "VmSize": "Standard_NC12s_v3",
     "VmFamily": "standardNCSv3Family",
     "LowPriority": false,
@@ -30712,54 +30286,6 @@
     "EncryptionAtHostSupported": true
   },
   {
-    "VmSize": "Standard_NC24",
-    "VmFamily": "standardNCFamily",
-    "LowPriority": false,
-    "PricePerHour": 4.666,
-    "MemoryInGiB": 224,
-    "VCpusAvailable": 24,
-    "ResourceDiskSizeInGiB": 1440,
-    "MaxDataDiskCount": 64,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "eastus",
-      "northcentralus",
-      "northeurope",
-      "southcentralus",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_NC24",
-    "VmFamily": "standardNCFamily",
-    "LowPriority": true,
-    "PricePerHour": 0.933,
-    "MemoryInGiB": 224,
-    "VCpusAvailable": 24,
-    "ResourceDiskSizeInGiB": 1440,
-    "MaxDataDiskCount": 64,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "eastus",
-      "northcentralus",
-      "northeurope",
-      "southcentralus",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
     "VmSize": "Standard_NC24ads_A100_v4",
     "VmFamily": "StandardNCADSA100v4Family",
     "LowPriority": false,
@@ -30836,72 +30362,6 @@
     "EncryptionAtHostSupported": true
   },
   {
-    "VmSize": "Standard_NC24r_Promo",
-    "VmFamily": "standardNCPromoFamily",
-    "LowPriority": false,
-    "PricePerHour": null,
-    "MemoryInGiB": 224,
-    "VCpusAvailable": 24,
-    "ResourceDiskSizeInGiB": 1440,
-    "MaxDataDiskCount": 64,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "eastus",
-      "northcentralus",
-      "northeurope",
-      "southcentralus",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_NC24rs_v2",
-    "VmFamily": "standardNCSv2Family",
-    "LowPriority": false,
-    "PricePerHour": 11.804,
-    "MemoryInGiB": 448,
-    "VCpusAvailable": 24,
-    "ResourceDiskSizeInGiB": 2948,
-    "MaxDataDiskCount": 32,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus",
-      "southeastasia",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
-    "VmSize": "Standard_NC24rs_v2",
-    "VmFamily": "standardNCSv2Family",
-    "LowPriority": true,
-    "PricePerHour": 2.3608,
-    "MemoryInGiB": 448,
-    "VCpusAvailable": 24,
-    "ResourceDiskSizeInGiB": 2948,
-    "MaxDataDiskCount": 32,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus",
-      "southeastasia",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
     "VmSize": "Standard_NC24rs_v3",
     "VmFamily": "standardNCSv3Family",
     "LowPriority": false,
@@ -30974,48 +30434,6 @@
       "westus",
       "westus2",
       "westus3"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
-    "VmSize": "Standard_NC24s_v2",
-    "VmFamily": "standardNCSv2Family",
-    "LowPriority": false,
-    "PricePerHour": 10.728,
-    "MemoryInGiB": 448,
-    "VCpusAvailable": 24,
-    "ResourceDiskSizeInGiB": 2948,
-    "MaxDataDiskCount": 32,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus",
-      "southeastasia",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
-    "VmSize": "Standard_NC24s_v2",
-    "VmFamily": "standardNCSv2Family",
-    "LowPriority": true,
-    "PricePerHour": 2.1464,
-    "MemoryInGiB": 448,
-    "VCpusAvailable": 24,
-    "ResourceDiskSizeInGiB": 2948,
-    "MaxDataDiskCount": 32,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus",
-      "southeastasia",
-      "westeurope",
-      "westus2"
     ],
     "EncryptionAtHostSupported": true
   },
@@ -31256,78 +30674,6 @@
     "EncryptionAtHostSupported": true
   },
   {
-    "VmSize": "Standard_NC6",
-    "VmFamily": "standardNCFamily",
-    "LowPriority": false,
-    "PricePerHour": 1.166,
-    "MemoryInGiB": 56,
-    "VCpusAvailable": 6,
-    "ResourceDiskSizeInGiB": 340,
-    "MaxDataDiskCount": 24,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "eastus",
-      "northcentralus",
-      "northeurope",
-      "southcentralus",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_NC6",
-    "VmFamily": "standardNCFamily",
-    "LowPriority": true,
-    "PricePerHour": 0.233,
-    "MemoryInGiB": 56,
-    "VCpusAvailable": 6,
-    "ResourceDiskSizeInGiB": 340,
-    "MaxDataDiskCount": 24,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "eastus",
-      "northcentralus",
-      "northeurope",
-      "southcentralus",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_NC6_Promo",
-    "VmFamily": "standardNCPromoFamily",
-    "LowPriority": false,
-    "PricePerHour": null,
-    "MemoryInGiB": 56,
-    "VCpusAvailable": 6,
-    "ResourceDiskSizeInGiB": 340,
-    "MaxDataDiskCount": 24,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "eastus",
-      "northcentralus",
-      "northeurope",
-      "southcentralus",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
     "VmSize": "Standard_NC64as_T4_v3",
     "VmFamily": "Standard NCASv3_T4 Family",
     "LowPriority": false,
@@ -31408,48 +30754,6 @@
       "westus",
       "westus2",
       "westus3"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
-    "VmSize": "Standard_NC6s_v2",
-    "VmFamily": "standardNCSv2Family",
-    "LowPriority": false,
-    "PricePerHour": 2.682,
-    "MemoryInGiB": 112,
-    "VCpusAvailable": 6,
-    "ResourceDiskSizeInGiB": 736,
-    "MaxDataDiskCount": 12,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus",
-      "southeastasia",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
-    "VmSize": "Standard_NC6s_v2",
-    "VmFamily": "standardNCSv2Family",
-    "LowPriority": true,
-    "PricePerHour": 0.5364,
-    "MemoryInGiB": 112,
-    "VCpusAvailable": 6,
-    "ResourceDiskSizeInGiB": 736,
-    "MaxDataDiskCount": 12,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus",
-      "southeastasia",
-      "westeurope",
-      "westus2"
     ],
     "EncryptionAtHostSupported": true
   },
@@ -31690,114 +30994,6 @@
     "EncryptionAtHostSupported": true
   },
   {
-    "VmSize": "Standard_ND12s",
-    "VmFamily": "standardNDSFamily",
-    "LowPriority": false,
-    "PricePerHour": 5.363,
-    "MemoryInGiB": 224,
-    "VCpusAvailable": 12,
-    "ResourceDiskSizeInGiB": 672,
-    "MaxDataDiskCount": 24,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
-    "VmSize": "Standard_ND12s",
-    "VmFamily": "standardNDSFamily",
-    "LowPriority": true,
-    "PricePerHour": 1.0732,
-    "MemoryInGiB": 224,
-    "VCpusAvailable": 12,
-    "ResourceDiskSizeInGiB": 672,
-    "MaxDataDiskCount": 24,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
-    "VmSize": "Standard_ND24rs",
-    "VmFamily": "standardNDSFamily",
-    "LowPriority": false,
-    "PricePerHour": 11.804,
-    "MemoryInGiB": 448,
-    "VCpusAvailable": 24,
-    "ResourceDiskSizeInGiB": 2948,
-    "MaxDataDiskCount": 32,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
-    "VmSize": "Standard_ND24rs",
-    "VmFamily": "standardNDSFamily",
-    "LowPriority": true,
-    "PricePerHour": 2.3608,
-    "MemoryInGiB": 448,
-    "VCpusAvailable": 24,
-    "ResourceDiskSizeInGiB": 2948,
-    "MaxDataDiskCount": 32,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
-    "VmSize": "Standard_ND24s",
-    "VmFamily": "standardNDSFamily",
-    "LowPriority": false,
-    "PricePerHour": 10.727,
-    "MemoryInGiB": 448,
-    "VCpusAvailable": 24,
-    "ResourceDiskSizeInGiB": 1344,
-    "MaxDataDiskCount": 32,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
-    "VmSize": "Standard_ND24s",
-    "VmFamily": "standardNDSFamily",
-    "LowPriority": true,
-    "PricePerHour": 2.145,
-    "MemoryInGiB": 448,
-    "VCpusAvailable": 24,
-    "ResourceDiskSizeInGiB": 1344,
-    "MaxDataDiskCount": 32,
-    "HyperVGenerations": [
-      "V1",
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "eastus"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
     "VmSize": "Standard_ND96amsr_A100_v4",
     "VmFamily": "standard NDAMSv4_A100Family",
     "LowPriority": false,
@@ -31810,6 +31006,7 @@
       "V2"
     ],
     "RegionsAvailable": [
+      "francecentral",
       "italynorth",
       "uksouth",
       "westus2"
@@ -31829,29 +31026,9 @@
       "V2"
     ],
     "RegionsAvailable": [
+      "francecentral",
       "italynorth",
       "uksouth",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": true
-  },
-  {
-    "VmSize": "Standard_ND96asr_v4",
-    "VmFamily": "Standard NDASv4_A100 Family",
-    "LowPriority": false,
-    "PricePerHour": 35.357,
-    "MemoryInGiB": 900,
-    "VCpusAvailable": 96,
-    "ResourceDiskSizeInGiB": 2900,
-    "MaxDataDiskCount": 16,
-    "HyperVGenerations": [
-      "V2"
-    ],
-    "RegionsAvailable": [
-      "centraluseuap",
-      "eastus",
-      "southcentralus",
-      "westeurope",
       "westus2"
     ],
     "EncryptionAtHostSupported": true
@@ -31872,7 +31049,7 @@
     "RegionsAvailable": [
       "eastus2",
       "swedencentral",
-      "westus3"
+      "westeurope"
     ],
     "EncryptionAtHostSupported": true
   },
@@ -31892,7 +31069,7 @@
     "RegionsAvailable": [
       "eastus2",
       "swedencentral",
-      "westus3"
+      "westeurope"
     ],
     "EncryptionAtHostSupported": true
   },
@@ -31912,7 +31089,7 @@
     "RegionsAvailable": [
       "eastus2",
       "swedencentral",
-      "westus3"
+      "westeurope"
     ],
     "EncryptionAtHostSupported": true
   },
@@ -31932,7 +31109,7 @@
     "RegionsAvailable": [
       "eastus2",
       "swedencentral",
-      "westus3"
+      "westeurope"
     ],
     "EncryptionAtHostSupported": true
   },
@@ -31952,7 +31129,7 @@
     "RegionsAvailable": [
       "eastus2",
       "swedencentral",
-      "westus3"
+      "westeurope"
     ],
     "EncryptionAtHostSupported": true
   },
@@ -31972,7 +31149,7 @@
     "RegionsAvailable": [
       "eastus2",
       "swedencentral",
-      "westus3"
+      "westeurope"
     ],
     "EncryptionAtHostSupported": true
   },
@@ -31992,7 +31169,7 @@
     "RegionsAvailable": [
       "eastus2",
       "swedencentral",
-      "westus3"
+      "westeurope"
     ],
     "EncryptionAtHostSupported": true
   },
@@ -32012,7 +31189,7 @@
     "RegionsAvailable": [
       "eastus2",
       "swedencentral",
-      "westus3"
+      "westeurope"
     ],
     "EncryptionAtHostSupported": true
   },
@@ -32159,84 +31336,6 @@
     "EncryptionAtHostSupported": true
   },
   {
-    "VmSize": "Standard_NV12",
-    "VmFamily": "standardNVFamily",
-    "LowPriority": false,
-    "PricePerHour": 2.73,
-    "MemoryInGiB": 112,
-    "VCpusAvailable": 12,
-    "ResourceDiskSizeInGiB": 680,
-    "MaxDataDiskCount": 48,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "centralindia",
-      "eastus",
-      "japaneast",
-      "northcentralus",
-      "northeurope",
-      "southeastasia",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_NV12",
-    "VmFamily": "standardNVFamily",
-    "LowPriority": true,
-    "PricePerHour": 0.546,
-    "MemoryInGiB": 112,
-    "VCpusAvailable": 12,
-    "ResourceDiskSizeInGiB": 680,
-    "MaxDataDiskCount": 48,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "centralindia",
-      "eastus",
-      "japaneast",
-      "northcentralus",
-      "northeurope",
-      "southeastasia",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_NV12_Promo",
-    "VmFamily": "standardNVPromoFamily",
-    "LowPriority": false,
-    "PricePerHour": null,
-    "MemoryInGiB": 112,
-    "VCpusAvailable": 12,
-    "ResourceDiskSizeInGiB": 680,
-    "MaxDataDiskCount": 48,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "centralindia",
-      "eastus",
-      "japaneast",
-      "northcentralus",
-      "northeurope",
-      "southeastasia",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
     "VmSize": "Standard_NV12ads_A10_v5",
     "VmFamily": "StandardNVADSA10v5Family",
     "LowPriority": false,
@@ -32254,7 +31353,47 @@
       "brazilsouth",
       "canadacentral",
       "centralindia",
-      "centraluseuap",
+      "eastasia",
+      "eastus",
+      "eastus2",
+      "francecentral",
+      "germanywestcentral",
+      "japaneast",
+      "koreacentral",
+      "northcentralus",
+      "northeurope",
+      "qatarcentral",
+      "southafricanorth",
+      "southcentralus",
+      "southeastasia",
+      "swedencentral",
+      "uaenorth",
+      "uksouth",
+      "westeurope",
+      "westus",
+      "westus2",
+      "westus3"
+    ],
+    "EncryptionAtHostSupported": true
+  },
+  {
+    "VmSize": "Standard_NV12ads_A10_v5",
+    "VmFamily": "StandardNVADSA10v5Family",
+    "LowPriority": true,
+    "PricePerHour": 0.236,
+    "MemoryInGiB": 110,
+    "VCpusAvailable": 12,
+    "ResourceDiskSizeInGiB": 360,
+    "MaxDataDiskCount": 8,
+    "HyperVGenerations": [
+      "V1",
+      "V2"
+    ],
+    "RegionsAvailable": [
+      "australiaeast",
+      "brazilsouth",
+      "canadacentral",
+      "centralindia",
       "eastasia",
       "eastus",
       "eastus2",
@@ -32438,7 +31577,6 @@
       "brazilsouth",
       "canadacentral",
       "centralindia",
-      "centraluseuap",
       "eastasia",
       "eastus",
       "eastus2",
@@ -32463,56 +31601,45 @@
     "EncryptionAtHostSupported": true
   },
   {
-    "VmSize": "Standard_NV24",
-    "VmFamily": "standardNVFamily",
-    "LowPriority": false,
-    "PricePerHour": 5.46,
-    "MemoryInGiB": 224,
-    "VCpusAvailable": 24,
-    "ResourceDiskSizeInGiB": 1440,
-    "MaxDataDiskCount": 64,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "centralindia",
-      "eastus",
-      "japaneast",
-      "northcentralus",
-      "northeurope",
-      "southeastasia",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_NV24",
-    "VmFamily": "standardNVFamily",
+    "VmSize": "Standard_NV18ads_A10_v5",
+    "VmFamily": "StandardNVADSA10v5Family",
     "LowPriority": true,
-    "PricePerHour": 1.092,
-    "MemoryInGiB": 224,
-    "VCpusAvailable": 24,
-    "ResourceDiskSizeInGiB": 1440,
-    "MaxDataDiskCount": 64,
+    "PricePerHour": 0.416,
+    "MemoryInGiB": 220,
+    "VCpusAvailable": 18,
+    "ResourceDiskSizeInGiB": 720,
+    "MaxDataDiskCount": 16,
     "HyperVGenerations": [
-      "V1"
+      "V1",
+      "V2"
     ],
     "RegionsAvailable": [
       "australiaeast",
+      "brazilsouth",
+      "canadacentral",
       "centralindia",
+      "eastasia",
       "eastus",
+      "eastus2",
+      "francecentral",
+      "germanywestcentral",
       "japaneast",
+      "koreacentral",
       "northcentralus",
       "northeurope",
+      "qatarcentral",
+      "southafricanorth",
+      "southcentralus",
       "southeastasia",
+      "swedencentral",
+      "uaenorth",
       "uksouth",
       "westeurope",
-      "westus2"
+      "westus",
+      "westus2",
+      "westus3"
     ],
-    "EncryptionAtHostSupported": false
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NV24s_v3",
@@ -32674,7 +31801,47 @@
       "brazilsouth",
       "canadacentral",
       "centralindia",
-      "centraluseuap",
+      "eastasia",
+      "eastus",
+      "eastus2",
+      "francecentral",
+      "germanywestcentral",
+      "japaneast",
+      "koreacentral",
+      "northcentralus",
+      "northeurope",
+      "qatarcentral",
+      "southafricanorth",
+      "southcentralus",
+      "southeastasia",
+      "swedencentral",
+      "uaenorth",
+      "uksouth",
+      "westeurope",
+      "westus",
+      "westus2",
+      "westus3"
+    ],
+    "EncryptionAtHostSupported": true
+  },
+  {
+    "VmSize": "Standard_NV36adms_A10_v5",
+    "VmFamily": "StandardNVADSA10v5Family",
+    "LowPriority": true,
+    "PricePerHour": 1.175,
+    "MemoryInGiB": 880,
+    "VCpusAvailable": 36,
+    "ResourceDiskSizeInGiB": 2880,
+    "MaxDataDiskCount": 32,
+    "HyperVGenerations": [
+      "V1",
+      "V2"
+    ],
+    "RegionsAvailable": [
+      "australiaeast",
+      "brazilsouth",
+      "canadacentral",
+      "centralindia",
       "eastasia",
       "eastus",
       "eastus2",
@@ -32716,7 +31883,47 @@
       "brazilsouth",
       "canadacentral",
       "centralindia",
-      "centraluseuap",
+      "eastasia",
+      "eastus",
+      "eastus2",
+      "francecentral",
+      "germanywestcentral",
+      "japaneast",
+      "koreacentral",
+      "northcentralus",
+      "northeurope",
+      "qatarcentral",
+      "southafricanorth",
+      "southcentralus",
+      "southeastasia",
+      "swedencentral",
+      "uaenorth",
+      "uksouth",
+      "westeurope",
+      "westus",
+      "westus2",
+      "westus3"
+    ],
+    "EncryptionAtHostSupported": true
+  },
+  {
+    "VmSize": "Standard_NV36ads_A10_v5",
+    "VmFamily": "StandardNVADSA10v5Family",
+    "LowPriority": true,
+    "PricePerHour": 0.832,
+    "MemoryInGiB": 440,
+    "VCpusAvailable": 36,
+    "ResourceDiskSizeInGiB": 1440,
+    "MaxDataDiskCount": 32,
+    "HyperVGenerations": [
+      "V1",
+      "V2"
+    ],
+    "RegionsAvailable": [
+      "australiaeast",
+      "brazilsouth",
+      "canadacentral",
+      "centralindia",
       "eastasia",
       "eastus",
       "eastus2",
@@ -32883,82 +32090,86 @@
     "EncryptionAtHostSupported": true
   },
   {
-    "VmSize": "Standard_NV6",
-    "VmFamily": "standardNVFamily",
+    "VmSize": "Standard_NV6ads_A10_v5",
+    "VmFamily": "StandardNVADSA10v5Family",
     "LowPriority": false,
-    "PricePerHour": 1.365,
-    "MemoryInGiB": 56,
+    "PricePerHour": 0.59,
+    "MemoryInGiB": 55,
     "VCpusAvailable": 6,
-    "ResourceDiskSizeInGiB": 380,
-    "MaxDataDiskCount": 24,
+    "ResourceDiskSizeInGiB": 180,
+    "MaxDataDiskCount": 4,
     "HyperVGenerations": [
-      "V1"
+      "V1",
+      "V2"
     ],
     "RegionsAvailable": [
       "australiaeast",
+      "brazilsouth",
+      "canadacentral",
       "centralindia",
+      "eastasia",
       "eastus",
+      "eastus2",
+      "francecentral",
+      "germanywestcentral",
       "japaneast",
+      "koreacentral",
       "northcentralus",
       "northeurope",
+      "qatarcentral",
+      "southafricanorth",
+      "southcentralus",
       "southeastasia",
+      "swedencentral",
+      "uaenorth",
       "uksouth",
       "westeurope",
-      "westus2"
+      "westus",
+      "westus2",
+      "westus3"
     ],
-    "EncryptionAtHostSupported": false
+    "EncryptionAtHostSupported": true
   },
   {
-    "VmSize": "Standard_NV6",
-    "VmFamily": "standardNVFamily",
+    "VmSize": "Standard_NV6ads_A10_v5",
+    "VmFamily": "StandardNVADSA10v5Family",
     "LowPriority": true,
-    "PricePerHour": 0.273,
-    "MemoryInGiB": 56,
+    "PricePerHour": 0.118,
+    "MemoryInGiB": 55,
     "VCpusAvailable": 6,
-    "ResourceDiskSizeInGiB": 380,
-    "MaxDataDiskCount": 24,
+    "ResourceDiskSizeInGiB": 180,
+    "MaxDataDiskCount": 4,
     "HyperVGenerations": [
-      "V1"
+      "V1",
+      "V2"
     ],
     "RegionsAvailable": [
       "australiaeast",
+      "brazilsouth",
+      "canadacentral",
       "centralindia",
+      "eastasia",
       "eastus",
+      "eastus2",
+      "francecentral",
+      "germanywestcentral",
       "japaneast",
+      "koreacentral",
       "northcentralus",
       "northeurope",
+      "qatarcentral",
+      "southafricanorth",
+      "southcentralus",
       "southeastasia",
+      "swedencentral",
+      "uaenorth",
       "uksouth",
       "westeurope",
-      "westus2"
+      "westus",
+      "westus2",
+      "westus3"
     ],
-    "EncryptionAtHostSupported": false
-  },
-  {
-    "VmSize": "Standard_NV6_Promo",
-    "VmFamily": "standardNVPromoFamily",
-    "LowPriority": false,
-    "PricePerHour": null,
-    "MemoryInGiB": 56,
-    "VCpusAvailable": 6,
-    "ResourceDiskSizeInGiB": 380,
-    "MaxDataDiskCount": 24,
-    "HyperVGenerations": [
-      "V1"
-    ],
-    "RegionsAvailable": [
-      "australiaeast",
-      "centralindia",
-      "eastus",
-      "japaneast",
-      "northcentralus",
-      "northeurope",
-      "southeastasia",
-      "uksouth",
-      "westeurope",
-      "westus2"
-    ],
-    "EncryptionAtHostSupported": false
+    "EncryptionAtHostSupported": true
   },
   {
     "VmSize": "Standard_NV72ads_A10_v5",
@@ -32978,7 +32189,47 @@
       "brazilsouth",
       "canadacentral",
       "centralindia",
-      "centraluseuap",
+      "eastasia",
+      "eastus",
+      "eastus2",
+      "francecentral",
+      "germanywestcentral",
+      "japaneast",
+      "koreacentral",
+      "northcentralus",
+      "northeurope",
+      "qatarcentral",
+      "southafricanorth",
+      "southcentralus",
+      "southeastasia",
+      "swedencentral",
+      "uaenorth",
+      "uksouth",
+      "westeurope",
+      "westus",
+      "westus2",
+      "westus3"
+    ],
+    "EncryptionAtHostSupported": true
+  },
+  {
+    "VmSize": "Standard_NV72ads_A10_v5",
+    "VmFamily": "StandardNVADSA10v5Family",
+    "LowPriority": true,
+    "PricePerHour": 1.695,
+    "MemoryInGiB": 880,
+    "VCpusAvailable": 72,
+    "ResourceDiskSizeInGiB": 2880,
+    "MaxDataDiskCount": 32,
+    "HyperVGenerations": [
+      "V1",
+      "V2"
+    ],
+    "RegionsAvailable": [
+      "australiaeast",
+      "brazilsouth",
+      "canadacentral",
+      "centralindia",
       "eastasia",
       "eastus",
       "eastus2",
