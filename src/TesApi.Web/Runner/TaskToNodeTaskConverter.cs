@@ -123,7 +123,7 @@ namespace TesApi.Web.Runner
         {
             if (task.Outputs is not null)
             {
-                logger.LogInformation($"Mapping {task.Outputs.Count} outputs");
+                logger.LogInformation(@"Mapping {TaskOutputsCount} outputs", task.Outputs.Count);
 
                 var outputs = PrepareLocalOutputsForMapping(task, defaultStorageAccount);
 
@@ -131,7 +131,7 @@ namespace TesApi.Web.Runner
             }
         }
 
-        private List<TesOutput> PrepareLocalOutputsForMapping(TesTask task, string defaultStorageAccount)
+        private static List<TesOutput> PrepareLocalOutputsForMapping(TesTask task, string defaultStorageAccount)
         {
             var outputs = new List<TesOutput>();
             if (task.Outputs is null)
@@ -155,7 +155,7 @@ namespace TesApi.Web.Runner
             return outputs;
         }
 
-        private TesOutput PrepareLocalOrLocalCromwellFileOutput(TesOutput output, string defaultStorageAccount)
+        private static TesOutput PrepareLocalOrLocalCromwellFileOutput(TesOutput output, string defaultStorageAccount)
         {
             if (StorageUrlUtils.IsLocalAbsolutePath(output.Url))
             {
@@ -207,13 +207,18 @@ namespace TesApi.Web.Runner
 
             foreach (var input in tesTask.Inputs)
             {
-                logger.LogInformation($"Preparing input {input.Path}");
+                logger.LogInformation(@"Preparing input {InputPath}", input.Path);
+
+                if (input.Streamable == true) // Don't download files where localization_optional is set to true in WDL (corresponds to "Streamable" property being true on TesInput)
+                {
+                    continue;
+                }
 
                 var preparedInput = await PrepareContentInputAsync(tesTask, input, cancellationToken);
 
                 if (preparedInput != null)
                 {
-                    logger.LogInformation($"Input {input.Path} is a content input");
+                    logger.LogInformation(@"Input {InputPath} is a content input", input.Path);
 
                     inputs.Add(preparedInput);
                     continue;
@@ -223,7 +228,7 @@ namespace TesApi.Web.Runner
 
                 if (preparedInput != null)
                 {
-                    logger.LogInformation($"Input {input.Path} is a local input");
+                    logger.LogInformation(@"Input {InputPath} is a local input", input.Path);
 
                     inputs.Add(preparedInput);
                     continue;
@@ -233,13 +238,13 @@ namespace TesApi.Web.Runner
 
                 if (preparedInput != null)
                 {
-                    logger.LogInformation($"Input {input.Path} is an external storage account input");
+                    logger.LogInformation(@"Input {InputPath} is an external storage account input", input.Path);
 
                     inputs.Add(preparedInput);
                     continue;
                 }
 
-                logger.LogInformation($"Input {input.Path} is a regular input");
+                logger.LogInformation(@"Input {InputPath} is a regular input", input.Path);
 
                 inputs.Add(input);
             }
@@ -360,7 +365,7 @@ namespace TesApi.Web.Runner
 
             var inputUrl = StorageUrlUtils.RemoveQueryStringFromUrl(inputFileUrl);
 
-            logger.LogInformation($"Successfully uploaded content input as a new blob at: {inputUrl}");
+            logger.LogInformation(@"Successfully uploaded content input as a new blob at: {InputUrl}", inputUrl);
 
             return new TesInput
             {
@@ -379,7 +384,7 @@ namespace TesApi.Web.Runner
                 return default;
             }
 
-            logger.LogInformation($"The input is content. Uploading its content to the internal storage location. Input path:{input.Path}");
+            logger.LogInformation(@"The input is content. Uploading its content to the internal storage location. Input path:{InputPath}", input.Path);
 
             return await UploadContentAndCreateTesInputAsync(tesTask, input.Path, input.Content, cancellationToken);
         }
