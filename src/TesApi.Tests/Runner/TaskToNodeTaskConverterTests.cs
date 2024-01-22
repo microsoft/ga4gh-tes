@@ -129,7 +129,7 @@ namespace TesApi.Tests.Runner
         }
 
         [TestMethod]
-        public async Task ToNodeTaskAsync_UniqueInputsFromTesTask_EquivalenceWithNodeTaskInputs()
+        public async Task ToNodeTaskAsync_DuplicateInputsAreRemoved()
         {
             var options = OptionsWithoutAdditionalInputs();
 
