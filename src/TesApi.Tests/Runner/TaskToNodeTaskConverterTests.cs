@@ -96,7 +96,6 @@ namespace TesApi.Tests.Runner
         [DataRow(null, GlobalManagedIdentity)]
         public void GetNodeManagedIdentityResourceId_ResourceIsProvided_ReturnsExpectedResult(string workflowIdentity, string expectedResourceId)
         {
-
             tesTask.Resources = new TesResources()
             {
                 BackendParameters = new Dictionary<string, string>()
@@ -132,10 +131,9 @@ namespace TesApi.Tests.Runner
         [TestMethod]
         public async Task ToNodeTaskAsync_ExternalStorageInputsProvided_NodeTesTaskContainsUrlsWithSasTokens()
         {
-
             tesTask.Inputs = new List<TesInput>
             {
-                new TesInput()
+                new()
                 {
                     Path = "/input/file1",
                     Url = $"{ExternalStorageContainer}/blob"
@@ -176,11 +174,10 @@ namespace TesApi.Tests.Runner
         [TestMethod]
         public async Task ToNodeTaskAsync_TesTaskWithNoInputsAndOutputs_NodeTaskContainsNoInputsAndOutputs()
         {
-            var task = GetTestTesTask();
-            task.Inputs = null;
-            task.Outputs = null;
+            tesTask.Inputs = null;
+            tesTask.Outputs = null;
             var options = OptionsWithoutAdditionalInputs();
-            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(task, options, CancellationToken.None);
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
             Assert.IsNull(nodeTask.Outputs);
@@ -190,11 +187,10 @@ namespace TesApi.Tests.Runner
         public async Task
             ToNodeTaskAsync_TesTaskWithNoInputsAndOutputsAndAdditionalInputs_NodeTaskContainsOnlyAdditionalInputs()
         {
-            var task = GetTestTesTask();
-            task.Inputs = null;
-            task.Outputs = null;
+            tesTask.Inputs = null;
+            tesTask.Outputs = null;
             var options = OptionsWithAdditionalInputs();
-            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(task, options, CancellationToken.None);
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
 
             Assert.IsNotNull(nodeTask);
             Assert.AreEqual(2, nodeTask.Inputs!.Count);
@@ -205,11 +201,34 @@ namespace TesApi.Tests.Runner
         public async Task
             ToNodeTaskAsync_TesTaskWithNoInputsAndOutputsAndNoAdditionalInputs_NodeTaskContainsNoInputsAndOutputs()
         {
-            var task = GetTestTesTask();
-            task.Inputs = null;
-            task.Outputs = null;
+            tesTask.Inputs = null;
+            tesTask.Outputs = null;
             var options = OptionsWithoutAdditionalInputs();
-            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(task, options, CancellationToken.None);
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
+            Assert.IsNotNull(nodeTask);
+            Assert.IsNull(nodeTask.Inputs);
+            Assert.IsNull(nodeTask.Outputs);
+        }
+
+        [TestMethod]
+        public async Task
+            ToNodeTaskAsync_TesTaskWithOnlyStreamableInputsAndOutputsAndNoAdditionalInputs_NodeTaskContainsNoInputsAndOutputs()
+        {
+            tesTask.Inputs = new List<TesInput>
+            {
+                new()
+                {
+                    Name = "local input",
+                    Streamable = true,
+                    Path = "/cromwell-executions/file",
+                    Url = "/cromwell-executions/file",
+                    Type = TesFileType.FILEEnum
+                }
+            };
+
+            tesTask.Outputs = null;
+            var options = OptionsWithoutAdditionalInputs();
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
             Assert.IsNotNull(nodeTask);
             Assert.IsNull(nodeTask.Inputs);
             Assert.IsNull(nodeTask.Outputs);
@@ -247,7 +266,7 @@ namespace TesApi.Tests.Runner
         {
             tesTask.Inputs = new List<TesInput>
             {
-                new TesInput()
+                new()
                 {
                     Name = "local input",
                     Path = "/cromwell-executions/file",
@@ -272,7 +291,7 @@ namespace TesApi.Tests.Runner
         {
             tesTask.Inputs = new List<TesInput>
             {
-                new TesInput()
+                new()
                 {
                     Name = "local input",
                     Path = $"/{ExternalStorageAccountName}/cont/file",

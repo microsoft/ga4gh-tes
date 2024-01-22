@@ -671,7 +671,7 @@ namespace TesApi.Web
 
                     try
                     {
-                        var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2") ?? false;
+                        var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2", StringComparer.OrdinalIgnoreCase) ?? false;
                         var poolId = (await GetOrAddPoolAsync(
                             key: pool.Key,
                             isPreemptable: virtualMachineInfo.LowPriority,
@@ -680,11 +680,10 @@ namespace TesApi.Web
                                 displayName: displayName,
                                 poolIdentity: GetBatchPoolIdentity(identities.ToArray()),
                                 vmSize: virtualMachineInfo.VmSize,
-                                autoscaled: true,
                                 preemptable: virtualMachineInfo.LowPriority,
                                 initialTarget: neededPoolNodesByPoolKey[pool.Key],
                                 nodeInfo: useGen2 ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                                encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
+                                encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported ?? false,
                                 cancellationToken: ct),
                             cancellationToken: token)).Id;
 
@@ -1156,17 +1155,17 @@ namespace TesApi.Web
         /// <param name="displayName"></param>
         /// <param name="poolIdentity"></param>
         /// <param name="vmSize"></param>
-        /// <param name="autoscaled"></param>
         /// <param name="preemptable"></param>
         /// <param name="initialTarget"></param>
         /// <param name="nodeInfo"></param>
         /// <param name="encryptionAtHostSupported">VM supports encryption at host.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// 
         /// <returns>The specification for the pool.</returns>
         /// <remarks>
         /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the likely exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
         /// </remarks>
-        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, bool autoscaled, bool preemptable, int initialTarget, BatchNodeInfo nodeInfo, bool encryptionAtHostSupported, CancellationToken cancellationToken)
+        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, bool preemptable, int initialTarget, BatchNodeInfo nodeInfo, bool encryptionAtHostSupported, CancellationToken cancellationToken)
         {
             ValidateString(name, 64);
             ValidateString(displayName, 1024);
@@ -1181,30 +1180,15 @@ namespace TesApi.Web
 
             if (encryptionAtHostSupported)
             {
-                vmConfig.DiskEncryptionConfiguration = new BatchModels.DiskEncryptionConfiguration(
+                vmConfig.DiskEncryptionConfiguration = new(
                     targets: new List<BatchModels.DiskEncryptionTarget> { BatchModels.DiskEncryptionTarget.OsDisk, BatchModels.DiskEncryptionTarget.TemporaryDisk }
                 );
-            }
-
-            BatchModels.ScaleSettings scaleSettings = new();
-
-            if (autoscaled)
-            {
-                scaleSettings.AutoScale = new(BatchPool.AutoPoolFormula(preemptable, initialTarget), BatchPool.AutoScaleEvaluationInterval);
-            }
-            else
-            {
-                scaleSettings.FixedScale = new(
-                    resizeTimeout: TimeSpan.FromMinutes(30),
-                    targetDedicatedNodes: preemptable == false ? initialTarget : 0,
-                    targetLowPriorityNodes: preemptable == true ? initialTarget : 0,
-                    nodeDeallocationOption: BatchModels.ComputeNodeDeallocationOption.TaskCompletion);
             }
 
             BatchModels.Pool poolSpec = new(name: name, displayName: displayName, identity: poolIdentity)
             {
                 VmSize = vmSize,
-                ScaleSettings = scaleSettings,
+                ScaleSettings = new(autoScale: new(BatchPool.AutoPoolFormula(preemptable, initialTarget), BatchPool.AutoScaleEvaluationInterval)),
                 DeploymentConfiguration = new(virtualMachineConfiguration: vmConfig),
                 //ApplicationPackages = ,
                 StartTask = await StartTaskIfNeeded(vmConfig, cancellationToken),
