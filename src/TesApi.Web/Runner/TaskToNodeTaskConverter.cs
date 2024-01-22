@@ -221,8 +221,8 @@ namespace TesApi.Web.Runner
                 {
                     logger.LogWarning(@"Input {InputPath} has the same path and URL as another input and will be ignored", input.Path);
                     continue;
-                } 
-
+                }
+                
                 var preparedInput = await PrepareContentInputAsync(tesTask, input, cancellationToken);
 
                 if (preparedInput != null)
