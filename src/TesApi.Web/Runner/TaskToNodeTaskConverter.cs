@@ -208,7 +208,7 @@ namespace TesApi.Web.Runner
 
             foreach (var input in tesTask.Inputs)
             {
-                var key = GetKey(input);
+                var key = $"{input.Path?.ToLowerInvariant()}{input.Url?.ToLowerInvariant()}";
 
                 logger.LogInformation(@"Preparing input {InputPath}", input.Path);
 
@@ -258,11 +258,6 @@ namespace TesApi.Web.Runner
             }
 
             return inputs.Values.ToList();
-
-            string GetKey(TesInput input)
-            {
-                return $"{input.Path?.ToLowerInvariant()}{input.Url?.ToLowerInvariant()}";
-            }
         }
 
         /// <summary>
