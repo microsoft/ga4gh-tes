@@ -208,7 +208,7 @@ namespace TesApi.Web.Runner
 
             foreach (var input in tesTask.Inputs)
             {
-                var key = $"{input.Path?.ToLowerInvariant()}{input.Url?.ToLowerInvariant()}";
+                var key = $"{input.Path}{input.Url}";
 
                 logger.LogInformation(@"Preparing input {InputPath}", input.Path);
 
