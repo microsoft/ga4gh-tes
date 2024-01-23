@@ -515,7 +515,7 @@ namespace TesApi.Web
                 tesTaskLog.VirtualMachineInfo = virtualMachineInfo;
 
 
-                var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2");
+                var useGen2 = virtualMachineInfo.HyperVGenerations?.Contains("V2", StringComparer.OrdinalIgnoreCase);
                 string jobOrTaskId = default;
                 if (enableBatchAutopool)
                 {
@@ -1225,7 +1225,7 @@ namespace TesApi.Web
         /// 
         /// <returns><see cref="PoolSpecification"/></returns>
         /// <remarks>We use the PoolSpecification for both the namespace of all the constituent parts and for the fact that it allows us to configure shared and autopools using the same code.</remarks>
-        private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, bool encryptionAtHostSupported, CancellationToken cancellationToken)
+        private async ValueTask<PoolSpecification> GetPoolSpecification(string vmSize, bool autoscaled, bool preemptable, BatchNodeInfo nodeInfo, bool? encryptionAtHostSupported, CancellationToken cancellationToken)
         {
             // Any changes to any properties set in this method will require corresponding changes to ConvertPoolSpecificationToModelsPool()
 
@@ -1237,9 +1237,9 @@ namespace TesApi.Web
                     nodeInfo.BatchImageVersion),
                 nodeAgentSkuId: nodeInfo.BatchNodeAgentSkuId);
 
-            if (encryptionAtHostSupported)
+            if (encryptionAtHostSupported ?? false)
             {
-                vmConfig.DiskEncryptionConfiguration = new DiskEncryptionConfiguration(
+                vmConfig.DiskEncryptionConfiguration = new(
                     targets: new List<DiskEncryptionTarget> { DiskEncryptionTarget.OsDisk, DiskEncryptionTarget.TemporaryDisk }
                 );
             }

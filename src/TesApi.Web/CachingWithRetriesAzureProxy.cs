@@ -232,9 +232,6 @@ namespace TesApi.Web
         public Task<Microsoft.WindowsAzure.Storage.Blob.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken) => cachingAsyncRetry.ExecuteWithRetryAsync(ct => azureProxy.GetBlobPropertiesAsync(blobAbsoluteUri, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public bool TryReadCwlFile(string workflowId, out string content) => azureProxy.TryReadCwlFile(workflowId, out content);
-
-        /// <inheritdoc/>
         public string GetArmRegion() => azureProxy.GetArmRegion();
 
         /// <inheritdoc/>
