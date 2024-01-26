@@ -52,7 +52,7 @@ public class BatchQuotaVerifierTests
     {
         var vmInfo = new VirtualMachineInformation();
 
-        await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo, true, true, System.Threading.CancellationToken.None);
+        await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo, true, System.Threading.CancellationToken.None);
 
 #pragma warning disable CA2254 // Template should be a static expression
         logger.Verify(l => l.LogError(It.IsAny<string>(), It.IsAny<Exception>()), Times.Once);
@@ -89,7 +89,7 @@ public class BatchQuotaVerifierTests
         serviceProvider.AzureProxy.Setup(p => p.GetBatchActivePoolCount()).Returns(activePoolCount);
         serviceProvider.BatchSkuInformationProvider.Setup(p => p.GetVmSizesAndPricesAsync(Region, It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync(CreateBatchSupportedVmSkuList(10));
 
-        await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo, true, true, System.Threading.CancellationToken.None);
+        await batchQuotaVerifier.CheckBatchAccountQuotasAsync(vmInfo, true, System.Threading.CancellationToken.None);
     }
 
     private static List<VirtualMachineInformation> CreateBatchSupportedVmSkuList(int maxNumberOfCores)

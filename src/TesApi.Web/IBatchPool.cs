@@ -19,9 +19,9 @@ namespace TesApi.Web
         bool IsAvailable { get; }
 
         /// <summary>
-        /// Provides the <see cref="PoolInformation"/> for the pool.
+        /// Provides the <see cref="CloudPool.Id"/> for the pool.
         /// </summary>
-        PoolInformation Pool { get; }
+        string PoolId { get; }
 
         /// <summary>
         /// Creates an Azure Batch pool and associated job in the Batch Account.
