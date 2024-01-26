@@ -298,15 +298,18 @@ namespace TesApi.Web
 
                 if (logs.Any())
                 {
-                    var log = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
-
-                    foreach (var (type, action) in new (string, Action<string>)[] { ("stderr", list => log.Stderr = list), ("stdout", list => log.Stdout = list) })
+                    if (prefix.StartsWith("exec_"))
                     {
-                        var list = logs.Where(blob => type.Equals(blob.BlobNameParts[1], StringComparison.OrdinalIgnoreCase)).ToList();
+                        var log = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
 
-                        if (list.Any())
+                        foreach (var (type, action) in new (string, Action<string>)[] { ("stderr", list => log.Stderr = list), ("stdout", list => log.Stdout = list) })
                         {
-                            action(JsonArray(list.Select(blob => blob.BlobUri.AbsoluteUri)));
+                            var list = logs.Where(blob => type.Equals(blob.BlobNameParts[1], StringComparison.OrdinalIgnoreCase)).ToList();
+
+                            if (list.Any())
+                            {
+                                action(JsonArray(list.Select(blob => blob.BlobUri.AbsoluteUri)));
+                            }
                         }
                     }
 
