@@ -19,7 +19,7 @@ namespace TesApi.Web.Options
         public const double DefaultPoolRotationForcedDays = 30.0;
 
         /// <summary>
-        /// Pool Id prefix and metadata value used to associate batch account pools and jobs to this scheduler.
+        /// Pool Id prefix and metadata value used to associate batch account pools and jobs to this scheduler
         /// </summary>
         /// <remarks>
         /// This value must be provided.

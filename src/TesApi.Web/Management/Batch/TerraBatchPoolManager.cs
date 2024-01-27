@@ -66,11 +66,11 @@ namespace TesApi.Web.Management.Batch
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="poolInfo"></param>
+        /// <param name="poolSpec"></param>
         /// <param name="isPreemptable"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public async Task<string> CreateBatchPoolAsync(Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
+        public async Task<string> CreateBatchPoolAsync(Pool poolSpec, bool isPreemptable, CancellationToken cancellationToken)
         {
             var resourceId = Guid.NewGuid();
             var resourceName = $"TES-{resourceId}";
@@ -80,16 +80,16 @@ namespace TesApi.Web.Management.Batch
                 Common = new ApiCommon
                 {
                     Name = resourceName,
-                    Description = poolInfo.DisplayName,
+                    Description = poolSpec.DisplayName,
                     CloningInstructions = CloningInstructionsCloneNothing,
                     AccessScope = AccessScopeSharedAccess,
                     ManagedBy = UserManaged,
                     ResourceId = resourceId
                 },
-                AzureBatchPool = mapper.Map<ApiAzureBatchPool>(poolInfo),
+                AzureBatchPool = mapper.Map<ApiAzureBatchPool>(poolSpec),
             };
 
-            apiRequest.AzureBatchPool.Id = poolInfo.Name;
+            apiRequest.AzureBatchPool.Id = poolSpec.Name;
 
             AddResourceIdToPoolMetadata(apiRequest, resourceId);
 

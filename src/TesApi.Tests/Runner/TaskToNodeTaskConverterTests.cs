@@ -129,6 +129,23 @@ namespace TesApi.Tests.Runner
         }
 
         [TestMethod]
+        public async Task ToNodeTaskAsync_DuplicateInputsAreRemoved()
+        {
+            var options = OptionsWithoutAdditionalInputs();
+
+            // Add a duplicate to tesTask.Inputs
+            var duplicateInput = tesTask.Inputs.First();
+            tesTask.Inputs.Add(duplicateInput);
+
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
+
+            Assert.IsNotNull(nodeTask);
+
+            Assert.IsTrue(nodeTask.Inputs.Count == tesTask.Inputs.Count - 1);
+        }
+
+
+        [TestMethod]
         public async Task ToNodeTaskAsync_ExternalStorageInputsProvided_NodeTesTaskContainsUrlsWithSasTokens()
         {
             tesTask.Inputs = new List<TesInput>

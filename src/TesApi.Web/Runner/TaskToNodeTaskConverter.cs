@@ -199,18 +199,27 @@ namespace TesApi.Web.Runner
         private async Task<List<TesInput>> PrepareInputsForMappingAsync(TesTask tesTask, string defaultStorageAccountName,
             CancellationToken cancellationToken)
         {
-            var inputs = new List<TesInput>();
+            var inputs = new Dictionary<string, TesInput>();
+
             if (tesTask.Inputs is null)
             {
-                return inputs;
+                return new List<TesInput>();
             }
 
             foreach (var input in tesTask.Inputs)
             {
+                var key = $"{input.Path}{input.Url}";
+
                 logger.LogInformation(@"Preparing input {InputPath}", input.Path);
 
                 if (input.Streamable == true) // Don't download files where localization_optional is set to true in WDL (corresponds to "Streamable" property being true on TesInput)
                 {
+                    continue;
+                }
+
+                if (inputs.ContainsKey(key))
+                {
+                    logger.LogWarning(@"Input {InputPath} has the same path and URL as another input and will be ignored", input.Path);
                     continue;
                 }
 
@@ -219,8 +228,7 @@ namespace TesApi.Web.Runner
                 if (preparedInput != null)
                 {
                     logger.LogInformation(@"Input {InputPath} is a content input", input.Path);
-
-                    inputs.Add(preparedInput);
+                    inputs.Add(key, preparedInput);
                     continue;
                 }
 
@@ -230,7 +238,7 @@ namespace TesApi.Web.Runner
                 {
                     logger.LogInformation(@"Input {InputPath} is a local input", input.Path);
 
-                    inputs.Add(preparedInput);
+                    inputs.Add(key, preparedInput);
                     continue;
                 }
 
@@ -240,15 +248,16 @@ namespace TesApi.Web.Runner
                 {
                     logger.LogInformation(@"Input {InputPath} is an external storage account input", input.Path);
 
-                    inputs.Add(preparedInput);
+                    inputs.Add(key, preparedInput);
                     continue;
                 }
 
                 logger.LogInformation(@"Input {InputPath} is a regular input", input.Path);
 
-                inputs.Add(input);
+                inputs.Add(key, input);
             }
-            return inputs;
+
+            return inputs.Values.ToList();
         }
 
         /// <summary>

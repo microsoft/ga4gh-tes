@@ -74,11 +74,11 @@ namespace TesApi.Web
 
 
         /// <inheritdoc/>
-        public async Task CreateBatchJobAsync(string jobId, CancellationToken cancellationToken)
+        public async Task CreateBatchJobAsync(string jobId, string poolId, CancellationToken cancellationToken)
         {
             try
             {
-                await cachingAsyncRetryExceptWhenExists.ExecuteWithRetryAsync(ct => azureProxy.CreateBatchJobAsync(jobId, ct), cancellationToken);
+                await cachingAsyncRetryExceptWhenExists.ExecuteWithRetryAsync(ct => azureProxy.CreateBatchJobAsync(jobId, poolId, ct), cancellationToken);
             }
             catch (BatchException exc) when (BatchErrorCodeStrings.JobExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             { }
@@ -208,15 +208,15 @@ namespace TesApi.Web
         public string GetArmRegion() => azureProxy.GetArmRegion();
 
         /// <inheritdoc/>
-        public async Task<CloudPool> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
+        public async Task<string> CreateBatchPoolAsync(BatchModels.Pool poolSpec, bool isPreemptable, CancellationToken cancellationToken)
         {
             try
             {
-                return await cachingAsyncRetryExceptWhenExists.ExecuteWithRetryAsync(ct => azureProxy.CreateBatchPoolAsync(poolInfo, isPreemptable, ct), cancellationToken);
+                return await cachingAsyncRetryExceptWhenExists.ExecuteWithRetryAsync(ct => azureProxy.CreateBatchPoolAsync(poolSpec, isPreemptable, ct), cancellationToken);
             }
             catch (BatchException exc) when (BatchErrorCodeStrings.PoolExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             {
-                return await GetBatchPoolAsync(poolInfo.Name, cancellationToken, new ODATADetailLevel { SelectClause = BatchPool.CloudPoolSelectClause });
+                return poolSpec.Name;
             }
         }
 

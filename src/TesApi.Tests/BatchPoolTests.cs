@@ -92,7 +92,7 @@ namespace TesApi.Tests
 
             void DeletePool(string poolId, System.Threading.CancellationToken cancellationToken)
             {
-                Assert.AreEqual(poolId, pool.Id);
+                Assert.AreEqual(poolId, pool.PoolId);
                 isDeleted = true;
             }
         }
@@ -105,14 +105,14 @@ namespace TesApi.Tests
             var pool = await AddPool(services.GetT(), false);
 
             azureProxy.SetPoolState(
-                pool.Id,
+                pool.PoolId,
                 enableAutoScale: true,
                 autoScaleRun: new(DateTime.UtcNow, error: new("ErrorCode", "Message")));
 
             await pool.ServicePoolAsync(BatchPool.ServiceKind.GetResizeErrors);
             await pool.ServicePoolAsync(BatchPool.ServiceKind.ManagePoolScaling);
 
-            services.AzureProxy.Verify(a => a.DisableBatchPoolAutoScaleAsync(pool.Id, It.IsAny<System.Threading.CancellationToken>()));
+            services.AzureProxy.Verify(a => a.DisableBatchPoolAutoScaleAsync(pool.PoolId, It.IsAny<System.Threading.CancellationToken>()));
         }
 
         [TestMethod] // TODO: delete?
@@ -124,14 +124,14 @@ namespace TesApi.Tests
             pool.TimeShift(7 * BatchPool.AutoScaleEvaluationInterval);
 
             azureProxy.SetPoolState(
-                pool.Id,
+                pool.PoolId,
                 enableAutoScale: true,
                 autoScaleRun: new(DateTime.UtcNow - (6 * BatchPool.AutoScaleEvaluationInterval)));
 
             await pool.ServicePoolAsync(BatchPool.ServiceKind.GetResizeErrors);
             await pool.ServicePoolAsync(BatchPool.ServiceKind.ManagePoolScaling);
 
-            services.AzureProxy.Verify(a => a.DisableBatchPoolAutoScaleAsync(pool.Id, It.IsAny<System.Threading.CancellationToken>()));
+            services.AzureProxy.Verify(a => a.DisableBatchPoolAutoScaleAsync(pool.PoolId, It.IsAny<System.Threading.CancellationToken>()));
         }
 
         [TestMethod]
@@ -142,14 +142,14 @@ namespace TesApi.Tests
             var pool = await AddPool(services.GetT(), false);
 
             azureProxy.SetPoolState(
-                pool.Id,
+                pool.PoolId,
                 enableAutoScale: true,
                 autoScaleRun: new(DateTime.UtcNow, error: new(code: "InsufficientSampleData")));
 
             await pool.ServicePoolAsync(BatchPool.ServiceKind.GetResizeErrors);
             await pool.ServicePoolAsync(BatchPool.ServiceKind.ManagePoolScaling);
 
-            services.AzureProxy.Verify(a => a.DisableBatchPoolAutoScaleAsync(pool.Id, It.IsAny<System.Threading.CancellationToken>()));
+            services.AzureProxy.Verify(a => a.DisableBatchPoolAutoScaleAsync(pool.PoolId, It.IsAny<System.Threading.CancellationToken>()));
         }
 
 
@@ -272,7 +272,7 @@ namespace TesApi.Tests
                 state.TargetLowPriorityNodes = targetLowPriorityNodes ?? state.TargetLowPriorityNodes ?? 0;
             }
 
-            internal CloudPool CreateBatchPoolImpl(Pool pool)
+            internal string CreateBatchPoolImpl(Pool pool)
             {
                 PoolState state = new(
                     CurrentDedicatedNodes: 0,
@@ -291,7 +291,7 @@ namespace TesApi.Tests
 
                 poolState.Add(pool.Name, state);
 
-                return GetPoolFromState(pool.Name, state);
+                return pool.Name;
 
                 static Microsoft.Azure.Batch.MetadataItem ConvertMetadata(Microsoft.Azure.Management.Batch.Models.MetadataItem item)
                     => new(item.Name, item.Value);

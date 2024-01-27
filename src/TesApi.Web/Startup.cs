@@ -37,7 +37,7 @@ namespace TesApi.Web
     public class Startup
     {
         // TODO centralize in single location
-        private const string TesVersion = "5.1.0";
+        private const string TesVersion = "5.2.0";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -143,7 +143,6 @@ namespace TesApi.Web
                     .AddHostedService(sp => (AllowedVmSizesService)sp.GetRequiredService(typeof(IAllowedVmSizesService)))
                     .AddHostedService<PoolScheduler>()
                     .AddHostedService<TaskScheduler>();
-                //.AddHostedService<RefreshVMSizesAndPricesHostedService>()
             }
             catch (Exception exc)
             {

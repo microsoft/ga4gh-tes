@@ -74,7 +74,7 @@ namespace TesApi.Tests
 
             var poolId = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
-            Assert.IsNotNull(poolId);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(poolId));
             Assert.AreEqual(terraApiStubData.PoolId, poolId);
         }
 

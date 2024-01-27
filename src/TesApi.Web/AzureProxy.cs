@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -156,12 +155,12 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task CreateBatchJobAsync(string jobId, CancellationToken cancellationToken)
+        public async Task CreateBatchJobAsync(string jobId, string poolId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrEmpty(jobId);
 
             logger.LogInformation("TES: Creating Batch job {BatchJob}", jobId);
-            var job = batchClient.JobOperations.CreateJob(jobId, new() { PoolId = jobId });
+            var job = batchClient.JobOperations.CreateJob(jobId, new() { PoolId = poolId });
             job.OnAllTasksComplete = OnAllTasksComplete.NoAction;
             job.OnTaskFailure = OnTaskFailure.NoAction;
 
@@ -227,10 +226,10 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task DeleteBatchTaskAsync(string cloudTaskId, string jobId, CancellationToken cancellationToken)
+        public async Task DeleteBatchTaskAsync(string taskId, string jobId, CancellationToken cancellationToken)
         {
-            logger.LogInformation("Deleting task {BatchTask}", cloudTaskId);
-            await batchRetryPolicyWhenNodeNotReady.ExecuteWithRetryAsync(ct => batchClient.JobOperations.DeleteTaskAsync(jobId, cloudTaskId, cancellationToken: ct), cancellationToken);
+            logger.LogInformation("Deleting task {BatchTask}", taskId);
+            await batchRetryPolicyWhenNodeNotReady.ExecuteWithRetryAsync(ct => batchClient.JobOperations.DeleteTaskAsync(jobId, taskId, cancellationToken: ct), cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -248,7 +247,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task DeleteBatchComputeNodesAsync(string poolId, IEnumerable<ComputeNode> computeNodes, CancellationToken cancellationToken = default)
-            => batchClient.PoolOperations.RemoveFromPoolAsync(poolId, computeNodes, deallocationOption: ComputeNodeDeallocationOption.Requeue, cancellationToken: cancellationToken);
+            => batchClient.PoolOperations.RemoveFromPoolAsync(poolId, computeNodes, deallocationOption: ComputeNodeDeallocationOption.Requeue, resizeTimeout: TimeSpan.FromMinutes(30), cancellationToken: cancellationToken);
 
         /// <inheritdoc/>
         public Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken = default)
@@ -336,7 +335,7 @@ namespace TesApi.Web
             var directory = new BlobClient(directoryUri, new(BlobClientOptions.ServiceVersion.V2021_04_10));
             return directory.GetParentBlobContainerClient()
                 .GetBlobsAsync(prefix: directory.Name.TrimEnd('/') + "/", cancellationToken: cancellationToken)
-                .Select(blobItem => new BlobNameAndUri(blobItem.Name, new BlobUriBuilder(directory.Uri) { Sas = null, BlobName = blobItem.Name, Query = null }.ToUri()));
+                .Select(blobItem => new BlobNameAndUri(blobItem.Name, new BlobUriBuilder(directory.Uri) { Sas = null, BlobName = blobItem.Name }.ToUri()));
         }
 
         /// <inheritdoc/>
@@ -381,14 +380,8 @@ namespace TesApi.Web
         }
 
         /// <inheritdoc/>
-        public async Task<CloudPool> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
-        {
-            logger.LogInformation("Creating batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolInfo.Name, poolInfo.VmSize, isPreemptable);
-            var poolId = await batchPoolManager.CreateBatchPoolAsync(poolInfo, isPreemptable, cancellationToken);
-            logger.LogInformation("Successfully created batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolInfo.Name, poolInfo.VmSize, isPreemptable);
-
-            return await batchClient.PoolOperations.GetPoolAsync(poolId, detailLevel: new ODATADetailLevel { SelectClause = BatchPool.CloudPoolSelectClause }, cancellationToken: cancellationToken);
-        }
+        public async Task<string> CreateBatchPoolAsync(BatchModels.Pool poolSpec, bool isPreemptable, CancellationToken cancellationToken)
+            => await batchPoolManager.CreateBatchPoolAsync(poolSpec, isPreemptable, cancellationToken);
 
         /// <inheritdoc/>
         public async Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken)

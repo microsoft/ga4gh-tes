@@ -142,7 +142,6 @@ namespace TesApi.Web
             this.globalManagedIdentity = batchNodesOptions.Value.GlobalManagedIdentity;
             this.allowedVmSizesService = allowedVmSizesService;
             this.taskExecutionScriptingManager = taskExecutionScriptingManager;
-
             batchPoolFactory = poolFactory;
             batchPrefix = batchSchedulingOptions.Value.Prefix;
             logger.LogInformation("BatchPrefix: {BatchPrefix}", batchPrefix);
@@ -343,6 +342,7 @@ namespace TesApi.Web
                 new(condition: null, AzureBatchTaskState.TaskState.InfoUpdate, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLog(tesTask, tesTask.State, info, ct)),
             }.AsReadOnly();
         }
+
 
         private async Task<bool> DeleteCompletedTaskAsync(string taskId, string jobId, DateTime taskCreated, CancellationToken cancellationToken)
         {
@@ -574,7 +574,6 @@ namespace TesApi.Web
         {
             ConcurrentBag<RelatedTask<TesTask, bool>> results = new(); // Early item return facilitator
             ConcurrentDictionary<string, ImmutableArray<QueuedTaskPoolMetadata>> tasksPoolMetadataByPoolKey = new();
-
             {
                 logger.LogDebug(@"Checking quota for {QueuedTasks} tasks.", tesTasks.Length);
 
@@ -683,9 +682,9 @@ namespace TesApi.Web
                                 preemptable: virtualMachineInfo.LowPriority,
                                 initialTarget: neededPoolNodesByPoolKey[pool.Key],
                                 nodeInfo: useGen2 ? gen2BatchNodeInfo : gen1BatchNodeInfo,
-                                encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported ?? false,
+                                encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
                                 cancellationToken: ct),
-                            cancellationToken: token)).Id;
+                            cancellationToken: token)).PoolId;
 
                         tasksJobMetadata.Add(new(pool.Key, poolId, virtualMachineInfo, pool.Value.Select(tuple => tuple.TesTask)));
                     }
@@ -1069,7 +1068,7 @@ namespace TesApi.Web
         /// <summary>
         /// Constructs a universal Azure Start Task instance if needed
         /// </summary>
-        /// <param name="machineConfiguration">A <see cref="VirtualMachineConfiguration"/> describing the OS of the pool's nodes.</param>
+        /// <param name="machineConfiguration">A <see cref="BatchModels.VirtualMachineConfiguration"/> describing the OS of the pool's nodes.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         /// <remarks>This method also mitigates errors associated with docker daemons that are not configured to place their filesystem assets on the data drive.</remarks>
@@ -1120,7 +1119,7 @@ namespace TesApi.Web
 
             BatchModels.StartTask startTask = new()
             {
-                UserIdentity = new BatchModels.UserIdentity(autoUser: new BatchModels.AutoUserSpecification(elevationLevel: BatchModels.ElevationLevel.Admin, scope: BatchModels.AutoUserScope.Pool)),
+                UserIdentity = new(autoUser: new(elevationLevel: BatchModels.ElevationLevel.Admin, scope: BatchModels.AutoUserScope.Pool)),
                 CommandLine = (!dockerConfigured, globalStartTaskConfigured) switch
                 {
                     // Both start tasks are required. Note that dockerConfigCmdLine must be prefixed with an '(' which is closed inside of globalStartTaskCmdLine.
@@ -1160,13 +1159,14 @@ namespace TesApi.Web
         /// <param name="nodeInfo"></param>
         /// <param name="encryptionAtHostSupported">VM supports encryption at host.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// 
         /// <returns>The specification for the pool.</returns>
         /// <remarks>
-        /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the likely exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
+        /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the possible exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
         /// </remarks>
-        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, bool preemptable, int initialTarget, BatchNodeInfo nodeInfo, bool encryptionAtHostSupported, CancellationToken cancellationToken)
+        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, bool preemptable, int initialTarget, BatchNodeInfo nodeInfo, bool? encryptionAtHostSupported, CancellationToken cancellationToken)
         {
+            // TODO: (perpetually) add new properties we set in the future on <see cref="PoolSpecification"/> and/or its contained objects, if possible. When not, update CreateAutoPoolModePoolInformation().
+
             ValidateString(name, 64);
             ValidateString(displayName, 1024);
 
@@ -1178,16 +1178,15 @@ namespace TesApi.Web
                     version: nodeInfo.BatchImageVersion),
                 nodeAgentSkuId: nodeInfo.BatchNodeAgentSkuId);
 
-            if (encryptionAtHostSupported)
+            if (encryptionAtHostSupported ?? false)
             {
                 vmConfig.DiskEncryptionConfiguration = new(
                     targets: new List<BatchModels.DiskEncryptionTarget> { BatchModels.DiskEncryptionTarget.OsDisk, BatchModels.DiskEncryptionTarget.TemporaryDisk }
                 );
             }
 
-            BatchModels.Pool poolSpec = new(name: name, displayName: displayName, identity: poolIdentity)
+            BatchModels.Pool poolSpecification = new(name: name, displayName: displayName, identity: poolIdentity, vmSize: vmSize)
             {
-                VmSize = vmSize,
                 ScaleSettings = new(autoScale: new(BatchPool.AutoPoolFormula(preemptable, initialTarget), BatchPool.AutoScaleEvaluationInterval)),
                 DeploymentConfiguration = new(virtualMachineConfiguration: vmConfig),
                 //ApplicationPackages = ,
@@ -1197,18 +1196,19 @@ namespace TesApi.Web
 
             if (!string.IsNullOrEmpty(batchNodesSubnetId))
             {
-                poolSpec.NetworkConfiguration = new()
+                poolSpecification.NetworkConfiguration = new()
                 {
-                    PublicIPAddressConfiguration = new BatchModels.PublicIPAddressConfiguration(disableBatchNodesPublicIpAddress ? BatchModels.IPAddressProvisioningType.NoPublicIPAddresses : BatchModels.IPAddressProvisioningType.BatchManaged),
+                    PublicIPAddressConfiguration = new(provision: disableBatchNodesPublicIpAddress ? BatchModels.IPAddressProvisioningType.NoPublicIPAddresses : BatchModels.IPAddressProvisioningType.BatchManaged),
                     SubnetId = batchNodesSubnetId
                 };
             }
 
-            return poolSpec;
+            return poolSpecification;
 
             static void ValidateString(string value, int maxLength, [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(value))] string paramName = null)
             {
                 ArgumentNullException.ThrowIfNull(value, paramName);
+
                 if (value.Length > maxLength) throw new ArgumentException($"{paramName} exceeds maximum length {maxLength}", paramName);
             }
         }
@@ -1569,6 +1569,15 @@ namespace TesApi.Web
                 AlternateSystemLogItem = alternateSystemLogItem;
             }
 
+            //public BatchTaskState BatchTaskState { get; set; }
+            //public BatchNodeMetrics BatchNodeMetrics { get; set; }
+            //public string FailureReason { get; set; }
+            //public DateTimeOffset? BatchTaskStartTime { get; set; }
+            //public DateTimeOffset? BatchTaskEndTime { get; set; }
+            //public int? BatchTaskExitCode { get; set; }
+            //public int? CromwellRcCode { get; set; }
+            //public IEnumerable<string> SystemLogItems { get; set; }
+            //public string Pool { get; set; }
             public string AlternateSystemLogItem { get; set; }
         }
     }

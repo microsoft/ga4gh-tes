@@ -22,7 +22,7 @@ namespace TesApi.Web
         /// <summary>
         /// Provides the <see cref="CloudPool.Id"/> for the pool.
         /// </summary>
-        string Id { get; }
+        string PoolId { get; }
 
         /// <summary>
         /// Failures from nodes in <see cref="Microsoft.Azure.Batch.Common.ComputeNodeState.StartTaskFailed"/>.

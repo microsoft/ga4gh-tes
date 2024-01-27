@@ -105,7 +105,7 @@ namespace TesApi.Web
                 }
                 catch (Exception exc)
                 {
-                    logger.LogError(exc, @"Batch pool {PoolId} threw an exception when serviced.", pool.Id);
+                    logger.LogError(exc, @"Batch pool {PoolId} threw an exception when serviced.", pool.PoolId);
                 }
             });
 
@@ -139,11 +139,11 @@ namespace TesApi.Web
 
                 if (TaskState.Completed.Equals(task.State) && task.CreationTime < deletionCandidateCreationCutoff && task.StateTransitionTime < stateTransitionTimeCutoffForDeletions)
                 {
-                    deletionCandidateTasks = deletionCandidateTasks.Append(new IBatchScheduler.CloudTaskId(pool.Id, task.Id, task.CreationTime.Value));
+                    deletionCandidateTasks = deletionCandidateTasks.Append(new IBatchScheduler.CloudTaskId(pool.PoolId, task.Id, task.CreationTime.Value));
                 }
             }
 
-            await ProcessCloudTaskStatesAsync(pool.Id, GetCloudTaskStatesAsync(pool, now, batchStateCandidateTasks, cancellationToken), cancellationToken);
+            await ProcessCloudTaskStatesAsync(pool.PoolId, GetCloudTaskStatesAsync(pool, now, batchStateCandidateTasks, cancellationToken), cancellationToken);
 
             await ProcessTasksToDelete(deletionCandidateTasks, cancellationToken);
         }
@@ -243,7 +243,7 @@ namespace TesApi.Web
 
             if (taskListWithComputeNodeInfo.Count > 0)
             {
-                logger.LogDebug("{PoolId} reported nodes that will be removed. There are {tasksWithComputeNodeInfo} tasks that might be impacted.", pool.Id, taskListWithComputeNodeInfo.Count);
+                logger.LogDebug("{PoolId} reported nodes that will be removed. There are {tasksWithComputeNodeInfo} tasks that might be impacted.", pool.PoolId, taskListWithComputeNodeInfo.Count);
 
                 await foreach (var node in (await pool.ListEjectableComputeNodesAsync()).WithCancellation(cancellationToken))
                 {

@@ -6,7 +6,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Storage.Blobs;
+using Microsoft.Azure.Management.Storage.Fluent.PolicyRule.Update;
 using Microsoft.Extensions.Logging;
+using Tes.Extensions;
 
 namespace TesApi.Web.Events
 {
@@ -272,7 +275,7 @@ namespace TesApi.Web.Events
                         Enumerable.Empty<string>()
                             .Append("Download failed.")
                             .Append(nodeMessage.EventData["errorMessage"])
-                            .Concat(await AddProcessLogsIfAvailable(nodeMessage, tesTask, cancellationToken)))),
+                            .Concat(await AddProcessLogsIfAvailableAsync(nodeMessage, tesTask, cancellationToken)))),
 
                     _ => throw new System.Diagnostics.UnreachableException(),
                 },
@@ -282,17 +285,18 @@ namespace TesApi.Web.Events
 
                 Tes.Runner.Events.EventsPublisher.ExecutorEndEvent => nodeMessage.StatusMessage switch
                 {
-                    Tes.Runner.Events.EventsPublisher.SuccessStatus => new(
+                    Tes.Runner.Events.EventsPublisher.SuccessStatus => await new AzureBatchTaskState(
                         AzureBatchTaskState.TaskState.InfoUpdate,
                         ExecutorEndTime: nodeMessage.Created,
-                        ExecutorExitCode: int.Parse(nodeMessage.EventData["exitCode"])),
+                        ExecutorExitCode: int.Parse(nodeMessage.EventData["exitCode"]))
+                        .WithActionAsync(() => AddProcessLogsAsync(tesTask, cancellationToken)),
 
                     Tes.Runner.Events.EventsPublisher.FailedStatus => new(
                         AzureBatchTaskState.TaskState.InfoUpdate,
                         Failure: new(AzureBatchTaskState.ExecutorError,
                         Enumerable.Empty<string>()
                             .Append(nodeMessage.EventData["errorMessage"])
-                            .Concat(await AddProcessLogsIfAvailable(nodeMessage, tesTask, cancellationToken))),
+                            .Concat(await AddProcessLogsIfAvailableAsync(nodeMessage, tesTask, cancellationToken))),
                         ExecutorEndTime: nodeMessage.Created,
                         ExecutorExitCode: int.Parse(nodeMessage.EventData["exitCode"])),
 
@@ -313,7 +317,7 @@ namespace TesApi.Web.Events
                         Enumerable.Empty<string>()
                             .Append("Upload failed.")
                             .Append(nodeMessage.EventData["errorMessage"])
-                            .Concat(await AddProcessLogsIfAvailable(nodeMessage, tesTask, cancellationToken)))),
+                            .Concat(await AddProcessLogsIfAvailableAsync(nodeMessage, tesTask, cancellationToken)))),
 
                     _ => throw new System.Diagnostics.UnreachableException(),
                 },
@@ -361,9 +365,9 @@ namespace TesApi.Web.Events
                 }
             }
 
-            async ValueTask<IEnumerable<string>> AddProcessLogsIfAvailable(Tes.Runner.Events.EventMessage message, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
+            async ValueTask<IEnumerable<string>> AddProcessLogsIfAvailableAsync(Tes.Runner.Events.EventMessage message, Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
             {
-                var processLogs = await GetProcessLogs(message, tesTask, cancellationToken).ToListAsync(cancellationToken);
+                var processLogs = await GetProcessLogsAsync(message.Name, tesTask, cancellationToken).ToListAsync(cancellationToken);
 
                 if (processLogs.Any())
                 {
@@ -373,9 +377,13 @@ namespace TesApi.Web.Events
                 return processLogs;
             }
 
-            async IAsyncEnumerable<string> GetProcessLogs(Tes.Runner.Events.EventMessage message, Tes.Models.TesTask tesTask, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+            async IAsyncEnumerable<string> GetProcessLogsAsync(string messageName, Tes.Models.TesTask tesTask, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
             {
-                var blobNameStartsWith = message.Name switch
+                var alsoAddToExecutorLog = Tes.Runner.Events.EventsPublisher.ExecutorEndEvent.Equals(messageName, StringComparison.Ordinal);
+                var stderr = Enumerable.Empty<string>();
+                var stdout = Enumerable.Empty<string>();
+
+                var blobNameStartsWith = messageName switch
                 {
                     Tes.Runner.Events.EventsPublisher.DownloadEndEvent => "download_std",
                     Tes.Runner.Events.EventsPublisher.ExecutorEndEvent => "exec_std",
@@ -391,18 +399,63 @@ namespace TesApi.Web.Events
                 // See: Tes.Runner.Logs.AppendBlobLogPublisher constructor and GetBlobNameConsideringBlockCountCurrentState()
                 // There will be two or three underlines in the last path segment of each blob name, and the names will always have a ".txt" extension.
                 // If there are three underlines, between the last underline and the extension is an incrementing int. If not, the file is the first (and possibly only).
+                var directoryUri = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken);
+                var namePrefixLen = new BlobUriBuilder(directoryUri).BlobName.Length + 1;
 
-                await foreach (var uri in azureProxy.ListBlobsAsync(await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken), cancellationToken)
-                    .Select(blob => (blob.BlobUri, BlobName: blob.BlobName.Split('/').Last()))
-                    .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.StartsWith(blobNameStartsWith))
-                    .Select(blob => (blob.BlobUri, BlobNameParts: blob.BlobName.Split('_', 4)))
-                    .OrderBy(blob => string.Join('_', blob.BlobNameParts.Take(3)))
-                    .ThenBy(blob => blob.BlobNameParts.Length < 3 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture))
-                    .Select(blob => blob.BlobUri)
+                await foreach (var(uri, label) in azureProxy.ListBlobsAsync(directoryUri, cancellationToken)
+                    .Where(blob => !blob.BlobName[namePrefixLen..].Contains('/')) // no "subdirectories"
+                    .Select(blob => (blob.BlobUri, BlobName: blob.BlobName.Split('/').Last())) // just the name
+                    .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.StartsWith(blobNameStartsWith)) // name starts and ends with expected values
+                    .Select(blob => (blob.BlobUri, BlobNameParts: blob.BlobName.Split('_', 4))) // split name into sections
+                    .Where(blob => blob.BlobNameParts.Length > 2 && !blob.BlobNameParts.Any(string.IsNullOrWhiteSpace)) // 3 or 4 sections and no sections are empty
+                    .OrderBy(blob => string.Join('_', blob.BlobNameParts.Take(3))) // sort by "root" names
+                    .ThenBy(blob => blob.BlobNameParts.Length < 3 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture)) // then by extended numbers
+                    .Select(blob => (blob.BlobUri, blob.BlobNameParts[1])) // uri and which standard stream
                     .WithCancellation(cancellationToken))
                 {
                     yield return uri.AbsoluteUri;
+
+                    switch (label)
+                    {
+                        case "stderr":
+                            stderr = stderr.Append(uri.AbsoluteUri);
+                            break;
+
+                        case "stdout":
+                            stdout = stdout.Append(uri.AbsoluteUri);
+                            break;
+                    }
                 }
+
+                if (alsoAddToExecutorLog)
+                {
+                    stderr = stderr.ToList();
+                    stdout = stdout.ToList();
+
+                    if (stderr.Any() || stdout.Any())
+                    {
+                        var log = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
+
+                        if (stderr.Any())
+                        {
+                            log.Stderr = JsonArrayAsIndentedString(stderr);
+                        }
+
+                        if (stdout.Any())
+                        {
+                            log.Stdout = JsonArrayAsIndentedString(stdout);
+                        }
+                    }
+                }
+
+                static string JsonArrayAsIndentedString(IEnumerable<string> array)
+                    => System.Text.Json.JsonSerializer.Serialize(array, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerOptions.Default) { WriteIndented = true });
+            }
+
+            async ValueTask AddProcessLogsAsync(Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
+            {
+                await foreach (var _ in GetProcessLogsAsync(Tes.Runner.Events.EventsPublisher.ExecutorEndEvent, tesTask, cancellationToken).WithCancellation(cancellationToken))
+                { }
             }
         }
 
@@ -449,6 +502,15 @@ namespace TesApi.Web.Events
 
             /// <inheritdoc/>
             public DownloadOrParseException(string message, Exception exception) : base(message, exception) { }
+        }
+    }
+
+    internal static partial class Extensions
+    {
+        public static async ValueTask<AzureBatchTaskState> WithActionAsync(this AzureBatchTaskState state, Func<ValueTask> action)
+        {
+            await action();
+            return state;
         }
     }
 }

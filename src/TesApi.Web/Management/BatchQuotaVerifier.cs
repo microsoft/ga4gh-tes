@@ -114,11 +114,6 @@ public class BatchQuotaVerifier : IBatchQuotaVerifier
                 throw exception;
             }
         }
-
-        if ((batchUtilization.TotalCoresInUse + workflowCoresRequirement) > batchVmFamilyBatchQuotas.TotalCoreQuota)
-        {
-            throw new AzureBatchQuotaMaxedOutException($"Not enough core quota remaining to schedule task requiring {workflowCoresRequirement} {(isDedicated ? "dedicated" : "low priority")} cores. There are {batchUtilization.TotalCoresInUse} cores in use out of {batchVmFamilyBatchQuotas.TotalCoreQuota}.");
-        }
     }
 
     /// <inheritdoc cref="IBatchQuotaProvider"/>
