@@ -402,7 +402,7 @@ namespace TesApi.Web.Events
                 var directoryUri = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, Azure.Storage.Sas.BlobSasPermissions.List, cancellationToken);
                 var namePrefixLen = new BlobUriBuilder(directoryUri).BlobName.Length + 1;
 
-                await foreach (var(uri, label) in azureProxy.ListBlobsAsync(directoryUri, cancellationToken)
+                await foreach (var (uri, label) in azureProxy.ListBlobsAsync(directoryUri, cancellationToken)
                     .Where(blob => !blob.BlobName[namePrefixLen..].Contains('/')) // no "subdirectories"
                     .Select(blob => (blob.BlobUri, BlobName: blob.BlobName.Split('/').Last())) // just the name
                     .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.StartsWith(blobNameStartsWith)) // name starts and ends with expected values
