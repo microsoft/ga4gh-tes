@@ -50,7 +50,8 @@ namespace TesApi.Web.Management.Batch
                 .ForMember(dest => dest.ResourceGroupName, opt => opt.Ignore())
                 .ForMember(dest => dest.Name, opt => opt.Ignore());
             CreateMap<Pool, ApiAzureBatchPool>()
-               .ForMember(dest => dest.UserAssignedIdentities, opt => opt.MapFrom(src => src.Identity.UserAssignedIdentities.Select(kvp => new ApiUserAssignedIdentity() { Name = TryGetManagedIdentityNameFromResourceId(kvp.Key), ClientId = kvp.Value.ClientId })));
+                .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Name))
+                .ForMember(dest => dest.UserAssignedIdentities, opt => opt.MapFrom(src => src.Identity.UserAssignedIdentities.Select(kvp => new ApiUserAssignedIdentity() { Name = TryGetManagedIdentityNameFromResourceId(kvp.Key), ClientId = kvp.Value.ClientId })));
         }
 
         /// <summary>

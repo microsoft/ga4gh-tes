@@ -108,7 +108,7 @@ namespace TesApi.Web
         /// <summary>
         /// Gets the task's pool Id.
         /// </summary>
-        public PoolInformation Pool { get; set; }
+        public string PoolId { get; set; }
         /// <summary>
         /// The Azure Batch Node Id
         /// </summary>

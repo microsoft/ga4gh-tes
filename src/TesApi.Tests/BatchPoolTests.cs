@@ -92,7 +92,7 @@ namespace TesApi.Tests
 
             void DeletePool(string poolId, System.Threading.CancellationToken cancellationToken)
             {
-                Assert.AreEqual(poolId, pool.Pool.PoolId);
+                Assert.AreEqual(poolId, pool.PoolId);
                 isDeleted = true;
             }
         }
@@ -105,14 +105,14 @@ namespace TesApi.Tests
             var pool = await AddPool(services.GetT(), false);
 
             azureProxy.SetPoolState(
-                pool.Pool.PoolId,
+                pool.PoolId,
                 enableAutoScale: true,
                 autoScaleRun: new(DateTime.UtcNow - (6 * BatchPool.AutoScaleEvaluationInterval)));
 
             await pool.ServicePoolAsync(BatchPool.ServiceKind.GetResizeErrors);
             await pool.ServicePoolAsync(BatchPool.ServiceKind.ManagePoolScaling);
 
-            services.AzureProxy.Verify(a => a.DisableBatchPoolAutoScaleAsync(pool.Pool.PoolId, It.IsAny<System.Threading.CancellationToken>()));
+            services.AzureProxy.Verify(a => a.DisableBatchPoolAutoScaleAsync(pool.PoolId, It.IsAny<System.Threading.CancellationToken>()));
         }
 
         [TestMethod]
@@ -123,14 +123,14 @@ namespace TesApi.Tests
             var pool = await AddPool(services.GetT(), false);
 
             azureProxy.SetPoolState(
-                pool.Pool.PoolId,
+                pool.PoolId,
                 enableAutoScale: true,
                 autoScaleRun: new(DateTime.UtcNow, error: new(code: "InsufficientSampleData")));
 
             await pool.ServicePoolAsync(BatchPool.ServiceKind.GetResizeErrors);
             await pool.ServicePoolAsync(BatchPool.ServiceKind.ManagePoolScaling);
 
-            services.AzureProxy.Verify(a => a.DisableBatchPoolAutoScaleAsync(pool.Pool.PoolId, It.IsAny<System.Threading.CancellationToken>()));
+            services.AzureProxy.Verify(a => a.DisableBatchPoolAutoScaleAsync(pool.PoolId, It.IsAny<System.Threading.CancellationToken>()));
         }
 
 
@@ -229,12 +229,12 @@ namespace TesApi.Tests
                 _ = poolState.Remove(poolId);
             }
 
-            internal PoolInformation CreateBatchPoolImpl(Pool pool)
+            internal string CreateBatchPoolImpl(Pool pool)
             {
                 var poolId = pool.Name;
 
                 poolState.Add(poolId, (default, default, default, default, Microsoft.Azure.Batch.Common.AllocationState.Steady, default, default, true, default, pool.Metadata?.Select(ConvertMetadata).ToList()));
-                return new() { PoolId = poolId };
+                return poolId;
 
                 static Microsoft.Azure.Batch.MetadataItem ConvertMetadata(Microsoft.Azure.Management.Batch.Models.MetadataItem item)
                     => new(item.Name, item.Value);
