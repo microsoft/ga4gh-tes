@@ -37,7 +37,9 @@ jobs:
       run: dotnet build --no-restore
 
     - name: Retrieve configuration
-      run: echo "${{ secrets.AZURE_VM_TEST_CONFIG}}" > src/GenerateBatchVmSkus/bin/Debug/net7.0/appsettings.json
+      run: echo "$APPSETTINGS" > src/GenerateBatchVmSkus/bin/Debug/net7.0/appsettings.json
+      env:
+        APPSETTINGS: ${{ secrets.AZURE_VM_TEST_CONFIG }}
 
     - name: Run GenerateBatchVmSkus
       run: ./src/GenerateBatchVmSkus/bin/Debug/net7.0/GenerateBatchVmSkus --outputFilePath src/TesApi.Web/BatchSupportedVmSizeInformation.json
