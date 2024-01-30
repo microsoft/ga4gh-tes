@@ -10,6 +10,9 @@ jobs:
     name: Update Batch VMs db
     runs-on: ubuntu-latest
     environment: test
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
     - name: Azure login
