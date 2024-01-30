@@ -14,10 +14,12 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
@@ -127,6 +129,8 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(TesCreateTaskResponse), description: "")]
         public virtual async Task<IActionResult> CreateTaskAsync([FromBody] TesTask tesTask, CancellationToken cancellationToken)
         {
+            await WriteRawRequestBodyToLocalFileAsync(cancellationToken);
+
             if (!string.IsNullOrWhiteSpace(tesTask.Id))
             {
                 return BadRequest("Id should not be included by the client in the request; the server is responsible for generating a unique Id.");
@@ -231,6 +235,19 @@ namespace TesApi.Controllers
             logger.LogDebug($"Creating task with id {tesTask.Id} state {tesTask.State}");
             await repository.CreateItemAsync(tesTask, cancellationToken);
             return StatusCode(200, new TesCreateTaskResponse { Id = tesTask.Id });
+        }
+
+        private async Task WriteRawRequestBodyToLocalFileAsync(CancellationToken cancellationToken)
+        {
+            // Enable the request stream to be read multiple times
+            Request.EnableBuffering();
+            Request.Body.Position = 0; // Reset the position to the start of the stream
+            using var reader = new StreamReader(Request.Body);
+            var requestBody = await reader.ReadToEndAsync();
+            // Reset the stream position to read it again later if needed
+            Request.Body.Position = 0;
+            string filePath = Path.Combine(Path.GetTempPath(), $"{DateTime.UtcNow:yyyyMMdd_HHmmss}.json");
+            await System.IO.File.WriteAllTextAsync(filePath, requestBody, cancellationToken);
         }
 
         /// <summary>
