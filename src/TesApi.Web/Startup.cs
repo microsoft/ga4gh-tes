@@ -24,6 +24,7 @@ using TesApi.Filters;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Configuration;
+using TesApi.Web.Middleware;
 using TesApi.Web.Options;
 using TesApi.Web.Runner;
 using TesApi.Web.Storage;
@@ -307,6 +308,14 @@ namespace TesApi.Web
                             logger.LogInformation("Configuring for Production environment");
                             return s.UseHsts();
                         });
+
+                // TODO
+                bool enableRawRequestBodyLogging = true; // Configuration.GetValue<bool>("Logging:EnableRawRequestBodyLogging");
+
+                if (enableRawRequestBodyLogging)
+                {
+                    app.UseMiddleware<RawRequestBodyLoggingMiddleware>();
+                }
             }
             catch (Exception exc)
             {
