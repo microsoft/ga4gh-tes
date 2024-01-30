@@ -34,10 +34,13 @@ jobs:
       run: dotnet restore
 
     - name: Build
-      run: dotnet build
+      run: dotnet build --no-restore
+
+    - name: Retrieve configuration
+      run: wget -O src/GenerateBatchVmSkus/bin/Debug/net7.0/appsettings.json https://malibu00.visualstudio.com/ec30bfad-bed7-4707-a941-3879f856f4e8/_apis/git/repositories/4d16156a-b965-4834-ba22-fadefe1ddae3/Items?path=/.attachments/appsettings-3fa57ef5-65ca-45f2-a676-683d51b11b1f.json&download=false&resolveLfs=true&%24format=octetStream&api-version=5.0-preview.1&sanitize=true&versionDescriptor.version=wikiMaster
 
     - name: Run GenerateBatchVmSkus
-      run: ./src/GenerateBatchVmSkus/bin/Debug/net7.0/GenerateBatchVmSkus --subscriptionId ${{ secrets.AZURE_SUBSCRIPTION_ID }} --outputFilePath src/TesApi.Web/BatchSupportedVmSizeInformation.json --TestedVmSkus src/TesApi.Web/DefaultVmPrices.json
+      run: ./src/GenerateBatchVmSkus/bin/Debug/net7.0/GenerateBatchVmSkus --subscriptionId ${{ secrets.AZURE_SUBSCRIPTION_ID }} --outputFilePath src/TesApi.Web/BatchSupportedVmSizeInformation.json
 
     - name: Restore nuget.config
       run: git restore nuget.config
