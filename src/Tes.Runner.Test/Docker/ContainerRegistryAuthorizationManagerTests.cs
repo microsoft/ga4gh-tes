@@ -50,4 +50,13 @@ public class ContainerRegistryAuthorizationManagerTests
         Assert.AreEqual(expectedResult, result);
         CollectionAssert.AreEqual(expectedParts, imageParts);
     }
+
+    [DataTestMethod]
+    [DataRow("jsotoimputation.azurecr.io/broad-gotc-prod/imputation-bcf-vcf", "1.0.5-1.10.2-0.1.16-1649948623")]
+    public async Task TryGetAuthConfigForAzureContainerRegistryAsync_PublicImage(string imageName, string imageTag)
+    {
+        var authManager = new ContainerRegistryAuthorizationManager(new CredentialsManager());
+        var result = await authManager.TryGetAuthConfigForAzureContainerRegistryAsync(imageName, imageTag, new RuntimeOptions());
+        Assert.IsNull(result);
+    }
 }

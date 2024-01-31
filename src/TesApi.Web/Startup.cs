@@ -66,7 +66,7 @@ namespace TesApi.Web
                 services
                     .AddLogging()
                     .AddApplicationInsightsTelemetry(configuration)
-
+                    .Configure<TesOptions>(configuration.GetSection(TesOptions.SectionName))
                     .Configure<BatchAccountOptions>(configuration.GetSection(BatchAccountOptions.SectionName))
                     .Configure<PostgreSqlOptions>(configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
                     .Configure<RetryPolicyOptions>(configuration.GetSection(RetryPolicyOptions.SectionName))
@@ -111,7 +111,15 @@ namespace TesApi.Web
                     .AddSingleton<AzureManagementClientsFactory>()
                     .AddSingleton<ConfigurationUtils>()
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
-                    .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
+                    .AddSingleton<TokenCredential>(s =>
+                    {
+                        var configuration = s.GetRequiredService<IConfiguration>();
+                        var tesOptions = new TesOptions();
+                        configuration.Bind(TesOptions.SectionName, tesOptions);
+
+                        return new DefaultAzureCredential(
+                            new DefaultAzureCredentialOptions { AuthorityHost = tesOptions.AzureAuthorityHost });
+                    })
                     .AddSingleton<TaskToNodeTaskConverter>()
                     .AddSingleton<TaskExecutionScriptingManager>()
                     .AddTransient<BatchNodeScriptBuilder>()

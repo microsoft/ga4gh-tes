@@ -293,6 +293,23 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
+        /// (Optional) sets the azure authority host for the node task.  If not set, the default Azure Public cloud is used.
+        /// </summary>
+        /// <param name="azureAuthorityHost">The URI for the Azure Authority Host</param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithAzureAuthorityHost(Uri azureAuthorityHost)
+        {
+            if (azureAuthorityHost == null)
+            {
+                return this;
+            }
+
+            nodeTask.RuntimeOptions ??= new RuntimeOptions();
+            nodeTask.RuntimeOptions.AzureAuthorityHost = azureAuthorityHost;
+            return this;
+        }
+
+        /// <summary>
         /// Returns true of the value provided is a valid resource id for a managed identity. 
         /// </summary>
         /// <param name="resourceId"></param>
