@@ -33,7 +33,7 @@ namespace TesApi.Tests.Runner
         private TerraOptions terraOptions;
         private StorageOptions storageOptions;
         private BatchAccountOptions batchAccountOptions;
-        private TesOptions tesOptions;
+        private GeneralOptions tesOptions;
 
         private const string SasToken = "sv=2019-12-12&ss=bfqt&srt=sco&spr=https&st=2023-09-27T17%3A32%3A57Z&se=2023-09-28T17%3A32%3A57Z&sp=rwdlacupx&sig=SIGNATURE";
 
@@ -57,7 +57,7 @@ namespace TesApi.Tests.Runner
             terraOptions = new TerraOptions();
             storageOptions = new StorageOptions() { ExternalStorageContainers = ExternalStorageContainerWithSas };
             batchAccountOptions = new BatchAccountOptions() { SubscriptionId = SubscriptionId, ResourceGroup = ResourceGroup };
-            tesOptions = new TesOptions();
+            tesOptions = new GeneralOptions();
             storageAccessProviderMock = new Mock<IStorageAccessProvider>();
             storageAccessProviderMock.Setup(x =>
                     x.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))

@@ -66,7 +66,7 @@ namespace TesApi.Web
                 services
                     .AddLogging()
                     .AddApplicationInsightsTelemetry(configuration)
-                    .Configure<TesOptions>(configuration.GetSection(TesOptions.SectionName))
+                    .Configure<GeneralOptions>(configuration.GetSection(GeneralOptions.SectionName))
                     .Configure<BatchAccountOptions>(configuration.GetSection(BatchAccountOptions.SectionName))
                     .Configure<PostgreSqlOptions>(configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
                     .Configure<RetryPolicyOptions>(configuration.GetSection(RetryPolicyOptions.SectionName))
@@ -114,8 +114,8 @@ namespace TesApi.Web
                     .AddSingleton<TokenCredential>(s =>
                     {
                         var configuration = s.GetRequiredService<IConfiguration>();
-                        var tesOptions = new TesOptions();
-                        configuration.Bind(TesOptions.SectionName, tesOptions);
+                        var tesOptions = new GeneralOptions();
+                        configuration.Bind(GeneralOptions.SectionName, tesOptions);
 
                         return new DefaultAzureCredential(
                             new DefaultAzureCredentialOptions { AuthorityHost = tesOptions.AzureAuthorityHost });

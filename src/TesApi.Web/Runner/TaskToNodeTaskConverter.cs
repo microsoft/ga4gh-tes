@@ -43,7 +43,7 @@ namespace TesApi.Web.Runner
         private readonly ILogger<TaskToNodeTaskConverter> logger;
         private readonly IList<ExternalStorageContainerInfo> externalStorageContainers;
         private readonly BatchAccountOptions batchAccountOptions;
-        private readonly TesOptions tesOptions;
+        private readonly GeneralOptions tesOptions;
 
         /// <summary>
         /// Constructor of TaskToNodeTaskConverter
@@ -54,7 +54,7 @@ namespace TesApi.Web.Runner
         /// <param name="batchAccountOptions"></param>
         /// <param name="tesOptions"></param>
         /// <param name="logger"></param>
-        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, IOptions<StorageOptions> storageOptions, IOptions<BatchAccountOptions> batchAccountOptions, IOptions<TesOptions> tesOptions, ILogger<TaskToNodeTaskConverter> logger)
+        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, IOptions<StorageOptions> storageOptions, IOptions<BatchAccountOptions> batchAccountOptions, IOptions<GeneralOptions> tesOptions, ILogger<TaskToNodeTaskConverter> logger)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(storageOptions);
