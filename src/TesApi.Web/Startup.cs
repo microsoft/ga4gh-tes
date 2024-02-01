@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Threading;
 using Azure.Core;
 using Azure.Identity;
+using CommonUtilities.AzureCloud;
 using CommonUtilities;
 using CommonUtilities.Options;
 using Microsoft.AspNetCore.Builder;
@@ -63,7 +64,12 @@ namespace TesApi.Web
         {
             try
             {
+                var tesOptions = new GeneralOptions();
+                configuration.Bind(GeneralOptions.SectionName, tesOptions);
+                var azureCloudConfig = AzureCloudConfig.CreateAsync(tesOptions.AzureCloudManagementUrl).Result;
+
                 services
+                    .AddSingleton(azureCloudConfig)
                     .AddLogging()
                     .AddApplicationInsightsTelemetry(configuration)
                     .Configure<GeneralOptions>(configuration.GetSection(GeneralOptions.SectionName))
@@ -94,7 +100,6 @@ namespace TesApi.Web
                             opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
                         })
                     .Services
-
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
                     .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
                     .AddSingleton<IRepository<TesTask>>(sp => ActivatorUtilities.CreateInstance<RepositoryRetryHandler<TesTask>>(sp, (IRepository<TesTask>)sp.GetRequiredService(typeof(TesTaskPostgreSqlRepository))))
@@ -118,7 +123,7 @@ namespace TesApi.Web
                         configuration.Bind(GeneralOptions.SectionName, tesOptions);
 
                         return new DefaultAzureCredential(
-                            new DefaultAzureCredentialOptions { AuthorityHost = tesOptions.AzureAuthorityHost });
+                            new DefaultAzureCredentialOptions { AuthorityHost = new Uri(azureCloudConfig.Authentication.LoginEndpointUrl) });
                     })
                     .AddSingleton<TaskToNodeTaskConverter>()
                     .AddSingleton<TaskExecutionScriptingManager>()

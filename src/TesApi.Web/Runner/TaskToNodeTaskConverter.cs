@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Storage.Blobs;
+using CommonUtilities.AzureCloud;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.Extensions;
@@ -43,7 +44,7 @@ namespace TesApi.Web.Runner
         private readonly ILogger<TaskToNodeTaskConverter> logger;
         private readonly IList<ExternalStorageContainerInfo> externalStorageContainers;
         private readonly BatchAccountOptions batchAccountOptions;
-        private readonly GeneralOptions tesOptions;
+        private readonly AzureCloudConfig azureCloudConfig;
 
         /// <summary>
         /// Constructor of TaskToNodeTaskConverter
@@ -54,20 +55,20 @@ namespace TesApi.Web.Runner
         /// <param name="batchAccountOptions"></param>
         /// <param name="tesOptions"></param>
         /// <param name="logger"></param>
-        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, IOptions<StorageOptions> storageOptions, IOptions<BatchAccountOptions> batchAccountOptions, IOptions<GeneralOptions> tesOptions, ILogger<TaskToNodeTaskConverter> logger)
+        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, IOptions<StorageOptions> storageOptions, IOptions<BatchAccountOptions> batchAccountOptions, AzureCloudConfig azureCloudConfig, ILogger<TaskToNodeTaskConverter> logger)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(storageOptions);
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
-            ArgumentNullException.ThrowIfNull(tesOptions);
+            ArgumentNullException.ThrowIfNull(azureCloudConfig);
             ArgumentNullException.ThrowIfNull(logger);
 
             this.terraOptions = terraOptions.Value;
             this.logger = logger;
             this.storageAccessProvider = storageAccessProvider;
             this.batchAccountOptions = batchAccountOptions.Value;
-            this.tesOptions = tesOptions.Value;
+            this.azureCloudConfig = azureCloudConfig;
             externalStorageContainers = StorageUrlUtils.GetExternalStorageContainerInfos(storageOptions.Value);
         }
 
@@ -94,7 +95,7 @@ namespace TesApi.Web.Runner
                 var executor = task.Executors.First();
 
                 builder.WithId(task.Id)
-                    .WithAzureAuthorityHost(tesOptions.AzureAuthorityHost)
+                    .WithAzureAuthorityHost(new Uri(azureCloudConfig.Authentication.LoginEndpointUrl))
                     .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(task, nodeTaskConversionOptions.GlobalManagedIdentity))
                     .WithWorkflowId(task.WorkflowId)
                     .WithContainerCommands(executor.Command)
