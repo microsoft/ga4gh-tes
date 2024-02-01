@@ -8,6 +8,8 @@ namespace CommonUtilities.AzureCloud
 {
     public class AzureCloudConfig
     {
+        private const string defaultAzureCloudMetadataUrl = "https://management.azure.com/metadata/endpoints?api-version=2023-11-01";
+
         [JsonPropertyName("portal")]
         public string PortalUrl { get; set; }
 
@@ -59,7 +61,6 @@ namespace CommonUtilities.AzureCloud
         [JsonPropertyName("ossrDbmsResourceId")]
         public string OssrDbmsResourceUrl { get; set; }
 
-        private const string defaultAzureCloudMetadataUrl = "https://management.azure.com/metadata/endpoints?api-version=2023-11-01";
         public static async Task<AzureCloudConfig> CreateAsync(string azureCloudMetadataUrl = defaultAzureCloudMetadataUrl)
         {
             using var httpClient = new HttpClient();

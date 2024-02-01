@@ -64,9 +64,7 @@ namespace TesApi.Web
         {
             try
             {
-                var tesOptions = new GeneralOptions();
-                configuration.Bind(GeneralOptions.SectionName, tesOptions);
-                var azureCloudConfig = AzureCloudConfig.CreateAsync(tesOptions.AzureCloudManagementUrl).Result;
+                var azureCloudConfig = GetAzureCloudConfig();
 
                 services
                     .AddSingleton(azureCloudConfig)
@@ -118,10 +116,6 @@ namespace TesApi.Web
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
                     .AddSingleton<TokenCredential>(s =>
                     {
-                        var configuration = s.GetRequiredService<IConfiguration>();
-                        var tesOptions = new GeneralOptions();
-                        configuration.Bind(GeneralOptions.SectionName, tesOptions);
-
                         return new DefaultAzureCredential(
                             new DefaultAzureCredentialOptions { AuthorityHost = new Uri(azureCloudConfig.Authentication.LoginEndpointUrl) });
                     })
@@ -285,6 +279,14 @@ namespace TesApi.Web
 
                 //assume the information was provided via configuration
                 return new BatchAccountResourceInformation(options.Value.AccountName, options.Value.ResourceGroup, options.Value.SubscriptionId, options.Value.Region, options.Value.BaseUrl);
+            }
+
+            AzureCloudConfig GetAzureCloudConfig()
+            {
+                var tesOptions = new GeneralOptions();
+                configuration.Bind(GeneralOptions.SectionName, tesOptions);
+                var azureCloudConfig = AzureCloudConfig.CreateAsync(tesOptions.AzureCloudManagementUrl).Result;
+                return azureCloudConfig;
             }
         }
 
