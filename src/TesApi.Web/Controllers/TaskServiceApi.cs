@@ -222,10 +222,10 @@ namespace TesApi.Controllers
                 }
 
                 // Backends shall not store or return unsupported keys if included in a task.
-                foreach (var key in unsupportedKeys)
-                {
-                    tesTask.Resources.BackendParameters.Remove(key);
-                }
+                //foreach (var key in unsupportedKeys)
+                //{
+                //    tesTask.Resources.BackendParameters.Remove(key);
+                //}
             }
 
             logger.LogDebug($"Creating task with id {tesTask.Id} state {tesTask.State}");
