@@ -221,11 +221,12 @@ namespace TesApi.Controllers
                     return BadRequest($"backend_parameters_strict is set to true and unsupported backend_parameters were specified: {string.Join(",", unsupportedKeys)}");
                 }
 
+                // 2/1/2024 - this has been removed to ensure all keys from Cromwell are stored and returned to the client for better reporting and analysis
                 // Backends shall not store or return unsupported keys if included in a task.
-                //foreach (var key in unsupportedKeys)
-                //{
-                //    tesTask.Resources.BackendParameters.Remove(key);
-                //}
+                // foreach (var key in unsupportedKeys)
+                // {
+                //     tesTask.Resources.BackendParameters.Remove(key);
+                // }
             }
 
             logger.LogDebug($"Creating task with id {tesTask.Id} state {tesTask.State}");
