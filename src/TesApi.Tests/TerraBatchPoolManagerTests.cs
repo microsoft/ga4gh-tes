@@ -72,10 +72,10 @@ namespace TesApi.Tests
                 UserAccounts = new List<UserAccount>() { new UserAccount("name", "password") }
             };
 
-            var pool = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
+            var poolId = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
-            Assert.IsNotNull(pool);
-            Assert.AreEqual(terraApiStubData.PoolId, pool.PoolId);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(poolId));
+            Assert.AreEqual(terraApiStubData.PoolId, poolId);
         }
 
         [TestMethod]

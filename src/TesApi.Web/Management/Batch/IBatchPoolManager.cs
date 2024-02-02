@@ -16,11 +16,11 @@ namespace TesApi.Web.Management.Batch
         /// <summary>
         /// Creates an Azure Batch pool who's lifecycle must be manually managed
         /// </summary>
-        /// <param name="poolInfo">Contains information about the pool. <see cref="BatchModels.ProxyResource.Name"/> becomes the <see cref="CloudPool.Id"/></param>
+        /// <param name="poolSpec">Contains information about the pool. <see cref="BatchModels.ProxyResource.Name"/> becomes the <see cref="CloudPool.Id"/></param>
         /// <param name="isPreemptable">True if nodes in this pool will all be preemptable. False if nodes will all be dedicated.</param>
-        /// <returns><see cref="PoolInformation"/> that identifies the created pool.</returns>
+        /// <returns>The name (aka <see cref="PoolInformation.PoolId"/>) that identifies the created pool.</returns>
         /// <param name="cancellationToken"></param>
-        Task<PoolInformation> CreateBatchPoolAsync(BatchModels.Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken);
+        Task<string> CreateBatchPoolAsync(BatchModels.Pool poolSpec, bool isPreemptable, CancellationToken cancellationToken);
 
         /// <summary>
         /// Deletes the specified pool
