@@ -4,8 +4,7 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Tes.ApiClients;
+using Polly;
 using Tes.ApiClients.Options;
 using Tes.Runner.Authentication;
 using Tes.Runner.Logs;
@@ -16,20 +15,23 @@ namespace Tes.Runner.Docker
 {
     public class DockerExecutor
     {
-
         private readonly IDockerClient dockerClient = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
-        private readonly NetworkUtility networkUtility = new NetworkUtility();
-        private readonly RetryHandler retryHandler = new RetryHandler(Options.Create(new RetryPolicyOptions()));
+        private readonly NetworkUtility networkUtility = new();
+        private readonly Polly.Retry.AsyncRetryPolicy asyncRetryPolicy = null!;
         private readonly IStreamLogReader streamLogReader = null!;
         private readonly ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager = null!;
+        private readonly Predicate<DockerApiException> IsAuthFailure = e => !IsNotAuthFailure(e);
+        private static readonly Func<DockerApiException, bool> IsNotAuthFailure = e =>
+            !(e.StatusCode == System.Net.HttpStatusCode.Unauthorized || e.StatusCode == System.Net.HttpStatusCode.Forbidden ||
+                !(e.StatusCode == System.Net.HttpStatusCode.InternalServerError &&
+                    new[] { "unauthorized", "forbidden" }.Contains(e.ResponseBody?.Split(':').Skip(1).FirstOrDefault()?.ToLower() ?? string.Empty)));
 
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
         public DockerExecutor(Uri dockerHost) : this(new DockerClientConfiguration(dockerHost)
             .CreateClient(), new ConsoleStreamLogPublisher(), new ContainerRegistryAuthorizationManager(new CredentialsManager()))
-        {
-        }
+        { }
 
         public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager)
         {
@@ -40,15 +42,20 @@ namespace Tes.Runner.Docker
             this.dockerClient = dockerClient;
             this.streamLogReader = streamLogReader;
             this.containerRegistryAuthorizationManager = containerRegistryAuthorizationManager;
+
+            var retryPolicyOption = new RetryPolicyOptions();
+            asyncRetryPolicy = Policy
+                .Handle(IsNotAuthFailure)
+                .WaitAndRetryAsync(retryPolicyOption.MaxRetryCount,
+                    (attempt) => TimeSpan.FromSeconds(Math.Pow(retryPolicyOption.ExponentialBackOffExponent,
+                        attempt)));
         }
 
         /// <summary>
         /// Parameter-less constructor for mocking
         /// </summary>
         protected DockerExecutor()
-        {
-
-        }
+        { }
 
         public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(ExecutionOptions executionOptions)
         {
@@ -56,9 +63,23 @@ namespace Tes.Runner.Docker
             ArgumentException.ThrowIfNullOrEmpty(executionOptions.ImageName);
             ArgumentNullException.ThrowIfNull(executionOptions.CommandsToExecute);
 
-            var authConfig = await containerRegistryAuthorizationManager.TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.RuntimeOptions);
+            try
+            {
+                await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag);
+            }
+            catch (DockerApiException e) when (IsAuthFailure(e))
+            {
+                var authConfig = await containerRegistryAuthorizationManager.TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.RuntimeOptions);
 
-            await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag, authConfig);
+                if (authConfig is not null)
+                {
+                    await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag, authConfig);
+                }
+                else
+                {
+                    throw;
+                }
+            }
 
             await ConfigureNetworkAsync();
 
@@ -103,7 +124,7 @@ namespace Tes.Runner.Docker
             List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir)
         {
             var imageWithTag = ToImageNameWithTag(imageName, imageTag);
-            logger.LogInformation($"Creating container with image name: {imageWithTag}");
+            logger.LogInformation(@"Creating container with image name: {ImageWithTag}", imageWithTag);
 
             var createResponse = await dockerClient.Containers.CreateContainerAsync(
                 new CreateContainerParameters
@@ -136,9 +157,9 @@ namespace Tes.Runner.Docker
 
         private async Task PullImageWithRetriesAsync(string imageName, string? tag, AuthConfig? authConfig = null)
         {
-            logger.LogInformation($"Pulling image name: {imageName} image tag: {tag}");
+            logger.LogInformation(@"Pulling image name: {ImageName} image tag: {ImageTag}", imageName, tag);
 
-            await retryHandler.AsyncRetryPolicy.ExecuteAsync(async () =>
+            await asyncRetryPolicy.ExecuteAsync(async () =>
             {
                 await dockerClient.Images.CreateImageAsync(
                     new ImagesCreateParameters() { FromImage = imageName, Tag = tag },
@@ -163,18 +184,18 @@ namespace Tes.Runner.Docker
                     try
                     {
                         await dockerClient.Images.DeleteImageAsync(image.ID, new ImageDeleteParameters { Force = true });
-                        logger.LogInformation($"Deleted Docker image with ID: {image.ID}");
+                        logger.LogInformation(@"Deleted Docker image with ID: {ImageID}", image.ID);
                     }
                     catch (Exception e)
                     {
-                        logger.LogInformation($"Failed to delete image with ID: {image.ID}. Error: {e.Message}");
+                        logger.LogInformation(@"Failed to delete image with ID: {ImageID}. Error: {ErrorMessage}", image.ID, e.Message);
                         throw;
                     }
                 }
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Exception in DeleteAllImagesAsync");
+                logger.LogError(e, "Exception in DeleteAllImagesAsync");
                 throw;
             }
         }
