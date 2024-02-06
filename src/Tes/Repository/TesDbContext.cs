@@ -3,6 +3,7 @@
 
 using System;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Tes.Models;
 
 namespace Tes.Repository
@@ -32,7 +33,10 @@ namespace Tes.Repository
             {
                 // use PostgreSQL
                 optionsBuilder
-                    .UseNpgsql(ConnectionString, options => options.MaxBatchSize(1000))
+                    .UseNpgsql(new NpgsqlDataSourceBuilder(ConnectionString)
+                            .EnableDynamicJson(jsonbClrTypes: new[] { typeof(TesTask) })
+                            .Build(),
+                        options => options.MaxBatchSize(1000))
                     .UseLowerCaseNamingConvention();
             }
         }
