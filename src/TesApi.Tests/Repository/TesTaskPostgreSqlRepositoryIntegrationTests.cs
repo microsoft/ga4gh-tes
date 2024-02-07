@@ -148,7 +148,6 @@ namespace Tes.Repository.Tests
 
                 var controller = new TaskServiceApiController(repository, null, null);
                 string pageToken = null;
-                var tesTasks = new List<TesTask>();
                 var tesTaskIds = new HashSet<string>();
 
                 while (true)
@@ -167,21 +166,22 @@ namespace Tes.Repository.Tests
                     {
                         if (tesTaskIds.Contains(tesTask.Id))
                         {
-                            int count = tesTasks.Count;
+                            int count = tesTaskIds.Count;
                             Debugger.Break();
                             Assert.Fail("Duplicate task id");
                         }
 
                         tesTaskIds.Add(tesTask.Id);
-                        tesTasks.Add(tesTask);
                     }
                 }
 
-                Console.WriteLine("done");
+                Assert.IsTrue(tesTaskIds.Count == itemCount);
+                Console.WriteLine("Done");
             }
             catch (Exception exc)
             {
                 Debugger.Break();
+                throw;
             }
         }
 
