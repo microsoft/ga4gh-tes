@@ -8,9 +8,9 @@ using Tes.Models;
 
 namespace Tes.Utilities
 {
-    public class ConnectionStringUtility
+    public static class ConnectionStringUtility
     {
-        public string GetPostgresConnectionString(IOptions<PostgreSqlOptions> options)
+        public static string GetPostgresConnectionString(IOptions<PostgreSqlOptions> options)
         {
             ArgumentException.ThrowIfNullOrEmpty(options.Value.ServerName, nameof(options.Value.ServerName));
             ArgumentException.ThrowIfNullOrEmpty(options.Value.ServerNameSuffix, nameof(options.Value.ServerNameSuffix));

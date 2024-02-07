@@ -25,6 +25,7 @@ namespace Tes.Repository
         }
 
         public string ConnectionString { get; set; }
+
         public DbSet<TesTaskDatabaseItem> TesTasks { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

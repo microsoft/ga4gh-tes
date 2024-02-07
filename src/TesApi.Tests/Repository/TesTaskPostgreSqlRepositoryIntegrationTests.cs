@@ -16,7 +16,6 @@ using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Extensions.Options;
 using Microsoft.Rest;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
 using Tes.Models;
 using Tes.Utilities;
 using FlexibleServer = Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
@@ -40,10 +39,10 @@ namespace Tes.Repository.Tests
         private static TesTaskPostgreSqlRepository repository;
         private static readonly string subscriptionId = "";
         private static readonly string regionName = "southcentralus";
-        private static readonly string resourceGroupName = $"tes-test-{Guid.NewGuid().ToString().Substring(0, 8)}";
-        private static readonly string postgreSqlServerName = $"tes{Guid.NewGuid().ToString().Substring(0, 8)}";
+        private static readonly string resourceGroupName = $"tes-test-{Guid.NewGuid().ToString()[..8]}";
+        private static readonly string postgreSqlServerName = $"tes{Guid.NewGuid().ToString()[..8]}";
         private static readonly string postgreSqlDatabaseName = "tes_db";
-        private static readonly string adminLogin = $"tes{Guid.NewGuid().ToString().Substring(0, 8)}";
+        private static readonly string adminLogin = $"tes{Guid.NewGuid().ToString()[..8]}";
         private static readonly string adminPw = PasswordGenerator.GeneratePassword();
 
         [ClassInitialize]
@@ -53,17 +52,15 @@ namespace Tes.Repository.Tests
             await PostgreSqlTestUtility.CreateTestDbAsync(
                 subscriptionId, regionName, resourceGroupName, postgreSqlServerName, postgreSqlDatabaseName, adminLogin, adminPw);
 
-            var options = new PostgreSqlOptions
-            {
-                ServerName = postgreSqlServerName,
-                DatabaseName = postgreSqlDatabaseName,
-                DatabaseUserLogin = adminLogin,
-                DatabaseUserPassword = adminPw
-            };
+            var connectionString = ConnectionStringUtility
+                .GetPostgresConnectionString(Options.Create(new PostgreSqlOptions
+                {
+                    ServerName = postgreSqlServerName,
+                    DatabaseName = postgreSqlDatabaseName,
+                    DatabaseUserLogin = adminLogin,
+                    DatabaseUserPassword = adminPw
+                }));
 
-            var optionsMock = new Mock<IOptions<PostgreSqlOptions>>();
-            optionsMock.Setup(x => x.Value).Returns(options);
-            var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(optionsMock.Object);
             repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(connectionString));
             Console.WriteLine("Creation complete.");
         }
@@ -81,18 +78,18 @@ namespace Tes.Repository.Tests
         public async Task TryGetItemAsyncTest()
         {
             var id = Guid.NewGuid().ToString();
-            var createdItem = await repository.CreateItemAsync(new Models.TesTask
+            var createdItem = await repository.CreateItemAsync(new TesTask
             {
                 Id = id,
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
-                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            }, System.Threading.CancellationToken.None);
+                Inputs = [new TesInput { Url = "https://test" }]
+            }, CancellationToken.None);
             Assert.IsNotNull(createdItem);
 
             Models.TesTask updatedAndRetrievedItem = null;
 
-            var isFound = await repository.TryGetItemAsync(id, System.Threading.CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
+            var isFound = await repository.TryGetItemAsync(id, CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
 
             Assert.IsNotNull(updatedAndRetrievedItem);
             Assert.IsTrue(isFound);
@@ -101,7 +98,7 @@ namespace Tes.Repository.Tests
         [TestMethod]
         public async Task GetItemsAsyncTest()
         {
-            var items = (await repository.GetItemsAsync(c => c.Id != null, System.Threading.CancellationToken.None)).ToList();
+            var items = (await repository.GetItemsAsync(c => c.Id != null, CancellationToken.None)).ToList();
 
             foreach (var item in items)
             {
@@ -141,19 +138,19 @@ namespace Tes.Repository.Tests
 
                 Assert.IsTrue(items.Select(i => i.Id).Distinct().Count() == itemCount);
 
-                await repository.CreateItemsAsync(items, System.Threading.CancellationToken.None);
+                await repository.CreateItemsAsync(items, CancellationToken.None);
                 Console.WriteLine($"Total seconds to insert {items.Count} items: {sw.Elapsed.TotalSeconds:n2}s");
                 sw.Restart();
             }
 
             sw.Restart();
-            var runningTasks = (await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None)).ToList();
+            var runningTasks = (await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, CancellationToken.None)).ToList();
 
             // Ensure performance is decent
             Assert.IsTrue(sw.Elapsed.TotalSeconds < 20);
             Console.WriteLine($"Retrieved {runningTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
             sw.Restart();
-            var allOtherTasks = (await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, System.Threading.CancellationToken.None)).ToList();
+            var allOtherTasks = (await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, CancellationToken.None)).ToList();
             Console.WriteLine($"Retrieved {allOtherTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
             Console.WriteLine($"Total running tasks: {runningTasks.Count}");
             Console.WriteLine($"Total other tasks: {allOtherTasks.Count}");
@@ -201,13 +198,13 @@ namespace Tes.Repository.Tests
         {
             var itemId = Guid.NewGuid().ToString();
 
-            var task = await repository.CreateItemAsync(new Models.TesTask
+            var task = await repository.CreateItemAsync(new TesTask
             {
                 Id = itemId,
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
-                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            }, System.Threading.CancellationToken.None);
+                Inputs = [new TesInput { Url = "https://test" }]
+            }, CancellationToken.None);
 
             Assert.IsNotNull(task);
         }
@@ -218,24 +215,24 @@ namespace Tes.Repository.Tests
             var description = $"created at {DateTime.UtcNow}";
             var id = Guid.NewGuid().ToString();
 
-            var createdItem = await repository.CreateItemAsync(new Models.TesTask
+            var createdItem = await repository.CreateItemAsync(new TesTask
             {
                 Id = id,
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
-                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            }, System.Threading.CancellationToken.None);
+                Inputs = [new TesInput { Url = "https://test" }]
+            }, CancellationToken.None);
 
             Assert.IsTrue(createdItem.State != Models.TesState.COMPLETEEnum);
 
             createdItem.Description = description;
             createdItem.State = Models.TesState.COMPLETEEnum;
 
-            await repository.UpdateItemAsync(createdItem, System.Threading.CancellationToken.None);
+            await repository.UpdateItemAsync(createdItem, CancellationToken.None);
 
             Models.TesTask updatedAndRetrievedItem = null;
 
-            var isFound = await repository.TryGetItemAsync(id, System.Threading.CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
+            var isFound = await repository.TryGetItemAsync(id, CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
 
             Assert.IsTrue(isFound);
             Assert.IsTrue(updatedAndRetrievedItem.State == Models.TesState.COMPLETEEnum);
@@ -247,19 +244,19 @@ namespace Tes.Repository.Tests
         {
             var id = Guid.NewGuid().ToString();
 
-            var createdItem = await repository.CreateItemAsync(new Models.TesTask
+            var createdItem = await repository.CreateItemAsync(new TesTask
             {
                 Id = id,
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
-                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
-            }, System.Threading.CancellationToken.None);
+                Inputs = [new TesInput { Url = "https://test" }]
+            }, CancellationToken.None);
             Assert.IsNotNull(createdItem);
-            await repository.DeleteItemAsync(id, System.Threading.CancellationToken.None);
+            await repository.DeleteItemAsync(id, CancellationToken.None);
 
             Models.TesTask updatedAndRetrievedItem = null;
 
-            var isFound = await repository.TryGetItemAsync(id, System.Threading.CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
+            var isFound = await repository.TryGetItemAsync(id, CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
             Assert.IsNull(updatedAndRetrievedItem);
             Assert.IsFalse(isFound);
         }
@@ -344,6 +341,5 @@ namespace Tes.Repository.Tests
                 .Configure()
                 .WithLogLevel(HttpLoggingDelegatingHandler.Level.Basic)
                 .Authenticate(azureCredentials);
-
     }
 }

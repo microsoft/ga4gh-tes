@@ -33,10 +33,8 @@ namespace Tes.Repository
         public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTaskDatabaseItem> cache = null)
             : base(hostApplicationLifetime, logger, cache)
         {
-            var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
-            CreateDbContext = () => { return new TesDbContext(connectionString); };
-            using var dbContext = CreateDbContext();
-            dbContext.Database.MigrateAsync().Wait();
+            var connectionString = ConnectionStringUtility.GetPostgresConnectionString(options);
+            CreateDbContext = Initialize(() => { return new TesDbContext(connectionString); });
             WarmCacheAsync(CancellationToken.None).Wait();
         }
 
@@ -47,9 +45,14 @@ namespace Tes.Repository
         public TesTaskPostgreSqlRepository(Func<TesDbContext> createDbContext)
             : base(default)
         {
-            CreateDbContext = createDbContext;
+            CreateDbContext = Initialize(createDbContext);
+        }
+
+        private static Func<TesDbContext> Initialize(Func<TesDbContext> createDbContext)
+        {
             using var dbContext = createDbContext();
-            dbContext.Database.MigrateAsync().Wait();
+            dbContext.Database.MigrateAsync(CancellationToken.None).Wait();
+            return createDbContext;
         }
 
         private async Task WarmCacheAsync(CancellationToken cancellationToken)
