@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonUtilities;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Management.PostgreSQL;
 using Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
@@ -19,6 +20,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
 using Tes.Utilities;
+using TesApi.Controllers;
 using FlexibleServer = Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 
 namespace Tes.Repository.Tests
@@ -111,6 +113,76 @@ namespace Tes.Repository.Tests
             Assert.IsTrue(items.Any());
             Console.WriteLine(items.Count);
             Assert.AreEqual(items.Count, items.Select(t => t.Id).Distinct().Count());
+        }
+
+        [TestMethod]
+        public async Task ListTasksPageTokenWorks()
+        {
+            try
+            {
+                const bool createItems = true;
+                const int itemCount = 1_000_000;
+
+                if (createItems)
+                {
+                    var rng = new Random(Guid.NewGuid().GetHashCode());
+                    var states = Enum.GetValues(typeof(Models.TesState)).Cast<Models.TesState>().ToArray();
+
+                    var items = new List<Models.TesTask>();
+
+                    for (var i = 0; i < itemCount; i++)
+                    {
+                        items.Add(new Models.TesTask
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            Description = Guid.NewGuid().ToString(),
+                            CreationTime = DateTime.UtcNow,
+                            State = states[rng.Next(states.Length)]
+                        });
+                    }
+
+                    Assert.IsTrue(items.Select(i => i.Id).Distinct().Count() == itemCount);
+
+                    await repository.CreateItemsAsync(items, System.Threading.CancellationToken.None);
+                }
+
+                var controller = new TaskServiceApiController(repository, null, null);
+                string pageToken = null;
+                var tesTasks = new List<TesTask>();
+                var tesTaskIds = new HashSet<string>();
+
+                while (true)
+                {
+                    var result = await controller.ListTasks(null, 2047, pageToken, "FULL", default);
+                    JsonResult jr = (JsonResult)result;
+                    var content = (TesListTasksResponse)jr.Value;
+                    pageToken = content.NextPageToken;
+
+                    if (string.IsNullOrWhiteSpace(pageToken))
+                    {
+                        break;
+                    }
+
+                    foreach (var tesTask in content.Tasks)
+                    {
+                        if (tesTaskIds.Contains(tesTask.Id))
+                        {
+                            int count = tesTasks.Count;
+                            Debugger.Break();
+                            Assert.Fail("Duplicate task id");
+                        }
+
+                        tesTaskIds.Add(tesTask.Id);
+                        tesTasks.Add(tesTask);
+                    }
+                }
+
+                Console.WriteLine("done");
+            }
+            catch (Exception exc)
+            {
+                Debugger.Break();
+            }
         }
 
         [TestMethod]
