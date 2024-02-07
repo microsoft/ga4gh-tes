@@ -34,12 +34,13 @@ namespace Tes.Repository.Tests
     /// 2.  Set "subscriptionId" to your subscriptionId
     /// 3.  Remove the "[Ignore]" attribute from this class
     /// </summary>
+    [Ignore]
     [TestClass]
     [TestCategory("Integration")]
     public class TesTaskPostgreSqlRepositoryIntegrationTests
     {
         private static TesTaskPostgreSqlRepository repository;
-        private static readonly string subscriptionId = "f483a450-5f19-4b20-9326-b5852bb89d83";
+        private static readonly string subscriptionId = "";
         private static readonly string regionName = "southcentralus";
         private static readonly string resourceGroupName = $"tes-test-{Guid.NewGuid().ToString().Substring(0, 8)}";
         private static readonly string postgreSqlServerName = $"tes{Guid.NewGuid().ToString().Substring(0, 8)}";
