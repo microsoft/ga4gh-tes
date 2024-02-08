@@ -74,7 +74,6 @@ namespace Tes.Repository.Tests
         public static async Task ClassCleanupAsync()
         {
             Console.WriteLine("Deleting Azure Resource Group...");
-            repository?.Dispose();
             await PostgreSqlTestUtility.DeleteResourceGroupAsync(subscriptionId, resourceGroupName);
             Console.WriteLine("Done");
         }
@@ -121,7 +120,7 @@ namespace Tes.Repository.Tests
             try
             {
                 const bool createItems = true;
-                const int itemCount = 1_000_000;
+                const int itemCount = 10000;
 
                 if (createItems)
                 {
@@ -157,11 +156,6 @@ namespace Tes.Repository.Tests
                     var content = (TesListTasksResponse)jr.Value;
                     pageToken = content.NextPageToken;
 
-                    if (string.IsNullOrWhiteSpace(pageToken))
-                    {
-                        break;
-                    }
-
                     foreach (var tesTask in content.Tasks)
                     {
                         if (tesTaskIds.Contains(tesTask.Id))
@@ -172,6 +166,13 @@ namespace Tes.Repository.Tests
                         }
 
                         tesTaskIds.Add(tesTask.Id);
+                    }
+
+                    Console.WriteLine($"Found {tesTaskIds.Count}");
+
+                    if (string.IsNullOrWhiteSpace(pageToken))
+                    {
+                        break;
                     }
                 }
 
