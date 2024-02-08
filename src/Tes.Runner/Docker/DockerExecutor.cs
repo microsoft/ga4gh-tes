@@ -50,7 +50,10 @@ namespace Tes.Runner.Docker
             this.containerRegistryAuthorizationManager = containerRegistryAuthorizationManager;
 
             // 91 seconds
-            var dockerPullRetryPolicyOptions = new RetryPolicyOptions { MaxRetryCount = 6 };
+            var dockerPullRetryPolicyOptions = new RetryPolicyOptions { 
+                MaxRetryCount = 6,
+                ExponentialBackOffExponent = 2
+            };
 
             dockerPullRetryPolicy = Policy
                 .Handle(IsNotAuthFailure)
