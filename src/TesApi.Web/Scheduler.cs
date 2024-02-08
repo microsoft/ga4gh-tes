@@ -166,6 +166,8 @@ namespace TesApi.Web
                         await repository.UpdateItemAsync(tesTask, stoppingToken);
                     }
 
+                    logger.LogDebug("{TesTask} {WAS}, state: {TesTaskState}", tesTask.Id, "was " + (isModified ? "not " : string.Empty) + "modified", tesTask.State);
+
                     if (isModified)
                     {
                         var hasErrored = false;
