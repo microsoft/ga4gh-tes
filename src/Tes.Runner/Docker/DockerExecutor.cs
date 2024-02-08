@@ -18,7 +18,7 @@ namespace Tes.Runner.Docker
         private readonly IDockerClient dockerClient = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
         private readonly NetworkUtility networkUtility = new();
-        private readonly Polly.Retry.AsyncRetryPolicy asyncRetryPolicy = null!;
+        private readonly Polly.Retry.AsyncRetryPolicy dockerPullRetryPolicy = null!;
         private readonly IStreamLogReader streamLogReader = null!;
         private readonly ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager = null!;
         private readonly Predicate<DockerApiException> IsAuthFailure = e => !IsNotAuthFailure(e);
@@ -49,11 +49,13 @@ namespace Tes.Runner.Docker
             this.streamLogReader = streamLogReader;
             this.containerRegistryAuthorizationManager = containerRegistryAuthorizationManager;
 
-            var retryPolicyOption = new RetryPolicyOptions();
-            asyncRetryPolicy = Policy
+            // 91 seconds
+            var dockerPullRetryPolicyOptions = new RetryPolicyOptions { MaxRetryCount = 6 };
+
+            dockerPullRetryPolicy = Policy
                 .Handle(IsNotAuthFailure)
-                .WaitAndRetryAsync(retryPolicyOption.MaxRetryCount,
-                    (attempt) => TimeSpan.FromSeconds(Math.Pow(retryPolicyOption.ExponentialBackOffExponent,
+                .WaitAndRetryAsync(dockerPullRetryPolicyOptions.MaxRetryCount,
+                    (attempt) => TimeSpan.FromSeconds(Math.Pow(dockerPullRetryPolicyOptions.ExponentialBackOffExponent,
                         attempt)));
         }
 
@@ -165,7 +167,7 @@ namespace Tes.Runner.Docker
         {
             logger.LogInformation(@"Pulling image name: {ImageName} image tag: {ImageTag}", imageName, tag);
 
-            await asyncRetryPolicy.ExecuteAsync(async () =>
+            await dockerPullRetryPolicy.ExecuteAsync(async () =>
             {
                 await dockerClient.Images.CreateImageAsync(
                     new ImagesCreateParameters() { FromImage = imageName, Tag = tag },
