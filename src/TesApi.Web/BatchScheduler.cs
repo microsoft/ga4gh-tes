@@ -402,6 +402,7 @@ namespace TesApi.Web
         public async ValueTask<bool> ProcessTesTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
             var combinedBatchTaskInfo = await GetBatchTaskStateAsync(tesTask, cancellationToken);
+            logger.LogDebug("Returned from GetBatchTaskStateAsync for task {TesTask}", tesTask.Id);
             const string template = "TES task: {TesTask} TES task state: {TesTaskState} BatchTaskState: {BatchTaskState}";
             var msg = string.Format(ConvertTemplateToFormat(template), tesTask.Id, tesTask.State.ToString(), combinedBatchTaskInfo.BatchTaskState.ToString());
 
@@ -661,6 +662,7 @@ namespace TesApi.Web
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1826:Do not use Enumerable methods on indexable collections", Justification = "FirstOrDefault() is straightforward, the alternative is less clear.")]
         private async ValueTask<CombinedBatchTaskInfo> GetBatchTaskStateAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
+            logger.LogDebug("Entering GetBatchTaskStateAsync for task {TesTask}", tesTask.Id);
             var azureBatchJobAndTaskState = await azureProxy.GetBatchJobAndTaskStateAsync(tesTask, cancellationToken);
 
             if (string.IsNullOrEmpty(azureBatchJobAndTaskState.PoolId) && !string.IsNullOrEmpty(tesTask.PoolId))
