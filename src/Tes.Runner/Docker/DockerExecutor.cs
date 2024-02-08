@@ -57,6 +57,7 @@ namespace Tes.Runner.Docker
 
             dockerPullRetryPolicy = Policy
                 .Handle(IsNotAuthFailure)
+                .Or<IOException>()
                 .WaitAndRetryAsync(dockerPullRetryPolicyOptions.MaxRetryCount,
                     (attempt) => TimeSpan.FromSeconds(Math.Pow(dockerPullRetryPolicyOptions.ExponentialBackOffExponent,
                         attempt)));
