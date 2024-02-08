@@ -49,7 +49,7 @@ namespace Tes.Runner.Docker
             this.streamLogReader = streamLogReader;
             this.containerRegistryAuthorizationManager = containerRegistryAuthorizationManager;
 
-            // 91 seconds
+            // Retry for ~91s for ACR 1-minute throttle window
             var dockerPullRetryPolicyOptions = new RetryPolicyOptions { 
                 MaxRetryCount = 6,
                 ExponentialBackOffExponent = 2
