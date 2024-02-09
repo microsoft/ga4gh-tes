@@ -1031,6 +1031,7 @@ namespace TesDeployer
                     EnableAutoScaling = false,
                     EnableNodePublicIP = false,
                     OsType = "Linux",
+                    OsSKU = "AzureLinux",
                     Mode = "System",
                     VnetSubnetID = virtualNetwork.Subnets[subnetName].Inner.Id,
                 }
