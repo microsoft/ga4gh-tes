@@ -61,7 +61,9 @@ namespace Tes.Repository.Tests
                     DatabaseUserPassword = adminPw
                 }));
 
-            repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(connectionString));
+            repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(
+                TesTaskPostgreSqlRepository.NpgsqlDataSourceBuilder(connectionString),
+                TesTaskPostgreSqlRepository.NpgsqlDbContextOptionsBuilder));
             Console.WriteLine("Creation complete.");
         }
 

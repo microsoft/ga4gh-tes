@@ -26,12 +26,12 @@ namespace Tes.Utilities
             }
 
             var connectionStringBuilder = new StringBuilder();
-            connectionStringBuilder.Append($"Server={options.Value.ServerName}{options.Value.ServerNameSuffix};");
+            connectionStringBuilder.Append($"Host={options.Value.ServerName}{options.Value.ServerNameSuffix};");
             connectionStringBuilder.Append($"Database={options.Value.DatabaseName};");
             connectionStringBuilder.Append($"Port={options.Value.ServerPort};");
-            connectionStringBuilder.Append($"User Id={options.Value.DatabaseUserLogin};");
+            connectionStringBuilder.Append($"Username={options.Value.DatabaseUserLogin};");
             connectionStringBuilder.Append($"Password={options.Value.DatabaseUserPassword};");
-            connectionStringBuilder.Append($"SSL Mode={options.Value.ServerSslMode};");
+            connectionStringBuilder.Append($"SslMode={options.Value.ServerSslMode};");
             return connectionStringBuilder.ToString();
         }
     }
