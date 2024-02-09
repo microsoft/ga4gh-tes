@@ -100,6 +100,7 @@ namespace TesApi.Web
                     logging.AddFilter<ApplicationInsightsLoggerProvider>("Microsoft", LogLevel.Warning);
 
                     // The following configures LogLevel Information or above to be sent to
+                    logging.AddFilter<ApplicationInsightsLoggerProvider>("Tes.Repository.TesTaskPostgreSqlRepository", LogLevel.Debug);
                     logging.AddFilter<ApplicationInsightsLoggerProvider>("TesApi.Web.AzureProxy", LogLevel.Debug);
                     logging.AddFilter<ApplicationInsightsLoggerProvider>("TesApi.Web.BatchPool", LogLevel.Debug);
                     logging.AddFilter<ApplicationInsightsLoggerProvider>("TesApi.Web.BatchPoolService", LogLevel.Debug);

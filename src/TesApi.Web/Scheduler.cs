@@ -104,6 +104,7 @@ namespace TesApi.Web
         {
             var pools = new HashSet<string>();
 
+            logger.LogDebug("Starting query.");
             var tesTasks = (await repository.GetItemsAsync(
                     predicate: t => t.State == TesState.QUEUEDEnum
                         || t.State == TesState.INITIALIZINGEnum
@@ -112,6 +113,7 @@ namespace TesApi.Web
                     cancellationToken: stoppingToken))
                 .OrderBy(t => t.CreationTime)
                 .ToList();
+            logger.LogDebug("Ending query.");
 
             if (0 == tesTasks.Count)
             {
