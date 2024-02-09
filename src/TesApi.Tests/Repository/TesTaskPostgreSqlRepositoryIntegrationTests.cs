@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonUtilities;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Management.PostgreSQL;
 using Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
@@ -19,6 +20,7 @@ using Microsoft.Rest;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Utilities;
+using TesApi.Controllers;
 using FlexibleServer = Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 
 namespace Tes.Repository.Tests
@@ -34,6 +36,7 @@ namespace Tes.Repository.Tests
     /// </summary>
     [Ignore]
     [TestClass]
+    [TestCategory("Integration")]
     public class TesTaskPostgreSqlRepositoryIntegrationTests
     {
         private static IRepository<Models.TesTask> repository;
@@ -71,7 +74,6 @@ namespace Tes.Repository.Tests
         public static async Task ClassCleanupAsync()
         {
             Console.WriteLine("Deleting Azure Resource Group...");
-            repository?.Dispose();
             await PostgreSqlTestUtility.DeleteResourceGroupAsync(subscriptionId, resourceGroupName);
             Console.WriteLine("Done");
         }
@@ -110,6 +112,78 @@ namespace Tes.Repository.Tests
             Assert.IsTrue(items.Any());
             Console.WriteLine(items.Count);
             Assert.AreEqual(items.Count, items.Select(t => t.Id).Distinct().Count());
+        }
+
+        [TestMethod]
+        public async Task ListTasksWithPagingRetrievesAllTesTasks()
+        {
+            try
+            {
+                const bool createItems = true;
+                const int itemCount = 10000;
+
+                if (createItems)
+                {
+                    var rng = new Random(Guid.NewGuid().GetHashCode());
+                    var states = Enum.GetValues(typeof(Models.TesState)).Cast<Models.TesState>().ToArray();
+
+                    var items = new List<Models.TesTask>();
+
+                    for (var i = 0; i < itemCount; i++)
+                    {
+                        items.Add(new Models.TesTask
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            Description = Guid.NewGuid().ToString(),
+                            CreationTime = DateTime.UtcNow,
+                            State = states[rng.Next(states.Length)]
+                        });
+                    }
+
+                    Assert.IsTrue(items.Select(i => i.Id).Distinct().Count() == itemCount);
+
+                    await Parallel.ForEachAsync(items, CancellationToken.None, async (item, token) => await repository.CreateItemAsync(item, token));
+                }
+
+                var controller = new TaskServiceApiController(repository, null, null);
+                string pageToken = null;
+                var tesTaskIds = new HashSet<string>();
+
+                while (true)
+                {
+                    var result = await controller.ListTasksAsync(null, null, null, null, 2047, pageToken, "FULL", default);
+                    JsonResult jr = (JsonResult)result;
+                    var content = (Models.TesListTasksResponse)jr.Value;
+                    pageToken = content.NextPageToken;
+
+                    foreach (var tesTask in content.Tasks)
+                    {
+                        if (tesTaskIds.Contains(tesTask.Id))
+                        {
+                            int count = tesTaskIds.Count;
+                            Debugger.Break();
+                            Assert.Fail("Duplicate task id");
+                        }
+
+                        tesTaskIds.Add(tesTask.Id);
+                    }
+
+                    Console.WriteLine($"Found {tesTaskIds.Count}");
+
+                    if (string.IsNullOrWhiteSpace(pageToken))
+                    {
+                        break;
+                    }
+                }
+
+                Assert.IsTrue(tesTaskIds.Count == itemCount);
+                Console.WriteLine("Done");
+            }
+            catch (Exception)
+            {
+                Debugger.Break();
+                throw;
+            }
         }
 
         [TestMethod]

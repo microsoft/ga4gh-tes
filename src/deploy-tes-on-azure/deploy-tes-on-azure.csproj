@@ -5,6 +5,9 @@
     <TargetFramework>net7.0</TargetFramework>
     <!-- Avoids "Couldn't find a valid ICU package installed on the system." error. -->
     <InvariantGlobalization Condition="'$(Configuration)' == 'linux'">true</InvariantGlobalization>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -18,22 +21,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="scripts\helm\templates\ubuntu-deployment.yaml" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Compile Include="..\CommonAssemblyInfo.cs" Link="Properties\CommonAssemblyInfo.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Identity" Version="1.8.2" />
+    <PackageReference Include="Azure.Identity" Version="1.10.3" />
     <PackageReference Include="Azure.ResourceManager.Network" Version="1.2.0" />
     <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.4.0" />
     <PackageReference Include="KubernetesClient" Version="10.1.4" />
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.21.0" />
     <PackageReference Include="Microsoft.Azure.Management.KeyVault" Version="4.0.0-preview.1" />
-    <PackageReference Include="Microsoft.Azure.Management.Network" Version="25.0.0" />
-    <PackageReference Include="Azure.Storage.Blobs" Version="12.15.0" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.16.0" />
     <PackageReference Include="Microsoft.Azure.Management.Batch" Version="15.0.0" />
     <PackageReference Include="Microsoft.Azure.Management.Fluent" Version="1.38.1" />
     <PackageReference Include="Microsoft.Azure.Management.PostgreSQL" Version="2.0.0" />
@@ -52,13 +50,13 @@
     <PackageReference Include="Microsoft.IdentityModel.Clients.ActiveDirectory" Version="5.3.0" />
     <!--Mitigate reported security issues-->
     <PackageReference Include="System.Drawing.Common" Version="7.0.0" />
+    <!--Mitigate reported security issues-->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.35.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.2" />
     <PackageReference Include="Polly" Version="7.2.3" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.27.0" />
   </ItemGroup>
   
   <ItemGroup>
-    <EmbeddedResource Include="scripts\containers-to-mount" />
     <EmbeddedResource Include="scripts\allowed-vm-sizes" />
     <EmbeddedResource Include="scripts\env-00-tes-version.txt" />
     <EmbeddedResource Include="scripts\env-01-account-names.txt" />
@@ -74,10 +72,6 @@
     <EmbeddedResource Include="scripts\helm\templates\persistence.yaml" />
     <EmbeddedResource Include="scripts\helm\templates\service.yaml" />
     <EmbeddedResource Include="scripts\helm\templates\tes-deployment.yaml" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Properties\PublishProfiles\" />
   </ItemGroup>
 
   <ItemGroup>

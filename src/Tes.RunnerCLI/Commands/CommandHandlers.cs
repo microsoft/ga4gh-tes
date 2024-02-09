@@ -1,11 +1,11 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Text.Json;
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Tes.Runner;
 using Tes.Runner.Docker;
-using Tes.Runner.Models;
+using Tes.Runner.Events;
 using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
@@ -13,10 +13,19 @@ namespace Tes.RunnerCLI.Commands
     internal class CommandHandlers
     {
         private static readonly ILogger Logger = PipelineLoggerFactory.Create<CommandHandlers>();
-        private const int SuccessExitCode = 0;
-        private const int ErrorExitCode = 1;
 
-        internal static async Task<int> ExecuteNodeTaskAsync(FileInfo file,
+        /// <summary>
+        /// Root command of the CLI. Executes all operations (download, executor, upload) as sub-processes.
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="blockSize"></param>
+        /// <param name="writers"></param>
+        /// <param name="readers"></param>
+        /// <param name="bufferCapacity"></param>
+        /// <param name="apiVersion"></param>
+        /// <param name="dockerUri"></param>
+        /// <returns></returns>
+        internal static async Task<int> ExecuteRootCommandAsync(FileInfo file,
             int blockSize,
             int writers,
             int readers,
@@ -26,30 +35,61 @@ namespace Tes.RunnerCLI.Commands
         {
             try
             {
-                var options = BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
+                var duration = Stopwatch.StartNew();
 
-                await ExecuteTransferAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options);
+                var nodeTask = await NodeTaskUtils.DeserializeNodeTaskAsync(file.FullName);
 
-                await ExecuteNodeContainerTaskAsync(file, dockerUri);
+                await using var eventsPublisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask);
 
-                await ExecuteTransferAsSubProcessAsync(CommandFactory.UploadCommandName, file, options);
+                try
+                {
+                    await ExecuteAllOperationsAsSubProcessesAsync(file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
 
-                return SuccessExitCode;
+                    await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
+                        EventsPublisher.SuccessStatus, errorMessage: string.Empty);
+                }
+                catch (Exception e)
+                {
+                    await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
+                        EventsPublisher.FailedStatus, errorMessage: e.Message);
+                    throw;
+                }
             }
             catch (Exception e)
             {
-                Logger.LogError(e, "Failed to execute the task");
-                return ErrorExitCode;
-            }
-        }
+                try
+                {
+                    CommandLauncher.HandleFatalLauncherError(CommandFactory.ExecutorCommandName, e);
+                }
+                catch (CommandExecutionException commandExecutionException)
+                {
+                    Logger.LogError(commandExecutionException, $"Failed to execute Node Task: {file.FullName}");
+                    return commandExecutionException.ExitCode;
+                }
 
-        private static async Task ExecuteNodeContainerTaskAsync(FileInfo file, Uri dockerUri)
+                Logger.LogError(e, $"Failed to execute Node Task: {file.FullName}");
+
+                return (int)ProcessExitCode.UncategorizedError;
+            }
+
+            return (int)ProcessExitCode.Success;
+        }
+        /// <summary>
+        /// Executor (exec) command. Executes the executor operation as defined in the node task definition file.
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="dockerUri"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
+        internal static async Task ExecuteExecCommandAsync(FileInfo file, Uri dockerUri)
         {
             try
             {
-                var nodeTask = await DeserializeNodeTaskAsync(file.FullName);
+                var nodeTask = await NodeTaskUtils.DeserializeNodeTaskAsync(file.FullName);
 
-                var executor = new Executor(nodeTask);
+                Logger.LogDebug($"Executing commands in container for Task ID: {nodeTask.Id}");
+
+                await using var executor = await Executor.CreateExecutorAsync(nodeTask);
 
                 var result = await executor.ExecuteNodeContainerTaskAsync(new DockerExecutor(dockerUri));
 
@@ -58,11 +98,8 @@ namespace Tes.RunnerCLI.Commands
                     throw new InvalidOperationException("The container task failed to return results");
                 }
 
-                var (stdout, stderr) = await result.ContainerResult.Logs.ReadOutputToEndAsync(CancellationToken.None);
+                Logger.LogInformation($"Docker container execution status code: {result.ContainerResult.ExitCode}");
 
-                Logger.LogInformation($"Docker container execution status code: {result.ContainerResult.StatusCode}");
-                Logger.LogInformation($"Docker container execution standard output: {stdout}");
-                Logger.LogInformation($"Docker container execution standard error: {stderr}");
                 if (!string.IsNullOrWhiteSpace(result.ContainerResult.Error))
                 {
                     Logger.LogInformation($"Docker container result error: {result.ContainerResult.Error}");
@@ -75,113 +112,86 @@ namespace Tes.RunnerCLI.Commands
             }
         }
 
-        private static BlobPipelineOptions CreateBlobPipelineOptions(int blockSize, int writers, int readers,
-            int bufferCapacity, string apiVersion)
-        {
-            var options = new BlobPipelineOptions(
-                BlockSizeBytes: blockSize,
-                NumberOfWriters: writers,
-                NumberOfReaders: readers,
-                ReadWriteBuffersCapacity: bufferCapacity,
-                MemoryBufferCapacity: bufferCapacity,
-                ApiVersion: apiVersion);
-
-            return options;
-        }
-
-        internal static async Task<int> ExecuteUploadTaskAsync(FileInfo file,
+        /// <summary>
+        /// Upload (upload) command. Executes the upload of outputs as defined in the node task definition file.
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="blockSize"></param>
+        /// <param name="writers"></param>
+        /// <param name="readers"></param>
+        /// <param name="bufferCapacity"></param>
+        /// <param name="apiVersion"></param>
+        /// <returns></returns>
+        internal static async Task<int> ExecuteUploadCommandAsync(FileInfo file,
             int blockSize,
             int writers,
             int readers,
             int bufferCapacity,
             string apiVersion)
         {
-            var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
+            var options = CommandLauncher.CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-            Logger.LogInformation("Starting upload operation as a sub-process.");
+            Logger.LogDebug("Starting upload operation.");
 
             return await ExecuteTransferTaskAsync(file, exec => exec.UploadOutputsAsync(options));
         }
 
-        private static void HandleResult(ProcessExecutionResult results, string command)
-        {
-            if (results.ExitCode != 0)
-            {
-                throw new Exception(
-                    $"Task operation failed. Command: {command}. Exit Code: {results.ExitCode}{Environment.NewLine}Error: {results.StandardError}{Environment.NewLine}Output: {results.StandardOutput}");
-            }
-
-            Logger.LogInformation($"Result from executing command {command} as a sub-process: ");
-            Console.WriteLine($"{results.StandardOutput}"); //writing the result to the console to keep formatting
-        }
-
-        private static async Task ExecuteTransferAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
-        {
-            var processLauncher = new ProcessLauncher();
-
-            var results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
-
-            HandleResult(results, command);
-        }
-
-        internal static async Task<int> ExecuteDownloadTaskAsync(FileInfo file,
+        /// <summary>
+        /// Download (download) command. Executes the download of inputs as defined in the node task definition file.
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="blockSize"></param>
+        /// <param name="writers"></param>
+        /// <param name="readers"></param>
+        /// <param name="bufferCapacity"></param>
+        /// <param name="apiVersion"></param>
+        /// <returns></returns>
+        internal static async Task<int> ExecuteDownloadCommandAsync(FileInfo file,
             int blockSize,
             int writers,
             int readers,
             int bufferCapacity,
             string apiVersion)
         {
-            var options = CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
+            var options = CommandLauncher.CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
-            Logger.LogInformation("Starting download operation as a sub-process.");
+            Logger.LogDebug("Starting download operation.");
 
             return await ExecuteTransferTaskAsync(file, exec => exec.DownloadInputsAsync(options));
+        }
+
+        private static async Task ExecuteAllOperationsAsSubProcessesAsync(FileInfo file, int blockSize, int writers, int readers, int bufferCapacity,
+            string apiVersion, Uri dockerUri)
+        {
+            var options =
+                BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity,
+                    apiVersion);
+
+            await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options);
+
+            await CommandLauncher.LaunchesExecutorCommandAsSubProcessAsync(file, dockerUri);
+
+            await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.UploadCommandName, file, options);
         }
 
         private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, Func<Executor, Task<long>> transferOperation)
         {
             try
             {
-                var nodeTask = await DeserializeNodeTaskAsync(taskDefinitionFile.FullName);
+                var nodeTask = await NodeTaskUtils.DeserializeNodeTaskAsync(taskDefinitionFile.FullName);
 
-                var executor = new Executor(nodeTask);
+                await using var executor = await Executor.CreateExecutorAsync(nodeTask);
 
-                var result = await transferOperation(executor);
+                await transferOperation(executor);
 
-                Logger.LogInformation($"Total bytes transferred: {result:n0}");
-
-                return SuccessExitCode;
+                return (int)ProcessExitCode.Success;
             }
             catch (Exception e)
             {
                 Console.WriteLine($"Failed to perform transfer. Error: {e.Message} Operation: {transferOperation.Method.Name}");
                 Logger.LogError(e, $"Failed to perform transfer. Operation: {transferOperation}");
-                return ErrorExitCode;
+                return (int)ProcessExitCode.UncategorizedError;
             }
-        }
-
-        private static async Task<NodeTask> DeserializeNodeTaskAsync(string tesNodeTaskFilePath)
-        {
-            try
-            {
-                var nodeTaskText = await File.ReadAllTextAsync(tesNodeTaskFilePath);
-
-                var nodeTask = JsonSerializer.Deserialize<NodeTask>(nodeTaskText, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true }) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
-
-                AddDefaultValuesIfMissing(nodeTask);
-
-                return nodeTask;
-            }
-            catch (Exception e)
-            {
-                Logger.LogError(e, "Failed to deserialize task JSON file.");
-                throw;
-            }
-        }
-
-        private static void AddDefaultValuesIfMissing(NodeTask nodeTask)
-        {
-            nodeTask.RuntimeOptions ??= new RuntimeOptions();
         }
     }
 }

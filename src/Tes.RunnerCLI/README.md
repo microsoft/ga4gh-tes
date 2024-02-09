@@ -17,7 +17,7 @@ The TES Node Runner is a command line executable that takes several arguments. I
 The following command executes the TES task in the default location - the same directory as the executable. 
 
 ```bash
-./tRunner
+./tes-runner
 ```
 
 There are several options that can be provided:
@@ -25,7 +25,7 @@ There are several options that can be provided:
 ```bash
 
 Options:
-  -f, --file <file> (REQUIRED)           The file with the task definition [default: TesTask.json]
+  -f, --file <file> (REQUIRED)           The file with the task definition [default: runner-task.json]
   -b, --blockSize <blockSize>            Blob block size in bytes [default: 10485760]
   -w, --writers <writers>                Number of concurrent writers [default: 10]
   -r, --readers <readers>                Number of concurrent readers [default: 10]
@@ -116,16 +116,16 @@ The download and upload operations are optimized for performance and large files
 
 ```bash
 Usage:
-  tRunner download | upload [options]
+ tes-runner download | upload [options]
 
 Options:
-  -f, --file <file> (REQUIRED)           The file with the task definition [default: TesTask.json]
+  -f, --file <file> (REQUIRED)           The file with the task definition [default: runner-task.json]
   -b, --blockSize <blockSize>            Blob block size in bytes [default: 10485760]
   -w, --writers <writers>                Number of concurrent writers [default: 10]
   -r, --readers <readers>                Number of concurrent readers [default: 10]
   -c, --bufferCapacity <bufferCapacity>  Pipeline buffer capacity [default: 10]
   -v, --apiVersion <apiVersion>          Azure Storage API version [default: 2020-10-02]
-  -f, --file <file> (REQUIRED)           The file with the task definition [default: TesTask.json]
+  -f, --file <file> (REQUIRED)           The file with the task definition [default: runner-task.json]
   -b, --blockSize <blockSize>            Blob block size in bytes [default: 10485760]
   -w, --writers <writers>                Number of concurrent writers [default: 10]
   -r, --readers <readers>                Number of concurrent readers [default: 10]

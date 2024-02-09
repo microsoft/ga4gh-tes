@@ -3,14 +3,25 @@
 
 using System.Diagnostics;
 using System.Reflection;
-using System.Text;
+using Microsoft.Extensions.Logging;
+using Tes.Runner.Logs;
+using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
 {
     public class ProcessLauncher
     {
-        private readonly StringBuilder standardOut = new StringBuilder();
-        private readonly StringBuilder standardError = new StringBuilder();
+        const int LogWaitTimeoutInSeconds = 30;
+
+        private readonly IStreamLogReader logReader;
+        private readonly ILogger logger = PipelineLoggerFactory.Create<ProcessLauncher>();
+
+        public ProcessLauncher(IStreamLogReader logReader)
+        {
+            ArgumentNullException.ThrowIfNull(logReader);
+
+            this.logReader = logReader;
+        }
 
         public async Task<ProcessExecutionResult> LaunchProcessAndWaitAsync(string[] options)
         {
@@ -18,40 +29,34 @@ namespace Tes.RunnerCLI.Commands
 
             SetupProcessStartInfo(options, process);
 
+            process.Start();
+
+            var processName = "NA";
+
+            if (!process.HasExited)
+            {
+                processName = process.ProcessName;
+            }
+
             SetupErrorAndOutputReaders(process);
 
             await StartAndWaitForExitAsync(process);
 
-            return new ProcessExecutionResult(standardOut.ToString(), standardError.ToString(), process.ExitCode);
+            return new ProcessExecutionResult(processName, process.ExitCode);
         }
 
-        private static async Task StartAndWaitForExitAsync(Process process)
+        private async Task StartAndWaitForExitAsync(Process process)
         {
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
             await process.WaitForExitAsync();
+
+            await logReader.WaitUntilAsync(timeout: TimeSpan.FromSeconds(LogWaitTimeoutInSeconds));
+
+            logger.LogInformation($"Process exited. Arguments: {process.StartInfo.Arguments}");
         }
 
         private void SetupErrorAndOutputReaders(Process process)
         {
-            standardOut.Clear();
-            standardError.Clear();
-            process.ErrorDataReceived += ProcessOnErrorDataReceived;
-            process.OutputDataReceived += ProcessOnOutputDataReceived;
-        }
-
-        private void ProcessOnOutputDataReceived(object sender, DataReceivedEventArgs e)
-        {
-
-            standardOut.Append(e.Data);
-            standardOut.Append('\n');
-        }
-
-        private void ProcessOnErrorDataReceived(object sender, DataReceivedEventArgs e)
-        {
-            standardError.Append(e.Data);
-            standardError.Append('\n');
+            logReader.StartReadingFromLogStreams(process.StandardOutput, process.StandardError);
         }
 
         private void SetupProcessStartInfo(string[] options, Process process)
@@ -61,6 +66,8 @@ namespace Tes.RunnerCLI.Commands
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
+
+            logger.LogInformation($"Starting process: {process.StartInfo.FileName} {process.StartInfo.Arguments}");
         }
 
         private static string? GetExecutableFullPath()
@@ -69,7 +76,7 @@ namespace Tes.RunnerCLI.Commands
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("SingleFile", "IL3000:Avoid accessing Assembly file path when publishing as a single file", Justification = "<Pending>")]
-        private string ParseArguments(string[] options)
+        private static string ParseArguments(string[] options)
         {
             var argList = new List<string>(options);
             var assemblyName = Assembly.GetExecutingAssembly().Location;
@@ -81,6 +88,17 @@ namespace Tes.RunnerCLI.Commands
             }
 
             return string.Join(" ", argList.ToArray());
+        }
+
+        public static async Task<ProcessLauncher> CreateLauncherAsync(FileInfo file, string logNamePrefix)
+        {
+            ArgumentNullException.ThrowIfNull(file);
+
+            var nodeTask = await NodeTaskUtils.DeserializeNodeTaskAsync(file.FullName);
+
+            var logPublisher = await LogPublisher.CreateStreamReaderLogPublisherAsync(nodeTask, logNamePrefix);
+
+            return new ProcessLauncher(logReader: logPublisher);
         }
     }
 }

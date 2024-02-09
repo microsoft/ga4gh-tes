@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
+using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.ApiClients;
@@ -81,7 +82,7 @@ namespace TesApi.Web.Storage
         }
 
         /// <inheritdoc />
-        public override async Task<string> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false)
+        public override async Task<Uri> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             if (sasTokenDuration is not null)
@@ -104,15 +105,13 @@ namespace TesApi.Web.Storage
             return await GetMappedSasUrlFromWsmAsync(terraBlobInfo, cancellationToken);
         }
 
-        /// <summary>
-        /// Returns a URL with a SAS token for the provided blobPath.The resulting URL contains the TES internal segments as a prefix to the blobPath.
+        /// <inheritdoc />
+        /// <remarks>
+        /// The resulting URL contains the TES internal segments as a prefix to the blobPath.
         /// If the blobPath is not provided(empty), a container SAS token is generated.
         /// If the blobPath is provided, a SAS token to the blobPath prefixed with the TES internal segments is generated.
-        /// </summary>
-        /// <param name="blobPath"></param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public override async Task<string> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken)
+        /// </remarks>
+        public override async Task<Uri> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken)
         {
             var blobInfo = GetTerraBlobInfoForInternalTes(blobPath);
 
@@ -124,16 +123,13 @@ namespace TesApi.Web.Storage
             return await GetMappedSasUrlFromWsmAsync(blobInfo, cancellationToken);
         }
 
-        /// <summary>
-        /// Returns a URL with a SAS token for the provided blobPath.The resulting URL contains the TES task internal segments as a prefix to the blobPath.
+        /// <inheritdoc />
+        /// <remarks>
+        /// The resulting URL contains the TES task internal segments as a prefix to the blobPath.
         /// If the blobPath is not provided(empty), a container SAS token is generated.
         /// If the blobPath is provided, a SAS token to the blobPath prefixed with the TES task internal segments is generated.
-        /// </summary>
-        /// <param name="task"></param>
-        /// <param name="blobPath"></param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public override async Task<string> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken)
+        /// </remarks>
+        public override async Task<Uri> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken)
         {
             var blobInfo = GetTerraBlobInfoForInternalTesTask(task, blobPath);
 
@@ -143,6 +139,42 @@ namespace TesApi.Web.Storage
             }
 
             return await GetMappedSasUrlFromWsmAsync(blobInfo, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public override Uri GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath)
+        {
+            var blobInfo = GetTerraBlobInfoForInternalTesTask(task, blobPath);
+
+            var blobName = blobInfo.BlobName;
+
+            if (!string.IsNullOrWhiteSpace(blobName))
+            {
+                blobName = $"/{blobName.TrimStart('/')}";
+            }
+
+            //passing the resulting string through the builder to ensure that the path is properly encoded and valid
+            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}/{blobInfo.BlobName.TrimStart('/')}"));
+
+            return builder.ToUri();
+        }
+
+        /// <inheritdoc />
+        public override Uri GetInternalTesBlobUrlWithoutSasToken(string blobPath)
+        {
+            var blobInfo = GetTerraBlobInfoForInternalTes(blobPath);
+
+            var blobName = blobInfo.BlobName;
+
+            if (!string.IsNullOrWhiteSpace(blobName))
+            {
+                blobName = $"/{blobName.TrimStart('/')}";
+            }
+
+            //passing the resulting string through the builder to ensure that the path is properly encoded and valid
+            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}{blobName}"));
+
+            return builder.ToUri();
         }
 
         private TerraBlobInfo GetTerraBlobInfoForInternalTes(string blobPath)
@@ -191,7 +223,7 @@ namespace TesApi.Web.Storage
             if (!StorageAccountUrlSegments.TryCreate(path, out var segments))
             {
                 throw new InvalidOperationException(
-                    "Invalid path provided. The path must be a valid blob storage url or a path with the following format: /accountName/container");
+                    "Invalid path provided. The path must be a valid blob storage URL or a path with the following format: /accountName/container");
             }
 
             CheckIfAccountIsTerraStorageAccount(segments.AccountName);
@@ -232,7 +264,12 @@ namespace TesApi.Web.Storage
             }
         }
 
-
+        /// <summary>
+        /// Returns the workspace ID from the container name.
+        /// It assumes the container name is in the format sc-{workspaceId}
+        /// </summary>
+        /// <param name="segmentsContainerName"></param>
+        /// <returns></returns>
         private Guid ToWorkspaceId(string segmentsContainerName)
         {
             try
@@ -250,7 +287,7 @@ namespace TesApi.Web.Storage
             }
         }
 
-        private async Task<string> GetMappedSasContainerUrlFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
+        private async Task<Uri> GetMappedSasContainerUrlFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
         {
             var tokenInfo = await GetWorkspaceContainerSasTokenFromWsmAsync(blobInfo, cancellationToken);
 
@@ -261,7 +298,7 @@ namespace TesApi.Web.Storage
                 urlBuilder.Path += $"/{blobInfo.BlobName.TrimStart('/')}";
             }
 
-            return urlBuilder.Uri.ToString();
+            return urlBuilder.Uri;
         }
 
         /// <summary>
@@ -270,7 +307,7 @@ namespace TesApi.Web.Storage
         /// <param name="blobInfo"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>URL with a SAS token</returns>
-        public async Task<string> GetMappedSasUrlFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
+        public async Task<Uri> GetMappedSasUrlFromWsmAsync(TerraBlobInfo blobInfo, CancellationToken cancellationToken)
         {
             var tokenInfo = await GetWorkspaceBlobSasTokenFromWsmAsync(blobInfo, cancellationToken);
 
@@ -286,7 +323,7 @@ namespace TesApi.Web.Storage
                 }
             }
 
-            return uriBuilder.Uri.ToString();
+            return uriBuilder.Uri;
         }
 
         private SasTokenApiParameters CreateTokenParamsFromOptions(string blobName, string sasPermissions)

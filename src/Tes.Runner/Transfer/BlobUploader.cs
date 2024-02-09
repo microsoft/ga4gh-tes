@@ -19,12 +19,19 @@ namespace Tes.Runner.Transfer
         }
 
         /// <summary>
+        /// Parameter-less constructor for mocking
+        /// </summary>
+        protected BlobUploader() : base(new BlobPipelineOptions(), Channel.CreateUnbounded<byte[]>())
+        {
+        }
+
+        /// <summary>
         /// Configures each part with the put block URL.
         /// </summary>
         /// <param name="buffer">Pipeline buffer to configure</param>
         public override void ConfigurePipelineBuffer(PipelineBuffer buffer)
         {
-            buffer.BlobPartUrl = BlobBlockApiHttpUtils.ParsePutBlockUrl(buffer.BlobUrl, buffer.Ordinal);
+            buffer.BlobPartUrl = BlobApiHttpUtils.ParsePutBlockUrl(buffer.BlobUrl, buffer.Ordinal);
 
             buffer.HashListProvider = hashListProviders.GetOrAdd(buffer.FileName, new Md5HashListProvider());
         }
@@ -46,7 +53,7 @@ namespace Tes.Runner.Transfer
 
             try
             {
-                response = await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() => BlobBlockApiHttpUtils.CreatePutBlockRequestAsync(buffer, PipelineOptions.ApiVersion), cancellationToken);
+                response = await BlobApiHttpUtils.ExecuteHttpRequestAsync(() => BlobApiHttpUtils.CreatePutBlockRequestAsync(buffer, PipelineOptions.ApiVersion), cancellationToken);
             }
             finally
             {
@@ -123,8 +130,8 @@ namespace Tes.Runner.Transfer
             HttpResponseMessage? response = null;
             try
             {
-                response = await BlobBlockApiHttpUtils.ExecuteHttpRequestAsync(() =>
-                    BlobBlockApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSizeBytes,
+                response = await BlobApiHttpUtils.ExecuteHttpRequestAsync(() =>
+                    BlobApiHttpUtils.CreateBlobBlockListRequest(length, blobUrl, PipelineOptions.BlockSizeBytes,
                         PipelineOptions.ApiVersion, rootHash));
             }
             catch (Exception e)
@@ -144,7 +151,7 @@ namespace Tes.Runner.Transfer
         /// </summary>
         /// <param name="uploadList">File upload list.</param>
         /// <returns></returns>
-        public async Task<long> UploadAsync(List<UploadInfo> uploadList)
+        public virtual async Task<long> UploadAsync(List<UploadInfo> uploadList)
         {
             ValidateUploadList(uploadList);
 

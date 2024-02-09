@@ -15,25 +15,25 @@ public class DefaultFileInfoProvider : IFileInfoProvider
 
     public long GetFileSize(string fileName)
     {
-        logger.LogInformation($"Getting file size for file: {fileName}");
+        logger.LogDebug($"Getting file size for file: {fileName}");
 
         return GetFileInfoOrThrowIfFileDoesNotExist(fileName).Length;
     }
 
     public string GetExpandedFileName(string fileName)
     {
-        logger.LogInformation($"Expanding file name: {fileName}");
+        logger.LogDebug($"Expanding file name: {fileName}");
 
         var expandedValue = Environment.ExpandEnvironmentVariables(fileName);
 
-        logger.LogInformation($"Expanded file name: {expandedValue}");
+        logger.LogDebug($"Expanded file name: {expandedValue}");
 
         return expandedValue;
     }
 
     public bool FileExists(string fileName)
     {
-        logger.LogInformation($"Checking if file exists: {fileName}");
+        logger.LogDebug($"Checking if file exists: {fileName}");
 
         var fileInfo = new FileInfo(Environment.ExpandEnvironmentVariables(fileName));
 
@@ -72,17 +72,19 @@ public class DefaultFileInfoProvider : IFileInfoProvider
 
     public List<FileResult> GetAllFilesInDirectory(string path)
     {
-        logger.LogInformation($"Getting all files in directory: {path}");
+        var expandedPath = Environment.ExpandEnvironmentVariables(path);
 
-        if (!Directory.Exists(path))
+        logger.LogInformation($"Getting all files in directory: {expandedPath}");
+
+        if (!Directory.Exists(expandedPath))
         {
-            logger.LogWarning($"The directory provided does not exist: {path}. The output will be ignored.");
+            logger.LogWarning($"The directory provided does not exist: {expandedPath}. The output will be ignored.");
 
             return new List<FileResult>();
         }
 
-        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), "*", SearchOption.AllDirectories)
-            .Select(f => new FileResult(f, ToRelativePathToSearchPath(path, searchPattern: String.Empty, f), path))
+        return Directory.GetFiles(expandedPath, "*", SearchOption.AllDirectories)
+            .Select(f => new FileResult(f, ToRelativePathToSearchPath(expandedPath, searchPattern: String.Empty, f), expandedPath))
             .ToList();
     }
 

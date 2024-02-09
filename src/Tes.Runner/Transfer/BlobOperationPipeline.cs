@@ -16,7 +16,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
     protected readonly Channel<byte[]> MemoryBufferChannel;
     protected readonly BlobPipelineOptions PipelineOptions;
     protected readonly ILogger Logger = PipelineLoggerFactory.Create<BlobOperationPipeline>();
-    protected readonly BlobBlockApiHttpUtils BlobBlockApiHttpUtils = new BlobBlockApiHttpUtils();
+    protected readonly BlobApiHttpUtils BlobApiHttpUtils = new BlobApiHttpUtils();
 
     private readonly PartsProducer partsProducer;
     private readonly PartsWriter partsWriter;

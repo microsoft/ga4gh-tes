@@ -21,6 +21,10 @@ namespace TesApi.Web.Options
         /// Default storage account name.
         /// </summary>
         public string DefaultAccountName { get; set; } = string.Empty;
+        /// <summary>
+        /// Container name for storing task information. 
+        /// </summary>
+        public string ExecutionsContainerName { get; set; }
         // TODO: add additional properties to run without a managed id?
     }
 }

@@ -70,7 +70,7 @@ namespace Tes.Runner.Storage
 
             return new FileInput
             {
-                SasStrategy = input.SasStrategy,
+                TransformationStrategy = input.TransformationStrategy,
                 SourceUrl = input.SourceUrl,
                 Path = fileInfoProvider.GetExpandedFileName(input.Path!),
             };
@@ -83,7 +83,7 @@ namespace Tes.Runner.Storage
                 ArgumentNullException.ThrowIfNull(input);
                 ArgumentException.ThrowIfNullOrEmpty(input.Path, nameof(input.Path));
                 ArgumentException.ThrowIfNullOrEmpty(input.SourceUrl, nameof(input.SourceUrl));
-                ArgumentNullException.ThrowIfNull(input.SasStrategy, nameof(input.SasStrategy));
+                ArgumentNullException.ThrowIfNull(input.TransformationStrategy, nameof(input.TransformationStrategy));
             }
             catch (Exception e)
             {
@@ -159,12 +159,24 @@ namespace Tes.Runner.Storage
         {
             var expandedPath = fileInfoProvider.GetExpandedFileName(output.Path!);
 
+            if (fileInfoProvider.FileExists(expandedPath))
+            {
+                //treat the output as a single file and use the target URL as is
+                logger.LogInformation($"Adding file: {expandedPath} to the output list with a target URL as is");
+
+                yield return CreateExpandedFileOutputUsingTargetUrl(output,
+                    absoluteFilePath: expandedPath);
+
+                yield break;
+            }
+
+            //at this point, the output is not a single file, so it must be a search pattern
             //break the given path into root and relative path, where the relative path is the search pattern
             var rootPathPair = fileInfoProvider.GetRootPathPair(expandedPath);
 
             foreach (var file in fileInfoProvider.GetFilesBySearchPattern(rootPathPair.Root, rootPathPair.RelativePath))
             {
-                logger.LogInformation($"Adding file: {file.RelativePathToSearchPath} with absolute path: {file.AbsolutePath} to the output list");
+                logger.LogInformation($"Adding file: {file.RelativePathToSearchPath} with absolute path: {file.AbsolutePath} to the output list with a combined target URL");
 
                 yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, absoluteFilePath: file.AbsolutePath, relativePathToSearchPath: file.RelativePathToSearchPath);
             }
@@ -176,6 +188,16 @@ namespace Tes.Runner.Storage
             {
                 Path = absoluteFilePath,
                 TargetUrl = ToCombinedTargetUrl(output.TargetUrl!, prefixToRemoveFromPath: string.Empty, relativePathToSearchPath),
+                TransformationStrategy = output.TransformationStrategy,
+                FileType = FileType.File,
+            };
+        }
+        private static FileOutput CreateExpandedFileOutputUsingTargetUrl(FileOutput output, string absoluteFilePath)
+        {
+            return new FileOutput()
+            {
+                Path = absoluteFilePath,
+                TargetUrl = output.TargetUrl,
                 TransformationStrategy = output.TransformationStrategy,
                 FileType = FileType.File,
             };

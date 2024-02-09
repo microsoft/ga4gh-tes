@@ -28,13 +28,13 @@ namespace Tes.Runner.Test.Storage
             {
                 Path = "/foo/bar",
                 SourceUrl = "https://foo.bar/cont?sig=sasToken",
-                SasStrategy = TransformationStrategy.None,
+                TransformationStrategy = TransformationStrategy.None,
             };
 
             singleFileOutput = new FileOutput
             {
                 Path = "/foo/bar",
-                TargetUrl = "https://foo.bar/cont/outputs?sig=sasToken",
+                TargetUrl = "https://foo.bar/cont/bar?sig=sasToken",
                 TransformationStrategy = TransformationStrategy.None,
                 FileType = FileType.File
             };
@@ -58,7 +58,6 @@ namespace Tes.Runner.Test.Storage
             fileInfoProvider = new Mock<IFileInfoProvider>();
 
             fileInfoProvider.Setup(x => x.GetExpandedFileName(It.IsAny<string>())).Returns<string>(f => f);
-            fileInfoProvider.Setup(x => x.FileExists(It.IsAny<string>())).Returns(true);
             fileInfoProvider.Setup(x => x.GetRootPathPair("/foo/bar"))
                 .Returns(() => new RootPathPair("/", "foo/bar"));
             fileInfoProvider.Setup(x => x.GetRootPathPair("/data/*"))
@@ -67,18 +66,19 @@ namespace Tes.Runner.Test.Storage
         }
 
         [TestMethod]
-        public async Task ResolveOutputsAsync_FileOutputProvided_FileOperationIsResolved()
+        public async Task ResolveOutputsAsync_FileOutputProvided_TargetUrlIsUsed()
         {
             var nodeTask = new NodeTask() { Outputs = new List<FileOutput> { singleFileOutput } };
 
-            //the path in the setup is /foo/bar, and the target URL is https://foo.bar/cont/outputs?sig=sasToken
-            //therefore the expected output URL is:
-            var expectedSingleFileOutputUrl = "https://foo.bar/cont/outputs/bar?sig=sasToken";
+            //the path in the setup is /foo/bar, and the target URL is https://foo.bar/cont/bar?sig=sasToken
+            //therefore the expected output URL is the target URL:
+            var expectedSingleFileOutputUrl = singleFileOutput.TargetUrl;
 
 
             fileInfoProvider.Setup(p =>
                     p.GetFilesBySearchPattern(It.IsAny<string>(), It.IsAny<string>()))
                      .Returns(new List<FileResult> { new FileResult(singleFileOutput.Path!, "bar", "/") });
+            fileInfoProvider.Setup(x => x.FileExists(singleFileOutput.Path!)).Returns(true);  // single file output exists
 
             var fileOperationInfoResolver =
                 new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
@@ -160,7 +160,7 @@ namespace Tes.Runner.Test.Storage
                 Outputs = new List<FileOutput>
                 {
                     patternFileOutput,  // path: /data/*, target URL: https://foo.bar/cont/data?sig=sasToken
-                    singleFileOutput    // path: /foo/bar, target URL: https://foo.bar/cont/outputs?sig=sasToken
+                    singleFileOutput    // path: /foo/bar, target URL: https://foo.bar/cont/bar?sig=sasToken
                 }
             };
 
@@ -173,6 +173,7 @@ namespace Tes.Runner.Test.Storage
                 .Returns(new List<FileResult> {
                     new FileResult("/foo/bar", "bar", "/") // result of the single file output
                 });
+            fileInfoProvider.Setup(x => x.FileExists(singleFileOutput.Path!)).Returns(true);  // single file output exists
 
             var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
             var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();
@@ -183,7 +184,7 @@ namespace Tes.Runner.Test.Storage
             Assert.IsTrue(resolvedOutputs!.Any(r => r.FullFilePath.Equals("/foo/bar", StringComparison.OrdinalIgnoreCase)));
             Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/foo.foo?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
             Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/dir1/bar.foo?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
-            Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/outputs/bar?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/bar?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
         }
 
         [TestMethod]

@@ -60,7 +60,7 @@ namespace Tes.Runner.Docker
         {
             if (string.IsNullOrEmpty(mountParentDirectory))
             {
-                logger.LogWarning(
+                logger.LogDebug(
                     $"The file {path} does not have a mount parent directory defined in the task definition. No volume binding will be created for this file in the container.");
                 return default;
             }
@@ -79,7 +79,7 @@ namespace Tes.Runner.Docker
 
             var volBinding = $"{expandedMountParentDirectory.TrimEnd('/')}/{targetDir}:/{targetDir}";
 
-            logger.LogInformation($"Volume binding for {expandedPath} is {volBinding}");
+            logger.LogDebug($"Volume binding for {expandedPath} is {volBinding}");
 
             return volBinding;
         }

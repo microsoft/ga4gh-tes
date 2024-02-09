@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Moq;
+using Tes.Runner.Logs;
 using Tes.RunnerCLI.Commands;
 
 namespace Tes.Runner.Test.Commands
@@ -10,31 +12,30 @@ namespace Tes.Runner.Test.Commands
     public class ProcessLauncherTests
     {
         private ProcessLauncher processLauncher = null!;
+        private Mock<IStreamLogReader> streamLogReaderMock = null!;
 
         [TestInitialize]
         public void SetUp()
         {
-            processLauncher = new ProcessLauncher();
+            streamLogReaderMock = new Mock<IStreamLogReader>();
+            processLauncher = new ProcessLauncher(streamLogReaderMock.Object);
         }
 
         [TestMethod]
-        public async Task LaunchProcessAndWaitAsync_ValidCommand_StandardOutputIsReturnedNoErrorSuccessExitCode()
+        public async Task LaunchProcessAndWaitAsync_ValidCommand_NoErrorSuccessExitCode()
         {
             //dotnet version must be available in windows and linux. 
             var result = await processLauncher.LaunchProcessAndWaitAsync(new[] { "dotnet --version" });
 
-            Assert.IsTrue(!string.IsNullOrEmpty(result.StandardOutput));
-            Assert.IsTrue(string.IsNullOrEmpty(result.StandardError));
             Assert.AreEqual(0, result.ExitCode);
         }
 
         [TestMethod]
-        public async Task LaunchProcessAndWaitAsync_InvalidCommand_StandardErrorIsReturnedNoSuccessExitCode()
+        public async Task LaunchProcessAndWaitAsync_InvalidCommand_NoSuccessExitCode()
         {
             //dotnet version must be available in windows and linux. 
             var result = await processLauncher.LaunchProcessAndWaitAsync(new[] { "dotnet -version" });
 
-            Assert.IsTrue(!string.IsNullOrEmpty(result.StandardError));
             Assert.AreNotEqual(0, result.ExitCode);
         }
 
@@ -45,9 +46,7 @@ namespace Tes.Runner.Test.Commands
             var result1 = await processLauncher.LaunchProcessAndWaitAsync(new[] { "dotnet --version" });
             var result2 = await processLauncher.LaunchProcessAndWaitAsync(new[] { "dotnet --version" });
 
-            Assert.AreEqual(result2.StandardOutput, result1.StandardOutput);
             Assert.AreEqual(result2.ExitCode, result1.ExitCode);
-            Assert.AreEqual(result2.StandardError, result1.StandardError);
         }
     }
 }

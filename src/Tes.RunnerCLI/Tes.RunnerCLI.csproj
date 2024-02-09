@@ -1,13 +1,37 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <UsingTask TaskName="GenerateMD5" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <InputFile ParameterType="Microsoft.Build.Framework.ITaskItem" Required="true" />
+      <MD5Hash Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Security.Cryptography" />
+      <Using Namespace="Microsoft.Build.Framework" />
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+            Log.LogMessage(MessageImportance.Normal, "Computing MD5 hash for {0}", InputFile.ItemSpec);
+            var md5spc = MD5.Create();
+            MD5Hash = Convert.ToBase64String(md5spc.ComputeHash(File.ReadAllBytes(InputFile.ItemSpec)));
+            Log.LogMessage(MessageImportance.Normal, "Computed MD5 hash is {0}", MD5Hash);
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net7.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>tRunner</AssemblyName>
-    <PublishSingleFile>true</PublishSingleFile>
+    <AssemblyName>tes-runner</AssemblyName>
     <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,9 +43,24 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="TesTask.json">
+    <None Update="runner-task.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </None>
   </ItemGroup>
+
+  <Target Name="GenerateMD5" AfterTargets="GenerateSingleFileBundle">
+    <GenerateMD5 InputFile="$(PublishedSingleFilePath)">
+      <Output TaskParameter="MD5Hash" PropertyName="__RunnerMD5Hash" />
+    </GenerateMD5>
+    <WriteLinesToFile Lines="$(__RunnerMD5Hash)" File="$(IntermediateOutputPath)$(AssemblyName).md5" WriteOnlyWhenDifferent="true" Overwrite="true" />
+    <ItemGroup>
+    <FileWrites Include="$(IntermediateOutputPath)$(AssemblyName).md5" />
+      <ResolvedFileToPublish Include="$(IntermediateOutputPath)$(AssemblyName).md5">
+        <RelativePath>$(AssemblyName).md5</RelativePath>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 
 </Project>

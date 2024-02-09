@@ -19,7 +19,7 @@ public class ExternalStorageContainerInfo
     /// <summary>
     /// Blob endpoint
     /// </summary>
-    public string BlobEndpoint { get; set; }
+    public System.Uri BlobEndpoint { get; set; }
     /// <summary>
     /// Sas Token
     /// </summary>

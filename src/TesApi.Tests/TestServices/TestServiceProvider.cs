@@ -21,6 +21,7 @@ using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
+using TesApi.Web.Runner;
 using TesApi.Web.Storage;
 
 namespace TesApi.Tests.TestServices
@@ -40,7 +41,6 @@ namespace TesApi.Tests.TestServices
             Action<Mock<IBatchSkuInformationProvider>> batchSkuInformationProvider = default,
             Action<Mock<IBatchQuotaProvider>> batchQuotaProvider = default,
             (Func<IServiceProvider, System.Linq.Expressions.Expression<Func<ArmBatchQuotaProvider>>> expression, Action<Mock<ArmBatchQuotaProvider>> action) armBatchQuotaProvider = default, //added so config utils gets the arm implementation, to be removed once config utils is refactored.
-            Action<Mock<ContainerRegistryProvider>> containerRegistryProviderSetup = default,
             Action<Mock<IAllowedVmSizesService>> allowedVmSizesServiceSetup = default,
             Action<IServiceCollection> additionalActions = default)
         {
@@ -48,15 +48,12 @@ namespace TesApi.Tests.TestServices
             provider = new ServiceCollection()
                         .AddSingleton<ConfigurationUtils>()
                         .AddSingleton(_ => GetAllowedVmSizesServiceProviderProvider(allowedVmSizesServiceSetup).Object)
-                        .AddSingleton(_ => GetContainerRegisterProvider(containerRegistryProviderSetup).Object)
                         .AddSingleton(Configuration)
                         .AddSingleton(BindHelper<BatchAccountOptions>(BatchAccountOptions.SectionName))
                         .AddSingleton(BindHelper<RetryPolicyOptions>(RetryPolicyOptions.SectionName))
                         .AddSingleton(BindHelper<TerraOptions>(TerraOptions.SectionName))
-                        .AddSingleton(BindHelper<ContainerRegistryOptions>(ContainerRegistryOptions.SectionName))
                         .AddSingleton(BindHelper<BatchImageGeneration1Options>(BatchImageGeneration1Options.SectionName))
                         .AddSingleton(BindHelper<BatchImageGeneration2Options>(BatchImageGeneration2Options.SectionName))
-                        .AddSingleton(BindHelper<BatchImageNameOptions>(BatchImageNameOptions.SectionName))
                         .AddSingleton(BindHelper<BatchNodesOptions>(BatchNodesOptions.SectionName))
                         .AddSingleton(BindHelper<BatchSchedulingOptions>(BatchSchedulingOptions.SectionName))
                         .AddSingleton(BindHelper<StorageOptions>(StorageOptions.SectionName))
@@ -79,7 +76,10 @@ namespace TesApi.Tests.TestServices
                         .AddTransient<ILogger<BatchQuotaVerifier>>(_ => NullLogger<BatchQuotaVerifier>.Instance)
                         .AddTransient<ILogger<ConfigurationUtils>>(_ => NullLogger<ConfigurationUtils>.Instance)
                         .AddTransient<ILogger<PriceApiBatchSkuInformationProvider>>(_ => NullLogger<PriceApiBatchSkuInformationProvider>.Instance)
-                        .AddSingleton<TestRepositoryStorage>()
+                        .AddTransient<ILogger<TaskToNodeTaskConverter>>(_ => NullLogger<TaskToNodeTaskConverter>.Instance)
+                        .AddTransient<ILogger<TaskExecutionScriptingManager>>(_ => NullLogger<TaskExecutionScriptingManager>.Instance)
+                        .AddTransient<ILogger<BatchNodeScriptBuilder>>(_ => NullLogger<BatchNodeScriptBuilder>.Instance)
+                        .AddTransient<ILogger<CachingWithRetriesAzureProxy>>(_ => NullLogger<CachingWithRetriesAzureProxy>.Instance)
                         .AddSingleton<CachingRetryHandler>()
                         .AddSingleton<PriceApiClient>()
                         .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
@@ -87,6 +87,9 @@ namespace TesApi.Tests.TestServices
                         .AddSingleton<IBatchScheduler, BatchScheduler>()
                         .AddSingleton(s => GetArmBatchQuotaProvider(s, armBatchQuotaProvider)) //added so config utils gets the arm implementation, to be removed once config utils is refactored.
                         .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
+                        .AddSingleton<TaskToNodeTaskConverter>()
+                        .AddSingleton<TaskExecutionScriptingManager>()
+                        .AddSingleton<BatchNodeScriptBuilder>()
                         .IfThenElse(additionalActions is null, s => { }, s => additionalActions(s))
                     .BuildServiceProvider();
 
@@ -101,7 +104,6 @@ namespace TesApi.Tests.TestServices
         internal Mock<ArmBatchQuotaProvider> ArmBatchQuotaProvider { get; private set; } //added so config utils gets the arm implementation, to be removed once config utils is refactored.
         internal Mock<IRepository<TesTask>> TesTaskRepository { get; private set; }
         internal Mock<IStorageAccessProvider> StorageAccessProvider { get; private set; }
-        internal Mock<ContainerRegistryProvider> ContainerRegistryProvider { get; private set; }
         internal Mock<IAllowedVmSizesService> AllowedVmSizesServiceProvider { get; private set; }
 
         internal T GetT()
@@ -172,13 +174,6 @@ namespace TesApi.Tests.TestServices
             return AllowedVmSizesServiceProvider = proxy;
         }
 
-        private Mock<ContainerRegistryProvider> GetContainerRegisterProvider(Action<Mock<ContainerRegistryProvider>> action)
-        {
-            var proxy = new Mock<ContainerRegistryProvider>();
-            action?.Invoke(proxy);
-            return ContainerRegistryProvider = proxy;
-        }
-
         private Mock<IBatchSkuInformationProvider> GetBatchSkuInformationProvider(Action<Mock<IBatchSkuInformationProvider>> action)
         {
             var proxy = new Mock<IBatchSkuInformationProvider>();
@@ -227,11 +222,5 @@ namespace TesApi.Tests.TestServices
                 Dispose();
             return ValueTask.CompletedTask;
         }
-    }
-
-    internal sealed class TestRepository<T> : BaseRepository<T> where T : RepositoryItem<T>
-    {
-        public TestRepository(string endpoint, string key, string databaseId, string containerId, string partitionKeyValue, TestRepositoryStorage storage)
-            : base(endpoint, key, databaseId, containerId, partitionKeyValue, storage) { }
     }
 }
