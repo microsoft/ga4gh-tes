@@ -83,9 +83,7 @@ namespace TesApi.Web
 
                 try
                 {
-                    logger.LogDebug("Starting delay.");
                     await Task.Delay(runInterval, stoppingToken);
-                    logger.LogDebug("Ending delay.");
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -104,7 +102,6 @@ namespace TesApi.Web
         {
             var pools = new HashSet<string>();
 
-            logger.LogDebug("Starting query.");
             var tesTasks = (await repository.GetItemsAsync(
                     predicate: t => t.State == TesState.QUEUEDEnum
                         || t.State == TesState.INITIALIZINGEnum
@@ -113,7 +110,6 @@ namespace TesApi.Web
                     cancellationToken: stoppingToken))
                 .OrderBy(t => t.CreationTime)
                 .ToList();
-            logger.LogDebug("Ending query.");
 
             if (0 == tesTasks.Count)
             {
@@ -169,8 +165,6 @@ namespace TesApi.Web
                         logger.LogError(exc, "TES task: {TesTask} threw an exception in OrchestrateTesTasksOnBatch().", tesTask.Id);
                         await repository.UpdateItemAsync(tesTask, stoppingToken);
                     }
-
-                    logger.LogDebug("{TesTask} {WAS}, state: {TesTaskState}", tesTask.Id, "was " + (isModified ? string.Empty : "not ") + "modified", tesTask.State);
 
                     if (isModified)
                     {

@@ -4,5 +4,5 @@ obj/
 .vscode/
 /CromwellTriggerService/out
 /Microsoft.GA4GH.TES.sln.DotSettings.user
-.user
+*.user
 

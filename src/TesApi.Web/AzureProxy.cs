@@ -184,8 +184,6 @@ namespace TesApi.Web
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1826:Do not use Enumerable methods on indexable collections", Justification = "FirstOrDefault() is straightforward, the alternative is less clear.")]
         public async Task<AzureBatchJobAndTaskState> GetBatchJobAndTaskStateAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
-            logger.LogDebug("Entering GetBatchJobAndTaskStateAsync for task {TesTask}", tesTask.Id);
-
             try
             {
                 string nodeErrorCode = null;
@@ -318,10 +316,6 @@ namespace TesApi.Web
             {
                 logger.LogError(ex, @"GetBatchJobAndTaskStateAsync failed for TesTask {TesTask}", tesTask.Id);
                 throw;
-            }
-            finally
-            {
-                logger.LogDebug("Leaving GetBatchJobAndTaskStateAsync for task {TesTask}", tesTask.Id);
             }
         }
 

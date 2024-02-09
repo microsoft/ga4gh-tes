@@ -127,20 +127,7 @@ namespace Tes.Repository
         /// <returns></returns>
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
         {
-            Logger.LogDebug("Performing query.");
-            try
-            {
-                return await InternalGetItemsAsync(predicate, cancellationToken);
-            }
-            catch (Exception e)
-            {
-                Logger.LogError(e, "Query resulted in ({ExceptionType}): {ExceptionMessage}", e.GetType().FullName, e.Message);
-                throw;
-            }
-            finally
-            {
-                Logger.LogDebug("Completed query.");
-            }
+            return await InternalGetItemsAsync(predicate, cancellationToken);
         }
 
         /// <summary>
