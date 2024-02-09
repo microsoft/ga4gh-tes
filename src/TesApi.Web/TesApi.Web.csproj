@@ -38,7 +38,7 @@
     <PackageReference Include="Swashbuckle.AspNetCore.Swagger" Version="6.5.0" />
     <PackageReference Include="System.Linq.Async" Version="6.0.1" />
     <PackageReference Include="System.Linq.Async.Queryable" Version="6.0.1" />
-    <PackageReference Include="YamlDotNet" Version="15.1.0" />
+    <PackageReference Include="YamlDotNet" Version="15.1.1" />
   </ItemGroup>
 
   <ItemGroup>
