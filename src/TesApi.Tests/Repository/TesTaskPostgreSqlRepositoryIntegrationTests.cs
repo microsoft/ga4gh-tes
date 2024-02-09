@@ -178,7 +178,7 @@ namespace Tes.Repository.Tests
                 Assert.IsTrue(tesTaskIds.Count == itemCount);
                 Console.WriteLine("Done");
             }
-            catch (Exception exc)
+            catch (Exception)
             {
                 Debugger.Break();
                 throw;
