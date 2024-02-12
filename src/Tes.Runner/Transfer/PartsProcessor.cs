@@ -64,13 +64,13 @@ public abstract class PartsProcessor
         return Task.Run(async () =>
         {
             var tasks = new List<Task>();
-        
+
             for (var p = 0; p < numberOfProcessors; p++)
             {
                 try
                 {
                     await semaphore.WaitAsync(cancellationSource.Token);
-        
+
                     if (!scalingStrategy.IsScalingAllowed(p, currentMaxPartProcessingTime))
                     {
                         logger.LogInformation("The maximum number of tasks for the transfer operation has been set. Max part processing time is: {currentMaxPartProcessingTimeInMs} ms. Processing tasks count: {processorCount}.", currentMaxPartProcessingTime, p);
@@ -81,22 +81,22 @@ public abstract class PartsProcessor
                 {
                     semaphore.Release();
                 }
-        
+
                 if (readFromChannel.Reader.Completion.IsCompleted)
                 {
                     logger.LogInformation("The readFromChannel is completed, no need to add more processing tasks. Processing tasks count: {processorCount}.", p);
                     break;
                 }
-        
+
                 var delay = scalingStrategy.GetScalingDelay(p);
-        
+
                 logger.LogInformation("Increasing the number of processing tasks to {processorCount}", p + 1);
-        
+
                 tasks.Add(StartProcessorTaskAsync(readFromChannel, processorAsync, cancellationSource));
-        
+
                 await Task.Delay(delay, cancellationSource.Token);
             }
-        
+
             await Task.WhenAll(tasks);
         }, cancellationSource.Token);
     }
