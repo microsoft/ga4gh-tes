@@ -40,7 +40,7 @@ namespace Tes.Runner.Docker
 
             // Get the manifest to the image to be pulled. If authentication is needed, this will derive it from the managed identity using the pull-image scope.
             var client = CreateContainerRegistryContentClientWithAcquireAuthTokenPolicy(new Uri(registryAddress), repositoryName, runtimeOptions, token => acrAccessToken = token);
-            _ = await client.GetManifestAsync(imageTag);
+            _ = await client.GetManifestAsync(imageTag ?? string.Empty);
 
             if (string.IsNullOrWhiteSpace(acrAccessToken))
             {

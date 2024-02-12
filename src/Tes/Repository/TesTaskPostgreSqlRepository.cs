@@ -23,6 +23,16 @@ namespace Tes.Repository
     /// <typeparam name="TesTask"></typeparam>
     public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem>, IRepository<TesTask>
     {
+        // Creator of NpgsqlDataSource
+        public static Func<string, Npgsql.NpgsqlDataSource> NpgsqlDataSourceBuilder
+            => connectionString => new Npgsql.NpgsqlDataSourceBuilder(connectionString)
+                            .EnableDynamicJson(jsonbClrTypes: new[] { typeof(TesTask) })
+                            .Build();
+
+        // Configuration of NpgsqlDbContext
+        public static Action<Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder> NpgsqlDbContextOptionsBuilder => options =>
+            options.MaxBatchSize(1000);
+
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
@@ -33,10 +43,8 @@ namespace Tes.Repository
         public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTaskDatabaseItem> cache = null)
             : base(hostApplicationLifetime, logger, cache)
         {
-            var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
-            CreateDbContext = () => { return new TesDbContext(connectionString); };
-            using var dbContext = CreateDbContext();
-            dbContext.Database.MigrateAsync().Wait();
+            var npgsqlDataSource = NpgsqlDataSourceBuilder(ConnectionStringUtility.GetPostgresConnectionString(options)); // This must be run just once, do not move it into the lambda below.
+            CreateDbContext = Initialize(() => new TesDbContext(npgsqlDataSource, NpgsqlDbContextOptionsBuilder));
             WarmCacheAsync(CancellationToken.None).Wait();
         }
 
@@ -47,9 +55,14 @@ namespace Tes.Repository
         public TesTaskPostgreSqlRepository(Func<TesDbContext> createDbContext)
             : base(default)
         {
-            CreateDbContext = createDbContext;
+            CreateDbContext = Initialize(createDbContext);
+        }
+
+        private static Func<TesDbContext> Initialize(Func<TesDbContext> createDbContext)
+        {
             using var dbContext = createDbContext();
-            dbContext.Database.MigrateAsync().Wait();
+            dbContext.Database.MigrateAsync(CancellationToken.None).Wait();
+            return createDbContext;
         }
 
         private async Task WarmCacheAsync(CancellationToken cancellationToken)
@@ -114,7 +127,7 @@ namespace Tes.Repository
         /// <returns></returns>
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
         {
-            return (await InternalGetItemsAsync(predicate, cancellationToken));
+            return await InternalGetItemsAsync(predicate, cancellationToken);
         }
 
         /// <summary>

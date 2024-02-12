@@ -78,14 +78,14 @@ namespace TesApi.Web
                 }
                 catch (Exception exc)
                 {
-                    logger.LogError(exc, exc.Message);
+                    logger.LogError(exc, "{ExceptionMessage}", exc.Message);
                 }
 
                 try
                 {
                     await Task.Delay(runInterval, stoppingToken);
                 }
-                catch (TaskCanceledException)
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
                     break;
                 }
