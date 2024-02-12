@@ -6,6 +6,8 @@ using System.IO;
 using System.Reflection;
 using Azure.Core;
 using Azure.Identity;
+using CommonUtilities;
+using CommonUtilities.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Caching.Memory;
@@ -17,7 +19,6 @@ using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Serialization;
 using Tes.ApiClients;
-using Tes.ApiClients.Options;
 using Tes.Models;
 using Tes.Repository;
 using TesApi.Filters;
@@ -96,7 +97,8 @@ namespace TesApi.Web
                     .AddSingleton<IRepository<TesTask>>(sp => ActivatorUtilities.CreateInstance<RepositoryRetryHandler<TesTask>>(sp, (IRepository<TesTask>)sp.GetRequiredService(typeof(TesTaskPostgreSqlRepository))))
 
                     .AddAutoMapper(typeof(MappingProfilePoolToWsmRequest))
-                    .AddSingleton<CachingRetryHandler>()
+                    .AddSingleton<CachingRetryPolicyBuilder>()
+                    .AddSingleton<RetryPolicyBuilder>(s => s.GetRequiredService<CachingRetryPolicyBuilder>()) // Return the already declared retry policy builder
                     .AddSingleton<IBatchQuotaVerifier, BatchQuotaVerifier>()
                     .AddSingleton<IBatchScheduler, BatchScheduler>()
                     .AddSingleton<PriceApiClient>()

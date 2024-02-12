@@ -5,8 +5,9 @@ using System.Collections;
 
 namespace CommonUtilities
 {
-    public static class Base32
+    public static class UtilityExtensions
     {
+        #region RFC 4648 Base32
         private static readonly char[] Rfc4648Base32 = new[] { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '2', '3', '4', '5', '6', '7' };
         private const int GroupBitlength = 5;
         private const int BitsPerByte = 8;
@@ -17,7 +18,8 @@ namespace CommonUtilities
         /// </summary>
         /// <param name="bytes">Data to convert.</param>
         /// <returns>RFC 4648 Base32 representation</returns>
-        public static string ConvertToBase32(byte[] bytes) // https://datatracker.ietf.org/doc/html/rfc4648#section-6
+        /// <remarks>https://datatracker.ietf.org/doc/html/rfc4648#section-6</remarks>
+        public static string ConvertToBase32(this byte[] bytes)
 
             // The RFC 4648 Base32 algorithm requires that each byte be presented in MSB order, but BitArray on every platform presents them in LSB order.
             => new string(new BitArray(bytes).Cast<bool>()
@@ -44,27 +46,28 @@ namespace CommonUtilities
                     4 => @"=",
                     _ => throw new InvalidOperationException(), // Keeps the compiler happy.
                 };
+        #endregion
 
         /// <summary>
         /// Converts each group (fixed number) of items into a new item
         /// </summary>
         /// <typeparam name="TSource">Type of source items</typeparam>
-        /// <typeparam name="TGroupItem">Intermediate type</typeparam>
+        /// <typeparam name="TGroup">Intermediate type</typeparam>
         /// <typeparam name="TResult">Type of the resultant items</typeparam>
-        /// <param name="ts">The source enumerable of type <typeparamref name="TSource"/>.</param>
-        /// <param name="itemsPerGroup">The size of each group to create out of the entire enumeration. The last group may be smaller.</param>
-        /// <param name="groupMemberFunc">The function that prepares each <typeparamref name="TSource"/> into the value expected by <paramref name="groupResultFunc"/>. Its parameters are an item of type <typeparamref name="TSource"/> and the index of that item (starting from zero) within each group.</param>
-        /// <param name="groupResultFunc">The function that creates the <typeparamref name="TResult"/> from each group of <typeparamref name="TGroupItem"/>.</param>
+        /// <param name="source">The source enumerable of type <typeparamref name="TSource"/>.</param>
+        /// <param name="groupSize">The size of each group to create out of the entire enumeration. The last group may be smaller.</param>
+        /// <param name="groupItemFunc">The function that prepares each <typeparamref name="TSource"/> into the value expected by <paramref name="groupResultFunc"/>. Its parameters are an item of type <typeparamref name="TSource"/> and the index of that item (starting from zero) within each group.</param>
+        /// <param name="groupResultFunc">The function that creates the <typeparamref name="TResult"/> from each group of <typeparamref name="TGroup"/> items.</param>
         /// <returns>An enumeration of <typeparamref name="TResult"/> from all of the groups.</returns>
-        private static IEnumerable<TResult> ConvertGroup<TSource, TGroupItem, TResult>(
-            this IEnumerable<TSource> ts,
-            int itemsPerGroup,
-            Func<TSource, int, TGroupItem> groupMemberFunc,
-            Func<IEnumerable<TGroupItem>, TResult> groupResultFunc)
-            => ts
+        public static IEnumerable<TResult> ConvertGroup<TSource, TGroup, TResult>(
+            this IEnumerable<TSource> source,
+            int groupSize,
+            Func<TSource, int, TGroup> groupItemFunc,
+            Func<IEnumerable<TGroup>, TResult> groupResultFunc)
+            => source
                 .Select((value, index) => (Index: index, Value: value))
-                .GroupBy(tuple => tuple.Index / itemsPerGroup)
+                .GroupBy(tuple => tuple.Index / groupSize)
                 .OrderBy(tuple => tuple.Key)
-                .Select(items => groupResultFunc(items.Select(i => groupMemberFunc(i.Value, i.Index % itemsPerGroup))));
+                .Select(groups => groupResultFunc(groups.Select(item => groupItemFunc(item.Value, item.Index % groupSize))));
     }
 }

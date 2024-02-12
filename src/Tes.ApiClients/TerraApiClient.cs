@@ -24,14 +24,11 @@ namespace Tes.ApiClients
         /// </summary>
         /// <param name="apiUrl">API Host</param>
         /// <param name="tokenCredential"><see cref="TokenCredential"/></param>
-        /// <param name="cachingRetryHandler"><see cref="CachingRetryHandler"/></param>
+        /// <param name="cachingRetryHandler"><see cref="CachingRetryPolicyBuilder"/></param>
         /// <param name="logger"><see cref="ILogger{TCategoryName}"/></param>
-        protected TerraApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryHandler cachingRetryHandler, ILogger logger) : base(tokenCredential, TokenScope, cachingRetryHandler, logger)
+        protected TerraApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryPolicyBuilder cachingRetryHandler, ILogger logger) : base(tokenCredential, TokenScope, cachingRetryHandler, logger)
         {
             ArgumentException.ThrowIfNullOrEmpty(apiUrl);
-            ArgumentNullException.ThrowIfNull(tokenCredential);
-            ArgumentNullException.ThrowIfNull(cachingRetryHandler);
-            ArgumentNullException.ThrowIfNull(logger);
 
             ApiUrl = apiUrl;
         }

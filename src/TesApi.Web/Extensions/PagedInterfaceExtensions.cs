@@ -5,13 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using CommonUtilities;
 using Microsoft.Azure.Batch;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
-using Microsoft.Rest.Azure;
-using Polly.Retry;
 
-namespace TesApi.Web
+namespace TesApi.Web.Extensions
 {
     /// <summary>
     /// Extension methods and implementations for enumerating paged enumeration/collection types from Azure
@@ -39,20 +35,23 @@ namespace TesApi.Web
 
                 _getEnumerator = c => new PagedEnumerableEnumerator<T>(source, c);
             }
-            public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+
+            /// <inheritdoc/>
+            IAsyncEnumerator<T> IAsyncEnumerable<T>.GetAsyncEnumerator(CancellationToken cancellationToken)
                 => _getEnumerator(cancellationToken);
         }
 
-        private sealed class PagedEnumerableEnumerator<T> : CommonUtilities.PagedInterfaceExtensions.Enumerator<T, IPagedEnumerator<T>>
+        private sealed class PagedEnumerableEnumerator<T> : CommonUtilities.PagedInterfaceExtensions.AbstractEnumerator<T, IPagedEnumerator<T>>
         {
             public PagedEnumerableEnumerator(IPagedEnumerable<T> source, CancellationToken cancellationToken)
                 : base(source?.GetPagedEnumerator(), e => e.Current, cancellationToken)
             { }
 
+            /// <inheritdoc/>
             public override async ValueTask<bool> MoveNextAsync()
             {
-                _cancellationToken.ThrowIfCancellationRequested();
-                return await _enumerator.MoveNextAsync(_cancellationToken);
+                CancellationToken.ThrowIfCancellationRequested();
+                return await Enumerator.MoveNextAsync(CancellationToken);
             }
         }
         #endregion

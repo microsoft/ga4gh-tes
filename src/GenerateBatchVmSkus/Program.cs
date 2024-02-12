@@ -15,13 +15,13 @@ using Azure.ResourceManager.Batch;
 using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.Compute.Models;
 using Azure.ResourceManager.Resources.Models;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Tes.ApiClients;
 using Tes.ApiClients.Models.Pricing;
-using Tes.ApiClients.Options;
 using Tes.Models;
 
 namespace GenerateBatchVmSkus
@@ -206,7 +206,7 @@ namespace GenerateBatchVmSkus
             clientOptions.Retry.MaxRetries = int.Max(clientOptions.Retry.MaxRetries, retryPolicyOptions.MaxRetryCount);
             var client = new ArmClient(tokenCredential, default, clientOptions);
             var appCache = new MemoryCache(new MemoryCacheOptions());
-            var cacheAndRetryHandler = new CachingRetryHandler(appCache, Options.Create(retryPolicyOptions));
+            var cacheAndRetryHandler = new CachingRetryPolicyBuilder(appCache, Options.Create(retryPolicyOptions));
             var priceApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
 
             var subscription = client.GetSubscriptionResource(new ResourceIdentifier($"/subscriptions/{configuration.SubscriptionId}"));

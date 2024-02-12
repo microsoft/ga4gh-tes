@@ -6,6 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\Tes.ApiClients.Tests\TestServices\RetryHandlersHelpers.cs" Link="TestServices\RetryHandlersHelpers.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   
