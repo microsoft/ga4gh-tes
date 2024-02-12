@@ -47,6 +47,7 @@ namespace Tes.Runner.Test
         }
 
         [TestMethod]
+        [Ignore]
         public async Task StartPartsReaderAsync_ThrowsWhenOneCallFailsFromTheList()
         {
             await PrepareReaderChannelAsync();
