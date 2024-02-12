@@ -19,6 +19,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Rest;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
+using Tes.Models;
 using Tes.Utilities;
 using TesApi.Controllers;
 using FlexibleServer = Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
@@ -42,10 +43,10 @@ namespace Tes.Repository.Tests
         private static IRepository<Models.TesTask> repository;
         private static readonly string subscriptionId = "";
         private static readonly string regionName = "southcentralus";
-        private static readonly string resourceGroupName = $"tes-test-{Guid.NewGuid().ToString().Substring(0, 8)}";
-        private static readonly string postgreSqlServerName = $"tes{Guid.NewGuid().ToString().Substring(0, 8)}";
+        private static readonly string resourceGroupName = $"tes-test-{Guid.NewGuid().ToString()[..8]}";
+        private static readonly string postgreSqlServerName = $"tes{Guid.NewGuid().ToString()[..8]}";
         private static readonly string postgreSqlDatabaseName = "tes_db";
-        private static readonly string adminLogin = $"tes{Guid.NewGuid().ToString().Substring(0, 8)}";
+        private static readonly string adminLogin = $"tes{Guid.NewGuid().ToString()[..8]}";
         private static readonly string adminPw = PasswordGenerator.GeneratePassword();
 
         [ClassInitialize]
@@ -55,18 +56,18 @@ namespace Tes.Repository.Tests
             await PostgreSqlTestUtility.CreateTestDbAsync(
                 subscriptionId, regionName, resourceGroupName, postgreSqlServerName, postgreSqlDatabaseName, adminLogin, adminPw);
 
-            var options = new Models.PostgreSqlOptions
-            {
-                ServerName = postgreSqlServerName,
-                DatabaseName = postgreSqlDatabaseName,
-                DatabaseUserLogin = adminLogin,
-                DatabaseUserPassword = adminPw
-            };
+            var connectionString = ConnectionStringUtility
+                .GetPostgresConnectionString(Options.Create(new PostgreSqlOptions
+                {
+                    ServerName = postgreSqlServerName,
+                    DatabaseName = postgreSqlDatabaseName,
+                    DatabaseUserLogin = adminLogin,
+                    DatabaseUserPassword = adminPw
+                }));
 
-            var optionsMock = new Mock<IOptions<Models.PostgreSqlOptions>>();
-            optionsMock.Setup(x => x.Value).Returns(options);
-            var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(optionsMock.Object);
-            repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(connectionString));
+            repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(
+                TesTaskPostgreSqlRepository.NpgsqlDataSourceBuilder(connectionString),
+                TesTaskPostgreSqlRepository.NpgsqlDbContextOptionsBuilder));
             Console.WriteLine("Creation complete.");
         }
 
@@ -82,12 +83,12 @@ namespace Tes.Repository.Tests
         public async Task TryGetItemAsyncTest()
         {
             var id = Guid.NewGuid().ToString();
-            var createdItem = await repository.CreateItemAsync(new Models.TesTask
+            var createdItem = await repository.CreateItemAsync(new TesTask
             {
                 Id = id,
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
-                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+                Inputs = [new TesInput { Url = "https://test" }]
             }, CancellationToken.None);
             Assert.IsNotNull(createdItem);
 
@@ -355,12 +356,12 @@ namespace Tes.Repository.Tests
         {
             var itemId = Guid.NewGuid().ToString();
 
-            var task = await repository.CreateItemAsync(new Models.TesTask
+            var task = await repository.CreateItemAsync(new TesTask
             {
                 Id = itemId,
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
-                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+                Inputs = [new TesInput { Url = "https://test" }]
             }, CancellationToken.None);
 
             Assert.IsNotNull(task);
@@ -372,12 +373,12 @@ namespace Tes.Repository.Tests
             var description = $"created at {DateTime.UtcNow}";
             var id = Guid.NewGuid().ToString();
 
-            var createdItem = await repository.CreateItemAsync(new Models.TesTask
+            var createdItem = await repository.CreateItemAsync(new TesTask
             {
                 Id = id,
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
-                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+                Inputs = [new TesInput { Url = "https://test" }]
             }, CancellationToken.None);
 
             Assert.IsTrue(createdItem.State != Models.TesState.COMPLETEEnum);
@@ -401,12 +402,12 @@ namespace Tes.Repository.Tests
         {
             var id = Guid.NewGuid().ToString();
 
-            var createdItem = await repository.CreateItemAsync(new Models.TesTask
+            var createdItem = await repository.CreateItemAsync(new TesTask
             {
                 Id = id,
                 Description = Guid.NewGuid().ToString(),
                 CreationTime = DateTime.UtcNow,
-                Inputs = new List<Models.TesInput> { new Models.TesInput { Url = "https://test" } }
+                Inputs = [new TesInput { Url = "https://test" }]
             }, CancellationToken.None);
             Assert.IsNotNull(createdItem);
             await repository.DeleteItemAsync(id, CancellationToken.None);
@@ -498,6 +499,5 @@ namespace Tes.Repository.Tests
                 .Configure()
                 .WithLogLevel(HttpLoggingDelegatingHandler.Level.Basic)
                 .Authenticate(azureCredentials);
-
     }
 }

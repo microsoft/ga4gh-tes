@@ -31,7 +31,7 @@ namespace Tes.Repository
             .WaitAndRetryAsync(10, i => TimeSpan.FromSeconds(Math.Pow(2, i)));
 
         private readonly Channel<(T, WriteAction, TaskCompletionSource<T>)> itemsToWrite = Channel.CreateUnbounded<(T, WriteAction, TaskCompletionSource<T>)>();
-        private readonly ConcurrentDictionary<T, object> updatingItems = new(); // Collection of all pending items to be written.
+        private readonly ConcurrentDictionary<T, object> updatingItems = new(); // Collection of all pending updates to be written, to faciliate detection of simultaneous parallel updates.
         private readonly CancellationTokenSource writerWorkerCancellationTokenSource = new();
         private readonly Task writerWorkerTask;
 
@@ -203,9 +203,10 @@ namespace Tes.Repository
 
         private async ValueTask WriteItemsAsync(IList<(T DbItem, WriteAction Action, TaskCompletionSource<T> TaskSource)> dbItems, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (dbItems.Count == 0) { return; }
 
-            cancellationToken.ThrowIfCancellationRequested();
             using var dbContext = CreateDbContext();
 
             // Manually set entity state to avoid potential NPG PostgreSql bug
@@ -213,9 +214,9 @@ namespace Tes.Repository
 
             try
             {
-                dbContext.RemoveRange(dbItems.Where(e => WriteAction.Delete.Equals(e.Action)).Select(e => e.DbItem));
-                dbContext.UpdateRange(dbItems.Where(e => WriteAction.Update.Equals(e.Action)).Select(e => e.DbItem));
                 dbContext.AddRange(dbItems.Where(e => WriteAction.Add.Equals(e.Action)).Select(e => e.DbItem));
+                dbContext.UpdateRange(dbItems.Where(e => WriteAction.Update.Equals(e.Action)).Select(e => e.DbItem));
+                dbContext.RemoveRange(dbItems.Where(e => WriteAction.Delete.Equals(e.Action)).Select(e => e.DbItem));
                 await asyncPolicy.ExecuteAsync(dbContext.SaveChangesAsync, cancellationToken);
             }
             catch (Exception ex)
@@ -244,7 +245,9 @@ namespace Tes.Repository
                     {
                         writerWorkerTask.Wait();
                     }
-                    catch (OperationCanceledException ex) when (writerWorkerCancellationTokenSource.Token == ex.CancellationToken)
+                    catch (AggregateException aex) when (aex?.InnerException is TaskCanceledException ex && writerWorkerCancellationTokenSource.Token == ex.CancellationToken)
+                    { } // Expected return from Wait().
+                    catch (TaskCanceledException ex) when (writerWorkerCancellationTokenSource.Token == ex.CancellationToken)
                     { } // Expected return from Wait().
                 }
 
