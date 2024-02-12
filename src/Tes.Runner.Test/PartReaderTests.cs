@@ -21,7 +21,7 @@ namespace Tes.Runner.Test
         private Channel<PipelineBuffer>? writeBufferChannel;
         private readonly long fileSize = BlobSizeUtils.MiB * 100;
         private readonly string fileName = "tempFile";
-
+        private CancellationTokenSource cancellationSource = null!;
 
         [TestInitialize]
         public async Task SetUp()
@@ -29,9 +29,10 @@ namespace Tes.Runner.Test
             memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(RunnerTestUtils.MemBuffersCapacity, blockSizeBytes);
             options = new BlobPipelineOptions();
             pipeline = new Mock<IBlobPipeline>();
-            partsReader = new PartsReader(pipeline.Object, options, memoryBufferChannel);
+            partsReader = new PartsReader(pipeline.Object, options, memoryBufferChannel, new SimpleScalingStrategy());
             readBufferChannel = Channel.CreateBounded<PipelineBuffer>(RunnerTestUtils.PipelineBufferCapacity);
             writeBufferChannel = Channel.CreateBounded<PipelineBuffer>(RunnerTestUtils.PipelineBufferCapacity);
+            cancellationSource = new CancellationTokenSource();
         }
 
         [TestMethod]
@@ -39,7 +40,7 @@ namespace Tes.Runner.Test
         {
             var numberOfParts = await PrepareReaderChannelAsync();
 
-            await partsReader!.StartPartsReaderAsync(readBufferChannel!, writeBufferChannel!);
+            await partsReader!.StartPartsReaderAsync(readBufferChannel!, writeBufferChannel!, cancellationSource);
 
             pipeline!.Verify(p => p.ExecuteReadAsync(It.IsAny<PipelineBuffer>(), It.IsAny<CancellationToken>()), Times.Exactly(numberOfParts));
             Assert.AreEqual(numberOfParts, writeBufferChannel!.Reader.Count);
@@ -64,7 +65,7 @@ namespace Tes.Runner.Test
                     }
                 });
 
-            await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => partsReader!.StartPartsReaderAsync(readBufferChannel!, writeBufferChannel!));
+            await Assert.ThrowsExceptionAsync<TaskCanceledException>(() => partsReader!.StartPartsReaderAsync(readBufferChannel!, writeBufferChannel!, cancellationSource));
         }
 
         [TestMethod]
@@ -72,7 +73,7 @@ namespace Tes.Runner.Test
         {
             var numberOfParts = await PrepareReaderChannelAsync();
 
-            await partsReader!.StartPartsReaderAsync(readBufferChannel!, writeBufferChannel!);
+            await partsReader!.StartPartsReaderAsync(readBufferChannel!, writeBufferChannel!, cancellationSource);
 
             //The reader reads from the memory buffer to create parts, the number of items in the memory
             //buffer must be the available must be the difference between the number of memory buffers and the number of parts to create

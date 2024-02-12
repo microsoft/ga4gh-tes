@@ -29,7 +29,7 @@ namespace Tes.Runner.Test
 
             memoryBuffer = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(5, blockSize);
 
-            options = new BlobPipelineOptions(blockSize, 10, 10, 10);
+            options = new BlobPipelineOptions(blockSize, 10, 10, 10, FileHandlerPoolCapacity: 1);
             operationPipeline = new BlobOperationPipelineTestImpl(options, memoryBuffer, sourceSize);
         }
 
@@ -39,7 +39,6 @@ namespace Tes.Runner.Test
             RunnerTestUtils.DeleteFileIfExists(tempFile1);
             RunnerTestUtils.DeleteFileIfExists(tempFile2);
         }
-
 
         [TestMethod]
         public async Task ExecuteAsync_SingleOperation_CallsReaderWriterAndCompleteMethods_CorrectNumberOfTimes()
@@ -73,10 +72,9 @@ namespace Tes.Runner.Test
         }
 
         [TestMethod]
-        [ExpectedException(typeof(InvalidOperationException))]
+        [ExpectedException(typeof(TaskCanceledException))]
         public async Task ExecuteAsync_ThrowsOnRead_ExecutesThrows()
         {
-
             var pipeline = new BlobOperationPipelineTestImpl(options, memoryBuffer, sourceSize);
 
             //throw on when processing the 5th block

@@ -14,6 +14,7 @@ public class PartsProducer
     private readonly IBlobPipeline blobPipeline;
     private readonly ILogger logger = PipelineLoggerFactory.Create<PartsProducer>();
     private readonly BlobPipelineOptions blobPipelineOptions;
+    private readonly List<Channel<FileStream>> fileHandlersPools = new List<Channel<FileStream>>();
 
 
     public PartsProducer(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions)
@@ -31,17 +32,17 @@ public class PartsProducer
     /// </summary>
     /// <param name="blobOperations">A list of <see cref="BlobOperationInfo"/>></param>
     /// <param name="readBufferChannel">Channel where are parts are written</param>
+    /// <param name="cancellationSource"></param>
     /// <returns></returns>
-    public async Task StartPartsProducersAsync(List<BlobOperationInfo> blobOperations, Channel<PipelineBuffer> readBufferChannel)
+    public async Task StartPartsProducersAsync(List<BlobOperationInfo> blobOperations, Channel<PipelineBuffer> readBufferChannel, CancellationTokenSource cancellationSource)
     {
         ValidateOperations(blobOperations, readBufferChannel);
 
         var partsProducerTasks = new List<Task>();
-        var cancellationTokenSource = new CancellationTokenSource();
 
         foreach (var operation in blobOperations)
         {
-            partsProducerTasks.Add(StartPartsProducerAsync(operation, readBufferChannel, cancellationTokenSource));
+            partsProducerTasks.Add(StartPartsProducerAsync(operation, readBufferChannel, cancellationSource));
         }
 
         try
@@ -53,7 +54,18 @@ public class PartsProducer
         catch (Exception e)
         {
             logger.LogError(e, "The parts producer failed.");
+
+            await TryCloseAllFileHandlerPools();
+
             throw;
+        }
+    }
+
+    private async Task TryCloseAllFileHandlerPools()
+    {
+        foreach (var fileHandlePool in fileHandlersPools)
+        {
+            await PartsProcessor.TryCloseFileHandlerPoolAsync(fileHandlePool);
         }
     }
 
@@ -98,6 +110,7 @@ public class PartsProducer
             {
                 await CreateAndWritePipelinePartBufferAsync(operation, readBufferChannel, fileHandlerPool, length, partOrdinal: i, numberOfParts, cancellationTokenSource.Token);
             }
+
         }
         catch (Exception e)
         {
@@ -170,6 +183,8 @@ public class PartsProducer
                 throw;
             }
         }
+
+        fileHandlersPools.Add(pool);
 
         return pool;
     }
