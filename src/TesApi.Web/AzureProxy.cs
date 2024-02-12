@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Azure.Identity;
 using CommonUtilities;
+using CommonUtilities.AzureCloud;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Auth;
 using Microsoft.Azure.Batch.Common;
@@ -50,7 +51,7 @@ namespace TesApi.Web
         private readonly string location;
         //TODO: This dependency should be injected at a higher level (e.g. scheduler), but that requires significant refactoring that should be done separately.
         private readonly IBatchPoolManager batchPoolManager;
-
+        private readonly AzureCloudConfig azureCloudConfig;
 
         /// <summary>
         /// Constructor of AzureProxy
@@ -61,7 +62,7 @@ namespace TesApi.Web
         /// <param name="retryHandler">Retry builder</param>
         /// <param name="logger">The logger</param>
         /// <exception cref="InvalidOperationException"></exception>
-        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, BatchAccountResourceInformation batchAccountInformation, IBatchPoolManager batchPoolManager, RetryPolicyBuilder retryHandler, ILogger<AzureProxy> logger)
+        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, BatchAccountResourceInformation batchAccountInformation, IBatchPoolManager batchPoolManager, AzureCloudConfig azureCloudConfig, RetryPolicyBuilder retryHandler, ILogger<AzureProxy> logger)
         {
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
             ArgumentNullException.ThrowIfNull(batchAccountInformation);
@@ -69,7 +70,9 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(batchPoolManager);
             ArgumentNullException.ThrowIfNull(retryHandler);
             ArgumentNullException.ThrowIfNull(logger);
+            ArgumentNullException.ThrowIfNull(azureCloudConfig);
 
+            this.azureCloudConfig = azureCloudConfig;
             this.batchPoolManager = batchPoolManager;
             this.logger = logger;
 
