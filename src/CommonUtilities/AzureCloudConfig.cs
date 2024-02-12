@@ -4,6 +4,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Polly;
+using Microsoft.Extensions.Logging;
 
 namespace CommonUtilities.AzureCloud
 {
@@ -62,16 +63,16 @@ namespace CommonUtilities.AzureCloud
         [JsonPropertyName("ossrDbmsResourceId")]
         public string? OssrDbmsResourceUrl { get; set; }
 
-        public static async Task<AzureCloudConfig> CreateAsync(string azureCloudMetadataUrl = defaultAzureCloudMetadataUrl)
+        public static async Task<AzureCloudConfig> CreateAsync(ILogger<AzureCloudConfig> logger, string azureCloudMetadataUrl = defaultAzureCloudMetadataUrl)
         {
             // It's critical that this succeeds for TES to function
-            // Retry every minute for up to 10 minutes
             // These URLs are expected to always be available
+
             var retryPolicy = Policy
                 .Handle<Exception>()
-                .WaitAndRetryAsync(10, retryAttempt => TimeSpan.FromMinutes(1), onRetry: (outcome, timespan, retryAttempt, context) =>
+                .WaitAndRetryAsync(10, retryAttempt => TimeSpan.FromSeconds(30), onRetry: (exception, timespan, retryAttempt, context) =>
                 {
-                    Console.WriteLine(context.CorrelationId);
+                    logger?.LogWarning(exception, $"Attempt {retryAttempt}: Retrying AzureCloudConfig creation due to error: {exception.Message}");
                 });
 
             using var httpClient = new HttpClient();
