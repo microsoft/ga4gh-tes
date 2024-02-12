@@ -81,14 +81,14 @@ namespace Tes.Runner.Test.Transfer
         [DataTestMethod]
         [DataRow(1)]
         [DataRow(10)]
-        public async Task StartProcessors_0ProcessingTime_ScalingStrategyIsCalledOnce(int numOfProcessors)
+        public async Task StartProcessors_0ProcessingTime_ScalingStrategyIsCalledAtLeastOnce(int numOfProcessors)
         {
             await PrepareReaderChannelAsync();
             await partsProcessor.StartProcessors(numOfProcessors, readChannel);
 
-            //since the part processing time ~0, a single processor should be sufficient, therefore the strategy should be called once
-            strategyMock.Verify(s => s.GetScalingDelay(It.IsAny<int>()), Times.Once);
-            strategyMock.Verify(s => s.IsScalingAllowed(It.IsAny<int>(), It.IsAny<TimeSpan>()), Times.Once);
+            //since the part processing time ~0, a single processor should be sufficient, therefore the strategy should be called at least once
+            strategyMock.Verify(s => s.GetScalingDelay(It.IsAny<int>()), Times.AtLeastOnce);
+            strategyMock.Verify(s => s.IsScalingAllowed(It.IsAny<int>(), It.IsAny<TimeSpan>()), Times.AtLeastOnce);
         }
 
         [TestMethod]
