@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
+using Newtonsoft.Json;
 using Tes.Repository;
 
 namespace Tes.Models
@@ -16,12 +17,16 @@ namespace Tes.Models
         private static readonly Regex CromwellShardRegex = new(".*:([^:]*):[^:]*");
         private static readonly Regex CromwellAttemptRegex = new(".*:([^:]*)");
 
-        public static readonly List<TesState> ActiveStates = new() {
-            TesState.QUEUEDEnum,
-            TesState.RUNNINGEnum,
-            TesState.PAUSEDEnum,
-            TesState.INITIALIZINGEnum,
-            TesState.CANCELINGEnum,
+        public static readonly List<TesState> TerminalStates = [
+            TesState.COMPLETEEnum,
+            TesState.EXECUTORERROREnum,
+            TesState.SYSTEMERROREnum,
+            TesState.CANCELEDEnum,
+        ];
+
+        public static readonly List<TesState> TerminalStatesWithPreempted = new(TerminalStates)
+        {
+            TesState.PREEMPTEDEnum,
         };
 
         /// <summary>
@@ -89,9 +94,18 @@ namespace Tes.Models
         /// True if task should be kept in the cache.
         /// </summary>
         /// <returns></returns>
-        public bool IsActiveState()
+        public bool IsActiveState(bool includePreempted = false) // TODO: consider using TesResources.BackendParameters to signal whether PREEMPTEDEnum is considered a terminal state
         {
-            return ActiveStates.Contains(this.State);
+            return !(includePreempted ? TerminalStatesWithPreempted : TerminalStates).Contains(this.State);
+        }
+
+        /// <summary>
+        /// Performs a deep copy.
+        /// </summary>
+        /// <returns></returns>
+        public TesTask Clone()
+        {
+            return JsonConvert.DeserializeObject<TesTask>(ToJson());
         }
     }
 }

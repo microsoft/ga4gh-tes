@@ -21,8 +21,18 @@ namespace Tes.Repository
     /// A TesTask specific repository for storing the TesTask as JSON within an Entity Framework Postgres table
     /// </summary>
     /// <typeparam name="TesTask"></typeparam>
-    public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem>, IRepository<TesTask>
+    public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem, TesTask>, IRepository<TesTask>
     {
+        // Creator of NpgsqlDataSource
+        public static Func<string, Npgsql.NpgsqlDataSource> NpgsqlDataSourceBuilder
+            => connectionString => new Npgsql.NpgsqlDataSourceBuilder(connectionString)
+                            .EnableDynamicJson(jsonbClrTypes: new[] { typeof(TesTask) })
+                            .Build();
+
+        // Configuration of NpgsqlDbContext
+        public static Action<Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder> NpgsqlDbContextOptionsBuilder => options =>
+            options.MaxBatchSize(1000);
+
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
@@ -33,10 +43,8 @@ namespace Tes.Repository
         public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTaskDatabaseItem> cache = null)
             : base(hostApplicationLifetime, logger, cache)
         {
-            var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
-            CreateDbContext = () => { return new TesDbContext(connectionString); };
-            using var dbContext = CreateDbContext();
-            dbContext.Database.MigrateAsync().Wait();
+            var npgsqlDataSource = NpgsqlDataSourceBuilder(ConnectionStringUtility.GetPostgresConnectionString(options)); // This must be run just once, do not move it into the lambda below.
+            CreateDbContext = Initialize(() => new TesDbContext(npgsqlDataSource, NpgsqlDbContextOptionsBuilder));
             WarmCacheAsync(CancellationToken.None).Wait();
         }
 
@@ -47,9 +55,14 @@ namespace Tes.Repository
         public TesTaskPostgreSqlRepository(Func<TesDbContext> createDbContext)
             : base(default)
         {
-            CreateDbContext = createDbContext;
+            CreateDbContext = Initialize(createDbContext);
+        }
+
+        private static Func<TesDbContext> Initialize(Func<TesDbContext> createDbContext)
+        {
             using var dbContext = createDbContext();
-            dbContext.Database.MigrateAsync().Wait();
+            dbContext.Database.MigrateAsync(CancellationToken.None).Wait();
+            return createDbContext;
         }
 
         private async Task WarmCacheAsync(CancellationToken cancellationToken)
@@ -79,7 +92,7 @@ namespace Tes.Repository
                     })
                 .ExecuteAsync(async ct =>
                 {
-                    var activeTasksCount = (await InternalGetItemsAsync(task => TesTask.ActiveStates.Contains(task.State), ct, q => q.OrderBy(t => t.Json.CreationTime))).Count();
+                    var activeTasksCount = (await InternalGetItemsAsync(task => !TesTask.TerminalStates.Contains(task.State), ct, orderBy: q => q.OrderBy(t => t.Json.CreationTime))).Count();
                     Logger?.LogInformation("Cache warmed successfully in {TotalSeconds} seconds. Added {TasksAddedCount} items to the cache.", $"{sw.Elapsed.TotalSeconds:n3}", $"{activeTasksCount:n0}");
                 }, cancellationToken);
         }
@@ -114,7 +127,7 @@ namespace Tes.Repository
         /// <returns></returns>
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
         {
-            return (await InternalGetItemsAsync(predicate, cancellationToken));
+            return await InternalGetItemsAsync(predicate, cancellationToken);
         }
 
         /// <summary>
@@ -126,7 +139,7 @@ namespace Tes.Repository
         public async Task<TesTask> CreateItemAsync(TesTask task, CancellationToken cancellationToken)
         {
             var item = new TesTaskDatabaseItem { Json = task };
-            item = await AddUpdateOrRemoveItemInDbAsync(item, WriteAction.Add, cancellationToken);
+            item = await AddUpdateOrRemoveItemInDbAsync(item, db => db.Json, WriteAction.Add, cancellationToken);
             return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json;
         }
 
@@ -149,7 +162,7 @@ namespace Tes.Repository
         {
             var item = await GetItemFromCacheOrDatabase(tesTask.Id, true, cancellationToken);
             item.Json = tesTask;
-            item = await AddUpdateOrRemoveItemInDbAsync(item, WriteAction.Update, cancellationToken);
+            item = await AddUpdateOrRemoveItemInDbAsync(item, db => db.Json, WriteAction.Update, cancellationToken);
             return EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState()).Json;
         }
 
@@ -161,7 +174,7 @@ namespace Tes.Repository
         /// <param name="cancellationToken"></param>
         public async Task DeleteItemAsync(string id, CancellationToken cancellationToken)
         {
-            _ = await AddUpdateOrRemoveItemInDbAsync(await GetItemFromCacheOrDatabase(id, true, cancellationToken), WriteAction.Delete, cancellationToken);
+            _ = await AddUpdateOrRemoveItemInDbAsync(await GetItemFromCacheOrDatabase(id, true, cancellationToken), db => db.Json, WriteAction.Delete, cancellationToken);
             _ = Cache?.TryRemove(id);
         }
 
@@ -236,7 +249,7 @@ namespace Tes.Repository
                 }
             }
 
-            return item;
+            return item.Clone();
         }
 
         /// <summary>

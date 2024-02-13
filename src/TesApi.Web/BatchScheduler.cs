@@ -369,7 +369,7 @@ namespace TesApi.Web
                 switch (batchInfo.State)
                 {
                     case AzureBatchTaskState.TaskState.CancellationRequested:
-                        if (!TesTask.ActiveStates.Contains(tesTask.State))
+                        if (!tesTask.IsActiveState())
                         {
                             return false; // It probably already finished on its own
                         }

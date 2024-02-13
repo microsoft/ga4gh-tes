@@ -288,12 +288,12 @@ namespace TesApi.Tests
             {
                 // Mock TryGetItemAsync to return true and provide a TesTask object
                 r.Setup(repo => repo.TryGetItemAsync(tesTaskId, It.IsAny<CancellationToken>(), It.IsAny<Action<TesTask>>()))
-                .Callback((string id, CancellationToken ct, Action<TesTask> action) => action(mockTesTask))
-                .ReturnsAsync(true);
+                    .Callback((string id, CancellationToken ct, Action<TesTask> action) => action(mockTesTask))
+                    .ReturnsAsync(true);
 
                 // Mock UpdateItemAsync to throw a RepositoryCollisionException
                 r.Setup(repo => repo.UpdateItemAsync(It.IsAny<TesTask>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new RepositoryCollisionException());
+                    .ThrowsAsync(new RepositoryCollisionException<TesTask>(Task.FromResult<TesTask>(default)));
             });
 
             var controller = services.GetT();
