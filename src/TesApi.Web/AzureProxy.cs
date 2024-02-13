@@ -10,7 +10,6 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
 using CommonUtilities;
-using CommonUtilities.Options;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Auth;
 using Microsoft.Azure.Batch.Common;
@@ -54,16 +53,14 @@ namespace TesApi.Web
         /// <summary>
         /// Constructor of AzureProxy
         /// </summary>
-        /// <param name="retryPolicyOptions">Retry policy options</param>
         /// <param name="batchAccountOptions">The Azure Batch Account options</param>
         /// <param name="batchAccountInformation">The Azure Batch Account information</param>
         /// <param name="batchPoolManager"><inheritdoc cref="IBatchPoolManager"/></param>
         /// <param name="retryHandler">Retry builder</param>
         /// <param name="logger">The logger</param>
         /// <exception cref="InvalidOperationException"></exception>
-        public AzureProxy(IOptions<RetryPolicyOptions> retryPolicyOptions, IOptions<BatchAccountOptions> batchAccountOptions, BatchAccountResourceInformation batchAccountInformation, IBatchPoolManager batchPoolManager, RetryPolicyBuilder retryHandler, ILogger<AzureProxy> logger)
+        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, BatchAccountResourceInformation batchAccountInformation, IBatchPoolManager batchPoolManager, RetryPolicyBuilder retryHandler, ILogger<AzureProxy> logger)
         {
-            ArgumentNullException.ThrowIfNull(retryPolicyOptions);
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
             ArgumentNullException.ThrowIfNull(batchAccountInformation);
             ArgumentNullException.ThrowIfNull(logger);
@@ -176,10 +173,9 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(cloudTasks);
 
             cloudTasks = cloudTasks.ToList();
-
             var job = await batchRetryPolicyWhenJobNotFound.ExecuteWithRetryAsync(ct =>
-                    batchClient.JobOperations.GetJobAsync(jobId, cancellationToken: ct),
-                    cancellationToken);
+                batchClient.JobOperations.GetJobAsync(jobId, cancellationToken: ct),
+                cancellationToken);
 
             await job.AddTaskAsync(cloudTasks, new() { CancellationToken = cancellationToken, MaxDegreeOfParallelism = (int)Math.Ceiling((double)cloudTasks.Count() / Microsoft.Azure.Batch.Constants.MaxTasksInSingleAddTaskCollectionRequest) });
         }

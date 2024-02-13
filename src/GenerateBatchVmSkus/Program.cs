@@ -4,7 +4,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Globalization;
-using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using Azure;
@@ -206,7 +205,7 @@ namespace GenerateBatchVmSkus
             clientOptions.Retry.MaxRetries = int.Max(clientOptions.Retry.MaxRetries, retryPolicyOptions.MaxRetryCount);
             var client = new ArmClient(tokenCredential, default, clientOptions);
             var appCache = new MemoryCache(new MemoryCacheOptions());
-            var cacheAndRetryHandler = new CachingRetryPolicyBuilder(appCache, Options.Create<RetryPolicyOptions>(retryPolicyOptions));
+            var cacheAndRetryHandler = new CachingRetryPolicyBuilder(appCache, Options.Create(retryPolicyOptions));
             var priceApiClient = new PriceApiClient(cacheAndRetryHandler, new NullLogger<PriceApiClient>());
 
             var subscription = client.GetSubscriptionResource(new ResourceIdentifier($"/subscriptions/{configuration.SubscriptionId}"));

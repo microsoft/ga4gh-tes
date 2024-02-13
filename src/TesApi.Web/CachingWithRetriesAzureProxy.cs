@@ -23,6 +23,7 @@ namespace TesApi.Web
     /// </summary>
     public class CachingWithRetriesAzureProxy : IAzureProxy
     {
+        private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
         private readonly CachingRetryHandlerPolicy cachingRetry;
         private readonly CachingAsyncRetryHandlerPolicy cachingAsyncRetry;
@@ -41,21 +42,23 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(cachingRetryHandler);
 
             this.azureProxy = azureProxy;
+            this.logger = logger;
+
             var sleepDuration = new Func<int, Exception, TimeSpan?>((attempt, exception) => (exception as BatchException)?.RequestInformation?.RetryAfter);
 
             this.cachingRetry = cachingRetryHandler.PolicyBuilder.OpinionatedRetryPolicy()
-                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup(sleepDuration, backupSkipProvidedIncrements: true).SetOnRetryBehavior(logger).AddCaching().SyncBuild();
+                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup(sleepDuration, backupSkipProvidedIncrements: true).SetOnRetryBehavior(this.logger).AddCaching().SyncBuild();
 
             this.cachingAsyncRetry = cachingRetryHandler.PolicyBuilder.OpinionatedRetryPolicy()
-                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup(sleepDuration, backupSkipProvidedIncrements: true).SetOnRetryBehavior(logger).AddCaching().AsyncBuild();
+                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup(sleepDuration, backupSkipProvidedIncrements: true).SetOnRetryBehavior(this.logger).AddCaching().AsyncBuild();
 
             this.cachingAsyncRetryExceptWhenExists = cachingRetryHandler.PolicyBuilder
                 .OpinionatedRetryPolicy(Polly.Policy.Handle<BatchException>(ex => !CreationErrorFoundCodes.Contains(ex.RequestInformation?.BatchError?.Code, StringComparer.OrdinalIgnoreCase)))
-                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup(sleepDuration, backupSkipProvidedIncrements: true).SetOnRetryBehavior(logger).AddCaching().AsyncBuild();
+                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup(sleepDuration, backupSkipProvidedIncrements: true).SetOnRetryBehavior(this.logger).AddCaching().AsyncBuild();
 
             this.cachingAsyncRetryExceptWhenNotFound = cachingRetryHandler.PolicyBuilder
                 .OpinionatedRetryPolicy(Polly.Policy.Handle<BatchException>(ex => !DeletionErrorFoundCodes.Contains(ex.RequestInformation?.BatchError?.Code, StringComparer.OrdinalIgnoreCase)))
-                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup(sleepDuration, backupSkipProvidedIncrements: true).SetOnRetryBehavior(logger).AddCaching().AsyncBuild();
+                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup(sleepDuration, backupSkipProvidedIncrements: true).SetOnRetryBehavior(this.logger).AddCaching().AsyncBuild();
         }
 
         private static readonly string[] CreationErrorFoundCodes = new[]
