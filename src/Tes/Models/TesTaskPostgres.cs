@@ -17,5 +17,12 @@ namespace Tes.Models
 
         [Column("json", TypeName = "jsonb")]
         public TesTask Json { get; set; }
+
+        public TesTaskDatabaseItem Clone()
+        {
+            var result = (TesTaskDatabaseItem)MemberwiseClone();
+            result.Json = Json.Clone();
+            return result;
+        }
     }
 }

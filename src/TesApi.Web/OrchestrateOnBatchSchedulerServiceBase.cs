@@ -248,33 +248,32 @@ namespace TesApi.Web
                         await repository.UpdateItemAsync(tesTask, cancellationToken);
                     }
                 }
-                catch (RepositoryCollisionException exc)
+                catch (RepositoryCollisionException<TesTask> rce)
                 {
-                    logger.LogError(exc, "RepositoryCollisionException in OrchestrateTesTasksOnBatch({Poll})", pollName);
-                    //TODO: retrieve fresh task if possible and add logs to the task in a similar way to the commanted out code block below.
-                    //Also: consider doing the same in the other place(s) this exception is caught.
+                    logger.LogError(rce, "RepositoryCollisionException in OrchestrateTesTasksOnBatch({Poll})", pollName);
+
+                    try
+                    {
+                        var currentTesTask = await rce.Task;
+
+                        if (currentTesTask is not null && currentTesTask.IsActiveState())
+                        {
+                            currentTesTask.SetWarning(rce.Message);
+
+                            if (currentTesTask.IsActiveState())
+                            {
+                                // TODO: merge tesTask and currentTesTask
+                            }
+
+                            await repository.UpdateItemAsync(currentTesTask, cancellationToken);
+                        }
+                    }
+                    catch (Exception exc)
+                    {
+                        // Consider retrying repository.UpdateItemAsync() if this exception was thrown from 'await rce.Task'
+                        logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
+                    }
                 }
-                //catch (Microsoft.Azure.Cosmos.CosmosException exc)
-                //{
-                //    TesTask currentTesTask = default;
-                //    _ = await repository.TryGetItemAsync(tesTask.Id, t => currentTesTask = t);
-
-                //    if (exc.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
-                //    {
-                //        logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw an exception attempting to set state: {tesTask.State}. Another actor set state: {currentTesTask?.State}");
-                //        currentTesTask?.SetWarning("ConcurrencyWriteFailure", tesTask.State.ToString(), exc.Message, exc.StackTrace);
-                //    }
-                //    else
-                //    {
-                //        logger.LogError(exc, $"Updating TES Task '{tesTask.Id}' threw {exc.GetType().FullName}: '{exc.Message}'. Stack trace: {exc.StackTrace}");
-                //        currentTesTask?.SetWarning(AzureBatchTaskState.UnknownError, exc.Message, exc.StackTrace);
-                //    }
-
-                //    if (currentTesTask is not null)
-                //    {
-                //        await repository.UpdateItemAsync(currentTesTask);
-                //    }
-                //}
                 catch (Exception exc)
                 {
                     logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);

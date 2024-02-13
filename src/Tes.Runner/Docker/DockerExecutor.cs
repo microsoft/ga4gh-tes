@@ -7,7 +7,6 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Polly;
 using Tes.Runner.Authentication;
 using Tes.Runner.Logs;
 using Tes.Runner.Models;
@@ -21,7 +20,7 @@ namespace Tes.Runner.Docker
         private readonly IDockerClient dockerClient = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
         private readonly NetworkUtility networkUtility = new();
-        private readonly AsyncRetryHandlerPolicy retryHandler = null!;
+        private readonly AsyncRetryHandlerPolicy dockerPullRetryPolicy = null!;
         private readonly IStreamLogReader streamLogReader = null!;
         private readonly ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager = null!;
         private readonly Predicate<DockerApiException> IsAuthFailure = e => !IsNotAuthFailure(e);
@@ -29,11 +28,12 @@ namespace Tes.Runner.Docker
         private static readonly Func<DockerApiException, bool> IsNotAuthFailure = e =>
             // Immediately fail calls with either 'Unauthorized' or 'Forbidden' status codes
             !(e.StatusCode == System.Net.HttpStatusCode.Unauthorized || e.StatusCode == System.Net.HttpStatusCode.Forbidden ||
-                (e.StatusCode == System.Net.HttpStatusCode.InternalServerError && // Immediately fail calls with a status code of 'InternalServerError' and
-                                                                                  // an HTTP body consisting of a JSON object with a single string property named "message" where the content is a colon-delimited string of three parts:
-                                                                                  // a user-readable description of the failure, the status code from the remote registry server, and the textual description of that status code.
-                                                                                  // Note that complete validation of the structure of the error report object is not performed. If a one word part after the first colon (and before any
-                                                                                  // second colon) isn't found, this isn't the failure we are looking for and we'll assume it's retriable.
+                // Immediately fail calls with a status code of 'InternalServerError' and
+                // an HTTP body consisting of a JSON object with a single string property named "message" where the content is a colon-delimited string of three parts:
+                // a user-readable description of the failure, the status code from the remote registry server, and the textual description of that status code.
+                // Note that complete validation of the structure of the error report object is not performed. If a one word part after the first colon (and before any
+                // second colon) isn't found, this isn't the failure we are looking for and we'll assume it's retriable.
+                (e.StatusCode == System.Net.HttpStatusCode.InternalServerError &&
                     new[] { "unauthorized", "forbidden" }.Contains(e.ResponseBody?.Split(':').Skip(1).FirstOrDefault()?.Trim().ToLowerInvariant() ?? string.Empty)));
 
         const int LogStreamingMaxWaitTimeInSeconds = 30;
@@ -43,7 +43,6 @@ namespace Tes.Runner.Docker
         { }
 
         public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager)
-            : this() // Add logging to retries
         {
             ArgumentNullException.ThrowIfNull(dockerClient);
             ArgumentNullException.ThrowIfNull(streamLogReader);
@@ -52,19 +51,28 @@ namespace Tes.Runner.Docker
             this.dockerClient = dockerClient;
             this.streamLogReader = streamLogReader;
             this.containerRegistryAuthorizationManager = containerRegistryAuthorizationManager;
+
+            // Retry for ~91s for ACR 1-minute throttle window
+            var dockerPullRetryPolicyOptions = new RetryPolicyOptions
+            {
+                MaxRetryCount = 6,
+                ExponentialBackOffExponent = 2
+            };
+
+            dockerPullRetryPolicy = new RetryPolicyBuilder(Options.Create(dockerPullRetryPolicyOptions))
+                .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy
+                    .Handle(IsNotAuthFailure)
+                    .Or<IOException>())
+                .WithRetryPolicyOptionsWait()
+                .SetOnRetryBehavior(logger)
+                .AsyncBuild();
         }
 
         /// <summary>
         /// Parameter-less constructor for mocking
         /// </summary>
         protected DockerExecutor()
-        {
-            var retryPolicyOption = new RetryPolicyOptions();
-            this.retryHandler =
-                new RetryPolicyBuilder(Options.Create(new RetryPolicyOptions()))
-                    .PolicyBuilder.OpinionatedRetryPolicy(Policy.Handle(IsNotAuthFailure))
-                    .WithRetryPolicyOptionsWait().SetOnRetryBehavior(logger).AsyncBuild();
-        }
+        { }
 
         public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(ExecutionOptions executionOptions)
         {
@@ -168,7 +176,7 @@ namespace Tes.Runner.Docker
         {
             logger.LogInformation(@"Pulling image name: {ImageName} image tag: {ImageTag}", imageName, tag);
 
-            await retryHandler.ExecuteWithRetryAsync(async () =>
+            await dockerPullRetryPolicy.ExecuteWithRetryAsync(async () =>
             {
                 await dockerClient.Images.CreateImageAsync(
                     new ImagesCreateParameters() { FromImage = imageName, Tag = tag },

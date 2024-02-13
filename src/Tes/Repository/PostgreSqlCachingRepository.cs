@@ -16,10 +16,11 @@ using Polly;
 namespace Tes.Repository
 {
     /// <summary>
-    /// A repository for storing <typeparamref name="T"/> in an Entity Framework Postgres table
+    /// A repository for storing <typeparamref name="TDbItem"/> in an Entity Framework Postgres table
     /// </summary>
-    /// <typeparam name="T">Database table schema class</typeparam>
-    public abstract class PostgreSqlCachingRepository<T> : IDisposable where T : class
+    /// <typeparam name="TDbItem">Database table schema class</typeparam>
+    /// <typeparam name="TItem">Corresponding type for <typeparamref name="TDbItem"/></typeparam>
+    public abstract class PostgreSqlCachingRepository<TDbItem, TItem> : IDisposable where TDbItem : class where TItem : RepositoryItem<TItem>
     {
         private const int BatchSize = 1000;
         private static readonly TimeSpan defaultCompletedTaskCacheExpiration = TimeSpan.FromDays(1);
@@ -28,15 +29,15 @@ namespace Tes.Repository
             .Handle<Npgsql.NpgsqlException>(e => e.IsTransient)
             .WaitAndRetryAsync(10, i => TimeSpan.FromSeconds(Math.Pow(2, i)));
 
-        private readonly Channel<(T, WriteAction, TaskCompletionSource<T>)> itemsToWrite = Channel.CreateUnbounded<(T, WriteAction, TaskCompletionSource<T>)>();
-        private readonly ConcurrentDictionary<T, object> updatingItems = new(); // Collection of all pending items to be written.
+        private readonly Channel<(TDbItem, WriteAction, TaskCompletionSource<TDbItem>)> itemsToWrite = Channel.CreateUnbounded<(TDbItem, WriteAction, TaskCompletionSource<TDbItem>)>();
+        private readonly ConcurrentDictionary<string, Task<TDbItem>> updatingItems = new(); // Collection of all pending updates to be written, to faciliate detection of simultaneous parallel updates.
         private readonly CancellationTokenSource writerWorkerCancellationTokenSource = new();
         private readonly Task writerWorkerTask;
 
         protected enum WriteAction { Add, Update, Delete }
 
         protected Func<TesDbContext> CreateDbContext { get; init; }
-        protected readonly ICache<T> Cache;
+        protected readonly ICache<TDbItem> Cache;
         protected readonly ILogger Logger;
 
         private bool _disposedValue;
@@ -48,7 +49,7 @@ namespace Tes.Repository
         /// <param name="logger"></param>
         /// <param name="cache"></param>
         /// <exception cref="System.Diagnostics.UnreachableException"></exception>
-        protected PostgreSqlCachingRepository(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger logger = default, ICache<T> cache = default)
+        protected PostgreSqlCachingRepository(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger logger = default, ICache<TDbItem> cache = default)
         {
             Logger = logger;
             Cache = cache;
@@ -80,11 +81,11 @@ namespace Tes.Repository
         /// <summary>
         /// Adds item to cache if active and not already present or updates it if already present.
         /// </summary>
-        /// <param name="item"><see cref="T"/> to add or update to the cache.</param>
-        /// <param name="getKey">Function to provide cache key from <see cref="T"/>.</param>
-        /// <param name="isActive">Predicate to determine if <see cref="T"/> is active.</param>
+        /// <param name="item"><see cref="TDbItem"/> to add or update to the cache.</param>
+        /// <param name="getKey">Function to provide cache key from <see cref="TDbItem"/>.</param>
+        /// <param name="isActive">Predicate to determine if <see cref="TDbItem"/> is active.</param>
         /// <returns><paramref name="item"/> (for convenience in fluent/LINQ usage patterns).</returns>
-        protected T EnsureActiveItemInCache(T item, Func<T, string> getKey, Predicate<T> isActive)
+        protected TDbItem EnsureActiveItemInCache(TDbItem item, Func<TDbItem, string> getKey, Predicate<TDbItem> isActive)
         {
             if (Cache is not null)
             {
@@ -111,7 +112,7 @@ namespace Tes.Repository
         /// <param name="pagination"></param>
         /// <returns></returns>
         /// <remarks>Ensure that the <see cref="DbContext"/> from which <paramref name="dbSet"/> comes isn't disposed until the entire query completes.</remarks>
-        protected async Task<IEnumerable<T>> GetItemsAsync(DbSet<T> dbSet, Expression<Func<T, bool>> predicate, CancellationToken cancellationToken, Func<IQueryable<T>, IQueryable<T>> orderBy = default, Func<IQueryable<T>, IQueryable<T>> pagination = default)
+        protected async Task<IEnumerable<TDbItem>> GetItemsAsync(DbSet<TDbItem> dbSet, Expression<Func<TDbItem, bool>> predicate, CancellationToken cancellationToken, Func<IQueryable<TDbItem>, IQueryable<TDbItem>> orderBy = default, Func<IQueryable<TDbItem>, IQueryable<TDbItem>> pagination = default)
         {
             ArgumentNullException.ThrowIfNull(dbSet);
             ArgumentNullException.ThrowIfNull(predicate);
@@ -130,23 +131,25 @@ namespace Tes.Repository
         /// Adds entry into WriterWorker queue.
         /// </summary>
         /// <param name="item"></param>
+        /// <param name="getItem"></param>
         /// <param name="action"></param>
         /// <returns></returns>
-        protected Task<T> AddUpdateOrRemoveItemInDbAsync(T item, WriteAction action, CancellationToken cancellationToken)
+        protected Task<TDbItem> AddUpdateOrRemoveItemInDbAsync(TDbItem item, Func<TDbItem, TItem> getItem, WriteAction action, CancellationToken cancellationToken)
         {
-            var source = new TaskCompletionSource<T>();
+            var source = new TaskCompletionSource<TDbItem>();
             var result = source.Task;
 
-            if (action == WriteAction.Update)
+            var value = updatingItems.GetOrAdd(getItem(item).GetId(), result);
+
+            if (value == result)
             {
-                if (updatingItems.TryAdd(item, null))
-                {
-                    result = source.Task.ContinueWith(RemoveUpdatingItem).Unwrap();
-                }
-                else
-                {
-                    throw new RepositoryCollisionException();
-                }
+                result = source.Task.ContinueWith(RemoveUpdatingItem).Unwrap();
+            }
+            else
+            {
+                throw new RepositoryCollisionException<TItem>(
+                    "Respository concurrency failure: attempt to update item with previously queued update pending.",
+                    value.ContinueWith(task => getItem(task.Result), TaskContinuationOptions.OnlyOnRanToCompletion));
             }
 
             if (!itemsToWrite.Writer.TryWrite((item, action, source)))
@@ -156,14 +159,14 @@ namespace Tes.Repository
 
             return result;
 
-            Task<T> RemoveUpdatingItem(Task<T> task)
+            Task<TDbItem> RemoveUpdatingItem(Task<TDbItem> task)
             {
-                _ = updatingItems.Remove(item, out _);
+                _ = updatingItems.Remove(getItem(item).GetId(), out _);
                 return task.Status switch
                 {
                     TaskStatus.RanToCompletion => Task.FromResult(task.Result),
-                    TaskStatus.Faulted => Task.FromException<T>(task.Exception),
-                    _ => Task.FromCanceled<T>(cancellationToken)
+                    TaskStatus.Faulted => Task.FromException<TDbItem>(task.Exception),
+                    _ => Task.FromCanceled<TDbItem>(cancellationToken)
                 };
             }
         }
@@ -173,7 +176,7 @@ namespace Tes.Repository
         /// </summary>
         private async Task WriterWorkerAsync(CancellationToken cancellationToken)
         {
-            var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
+            var list = new List<(TDbItem, WriteAction, TaskCompletionSource<TDbItem>)>();
 
             await foreach (var itemToWrite in itemsToWrite.Reader.ReadAllAsync(cancellationToken))
             {
@@ -192,11 +195,12 @@ namespace Tes.Repository
             // If cancellation is requested, do not write any more items
         }
 
-        private async ValueTask WriteItemsAsync(IList<(T DbItem, WriteAction Action, TaskCompletionSource<T> TaskSource)> dbItems, CancellationToken cancellationToken)
+        private async ValueTask WriteItemsAsync(IList<(TDbItem DbItem, WriteAction Action, TaskCompletionSource<TDbItem> TaskSource)> dbItems, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (dbItems.Count == 0) { return; }
 
-            cancellationToken.ThrowIfCancellationRequested();
             using var dbContext = CreateDbContext();
 
             // Manually set entity state to avoid potential NPG PostgreSql bug
@@ -204,9 +208,9 @@ namespace Tes.Repository
 
             try
             {
-                dbContext.RemoveRange(dbItems.Where(e => WriteAction.Delete.Equals(e.Action)).Select(e => e.DbItem));
-                dbContext.UpdateRange(dbItems.Where(e => WriteAction.Update.Equals(e.Action)).Select(e => e.DbItem));
                 dbContext.AddRange(dbItems.Where(e => WriteAction.Add.Equals(e.Action)).Select(e => e.DbItem));
+                dbContext.UpdateRange(dbItems.Where(e => WriteAction.Update.Equals(e.Action)).Select(e => e.DbItem));
+                dbContext.RemoveRange(dbItems.Where(e => WriteAction.Delete.Equals(e.Action)).Select(e => e.DbItem));
                 await asyncPolicy.ExecuteAsync(dbContext.SaveChangesAsync, cancellationToken);
             }
             catch (Exception ex)
@@ -219,7 +223,7 @@ namespace Tes.Repository
 
             _ = Parallel.ForEach(dbItems, e => e.TaskSource.TrySetResult(e.DbItem));
 
-            static void FailAll(IEnumerable<TaskCompletionSource<T>> sources, Exception ex)
+            static void FailAll(IEnumerable<TaskCompletionSource<TDbItem>> sources, Exception ex)
                 => _ = Parallel.ForEach(sources, s => s.TrySetException(new AggregateException(Enumerable.Empty<Exception>().Append(ex))));
         }
 
@@ -235,7 +239,9 @@ namespace Tes.Repository
                     {
                         writerWorkerTask.Wait();
                     }
-                    catch (OperationCanceledException ex) when (writerWorkerCancellationTokenSource.Token == ex.CancellationToken)
+                    catch (AggregateException aex) when (aex?.InnerException is TaskCanceledException ex && writerWorkerCancellationTokenSource.Token == ex.CancellationToken)
+                    { } // Expected return from Wait().
+                    catch (TaskCanceledException ex) when (writerWorkerCancellationTokenSource.Token == ex.CancellationToken)
                     { } // Expected return from Wait().
 
                     writerWorkerCancellationTokenSource.Dispose();

@@ -99,7 +99,7 @@ namespace TesApi.Controllers
                     {
                         await repository.UpdateItemAsync(tesTask, cancellationToken);
                     }
-                    catch (RepositoryCollisionException exc)
+                    catch (RepositoryCollisionException<TesTask> exc)
                     {
                         logger.LogError(exc, "RepositoryCollisionException in CancelTask for {TesTaskId}", id);
                         return Conflict(new { message = "The task could not be updated due to a conflict with the current state; please retry." });
@@ -249,7 +249,7 @@ namespace TesApi.Controllers
             {
                 Name = "GA4GH Task Execution Service",
                 Doc = string.Empty,
-                Storage = new List<string>(),
+                Storage = [],
                 TesResourcesSupportedBackendParameters = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList()
             };
 
