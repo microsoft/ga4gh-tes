@@ -5,7 +5,6 @@ using System;
 using System.Linq;
 using AutoMapper;
 using Microsoft.Azure.Management.Batch.Models;
-using Microsoft.Azure.Management.ContainerRegistry.Fluent.Models;
 using TesApi.Web.Management.Models.Terra;
 using TesApi.Web.Runner;
 

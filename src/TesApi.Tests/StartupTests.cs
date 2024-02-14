@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using CommonUtilities;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,7 +24,6 @@ namespace TesApi.Tests
     public class StartupTests
     {
         private Startup startup;
-        private Mock<IConfiguration> configurationMock;
         private Mock<IWebHostEnvironment> hostingEnvMock;
         private ServiceCollection services;
         private TerraApiStubData terraApiStubData;
@@ -50,7 +50,7 @@ namespace TesApi.Tests
                 options.Prefix = "TES-prefix";
             });
 
-            configurationMock = new Mock<IConfiguration>();
+            var configurationMock = new Mock<IConfiguration>();
             configurationMock.Setup(c => c.GetSection(It.IsAny<string>())).Returns(new Mock<IConfigurationSection>().Object);
             hostingEnvMock = new Mock<IWebHostEnvironment>();
             hostingEnvMock.Setup(e => e.EnvironmentName).Returns("Development");
@@ -61,6 +61,9 @@ namespace TesApi.Tests
             services.AddSingleton(hostEnv.Object);
 #pragma warning restore CS0618
 
+            services.AddSingleton(new ArmEnvironmentEndpoints(new("https://login.microsoftonline.com"), "http://management.core.windows.net/", "common", new("https://management.azure.com/"), new("https://api.applicationinsights.io"), new("https://dc.applicationinsights.azure.com/v2/track"), new("https://batch.core.windows.net/"), "azurecr.io", "vault.azure.net", "core.windows.net", "postgres.database.azure.com"));
+            services.AddTransient(provider => ActivatorUtilities.CreateInstance<AzureServicesConnectionStringCredentialOptions>(provider));
+            services.AddSingleton(configurationMock.Object);
             startup = new Startup(configurationMock.Object, NullLogger<Startup>.Instance, hostingEnvMock.Object);
         }
 
@@ -94,6 +97,19 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
+        public void ConfigureServices_TerraOptionsAreNotConfigured_DefaultStorageProviderIsResolved()
+        {
+            startup.ConfigureServices(services);
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            var terraStorageProvider = serviceProvider.GetService<IStorageAccessProvider>();
+
+            Assert.IsNotNull(terraStorageProvider);
+            Assert.IsInstanceOfType(terraStorageProvider, typeof(DefaultStorageAccessProvider));
+        }
+
+        [TestMethod]
         public void ConfigureServices_TerraOptionsAreConfigured_TerraBatchPoolManagerIsResolved()
         {
             ConfigureTerraOptions();
@@ -105,7 +121,22 @@ namespace TesApi.Tests
             var poolManager = serviceProvider.GetService<IBatchPoolManager>();
 
             Assert.IsNotNull(poolManager);
-            Assert.IsInstanceOfType(poolManager, typeof(TerraBatchPoolManager));
+            Assert.IsInstanceOfType(poolManager, typeof(CachingWithRetriesBatchPoolManager));
+            Assert.IsInstanceOfType(poolManager.GetType().GetField("batchPoolManager", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(poolManager), typeof(TerraBatchPoolManager));
+        }
+
+        [TestMethod]
+        public void ConfigureServices_TerraOptionsAreNotConfigured_ArmBatchPoolManagerIsResolved()
+        {
+            startup.ConfigureServices(services);
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            var poolManager = serviceProvider.GetService<IBatchPoolManager>();
+
+            Assert.IsNotNull(poolManager);
+            Assert.IsInstanceOfType(poolManager, typeof(CachingWithRetriesBatchPoolManager));
+            Assert.IsInstanceOfType(poolManager.GetType().GetField("batchPoolManager", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(poolManager), typeof(ArmBatchPoolManager));
         }
 
         [TestMethod]
@@ -121,6 +152,19 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(quotaProvider);
             Assert.IsInstanceOfType(quotaProvider, typeof(TerraQuotaProvider));
+        }
+
+        [TestMethod]
+        public void ConfigureServices_TerraOptionsAreNotConfigured_ArmBatchQuotaVerifierIsResolved()
+        {
+            startup.ConfigureServices(services);
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            var quotaProvider = serviceProvider.GetService<IBatchQuotaProvider>();
+
+            Assert.IsNotNull(quotaProvider);
+            Assert.IsInstanceOfType(quotaProvider, typeof(ArmBatchQuotaProvider));
         }
     }
 }

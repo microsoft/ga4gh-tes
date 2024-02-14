@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -202,13 +203,15 @@ namespace TesApi.Web
             logger.LogDebug(@"Deleting pool and job {PoolId}", pool.PoolId);
 
             return Task.WhenAll(
-                AllowIfNotFound(azureProxy.DeleteBatchPoolAsync(pool.PoolId, cancellationToken)),
+                AllowIfNotFound(batchPoolManager.DeleteBatchPoolAsync(pool.PoolId, cancellationToken)),
                 AllowIfNotFound(azureProxy.DeleteBatchJobAsync(pool.PoolId, cancellationToken)));
 
             static async Task AllowIfNotFound(Task task)
             {
                 try { await task; }
                 catch (BatchException ex) when (ex.InnerException is Microsoft.Azure.Batch.Protocol.Models.BatchErrorException e && e.Response.StatusCode == System.Net.HttpStatusCode.NotFound) { }
+                catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { }
+                //catch (InvalidOperationException) { } // Terra providers may also throw this
                 catch { throw; }
             }
         }

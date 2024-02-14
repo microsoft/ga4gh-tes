@@ -33,6 +33,7 @@ namespace TesApi.Web
 
         private readonly ILogger _logger;
         private readonly IAzureProxy _azureProxy;
+        private readonly Management.Batch.IBatchPoolManager _batchPoolManager;
 
         /// <summary>
         /// Constructor of <see cref="BatchPool"/>.
@@ -40,16 +41,18 @@ namespace TesApi.Web
         /// <param name="batchScheduler"></param>
         /// <param name="batchSchedulingOptions"></param>
         /// <param name="azureProxy"></param>
+        /// <param name="batchPoolManager"></param>
         /// <param name="logger"></param>
         /// <exception cref="ArgumentException"></exception>
-        public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, ILogger<BatchPool> logger)
+        public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, Management.Batch.IBatchPoolManager batchPoolManager, ILogger<BatchPool> logger)
         {
             var rotationDays = batchSchedulingOptions.Value.PoolRotationForcedDays;
             if (rotationDays == 0) { rotationDays = Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays; }
             _forcePoolRotationAge = TimeSpan.FromDays(rotationDays);
 
-            this._azureProxy = azureProxy;
-            this._logger = logger;
+            _azureProxy = azureProxy;
+            _batchPoolManager = batchPoolManager;
+            _logger = logger;
             _batchPools = batchScheduler as BatchScheduler ?? throw new ArgumentException("batchScheduler must be of type BatchScheduler", nameof(batchScheduler));
         }
 
@@ -654,7 +657,7 @@ namespace TesApi.Web
                     _azureProxy.CreateBatchJobAsync(poolModel.Name, poolModel.Name, cancellationToken),
                     Task.Run(async () =>
                     {
-                        var poolId = await _azureProxy.CreateBatchPoolAsync(poolModel, isPreemptible, cancellationToken);
+                        var poolId = await _batchPoolManager.CreateBatchPoolAsync(poolModel, isPreemptible, cancellationToken);
                         pool = await _azureProxy.GetBatchPoolAsync(poolId, cancellationToken, new ODATADetailLevel { SelectClause = CloudPoolSelectClause });
                     }, cancellationToken));
 

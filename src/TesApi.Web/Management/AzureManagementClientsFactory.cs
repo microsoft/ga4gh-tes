@@ -64,27 +64,5 @@ namespace TesApi.Web.Management
         /// <returns></returns>
         public async Task<BatchManagementClient> CreateBatchAccountManagementClient(CancellationToken cancellationToken)
             => new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken))) { SubscriptionId = batchAccountInformation.SubscriptionId };
-
-        /// <summary>
-        /// Creates a new instance of Azure Management Client with the default credentials and subscription.
-        /// </summary>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        public async Task<FluentAzure.IAuthenticated> CreateAzureManagementClientAsync(CancellationToken cancellationToken)
-            => await GetAzureManagementClientAsync(cancellationToken);
-
-        /// <summary>
-        /// Creates a new instance of Azure Management client
-        /// </summary>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <returns></returns>
-        public static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(CancellationToken cancellationToken)
-        {
-            var accessToken = await GetAzureAccessTokenAsync(cancellationToken);
-            var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, AzureEnvironment.AzureGlobalCloud);
-            var azureClient = FluentAzure.Authenticate(azureCredentials);
-
-            return azureClient;
-        }
     }
 }

@@ -24,19 +24,18 @@ namespace TesApi.Tests
         private TerraBatchPoolManager terraBatchPoolManager;
         private Mock<TerraWsmApiClient> wsmApiClientMock;
         private Mock<IOptions<TerraOptions>> terraOptionsMock;
-        private Mock<IOptions<BatchAccountOptions>> batchAccountOptionsMock;
+        private Mock<PoolMetadataReader> poolMetadataReaderMock;
         private TerraApiStubData terraApiStubData;
         private ApiCreateBatchPoolRequest capturedApiCreateBatchPoolRequest;
 
         [TestInitialize]
         public void SetUp()
         {
-            terraApiStubData = new TerraApiStubData();
-            wsmApiClientMock = new Mock<TerraWsmApiClient>();
-            terraOptionsMock = new Mock<IOptions<TerraOptions>>();
+            terraApiStubData = new();
+            wsmApiClientMock = new();
+            terraOptionsMock = new();
             terraOptionsMock.Setup(x => x.Value).Returns(terraApiStubData.GetTerraOptions());
-            batchAccountOptionsMock = new Mock<IOptions<BatchAccountOptions>>();
-            batchAccountOptionsMock.Setup(x => x.Value).Returns(terraApiStubData.GetBatchAccountOptions());
+            poolMetadataReaderMock = new();
             wsmApiClientMock.Setup(x => x.CreateBatchPool(It.IsAny<Guid>(), It.IsAny<ApiCreateBatchPoolRequest>(), It.IsAny<System.Threading.CancellationToken>()))
                 .Callback<Guid, ApiCreateBatchPoolRequest, System.Threading.CancellationToken>((arg1, arg2, arg3) => capturedApiCreateBatchPoolRequest = arg2)
                 .ReturnsAsync(terraApiStubData.GetApiCreateBatchPoolResponse());
@@ -44,7 +43,7 @@ namespace TesApi.Tests
             var mapperCfg = new MapperConfiguration(cfg => cfg.AddProfile(typeof(MappingProfilePoolToWsmRequest)));
 
             terraBatchPoolManager = new TerraBatchPoolManager(wsmApiClientMock.Object, mapperCfg.CreateMapper(),
-                terraOptionsMock.Object, batchAccountOptionsMock.Object, NullLogger<TerraBatchPoolManager>.Instance);
+                poolMetadataReaderMock.Object, terraOptionsMock.Object, NullLogger<TerraBatchPoolManager>.Instance);
         }
 
 

@@ -18,6 +18,7 @@ using Newtonsoft.Json;
 using Tes.Extensions;
 using Tes.Models;
 using TesApi.Web.Management;
+using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Models.Quotas;
 using TesApi.Web.Options;
 using TesApi.Web.Runner;
@@ -58,6 +59,7 @@ namespace TesApi.Web
         private readonly string cromwellDrsLocalizerImageName;
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
+        private readonly IBatchPoolManager batchPoolManager;
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly IBatchQuotaVerifier quotaVerifier;
         private readonly IBatchSkuInformationProvider skuInformationProvider;
@@ -89,6 +91,7 @@ namespace TesApi.Web
         /// <param name="batchNodesOptions">Configuration of <see cref="BatchNodesOptions"/></param>
         /// <param name="batchSchedulingOptions">Configuration of <see cref="BatchSchedulingOptions"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
+        /// <param name="batchPoolManager"></param>
         /// <param name="storageAccessProvider">Storage access provider <see cref="IStorageAccessProvider"/></param>
         /// <param name="quotaVerifier">Quota verifier <see cref="IBatchQuotaVerifier"/>></param>
         /// <param name="skuInformationProvider">Sku information provider <see cref="IBatchSkuInformationProvider"/></param>
@@ -104,6 +107,7 @@ namespace TesApi.Web
             IOptions<Options.BatchNodesOptions> batchNodesOptions,
             IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions,
             IAzureProxy azureProxy,
+            IBatchPoolManager batchPoolManager,
             IStorageAccessProvider storageAccessProvider,
             IBatchQuotaVerifier quotaVerifier,
             IBatchSkuInformationProvider skuInformationProvider,
@@ -121,6 +125,7 @@ namespace TesApi.Web
 
             this.logger = logger;
             this.azureProxy = azureProxy;
+            this.batchPoolManager = batchPoolManager;
             this.storageAccessProvider = storageAccessProvider;
             this.quotaVerifier = quotaVerifier;
             this.skuInformationProvider = skuInformationProvider;

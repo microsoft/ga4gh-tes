@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonUtilities;
@@ -13,22 +12,15 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Tes.ApiClients;
 using TesApi.Web.Storage;
-using static Tes.ApiClients.CachingRetryHandler;
-using BatchModels = Microsoft.Azure.Management.Batch.Models;
 
 namespace TesApi.Web
 {
     /// <summary>
     /// Implements caching and retries for <see cref="IAzureProxy"/>.
     /// </summary>
-    public class CachingWithRetriesAzureProxy : IAzureProxy
+    public class CachingWithRetriesAzureProxy : CachingWithRetriesBase, IAzureProxy
     {
-        private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
-        private readonly CachingRetryHandlerPolicy cachingRetry;
-        private readonly CachingAsyncRetryHandlerPolicy cachingAsyncRetry;
-        private readonly CachingAsyncRetryHandlerPolicy cachingAsyncRetryExceptWhenExists;
-        private readonly CachingAsyncRetryHandlerPolicy cachingAsyncRetryExceptWhenNotFound;
 
         /// <summary>
         /// Contructor to create a cache of <see cref="IAzureProxy"/>
@@ -37,43 +29,12 @@ namespace TesApi.Web
         /// <param name="cachingRetryHandler"></param>
         /// <param name="logger"></param>
         public CachingWithRetriesAzureProxy(IAzureProxy azureProxy, CachingRetryPolicyBuilder cachingRetryHandler, ILogger<CachingWithRetriesAzureProxy> logger)
+            : base(cachingRetryHandler, logger)
         {
             ArgumentNullException.ThrowIfNull(azureProxy);
-            ArgumentNullException.ThrowIfNull(cachingRetryHandler);
 
             this.azureProxy = azureProxy;
-            this.logger = logger;
-
-            var sleepDuration = new Func<int, Exception, TimeSpan?>((attempt, exception) => (exception as BatchException)?.RequestInformation?.RetryAfter);
-
-            this.cachingRetry = cachingRetryHandler.PolicyBuilder.OpinionatedRetryPolicy()
-                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup(sleepDuration, backupSkipProvidedIncrements: true).SetOnRetryBehavior(this.logger).AddCaching().SyncBuild();
-
-            this.cachingAsyncRetry = cachingRetryHandler.PolicyBuilder.OpinionatedRetryPolicy()
-                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup(sleepDuration, backupSkipProvidedIncrements: true).SetOnRetryBehavior(this.logger).AddCaching().AsyncBuild();
-
-            this.cachingAsyncRetryExceptWhenExists = cachingRetryHandler.PolicyBuilder
-                .OpinionatedRetryPolicy(Polly.Policy.Handle<BatchException>(ex => !CreationErrorFoundCodes.Contains(ex.RequestInformation?.BatchError?.Code, StringComparer.OrdinalIgnoreCase)))
-                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup(sleepDuration, backupSkipProvidedIncrements: true).SetOnRetryBehavior(this.logger).AddCaching().AsyncBuild();
-
-            this.cachingAsyncRetryExceptWhenNotFound = cachingRetryHandler.PolicyBuilder
-                .OpinionatedRetryPolicy(Polly.Policy.Handle<BatchException>(ex => !DeletionErrorFoundCodes.Contains(ex.RequestInformation?.BatchError?.Code, StringComparer.OrdinalIgnoreCase)))
-                .WithExceptionBasedWaitWithRetryPolicyOptionsBackup(sleepDuration, backupSkipProvidedIncrements: true).SetOnRetryBehavior(this.logger).AddCaching().AsyncBuild();
         }
-
-        private static readonly string[] CreationErrorFoundCodes = new[]
-        {
-            BatchErrorCodeStrings.TaskExists,
-            BatchErrorCodeStrings.PoolExists,
-            BatchErrorCodeStrings.JobExists
-        };
-
-        private static readonly string[] DeletionErrorFoundCodes = new[]
-        {
-            BatchErrorCodeStrings.TaskNotFound,
-            BatchErrorCodeStrings.PoolNotFound,
-            BatchErrorCodeStrings.JobNotFound
-        };
 
 
         /// <inheritdoc/>
@@ -115,17 +76,6 @@ namespace TesApi.Web
             try
             {
                 await cachingAsyncRetryExceptWhenNotFound.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchTaskAsync(taskId, poolId, ct), cancellationToken);
-            }
-            catch (BatchException exc) when (BatchErrorCodeStrings.TaskNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
-            { }
-        }
-
-        /// <inheritdoc/>
-        public async Task DeleteBatchPoolAsync(string poolId, CancellationToken cancellationToken)
-        {
-            try
-            {
-                await cachingAsyncRetryExceptWhenNotFound.ExecuteWithRetryAsync(ct => azureProxy.DeleteBatchPoolAsync(poolId, ct), cancellationToken);
             }
             catch (BatchException exc) when (BatchErrorCodeStrings.TaskNotFound.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
             { }
@@ -210,19 +160,6 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public string GetArmRegion() => azureProxy.GetArmRegion();
-
-        /// <inheritdoc/>
-        public async Task<string> CreateBatchPoolAsync(BatchModels.Pool poolSpec, bool isPreemptable, CancellationToken cancellationToken)
-        {
-            try
-            {
-                return await cachingAsyncRetryExceptWhenExists.ExecuteWithRetryAsync(ct => azureProxy.CreateBatchPoolAsync(poolSpec, isPreemptable, ct), cancellationToken);
-            }
-            catch (BatchException exc) when (BatchErrorCodeStrings.PoolExists.Equals(exc.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase))
-            {
-                return poolSpec.Name;
-            }
-        }
 
         /// <inheritdoc/>
         public Task<FullBatchPoolAllocationState> GetFullAllocationStateAsync(string poolId, CancellationToken cancellationToken)
