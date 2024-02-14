@@ -290,7 +290,7 @@ namespace TesApi.Tests
             });
         }
 
-        private async Task AddBatchTaskHandlesExceptions(TesState newState, Func<AzureProxyReturnValues, (Action<IServiceCollection>, Action<Mock<IAzureProxy>>,  Action<Mock<IBatchPoolManager>>)> testArranger, Action<TesTask, IEnumerable<(LogLevel, Exception)>> resultValidator)
+        private async Task AddBatchTaskHandlesExceptions(TesState newState, Func<AzureProxyReturnValues, (Action<IServiceCollection>, Action<Mock<IAzureProxy>>, Action<Mock<IBatchPoolManager>>)> testArranger, Action<TesTask, IEnumerable<(LogLevel, Exception)>> resultValidator)
         {
             var logger = new Mock<ILogger<BatchScheduler>>();
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
