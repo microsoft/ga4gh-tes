@@ -35,11 +35,12 @@ namespace TesApi.Web
             Console.WriteLine($"TES v{Startup.TesVersion} build {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version}");
 
             Options.ApplicationInsightsOptions applicationInsightsOptions = default;
-            var builder = WebHost.CreateDefaultBuilder<Startup>(args);
+            var builder = WebHost.CreateDefaultBuilder<Startup>(args)
+                .UseUrls("http://0.0.0.0:80");
 
             builder.ConfigureAppConfiguration((context, config) =>
             {
-                config.AddEnvironmentVariables(); // For Docker-Compose
+                config.AddEnvironmentVariables();
                 applicationInsightsOptions = GetApplicationInsightsConnectionString(config.Build());
 
                 if (!string.IsNullOrEmpty(applicationInsightsOptions?.ConnectionString))
