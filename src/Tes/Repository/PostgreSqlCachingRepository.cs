@@ -12,7 +12,6 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Polly;
-using Tes.Models;
 
 namespace Tes.Repository
 {
