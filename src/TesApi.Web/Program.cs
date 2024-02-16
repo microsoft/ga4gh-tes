@@ -32,6 +32,8 @@ namespace TesApi.Web
         /// <returns><see cref="IWebHostBuilder"/></returns>
         public static IWebHostBuilder CreateWebHostBuilder(string[] args)
         {
+            Console.WriteLine($"TES v{Startup.TesVersion} build {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version}");
+
             Options.ApplicationInsightsOptions applicationInsightsOptions = default;
             var builder = WebHost.CreateDefaultBuilder<Startup>(args);
 
