@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Polly;
+using Tes.Models;
 
 namespace Tes.Repository
 {
@@ -57,17 +58,24 @@ namespace Tes.Repository
             writerWorkerTask = Task.Run(() => WriterWorkerAsync(writerWorkerCancellationTokenSource.Token))
                 .ContinueWith(async task =>
                 {
-                    if (task.Status == TaskStatus.Faulted)
+                    if (task.Status == TaskStatus.Faulted || task.Status == TaskStatus.RanToCompletion)
                     {
-                        Logger.LogCritical("Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
+                        if (task.Status == TaskStatus.Faulted)
+                        {
+                            Console.WriteLine($"Repository WriterWorkerAsync failed unexpectedly with: {task.Exception.Message}.");
+                            Logger.LogCritical("Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
+                        }
+
+                        var errorMessage = "Repository WriterWorkerAsync unexpectedly completed. The TES application will now be stopped.";
+                        Logger.LogCritical(errorMessage);
+                        Console.WriteLine(errorMessage);
+
+                        await Task.Delay(TimeSpan.FromSeconds(40)); // Give the logger time to flush; default flush is 30s
+                        hostApplicationLifetime?.StopApplication();
                     }
 
-                    var errorMessage = $"Critical issue: the repository WriterWorkerAsync unexpectedly ended with TaskStatus: {task.Status}. The TES application will now be stopped.";
-                    Logger.LogCritical(errorMessage);
-                    Console.WriteLine(errorMessage);
-
-                    await Task.Delay(TimeSpan.FromSeconds(5)); // Give the logger time to flush.
-                    hostApplicationLifetime?.StopApplication();
+                    var message = $"The repository WriterWorkerAsync ended with TaskStatus: {task.Status}";
+                    Logger.LogInformation(message);
                 },
                 TaskContinuationOptions.NotOnCanceled);
         }
