@@ -62,7 +62,6 @@ namespace Tes.Repository
                         Logger.LogCritical("Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
                     }
 
-
                     var errorMessage = $"Critical issue: the repository WriterWorkerAsync unexpectedly ended with TaskStatus: {task.Status}. The TES application will now be stopped.";
                     Logger.LogCritical(errorMessage);
                     Console.WriteLine(errorMessage);
