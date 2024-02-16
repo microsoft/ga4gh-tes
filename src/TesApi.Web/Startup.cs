@@ -64,10 +64,7 @@ namespace TesApi.Web
         {
             try
             {
-                services.AddLogging();
-                var serviceProvider = services.BuildServiceProvider();
-                var logger = serviceProvider.GetService<ILogger<AzureCloudConfig>>();
-                var azureCloudConfig = GetAzureCloudConfig(logger);
+                var azureCloudConfig = GetAzureCloudConfig();
 
                 services
                     .AddSingleton(azureCloudConfig)
@@ -283,11 +280,11 @@ namespace TesApi.Web
                 return new BatchAccountResourceInformation(options.Value.AccountName, options.Value.ResourceGroup, options.Value.SubscriptionId, options.Value.Region, options.Value.BaseUrl);
             }
 
-            AzureCloudConfig GetAzureCloudConfig(ILogger<AzureCloudConfig> logger)
+            AzureCloudConfig GetAzureCloudConfig()
             {
                 var tesOptions = new GeneralOptions();
                 configuration.Bind(GeneralOptions.SectionName, tesOptions);
-                return AzureCloudConfig.CreateAsync(logger, tesOptions.AzureCloudManagementUrl).Result;
+                return AzureCloudConfig.CreateAsync(tesOptions.AzureCloudName, tesOptions.AzureCloudMetadataUrlApiVersion).Result;
             }
         }
 

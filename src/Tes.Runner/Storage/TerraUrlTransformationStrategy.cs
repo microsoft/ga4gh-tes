@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using Azure.Core;
 using Azure.Storage.Blobs;
 using Azure.Storage.Sas;
+using CommonUtilities;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Tes.ApiClients;
@@ -29,12 +30,12 @@ namespace Tes.Runner.Storage
         private static IMemoryCache memoryCache = new MemoryCache(new MemoryCacheOptions());
         private readonly int cacheExpirationInSeconds;
 
-        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, int cacheExpirationInSeconds = CacheExpirationInSeconds)
+        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, AzureCloudIdentityConfig azureCloudIdentityConfig, int cacheExpirationInSeconds = CacheExpirationInSeconds)
         {
             ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
             ArgumentException.ThrowIfNullOrEmpty(terraRuntimeOptions.WsmApiHost, nameof(terraRuntimeOptions.WsmApiHost));
 
-            terraWsmApiClient = TerraWsmApiClient.CreateTerraWsmApiClient(terraRuntimeOptions.WsmApiHost, tokenCredential);
+            terraWsmApiClient = TerraWsmApiClient.CreateTerraWsmApiClient(terraRuntimeOptions.WsmApiHost, tokenCredential, azureCloudIdentityConfig);
             this.terraRuntimeOptions = terraRuntimeOptions;
             this.cacheExpirationInSeconds = cacheExpirationInSeconds;
         }

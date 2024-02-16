@@ -4,10 +4,11 @@
 using System.Net;
 using System.Web;
 using Azure.Core;
+using CommonUtilities;
+using CommonUtilities.AzureCloud;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.ApiClients.Models.Terra;
-using TesApi.Web.Management.Models.Terra;
 
 namespace Tes.ApiClients.Tests
 {
@@ -19,6 +20,7 @@ namespace Tes.ApiClients.Tests
         private Mock<CachingRetryPolicyBuilder> cacheAndRetryBuilder = null!;
         private Lazy<Mock<CachingRetryHandler.CachingAsyncRetryHandlerPolicy<HttpResponseMessage>>> cacheAndRetryHandler = null!;
         private TerraApiStubData terraApiStubData = null!;
+        private AzureCloudIdentityConfig azureCloudIdentityConfig = null!;
 
         [TestInitialize]
         public void SetUp()
@@ -30,7 +32,11 @@ namespace Tes.ApiClients.Tests
             cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(new Mock<Microsoft.Extensions.Caching.Memory.ICacheEntry>().Object);
             cacheAndRetryBuilder.SetupGet(c => c.AppCache).Returns(cache.Object);
             cacheAndRetryHandler = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock(cacheAndRetryBuilder, c => c.DefaultRetryHttpResponseMessagePolicyBuilder()));
+            cacheAndRetryHandler = new Mock<CachingRetryHandler>();
+            azureCloudIdentityConfig = AzureCloudConfig.CreateAsync().Result.AzureCloudIdentityConfig;
+
             terraWsmApiClient = new TerraWsmApiClient(TerraApiStubData.WsmApiHost, tokenCredential.Object,
+                cacheAndRetryHandler.Object, azureCloudIdentityConfig, NullLogger<TerraWsmApiClient>.Instance);
                 cacheAndRetryBuilder.Object, NullLogger<TerraWsmApiClient>.Instance);
         }
 

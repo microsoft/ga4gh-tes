@@ -20,8 +20,6 @@ namespace Tes.Runner.Authentication
         private const int MaxRetryCount = 7;
         private const int ExponentialBackOffExponent = 2;
 
-        private const string DefaultTokenScope = @"https://management.azure.com/.default";
-
         public CredentialsManager()
         {
             retryPolicy = Policy
@@ -59,7 +57,7 @@ namespace Tes.Runner.Authentication
                 if (!string.IsNullOrWhiteSpace(runtimeOptions.NodeManagedIdentityResourceId))
                 {
                     logger.LogInformation($"Token credentials with Managed Identity and resource ID: {runtimeOptions.NodeManagedIdentityResourceId}");
-                    var tokenCredentialOptions = new TokenCredentialOptions { AuthorityHost = runtimeOptions.AzureAuthorityHost };
+                    var tokenCredentialOptions = new TokenCredentialOptions { AuthorityHost = new Uri(runtimeOptions.AzureCloudIdentityConfig.AzureAuthorityHostUrl!) };
 
                     tokenCredential = new ManagedIdentityCredential(
                         new ResourceIdentifier(runtimeOptions.NodeManagedIdentityResourceId),
@@ -68,12 +66,12 @@ namespace Tes.Runner.Authentication
                 else
                 {
                     logger.LogInformation("Token credentials with DefaultAzureCredential");
-                    var defaultAzureCredentialOptions = new DefaultAzureCredentialOptions { AuthorityHost = runtimeOptions.AzureAuthorityHost };
+                    var defaultAzureCredentialOptions = new DefaultAzureCredentialOptions { AuthorityHost = new Uri(runtimeOptions.AzureCloudIdentityConfig.AzureAuthorityHostUrl!) };
                     tokenCredential = new DefaultAzureCredential(defaultAzureCredentialOptions);
                 }
 
                 //Get token to verify that credentials are valid
-                tokenCredential.GetToken(new TokenRequestContext(new[] { DefaultTokenScope }), CancellationToken.None);
+                tokenCredential.GetToken(new TokenRequestContext(new[] { runtimeOptions.AzureCloudIdentityConfig.TokenScope! }), CancellationToken.None);
 
                 return tokenCredential;
             }

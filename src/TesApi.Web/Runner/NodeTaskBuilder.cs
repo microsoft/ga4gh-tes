@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using CommonUtilities;
 using Tes.Runner.Models;
 
 namespace TesApi.Web.Runner
@@ -295,17 +296,17 @@ namespace TesApi.Web.Runner
         /// <summary>
         /// (Optional) sets the azure authority host for the node task.  If not set, the default Azure Public cloud is used.
         /// </summary>
-        /// <param name="azureAuthorityHost">The URI for the Azure Authority Host</param>
+        /// <param name="azureCloudIdentityConfig">Azure cloud identity config</param>
         /// <returns></returns>
-        public NodeTaskBuilder WithAzureAuthorityHost(Uri azureAuthorityHost)
+        public NodeTaskBuilder WithAzureCloudIdentityConfig(AzureCloudIdentityConfig azureCloudIdentityConfig)
         {
-            if (azureAuthorityHost == null)
+            if (azureCloudIdentityConfig == null)
             {
                 return this;
             }
 
             nodeTask.RuntimeOptions ??= new RuntimeOptions();
-            nodeTask.RuntimeOptions.AzureAuthorityHost = azureAuthorityHost;
+            nodeTask.RuntimeOptions.AzureCloudIdentityConfig = azureCloudIdentityConfig;
             return this;
         }
 

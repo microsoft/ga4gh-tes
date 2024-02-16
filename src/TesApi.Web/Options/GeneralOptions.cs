@@ -14,8 +14,10 @@ namespace TesApi.Web.Options
         public const string SectionName = "General";
 
         /// <summary>
-        /// URL to obtain Azure cloud metadata at runtime
+        /// Azure cloud name.  Defined here: https://github.com/Azure/azure-sdk-for-net/blob/bc9f38eca0d8abbf0697dd3e3e75220553eeeafa/sdk/identity/Azure.Identity/src/AzureAuthorityHosts.cs#L11
         /// </summary>
-        public string AzureCloudManagementUrl { get; set; } = "https://management.azure.com/metadata/endpoints?api-version=2023-11-01";
+        public string AzureCloudName { get; set; } = "AzurePublicCloud"; // or "AzureGovernment"
+        public string AzureCloudMetadataUrlApiVersion { get; set; } = "2023-11-01";
+
     }
 }

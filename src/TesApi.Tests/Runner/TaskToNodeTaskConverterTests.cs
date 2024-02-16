@@ -70,9 +70,9 @@ namespace TesApi.Tests.Runner
                     x.GetInternalTesTaskBlobUrlWithoutSasToken(It.IsAny<TesTask>(), It.IsAny<string>()))
                 .Returns(InternalBlobUrl);
 
-            var azureCloudConfig = new AzureCloudConfig();
+            var azureCloudIdentityConfig = AzureCloudConfig.CreateAsync().Result.AzureCloudIdentityConfig;
             taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), storageAccessProviderMock.Object,
-                Options.Create(storageOptions), Options.Create(batchAccountOptions), azureCloudConfig, new NullLogger<TaskToNodeTaskConverter>());
+                Options.Create(storageOptions), Options.Create(batchAccountOptions), azureCloudIdentityConfig, new NullLogger<TaskToNodeTaskConverter>());
         }
 
 

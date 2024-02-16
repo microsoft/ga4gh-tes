@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Text.Json.Serialization;
-using Azure.Identity;
+using CommonUtilities;
 
 namespace Tes.Runner.Models
 {
@@ -48,7 +48,8 @@ namespace Tes.Runner.Models
         public StorageTargetLocation? StorageEventSink { get; set; }
 
         public StorageTargetLocation? StreamingLogPublisher { get; set; }
-        public Uri AzureAuthorityHost { get; set; } = AzureAuthorityHosts.AzurePublicCloud;
+
+        public AzureCloudIdentityConfig? AzureCloudIdentityConfig { get; set; }
     }
 
     public class StorageTargetLocation

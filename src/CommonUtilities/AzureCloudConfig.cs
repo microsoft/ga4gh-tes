@@ -4,13 +4,13 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Polly;
-using Microsoft.Extensions.Logging;
 
 namespace CommonUtilities.AzureCloud
 {
     public class AzureCloudConfig
     {
-        private const string defaultAzureCloudMetadataUrl = "https://management.azure.com/metadata/endpoints?api-version=2023-11-01";
+        private const string defaultAzureCloudName = "AzurePublicCloud";
+        private const string defaultAzureCloudMetadataUrlApiVersion = "2023-11-01";
 
         [JsonPropertyName("portal")]
         public string? PortalUrl { get; set; }
@@ -63,16 +63,49 @@ namespace CommonUtilities.AzureCloud
         [JsonPropertyName("ossrDbmsResourceId")]
         public string? OssrDbmsResourceUrl { get; set; }
 
-        public static async Task<AzureCloudConfig> CreateAsync(ILogger<AzureCloudConfig> logger, string azureCloudMetadataUrl = defaultAzureCloudMetadataUrl)
+        public string? DefaultTokenScope { get; set; }
+
+        public AzureCloudIdentityConfig AzureCloudIdentityConfig => new AzureCloudIdentityConfig
+        {
+            AzureAuthorityHostUrl = Authentication?.LoginEndpointUrl,
+            TokenScope = DefaultTokenScope
+        };
+
+        public static async Task<AzureCloudConfig> CreateAsync(string azureCloudName = defaultAzureCloudName, string azureCloudMetadataUrlApiVersion = defaultAzureCloudMetadataUrlApiVersion)
         {
             // It's critical that this succeeds for TES to function
             // These URLs are expected to always be available
+            string domain;
+            string defaultTokenScope;
+
+            // Names defined here: https://github.com/Azure/azure-sdk-for-net/blob/bc9f38eca0d8abbf0697dd3e3e75220553eeeafa/sdk/identity/Azure.Identity/src/AzureAuthorityHosts.cs#L11
+            switch (azureCloudName.ToUpperInvariant())
+            {
+                case "AZUREPUBLICCLOUD":
+                    domain = "azure.com";
+                    // The double slash is intentional for the public cloud.
+                    // https://github.com/Azure/azure-sdk-for-net/blob/bc9f38eca0d8abbf0697dd3e3e75220553eeeafa/sdk/identity/Azure.Identity/src/AzureAuthorityHosts.cs#L53
+                    defaultTokenScope = $"https://management.{domain}//.default"; 
+                    break; 
+                case "AZUREGOVERNMENT":
+                    domain = "usgovcloudapi.net";
+                    defaultTokenScope = $"https://management.{domain}/.default";
+                    break;
+                case "AZURECHINA":
+                    domain = "chinacloudapi.cn";
+                    defaultTokenScope = $"https://management.{domain}/.default";
+                    break;
+                default:
+                    throw new ArgumentException($"Invalid Azure cloud name: {azureCloudName}");
+            }
+
+            string azureCloudMetadataUrl = $"https://management.{domain}/metadata/endpoints?api-version={azureCloudMetadataUrlApiVersion}";
 
             var retryPolicy = Policy
                 .Handle<Exception>()
                 .WaitAndRetryAsync(10, retryAttempt => TimeSpan.FromSeconds(30), onRetry: (exception, timespan, retryAttempt, context) =>
                 {
-                    logger?.LogWarning(exception, $"Attempt {retryAttempt}: Retrying AzureCloudConfig creation due to error: {exception.Message}");
+                    Console.WriteLine($"Attempt {retryAttempt}: Retrying AzureCloudConfig creation due to error: {exception.Message}.  {exception}");
                 });
 
             using var httpClient = new HttpClient();
@@ -83,6 +116,7 @@ namespace CommonUtilities.AzureCloud
                 httpResponse.EnsureSuccessStatusCode();
                 var jsonString = await httpResponse.Content.ReadAsStringAsync();
                 var config = JsonSerializer.Deserialize<AzureCloudConfig>(jsonString)!;
+                config.DefaultTokenScope = defaultTokenScope;
                 return config;
             });
         }

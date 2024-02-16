@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Azure.Core;
 using CommonUtilities.Options;
+using CommonUtilities;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Tes.ApiClients.Models.Terra;
@@ -28,19 +29,19 @@ namespace Tes.ApiClients
         /// <param name="tokenCredential"></param>
         /// <param name="cachingRetryHandler"></param>
         /// <param name="logger"></param>
-        public TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryPolicyBuilder cachingRetryHandler,
-            ILogger<TerraWsmApiClient> logger) : base(apiUrl, tokenCredential, cachingRetryHandler, logger)
+        public TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryHandler cachingRetryHandler,
+            AzureCloudIdentityConfig azureCloudIdentityConfig, ILogger<TerraWsmApiClient> logger) : base(apiUrl, tokenCredential, cachingRetryHandler, azureCloudIdentityConfig, logger)
         {
 
         }
 
-        public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl, TokenCredential tokenCredential)
+        public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, AzureCloudIdentityConfig azureCloudIdentityConfig)
         {
             var retryPolicyOptions = new RetryPolicyOptions();
             var cacheRetryHandler = new CachingRetryPolicyBuilder(sharedMemoryCache,
                  Microsoft.Extensions.Options.Options.Create(retryPolicyOptions));
 
-            return new TerraWsmApiClient(apiUrl, tokenCredential, cacheRetryHandler, ApiClientsLoggerFactory.Create<TerraWsmApiClient>());
+            return new TerraWsmApiClient(apiUrl, tokenCredential, cacheRetryHandler, azureCloudIdentityConfig, ApiClientsLoggerFactory.Create<TerraWsmApiClient>());
         }
 
         /// <summary>
