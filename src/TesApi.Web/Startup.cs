@@ -334,6 +334,8 @@ namespace TesApi.Web
 
                             return s.UseHsts();
                         });
+
+                System.AppDomain.CurrentDomain.UnhandledException += ProcessUnhandledException;
             }
             catch (Exception exc)
             {
@@ -341,6 +343,34 @@ namespace TesApi.Web
                 Console.WriteLine($"TES threw an exception in Configure(IApplicationBuilder app) and could not start: {exc}");
                 Thread.Sleep(TimeSpan.FromSeconds(40)); // Give the logger time to flush; default flush is 30s
                 throw;
+            }
+        }
+
+        private void ProcessUnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            var exception = e.ExceptionObject as Exception;
+
+            if (exception is not null)
+            {
+                if (e.IsTerminating)
+                {
+                    logger?.LogCritical(exception, "A failure is terminating the service: {ExceptionType}:{ExceptionMessage}", exception.GetType().FullName, exception.Message);
+                }
+                else
+                {
+                    logger?.LogError(exception, "A failure was not processed normally: {ExceptionType}:{ExceptionMessage}", exception.GetType().FullName, exception.Message);
+                }
+            }
+            else
+            {
+                if (e.IsTerminating)
+                {
+                    logger?.LogCritical("A failure is terminating the service: {ExceptionObjectType}:{ExceptionObjectString}", e.ExceptionObject.GetType().FullName, e.ExceptionObject.ToString());
+                }
+                else
+                {
+                    logger?.LogCritical("A failure was not processed normally: {ExceptionObjectType}:{ExceptionObjectString}", e.ExceptionObject.GetType().FullName, e.ExceptionObject.ToString());
+                }
             }
         }
     }
