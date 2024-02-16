@@ -63,11 +63,11 @@ namespace Tes.Repository
                     }
 
 
-                    var errorMessage = $"Repository WriterWorkerAsync unexpectedly ended with TaskStatus: {task.Status}";
+                    var errorMessage = $"Critical issue: the repository WriterWorkerAsync unexpectedly ended with TaskStatus: {task.Status}. The TES application will now be stopped.";
                     Logger.LogCritical(errorMessage);
                     Console.WriteLine(errorMessage);
 
-                    await Task.Delay(50); // Give the logger time to flush.
+                    await Task.Delay(TimeSpan.FromSeconds(5)); // Give the logger time to flush.
                     hostApplicationLifetime?.StopApplication();
                 },
                 TaskContinuationOptions.NotOnCanceled);
