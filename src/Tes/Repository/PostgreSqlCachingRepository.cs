@@ -57,20 +57,23 @@ namespace Tes.Repository
             writerWorkerTask = Task.Run(() => WriterWorkerAsync(writerWorkerCancellationTokenSource.Token))
                 .ContinueWith(async task =>
                 {
-                    switch (task.Status)
+                    Logger.LogInformation("The repository WriterWorkerAsync ended with TaskStatus: {TaskStatus}", task.Status);
+
+                    if (task.Status == TaskStatus.Faulted)
                     {
-                        case TaskStatus.Faulted:
-                            Logger.LogCritical("Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
-                            break;
-                        case TaskStatus.RanToCompletion:
-                            Logger.LogCritical("Repository WriterWorkerAsync unexpectedly completed.");
-                            break;
+                        Console.WriteLine($"Repository WriterWorkerAsync failed unexpectedly with: {task.Exception.Message}.");
+                        Logger.LogCritical(task.Exception, "Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
                     }
 
-                    await Task.Delay(50); // Give the logger time to flush.
+                    const string errMessage = "Repository WriterWorkerAsync unexpectedly completed. The TES application will now be stopped.";
+                    Logger.LogCritical(errMessage);
+                    Console.WriteLine(errMessage);
+
+                    await Task.Delay(TimeSpan.FromSeconds(40)); // Give the logger time to flush; default flush is 30s
                     hostApplicationLifetime?.StopApplication();
-                },
-                TaskContinuationOptions.NotOnCanceled);
+                    return;
+                }, TaskContinuationOptions.NotOnCanceled)
+                .ContinueWith(task => Logger.LogInformation("The repository WriterWorkerAsync ended normally"), TaskContinuationOptions.OnlyOnCanceled);
         }
 
         /// <summary>

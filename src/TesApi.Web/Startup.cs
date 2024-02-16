@@ -3,14 +3,17 @@
 
 using System;
 using System.IO;
+using System.Net;
 using System.Reflection;
+using System.Threading;
 using Azure.Core;
 using Azure.Identity;
 using CommonUtilities;
 using CommonUtilities.Options;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -37,7 +40,7 @@ namespace TesApi.Web
     public class Startup
     {
         // TODO centralize in single location
-        private const string TesVersion = "5.2.0";
+        private const string TesVersion = "5.2.1";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -120,7 +123,7 @@ namespace TesApi.Web
                         {
                             Version = TesVersion,
                             Title = "GA4GH Task Execution Service",
-                            Description = "Task Execution Service (ASP.NET Core 7.0)",
+                            Description = "Task Execution Service (ASP.NET Core 8.0)",
                             Contact = new()
                             {
                                 Name = "Microsoft Biomedical Platforms and Genomics",
@@ -146,8 +149,9 @@ namespace TesApi.Web
             }
             catch (Exception exc)
             {
-                logger?.LogCritical(exc, @"TES could not start: {ExceptionMessage}", exc.Message);
-                Console.WriteLine($"TES could not start: {exc}");
+                logger?.LogCritical(exc, @"TES threw an exception in ConfigureServices and could not start: {ExceptionMessage}", exc.Message);
+                Console.WriteLine($"TES threw an exception in ConfigureServices and could not start: {exc}");
+                Thread.Sleep(TimeSpan.FromSeconds(40)); // Give the logger time to flush; default flush is 30s
                 throw;
             }
 
@@ -310,14 +314,69 @@ namespace TesApi.Web
                         s =>
                         {
                             logger.LogInformation("Configuring for Production environment");
+
+                            s.UseExceptionHandler(a => a.Run(async context =>
+                            {
+                                var exceptionHandlerFeature = context.Features.Get<IExceptionHandlerFeature>();
+
+                                if (exceptionHandlerFeature != null)
+                                {
+                                    var exception = exceptionHandlerFeature.Error;
+                                    logger.LogError(exception, "An unexpected error occurred while processing an API request.");
+
+                                    context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                                    context.Response.ContentType = "application/json";
+
+                                    var problemDetails = new
+                                    {
+                                        status = context.Response.StatusCode,
+                                        title = "An unexpected error occurred.",
+                                        detail = "An unexpected error occurred while processing your request.",
+                                    };
+
+                                    await context.Response.WriteAsJsonAsync(problemDetails);
+                                }
+                            }));
+
                             return s.UseHsts();
                         });
+
+                System.AppDomain.CurrentDomain.UnhandledException += ProcessUnhandledException;
             }
             catch (Exception exc)
             {
-                logger?.LogCritical(exc, @"TES could not start: {ExceptionMessage}", exc.Message);
-                Console.WriteLine($"TES could not start: {exc}");
+                logger?.LogCritical(exc, @"TES threw an exception in Configure(IApplicationBuilder app) and could not start: {ExceptionMessage}", exc.Message);
+                Console.WriteLine($"TES threw an exception in Configure(IApplicationBuilder app) and could not start: {exc}");
+                Thread.Sleep(TimeSpan.FromSeconds(40)); // Give the logger time to flush; default flush is 30s
                 throw;
+            }
+        }
+
+        private void ProcessUnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            var exception = e.ExceptionObject as Exception;
+
+            if (exception is not null)
+            {
+                if (e.IsTerminating)
+                {
+                    logger?.LogCritical(exception, "A failure is terminating the service: {ExceptionType}:{ExceptionMessage}", exception.GetType().FullName, exception.Message);
+                }
+                else
+                {
+                    logger?.LogError(exception, "A failure was not processed normally: {ExceptionType}:{ExceptionMessage}", exception.GetType().FullName, exception.Message);
+                }
+            }
+            else
+            {
+                if (e.IsTerminating)
+                {
+                    logger?.LogCritical("A failure is terminating the service: {ExceptionObjectType}:{ExceptionObjectString}", e.ExceptionObject?.GetType().FullName ?? "<missing>", e.ExceptionObject?.ToString() ?? "<null>");
+                }
+                else
+                {
+                    logger?.LogCritical("A failure was not processed normally: {ExceptionObjectType}:{ExceptionObjectString}", e.ExceptionObject?.GetType().FullName ?? "<missing>", e.ExceptionObject?.ToString() ?? "<null>");
+                }
             }
         }
     }
