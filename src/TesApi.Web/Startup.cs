@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Net;
 using System.Reflection;
+using System.Threading;
 using Azure.Core;
 using Azure.Identity;
 using CommonUtilities;
@@ -147,8 +148,9 @@ namespace TesApi.Web
             }
             catch (Exception exc)
             {
-                logger?.LogCritical(exc, @"TES could not start: {ExceptionMessage}", exc.Message);
-                Console.WriteLine($"TES could not start: {exc}");
+                logger?.LogCritical(exc, @"TES threw an exception in ConfigureServices and could not start: {ExceptionMessage}", exc.Message);
+                Console.WriteLine($"TES threw an exception in ConfigureServices and could not start: {exc}");
+                Thread.Sleep(TimeSpan.FromSeconds(40)); // Give the logger time to flush; default flush is 30s
                 throw;
             }
 
@@ -335,8 +337,9 @@ namespace TesApi.Web
             }
             catch (Exception exc)
             {
-                logger?.LogCritical(exc, @"TES could not start: {ExceptionMessage}", exc.Message);
-                Console.WriteLine($"TES could not start: {exc}");
+                logger?.LogCritical(exc, @"TES threw an exception in Configure(IApplicationBuilder app) and could not start: {ExceptionMessage}", exc.Message);
+                Console.WriteLine($"TES threw an exception in Configure(IApplicationBuilder app) and could not start: {exc}");
+                Thread.Sleep(TimeSpan.FromSeconds(40)); // Give the logger time to flush; default flush is 30s
                 throw;
             }
         }
