@@ -57,15 +57,15 @@ namespace Tes.Repository
             writerWorkerTask = Task.Run(() => WriterWorkerAsync(writerWorkerCancellationTokenSource.Token))
                 .ContinueWith(async task =>
                 {
-                    switch (task.Status)
+                    if (task.Status == TaskStatus.Faulted)
                     {
-                        case TaskStatus.Faulted:
-                            Logger.LogCritical("Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
-                            break;
-                        case TaskStatus.RanToCompletion:
-                            Logger.LogCritical("Repository WriterWorkerAsync unexpectedly completed.");
-                            break;
+                        Logger.LogCritical("Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
                     }
+
+
+                    var errorMessage = $"Repository WriterWorkerAsync unexpectedly ended with TaskStatus: {task.Status}";
+                    Logger.LogCritical(errorMessage);
+                    Console.WriteLine(errorMessage);
 
                     await Task.Delay(50); // Give the logger time to flush.
                     hostApplicationLifetime?.StopApplication();

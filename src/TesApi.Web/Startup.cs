@@ -3,14 +3,16 @@
 
 using System;
 using System.IO;
+using System.Net;
 using System.Reflection;
 using Azure.Core;
 using Azure.Identity;
 using CommonUtilities;
 using CommonUtilities.Options;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -304,6 +306,30 @@ namespace TesApi.Web
                         s =>
                         {
                             logger.LogInformation("Configuring for Production environment");
+
+                            s.UseExceptionHandler(a => a.Run(async context =>
+                            {
+                                var exceptionHandlerFeature = context.Features.Get<IExceptionHandlerFeature>();
+
+                                if (exceptionHandlerFeature != null)
+                                {
+                                    var exception = exceptionHandlerFeature.Error;
+                                    logger.LogError(exception, "An unexpected error occurred");
+
+                                    context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                                    context.Response.ContentType = "application/json";
+
+                                    var problemDetails = new
+                                    {
+                                        status = context.Response.StatusCode,
+                                        title = "An unexpected error occurred.",
+                                        detail = "An unexpected error occurred while processing your request.",
+                                    };
+
+                                    await context.Response.WriteAsJsonAsync(problemDetails);
+                                }
+                            }));
+
                             return s.UseHsts();
                         });
             }
