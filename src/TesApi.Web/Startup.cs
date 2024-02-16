@@ -365,11 +365,11 @@ namespace TesApi.Web
             {
                 if (e.IsTerminating)
                 {
-                    logger?.LogCritical("A failure is terminating the service: {ExceptionObjectType}:{ExceptionObjectString}", e.ExceptionObject.GetType().FullName, e.ExceptionObject.ToString());
+                    logger?.LogCritical("A failure is terminating the service: {ExceptionObjectType}:{ExceptionObjectString}", e.ExceptionObject?.GetType().FullName ?? "<missing>", e.ExceptionObject?.ToString() ?? "<null>");
                 }
                 else
                 {
-                    logger?.LogCritical("A failure was not processed normally: {ExceptionObjectType}:{ExceptionObjectString}", e.ExceptionObject.GetType().FullName, e.ExceptionObject.ToString());
+                    logger?.LogCritical("A failure was not processed normally: {ExceptionObjectType}:{ExceptionObjectString}", e.ExceptionObject?.GetType().FullName ?? "<missing>", e.ExceptionObject?.ToString() ?? "<null>");
                 }
             }
         }
