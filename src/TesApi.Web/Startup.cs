@@ -40,7 +40,7 @@ namespace TesApi.Web
     public class Startup
     {
         // TODO centralize in single location
-        private const string TesVersion = "5.2.0";
+        private const string TesVersion = "5.2.1";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
@@ -122,7 +122,7 @@ namespace TesApi.Web
                         {
                             Version = TesVersion,
                             Title = "GA4GH Task Execution Service",
-                            Description = "Task Execution Service (ASP.NET Core 7.0)",
+                            Description = "Task Execution Service (ASP.NET Core 8.0)",
                             Contact = new()
                             {
                                 Name = "Microsoft Biomedical Platforms and Genomics",
