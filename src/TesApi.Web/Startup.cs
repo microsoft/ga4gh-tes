@@ -314,7 +314,7 @@ namespace TesApi.Web
                                 if (exceptionHandlerFeature != null)
                                 {
                                     var exception = exceptionHandlerFeature.Error;
-                                    logger.LogError(exception, "An unexpected error occurred");
+                                    logger.LogError(exception, "An unexpected error occurred while processing an API request.");
 
                                     context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
                                     context.Response.ContentType = "application/json";
