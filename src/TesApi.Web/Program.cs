@@ -32,11 +32,15 @@ namespace TesApi.Web
         /// <returns><see cref="IWebHostBuilder"/></returns>
         public static IWebHostBuilder CreateWebHostBuilder(string[] args)
         {
-            Console.WriteLine($"TES v{Startup.TesVersion} build {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version}");
+            Console.WriteLine($"TES v{Startup.TesVersion}");
 
             Options.ApplicationInsightsOptions applicationInsightsOptions = default;
-            var builder = WebHost.CreateDefaultBuilder<Startup>(args)
-                .UseUrls("http://0.0.0.0:80");
+            var builder = WebHost.CreateDefaultBuilder<Startup>(args);
+
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
+            {
+                builder.UseUrls("http://0.0.0.0:80");
+            }
 
             builder.ConfigureAppConfiguration((context, config) =>
             {
