@@ -73,7 +73,7 @@ namespace TesDeployer
         public bool? DisableBatchNodesPublicIpAddress { get; set; } = null;
         public bool DebugLogging { get; set; } = false;
         public string PostgreSqlServerName { get; set; }
-        public string PostgreSqlServerNameSuffix { get; set; } = ".postgres.database.azure.com";
+        public string PostgreSqlServerNameSuffix { get; set; } = null;
         public int PostgreSqlServerPort { get; set; } = 5432;
         public string PostgreSqlServerSslMode { get; set; } = "VerifyFull";
         public string KeyVaultName { get; set; }

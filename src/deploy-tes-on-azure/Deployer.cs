@@ -389,6 +389,11 @@ namespace TesDeployer
 
                     ConsoleEx.WriteLine($"Deploying TES on Azure version {targetVersion}...");
 
+                    if (string.IsNullOrWhiteSpace(configuration.PostgreSqlServerNameSuffix))
+                    {
+                        configuration.PostgreSqlServerNameSuffix = azureCloudConfig.Suffixes.PostgresqlServerEndpointSuffix;
+                    }
+
                     // Configuration preferences not currently settable by user.
                     if (string.IsNullOrWhiteSpace(configuration.PostgreSqlServerName))
                     {
