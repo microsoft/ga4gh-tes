@@ -67,14 +67,7 @@ namespace CommonUtilities.AzureCloud
         public string? DefaultTokenScope { get; set; }
         public AzureEnvironment AzureEnvironment { get; set; }
         public string Domain { get; set; }
-
-        public AzureCloudIdentityConfig AzureCloudIdentityConfig => new AzureCloudIdentityConfig
-        {
-            AzureAuthorityHostUrl = Authentication?.LoginEndpointUrl,
-            TokenScope = DefaultTokenScope,
-            ResourceManagerUrl = ResourceManagerUrl,
-            AzureEnvironment = AzureEnvironment
-        };
+        public AzureCloudIdentityConfig AzureCloudIdentityConfig { get; set; }
 
         public static async Task<AzureCloudConfig> CreateAsync(string azureCloudName = DefaultAzureCloudName, string azureCloudMetadataUrlApiVersion = defaultAzureCloudMetadataUrlApiVersion)
         {
@@ -127,6 +120,15 @@ namespace CommonUtilities.AzureCloud
                 config.DefaultTokenScope = defaultTokenScope;
                 config.AzureEnvironment = azureEnvironment;
                 config.Domain = domain;
+
+                config.AzureCloudIdentityConfig = new AzureCloudIdentityConfig
+                {
+                    AzureAuthorityHostUrl = config.Authentication?.LoginEndpointUrl,
+                    TokenScope = config.DefaultTokenScope,
+                    ResourceManagerUrl = config.ResourceManagerUrl,
+                    AzureEnvironment = config.AzureEnvironment
+                };
+
                 return config;
             });
         }
