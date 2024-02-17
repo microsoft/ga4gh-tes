@@ -2383,7 +2383,7 @@ namespace TesDeployer
                 throw new ValidationException("Invalid configuration options BatchNodesSubnetId and BatchSubnetName are mutually exclusive.");
             }
 
-            if (!new[] { "AZUREPUBLICCLOUD", "AZUREGOVERNMENT", "AZURECHINA" }.Contains(configuration.AzureCloudName, StringComparer.OrdinalIgnoreCase))
+            if (!new[] { "AzurePublicCloud", "AzureGovernment", "AzureChina" }.Contains(configuration.AzureCloudName, StringComparer.OrdinalIgnoreCase))
             {
                 throw new ValidationException("AzureCloudName must be either 'AzurePublicCloud','AzureGovernment', or 'AzureChina'");
             }
