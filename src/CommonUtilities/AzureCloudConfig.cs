@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Polly;
 
 namespace CommonUtilities.AzureCloud
@@ -64,12 +65,14 @@ namespace CommonUtilities.AzureCloud
         public string? OssrDbmsResourceUrl { get; set; }
 
         public string? DefaultTokenScope { get; set; }
+        public AzureEnvironment AzureEnvironment { get; set; }
 
         public AzureCloudIdentityConfig AzureCloudIdentityConfig => new AzureCloudIdentityConfig
         {
             AzureAuthorityHostUrl = Authentication?.LoginEndpointUrl,
             TokenScope = DefaultTokenScope,
-            ResourceManagerUrl = ResourceManagerUrl
+            ResourceManagerUrl = ResourceManagerUrl,
+            AzureEnvironment = AzureEnvironment
         };
 
         public static async Task<AzureCloudConfig> CreateAsync(string azureCloudName = DefaultAzureCloudName, string azureCloudMetadataUrlApiVersion = defaultAzureCloudMetadataUrlApiVersion)
@@ -78,7 +81,7 @@ namespace CommonUtilities.AzureCloud
             // These URLs are expected to always be available
             string domain;
             string defaultTokenScope;
-
+            AzureEnvironment azureEnvironment;
             // Names defined here: https://github.com/Azure/azure-sdk-for-net/blob/bc9f38eca0d8abbf0697dd3e3e75220553eeeafa/sdk/identity/Azure.Identity/src/AzureAuthorityHosts.cs#L11
             switch (azureCloudName.ToUpperInvariant())
             {
@@ -86,15 +89,18 @@ namespace CommonUtilities.AzureCloud
                     domain = "azure.com";
                     // The double slash is intentional for the public cloud.
                     // https://github.com/Azure/azure-sdk-for-net/blob/bc9f38eca0d8abbf0697dd3e3e75220553eeeafa/sdk/identity/Azure.Identity/src/AzureAuthorityHosts.cs#L53
-                    defaultTokenScope = $"https://management.{domain}//.default"; 
+                    defaultTokenScope = $"https://management.{domain}//.default";
+                    azureEnvironment = AzureEnvironment.AzureGlobalCloud;
                     break; 
                 case "AZUREGOVERNMENT":
                     domain = "usgovcloudapi.net";
                     defaultTokenScope = $"https://management.{domain}/.default";
+                    azureEnvironment = AzureEnvironment.AzureUSGovernment;
                     break;
                 case "AZURECHINA":
                     domain = "chinacloudapi.cn";
                     defaultTokenScope = $"https://management.{domain}/.default";
+                    azureEnvironment = AzureEnvironment.AzureChinaCloud;
                     break;
                 default:
                     throw new ArgumentException($"Invalid Azure cloud name: {azureCloudName}");
@@ -118,6 +124,7 @@ namespace CommonUtilities.AzureCloud
                 var jsonString = await httpResponse.Content.ReadAsStringAsync();
                 var config = JsonSerializer.Deserialize<AzureCloudConfig>(jsonString)!;
                 config.DefaultTokenScope = defaultTokenScope;
+                config.AzureEnvironment = azureEnvironment;
                 return config;
             });
         }

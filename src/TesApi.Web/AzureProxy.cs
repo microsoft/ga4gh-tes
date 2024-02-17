@@ -59,6 +59,7 @@ namespace TesApi.Web
         /// <param name="batchAccountOptions">The Azure Batch Account options</param>
         /// <param name="batchAccountInformation">The Azure Batch Account information</param>
         /// <param name="batchPoolManager"><inheritdoc cref="IBatchPoolManager"/></param>
+        /// <param name="azureCloudConfig"></param>
         /// <param name="retryHandler">Retry builder</param>
         /// <param name="logger">The logger</param>
         /// <exception cref="InvalidOperationException"></exception>
@@ -475,9 +476,9 @@ namespace TesApi.Web
             return new(pool.AllocationState, pool.AllocationStateTransitionTime, pool.AutoScaleEnabled, pool.TargetLowPriorityComputeNodes, pool.CurrentLowPriorityComputeNodes, pool.TargetDedicatedComputeNodes, pool.CurrentDedicatedComputeNodes);
         }
 
-        private static async Task<IAsyncEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync(CancellationToken cancellationToken)
+        private static async Task<IAsyncEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync(AzureCloudIdentityConfig azureCloudIdentityConfig,CancellationToken cancellationToken)
         {
-            var azureClient = await GetAzureManagementClientAsync(cancellationToken);
+            var azureClient = await GetAzureManagementClientAsync(azureCloudIdentityConfig, cancellationToken);
             return (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken))
                 .ToAsyncEnumerable()
                 .Select(s => s.SubscriptionId).SelectManyAwait(async (subscriptionId, ct) =>
@@ -491,7 +492,7 @@ namespace TesApi.Web
         {
             try
             {
-                var azureClient = await GetAzureManagementClientAsync(cancellationToken);
+                var azureClient = await GetAzureManagementClientAsync(azureCloudConfig.AzureCloudIdentityConfig, cancellationToken);
                 var storageAccount = await azureClient.WithSubscription(storageAccountInfo.SubscriptionId).StorageAccounts.GetByIdAsync(storageAccountInfo.Id, cancellationToken);
 
                 return (await storageAccount.GetKeysAsync(cancellationToken))[0].Value;
@@ -563,12 +564,13 @@ namespace TesApi.Web
         /// <summary>
         /// Gets an authenticated Azure Client instance
         /// </summary>
+        /// <param name="azureCloudIdentityConfig"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>An authenticated Azure Client instance</returns>
-        private static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(CancellationToken cancellationToken)
+        private static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(AzureCloudIdentityConfig azureCloudIdentityConfig, CancellationToken cancellationToken)
         {
-            var accessToken = await GetAzureAccessTokenAsync(cancellationToken);
-            var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, AzureEnvironment.AzureGlobalCloud);
+            var accessToken = await GetAzureAccessTokenAsync(cancellationToken, resource: azureCloudIdentityConfig.ResourceManagerUrl);
+            var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, azureCloudIdentityConfig.AzureEnvironment);
             var azureClient = FluentAzure.Authenticate(azureCredentials);
 
             return azureClient;
@@ -580,7 +582,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken)
-            => await (await GetAccessibleStorageAccountsAsync(cancellationToken))
+            => await (await GetAccessibleStorageAccountsAsync(azureCloudConfig.AzureCloudIdentityConfig, cancellationToken))
                 .FirstOrDefaultAsync(storageAccount => storageAccount.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
 
         /// <inheritdoc/>
