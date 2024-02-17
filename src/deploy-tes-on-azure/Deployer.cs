@@ -147,7 +147,7 @@ namespace TesDeployer
                 await Execute("Connecting to Azure Services...", async () =>
                 {
                     azureCloudConfig = await AzureCloudConfig.CreateAsync(configuration.AzureCloudName);
-                    tokenProvider = new RefreshableAzureServiceTokenProvider(azureCloudConfig.AzureCloudIdentityConfig.ResourceManagerUrl, null, azureCloudConfig.AzureCloudIdentityConfig.AzureAuthorityHostUrl);
+                    tokenProvider = new RefreshableAzureServiceTokenProvider(azureCloudConfig.ResourceManagerUrl, null, azureCloudConfig.Authentication.LoginEndpointUrl);
                     tokenCredentials = new(tokenProvider);
                     azureCredentials = new(tokenCredentials, null, null, azureCloudConfig.AzureCloudIdentityConfig.AzureEnvironment);
                     azureClient = GetAzureClient(azureCredentials);
@@ -2236,7 +2236,7 @@ namespace TesDeployer
         {
             try
             {
-                _ = await Execute("Retrieving Azure management token...", () => new AzureServiceTokenProvider("RunAs=Developer; DeveloperTool=AzureCli").GetAccessTokenAsync(azureCloudConfig.AzureCloudIdentityConfig.ResourceManagerUrl, cancellationToken: cts.Token));
+                _ = await Execute("Retrieving Azure management token...", () => new AzureServiceTokenProvider("RunAs=Developer; DeveloperTool=AzureCli").GetAccessTokenAsync(azureCloudConfig.ResourceManagerUrl, cancellationToken: cts.Token));
             }
             catch (AuthenticationFailedException ex)
             {

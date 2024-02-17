@@ -476,9 +476,9 @@ namespace TesApi.Web
             return new(pool.AllocationState, pool.AllocationStateTransitionTime, pool.AutoScaleEnabled, pool.TargetLowPriorityComputeNodes, pool.CurrentLowPriorityComputeNodes, pool.TargetDedicatedComputeNodes, pool.CurrentDedicatedComputeNodes);
         }
 
-        private static async Task<IAsyncEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync(AzureCloudIdentityConfig azureCloudIdentityConfig,CancellationToken cancellationToken)
+        private static async Task<IAsyncEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync(AzureCloudConfig azureCloudConfig,CancellationToken cancellationToken)
         {
-            var azureClient = await GetAzureManagementClientAsync(azureCloudIdentityConfig, cancellationToken);
+            var azureClient = await GetAzureManagementClientAsync(azureCloudConfig, cancellationToken);
             return (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken))
                 .ToAsyncEnumerable()
                 .Select(s => s.SubscriptionId).SelectManyAwait(async (subscriptionId, ct) =>
@@ -492,7 +492,7 @@ namespace TesApi.Web
         {
             try
             {
-                var azureClient = await GetAzureManagementClientAsync(azureCloudConfig.AzureCloudIdentityConfig, cancellationToken);
+                var azureClient = await GetAzureManagementClientAsync(azureCloudConfig, cancellationToken);
                 var storageAccount = await azureClient.WithSubscription(storageAccountInfo.SubscriptionId).StorageAccounts.GetByIdAsync(storageAccountInfo.Id, cancellationToken);
 
                 return (await storageAccount.GetKeysAsync(cancellationToken))[0].Value;
@@ -567,10 +567,10 @@ namespace TesApi.Web
         /// <param name="azureCloudIdentityConfig"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>An authenticated Azure Client instance</returns>
-        private static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(AzureCloudIdentityConfig azureCloudIdentityConfig, CancellationToken cancellationToken)
+        private static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)
         {
-            var accessToken = await GetAzureAccessTokenAsync(cancellationToken, resource: azureCloudIdentityConfig.ResourceManagerUrl);
-            var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, azureCloudIdentityConfig.AzureEnvironment);
+            var accessToken = await GetAzureAccessTokenAsync(cancellationToken, resource: azureCloudConfig.ResourceManagerUrl);
+            var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, azureCloudConfig.AzureEnvironment);
             var azureClient = FluentAzure.Authenticate(azureCredentials);
 
             return azureClient;
@@ -582,7 +582,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken)
-            => await (await GetAccessibleStorageAccountsAsync(azureCloudConfig.AzureCloudIdentityConfig, cancellationToken))
+            => await (await GetAccessibleStorageAccountsAsync(azureCloudConfig, cancellationToken))
                 .FirstOrDefaultAsync(storageAccount => storageAccount.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
 
         /// <inheritdoc/>
