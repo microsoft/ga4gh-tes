@@ -98,7 +98,7 @@ namespace TesApi.Web.Management
             ArgumentNullException.ThrowIfNull(finalize);
 
             var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync(azureCloudIdentityConfig.ResourceManagerUrl));
-            var azureManagementClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(cancellationToken);
+            var azureManagementClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(azureCloudIdentityConfig, cancellationToken);
 
             var subscriptions = (await azureManagementClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
 
