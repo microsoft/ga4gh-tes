@@ -9,6 +9,7 @@ using CommonUtilities.AzureCloud;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.ApiClients.Models.Terra;
+using TesApi.Web.Management.Models.Terra;
 
 namespace Tes.ApiClients.Tests
 {

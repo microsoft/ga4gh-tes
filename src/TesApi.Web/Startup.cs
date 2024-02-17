@@ -10,6 +10,7 @@ using Azure.Core;
 using Azure.Identity;
 using CommonUtilities.AzureCloud;
 using CommonUtilities;
+using CommonUtilities.AzureCloud;
 using CommonUtilities.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
