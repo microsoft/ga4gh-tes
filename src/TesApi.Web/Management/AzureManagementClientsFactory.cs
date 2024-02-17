@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommonUtilities;
 using Azure.Identity;
+using CommonUtilities.AzureCloud;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
@@ -21,7 +22,7 @@ namespace TesApi.Web.Management
     public class AzureManagementClientsFactory
     {
         private readonly BatchAccountResourceInformation batchAccountInformation;
-        private readonly AzureCloudIdentityConfig azureCloudIdentityConfig;
+        private readonly AzureCloudConfig azureCloudConfig;
 
         /// <summary>
         /// Batch account resource information.
@@ -32,12 +33,12 @@ namespace TesApi.Web.Management
         /// Constructor of AzureManagementClientsFactory
         /// </summary>
         /// <param name="batchAccountInformation"><see cref="BatchAccountResourceInformation"/>></param>
-        /// <param name="azureCloudIdentityConfig"></param>
+        /// <param name="azureCloudConfig"></param>
         /// <exception cref="ArgumentException"></exception>
-        public AzureManagementClientsFactory(BatchAccountResourceInformation batchAccountInformation, AzureCloudIdentityConfig azureCloudIdentityConfig)
+        public AzureManagementClientsFactory(BatchAccountResourceInformation batchAccountInformation, AzureCloudConfig azureCloudConfig)
         {
             ArgumentNullException.ThrowIfNull(batchAccountInformation);
-            ArgumentNullException.ThrowIfNull(azureCloudIdentityConfig);
+            ArgumentNullException.ThrowIfNull(azureCloudConfig);
 
             if (string.IsNullOrEmpty(batchAccountInformation.SubscriptionId))
             {
@@ -50,7 +51,7 @@ namespace TesApi.Web.Management
             }
 
             this.batchAccountInformation = batchAccountInformation;
-            this.azureCloudIdentityConfig = azureCloudIdentityConfig;
+            this.azureCloudConfig = azureCloudConfig;
         }
 
         /// <summary>
@@ -68,7 +69,7 @@ namespace TesApi.Web.Management
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public async Task<BatchManagementClient> CreateBatchAccountManagementClient(CancellationToken cancellationToken)
-            => new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken, resource: azureCloudIdentityConfig.ResourceManagerUrl))) { SubscriptionId = batchAccountInformation.SubscriptionId };
+            => new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken, resource: azureCloudConfig.ResourceManagerUrl))) { SubscriptionId = batchAccountInformation.SubscriptionId };
 
         /// <summary>
         /// Creates a new instance of Azure Management Client with the default credentials and subscription.
@@ -76,7 +77,7 @@ namespace TesApi.Web.Management
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public async Task<FluentAzure.IAuthenticated> CreateAzureManagementClientAsync(CancellationToken cancellationToken)
-            => await GetAzureManagementClientAsync(azureCloudIdentityConfig, cancellationToken);
+            => await GetAzureManagementClientAsync(azureCloudConfig, cancellationToken);
 
         /// <summary>
         /// Creates a new instance of Azure Management client
@@ -84,10 +85,10 @@ namespace TesApi.Web.Management
         /// <param name="azureCloudIdentityConfig"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(AzureCloudIdentityConfig azureCloudIdentityConfig, CancellationToken cancellationToken)
+        public static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)
         {
-            var accessToken = await GetAzureAccessTokenAsync(cancellationToken, resource: azureCloudIdentityConfig.ResourceManagerUrl);
-            var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, azureCloudIdentityConfig.AzureEnvironment);
+            var accessToken = await GetAzureAccessTokenAsync(cancellationToken, resource: azureCloudConfig.ResourceManagerUrl);
+            var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, azureCloudConfig.AzureEnvironment);
             var azureClient = FluentAzure.Authenticate(azureCredentials);
 
             return azureClient;

@@ -71,7 +71,7 @@ namespace TesApi.Web
 
                     if (string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
                     {
-                        applicationInsightsConnectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, Startup.AzureCloudConfig.AzureCloudIdentityConfig, System.Threading.CancellationToken.None).Result;
+                        applicationInsightsConnectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, Startup.AzureCloudConfig, System.Threading.CancellationToken.None).Result;
                     }
 
                     if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
