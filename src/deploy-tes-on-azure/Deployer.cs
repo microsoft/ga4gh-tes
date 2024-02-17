@@ -1839,7 +1839,7 @@ namespace TesDeployer
 
                         var networkInterface = privateEndpoint.NetworkInterfaces[0];
 
-                        var dnsZone = await CreatePrivateDnsZoneAsync(subnet.Parent, "privatelink.vaultcore.azure.net", "KeyVault");
+                        var dnsZone = await CreatePrivateDnsZoneAsync(subnet.Parent, $"privatelink.{azureCloudConfig.Suffixes.KeyVaultDnsSuffix}", "KeyVault");
                         await dnsZone
                             .Update()
                             .DefineARecordSet(vault.Name)

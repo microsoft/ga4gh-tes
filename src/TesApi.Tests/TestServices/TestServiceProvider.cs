@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using CommonUtilities.Options;
+using CommonUtilities;
+using CommonUtilities.AzureCloud;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,7 +47,10 @@ namespace TesApi.Tests.TestServices
             Action<IServiceCollection> additionalActions = default)
         {
             Configuration = GetConfiguration(configuration);
+            var azureCloudConfig = AzureCloudConfig.CreateAsync().Result;
             provider = new ServiceCollection()
+                        .AddSingleton(azureCloudConfig)
+                        .AddSingleton(azureCloudConfig.AzureCloudIdentityConfig)
                         .AddSingleton<ConfigurationUtils>()
                         .AddSingleton(_ => GetAllowedVmSizesServiceProviderProvider(allowedVmSizesServiceSetup).Object)
                         .AddSingleton(Configuration)
