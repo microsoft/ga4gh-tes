@@ -124,9 +124,7 @@ namespace CommonUtilities.AzureCloud
                 config.AzureCloudIdentityConfig = new AzureCloudIdentityConfig
                 {
                     AzureAuthorityHostUrl = config.Authentication?.LoginEndpointUrl,
-                    TokenScope = config.DefaultTokenScope,
-                    ResourceManagerUrl = config.ResourceManagerUrl,
-                    AzureEnvironment = config.AzureEnvironment
+                    TokenScope = config.DefaultTokenScope
                 };
 
                 return config;

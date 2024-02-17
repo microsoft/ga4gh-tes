@@ -149,7 +149,7 @@ namespace TesDeployer
                     azureCloudConfig = await AzureCloudConfig.CreateAsync(configuration.AzureCloudName);
                     tokenProvider = new RefreshableAzureServiceTokenProvider(azureCloudConfig.ResourceManagerUrl, null, azureCloudConfig.Authentication.LoginEndpointUrl);
                     tokenCredentials = new(tokenProvider);
-                    azureCredentials = new(tokenCredentials, null, null, azureCloudConfig.AzureCloudIdentityConfig.AzureEnvironment);
+                    azureCredentials = new(tokenCredentials, null, null, azureCloudConfig.AzureEnvironment);
                     azureClient = GetAzureClient(azureCredentials);
                     armClient = new ArmClient(new AzureCliCredential());
                     azureSubscriptionClient = azureClient.WithSubscription(configuration.SubscriptionId);
