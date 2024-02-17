@@ -87,7 +87,7 @@ namespace TesApi.Web.Management
         public static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(AzureCloudIdentityConfig azureCloudIdentityConfig, CancellationToken cancellationToken)
         {
             var accessToken = await GetAzureAccessTokenAsync(cancellationToken, resource: azureCloudIdentityConfig.ResourceManagerUrl);
-            var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, AzureEnvironment.AzureGlobalCloud);
+            var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, azureCloudIdentityConfig.AzureEnvironment);
             var azureClient = FluentAzure.Authenticate(azureCredentials);
 
             return azureClient;
