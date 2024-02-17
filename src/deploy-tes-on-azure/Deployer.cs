@@ -138,15 +138,15 @@ namespace TesDeployer
 
             try
             {
-                ValidateInitialCommandLineArgs();
-
                 ConsoleEx.WriteLine("Running...");
-
+                ConsoleEx.WriteLine("Getting cloud configuration...");
+                azureCloudConfig = await AzureCloudConfig.CreateAsync(configuration.AzureCloudName);
+                ConsoleEx.WriteLine("Validating command line arguments...");
+                ValidateInitialCommandLineArgs();
                 await ValidateTokenProviderAsync();
                 
                 await Execute("Connecting to Azure Services...", async () =>
-                {
-                    azureCloudConfig = await AzureCloudConfig.CreateAsync(configuration.AzureCloudName);
+                { 
                     tokenProvider = new RefreshableAzureServiceTokenProvider(azureCloudConfig.ResourceManagerUrl, null, azureCloudConfig.Authentication.LoginEndpointUrl);
                     tokenCredentials = new(tokenProvider);
                     azureCredentials = new(tokenCredentials, null, null, azureCloudConfig.AzureEnvironment);
