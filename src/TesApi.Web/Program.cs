@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using CommonUtilities.AzureCloud;
 using System.Reflection;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
@@ -11,6 +12,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.ApplicationInsights;
 using TesApi.Web.Management;
+using TesApi.Web.Options;
 
 namespace TesApi.Web
 {
@@ -44,8 +46,8 @@ namespace TesApi.Web
             }
 
             builder.ConfigureAppConfiguration((context, config) =>
-            {
-                config.AddEnvironmentVariables();
+            { 
+                config.AddEnvironmentVariables(); // For Docker-Compose
                 applicationInsightsOptions = GetApplicationInsightsConnectionString(config.Build());
 
                 if (!string.IsNullOrEmpty(applicationInsightsOptions?.ConnectionString))
@@ -55,6 +57,8 @@ namespace TesApi.Web
 
                 static Options.ApplicationInsightsOptions GetApplicationInsightsConnectionString(IConfiguration configuration)
                 {
+                    Startup.AzureCloudConfig = GetAzureCloudConfig(configuration);
+
                     var applicationInsightsOptions = configuration.GetSection(Options.ApplicationInsightsOptions.SectionName).Get<Options.ApplicationInsightsOptions>();
                     var applicationInsightsAccountName = applicationInsightsOptions?.AccountName;
 
@@ -67,7 +71,7 @@ namespace TesApi.Web
 
                     if (string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
                     {
-                        applicationInsightsConnectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, System.Threading.CancellationToken.None).Result;
+                        applicationInsightsConnectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, Startup.AzureCloudConfig.AzureCloudIdentityConfig, System.Threading.CancellationToken.None).Result;
                     }
 
                     if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
@@ -123,6 +127,13 @@ namespace TesApi.Web
             });
 
             return builder;
+
+            static AzureCloudConfig GetAzureCloudConfig(IConfiguration configuration)
+            {
+                var tesOptions = new GeneralOptions();
+                configuration.Bind(GeneralOptions.SectionName, tesOptions);
+                return AzureCloudConfig.CreateAsync(tesOptions.AzureCloudName, tesOptions.AzureCloudMetadataUrlApiVersion).Result;
+            }
         }
     }
 }

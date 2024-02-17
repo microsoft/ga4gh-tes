@@ -7,5 +7,6 @@ namespace CommonUtilities
     {
         public string? AzureAuthorityHostUrl { get; set; }
         public string? TokenScope { get; set; }
+        public string? ResourceManagerUrl { get; set; }
     }
 }

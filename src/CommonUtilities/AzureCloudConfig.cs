@@ -68,7 +68,8 @@ namespace CommonUtilities.AzureCloud
         public AzureCloudIdentityConfig AzureCloudIdentityConfig => new AzureCloudIdentityConfig
         {
             AzureAuthorityHostUrl = Authentication?.LoginEndpointUrl,
-            TokenScope = DefaultTokenScope
+            TokenScope = DefaultTokenScope,
+            ResourceManagerUrl = ResourceManagerUrl
         };
 
         public static async Task<AzureCloudConfig> CreateAsync(string azureCloudName = DefaultAzureCloudName, string azureCloudMetadataUrlApiVersion = defaultAzureCloudMetadataUrlApiVersion)

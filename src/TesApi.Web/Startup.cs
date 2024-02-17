@@ -45,6 +45,7 @@ namespace TesApi.Web
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
+        internal static AzureCloudConfig AzureCloudConfig;
 
         /// <summary>
         /// Startup class for ASP.NET core
@@ -55,7 +56,7 @@ namespace TesApi.Web
             this.hostingEnvironment = hostingEnvironment;
             this.logger = logger;
         }
-
+        
         /// <summary>
         /// This method gets called by the runtime. Use this method to add services to the container.
         /// </summary>
@@ -64,10 +65,9 @@ namespace TesApi.Web
         {
             try
             {
-                var azureCloudConfig = GetAzureCloudConfig();
-
                 services
-                    .AddSingleton(azureCloudConfig)
+                    .AddSingleton(AzureCloudConfig)
+                    .AddLogging()
                     .AddApplicationInsightsTelemetry(configuration)
                     .Configure<GeneralOptions>(configuration.GetSection(GeneralOptions.SectionName))
                     .Configure<BatchAccountOptions>(configuration.GetSection(BatchAccountOptions.SectionName))
@@ -116,7 +116,7 @@ namespace TesApi.Web
                     .AddSingleton<TokenCredential>(s =>
                     {
                         return new DefaultAzureCredential(
-                            new DefaultAzureCredentialOptions { AuthorityHost = new Uri(azureCloudConfig.Authentication.LoginEndpointUrl) });
+                            new DefaultAzureCredentialOptions { AuthorityHost = new Uri(AzureCloudConfig.Authentication.LoginEndpointUrl) });
                     })
                     .AddSingleton<TaskToNodeTaskConverter>()
                     .AddSingleton<TaskExecutionScriptingManager>()
@@ -264,7 +264,7 @@ namespace TesApi.Web
                 if (string.IsNullOrWhiteSpace(options.Value.AppKey))
                 {
                     //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
-                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName, System.Threading.CancellationToken.None);
+                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName, AzureCloudConfig.AzureCloudIdentityConfig, System.Threading.CancellationToken.None);
                     task.Wait();
 
                     if (task.Result is null)
@@ -278,13 +278,6 @@ namespace TesApi.Web
 
                 //assume the information was provided via configuration
                 return new BatchAccountResourceInformation(options.Value.AccountName, options.Value.ResourceGroup, options.Value.SubscriptionId, options.Value.Region, options.Value.BaseUrl);
-            }
-
-            AzureCloudConfig GetAzureCloudConfig()
-            {
-                var tesOptions = new GeneralOptions();
-                configuration.Bind(GeneralOptions.SectionName, tesOptions);
-                return AzureCloudConfig.CreateAsync(tesOptions.AzureCloudName, tesOptions.AzureCloudMetadataUrlApiVersion).Result;
             }
         }
 
