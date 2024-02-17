@@ -390,6 +390,7 @@ namespace TesDeployer
             var batchImageGen1 = GetObjectFromConfig(values, "batchImageGen1") ?? new Dictionary<string, string>();
             var martha = GetObjectFromConfig(values, "martha") ?? new Dictionary<string, string>();
 
+            values.Config["azureCloudName"] = GetValueOrDefault(settings, "AzureCloudName");
             values.Config["tesOnAzureVersion"] = GetValueOrDefault(settings, "TesOnAzureVersion");
             values.Config["azureServicesAuthConnectionString"] = GetValueOrDefault(settings, "AzureServicesAuthConnectionString");
             values.Config["applicationInsightsAccountName"] = GetValueOrDefault(settings, "ApplicationInsightsAccountName");
@@ -453,6 +454,7 @@ namespace TesDeployer
 
             return new()
             {
+                ["AzureCloudName"] = GetValueOrDefault(values.Config, "azureCloudName") as string,
                 ["TesOnAzureVersion"] = GetValueOrDefault(values.Config, "tesOnAzureVersion") as string,
                 ["AzureServicesAuthConnectionString"] = GetValueOrDefault(values.Config, "azureServicesAuthConnectionString") as string,
                 ["ApplicationInsightsAccountName"] = GetValueOrDefault(values.Config, "applicationInsightsAccountName") as string,

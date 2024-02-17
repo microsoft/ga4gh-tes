@@ -9,8 +9,8 @@ namespace CommonUtilities.AzureCloud
 {
     public class AzureCloudConfig
     {
-        private const string defaultAzureCloudName = "AzurePublicCloud";
         private const string defaultAzureCloudMetadataUrlApiVersion = "2023-11-01";
+        public const string DefaultAzureCloudName = "AzurePublicCloud";
 
         [JsonPropertyName("portal")]
         public string? PortalUrl { get; set; }
@@ -71,7 +71,7 @@ namespace CommonUtilities.AzureCloud
             TokenScope = DefaultTokenScope
         };
 
-        public static async Task<AzureCloudConfig> CreateAsync(string azureCloudName = defaultAzureCloudName, string azureCloudMetadataUrlApiVersion = defaultAzureCloudMetadataUrlApiVersion)
+        public static async Task<AzureCloudConfig> CreateAsync(string azureCloudName = DefaultAzureCloudName, string azureCloudMetadataUrlApiVersion = defaultAzureCloudMetadataUrlApiVersion)
         {
             // It's critical that this succeeds for TES to function
             // These URLs are expected to always be available

@@ -4,6 +4,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using CommonUtilities.AzureCloud;
 using Microsoft.Extensions.Configuration;
 
 namespace TesDeployer
@@ -26,6 +27,7 @@ namespace TesDeployer
 
     public abstract class UserAccessibleConfiguration
     {
+        public string AzureCloudName { get; set; } = AzureCloudConfig.DefaultAzureCloudName;
         public string BatchPrefix { get; set; }
         public string SubscriptionId { get; set; }
         public string RegionName { get; set; }
