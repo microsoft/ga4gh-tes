@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using CommonUtilities.AzureCloud;
 using k8s;
 using k8s.Models;
 using Microsoft.Azure.Management.ContainerService;
@@ -45,6 +46,7 @@ namespace TesDeployer
 
         private Configuration configuration { get; set; }
         private AzureCredentials azureCredentials { get; set; }
+        private AzureCloudConfig azureCloudConfig { get; set; }
         private CancellationToken cancellationToken { get; set; }
         private string workingDirectoryTemp { get; set; }
         private string kubeConfigPath { get; set; }
@@ -55,8 +57,9 @@ namespace TesDeployer
         public string TesHostname { get; set; }
         public string AzureDnsLabelName { get; set; }
 
-        public KubernetesManager(Configuration config, AzureCredentials credentials, CancellationToken cancellationToken)
+        public KubernetesManager(Configuration config, AzureCredentials credentials, AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)
         {
+            this.azureCloudConfig = azureCloudConfig;
             this.cancellationToken = cancellationToken;
             configuration = config;
             azureCredentials = credentials;
@@ -67,7 +70,7 @@ namespace TesDeployer
         public void SetTesIngressNetworkingConfiguration(string prefix)
         {
             const int maxCnLength = 64;
-            var suffix = $".{configuration.RegionName}.cloudapp.azure.com";
+            var suffix = $".{configuration.RegionName}.cloudapp.{azureCloudConfig.Domain}";
             var prefixMaxLength = maxCnLength - suffix.Length;
             TesCname = GetTesCname(prefix, prefixMaxLength);
             TesHostname = $"{TesCname}{suffix}";

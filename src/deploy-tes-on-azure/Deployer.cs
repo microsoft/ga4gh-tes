@@ -27,6 +27,7 @@ using Azure.Security.KeyVault.Secrets;
 using Azure.Storage;
 using Azure.Storage.Blobs;
 using CommonUtilities;
+using CommonUtilities.AzureCloud;
 using k8s;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.Batch.Models;
@@ -126,6 +127,7 @@ namespace TesDeployer
         private IEnumerable<string> subscriptionIds { get; set; }
         private bool isResourceGroupCreated { get; set; }
         private KubernetesManager kubernetesManager { get; set; }
+        internal AzureCloudConfig azureCloudConfig { get; set; }
 
         public Deployer(Configuration configuration)
             => this.configuration = configuration;
@@ -141,13 +143,13 @@ namespace TesDeployer
                 ConsoleEx.WriteLine("Running...");
 
                 await ValidateTokenProviderAsync();
-
+                
                 await Execute("Connecting to Azure Services...", async () =>
                 {
-                    tokenProvider = new RefreshableAzureServiceTokenProvider("https://management.azure.com//.default");
+                    azureCloudConfig = await AzureCloudConfig.CreateAsync(configuration.AzureCloudName);
+                    tokenProvider = new RefreshableAzureServiceTokenProvider(azureCloudConfig.AzureCloudIdentityConfig.ResourceManagerUrl, null, azureCloudConfig.AzureCloudIdentityConfig.AzureAuthorityHostUrl);
                     tokenCredentials = new(tokenProvider);
-                    azureCredentials = new(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
-                    armClient = new ArmClient(new DefaultAzureCredential());
+                    azureCredentials = new(tokenCredentials, null, null, azureCloudConfig.AzureCloudIdentityConfig.AzureEnvironment);
                     azureClient = GetAzureClient(azureCredentials);
                     armClient = new ArmClient(new AzureCliCredential());
                     azureSubscriptionClient = azureClient.WithSubscription(configuration.SubscriptionId);
@@ -157,7 +159,7 @@ namespace TesDeployer
                 });
 
                 await ValidateSubscriptionAndResourceGroupAsync(configuration);
-                kubernetesManager = new(configuration, azureCredentials, cts.Token);
+                kubernetesManager = new(configuration, azureCredentials, azureCloudConfig, cts.Token);
                 IResourceGroup resourceGroup = null;
                 ManagedCluster aksCluster = null;
                 BatchAccount batchAccount = null;
@@ -524,7 +526,7 @@ namespace TesDeployer
 
                     if (postgreSqlFlexServer is null)
                     {
-                        postgreSqlDnsZone = await CreatePrivateDnsZoneAsync(vnetAndSubnet.Value.virtualNetwork, $"privatelink.postgres.database.azure.com", "PostgreSQL Server");
+                        postgreSqlDnsZone = await CreatePrivateDnsZoneAsync(vnetAndSubnet.Value.virtualNetwork, $"privatelink.{azureCloudConfig.Suffixes.PostgresqlServerEndpointSuffix}", "PostgreSQL Server");
                     }
 
                     await Task.WhenAll(new[]
@@ -560,7 +562,7 @@ namespace TesDeployer
                         new[]
                         {
                                 "Run the following postgresql command to setup the database.",
-                                $"\tPostgreSQL command: psql postgresql://{configuration.PostgreSqlAdministratorLogin}:{configuration.PostgreSqlAdministratorPassword}@{configuration.PostgreSqlServerName}.postgres.database.azure.com/{configuration.PostgreSqlTesDatabaseName} -c \"{GetCreateTesUserString()}\""
+                                $"\tPostgreSQL command: psql postgresql://{configuration.PostgreSqlAdministratorLogin}:{configuration.PostgreSqlAdministratorPassword}@{configuration.PostgreSqlServerName}.{azureCloudConfig.Suffixes.PostgresqlServerEndpointSuffix}/{configuration.PostgreSqlTesDatabaseName} -c \"{GetCreateTesUserString()}\""
                         },
                         async kubernetesClient =>
                         {
@@ -1299,7 +1301,7 @@ namespace TesDeployer
                 ConsoleEx.WriteLine();
                 ConsoleEx.WriteLine("Please contact the Owner or Contributor of your Azure subscription, and have them:", ConsoleColor.Yellow);
                 ConsoleEx.WriteLine();
-                ConsoleEx.WriteLine("1. Navigate to https://portal.azure.com", ConsoleColor.Yellow);
+                ConsoleEx.WriteLine($"1. Navigate to {azureCloudConfig.PortalUrl}", ConsoleColor.Yellow);
                 ConsoleEx.WriteLine("2. Select Subscription -> Resource Providers", ConsoleColor.Yellow);
                 ConsoleEx.WriteLine("3. Select each of the following and click Register:", ConsoleColor.Yellow);
                 ConsoleEx.WriteLine();
@@ -1615,7 +1617,7 @@ namespace TesDeployer
                 async () =>
                 {
                     var tesScript = GetCreateTesUserString();
-                    var serverPath = $"{configuration.PostgreSqlServerName}.postgres.database.azure.com";
+                    var serverPath = $"{configuration.PostgreSqlServerName}.{azureCloudConfig.Suffixes.PostgresqlServerEndpointSuffix}";
                     var adminUser = configuration.PostgreSqlAdministratorLogin;
 
                     var commands = new List<string[]> {
@@ -2229,7 +2231,7 @@ namespace TesDeployer
         {
             try
             {
-                _ = await Execute("Retrieving Azure management token...", async () => (await (new AzureCliCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { "https://management.azure.com//.default" }))).Token);
+                _ = await Execute("Retrieving Azure management token...", () => new AzureServiceTokenProvider("RunAs=Developer; DeveloperTool=AzureCli").GetAccessTokenAsync(azureCloudConfig.AzureCloudIdentityConfig.ResourceManagerUrl, cancellationToken: cts.Token));
             }
             catch (AuthenticationFailedException ex)
             {
@@ -2373,7 +2375,12 @@ namespace TesDeployer
 
             if (!string.IsNullOrWhiteSpace(configuration.BatchNodesSubnetId) && !string.IsNullOrWhiteSpace(configuration.BatchSubnetName))
             {
-                throw new Exception("Invalid configuration options BatchNodesSubnetId and BatchSubnetName are mutually exclusive.");
+                throw new ValidationException("Invalid configuration options BatchNodesSubnetId and BatchSubnetName are mutually exclusive.");
+            }
+
+            if (!new[] { "AZUREPUBLICCLOUD", "AZUREGOVERNMENT", "AZURECHINA" }.Contains(configuration.AzureCloudName, StringComparer.OrdinalIgnoreCase))
+            {
+                throw new ValidationException("AzureCloudName must be either 'AzurePublicCloud','AzureGovernment', or 'AzureChina'");
             }
         }
 

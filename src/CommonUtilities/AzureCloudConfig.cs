@@ -66,6 +66,7 @@ namespace CommonUtilities.AzureCloud
 
         public string? DefaultTokenScope { get; set; }
         public AzureEnvironment AzureEnvironment { get; set; }
+        public string Domain { get; set; }
 
         public AzureCloudIdentityConfig AzureCloudIdentityConfig => new AzureCloudIdentityConfig
         {
@@ -125,6 +126,7 @@ namespace CommonUtilities.AzureCloud
                 var config = JsonSerializer.Deserialize<AzureCloudConfig>(jsonString)!;
                 config.DefaultTokenScope = defaultTokenScope;
                 config.AzureEnvironment = azureEnvironment;
+                config.Domain = domain;
                 return config;
             });
         }
