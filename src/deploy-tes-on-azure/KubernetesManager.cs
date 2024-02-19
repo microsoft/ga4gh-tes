@@ -36,8 +36,8 @@ namespace TesDeployer
             .WaitAndRetryAsync(80, retryAttempt => TimeSpan.FromSeconds(15));
 
         private static readonly AsyncRetryPolicy KubeExecRetryPolicy = Policy
-            .Handle<WebSocketException>(ex => ex.WebSocketErrorCode == WebSocketError.NotAWebSocket)
-            .WaitAndRetryAsync(200, retryAttempt => TimeSpan.FromSeconds(5));
+                    .Handle<WebSocketException>(ex => ex.WebSocketErrorCode == WebSocketError.NotAWebSocket)
+                    .WaitAndRetryAsync(200, retryAttempt => TimeSpan.FromSeconds(5));
 
         private const string NginxIngressRepo = "https://kubernetes.github.io/ingress-nginx";
         private const string NginxIngressVersion = "4.7.1";
@@ -104,7 +104,6 @@ namespace TesDeployer
                 apiVersion: apps/v1
                 kind: Deployment
                 metadata:
-                  creationTimestamp: null
                   labels:
                     io.kompose.service: ubuntu
                   name: ubuntu
@@ -113,21 +112,16 @@ namespace TesDeployer
                   selector:
                     matchLabels:
                       io.kompose.service: ubuntu
-                  strategy: {}
                   template:
                     metadata:
-                      creationTimestamp: null
                       labels:
                         io.kompose.service: ubuntu
                     spec:
                       containers:
-                        - name: ubuntu
-                          image: mcr.microsoft.com/mirror/docker/library/ubuntu:22.04
-                          command: [ "/bin/bash", "-c", "--" ]
-                          args: [ "while true; do sleep 30; done;" ]
-                          resources: {}
-                      restartPolicy: Always
-                status: {}
+                      - name: ubuntu
+                        image: ubuntu
+                        command: ["/bin/bash", "-c", "--"]
+                        args: ["while true; do sleep 30; done;"]
                 """));
 
         /// <summary>
@@ -344,6 +338,7 @@ namespace TesDeployer
             {
                 foreach (var command in commands)
                 {
+                    // Debug: ConsoleEx.WriteLine($"Executing: {string.Join(' ', command)}");
                     _ = await client.NamespacedPodExecAsync(workloadPod.Metadata.Name, podNamespace, podName, command, true,
                         (stdIn, stdOut, stdError) => Task.WhenAll(StreamHandler(stdOut), StreamHandler(stdError)), CancellationToken.None);
                 }
