@@ -391,7 +391,7 @@ namespace TesDeployer
 
                     if (string.IsNullOrWhiteSpace(configuration.PostgreSqlServerNameSuffix))
                     {
-                        configuration.PostgreSqlServerNameSuffix = azureCloudConfig.Suffixes.PostgresqlServerEndpointSuffix;
+                        configuration.PostgreSqlServerNameSuffix = $".{azureCloudConfig.Suffixes.PostgresqlServerEndpointSuffix}";
                     }
 
                     // Configuration preferences not currently settable by user.
