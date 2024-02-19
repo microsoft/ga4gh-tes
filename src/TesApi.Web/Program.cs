@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Threading.Tasks;
 using CommonUtilities.AzureCloud;
 using System.Reflection;
 using Microsoft.AspNetCore;
@@ -25,8 +26,18 @@ namespace TesApi.Web
         /// Main
         /// </summary>
         /// <param name="args"></param>
-        public static void Main(string[] args)
-            => CreateWebHostBuilder(args).Build().Run();
+        public static async Task Main(string[] args)
+        {
+            try
+            {
+                await CreateWebHostBuilder(args).Build().RunAsync();
+            }
+            catch (Exception exc)
+            {
+                Console.WriteLine($"Main critical error: {exc.Message} {exc}");
+                throw;
+            }
+        }
 
         /// <summary>
         /// Create the web host builder.
@@ -45,19 +56,21 @@ namespace TesApi.Web
                 builder.UseUrls("http://0.0.0.0:80");
             }
 
-            builder.ConfigureAppConfiguration((context, config) =>
-            { 
-                config.AddEnvironmentVariables(); // For Docker-Compose
-                applicationInsightsOptions = GetApplicationInsightsConnectionString(config.Build());
+            builder.ConfigureAppConfiguration((context, configBuilder) =>
+            {
+                configBuilder.AddEnvironmentVariables();
+                var config = configBuilder.Build();
+                Startup.AzureCloudConfig = GetAzureCloudConfig(config);
+                applicationInsightsOptions = GetApplicationInsightsConnectionString(config);
 
                 if (!string.IsNullOrEmpty(applicationInsightsOptions?.ConnectionString))
                 {
-                    config.AddApplicationInsightsSettings(applicationInsightsOptions.ConnectionString, developerMode: context.HostingEnvironment.IsDevelopment() ? true : null);
+                    configBuilder.AddApplicationInsightsSettings(applicationInsightsOptions.ConnectionString, developerMode: context.HostingEnvironment.IsDevelopment() ? true : null);
                 }
 
                 static Options.ApplicationInsightsOptions GetApplicationInsightsConnectionString(IConfiguration configuration)
                 {
-                    Startup.AzureCloudConfig = GetAzureCloudConfig(configuration);
+                    
 
                     var applicationInsightsOptions = configuration.GetSection(Options.ApplicationInsightsOptions.SectionName).Get<Options.ApplicationInsightsOptions>();
                     var applicationInsightsAccountName = applicationInsightsOptions?.AccountName;
