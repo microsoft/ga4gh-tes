@@ -82,7 +82,7 @@ namespace TesApi.Web.Management
         /// <summary>
         /// Creates a new instance of Azure Management client
         /// </summary>
-        /// <param name="azureCloudIdentityConfig"></param>
+        /// <param name="azureCloudConfig"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)

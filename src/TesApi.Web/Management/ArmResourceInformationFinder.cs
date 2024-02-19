@@ -24,7 +24,7 @@ namespace TesApi.Web.Management
         /// Looks up the AppInsights instrumentation key in subscriptions the TES services has access to 
         /// </summary>
         /// <param name="accountName"></param>
-        /// <param name="azureCloudIdentityConfig">Azure cloud identity configuration</param>
+        /// <param name="azureCloudConfig">Azure cloud identity configuration</param>
         /// <returns></returns>
         /// <param name="cancellationToken"></param>
         public static Task<string> GetAppInsightsConnectionStringAsync(string accountName, AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)
@@ -44,7 +44,7 @@ namespace TesApi.Web.Management
         /// Returns null if the resource was not found or the account does not have access.
         /// </summary>
         /// <param name="batchAccountName">batch account name</param>
-        /// <param name="azureCloudIdentityConfig">Azure cloud identity configuration</param>
+        /// <param name="azureCloudConfig">Azure cloud identity configuration</param>
         /// <returns></returns>
         /// <param name="cancellationToken"></param>
         public static Task<BatchAccountResourceInformation> TryGetResourceInformationFromAccountNameAsync(string batchAccountName, AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)

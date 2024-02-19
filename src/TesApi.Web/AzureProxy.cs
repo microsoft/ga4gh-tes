@@ -564,7 +564,7 @@ namespace TesApi.Web
         /// <summary>
         /// Gets an authenticated Azure Client instance
         /// </summary>
-        /// <param name="azureCloudIdentityConfig"></param>
+        /// <param name="azureCloudConfig"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>An authenticated Azure Client instance</returns>
         private static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)
