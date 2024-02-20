@@ -2201,7 +2201,7 @@ namespace TesDeployer
         {
             try
             {
-                _ = await Execute("Retrieving Azure management token...", async () => (await (new DefaultAzureCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { "https://management.azure.com//.default" }))).Token);
+                _ = await Execute("Retrieving Azure management token...", async () => (await (new AzureCliCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { "https://management.azure.com//.default" }))).Token);
             }
             catch (AuthenticationFailedException ex)
             {

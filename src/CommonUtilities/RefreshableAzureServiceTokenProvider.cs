@@ -14,7 +14,7 @@ namespace CommonUtilities
     {
         private readonly string resource;
         private readonly string? tenantId;
-        private readonly DefaultAzureCredential azureCredential;
+        private readonly AzureCliCredential azureCredential;
 
         /// <summary>
         /// Constructor.
@@ -29,7 +29,7 @@ namespace CommonUtilities
             this.resource = resource;
             this.tenantId = tenantId;
 
-            this.azureCredential = new DefaultAzureCredential();
+            this.azureCredential = new AzureCliCredential();
         }
 
         /// <summary>
