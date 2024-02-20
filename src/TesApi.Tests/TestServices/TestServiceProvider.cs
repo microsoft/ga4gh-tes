@@ -47,7 +47,7 @@ namespace TesApi.Tests.TestServices
             Action<IServiceCollection> additionalActions = default)
         {
             Configuration = GetConfiguration(configuration);
-            var azureCloudConfig = AzureCloudConfig.CreateAsync().Result;
+            var azureCloudConfig = ExpensiveObjectTestUtility.AzureCloudConfig;
             provider = new ServiceCollection()
                         .AddSingleton(azureCloudConfig)
                         .AddSingleton(azureCloudConfig.AzureEnvironmentConfig)
@@ -72,7 +72,7 @@ namespace TesApi.Tests.TestServices
                         .IfThenElse(mockStorageAccessProvider, s => s, s => s.AddTransient<ILogger<DefaultStorageAccessProvider>>(_ => NullLogger<DefaultStorageAccessProvider>.Instance))
                         .IfThenElse(batchSkuInformationProvider is null,
                             s => s.AddSingleton<IBatchSkuInformationProvider>(sp => ActivatorUtilities.CreateInstance<PriceApiBatchSkuInformationProvider>(sp))
-                                .AddSingleton(sp => new PriceApiBatchSkuInformationProvider(sp.GetRequiredService<PriceApiClient>(), sp.GetRequiredService<ILogger<PriceApiBatchSkuInformationProvider>>())),
+                                .AddSingleton(sp => new PriceApiBatchSkuInformationProvider(sp.GetRequiredService<PriceApiClient>(), ExpensiveObjectTestUtility.AzureCloudConfig, sp.GetRequiredService<ILogger<PriceApiBatchSkuInformationProvider>>())),
                             s => s.AddSingleton(_ => GetBatchSkuInformationProvider(batchSkuInformationProvider).Object))
                         .AddSingleton(_ => GetBatchQuotaProvider(batchQuotaProvider).Object)
                         .AddTransient<ILogger<BatchScheduler>>(_ => NullLogger<BatchScheduler>.Instance)
