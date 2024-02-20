@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Identity;
 using CommonUtilities;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Auth;
@@ -553,8 +554,8 @@ namespace TesApi.Web
         public string GetArmRegion()
             => location;
 
-        private static Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string resource = "https://management.azure.com/")
-            => new AzureServiceTokenProvider().GetAccessTokenAsync(resource, cancellationToken: cancellationToken);
+        private static async Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string scope = "https://management.azure.com//.default")
+            => (await (new DefaultAzureCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { scope }), cancellationToken)).Token;
 
         /// <summary>
         /// Gets an authenticated Azure Client instance
