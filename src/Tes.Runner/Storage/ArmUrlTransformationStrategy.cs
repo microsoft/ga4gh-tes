@@ -4,7 +4,6 @@
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
-using CommonUtilities;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
