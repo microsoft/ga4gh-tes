@@ -11,7 +11,7 @@ namespace CommonUtilities.AzureCloud
     public class AzureCloudConfig
     {
         private const string defaultAzureCloudMetadataUrlApiVersion = "2023-11-01";
-        public const string DefaultAzureCloudName = "AzurePublicCloud";
+        public const string DefaultAzureCloudName = "AzureCloud";
 
         [JsonPropertyName("portal")]
         public string? PortalUrl { get; set; }
@@ -29,7 +29,7 @@ namespace CommonUtilities.AzureCloud
         public string? GraphUrl { get; set; }
 
         [JsonPropertyName("name")]
-        public string? Name { get; set; }
+        public string? Name { get; set; } // AzureCloud, AzureChinaCloud, AzureUSGovernment
 
         [JsonPropertyName("suffixes")]
         public EndpointSuffixes? Suffixes { get; set; }
@@ -79,19 +79,19 @@ namespace CommonUtilities.AzureCloud
             // Names defined here: https://github.com/Azure/azure-sdk-for-net/blob/bc9f38eca0d8abbf0697dd3e3e75220553eeeafa/sdk/identity/Azure.Identity/src/AzureAuthorityHosts.cs#L11
             switch (azureCloudName.ToUpperInvariant())
             {
-                case "AZUREPUBLICCLOUD":
+                case "AZURECLOUD":
                     domain = "azure.com";
                     // The double slash is intentional for the public cloud.
                     // https://github.com/Azure/azure-sdk-for-net/blob/bc9f38eca0d8abbf0697dd3e3e75220553eeeafa/sdk/identity/Azure.Identity/src/AzureAuthorityHosts.cs#L53
                     defaultTokenScope = $"https://management.{domain}//.default";
                     azureEnvironment = AzureEnvironment.AzureGlobalCloud;
                     break; 
-                case "AZUREGOVERNMENT":
+                case "AZUREUSGOVERNMENT":
                     domain = "usgovcloudapi.net";
                     defaultTokenScope = $"https://management.{domain}/.default";
                     azureEnvironment = AzureEnvironment.AzureUSGovernment;
                     break;
-                case "AZURECHINA":
+                case "AZURECHINACLOUD":
                     domain = "chinacloudapi.cn";
                     defaultTokenScope = $"https://management.{domain}/.default";
                     azureEnvironment = AzureEnvironment.AzureChinaCloud;
