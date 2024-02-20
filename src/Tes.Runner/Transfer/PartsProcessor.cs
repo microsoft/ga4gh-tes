@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Diagnostics;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
@@ -14,14 +15,20 @@ public abstract class PartsProcessor
     protected readonly Channel<byte[]> MemoryBufferChannel;
     protected readonly BlobPipelineOptions BlobPipelineOptions;
     private readonly ILogger logger = PipelineLoggerFactory.Create<PartsProcessor>();
+    private readonly IScalingStrategy scalingStrategy;
 
-    protected PartsProcessor(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel)
+    private TimeSpan currentMaxPartProcessingTime;
+
+    private readonly SemaphoreSlim semaphore = new SemaphoreSlim(1);
+
+    protected PartsProcessor(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel, IScalingStrategy scalingStrategy)
     {
         ValidateArguments(blobPipeline, blobPipelineOptions, memoryBufferChannel);
 
         BlobPipeline = blobPipeline;
         BlobPipelineOptions = blobPipelineOptions;
         MemoryBufferChannel = memoryBufferChannel;
+        this.scalingStrategy = scalingStrategy;
     }
 
     private static void ValidateArguments(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions,
@@ -52,45 +59,104 @@ public abstract class PartsProcessor
         }
     }
 
-    protected List<Task> StartProcessors(int numberOfProcessors, Channel<PipelineBuffer> readFromChannel, Func<PipelineBuffer, CancellationToken, Task> processorAsync)
+    protected Task StartProcessorsWithScalingStrategyAsync(int numberOfProcessors, Channel<PipelineBuffer> readFromChannel, Func<PipelineBuffer, CancellationToken, Task> processorAsync, CancellationTokenSource cancellationSource)
     {
-        ArgumentNullException.ThrowIfNull(readFromChannel);
-        ArgumentNullException.ThrowIfNull(processorAsync);
-
-        var cancellationTokenSource = new CancellationTokenSource();
-
-        var tasks = new List<Task>();
-        for (var i = 0; i < numberOfProcessors; i++)
+        return Task.Run(async () =>
         {
-            tasks.Add(Task.Run(async () =>
+            var tasks = new List<Task>();
+
+            for (var p = 0; p < numberOfProcessors; p++)
             {
-                PipelineBuffer? buffer;
-                while (await readFromChannel.Reader.WaitToReadAsync(cancellationTokenSource.Token))
-                    while (readFromChannel.Reader.TryRead(out buffer))
+                try
+                {
+                    await semaphore.WaitAsync(cancellationSource.Token);
+
+                    if (!scalingStrategy.IsScalingAllowed(p, currentMaxPartProcessingTime))
                     {
-                        try
-                        {
-                            await processorAsync(buffer, cancellationTokenSource.Token);
-                        }
-                        catch (Exception e)
-                        {
-                            logger.LogError(e, "Failed to execute processorAsync");
-                            if (cancellationTokenSource.Token.CanBeCanceled)
-                            {
-                                cancellationTokenSource.Cancel();
-                            }
-
-                            await TryCloseFileHandlerPoolAsync(buffer.FileHandlerPool);
-
-                            throw;
-                        }
+                        logger.LogInformation("The maximum number of tasks for the transfer operation has been set. Max part processing time is: {currentMaxPartProcessingTimeInMs} ms. Processing tasks count: {processorCount}.", currentMaxPartProcessingTime, p);
+                        break;
                     }
-            }, cancellationTokenSource.Token));
-        }
-        return tasks;
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+
+                if (readFromChannel.Reader.Completion.IsCompleted)
+                {
+                    logger.LogInformation("The readFromChannel is completed, no need to add more processing tasks. Processing tasks count: {processorCount}.", p);
+                    break;
+                }
+
+                var delay = scalingStrategy.GetScalingDelay(p);
+
+                logger.LogInformation("Increasing the number of processing tasks to {processorCount}", p + 1);
+
+                tasks.Add(StartProcessorTaskAsync(readFromChannel, processorAsync, cancellationSource));
+
+                await Task.Delay(delay, cancellationSource.Token);
+            }
+
+            await Task.WhenAll(tasks);
+        }, cancellationSource.Token);
     }
 
-    private async Task TryCloseFileHandlerPoolAsync(Channel<FileStream>? fileHandlerPool)
+
+    private async Task StartProcessorTaskAsync(Channel<PipelineBuffer> readFromChannel, Func<PipelineBuffer, CancellationToken, Task> processorAsync, CancellationTokenSource cancellationTokenSource)
+    {
+        await Task.Run(async () =>
+        {
+            PipelineBuffer? buffer;
+            var stopwatch = new Stopwatch();
+            while (await readFromChannel.Reader.WaitToReadAsync(cancellationTokenSource.Token))
+                while (readFromChannel.Reader.TryRead(out buffer))
+                {
+                    stopwatch.Restart();
+                    try
+                    {
+                        await processorAsync(buffer, cancellationTokenSource.Token);
+                    }
+                    catch (Exception e)
+                    {
+                        logger.LogError(e, "Failed to execute processorAsync");
+
+                        await TryCloseFileHandlerPoolAsync(buffer.FileHandlerPool);
+
+                        if (cancellationTokenSource.Token.CanBeCanceled)
+                        {
+                            cancellationTokenSource.Cancel();
+                        }
+
+                        throw;
+                    }
+                    finally
+                    {
+                        stopwatch.Stop();
+
+                        await UpdateMaxProcessingTimeAsync(stopwatch.Elapsed);
+                    }
+                }
+        }, cancellationTokenSource.Token);
+    }
+
+    private async Task UpdateMaxProcessingTimeAsync(TimeSpan stopwatchElapsed)
+    {
+        await semaphore.WaitAsync();
+
+        try
+        {
+            if (stopwatchElapsed > currentMaxPartProcessingTime)
+            {
+                currentMaxPartProcessingTime = stopwatchElapsed;
+            }
+        }
+        finally
+        {
+            semaphore.Release();
+        }
+    }
+
+    internal static async Task TryCloseFileHandlerPoolAsync(Channel<FileStream>? fileHandlerPool)
     {
         if (fileHandlerPool is null)
         {
@@ -109,3 +175,4 @@ public abstract class PartsProcessor
         }
     }
 }
+
