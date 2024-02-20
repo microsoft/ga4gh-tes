@@ -28,14 +28,15 @@ namespace Tes.ApiClients
         /// <param name="apiUrl">WSM API host</param>
         /// <param name="tokenCredential"></param>
         /// <param name="cachingRetryHandler"></param>
+        /// <param name="azureCloudIdentityConfig"></param>
         /// <param name="logger"></param>
-        public TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryHandler cachingRetryHandler,
-            AzureCloudIdentityConfig azureCloudIdentityConfig, ILogger<TerraWsmApiClient> logger) : base(apiUrl, tokenCredential, cachingRetryHandler, azureCloudIdentityConfig, logger)
+        public TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryPolicyBuilder cachingRetryHandler,
+            AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<TerraWsmApiClient> logger) : base(apiUrl, tokenCredential, cachingRetryHandler, azureCloudIdentityConfig, logger)
         {
 
         }
 
-        public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, AzureCloudIdentityConfig azureCloudIdentityConfig)
+        public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig)
         {
             var retryPolicyOptions = new RetryPolicyOptions();
             var cacheRetryHandler = new CachingRetryPolicyBuilder(sharedMemoryCache,

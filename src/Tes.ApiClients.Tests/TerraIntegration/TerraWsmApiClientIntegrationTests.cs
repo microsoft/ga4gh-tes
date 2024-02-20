@@ -25,7 +25,7 @@ namespace Tes.ApiClients.Tests.TerraIntegration
             var memoryCache = new MemoryCache(new MemoryCacheOptions());
             var 
             wsmApiClient = new TerraWsmApiClient(envInfo.WsmApiHost, new TestEnvTokenCredential(),
-                new CachingRetryPolicyBuilder(memoryCache, retryOptions), azureCloudConfig.AzureCloudIdentityConfig, TestLoggerFactory.Create<TerraWsmApiClient>());
+                new CachingRetryPolicyBuilder(memoryCache, retryOptions), azureCloudConfig.AzureEnvironmentConfig, TestLoggerFactory.Create<TerraWsmApiClient>());
 
         }
 

@@ -49,7 +49,7 @@ namespace Tes.Runner.Models
 
         public StorageTargetLocation? StreamingLogPublisher { get; set; }
 
-        public AzureCloudIdentityConfig? AzureCloudIdentityConfig { get; set; }
+        public AzureEnvironmentConfig? AzureEnvironmentConfig { get; set; }
     }
 
     public class StorageTargetLocation

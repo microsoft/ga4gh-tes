@@ -298,7 +298,7 @@ namespace TesApi.Web.Runner
         /// </summary>
         /// <param name="azureCloudIdentityConfig">Azure cloud identity config</param>
         /// <returns></returns>
-        public NodeTaskBuilder WithAzureCloudIdentityConfig(AzureCloudIdentityConfig azureCloudIdentityConfig)
+        public NodeTaskBuilder WithAzureCloudIdentityConfig(AzureEnvironmentConfig azureCloudIdentityConfig)
         {
             if (azureCloudIdentityConfig == null)
             {
@@ -306,7 +306,7 @@ namespace TesApi.Web.Runner
             }
 
             nodeTask.RuntimeOptions ??= new RuntimeOptions();
-            nodeTask.RuntimeOptions.AzureCloudIdentityConfig = azureCloudIdentityConfig;
+            nodeTask.RuntimeOptions.AzureEnvironmentConfig = azureCloudIdentityConfig;
             return this;
         }
 

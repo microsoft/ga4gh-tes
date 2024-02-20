@@ -21,7 +21,7 @@ namespace Tes.ApiClients.Tests
         private Mock<CachingRetryPolicyBuilder> cacheAndRetryBuilder = null!;
         private Lazy<Mock<CachingRetryHandler.CachingAsyncRetryHandlerPolicy<HttpResponseMessage>>> cacheAndRetryHandler = null!;
         private TerraApiStubData terraApiStubData = null!;
-        private AzureCloudIdentityConfig azureCloudIdentityConfig = null!;
+        private AzureEnvironmentConfig azureCloudIdentityConfig = null!;
 
         [TestInitialize]
         public void SetUp()

@@ -50,7 +50,7 @@ namespace TesApi.Tests.TestServices
             var azureCloudConfig = AzureCloudConfig.CreateAsync().Result;
             provider = new ServiceCollection()
                         .AddSingleton(azureCloudConfig)
-                        .AddSingleton(azureCloudConfig.AzureCloudIdentityConfig)
+                        .AddSingleton(azureCloudConfig.AzureEnvironmentConfig)
                         .AddSingleton<ConfigurationUtils>()
                         .AddSingleton(_ => GetAllowedVmSizesServiceProviderProvider(allowedVmSizesServiceSetup).Object)
                         .AddSingleton(Configuration)

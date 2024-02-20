@@ -26,7 +26,7 @@ namespace Tes.ApiClients
         /// <param name="tokenCredential"><see cref="TokenCredential"/></param>
         /// <param name="cachingRetryHandler"><see cref="CachingRetryPolicyBuilder"/></param>
         /// <param name="logger"><see cref="ILogger{TCategoryName}"/></param>
-        protected TerraApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryHandler cachingRetryHandler, AzureCloudIdentityConfig azureCloudIdentityConfig, ILogger logger) : base(tokenCredential, azureCloudIdentityConfig.TokenScope, cachingRetryHandler, logger)
+        protected TerraApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryPolicyBuilder cachingRetryHandler, AzureEnvironmentConfig azureCloudIdentityConfig, ILogger logger) : base(tokenCredential, azureCloudIdentityConfig.TokenScope, cachingRetryHandler, logger)
         {
             ArgumentException.ThrowIfNullOrEmpty(apiUrl);
             ArgumentNullException.ThrowIfNull(tokenCredential);

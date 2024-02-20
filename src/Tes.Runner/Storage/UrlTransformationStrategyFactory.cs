@@ -21,20 +21,20 @@ namespace Tes.Runner.Storage
                 case TransformationStrategy.SchemeConverter:
                     return new CloudProviderSchemeConverter();
                 case TransformationStrategy.AzureResourceManager:
-                    return new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, TokenCredentialsManager.GetTokenCredential(runtimeOptions)));
+                    return new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, TokenCredentialsManager.GetTokenCredential(runtimeOptions)), runtimeOptions);
                 case TransformationStrategy.TerraWsm:
-                    return new TerraUrlTransformationStrategy(runtimeOptions.Terra!, TokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureCloudIdentityConfig);
+                    return new TerraUrlTransformationStrategy(runtimeOptions.Terra!, TokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureEnvironmentConfig);
                 case TransformationStrategy.CombinedTerra:
                     return new CombinedTransformationStrategy(new List<IUrlTransformationStrategy>
                     {
                         new CloudProviderSchemeConverter(),
-                        new TerraUrlTransformationStrategy(runtimeOptions.Terra!, TokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureCloudIdentityConfig),
+                        new TerraUrlTransformationStrategy(runtimeOptions.Terra!, TokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureEnvironmentConfig),
                     });
                 case TransformationStrategy.CombinedAzureResourceManager:
                     return new CombinedTransformationStrategy(new List<IUrlTransformationStrategy>
                     {
                         new CloudProviderSchemeConverter(),
-                        new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, TokenCredentialsManager.GetTokenCredential(runtimeOptions)))
+                        new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, TokenCredentialsManager.GetTokenCredential(runtimeOptions)), runtimeOptions)
                     });
             }
 

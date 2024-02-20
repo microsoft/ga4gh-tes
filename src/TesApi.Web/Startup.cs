@@ -68,7 +68,7 @@ namespace TesApi.Web
             {
                 services
                     .AddSingleton(AzureCloudConfig)
-                    .AddSingleton(AzureCloudConfig.AzureCloudIdentityConfig)
+                    .AddSingleton(AzureCloudConfig.AzureEnvironmentConfig)
                     .AddLogging()
                     .AddApplicationInsightsTelemetry(configuration)
                     .Configure<GeneralOptions>(configuration.GetSection(GeneralOptions.SectionName))

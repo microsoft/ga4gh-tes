@@ -3,9 +3,10 @@
 
 namespace CommonUtilities
 {
-    public class AzureCloudIdentityConfig
+    public class AzureEnvironmentConfig
     {
         public string? AzureAuthorityHostUrl { get; set; }
         public string? TokenScope { get; set; }
+        public string? StorageUrlSuffix { get; set; }
     }
 }
