@@ -250,8 +250,11 @@ namespace TesApi.Controllers
             var serviceInfo = new TesServiceInfo
 
             {
-                Name = "GA4GH Task Execution Service",
-                Doc = string.Empty,
+                Id = string.Empty,
+		Name = "GA4GH Task Execution Service",
+                Organization = string.Empty,
+                Type = string.Empty,
+                Version = string.Empty,
                 Storage = [],
                 TesResourcesSupportedBackendParameters = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList()
             };
