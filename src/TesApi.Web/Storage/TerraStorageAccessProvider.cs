@@ -42,17 +42,19 @@ namespace TesApi.Web.Storage
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         /// <param name="terraOptions"><see cref="TerraOptions"/></param>
         /// <param name="batchSchedulingOptions"><see cref="BatchSchedulingOptions"/>></param>
-        /// <param name="config"></param>
+        /// <param name="azureEnvironmentConfig"></param>
         /// <param name="logger">Logger <see cref="ILogger"/></param>
         public TerraStorageAccessProvider(TerraWsmApiClient terraWsmApiClient, IAzureProxy azureProxy,
-            IOptions<TerraOptions> terraOptions, IOptions<BatchSchedulingOptions> batchSchedulingOptions, AzureEnvironmentConfig config,
+            IOptions<TerraOptions> terraOptions, IOptions<BatchSchedulingOptions> batchSchedulingOptions, AzureEnvironmentConfig azureEnvironmentConfig,
             ILogger<TerraStorageAccessProvider> logger) : base(
             logger, azureProxy)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(batchSchedulingOptions);
             ArgumentNullException.ThrowIfNull(batchSchedulingOptions.Value.Prefix, nameof(batchSchedulingOptions.Value.Prefix));
+            ArgumentNullException.ThrowIfNull(azureEnvironmentConfig);
 
+            this.azureEnvironmentConfig = azureEnvironmentConfig;
             this.terraWsmApiClient = terraWsmApiClient;
             this.batchSchedulingOptions = batchSchedulingOptions.Value;
             this.terraOptions = terraOptions.Value;
