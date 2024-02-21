@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Azure.ResourceManager;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Polly;
 
@@ -66,6 +67,7 @@ namespace CommonUtilities.AzureCloud
 
         public string? DefaultTokenScope { get; set; }
         public AzureEnvironment AzureEnvironment { get; set; }
+        public ArmEnvironment ArmEnvironment { get; set; }
         public string Domain { get; set; }
         public AzureEnvironmentConfig AzureEnvironmentConfig { get; set; }
 
@@ -76,6 +78,7 @@ namespace CommonUtilities.AzureCloud
             string domain;
             string defaultTokenScope;
             AzureEnvironment azureEnvironment;
+            ArmEnvironment armEnvironment;
             // Names defined here: https://github.com/Azure/azure-sdk-for-net/blob/bc9f38eca0d8abbf0697dd3e3e75220553eeeafa/sdk/identity/Azure.Identity/src/AzureAuthorityHosts.cs#L11
             switch (azureCloudName.ToUpperInvariant())
             {
@@ -85,16 +88,19 @@ namespace CommonUtilities.AzureCloud
                     // https://github.com/Azure/azure-sdk-for-net/blob/bc9f38eca0d8abbf0697dd3e3e75220553eeeafa/sdk/identity/Azure.Identity/src/AzureAuthorityHosts.cs#L53
                     defaultTokenScope = $"https://management.{domain}//.default";
                     azureEnvironment = AzureEnvironment.AzureGlobalCloud;
+                    armEnvironment = ArmEnvironment.AzurePublicCloud;
                     break; 
                 case "AZUREUSGOVERNMENT":
                     domain = "usgovcloudapi.net";
                     defaultTokenScope = $"https://management.{domain}/.default";
                     azureEnvironment = AzureEnvironment.AzureUSGovernment;
+                    armEnvironment = ArmEnvironment.AzureGovernment;
                     break;
                 case "AZURECHINACLOUD":
                     domain = "chinacloudapi.cn";
                     defaultTokenScope = $"https://management.{domain}/.default";
                     azureEnvironment = AzureEnvironment.AzureChinaCloud;
+                    armEnvironment = ArmEnvironment.AzureChina;
                     break;
                 default:
                     throw new ArgumentException($"Invalid Azure cloud name: {azureCloudName}");
@@ -119,6 +125,7 @@ namespace CommonUtilities.AzureCloud
                 var config = JsonSerializer.Deserialize<AzureCloudConfig>(jsonString)!;
                 config.DefaultTokenScope = defaultTokenScope;
                 config.AzureEnvironment = azureEnvironment;
+                config.ArmEnvironment = armEnvironment;
                 config.Domain = domain;
 
                 config.AzureEnvironmentConfig = new AzureEnvironmentConfig

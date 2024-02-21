@@ -30,7 +30,7 @@ namespace TesApi.Web.Management
         public static Task<string> GetAppInsightsConnectionStringAsync(string accountName, AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)
         {
             return GetAzureResourceAsync(
-                clientFactory: (tokenCredentials, subscription) => new ApplicationInsightsManagementClient(tokenCredentials) { SubscriptionId = subscription },
+                clientFactory: (tokenCredentials, subscription) => new ApplicationInsightsManagementClient(tokenCredentials) { SubscriptionId = subscription, BaseUri = new Uri(azureCloudConfig.ResourceManagerUrl) },
                 listAsync: (client, ct) => client.Components.ListAsync(ct),
                 listNextAsync: (client, link, ct) => client.Components.ListNextAsync(link, ct),
                 predicate: a => a.ApplicationId.Equals(accountName, StringComparison.OrdinalIgnoreCase),
@@ -51,7 +51,7 @@ namespace TesApi.Web.Management
         {
             //TODO: look if a newer version of the management SDK provides a simpler way to look for this information .
             return GetAzureResourceAsync(
-                clientFactory: (tokenCredentials, subscription) => new BatchManagementClient(tokenCredentials) { SubscriptionId = subscription },
+                clientFactory: (tokenCredentials, subscription) => new BatchManagementClient(tokenCredentials) { SubscriptionId = subscription, BaseUri = new Uri(azureCloudConfig.ResourceManagerUrl) },
                 listAsync: (client, ct) => client.BatchAccount.ListAsync(ct),
                 listNextAsync: (client, link, ct) => client.BatchAccount.ListNextAsync(link, ct),
                 predicate: a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase),

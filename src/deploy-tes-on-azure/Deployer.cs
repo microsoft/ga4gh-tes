@@ -127,7 +127,7 @@ namespace TesDeployer
         private IEnumerable<string> subscriptionIds { get; set; }
         private bool isResourceGroupCreated { get; set; }
         private KubernetesManager kubernetesManager { get; set; }
-        internal AzureCloudConfig azureCloudConfig { get; set; }
+        internal static AzureCloudConfig azureCloudConfig { get; set; }
 
         public Deployer(Configuration configuration)
             => this.configuration = configuration;
@@ -139,8 +139,9 @@ namespace TesDeployer
             try
             {
                 ConsoleEx.WriteLine("Running...");
-                ConsoleEx.WriteLine("Getting cloud configuration...");
+                ConsoleEx.Write("Getting cloud configuration...");
                 azureCloudConfig = await AzureCloudConfig.CreateAsync(configuration.AzureCloudName);
+                ConsoleEx.Write($"running in {azureCloudConfig.Name}.{Environment.NewLine}");
                 ConsoleEx.WriteLine("Validating command line arguments...");
                 ValidateInitialCommandLineArgs();
                 await ValidateTokenProviderAsync();
@@ -151,11 +152,11 @@ namespace TesDeployer
                     tokenCredentials = new(tokenProvider);
                     azureCredentials = new(tokenCredentials, null, null, azureCloudConfig.AzureEnvironment);
                     azureClient = GetAzureClient(azureCredentials);
-                    armClient = new ArmClient(new AzureCliCredential());
+                    armClient = new ArmClient(new AzureCliCredential(), null, new ArmClientOptions { Environment = azureCloudConfig.ArmEnvironment });
                     azureSubscriptionClient = azureClient.WithSubscription(configuration.SubscriptionId);
                     subscriptionIds = await (await azureClient.Subscriptions.ListAsync(cancellationToken: cts.Token)).ToAsyncEnumerable().Select(s => s.SubscriptionId).ToListAsync(cts.Token);
                     resourceManagerClient = GetResourceManagerClient(azureCredentials);
-                    postgreSqlFlexManagementClient = new FlexibleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, LongRunningOperationRetryTimeout = 1200 };
+                    postgreSqlFlexManagementClient = new FlexibleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, BaseUri = new Uri(azureCloudConfig.ResourceManagerUrl), LongRunningOperationRetryTimeout = 1200 };
                 });
 
                 await ValidateSubscriptionAndResourceGroupAsync(configuration);
@@ -384,7 +385,7 @@ namespace TesDeployer
 
                     if (aksCluster is null && !configuration.ManualHelmDeployment)
                     {
-                        await ValidateVmAsync();
+                        //await ValidateVmAsync();
                     }
 
                     ConsoleEx.WriteLine($"Deploying TES on Azure version {targetVersion}...");
@@ -986,7 +987,7 @@ namespace TesDeployer
         {
             var resourceGroup = resourceGroupObject.Name;
             var nodePoolName = "nodepool1";
-            var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
+            var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, BaseUri = new Uri(azureCloudConfig.ResourceManagerUrl) };
             var cluster = new ManagedCluster
             {
                 AddonProfiles = new Dictionary<string, ManagedClusterAddonProfile>
@@ -1903,7 +1904,7 @@ namespace TesDeployer
         private Task<BatchAccount> CreateBatchAccountAsync(string storageAccountId)
             => Execute(
                 $"Creating Batch Account: {configuration.BatchAccountName}...",
-                () => new BatchManagementClient(tokenCredentials) { SubscriptionId = configuration.SubscriptionId }
+                () => new BatchManagementClient(tokenCredentials) { SubscriptionId = configuration.SubscriptionId, BaseUri = new Uri(azureCloudConfig.ResourceManagerUrl) }
                     .BatchAccount
                     .CreateAsync(
                         configuration.ResourceGroupName,
@@ -2123,7 +2124,7 @@ namespace TesDeployer
 
         private async Task ValidateBatchAccountQuotaAsync()
         {
-            var batchManagementClient = new BatchManagementClient(tokenCredentials) { SubscriptionId = configuration.SubscriptionId };
+            var batchManagementClient = new BatchManagementClient(tokenCredentials) { SubscriptionId = configuration.SubscriptionId, BaseUri = new Uri(azureCloudConfig.ResourceManagerUrl) };
             var accountQuota = (await batchManagementClient.Location.GetQuotasAsync(configuration.RegionName, cts.Token)).AccountQuota;
             var existingBatchAccountCount = await (await batchManagementClient.BatchAccount.ListAsync(cts.Token)).ToAsyncEnumerable(batchManagementClient.BatchAccount.ListNextAsync)
                 .CountAsync(b => b.Location.Equals(configuration.RegionName), cts.Token);
@@ -2229,7 +2230,7 @@ namespace TesDeployer
 
         private static async Task<BlobServiceClient> GetBlobClientAsync(IStorageAccount storageAccount, CancellationToken cancellationToken)
             => new(
-                new($"https://{storageAccount.Name}.blob.core.windows.net"),
+                new($"https://{storageAccount.Name}.blob.{azureCloudConfig.Suffixes.StorageSuffix}"),
                 new StorageSharedKeyCredential(
                     storageAccount.Name,
                     (await storageAccount.GetKeysAsync(cancellationToken))[0].Value));

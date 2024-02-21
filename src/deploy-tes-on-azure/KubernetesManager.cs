@@ -80,7 +80,7 @@ namespace TesDeployer
         public async Task<IKubernetes> GetKubernetesClientAsync(IResource resourceGroupObject)
         {
             var resourceGroup = resourceGroupObject.Name;
-            var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
+            var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, BaseUri = new Uri(azureCloudConfig.ResourceManagerUrl) };
 
             // Write kubeconfig in the working directory, because KubernetesClientConfiguration needs to read from a file, TODO figure out how to pass this directly. 
             var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(resourceGroup, configuration.AksClusterName, cancellationToken: cancellationToken);
