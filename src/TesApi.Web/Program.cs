@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.ApplicationInsights;
 using TesApi.Web.Management;
 using TesApi.Web.Options;
+using TesApi.Web.Runner;
 
 namespace TesApi.Web
 {
@@ -61,6 +62,7 @@ namespace TesApi.Web
                 configBuilder.AddEnvironmentVariables();
                 var config = configBuilder.Build();
                 Startup.AzureCloudConfig = GetAzureCloudConfig(config);
+                StorageUrlUtils.BlobEndpointHostNameSuffix = $".blob.{Startup.AzureCloudConfig.Suffixes.StorageSuffix}";
                 applicationInsightsOptions = GetApplicationInsightsConnectionString(config);
 
                 if (!string.IsNullOrEmpty(applicationInsightsOptions?.ConnectionString))

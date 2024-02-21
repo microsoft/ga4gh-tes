@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using Azure.Storage.Blobs;
+using CommonUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.ApiClients;
@@ -28,6 +29,7 @@ namespace TesApi.Web.Storage
         private readonly TerraOptions terraOptions;
         private readonly BatchSchedulingOptions batchSchedulingOptions;
         private readonly TerraWsmApiClient terraWsmApiClient;
+        private readonly AzureEnvironmentConfig azureEnvironmentConfig;
         private const string SasBlobPermissions = "racw";
         private const string SasContainerPermissions = "racwl";
         private const string LzStorageAccountNamePattern = "lz[0-9a-f]*";
@@ -42,7 +44,7 @@ namespace TesApi.Web.Storage
         /// <param name="batchSchedulingOptions"><see cref="BatchSchedulingOptions"/>></param>
         /// <param name="logger">Logger <see cref="ILogger"/></param>
         public TerraStorageAccessProvider(TerraWsmApiClient terraWsmApiClient, IAzureProxy azureProxy,
-            IOptions<TerraOptions> terraOptions, IOptions<BatchSchedulingOptions> batchSchedulingOptions,
+            IOptions<TerraOptions> terraOptions, IOptions<BatchSchedulingOptions> batchSchedulingOptions, AzureEnvironmentConfig config,
             ILogger<TerraStorageAccessProvider> logger) : base(
             logger, azureProxy)
         {
@@ -154,7 +156,7 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}/{blobInfo.BlobName.TrimStart('/')}"));
+            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.{azureEnvironmentConfig.StorageUrlSuffix}/{blobInfo.WsmContainerName.TrimStart('/')}/{blobInfo.BlobName.TrimStart('/')}"));
 
             return builder.ToUri();
         }
@@ -172,7 +174,7 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.core.windows.net/{blobInfo.WsmContainerName.TrimStart('/')}{blobName}"));
+            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.{azureEnvironmentConfig.StorageUrlSuffix}/{blobInfo.WsmContainerName.TrimStart('/')}{blobName}"));
 
             return builder.ToUri();
         }

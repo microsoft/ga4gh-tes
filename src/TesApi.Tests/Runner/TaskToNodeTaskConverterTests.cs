@@ -45,7 +45,7 @@ namespace TesApi.Tests.Runner
 
         const string ExternalStorageAccountName = "external";
         const string ExternalStorageContainer =
-            $"https://{ExternalStorageAccountName}{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont";
+            $"https://{ExternalStorageAccountName}{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/cont";
         const string ExternalStorageContainerWithSas =
             $"{ExternalStorageContainer}?{SasToken}";
         const string ResourceGroup = "myResourceGroup";
