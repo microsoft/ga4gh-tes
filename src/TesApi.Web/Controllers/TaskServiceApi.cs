@@ -76,6 +76,11 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(object), description: "")]
         public virtual async Task<IActionResult> CancelTask([FromRoute][Required] string id, CancellationToken cancellationToken)
         {
+            if (!TesTask.IsValidId(id))
+            {
+                return BadRequest("Invalid ID");
+            }
+
             TesTask tesTask = null;
 
             if (await repository.TryGetItemAsync(id, cancellationToken, item => tesTask = item))
@@ -98,7 +103,8 @@ namespace TesApi.Controllers
                     }
                     catch (RepositoryCollisionException exc)
                     {
-                        // TODO
+                        logger.LogError(exc, $"RepositoryCollisionException in CancelTask for {id}");
+                        return Conflict(new { message = "The task could not be updated due to a conflict with the current state; please retry." });
                     }
                 }
             }
@@ -140,6 +146,11 @@ namespace TesApi.Controllers
                 {
                     return BadRequest("Input paths in the container must be absolute paths.");
                 }
+
+                if (input.Url?.StartsWith("file://") ?? false)
+                {
+                    return BadRequest("Input URLs to the local file system are not supported.");
+                }
             }
 
             foreach (var output in tesTask.Outputs ?? Enumerable.Empty<TesOutput>())
@@ -163,26 +174,24 @@ namespace TesApi.Controllers
                 ?.FirstOrDefault();
 
             // Prefix the TES task id with first eight characters of root Cromwell job id to facilitate easier debugging
-            var tesTaskIdPrefix = tesTask.WorkflowId is not null && Guid.TryParse(tesTask.WorkflowId, out _) ? $"{tesTask.WorkflowId.Substring(0, 8)}_" : string.Empty;
-            tesTask.Id = $"{tesTaskIdPrefix}{Guid.NewGuid():N}";
+            tesTask.Id = tesTask.CreateId();
 
-            // For CWL workflows, if disk size is not specified in TES object (always), try to retrieve it from the corresponding workflow stored by Cromwell in /cromwell-tmp directory
-            // Also allow for TES-style "memory" and "cpu" hints in CWL.
-            if (tesTask.Name is not null
-                && tesTask.Inputs?.Any(i => i.Path.Contains(".cwl/")) == true
-                && tesTask.WorkflowId is not null
-                && azureProxy.TryReadCwlFile(tesTask.WorkflowId, out var cwlContent)
-                && CwlDocument.TryCreate(cwlContent, out var cwlDocument))
+            if (tesTask?.Resources is not null)
             {
-                tesTask.Resources ??= new TesResources();
-                tesTask.Resources.DiskGb = tesTask.Resources.DiskGb ?? cwlDocument.DiskGb;
-                tesTask.Resources.CpuCores = tesTask.Resources.CpuCores ?? cwlDocument.Cpu;
-                tesTask.Resources.RamGb = tesTask.Resources.RamGb ?? cwlDocument.MemoryGb;
+                if (tesTask.Resources.CpuCores.HasValue && tesTask.Resources.CpuCores.Value <= 0)
+                {
+                    return BadRequest("cpu_cores must be greater than zero");
+                }
 
-                // Preemptible is not passed on from CWL workflows to Cromwell, so Cromwell sends the default (TRUE) to TES, 
-                // instead of NULL like the other values above.
-                // If CWL document has it specified, override the value sent by Cromwell
-                tesTask.Resources.Preemptible = cwlDocument.Preemptible ?? tesTask.Resources.Preemptible;
+                if (tesTask.Resources.DiskGb.HasValue && tesTask.Resources.DiskGb.Value <= 0.0)
+                {
+                    return BadRequest("disk_gb must be greater than zero");
+                }
+
+                if (tesTask.Resources.RamGb.HasValue && tesTask.Resources.RamGb.Value <= 0.0)
+                {
+                    return BadRequest("ram_gb must be greater than zero");
+                }
             }
 
             if (tesTask?.Resources?.BackendParameters is not null)
@@ -238,8 +247,17 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(TesServiceInfo), description: "")]
         public virtual IActionResult GetServiceInfo()
         {
+            
+	var serviceInfo = new TesServiceInfo
+            {
+                Name = "GA4GH Task Execution Service",
+                Doc = string.Empty,
+                Storage = [],
+                TesResourcesSupportedBackendParameters = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList()
+            };
+
             logger.LogInformation($"Id: {serviceInfo.Id} Name: {serviceInfo.Name} Type: {serviceInfo.Type} Description: {serviceInfo.Description} Organization: {serviceInfo.Organization} ContactUrl: {serviceInfo.ContactUrl} DocumentationUrl: {serviceInfo.DocumentationUrl} CreatedAt:{serviceInfo.CreatedAt} UpdatedAt:{serviceInfo.UpdatedAt} Environment: {serviceInfo.Environment} Version: {serviceInfo.Version} Storage: {string.Join(",", serviceInfo.Storage ?? new())} TesResourcesSupportedBackendParameters: {string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters ?? new())}");
-            return StatusCode(200, serviceInfo);
+	    return StatusCode(200, serviceInfo);
         }
 
         /// <summary>
@@ -256,6 +274,11 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(TesTask), description: "")]
         public virtual async Task<IActionResult> GetTaskAsync([FromRoute][Required] string id, [FromQuery] string view, CancellationToken cancellationToken)
         {
+            if (!TesTask.IsValidId(id))
+            {
+                return BadRequest("Invalid ID");
+            }
+
             TesTask tesTask = null;
             var itemFound = await repository.TryGetItemAsync(id, cancellationToken, item => tesTask = item);
 

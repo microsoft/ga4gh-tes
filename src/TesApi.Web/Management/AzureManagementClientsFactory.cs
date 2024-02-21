@@ -4,10 +4,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Identity;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Rest;
 using FluentAzure = Microsoft.Azure.Management.Fluent.Azure;
 
@@ -53,8 +53,8 @@ namespace TesApi.Web.Management
         /// </summary>
         protected AzureManagementClientsFactory() { }
 
-        private static Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string resource = "https://management.azure.com/")
-            => new AzureServiceTokenProvider().GetAccessTokenAsync(resource, cancellationToken: cancellationToken);
+        private static async Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string scope = "https://management.azure.com//.default")
+            => (await (new DefaultAzureCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { scope }), cancellationToken)).Token;
 
         /// <summary>
         /// Creates Batch Account management client using AAD authentication.

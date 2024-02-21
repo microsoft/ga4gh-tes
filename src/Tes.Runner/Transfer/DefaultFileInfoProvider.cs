@@ -15,21 +15,25 @@ public class DefaultFileInfoProvider : IFileInfoProvider
 
     public long GetFileSize(string fileName)
     {
-        logger.LogInformation($"Getting file size for file: {fileName}");
+        logger.LogDebug($"Getting file size for file: {fileName}");
 
         return GetFileInfoOrThrowIfFileDoesNotExist(fileName).Length;
     }
 
     public string GetExpandedFileName(string fileName)
     {
-        logger.LogInformation($"Expanding file name: {fileName}");
+        logger.LogDebug($"Expanding file name: {fileName}");
 
-        return Environment.ExpandEnvironmentVariables(fileName);
+        var expandedValue = Environment.ExpandEnvironmentVariables(fileName);
+
+        logger.LogDebug($"Expanded file name: {expandedValue}");
+
+        return expandedValue;
     }
 
     public bool FileExists(string fileName)
     {
-        logger.LogInformation($"Checking if file exists: {fileName}");
+        logger.LogDebug($"Checking if file exists: {fileName}");
 
         var fileInfo = new FileInfo(Environment.ExpandEnvironmentVariables(fileName));
 
@@ -37,18 +41,67 @@ public class DefaultFileInfoProvider : IFileInfoProvider
     }
 
 
-    public string[] GetFilesBySearchPattern(string path, string searchPattern)
+    public List<FileResult> GetFilesBySearchPattern(string searchPath, string searchPattern)
     {
-        logger.LogInformation($"Searching for files in path: {path} with search pattern: {searchPattern}");
+        logger.LogInformation($"Searching for files in the search path: {searchPath} with search pattern: {searchPattern}");
 
-        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), Environment.ExpandEnvironmentVariables(searchPattern), SearchOption.AllDirectories);
+        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(searchPath), Environment.ExpandEnvironmentVariables(searchPattern), SearchOption.AllDirectories)
+            .Select(f => new FileResult(f, ToRelativePathToSearchPath(searchPath, searchPattern, f), searchPath))
+            .ToList();
     }
 
-    public string[] GetAllFilesInDirectory(string path)
+    private string ToRelativePathToSearchPath(string searchPath, string searchPattern, string absolutePath)
     {
-        logger.LogInformation($"Getting all files in path: {path}");
+        var delimiter = "/";
 
-        return Directory.GetFiles(Environment.ExpandEnvironmentVariables(path), "*", SearchOption.AllDirectories);
+        if (searchPath.Equals("/", StringComparison.OrdinalIgnoreCase))
+        {
+            delimiter = string.Empty;
+        }
+        var prefixToRemove = Path.GetDirectoryName($"{searchPath}{delimiter}{searchPattern.TrimStart('/')}");
+
+        if (!string.IsNullOrWhiteSpace(prefixToRemove) && absolutePath.StartsWith(prefixToRemove))
+        {
+            logger.LogInformation($"Removing prefix: {prefixToRemove} from absolute path: {absolutePath}");
+
+            return absolutePath.Substring(prefixToRemove.Length + 1);
+        }
+
+        return absolutePath;
+    }
+
+    public List<FileResult> GetAllFilesInDirectory(string path)
+    {
+        var expandedPath = Environment.ExpandEnvironmentVariables(path);
+
+        logger.LogInformation($"Getting all files in directory: {expandedPath}");
+
+        if (!Directory.Exists(expandedPath))
+        {
+            logger.LogWarning($"The directory provided does not exist: {expandedPath}. The output will be ignored.");
+
+            return new List<FileResult>();
+        }
+
+        return Directory.GetFiles(expandedPath, "*", SearchOption.AllDirectories)
+            .Select(f => new FileResult(f, ToRelativePathToSearchPath(expandedPath, searchPattern: String.Empty, f), expandedPath))
+            .ToList();
+    }
+
+    public RootPathPair GetRootPathPair(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var root = Path.GetPathRoot(path);
+
+        if (string.IsNullOrEmpty(root))
+        {
+            throw new ArgumentException($"Path {path} does not have a root");
+        }
+
+        var relativePath = path.Substring(root.Length);
+
+        return new RootPathPair(root, relativePath);
     }
 
     private FileInfo GetFileInfoOrThrowIfFileDoesNotExist(string fileName)

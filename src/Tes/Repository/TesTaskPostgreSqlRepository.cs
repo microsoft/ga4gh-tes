@@ -23,19 +23,28 @@ namespace Tes.Repository
     /// <typeparam name="TesTask"></typeparam>
     public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem>, IRepository<TesTask>
     {
+        // Creator of NpgsqlDataSource
+        public static Func<string, Npgsql.NpgsqlDataSource> NpgsqlDataSourceBuilder
+            => connectionString => new Npgsql.NpgsqlDataSourceBuilder(connectionString)
+                            .EnableDynamicJson(jsonbClrTypes: new[] { typeof(TesTask) })
+                            .Build();
+
+        // Configuration of NpgsqlDbContext
+        public static Action<Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder> NpgsqlDbContextOptionsBuilder => options =>
+            options.MaxBatchSize(1000);
+
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
         /// <param name="options"></param>
+        /// <param name="hostApplicationLifetime">Used for requesting termination of the current application if the writer task unexpectedly exits.</param>
         /// <param name="logger"></param>
         /// <param name="cache"></param>
-        public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTaskDatabaseItem> cache = null)
-            : base(logger, cache)
+        public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTaskDatabaseItem> cache = null)
+            : base(hostApplicationLifetime, logger, cache)
         {
-            var connectionString = new ConnectionStringUtility().GetPostgresConnectionString(options);
-            CreateDbContext = () => { return new TesDbContext(connectionString); };
-            using var dbContext = CreateDbContext();
-            dbContext.Database.MigrateAsync().Wait();
+            var npgsqlDataSource = NpgsqlDataSourceBuilder(ConnectionStringUtility.GetPostgresConnectionString(options)); // This must be run just once, do not move it into the lambda below.
+            CreateDbContext = Initialize(() => new TesDbContext(npgsqlDataSource, NpgsqlDbContextOptionsBuilder));
             WarmCacheAsync(CancellationToken.None).Wait();
         }
 
@@ -44,23 +53,28 @@ namespace Tes.Repository
         /// </summary>
         /// <param name="createDbContext">A delegate that creates a TesTaskPostgreSqlRepository context</param>
         public TesTaskPostgreSqlRepository(Func<TesDbContext> createDbContext)
-            : base()
+            : base(default)
         {
-            CreateDbContext = createDbContext;
+            CreateDbContext = Initialize(createDbContext);
+        }
+
+        private static Func<TesDbContext> Initialize(Func<TesDbContext> createDbContext)
+        {
             using var dbContext = createDbContext();
-            dbContext.Database.MigrateAsync().Wait();
+            dbContext.Database.MigrateAsync(CancellationToken.None).Wait();
+            return createDbContext;
         }
 
         private async Task WarmCacheAsync(CancellationToken cancellationToken)
         {
-            if (_cache is null)
+            if (Cache is null)
             {
-                _logger?.LogWarning("Cache is null for TesTaskPostgreSqlRepository; no caching will be used.");
+                Logger?.LogWarning("Cache is null for TesTaskPostgreSqlRepository; no caching will be used.");
                 return;
             }
 
             var sw = Stopwatch.StartNew();
-            _logger?.LogInformation("Warming cache...");
+            Logger?.LogInformation("Warming cache...");
 
             // Don't allow the state of the system to change until the cache and system are consistent;
             // this is a fast PostgreSQL query even for 1 million items
@@ -69,18 +83,18 @@ namespace Tes.Repository
                 .WaitAndRetryAsync(3,
                     retryAttempt =>
                     {
-                        _logger?.LogWarning("Warming cache retry attempt #{RetryAttempt}", retryAttempt);
+                        Logger?.LogWarning("Warming cache retry attempt #{RetryAttempt}", retryAttempt);
                         return TimeSpan.FromSeconds(10);
                     },
                     (ex, ts) =>
                     {
-                        _logger?.LogCritical(ex, "Couldn't warm cache, is the database online?");
+                        Logger?.LogCritical(ex, "Couldn't warm cache, is the database online?");
                     })
-                .ExecuteAsync(async () =>
+                .ExecuteAsync(async ct =>
                 {
-                    var activeTasksCount = (await InternalGetItemsAsync(task => TesTask.ActiveStates.Contains(task.State), cancellationToken, q => q.OrderBy(t => t.Json.CreationTime))).Count();
-                    _logger?.LogInformation("Cache warmed successfully in {TotalSeconds} seconds. Added {TasksAddedCount} items to the cache.", $"{sw.Elapsed.TotalSeconds:n3}", $"{activeTasksCount:n0}");
-                });
+                    var activeTasksCount = (await InternalGetItemsAsync(task => TesTask.ActiveStates.Contains(task.State), ct, q => q.OrderBy(t => t.Json.CreationTime))).Count();
+                    Logger?.LogInformation("Cache warmed successfully in {TotalSeconds} seconds. Added {TasksAddedCount} items to the cache.", $"{sw.Elapsed.TotalSeconds:n3}", $"{activeTasksCount:n0}");
+                }, cancellationToken);
         }
 
 
@@ -113,7 +127,7 @@ namespace Tes.Repository
         /// <returns></returns>
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
         {
-            return (await InternalGetItemsAsync(predicate, cancellationToken));
+            return await InternalGetItemsAsync(predicate, cancellationToken);
         }
 
         /// <summary>
@@ -161,7 +175,7 @@ namespace Tes.Repository
         public async Task DeleteItemAsync(string id, CancellationToken cancellationToken)
         {
             _ = await AddUpdateOrRemoveItemInDbAsync(await GetItemFromCacheOrDatabase(id, true, cancellationToken), WriteAction.Delete, cancellationToken);
-            _ = _cache?.TryRemove(id);
+            _ = Cache?.TryRemove(id);
         }
 
         /// <summary>
@@ -222,12 +236,12 @@ namespace Tes.Repository
         {
             TesTaskDatabaseItem item = default;
 
-            if (!_cache?.TryGetValue(id, out item) ?? true)
+            if (!Cache?.TryGetValue(id, out item) ?? true)
             {
                 using var dbContext = CreateDbContext();
 
                 // Search for Id within the JSON
-                item = await _asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, ct), cancellationToken);
+                item = await asyncPolicy.ExecuteAsync(ct => dbContext.TesTasks.FirstOrDefaultAsync(t => t.Json.Id == id, ct), cancellationToken);
 
                 if (throwIfNotFound && item is null)
                 {
@@ -271,7 +285,7 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public ValueTask<bool> TryRemoveItemFromCacheAsync(TesTask item, CancellationToken _1)
         {
-            return ValueTask.FromResult(_cache?.TryRemove(item.Id) ?? false);
+            return ValueTask.FromResult(Cache?.TryRemove(item.Id) ?? false);
         }
     }
 }

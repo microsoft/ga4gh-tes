@@ -10,14 +10,14 @@ namespace Tes.Runner.Test
     [TestClass]
     public class ResolutionPolicyHandlerTests
     {
-#pragma warning disable CS8618
-        private ResolutionPolicyHandler resolutionPolicyHandler;
-#pragma warning restore CS8618
+        private ResolutionPolicyHandler resolutionPolicyHandler = null!;
+        private RuntimeOptions runtimeOptions = null!;
 
         [TestInitialize]
         public void SetUp()
         {
-            resolutionPolicyHandler = new ResolutionPolicyHandler();
+            runtimeOptions = new RuntimeOptions();
+            resolutionPolicyHandler = new ResolutionPolicyHandler(runtimeOptions);
         }
 
         [TestMethod]
@@ -42,9 +42,9 @@ namespace Tes.Runner.Test
         {
             var testTaskOutputs = new List<FileOutput>
             {
-                new FileOutput(){Path = "file", TargetUrl = "http://foo.bar", SasStrategy = SasResolutionStrategy.None},
-                new FileOutput(){Path = "file1", TargetUrl = "http://foo1.bar", SasStrategy = SasResolutionStrategy.None},
-                new FileOutput(){Path = "file2", TargetUrl = "http://foo2.bar", SasStrategy = SasResolutionStrategy.None}
+                new FileOutput(){Path = "file", TargetUrl = "http://foo.bar", TransformationStrategy = TransformationStrategy.None},
+                new FileOutput(){Path = "file1", TargetUrl = "http://foo1.bar", TransformationStrategy = TransformationStrategy.None},
+                new FileOutput(){Path = "file2", TargetUrl = "http://foo2.bar", TransformationStrategy = TransformationStrategy.None}
             };
             var result = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(testTaskOutputs);
             Assert.IsNotNull(result);
@@ -72,9 +72,9 @@ namespace Tes.Runner.Test
         {
             var testTaskInputs = new List<FileInput>
             {
-                new FileInput(){Path = "file", SourceUrl = "http://foo.bar", SasStrategy = SasResolutionStrategy.None},
-                new FileInput(){Path = "file1", SourceUrl = "http://foo1.bar", SasStrategy = SasResolutionStrategy.None},
-                new FileInput(){Path = "file2", SourceUrl = "http://foo2.bar", SasStrategy = SasResolutionStrategy.None}
+                new FileInput(){Path = "file", SourceUrl = "http://foo.bar", TransformationStrategy = TransformationStrategy.None},
+                new FileInput(){Path = "file1", SourceUrl = "http://foo1.bar", TransformationStrategy = TransformationStrategy.None},
+                new FileInput(){Path = "file2", SourceUrl = "http://foo2.bar", TransformationStrategy = TransformationStrategy.None}
             };
             var result = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(testTaskInputs);
             Assert.IsNotNull(result);

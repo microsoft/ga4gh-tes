@@ -61,12 +61,6 @@ namespace Tes.Models
         public TesFileType Type { get; set; }
 
         /// <summary>
-        /// Gets or Sets Path Prefix
-        /// </summary>
-        [DataMember(Name = "pathPrefix")]
-        public string PathPrefix { get; set; }
-
-        /// <summary>
         /// Returns the string presentation of the object
         /// </summary>
         /// <returns>String presentation of the object</returns>
@@ -78,7 +72,6 @@ namespace Tes.Models
                 .Append("  Url: ").Append(Url).Append('\n')
                 .Append("  Path: ").Append(Path).Append('\n')
                 .Append("  Type: ").Append(Type).Append('\n')
-                .Append("  PathPrefix: ").Append(PathPrefix).Append('\n')
                 .Append("}\n")
                 .ToString();
 
@@ -136,11 +129,7 @@ namespace Tes.Models
                 (
                     Type == other.Type ||
                     Type.Equals(other.Type)
-                ) &&
-                (
-                    PathPrefix == other.PathPrefix ||
-                    PathPrefix.Equals(other.PathPrefix)
-                    ),
+                ),
             };
 
         /// <summary>
@@ -171,11 +160,6 @@ namespace Tes.Models
                 if (Path is not null)
                 {
                     hashCode = hashCode * 59 + Path.GetHashCode();
-                }
-
-                if (PathPrefix is not null)
-                {
-                    hashCode = hashCode * 59 + PathPrefix.GetHashCode();
                 }
 
                 hashCode = hashCode * 59 + Type.GetHashCode();

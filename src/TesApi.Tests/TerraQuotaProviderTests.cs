@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
+using Tes.ApiClients;
 using TesApi.Web.Management;
-using TesApi.Web.Management.Clients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 
@@ -16,7 +16,7 @@ namespace TesApi.Tests
     [TestClass]
     public class TerraQuotaProviderTests
     {
-        private Mock<TerraLandingZoneApiClient> terraLandingZoneApiClientMock;
+        private Mock<TerraWsmApiClient> terraWsmApiClientMock;
         private TerraQuotaProvider terraQuotaProvider;
         private TerraApiStubData terraApiStubData;
         private LandingZoneResourcesApiResponse resourcesApiResponse;
@@ -26,20 +26,20 @@ namespace TesApi.Tests
         public void SetUp()
         {
             terraApiStubData = new();
-            terraLandingZoneApiClientMock = new();
+            terraWsmApiClientMock = new();
             resourcesApiResponse = terraApiStubData.GetResourceApiResponse();
             quotaApiResponse = terraApiStubData.GetResourceQuotaApiResponse();
 
             var optionsMock = new Mock<IOptions<TerraOptions>>();
-            optionsMock.Setup(o => o.Value).Returns(new TerraOptions() { LandingZoneApiHost = TerraApiStubData.LandingZoneApiHost, LandingZoneId = terraApiStubData.LandingZoneId.ToString() });
+            optionsMock.Setup(o => o.Value).Returns(new TerraOptions() { WsmApiHost = TerraApiStubData.WsmApiHost, LandingZoneId = terraApiStubData.LandingZoneId.ToString(), WorkspaceId = terraApiStubData.WorkspaceId.ToString() });
 
-            terraLandingZoneApiClientMock
-                .Setup(t => t.GetLandingZoneResourcesAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.LandingZoneId)), It.IsAny<System.Threading.CancellationToken>(), It.Is<bool>(c => c == true)))
+            terraWsmApiClientMock
+                .Setup(t => t.GetLandingZoneResourcesAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.WorkspaceId)), It.IsAny<System.Threading.CancellationToken>(), It.Is<bool>(c => c == true)))
                 .ReturnsAsync(resourcesApiResponse);
-            terraLandingZoneApiClientMock
-                .Setup(t => t.GetResourceQuotaAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.LandingZoneId)), It.Is<string>(b => string.Equals(b, terraApiStubData.BatchAccountId, StringComparison.OrdinalIgnoreCase)), It.Is<bool>(c => c == true), It.IsAny<System.Threading.CancellationToken>()))
+            terraWsmApiClientMock
+                .Setup(t => t.GetResourceQuotaAsync(It.Is<Guid>(g => g.Equals(terraApiStubData.WorkspaceId)), It.Is<string>(b => string.Equals(b, terraApiStubData.BatchAccountId, StringComparison.OrdinalIgnoreCase)), It.Is<bool>(c => c == true), It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(quotaApiResponse);
-            terraQuotaProvider = new(terraLandingZoneApiClientMock.Object, optionsMock.Object);
+            terraQuotaProvider = new(terraWsmApiClientMock.Object, optionsMock.Object);
         }
 
         [TestMethod]

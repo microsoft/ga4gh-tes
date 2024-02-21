@@ -11,7 +11,7 @@ using Microsoft.Azure.Batch.Auth;
 using Microsoft.Azure.Management.Batch.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TesApi.Web.Management.Clients;
+using Tes.ApiClients;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Management.Models.Terra;
 
@@ -30,7 +30,6 @@ namespace TesApi.Web.Management.Batch
         private const string CloningInstructionsCloneNothing = "COPY_NOTHING";
         private const string AccessScopeSharedAccess = "SHARED_ACCESS";
         private const string UserManaged = "USER";
-        private readonly string tesBatchPoolName = Guid.NewGuid().ToString();
 
         private readonly TerraWsmApiClient terraWsmApiClient;
         private readonly IMapper mapper;
@@ -67,11 +66,11 @@ namespace TesApi.Web.Management.Batch
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="poolInfo"></param>
+        /// <param name="poolSpec"></param>
         /// <param name="isPreemptable"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public async Task<PoolInformation> CreateBatchPoolAsync(Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
+        public async Task<string> CreateBatchPoolAsync(Pool poolSpec, bool isPreemptable, CancellationToken cancellationToken)
         {
             var resourceId = Guid.NewGuid();
             var resourceName = $"TES-{resourceId}";
@@ -81,22 +80,22 @@ namespace TesApi.Web.Management.Batch
                 Common = new ApiCommon
                 {
                     Name = resourceName,
-                    Description = poolInfo.DisplayName,
+                    Description = poolSpec.DisplayName,
                     CloningInstructions = CloningInstructionsCloneNothing,
                     AccessScope = AccessScopeSharedAccess,
                     ManagedBy = UserManaged,
                     ResourceId = resourceId
                 },
-                AzureBatchPool = mapper.Map<ApiAzureBatchPool>(poolInfo),
+                AzureBatchPool = mapper.Map<ApiAzureBatchPool>(poolSpec),
             };
 
-            apiRequest.AzureBatchPool.Id = poolInfo.Name;
+            apiRequest.AzureBatchPool.Id = poolSpec.Name;
 
             AddResourceIdToPoolMetadata(apiRequest, resourceId);
 
             var response = await terraWsmApiClient.CreateBatchPool(Guid.Parse(terraOptions.WorkspaceId), apiRequest, cancellationToken);
 
-            return new PoolInformation() { PoolId = response.AzureBatchPool.Attributes.Id };
+            return response.AzureBatchPool.Attributes.Id;
         }
 
         private static void AddResourceIdToPoolMetadata(ApiCreateBatchPoolRequest apiRequest, Guid resourceId)

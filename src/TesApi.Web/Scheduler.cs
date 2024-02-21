@@ -78,14 +78,14 @@ namespace TesApi.Web
                 }
                 catch (Exception exc)
                 {
-                    logger.LogError(exc, exc.Message);
+                    logger.LogError(exc, "{ExceptionMessage}", exc.Message);
                 }
 
                 try
                 {
                     await Task.Delay(runInterval, stoppingToken);
                 }
-                catch (TaskCanceledException)
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
                     break;
                 }
@@ -203,7 +203,7 @@ namespace TesApi.Web
                 }
                 catch (RepositoryCollisionException exc)
                 {
-                    // TODO
+                    logger.LogError(exc, $"RepositoryCollisionException in OrchestrateTesTasksOnBatch");
                 }
                 // TODO catch EF / postgres exception?
                 //catch (Microsoft.Azure.Cosmos.CosmosException exc)

@@ -10,8 +10,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Tes.ApiClients;
 using Tes.Models;
-using TesApi.Web.Management.Clients;
 
 namespace TesApi.Web.Management
 {
@@ -70,39 +70,48 @@ namespace TesApi.Web.Management
             logger.LogInformation($"Getting VM sizes and price information for region:{region}");
 
             var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync(cancellationToken)).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase));
-            var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region, cancellationToken).ToListAsync(cancellationToken);
 
-            logger.LogInformation($"Received {pricingItems.Count} pricing items");
-
-            var vmInfoList = new List<VirtualMachineInformation>();
-
-            foreach (var vm in localVmSizeInfoForBatchSupportedSkus)
+            try
             {
+                var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region, cancellationToken).ToListAsync(cancellationToken);
 
-                var instancePricingInfo = pricingItems.Where(p => p.armSkuName == vm.VmSize).ToList();
-                var normalPriorityInfo = instancePricingInfo.FirstOrDefault(s =>
-                    s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase));
-                var lowPriorityInfo = instancePricingInfo.FirstOrDefault(s =>
-                    !s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase));
+                logger.LogInformation($"Received {pricingItems.Count} pricing items");
 
-                if (lowPriorityInfo is not null)
+                var vmInfoList = new List<VirtualMachineInformation>();
+
+                foreach (var vm in localVmSizeInfoForBatchSupportedSkus.Where(v => !v.LowPriority))
                 {
-                    vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, true,
-                        Convert.ToDecimal(lowPriorityInfo.unitPrice)));
+
+                    var instancePricingInfo = pricingItems.Where(p => p.armSkuName == vm.VmSize && p.effectiveStartDate < DateTime.UtcNow).ToList();
+                    var normalPriorityInfo = instancePricingInfo.Where(s =>
+                        !s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase)).MaxBy(p => p.effectiveStartDate);
+                    var lowPriorityInfo = instancePricingInfo.Where(s =>
+                        s.skuName.Contains(" Low Priority", StringComparison.OrdinalIgnoreCase)).MaxBy(p => p.effectiveStartDate);
+
+                    if (lowPriorityInfo is not null)
+                    {
+                        vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, true,
+                            Convert.ToDecimal(lowPriorityInfo.unitPrice)));
+                    }
+
+                    if (normalPriorityInfo is not null)
+                    {
+                        vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, false,
+                            Convert.ToDecimal(normalPriorityInfo.unitPrice)));
+                    }
                 }
 
-                if (normalPriorityInfo is not null)
-                {
-                    vmInfoList.Add(CreateVirtualMachineInfoFromReference(vm, false,
-                        Convert.ToDecimal(normalPriorityInfo.unitPrice)));
-                }
+                logger.LogInformation(
+                    $"Returning {vmInfoList.Count} Vm information entries with pricing for Azure Batch Supported Vm types");
+
+                return vmInfoList;
             }
-
-            logger.LogInformation(
-                $"Returning {vmInfoList.Count} Vm information entries with pricing for Azure Batch Supported Vm types");
-
-            return vmInfoList;
-
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    $"Exception encountered retrieving live pricing data, reverting to local pricing data.");
+                return new List<VirtualMachineInformation>(localVmSizeInfoForBatchSupportedSkus);
+            }
         }
 
         private static VirtualMachineInformation CreateVirtualMachineInfoFromReference(
@@ -118,7 +127,8 @@ namespace TesApi.Web.Management
                 VmFamily = vmReference.VmFamily,
                 VmSize = vmReference.VmSize,
                 RegionsAvailable = vmReference.RegionsAvailable,
-                HyperVGenerations = vmReference.HyperVGenerations
+                HyperVGenerations = vmReference.HyperVGenerations,
+                EncryptionAtHostSupported = vmReference.EncryptionAtHostSupported
             };
 
         private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync(CancellationToken cancellationToken)

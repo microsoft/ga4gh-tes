@@ -36,24 +36,24 @@ namespace TesApi.Web.Management.Batch
         }
 
         /// <inheritdoc />
-        public async Task<PoolInformation> CreateBatchPoolAsync(Pool poolInfo, bool isPreemptable, CancellationToken cancellationToken)
+        public async Task<string> CreateBatchPoolAsync(Pool poolSpec, bool isPreemptable, CancellationToken cancellationToken)
         {
             try
             {
                 var batchManagementClient = await azureClientsFactory.CreateBatchAccountManagementClient(cancellationToken);
 
-                logger.LogInformation("Creating manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolInfo.Name, poolInfo.VmSize, isPreemptable);
+                logger.LogInformation("Creating manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolSpec.Name, poolSpec.VmSize, isPreemptable);
 
-                var pool = await batchManagementClient.Pool.CreateAsync(azureClientsFactory.BatchAccountInformation.ResourceGroupName, azureClientsFactory.BatchAccountInformation.Name, poolInfo.Name, poolInfo);
+                var pool = await batchManagementClient.Pool.CreateAsync(azureClientsFactory.BatchAccountInformation.ResourceGroupName, azureClientsFactory.BatchAccountInformation.Name, poolSpec.Name, poolSpec, cancellationToken: cancellationToken);
 
-                logger.LogInformation("Successfully created manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolInfo.Name, poolInfo.VmSize, isPreemptable);
+                logger.LogInformation("Successfully created manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", poolSpec.Name, poolSpec.VmSize, isPreemptable);
 
-                return new PoolInformation() { PoolId = pool.Name };
+                return pool.Name;
             }
             catch (Exception exc)
             {
                 var batchError = Newtonsoft.Json.JsonConvert.SerializeObject((exc as Microsoft.Azure.Batch.Common.BatchException)?.RequestInformation?.BatchError);
-                logger.LogError(exc, "Error trying to create manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}. Batch error: {BatchError}", poolInfo.Name, poolInfo.VmSize, isPreemptable, batchError);
+                logger.LogError(exc, "Error trying to create manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}. Batch error: {BatchError}", poolSpec.Name, poolSpec.VmSize, isPreemptable, batchError);
                 throw;
             }
         }
@@ -66,19 +66,19 @@ namespace TesApi.Web.Management.Batch
                 var batchManagementClient = await azureClientsFactory.CreateBatchAccountManagementClient(cancellationToken);
 
                 logger.LogInformation(
-                    $"Deleting pool with the id/name:{poolId} in Batch account:{azureClientsFactory.BatchAccountInformation.Name}");
+                    @"Deleting pool with the id/name:{PoolName} in Batch account:{BatchAccountName}", poolId, azureClientsFactory.BatchAccountInformation.Name);
 
-                await batchManagementClient.Pool.DeleteWithHttpMessagesAsync(
+                _ = await batchManagementClient.Pool.DeleteAsync(
                     azureClientsFactory.BatchAccountInformation.ResourceGroupName,
                     azureClientsFactory.BatchAccountInformation.Name, poolId, cancellationToken: cancellationToken);
 
                 logger.LogInformation(
-                    $"Successfully deleted pool with the id/name:{poolId} in Batch account:{azureClientsFactory.BatchAccountInformation.Name}");
+                    @"Successfully deleted pool with the id/name:{PoolName} in Batch account:{BatchAccountName}", poolId, azureClientsFactory.BatchAccountInformation.Name);
 
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Error trying to delete pool named {poolId}");
+                logger.LogError(e, @"Error trying to delete pool named {PoolName}", poolId);
 
                 throw;
             }

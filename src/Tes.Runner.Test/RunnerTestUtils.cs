@@ -4,6 +4,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Channels;
+using Microsoft.VisualStudio.TestTools.UnitTesting.Logging;
 using Tes.Runner.Transfer;
 namespace Tes.Runner.Test;
 
@@ -56,7 +57,14 @@ public class RunnerTestUtils
     {
         if (File.Exists(file))
         {
-            File.Delete(file);
+            try
+            {
+                File.Delete(file);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
         }
     }
 
@@ -174,6 +182,21 @@ public class RunnerTestUtils
 
             await processedBuffer.Writer.WriteAsync(processedPart);
         }
+    }
+
+    public static string GenerateRandomTestAzureStorageKey()
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        var length = 64;
+        var random = new Random();
+        var result = new StringBuilder(length);
+
+        for (int i = 0; i < length; i++)
+        {
+            result.Append(chars[random.Next(chars.Length)]);
+        }
+
+        return result.ToString();
     }
 
     public const int MemBuffersCapacity = 20;

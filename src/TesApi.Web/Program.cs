@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.ApplicationInsights;
+using TesApi.Web.Management;
 
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("TesApi.Tests")]
 
@@ -33,12 +34,19 @@ namespace TesApi.Web
         /// <returns><see cref="IWebHostBuilder"/></returns>
         public static IWebHostBuilder CreateWebHostBuilder(string[] args)
         {
+            Console.WriteLine($"TES v{Startup.TesVersion}");
+
             Options.ApplicationInsightsOptions applicationInsightsOptions = default;
             var builder = WebHost.CreateDefaultBuilder<Startup>(args);
 
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
+            {
+                builder.UseUrls("http://0.0.0.0:80");
+            }
+
             builder.ConfigureAppConfiguration((context, config) =>
             {
-                config.AddEnvironmentVariables(); // For Docker-Compose
+                config.AddEnvironmentVariables();
                 applicationInsightsOptions = GetApplicationInsightsConnectionString(config.Build());
 
                 if (!string.IsNullOrEmpty(applicationInsightsOptions?.ConnectionString))
@@ -50,7 +58,6 @@ namespace TesApi.Web
                 {
                     var applicationInsightsOptions = configuration.GetSection(Options.ApplicationInsightsOptions.SectionName).Get<Options.ApplicationInsightsOptions>();
                     var applicationInsightsAccountName = applicationInsightsOptions?.AccountName;
-                    Console.WriteLine($"ApplicationInsightsAccountName: {applicationInsightsAccountName}");
 
                     if (applicationInsightsAccountName is null || !string.IsNullOrWhiteSpace(applicationInsightsOptions?.ConnectionString))
                     {
@@ -59,17 +66,15 @@ namespace TesApi.Web
 
                     var applicationInsightsConnectionString = configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
 
+                    if (string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
+                    {
+                        applicationInsightsConnectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, System.Threading.CancellationToken.None).Result;
+                    }
+
                     if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
                     {
                         applicationInsightsOptions ??= new Options.ApplicationInsightsOptions();
                         applicationInsightsOptions.ConnectionString = applicationInsightsConnectionString;
-                        return applicationInsightsOptions;
-                    }
-
-                    var connectionString = AzureProxy.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, System.Threading.CancellationToken.None).Result;
-                    if (!string.IsNullOrWhiteSpace(connectionString))
-                    {
-                        applicationInsightsOptions.ConnectionString = connectionString;
                     }
 
                     return applicationInsightsOptions;
