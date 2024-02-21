@@ -68,10 +68,8 @@ namespace TesApi.Web
                     configBuilder.AddApplicationInsightsSettings(applicationInsightsOptions.ConnectionString, developerMode: context.HostingEnvironment.IsDevelopment() ? true : null);
                 }
 
-                static Options.ApplicationInsightsOptions GetApplicationInsightsConnectionString(IConfiguration configuration)
+                static ApplicationInsightsOptions GetApplicationInsightsConnectionString(IConfiguration configuration)
                 {
-                    
-
                     var applicationInsightsOptions = configuration.GetSection(Options.ApplicationInsightsOptions.SectionName).Get<Options.ApplicationInsightsOptions>();
                     var applicationInsightsAccountName = applicationInsightsOptions?.AccountName;
 

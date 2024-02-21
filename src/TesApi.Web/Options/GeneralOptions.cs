@@ -18,6 +18,5 @@ namespace TesApi.Web.Options
         /// </summary>
         public string AzureCloudName { get; set; } = "AzurePublicCloud"; // or "AzureGovernment"
         public string AzureCloudMetadataUrlApiVersion { get; set; } = "2023-11-01";
-
     }
 }
