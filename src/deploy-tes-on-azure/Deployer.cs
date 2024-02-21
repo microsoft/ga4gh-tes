@@ -139,11 +139,17 @@ namespace TesDeployer
             try
             {
                 ConsoleEx.WriteLine("Running...");
-                ConsoleEx.Write("Getting cloud configuration...");
-                azureCloudConfig = await AzureCloudConfig.CreateAsync(configuration.AzureCloudName);
-                ConsoleEx.Write($"running in {azureCloudConfig.Name}.{Environment.NewLine}");
-                ConsoleEx.WriteLine("Validating command line arguments...");
-                ValidateInitialCommandLineArgs();
+                
+                await Execute($"Getting cloud configuration for {configuration.AzureCloudName}...", async () =>
+                {
+                    azureCloudConfig = await AzureCloudConfig.CreateAsync(configuration.AzureCloudName);
+                });
+
+                await Execute("Validating command line arguments...", async () =>
+                {
+                    ValidateInitialCommandLineArgs();
+                });
+
                 await ValidateTokenProviderAsync();
                 
                 await Execute("Connecting to Azure Services...", async () =>
