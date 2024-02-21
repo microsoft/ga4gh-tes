@@ -12,7 +12,7 @@ using Microsoft.Azure.Batch.Common;
 using Polly;
 using Polly.Retry;
 using Tes.Models;
-using static GenerateBatchVmSkus.Program;
+using static GenerateBatchVmSkus.AzureBatchSkuLocator;
 
 /*
  * TODO considerations:
