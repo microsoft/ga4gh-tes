@@ -23,8 +23,9 @@ namespace Tes.ApiClients.Tests.TerraIntegration
 
             var retryOptions = Microsoft.Extensions.Options.Options.Create(new RetryPolicyOptions());
             var memoryCache = new MemoryCache(new MemoryCacheOptions());
+            var config = ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig;
             wsmApiClient = new TerraWsmApiClient(envInfo.WsmApiHost, new TestEnvTokenCredential(),
-                new CachingRetryPolicyBuilder(memoryCache, retryOptions), ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig, TestLoggerFactory.Create<TerraWsmApiClient>());
+                new CachingRetryPolicyBuilder(memoryCache, retryOptions), config, TestLoggerFactory.Create<TerraWsmApiClient>());
 
         }
 
