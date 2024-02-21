@@ -57,7 +57,6 @@ namespace TesApi.Tests.Runner
             terraOptions = new TerraOptions();
             storageOptions = new StorageOptions() { ExternalStorageContainers = ExternalStorageContainerWithSas };
             batchAccountOptions = new BatchAccountOptions() { SubscriptionId = SubscriptionId, ResourceGroup = ResourceGroup };
-            tesOptions = new GeneralOptions();
             storageAccessProviderMock = new Mock<IStorageAccessProvider>();
             storageAccessProviderMock.Setup(x =>
                     x.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
