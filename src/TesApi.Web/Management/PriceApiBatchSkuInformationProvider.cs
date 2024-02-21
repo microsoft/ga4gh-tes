@@ -73,9 +73,11 @@ namespace TesApi.Web.Management
 
         private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsyncImpl(string region, CancellationToken cancellationToken)
         {
-            logger.LogInformation($"Getting VM sizes and price information for region:{region}");
+            logger.LogInformation($"Getting VM sizes and price information for region: {region}");
 
-            var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync(cancellationToken)).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase));
+            var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync(cancellationToken)).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase)).ToList();
+
+            logger.LogInformation($"localVmSizeInfoForBatchSupportedSkus.Count: {localVmSizeInfoForBatchSupportedSkus.Count}");
 
             try
             {
@@ -139,9 +141,11 @@ namespace TesApi.Web.Management
 
         private async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync(CancellationToken cancellationToken)
         {
+            string filePath = Path.Combine(AppContext.BaseDirectory, $"BatchSupportedVmSizeInformation_{azureCloudConfig.Name.ToUpperInvariant()}.json");
+            logger.LogInformation("Reading local VM size information from file: {0}", filePath);
+
             return JsonConvert.DeserializeObject<List<VirtualMachineInformation>>(
-                await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,
-                    $"BatchSupportedVmSizeInformation_{azureCloudConfig.Name.ToUpperInvariant()}.json"), cancellationToken));
+                await File.ReadAllTextAsync(filePath, cancellationToken));
         }
     }
 }
