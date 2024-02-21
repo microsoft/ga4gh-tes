@@ -248,7 +248,8 @@ namespace TesApi.Controllers
         public virtual IActionResult GetServiceInfo()
         {
             
-	var serviceInfo = new TesServiceInfo
+	    var serviceInfo = new TesServiceInfo
+
             {
                 Name = "GA4GH Task Execution Service",
                 Doc = string.Empty,
