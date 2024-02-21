@@ -8,7 +8,6 @@ using CommonUtilities;
 using Azure.Identity;
 using CommonUtilities.AzureCloud;
 using Microsoft.Azure.Management.Batch;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Rest;
 using FluentAzure = Microsoft.Azure.Management.Fluent.Azure;
@@ -69,7 +68,7 @@ namespace TesApi.Web.Management
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         public async Task<BatchManagementClient> CreateBatchAccountManagementClient(CancellationToken cancellationToken)
-            => new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken, resource: azureCloudConfig.ResourceManagerUrl))) { SubscriptionId = batchAccountInformation.SubscriptionId };
+            => new BatchManagementClient(new Uri(azureCloudConfig.ResourceManagerUrl), new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken, resource: azureCloudConfig.ResourceManagerUrl))) { SubscriptionId = batchAccountInformation.SubscriptionId };
 
         /// <summary>
         /// Creates a new instance of Azure Management Client with the default credentials and subscription.
