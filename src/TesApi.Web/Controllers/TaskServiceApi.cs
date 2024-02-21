@@ -247,8 +247,7 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(TesServiceInfo), description: "")]
         public virtual IActionResult GetServiceInfo()
         {
-            
-	    var serviceInfo = new TesServiceInfo
+            var serviceInfo = new TesServiceInfo
 
             {
                 Name = "GA4GH Task Execution Service",
