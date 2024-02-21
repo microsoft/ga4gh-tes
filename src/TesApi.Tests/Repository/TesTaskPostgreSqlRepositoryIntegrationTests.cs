@@ -351,7 +351,7 @@ namespace Tes.Repository.Tests
         {
             const string postgreSqlVersion = "14";
 
-            var tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider("https://management.azure.com/"));
+            var tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider("https://management.azure.com//.default"));
             var azureCredentials = new AzureCredentials(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
             var postgresManagementClient = new FlexibleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = subscriptionId, LongRunningOperationRetryTimeout = 1200 };
             var azureClient = GetAzureClient(azureCredentials);
@@ -404,7 +404,7 @@ namespace Tes.Repository.Tests
 
         public static async Task DeleteResourceGroupAsync(string subscriptionId, string resourceGroupName)
         {
-            var tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider("https://management.azure.com/"));
+            var tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider("https://management.azure.com//.default"));
             var azureCredentials = new AzureCredentials(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
             var azureClient = GetAzureClient(azureCredentials);
             var azureSubscriptionClient = azureClient.WithSubscription(subscriptionId);

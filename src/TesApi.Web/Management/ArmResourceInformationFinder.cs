@@ -5,10 +5,10 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Identity;
 using CommonUtilities;
 using Microsoft.Azure.Management.ApplicationInsights.Management;
 using Microsoft.Azure.Management.Batch;
-using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Rest;
 using TesApi.Web.Extensions;
 
@@ -55,11 +55,8 @@ namespace TesApi.Web.Management
                 finalize: batchAccount => BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id, batchAccount.Location, $"https://{batchAccount.AccountEndpoint}"));
         }
 
-        //TODO: refactor this to use Azure Identity token provider. 
-        private static Task<string> GetAzureAccessTokenAsync(string resource = "https://management.azure.com/")
-        {
-            return new AzureServiceTokenProvider().GetAccessTokenAsync(resource);
-        }
+        private static async Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string scope = "https://management.azure.com//.default")
+            => (await (new DefaultAzureCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { scope }))).Token;
 
         /// <summary>
         /// Looks up an Azure resource with management clients that use <see cref="Microsoft.Rest.Azure.IPage{T}"/> enumerators
@@ -94,7 +91,7 @@ namespace TesApi.Web.Management
             ArgumentNullException.ThrowIfNull(predicate);
             ArgumentNullException.ThrowIfNull(finalize);
 
-            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync());
+            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken));
             var azureManagementClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(cancellationToken);
 
             var subscriptions = (await azureManagementClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);

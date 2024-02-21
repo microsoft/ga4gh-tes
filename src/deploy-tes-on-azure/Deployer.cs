@@ -46,7 +46,6 @@ using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Azure.Management.Storage.Fluent;
-using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Rest;
 using Newtonsoft.Json;
 using Polly;
@@ -142,7 +141,7 @@ namespace TesDeployer
 
                 await Execute("Connecting to Azure Services...", async () =>
                 {
-                    tokenProvider = new RefreshableAzureServiceTokenProvider("https://management.azure.com/");
+                    tokenProvider = new RefreshableAzureServiceTokenProvider("https://management.azure.com//.default");
                     tokenCredentials = new(tokenProvider);
                     azureCredentials = new(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
                     armClient = new ArmClient(new DefaultAzureCredential());
@@ -1818,7 +1817,7 @@ namespace TesDeployer
 
                     async ValueTask<string> GetUserObjectId()
                     {
-                        const string graphUri = "https://graph.windows.net";
+                        const string graphUri = "https://graph.windows.net//.default";
                         var credentials = new AzureCredentials(default, new TokenCredentials(new RefreshableAzureServiceTokenProvider(graphUri)), tenantId, AzureEnvironment.AzureGlobalCloud);
                         using GraphRbacManagementClient rbacClient = new(Configure().WithEnvironment(AzureEnvironment.AzureGlobalCloud).WithCredentials(credentials).WithBaseUri(graphUri).Build()) { TenantID = tenantId };
                         credentials.InitializeServiceClient(rbacClient);
@@ -2202,9 +2201,9 @@ namespace TesDeployer
         {
             try
             {
-                _ = await Execute("Retrieving Azure management token...", () => new AzureServiceTokenProvider("RunAs=Developer; DeveloperTool=AzureCli").GetAccessTokenAsync("https://management.azure.com/", cancellationToken: cts.Token));
+                _ = await Execute("Retrieving Azure management token...", async () => (await (new AzureCliCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { "https://management.azure.com//.default" }))).Token);
             }
-            catch (AzureServiceTokenProviderException ex)
+            catch (AuthenticationFailedException ex)
             {
                 ConsoleEx.WriteLine("No access token found.  Please install the Azure CLI and login with 'az login'", ConsoleColor.Red);
                 ConsoleEx.WriteLine("Link: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli");
