@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Net;
 using CommonUtilities;
 using CommonUtilities.Options;
 using Docker.DotNet;
@@ -63,7 +64,8 @@ namespace Tes.Runner.Docker
             dockerPullRetryPolicy = new RetryPolicyBuilder(Options.Create(dockerPullRetryPolicyOptions))
                 .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy
                     .Handle(IsNotAuthFailure)
-                    .Or<IOException>())
+                    .Or<IOException>()
+                    .Or<HttpRequestException>(e => e.InnerException is IOException || e.StatusCode >= HttpStatusCode.InternalServerError || e.StatusCode == HttpStatusCode.RequestTimeout))
                 .WithRetryPolicyOptionsWait()
                 .SetOnRetryBehavior(logger)
                 .AsyncBuild();
@@ -177,13 +179,11 @@ namespace Tes.Runner.Docker
         {
             logger.LogInformation(@"Pulling image name: {ImageName} image tag: {ImageTag}", imageName, tag);
 
-            await dockerPullRetryPolicy.ExecuteWithRetryAsync(async () =>
-            {
-                await dockerClient.Images.CreateImageAsync(
+            await dockerPullRetryPolicy.ExecuteWithRetryAsync(
+                () => dockerClient.Images.CreateImageAsync(
                     new ImagesCreateParameters() { FromImage = imageName, Tag = tag },
                     authConfig,
-                    new Progress<JSONMessage>(message => logger.LogDebug(message.Status)));
-            });
+                    new Progress<JSONMessage>(message => logger.LogDebug(message.Status))));
         }
 
         private async Task DeleteAllImagesAsync()
