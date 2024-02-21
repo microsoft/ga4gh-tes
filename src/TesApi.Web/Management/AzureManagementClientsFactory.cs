@@ -4,22 +4,24 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Azure.Management.Batch;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Azure.Services.AppAuthentication;
-using Microsoft.Rest;
-using FluentAzure = Microsoft.Azure.Management.Fluent.Azure;
+using Azure.ResourceManager;
+using Azure.ResourceManager.Batch;
+using CommonUtilities;
+
+//using Microsoft.Azure.Services.AppAuthentication;
+//using Microsoft.Rest;
 
 
 namespace TesApi.Web.Management
 {
     /// <summary>
-    /// Factory if ARM management clients. 
+    /// Factory of ARM management clients. 
     /// </summary>
     public class AzureManagementClientsFactory
     {
         private readonly BatchAccountResourceInformation batchAccountInformation;
+        private readonly ArmEnvironmentEndpoints armEndpoints;
+        private readonly AzureServicesConnectionStringCredentialOptions credentialOptions;
 
         /// <summary>
         /// Batch account resource information.
@@ -30,10 +32,14 @@ namespace TesApi.Web.Management
         /// Constructor of AzureManagementClientsFactory
         /// </summary>
         /// <param name="batchAccountInformation"><see cref="BatchAccountResourceInformation"/>></param>
+        /// <param name="armEndpoints"></param>
+        /// <param name="credentialOptions"></param>
         /// <exception cref="ArgumentException"></exception>
-        public AzureManagementClientsFactory(BatchAccountResourceInformation batchAccountInformation)
+        public AzureManagementClientsFactory(BatchAccountResourceInformation batchAccountInformation, ArmEnvironmentEndpoints armEndpoints, AzureServicesConnectionStringCredentialOptions credentialOptions)
         {
             ArgumentNullException.ThrowIfNull(batchAccountInformation);
+            ArgumentNullException.ThrowIfNull(armEndpoints);
+            ArgumentNullException.ThrowIfNull(credentialOptions);
 
             if (string.IsNullOrEmpty(batchAccountInformation.SubscriptionId))
             {
@@ -45,7 +51,11 @@ namespace TesApi.Web.Management
                 throw new ArgumentException("Batch account information does not contain the resource group name.", nameof(batchAccountInformation));
             }
 
+            credentialOptions.AuthorityHost = armEndpoints.AuthorityHost;
+
             this.batchAccountInformation = batchAccountInformation;
+            this.armEndpoints = armEndpoints;
+            this.credentialOptions = credentialOptions;
         }
 
         /// <summary>
@@ -53,16 +63,16 @@ namespace TesApi.Web.Management
         /// </summary>
         protected AzureManagementClientsFactory() { }
 
-        private static Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string resource = "https://management.azure.com/")
-            => new AzureServiceTokenProvider().GetAccessTokenAsync(resource, cancellationToken: cancellationToken);
-
         /// <summary>
         /// Creates Batch Account management client using AAD authentication.
         /// Configure to the subscription id that contains the batch account.
         /// </summary>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        public async Task<BatchManagementClient> CreateBatchAccountManagementClient(CancellationToken cancellationToken)
-            => new BatchManagementClient(new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken))) { SubscriptionId = batchAccountInformation.SubscriptionId };
+        public BatchAccountResource CreateBatchAccountManagementClient()
+            => new ArmClient(
+                    new AzureServicesConnectionStringCredential(credentialOptions),
+                    batchAccountInformation.SubscriptionId,
+                    new() { Environment = new(armEndpoints.ResourceManager, armEndpoints.Audience) })
+            .GetBatchAccountResource(BatchAccountResource.CreateResourceIdentifier(batchAccountInformation.SubscriptionId, batchAccountInformation.ResourceGroupName, batchAccountInformation.Name));
     }
 }

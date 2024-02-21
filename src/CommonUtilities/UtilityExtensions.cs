@@ -49,25 +49,43 @@ namespace CommonUtilities
         #endregion
 
         /// <summary>
-        /// Converts each group (fixed number) of items into a new item
+        /// Converts each group (by count) of items into a new item
         /// </summary>
         /// <typeparam name="TSource">Type of source items</typeparam>
         /// <typeparam name="TGroup">Intermediate type</typeparam>
         /// <typeparam name="TResult">Type of the resultant items</typeparam>
         /// <param name="source">The source enumerable of type <typeparamref name="TSource"/>.</param>
         /// <param name="groupSize">The size of each group to create out of the entire enumeration. The last group may be smaller.</param>
-        /// <param name="groupItemFunc">The function that prepares each <typeparamref name="TSource"/> into the value expected by <paramref name="groupResultFunc"/>. Its parameters are an item of type <typeparamref name="TSource"/> and the index of that item (starting from zero) within each group.</param>
-        /// <param name="groupResultFunc">The function that creates the <typeparamref name="TResult"/> from each group of <typeparamref name="TGroup"/> items.</param>
+        /// <param name="source2Group">The function that prepares each <typeparamref name="TSource"/> into the value expected by <paramref name="group2Result"/>. Its parameters are an item of type <typeparamref name="TSource"/> and the index of that item (starting from zero) within each group.</param>
+        /// <param name="group2Result">The function that creates the <typeparamref name="TResult"/> from each group of <typeparamref name="TGroup"/> items.</param>
         /// <returns>An enumeration of <typeparamref name="TResult"/> from all of the groups.</returns>
         public static IEnumerable<TResult> ConvertGroup<TSource, TGroup, TResult>(
             this IEnumerable<TSource> source,
             int groupSize,
-            Func<TSource, int, TGroup> groupItemFunc,
-            Func<IEnumerable<TGroup>, TResult> groupResultFunc)
+            Func<TSource, int, TGroup> source2Group,
+            Func<IEnumerable<TGroup>, TResult> group2Result)
             => source
                 .Select((value, index) => (Index: index, Value: value))
                 .GroupBy(tuple => tuple.Index / groupSize)
                 .OrderBy(tuple => tuple.Key)
-                .Select(groups => groupResultFunc(groups.Select(item => groupItemFunc(item.Value, item.Index % groupSize))));
+                .Select(groups => group2Result(groups.Select(item => source2Group(item.Value, item.Index % groupSize))));
+
+        #region AddRange
+        public static void AddRange<T>(this IList<T> list, IEnumerable<T> values)
+        {
+            foreach (var value in values)
+            {
+                list.Add(value);
+            };
+        }
+
+        public static void AddRange<Tkey, TValue>(this IDictionary<Tkey, TValue> dictionary, IDictionary<Tkey, TValue> values)
+        {
+            foreach (var value in values)
+            {
+                dictionary.Add(value);
+            };
+        }
+        #endregion
     }
 }

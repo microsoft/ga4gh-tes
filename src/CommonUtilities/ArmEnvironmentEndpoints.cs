@@ -1,6 +1,9 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Azure.ResourceManager;
+using Microsoft.Extensions.Options;
+
 namespace CommonUtilities
 {
     /// <summary>
@@ -20,22 +23,37 @@ namespace CommonUtilities
     public record class ArmEnvironmentEndpoints(Uri AuthorityHost, string Audience, string Tenant, Uri ResourceManager, Uri AppInsightsResource, Uri AppInsightsTelemetry, Uri BatchResource, string AcrSuffix, string KeyVaultSuffix, string StorageSuffix, string PostgresqlSuffix)
     {
         /// <summary>
+        /// Gets default authentication scope.
+        /// </summary>
+        public string DefaultScope => $"{Audience}/.default";
+
+
+        /// <summary>
         /// Azure cloud endpoints from cloud management endpoints
         /// </summary>
         /// <param name="cloudManagement">Azure cloud resource management endpoint.</param>
         /// <returns></returns>
-        public static async Task<ArmEnvironmentEndpoints> FromMetadataEndpointsAsync(Uri cloudManagement)
+        public static async Task<ArmEnvironmentEndpoints> FromMetadataEndpointsAsync(Uri cloudManagement, IOptions<Options.RetryPolicyOptions> retryPolicyOptions)
         {
-            cloudManagement = new UriBuilder(cloudManagement) { Path = "/metadata/endpoints", Query = "api-version=2023-11-01" }.Uri;
-            using HttpClient client = new();
-            HttpRequestMessage request = new(HttpMethod.Get, cloudManagement);
-            var response = await client.SendAsync(request);
-            response.EnsureSuccessStatusCode();
+            ArgumentNullException.ThrowIfNull(cloudManagement);
+            var retryPolicy = new RetryPolicyBuilder(retryPolicyOptions).DefaultRetryHttpResponseMessagePolicyBuilder().SetOnRetryBehavior().AsyncBuildPolicy();
             System.Text.Json.JsonDocument endpointMetadata;
 
             {
-                using var stream = response.Content.ReadAsStream();
-                endpointMetadata = await System.Text.Json.JsonDocument.ParseAsync(stream);
+                HttpResponseMessage response;
+
+                {
+                    using HttpClient client = new();
+                    response = await retryPolicy.ExecuteAsync(() =>
+                        client.SendAsync(new(HttpMethod.Get, new UriBuilder(cloudManagement) { Path = "/metadata/endpoints", Query = "api-version=2023-11-01" }.Uri)));
+                }
+
+                response.EnsureSuccessStatusCode();
+
+                {
+                    using var stream = response.Content.ReadAsStream();
+                    endpointMetadata = await System.Text.Json.JsonDocument.ParseAsync(stream);
+                }
             }
 
             using var cloud = endpointMetadata;
@@ -55,21 +73,21 @@ namespace CommonUtilities
         /// <para>Azure Government: <c>AzureUSGovernment</c>: <c>AzureUSGovernmentCloud</c></para>
         /// <para>Microsoft Azure operated by 21Vianet: <c>AzureChinaCloud</c></para>
         /// </remarks>
-        public static Task<ArmEnvironmentEndpoints> FromKnownCloudNameAsync(string cloudName) =>
+        public static Task<ArmEnvironmentEndpoints> FromKnownCloudNameAsync(string cloudName, IOptions<Options.RetryPolicyOptions> retryPolicyOptions) =>
             cloudName.ToLowerInvariant() switch
             {
-                "azurepubliccloud" => FromMetadataEndpointsAsync(AzurePublicCloud),
-                "azurecloud" => FromMetadataEndpointsAsync(AzurePublicCloud),
-                "azureusgovernmentcloud" => FromMetadataEndpointsAsync(AzureUSGovernmentCloud),
-                "azureusgovernment" => FromMetadataEndpointsAsync(AzureUSGovernmentCloud),
-                "azurechinacloud" => FromMetadataEndpointsAsync(AzureChinaCloud),
+                "azurepubliccloud" => FromMetadataEndpointsAsync(AzurePublicCloud, retryPolicyOptions),
+                "azurecloud" => FromMetadataEndpointsAsync(AzurePublicCloud, retryPolicyOptions),
+                "azureusgovernmentcloud" => FromMetadataEndpointsAsync(AzureUSGovernmentCloud, retryPolicyOptions),
+                "azureusgovernment" => FromMetadataEndpointsAsync(AzureUSGovernmentCloud, retryPolicyOptions),
+                "azurechinacloud" => FromMetadataEndpointsAsync(AzureChinaCloud, retryPolicyOptions),
                 null => throw new ArgumentNullException(nameof(cloudName)),
                 _ => throw new ArgumentOutOfRangeException(nameof(cloudName)),
             };
 
-        private static readonly Uri AzurePublicCloud = new("https://management.azure.com/");
-        private static readonly Uri AzureUSGovernmentCloud = new("https://management.usgovcloudapi.net");
-        private static readonly Uri AzureChinaCloud = new("https://management.chinacloudapi.cn");
+        private static readonly Uri AzurePublicCloud = ArmEnvironment.AzurePublicCloud.Endpoint;
+        private static readonly Uri AzureUSGovernmentCloud = ArmEnvironment.AzureGovernment.Endpoint;
+        private static readonly Uri AzureChinaCloud = ArmEnvironment.AzureChina.Endpoint;
 
         private static ArmEnvironmentEndpoints ParseJson(System.Text.Json.JsonDocument cloud)
         {
@@ -98,7 +116,7 @@ namespace CommonUtilities
 
             return new(new(loginEndpoint), audience, tenant, new(resourceManager), new(appInsightsResourceId), new(appInsightsTelemetryChannelResourceId), new(batch), acrLoginServer, keyVaultDns, storage, postgresqlServerEndpoint);
 
-            static string GetPropertyString(System.Text.Json.JsonElement element, string key) => element.GetProperty(key).GetString() ?? throw new InvalidOperationException($"\"This azure cloud is not supported. '{key}' is empty.");
+            static string GetPropertyString(System.Text.Json.JsonElement element, string key) => element.GetProperty(key).GetString() ?? throw new InvalidOperationException($"This azure cloud is not supported: '{key}' is empty.");
         }
     }
 }

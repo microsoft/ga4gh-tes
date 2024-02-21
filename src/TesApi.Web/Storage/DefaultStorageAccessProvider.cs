@@ -8,14 +8,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using Azure.Storage.Blobs;
+using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.WindowsAzure.Storage;
-using Microsoft.WindowsAzure.Storage.Auth;
-using Microsoft.WindowsAzure.Storage.Blob;
 using Tes.Extensions;
 using Tes.Models;
-using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
 
 namespace TesApi.Web.Storage
@@ -138,21 +135,31 @@ namespace TesApi.Web.Storage
 
             try
             {
-                var accountKey = await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, cancellationToken);
                 var resultPathSegments = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName, pathSegments.BlobName);
-                var policy = new SharedAccessBlobPolicy { SharedAccessExpiryTime = DateTimeOffset.UtcNow.Add(sasTokenDuration ?? SasTokenDuration) };
+                var sharedAccessExpiryTime = DateTimeOffset.UtcNow.Add(sasTokenDuration ?? SasTokenDuration);
+                BlobSasBuilder sasBuilder;
 
                 if (pathSegments.IsContainer || getContainerSas)
                 {
-                    policy.Permissions = SharedAccessBlobPermissions.Add | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.List | SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.Write;
-                    var containerUri = new StorageAccountUrlSegments(storageAccountInfo.BlobEndpoint, pathSegments.ContainerName).ToUri();
-                    resultPathSegments.SasToken = new CloudBlobContainer(containerUri, new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, SharedAccessProtocol.HttpsOnly, null);
+                    sasBuilder = new(BlobContainerSasPermissions.Add | BlobContainerSasPermissions.Create | BlobContainerSasPermissions.List | BlobContainerSasPermissions.Read | BlobContainerSasPermissions.Write, sharedAccessExpiryTime)
+                    {
+                        BlobContainerName = pathSegments.ContainerName,
+                        Resource = "b",
+                    };
                 }
                 else
                 {
-                    policy.Permissions = SharedAccessBlobPermissions.Read;
-                    resultPathSegments.SasToken = new CloudBlob(resultPathSegments.ToUri(), new StorageCredentials(storageAccountInfo.Name, accountKey)).GetSharedAccessSignature(policy, null, null, SharedAccessProtocol.HttpsOnly, null);
+                    sasBuilder = new(BlobContainerSasPermissions.Read, sharedAccessExpiryTime)
+                    {
+                        BlobContainerName = pathSegments.ContainerName,
+                        BlobName = pathSegments.BlobName,
+                        Resource = "c"
+                    };
                 }
+
+                sasBuilder.Protocol = SasProtocol.Https;
+                var accountCredential = new Azure.Storage.StorageSharedKeyCredential(storageAccountInfo.Name, await AzureProxy.GetStorageAccountKeyAsync(storageAccountInfo, cancellationToken));
+                resultPathSegments.SasToken = sasBuilder.ToSasQueryParameters(accountCredential).ToString();
 
                 return resultPathSegments;
             }

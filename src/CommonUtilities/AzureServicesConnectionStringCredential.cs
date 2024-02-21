@@ -15,14 +15,14 @@ namespace CommonUtilities
     public class AzureServicesConnectionStringCredential : TokenCredential
     {
         private readonly TokenCredential credential;
-        private readonly AzureServicesConnectionStringCredentialOptions options;
+        //private readonly AzureServicesConnectionStringCredentialOptions options;
 
         public AzureServicesConnectionStringCredential(AzureServicesConnectionStringCredentialOptions options)
         {
             ArgumentNullException.ThrowIfNull(options);
-            options.Validate();
+            //options.Validate();
 
-            this.options = options;
+            //this.options = options;
             this.credential = AzureServicesConnectionStringCredentialFactory.Create(options);
         }
 
@@ -44,10 +44,25 @@ namespace CommonUtilities
     public class AzureServicesConnectionStringCredentialOptions : Azure.Identity.TokenCredentialOptions
     {
         public AzureServicesConnectionStringCredentialOptions(IConfiguration? configuration, ArmEnvironmentEndpoints armEndpoints)
+            : this(armEndpoints)
         {
             Configuration = configuration;
             ConnectionString = GetEnvironmentVariable("AzureServicesAuthConnectionString")!;
-            AdditionallyAllowedTenants = (GetEnvironmentVariable("AZURE_ADDITIONALLY_ALLOWED_TENANTS") ?? string.Empty).Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+        }
+
+        public AzureServicesConnectionStringCredentialOptions(string connectionString, ArmEnvironmentEndpoints armEndpoints)
+            : this(armEndpoints)
+        {
+            ConnectionString = connectionString;
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0305:Simplify collection initialization", Justification = "Using .ToList() is exactly the semantics we want. (Line setting 'AdditionallyAllowedTenants')")]
+        private AzureServicesConnectionStringCredentialOptions(ArmEnvironmentEndpoints armEndpoints)
+        {
+            ConnectionString = null!;
+            AdditionallyAllowedTenants = (GetEnvironmentVariable("AZURE_ADDITIONALLY_ALLOWED_TENANTS") ?? string.Empty)
+                .Split((char[])[';'], StringSplitOptions.RemoveEmptyEntries)
+                .ToList();
             TenantId = GetEnvironmentVariable("AZURE_TENANT_ID")!;
             AuthorityHost = armEndpoints.AuthorityHost;
             Audience = armEndpoints.Audience;
@@ -101,10 +116,10 @@ namespace CommonUtilities
 
         private string? GetEnvironmentVariable(string key) => Configuration is null ? Environment.GetEnvironmentVariable(key) : Configuration[key] ?? Environment.GetEnvironmentVariable(key);
 
-        internal void Validate()
-        {
-            throw new NotImplementedException();
-        }
+        //internal void Validate()
+        //{
+        //    throw new NotImplementedException();
+        //}
 
         internal Azure.Identity.AzureCliCredential CreateAzureCliCredential()
         {

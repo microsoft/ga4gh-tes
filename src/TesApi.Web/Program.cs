@@ -2,9 +2,11 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Net.Http;
 using System.Threading;
 using Azure.ResourceManager;
 using CommonUtilities;
+using CommonUtilities.Options;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -38,18 +40,12 @@ namespace TesApi.Web
             Options.ApplicationInsightsOptions applicationInsightsOptions = default;
             ArmEnvironmentEndpoints armEnvironmentEndpoints = default;
             var builder = WebHost.CreateDefaultBuilder<Startup>(args);
-
-            builder.ConfigureServices(services =>
-            {
-                services.AddSingleton(armEnvironmentEndpoints);
-                services.AddTransient<AzureServicesConnectionStringCredentialOptions>();
-            });
+            builder.ConfigureServices(services => services.AddTransient<AzureServicesConnectionStringCredentialOptions>());
+            builder.ConfigureServices(services => services.AddSingleton(armEnvironmentEndpoints));
 
             builder.ConfigureAppConfiguration((context, config) =>
             {
-                config.AddEnvironmentVariables(); // For Docker-Compose
-
-                var configuration = config.Build();
+                var configuration = config.AddEnvironmentVariables().Build();
 
                 armEnvironmentEndpoints = GetArmEnvironment(configuration);
 
@@ -91,20 +87,36 @@ namespace TesApi.Web
 
                 static ArmEnvironmentEndpoints GetArmEnvironment(IConfiguration configuration)
                 {
+                    var retryOptions = Microsoft.Extensions.Options.Options.Create(configuration.GetSection(CommonUtilities.Options.RetryPolicyOptions.SectionName).Get<CommonUtilities.Options.RetryPolicyOptions>());
                     var armEnvironmentOptions = configuration.GetSection(Options.ArmEnvironmentOptions.SectionName).Get<Options.ArmEnvironmentOptions>();
                     var armEndpoint = NullIfEnpty(armEnvironmentOptions?.Endpoint);
                     var armName = NullIfEnpty(armEnvironmentOptions?.Name);
 
                     if (armEndpoint is null && armName is null)
                     {
-                        // Ask the VM for Name
+                        // Ask the VM for the cloud Name https://learn.microsoft.com/azure/virtual-machines/instance-metadata-service?tabs=linux#sample-5-get-the-azure-environment-where-the-vm-is-running
+                        var retryPolicy = new RetryPolicyBuilder(retryOptions).DefaultRetryHttpResponseMessagePolicyBuilder().SetOnRetryBehavior().AsyncBuildPolicy();
+                        HttpRequestMessage request = new(HttpMethod.Get, new UriBuilder("http://169.254.169.254/")
+                        {
+                            Path = "/metadata/instance/compute/azEnvironment",
+                            Query = "api-version=2018-10-01&format=text"
+                        }.Uri);
+                        request.Headers.Add("Metadata", "true");
+
+                        using HttpClient client = new(new HttpClientHandler() { UseProxy = false });
+                        var response = retryPolicy.ExecuteAsync(
+                            () => client.SendAsync(request))
+                            .Result;
+
+                        response.EnsureSuccessStatusCode();
+                        armName = response.Content.ReadAsStringAsync().Result;
                     }
 
                     try
                     {
                         return armEndpoint is null
-                            ? ArmEnvironmentEndpoints.FromKnownCloudNameAsync(armName).GetAwaiter().GetResult()
-                            : ArmEnvironmentEndpoints.FromMetadataEndpointsAsync(new(armEndpoint)).GetAwaiter().GetResult();
+                            ? ArmEnvironmentEndpoints.FromKnownCloudNameAsync(armName, retryOptions).GetAwaiter().GetResult()
+                            : ArmEnvironmentEndpoints.FromMetadataEndpointsAsync(new(armEndpoint), retryOptions).GetAwaiter().GetResult();
                     }
                     catch (ArgumentException exception)
                     {

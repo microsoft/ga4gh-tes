@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
+using Azure.ResourceManager.Batch;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
@@ -648,13 +649,16 @@ namespace TesApi.Web
             => (await _azureProxy.GetBatchPoolAsync(PoolId, cancellationToken, new ODATADetailLevel { SelectClause = "allocationStateTransitionTime" })).AllocationStateTransitionTime ?? DateTime.UtcNow;
 
         /// <inheritdoc/>
-        public async ValueTask CreatePoolAndJobAsync(Microsoft.Azure.Management.Batch.Models.Pool poolModel, bool isPreemptible, CancellationToken cancellationToken)
+        public async ValueTask CreatePoolAndJobAsync(BatchAccountPoolData poolModel, bool isPreemptible, CancellationToken cancellationToken)
         {
+            var jobId = poolModel.Metadata.Single(i => string.IsNullOrEmpty(i.Name)).Value;
+
             try
             {
                 CloudPool pool = default;
+
                 await Task.WhenAll(
-                    _azureProxy.CreateBatchJobAsync(poolModel.Name, poolModel.Name, cancellationToken),
+                    _azureProxy.CreateBatchJobAsync(jobId, jobId, cancellationToken),
                     Task.Run(async () =>
                     {
                         var poolId = await _batchPoolManager.CreateBatchPoolAsync(poolModel, isPreemptible, cancellationToken);
@@ -684,7 +688,7 @@ namespace TesApi.Web
             {
                 // When the batch management API creating the pool times out, it may or may not have created the pool.
                 // Add an inactive record to delete it if it did get created and try again later. That record will be removed later whether or not the pool was created.
-                PoolId ??= poolModel.Name;
+                PoolId ??= jobId;
                 _ = _batchPools.AddPool(this);
                 return ex switch
                 {

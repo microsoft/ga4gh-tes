@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Azure.Core;
+using CommonUtilities;
 using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -26,22 +27,25 @@ namespace Tes.ApiClients
         /// </summary>
         /// <param name="apiUrl">WSM API host</param>
         /// <param name="tokenCredential"></param>
+        /// <param name="armEndpoints"></param>
         /// <param name="cachingRetryHandler"></param>
         /// <param name="logger"></param>
-        public TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryPolicyBuilder cachingRetryHandler,
-            ILogger<TerraWsmApiClient> logger) : base(apiUrl, tokenCredential, cachingRetryHandler, logger)
-        {
+        public TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, ArmEnvironmentEndpoints armEndpoints,
+            CachingRetryPolicyBuilder cachingRetryHandler, ILogger<TerraWsmApiClient> logger) : this(apiUrl, tokenCredential, armEndpoints.DefaultScope, cachingRetryHandler, logger)
+        { }
 
-        }
-
-        public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl, TokenCredential tokenCredential)
+        public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, string tokenScope)
         {
             var retryPolicyOptions = new RetryPolicyOptions();
             var cacheRetryHandler = new CachingRetryPolicyBuilder(sharedMemoryCache,
                  Microsoft.Extensions.Options.Options.Create(retryPolicyOptions));
 
-            return new TerraWsmApiClient(apiUrl, tokenCredential, cacheRetryHandler, ApiClientsLoggerFactory.Create<TerraWsmApiClient>());
+            return new TerraWsmApiClient(apiUrl, tokenCredential, tokenScope, cacheRetryHandler, ApiClientsLoggerFactory.Create<TerraWsmApiClient>());
         }
+
+        private TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, string tokenScope, CachingRetryPolicyBuilder cachingRetryHandler, ILogger logger)
+            : base(apiUrl, tokenCredential, tokenScope, cachingRetryHandler, logger)
+        { }
 
         /// <summary>
         /// Protected parameter-less constructor

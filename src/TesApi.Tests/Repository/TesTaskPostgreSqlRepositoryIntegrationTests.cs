@@ -7,20 +7,18 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure;
+using Azure.Core;
+using Azure.ResourceManager;
+using Azure.ResourceManager.PostgreSql.FlexibleServers;
+using Azure.ResourceManager.PostgreSql.FlexibleServers.Models;
 using CommonUtilities;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.Management.PostgreSQL;
-using Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Extensions.Options;
-using Microsoft.Rest;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Tes.Models;
 using Tes.Utilities;
 using TesApi.Controllers;
-using FlexibleServer = Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 
 namespace Tes.Repository.Tests
 {
@@ -351,40 +349,31 @@ namespace Tes.Repository.Tests
         {
             const string postgreSqlVersion = "14";
 
-            var tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider("https://management.azure.com/"));
-            var azureCredentials = new AzureCredentials(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
-            var postgresManagementClient = new FlexibleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = subscriptionId, LongRunningOperationRetryTimeout = 1200 };
-            var azureClient = GetAzureClient(azureCredentials);
-            var azureSubscriptionClient = azureClient.WithSubscription(subscriptionId);
+            var azureSubscriptionClient = GetArmClient(subscriptionId).GetDefaultSubscription();
 
-            var rgs = (await azureSubscriptionClient.ResourceGroups.ListAsync()).ToList();
-
-            if (rgs.Any(r => r.Name.Equals(resourceGroupName, StringComparison.OrdinalIgnoreCase)))
+            if (await azureSubscriptionClient.GetResourceGroups().GetAllAsync()
+                .AnyAsync(r => r.Id.Name.Equals(resourceGroupName, StringComparison.OrdinalIgnoreCase)))
             {
                 return;
             }
 
-            await azureSubscriptionClient
-                .ResourceGroups
-                .Define(resourceGroupName)
-                .WithRegion(regionName)
-                .CreateAsync();
+            var rg = (await azureSubscriptionClient.GetResourceGroups()
+                .CreateOrUpdateAsync(Azure.WaitUntil.Completed, resourceGroupName, new(new(regionName)))).Value;
 
-            await postgresManagementClient.Servers.CreateAsync(
-                resourceGroupName,
-                postgreSqlServerName,
-                        new(
-                           location: regionName,
-                           version: postgreSqlVersion,
-                           sku: new("Standard_B2s", "Burstable"),
-                           storage: new(128),
-                           administratorLogin: adminLogin,
-                           administratorLoginPassword: adminPw,
-                           //network: new(publicNetworkAccess: "Enabled"),
-                           highAvailability: new("Disabled")
-                        ));
+            var server = (await rg.GetPostgreSqlFlexibleServers().CreateOrUpdateAsync(Azure.WaitUntil.Completed, postgreSqlServerName, new(new(regionName))
+            {
+                Version = new(postgreSqlVersion),
+                Sku = new("Standard_B2s", PostgreSqlFlexibleServerSkuTier.Burstable),
+                StorageSizeInGB = 128,
+                AdministratorLogin = adminLogin,
+                AdministratorLoginPassword = adminPw,
+                //Network = new() { },
+                HighAvailability = new() { Mode = PostgreSqlFlexibleServerHighAvailabilityMode.Disabled }
+            })).Value;
 
-            await postgresManagementClient.Databases.CreateAsync(resourceGroupName, postgreSqlServerName, postgreSqlDatabaseName, new());
+            var dattabase = (await server.GetPostgreSqlFlexibleServerDatabases().CreateOrUpdateAsync(Azure.WaitUntil.Completed, postgreSqlDatabaseName, new())).Value;
+
+            //var postgresManagementClient = new FlexibleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = subscriptionId, LongRunningOperationRetryTimeout = 1200 };
 
             var startIp = "0.0.0.0";
             var endIp = "255.255.255.255";
@@ -395,26 +384,41 @@ namespace Tes.Repository.Tests
             //startIp = ip;
             //endIp = ip;
 
-            await postgresManagementClient.FirewallRules.CreateOrUpdateAsync(
-                resourceGroupName,
-                postgreSqlServerName,
-                "AllowTestMachine",
-                new FlexibleServer.Models.FirewallRule { StartIpAddress = startIp, EndIpAddress = endIp });
+            Assert.IsFalse((await server.GetPostgreSqlFlexibleServerFirewallRules()
+                .CreateOrUpdateAsync(Azure.WaitUntil.Completed,
+                    "AllowTestMachine",
+                    new(System.Net.IPAddress.Parse(startIp), System.Net.IPAddress.Parse(endIp))))
+                .GetRawResponse().IsError);
         }
 
         public static async Task DeleteResourceGroupAsync(string subscriptionId, string resourceGroupName)
         {
-            var tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider("https://management.azure.com/"));
-            var azureCredentials = new AzureCredentials(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
-            var azureClient = GetAzureClient(azureCredentials);
-            var azureSubscriptionClient = azureClient.WithSubscription(subscriptionId);
-            await azureSubscriptionClient.ResourceGroups.DeleteByNameAsync(resourceGroupName, CancellationToken.None);
+            var azureSubscriptionClient = GetArmClient(subscriptionId).GetDefaultSubscription();
+            Assert.IsFalse((await azureSubscriptionClient.GetResourceGroups().Get(resourceGroupName, CancellationToken.None).Value
+                .DeleteAsync(WaitUntil.Completed, cancellationToken: CancellationToken.None))
+                .GetRawResponse().IsError);
         }
 
-        private static Microsoft.Azure.Management.Fluent.Azure.IAuthenticated GetAzureClient(AzureCredentials azureCredentials)
-            => Microsoft.Azure.Management.Fluent.Azure
-                .Configure()
-                .WithLogLevel(HttpLoggingDelegatingHandler.Level.Basic)
-                .Authenticate(azureCredentials);
+        private static ArmClient GetArmClient(string subscriptionId)
+        {
+            var credentialOptions = new Azure.Identity.DefaultAzureCredentialOptions
+            {
+                AuthorityHost = Azure.Identity.AzureAuthorityHosts.AzurePublicCloud,
+                ExcludeManagedIdentityCredential = true,
+                ExcludeWorkloadIdentityCredential = true,
+            };
+            TokenCredential credentials = new Azure.Identity.DefaultAzureCredential(credentialOptions);
+
+            ArmClientOptions clientOptions = new()
+            {
+                Environment = ArmEnvironment.AzurePublicCloud,
+            };
+            clientOptions.Diagnostics.IsLoggingEnabled = true;
+            clientOptions.Retry.Mode = RetryMode.Exponential;
+            clientOptions.Retry.Delay = TimeSpan.FromSeconds(1);
+            clientOptions.Retry.MaxDelay = TimeSpan.FromSeconds(30);
+            clientOptions.Retry.MaxRetries = 10;
+            return new ArmClient(credentials, subscriptionId, clientOptions);
+        }
     }
 }

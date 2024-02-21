@@ -4,6 +4,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.ResourceManager.Batch;
 using Microsoft.Azure.Batch;
 
 namespace TesApi.Web
@@ -29,7 +30,7 @@ namespace TesApi.Web
         /// <param name="pool"></param>
         /// <param name="isPreemptible"></param>
         /// <param name="cancellationToken"></param>
-        ValueTask CreatePoolAndJobAsync(Microsoft.Azure.Management.Batch.Models.Pool pool, bool isPreemptible, CancellationToken cancellationToken);
+        ValueTask CreatePoolAndJobAsync(BatchAccountPoolData pool, bool isPreemptible, CancellationToken cancellationToken);
 
         /// <summary>
         /// Connects to the provided pool and associated job in the Batch Account.

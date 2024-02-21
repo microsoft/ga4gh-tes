@@ -6,16 +6,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Core;
+using Azure.ResourceManager;
+using Azure.ResourceManager.Resources;
+using Azure.ResourceManager.Storage;
+using Azure.Storage.Blobs;
 using CommonUtilities;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Rest;
-using Microsoft.WindowsAzure.Storage.Blob;
 using Polly;
 using Tes.Models;
 using TesApi.Web.Management;
@@ -23,9 +24,9 @@ using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
 using static CommonUtilities.RetryHandler;
 using BatchProtocol = Microsoft.Azure.Batch.Protocol;
+using BlobModels = Azure.Storage.Blobs.Models;
 using CloudTask = Microsoft.Azure.Batch.CloudTask;
 using ComputeNodeState = Microsoft.Azure.Batch.Common.ComputeNodeState;
-using FluentAzure = Microsoft.Azure.Management.Fluent.Azure;
 using JobState = Microsoft.Azure.Batch.Common.JobState;
 using OnAllTasksComplete = Microsoft.Azure.Batch.Common.OnAllTasksComplete;
 using TaskExecutionInformation = Microsoft.Azure.Batch.TaskExecutionInformation;
@@ -43,6 +44,8 @@ namespace TesApi.Web
         private readonly AsyncRetryHandlerPolicy batchRetryPolicyWhenNodeNotReady;
 
         private readonly ILogger logger;
+        private readonly AzureServicesConnectionStringCredentialOptions credentialOptions;
+        private readonly ArmEnvironmentEndpoints armEndpoints;
         private readonly BatchProtocol.BatchServiceClient batchServiceClient;
         private readonly BatchClient batchClient;
         private readonly string location;
@@ -62,9 +65,15 @@ namespace TesApi.Web
         {
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
             ArgumentNullException.ThrowIfNull(batchAccountInformation);
+            ArgumentNullException.ThrowIfNull(armEndpoints);
+            ArgumentNullException.ThrowIfNull(credentialOptions);
             ArgumentNullException.ThrowIfNull(retryHandler);
             ArgumentNullException.ThrowIfNull(logger);
 
+            credentialOptions.AuthorityHost = this.armEndpoints.AuthorityHost;
+
+            this.armEndpoints = armEndpoints;
+            this.credentialOptions = credentialOptions;
             this.logger = logger;
 
             if (string.IsNullOrWhiteSpace(batchAccountOptions.Value.AccountName))
@@ -96,11 +105,10 @@ namespace TesApi.Web
             else
             {
                 location = batchAccountInformation.Region;
-                credentialOptions.Resource = armEndpoints.BatchResource;
                 var credentials = new AzureServicesConnectionStringCredential(credentialOptions);
                 serviceClientCredentials = new TokenCredentials(new BatchProtocol.BatchTokenProvider(async () =>
                     (await credentials.GetTokenAsync(new Azure.Core.TokenRequestContext(
-                        new[] { armEndpoints.BatchResource.AbsoluteUri + ".default"/*"/.default"*/ },
+                        [armEndpoints.BatchResource.AbsoluteUri.TrimEnd('/') + "/.default"],
                         tenantId: armEndpoints.Tenant), CancellationToken.None)).Token));
             }
 
@@ -416,15 +424,11 @@ namespace TesApi.Web
             return new(pool.AllocationState, pool.AllocationStateTransitionTime, pool.AutoScaleEnabled, pool.TargetLowPriorityComputeNodes, pool.CurrentLowPriorityComputeNodes, pool.TargetDedicatedComputeNodes, pool.CurrentDedicatedComputeNodes);
         }
 
-        private static async Task<IAsyncEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync(CancellationToken cancellationToken)
+        private IAsyncEnumerable<StorageAccountInfo> GetAccessibleStorageAccountsAsync(CancellationToken cancellationToken)
         {
-            var azureClient = await GetAzureManagementClientAsync(cancellationToken);
-            return (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken))
-                .ToAsyncEnumerable()
-                .Select(s => s.SubscriptionId).SelectManyAwait(async (subscriptionId, ct) =>
-                    (await azureClient.WithSubscription(subscriptionId).StorageAccounts.ListAsync(cancellationToken: cancellationToken))
-                        .ToAsyncEnumerable()
-                        .Select(a => new StorageAccountInfo { Id = a.Id, Name = a.Name, SubscriptionId = subscriptionId, BlobEndpoint = new(a.EndPoints.Primary.Blob) }));
+            var azureClient = GetAzureManagementClient();
+            return azureClient.GetSubscriptions().SelectMany(s => s.GetStorageAccountsAsync(cancellationToken)).SelectAwaitWithCancellation(async (a, ct) => (await a.GetAsync(cancellationToken: ct)).Value)
+                        .Select(a => new StorageAccountInfo { Id = a.Id, Name = a.Data.Name, SubscriptionId = a.Id.SubscriptionId, BlobEndpoint = a.Data.PrimaryEndpoints.BlobUri });
         }
 
         /// <inheritdoc/>
@@ -432,10 +436,11 @@ namespace TesApi.Web
         {
             try
             {
-                var azureClient = await GetAzureManagementClientAsync(cancellationToken);
-                var storageAccount = await azureClient.WithSubscription(storageAccountInfo.SubscriptionId).StorageAccounts.GetByIdAsync(storageAccountInfo.Id, cancellationToken);
+                ResourceIdentifier storageAccountId = new(storageAccountInfo.Id);
+                var azureClient = GetAzureManagementClient().GetResourceGroupResource(ResourceGroupResource.CreateResourceIdentifier(storageAccountId.SubscriptionId, storageAccountId.ResourceGroupName));
+                var storageAccount = (await azureClient.GetStorageAccountAsync(storageAccountId.Name, cancellationToken: cancellationToken)).Value;
 
-                return (await storageAccount.GetKeysAsync(cancellationToken))[0].Value;
+                return (await storageAccount.GetKeysAsync(cancellationToken: cancellationToken).FirstAsync(key => Azure.ResourceManager.Storage.Models.StorageAccountKeyPermission.Full.Equals(key.Permissions), cancellationToken)).Value;
             }
             catch (Exception ex)
             {
@@ -446,52 +451,45 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public Task UploadBlobAsync(Uri blobAbsoluteUri, string content, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).UploadTextAsync(content, null, null, null, null, cancellationToken);
+            => new BlobClient(blobAbsoluteUri).UploadAsync(BinaryData.FromString(content), cancellationToken);
 
         /// <inheritdoc/>
         public Task UploadBlobFromFileAsync(Uri blobAbsoluteUri, string filePath, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).UploadFromFileAsync(filePath, null, null, null, cancellationToken);
-
-        /// <inheritdoc/>
-        public Task<string> DownloadBlobAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).DownloadTextAsync(null, null, null, null, cancellationToken);
-
-        /// <inheritdoc/>
-        public Task<bool> BlobExistsAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
-            => new CloudBlockBlob(blobAbsoluteUri).ExistsAsync(null, null, cancellationToken);
-
-        /// <inheritdoc/>
-        public async Task<BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
         {
-            var blob = new CloudBlockBlob(blobAbsoluteUri);
+            using var stream = System.IO.File.OpenRead(filePath);
+            return new BlobClient(blobAbsoluteUri).UploadAsync(BinaryData.FromStream(stream), cancellationToken);
+        }
 
-            if (await blob.ExistsAsync(null, null, cancellationToken))
+        /// <inheritdoc/>
+        public async Task<string> DownloadBlobAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
+            => (await new BlobClient(blobAbsoluteUri).DownloadContentAsync(cancellationToken)).Value.Content.ToString();
+
+        /// <inheritdoc/>
+        public async Task<bool> BlobExistsAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
+            => (await new BlobClient(blobAbsoluteUri).ExistsAsync(cancellationToken)).Value;
+
+        /// <inheritdoc/>
+        public async Task<BlobModels.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken)
+        {
+            var blob = new BlobClient(blobAbsoluteUri);
+
+            if ((await blob.ExistsAsync(cancellationToken)).Value)
             {
-                await blob.FetchAttributesAsync(null, null, null, cancellationToken);
-                return blob.Properties;
+                return (await blob.GetPropertiesAsync(cancellationToken: cancellationToken)).Value;
             }
 
             return default;
         }
 
         /// <inheritdoc/>
-        public async Task<IEnumerable<CloudBlob>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
+        public Task<IEnumerable<BlobModels.BlobItem>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken)
         {
-            var blob = new CloudBlockBlob(directoryUri);
-            var directory = blob.Container.GetDirectoryReference(blob.Name);
+            BlobUriBuilder uriBuilder = new(directoryUri);
+            var prefix = uriBuilder.BlobName + "/";
+            uriBuilder.BlobName = null;
+            BlobContainerClient container = new(uriBuilder.ToUri());
 
-            BlobContinuationToken continuationToken = null;
-            var results = new List<CloudBlob>();
-
-            do
-            {
-                var response = await directory.ListBlobsSegmentedAsync(useFlatBlobListing: true, blobListingDetails: BlobListingDetails.None, maxResults: null, currentToken: continuationToken, options: null, operationContext: null, cancellationToken: cancellationToken);
-                continuationToken = response.ContinuationToken;
-                results.AddRange(response.Results.OfType<CloudBlob>());
-            }
-            while (continuationToken is not null);
-
-            return results;
+            return Task.FromResult(container.GetBlobsAsync(prefix: prefix, cancellationToken: cancellationToken).ToBlockingEnumerable(cancellationToken));
         }
 
         /// <inheritdoc />
@@ -501,20 +499,17 @@ namespace TesApi.Web
         /// <summary>
         /// Gets an authenticated Azure Client instance
         /// </summary>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>An authenticated Azure Client instance</returns>
-        private static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(CancellationToken cancellationToken)
+        private ArmClient GetAzureManagementClient()
         {
-            var accessToken = await new AzureServiceTokenProvider().GetAccessTokenAsync("https://management.azure.com/", cancellationToken: cancellationToken);
-            var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, AzureEnvironment.AzureGlobalCloud);
-            var azureClient = FluentAzure.Authenticate(azureCredentials);
-
-            return azureClient;
+            return new(new AzureServicesConnectionStringCredential(credentialOptions),
+                default,
+                new ArmClientOptions { Environment = new(armEndpoints.ResourceManager, armEndpoints.Audience) });
         }
 
         /// <inheritdoc/>
         public async Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken)
-            => await (await GetAccessibleStorageAccountsAsync(cancellationToken))
+            => await GetAccessibleStorageAccountsAsync(cancellationToken)
                 .FirstOrDefaultAsync(storageAccount => storageAccount.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
 
         /// <inheritdoc/>

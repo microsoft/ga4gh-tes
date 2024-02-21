@@ -111,7 +111,13 @@ namespace TesApi.Web
                     .AddSingleton<AzureManagementClientsFactory>()
                     .AddSingleton<ConfigurationUtils>()
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
-                    .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
+                    .AddSingleton<TokenCredential>(s =>
+                    {
+                        var env = s.GetRequiredService<ArmEnvironmentEndpoints>();
+                        var options = s.GetRequiredService<AzureServicesConnectionStringCredentialOptions>();
+                        options.AuthorityHost = env.AuthorityHost;
+                        return new AzureServicesConnectionStringCredential(options);
+                    })
                     .AddSingleton<TaskToNodeTaskConverter>()
                     .AddSingleton<TaskExecutionScriptingManager>()
                     .AddSingleton<PoolMetadataReader>()

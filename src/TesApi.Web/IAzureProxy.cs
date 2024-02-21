@@ -6,10 +6,9 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Batch;
-using Microsoft.Azure.Batch.Common;
 using Tes.Models;
 using TesApi.Web.Storage;
-using BatchModels = Microsoft.Azure.Management.Batch.Models;
+using BlobModels = Azure.Storage.Blobs.Models;
 
 namespace TesApi.Web
 {
@@ -132,7 +131,7 @@ namespace TesApi.Web
         /// <param name="directoryUri">Directory Uri</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>List of blob paths</returns>
-        Task<IEnumerable<Microsoft.WindowsAzure.Storage.Blob.CloudBlob>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken);
+        Task<IEnumerable<BlobModels.BlobItem>> ListBlobsAsync(Uri directoryUri, CancellationToken cancellationToken);
 
         /// <summary>
         /// Fetches the blobs properties
@@ -140,7 +139,7 @@ namespace TesApi.Web
         /// <param name="blobAbsoluteUri">Absolute Blob URI</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
-        Task<Microsoft.WindowsAzure.Storage.Blob.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken);
+        Task<BlobModels.BlobProperties> GetBlobPropertiesAsync(Uri blobAbsoluteUri, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the list of active pool ids matching the prefix and with creation time older than the minAge
