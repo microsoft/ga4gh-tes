@@ -34,7 +34,6 @@ namespace TesApi.Tests.Runner
         private TerraOptions terraOptions;
         private StorageOptions storageOptions;
         private BatchAccountOptions batchAccountOptions;
-        private GeneralOptions tesOptions;
 
         private const string SasToken = "sv=2019-12-12&ss=bfqt&srt=sco&spr=https&st=2023-09-27T17%3A32%3A57Z&se=2023-09-28T17%3A32%3A57Z&sp=rwdlacupx&sig=SIGNATURE";
 
