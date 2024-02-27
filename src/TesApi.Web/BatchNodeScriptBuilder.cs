@@ -69,8 +69,9 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="runnerBinaryUrl"></param>
         /// <param name="runnerTaskInfoUrl"></param>
+        /// /// <param name="vmPerfArchiveUrl"></param>
         /// <returns></returns>
-        public BatchNodeScriptBuilder WithRunnerFilesDownloadUsingWget(Uri runnerBinaryUrl, Uri runnerTaskInfoUrl)
+        public BatchNodeScriptBuilder WithRunnerFilesDownloadUsingWget(Uri runnerBinaryUrl, Uri runnerTaskInfoUrl, Uri vmPerfArchiveUrl)
         {
             ArgumentNullException.ThrowIfNull(runnerBinaryUrl);
             ArgumentNullException.ThrowIfNull(runnerTaskInfoUrl);
@@ -82,10 +83,22 @@ namespace TesApi.Web
 
             batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerBinaryUrl, $"{BatchTaskDirEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)} && \\");
             batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{BatchTaskDirEnvVar}/{NodeRunnerTaskDefinitionFilename}", setExecutable: false)} && \\");
+            if (vmPerfArchiveUrl != null )
+            {
+                batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{BatchTaskDirEnvVar}/{NodeRunnerTaskDefinitionFilename}", setExecutable: false)} && \\");
+            }
 
             if (useMetricsFile)
             {
                 batchScript.AppendLinuxLine("write_ts DownloadRunnerFileEnd && \\");
+            }
+
+            if (vmPerfArchiveUrl != null)
+            {
+                // TES vm performance monitoring is bootstrapped and begun by the script inside the archive:
+                batchScript.AppendLinuxLine("tar zxvf tes_vm_perf.tar.gz start_vm_node_monitoring.sh && \\");
+                batchScript.AppendLinuxLine("chmmod +x \"${AZ_BATCH_TASK_DIR}/start_vm_node_monitoring.sh\" && \\");
+                batchScript.AppendLinuxLine("/usr/bin/bash -c \"${AZ_BATCH_TASK_DIR}/start_vm_node_monitoring.sh &\" && \\");
             }
 
             return this;

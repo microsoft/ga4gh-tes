@@ -19,6 +19,7 @@ namespace TesApi.Web.Runner
     {
         private const string NodeTaskFilename = "runner-task.json";
         private const string NodeTaskRunnerFilename = "tes-runner";
+        private const string VMPerformanceArchiverFilename = "tes_vm_perf.tar.gz";
         private const string BatchScriptFileName = "batch_script";
 
         private readonly IStorageAccessProvider storageAccessProvider;
@@ -126,11 +127,12 @@ namespace TesApi.Web.Runner
             logger.LogInformation($"Creating and uploading Batch script for Task ID: {tesTask.Id}");
 
             var nodeTaskRunnerUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
+            var nodeVMPerfArchiveUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken);
 
             var batchNodeScript = batchNodeScriptBuilder
                 .WithAlpineWgetInstallation()
                 .WithMetrics()
-                .WithRunnerFilesDownloadUsingWget(nodeTaskRunnerUrl, nodeTaskUrl)
+                .WithRunnerFilesDownloadUsingWget(nodeTaskRunnerUrl, nodeTaskUrl, nodeVMPerfArchiveUrl)
                 .WithExecuteRunner()
                 .WithLocalRuntimeSystemInformation()
                 .Build();
