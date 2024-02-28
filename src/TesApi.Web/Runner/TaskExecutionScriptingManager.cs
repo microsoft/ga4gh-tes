@@ -122,6 +122,11 @@ namespace TesApi.Web.Runner
             return sanitizedLogEntry;
         }
 
+        private async Task<Uri> CreateAndUploadBatchScriptAsync(TesTask tesTask, Uri nodeTaskUrl)
+        {
+            return await CreateAndUploadBatchScriptAsync(tesTask, nodeTaskUrl, CancellationToken.None);
+        }
+
         private async Task<Uri> CreateAndUploadBatchScriptAsync(TesTask tesTask, Uri nodeTaskUrl, CancellationToken cancellationToken)
         {
             logger.LogInformation($"Creating and uploading Batch script for Task ID: {tesTask.Id}");
