@@ -62,7 +62,7 @@ namespace TesApi.Tests
 #pragma warning restore CS0618
 
             services.AddSingleton(new ArmEnvironmentEndpoints(new("https://login.microsoftonline.com"), "http://management.core.windows.net/", "common", new("https://management.azure.com/"), new("https://api.applicationinsights.io"), new("https://dc.applicationinsights.azure.com/v2/track"), new("https://batch.core.windows.net/"), "azurecr.io", "vault.azure.net", "core.windows.net", "postgres.database.azure.com"));
-            services.AddTransient(provider => ActivatorUtilities.CreateInstance<AzureServicesConnectionStringCredentialOptions>(provider));
+            services.AddTransient(provider => ActivatorUtilities.CreateInstance<AzureServicesConnectionStringCredentialOptions>(provider, $"RunAs=App;AppId={System.Guid.Empty:D}"));
             services.AddSingleton(configurationMock.Object);
             startup = new Startup(configurationMock.Object, NullLogger<Startup>.Instance, hostingEnvMock.Object);
         }

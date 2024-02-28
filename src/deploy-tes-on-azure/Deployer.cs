@@ -23,7 +23,6 @@ using Azure.ResourceManager.ApplicationInsights;
 using Azure.ResourceManager.Authorization;
 using Azure.ResourceManager.Batch;
 using Azure.ResourceManager.Compute;
-using Azure.ResourceManager.ContainerRegistry;
 using Azure.ResourceManager.ContainerService;
 using Azure.ResourceManager.ContainerService.Models;
 using Azure.ResourceManager.KeyVault;
@@ -1753,8 +1752,17 @@ namespace TesDeployer
 
                     async ValueTask<string> GetUserObjectId()
                     {
-                        using var client = new GraphServiceClient(tokenCredential, baseUrl: "https://graph.windows.net");
-                        return (await client.Me.GetAsync(cancellationToken: cts.Token)).Id;
+                        string baseUrl;
+                        {
+                            // TODO: convert cloud to appropriate field. Note that there are two different values for USGovernment.
+                            using var client = GraphClientFactory.Create(nationalCloud: GraphClientFactory.Global_Cloud);
+                            baseUrl = client.BaseAddress.AbsoluteUri;
+                        }
+
+                        {
+                            using var client = new GraphServiceClient(tokenCredential, baseUrl: baseUrl);
+                            return (await client.Me.GetAsync(cancellationToken: cts.Token)).Id;
+                        }
                     }
                 });
 
@@ -2116,9 +2124,10 @@ namespace TesDeployer
             try
             {
                 _ = await Execute("Retrieving Azure management token...",
-                    async () => await new AzureServicesConnectionStringCredential(new("RunAs=Developer; DeveloperTool=AzureCli", default)
-                    { Resource = cloudEnvironment.ArmEnvironment.Endpoint, AuthorityHost = cloudEnvironment.AzureAuthorityHost, Audience = cloudEnvironment.ArmEnvironment.Audience })
-                        .GetTokenAsync(new([cloudEnvironment.ArmEnvironment.DefaultScope]), cancellationToken: cts.Token));
+                    async () => await new AzureCliCredential(new()
+                    {
+                        AuthorityHost = cloudEnvironment.AzureAuthorityHost
+                    }).GetTokenAsync(new([cloudEnvironment.ArmEnvironment.DefaultScope]), cancellationToken: cts.Token));
             }
             catch (AuthenticationFailedException ex)
             {

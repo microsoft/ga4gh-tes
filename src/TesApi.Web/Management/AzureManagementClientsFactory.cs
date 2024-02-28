@@ -2,15 +2,9 @@
 // Licensed under the MIT License.
 
 using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Batch;
 using CommonUtilities;
-
-//using Microsoft.Azure.Services.AppAuthentication;
-//using Microsoft.Rest;
-
 
 namespace TesApi.Web.Management
 {

@@ -4,9 +4,9 @@
 using System;
 using System.Linq;
 using AutoMapper;
+using Azure.Core;
 using Azure.ResourceManager.Batch;
 using Azure.ResourceManager.Batch.Models;
-using Microsoft.Azure.Batch;
 using TesApi.Web.Management.Models.Terra;
 using TesApi.Web.Runner;
 
@@ -22,23 +22,31 @@ namespace TesApi.Web.Management.Batch
         /// </summary>
         public MappingProfilePoolToWsmRequest()
         {
-            CreateMap<BatchDeploymentConfiguration, ApiDeploymentConfiguration>();
+            CreateMap<BatchDeploymentConfiguration, ApiDeploymentConfiguration>()
+                .ForMember(dest => dest.VirtualMachineConfiguration, opt => opt.MapFrom(src => src.VmConfiguration))
+                .ForMember(dest => dest.CloudServiceConfiguration, opt => opt.MapFrom(src => src.CloudServiceConfiguration));
             CreateMap<BatchVmConfiguration, ApiVirtualMachineConfiguration>();
             CreateMap<BatchCloudServiceConfiguration, ApiCloudServiceConfiguration>();
             CreateMap<BatchAccountPoolScaleSettings, ApiScaleSettings>();
             CreateMap<BatchAccountAutoScaleSettings, ApiAutoScale>()
                 .ForMember(dest => dest.EvaluationInterval, opt => opt.MapFrom(src => Convert.ToInt64(src.EvaluationInterval.Value.TotalMinutes)));
             CreateMap<BatchAccountPoolStartTask, ApiStartTask>();
-            CreateMap<BatchResourceFile, ApiResourceFile>();
-            CreateMap<ComputeNodeIdentityReference, ApiIdentityReference>();
+            CreateMap<BatchResourceFile, ApiResourceFile>()
+                .ForMember(dest => dest.AutoStorageContainerName, opt => opt.MapFrom(src => src.AutoBlobContainerName))
+                .ForMember(dest => dest.HttpUrl, opt => opt.MapFrom(src => src.HttpUri))
+                .ForMember(dest => dest.IdentityReference, opt => opt.MapFrom(src => src.IdentityResourceId))
+                .ForMember(dest => dest.StorageContainerUrl, opt => opt.MapFrom(src => src.BlobContainerUri));
+            CreateMap<ResourceIdentifier, ApiIdentityReference>()
+                .ForMember(dest => dest.ResourceId, opt => opt.MapFrom(src => src.ToString()));
             CreateMap<BatchEnvironmentSetting, ApiEnvironmentSetting>();
             CreateMap<BatchUserIdentity, ApiUserIdentity>();
             CreateMap<BatchAutoUserSpecification, ApiAutoUserSpecification>();
             CreateMap<BatchTaskContainerSettings, ApiContainerSettings>();
             CreateMap<BatchApplicationPackageReference, ApiApplicationPackage>();
-            CreateMap<BatchVmContainerRegistry, ApiContainerRegistry>();
-            CreateMap<BatchNetworkConfiguration, ApiNetworkConfiguration>();
-            CreateMap<PoolEndpointConfiguration, ApiEndpointConfiguration>();
+            CreateMap<BatchVmContainerRegistry, ApiContainerRegistry>()
+                .ForMember(dest => dest.IdentityReference, opt => opt.MapFrom(src => src.IdentityResourceId));
+            CreateMap<BatchNetworkConfiguration, ApiNetworkConfiguration>()
+                .ForPath(dest => dest.EndpointConfiguration.InboundNatPools, opt => opt.MapFrom(src => src.EndpointInboundNatPools));
             CreateMap<BatchInboundNatPool, ApiInboundNatPool>();
             CreateMap<BatchNetworkSecurityGroupRule, ApiNetworkSecurityGroupRule>();
             CreateMap<BatchImageReference, ApiImageReference>();

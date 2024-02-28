@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using Azure.Storage.Blobs;
-using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
 using Azure.Storage.Sas;
 using Tes.Runner.Transfer;
@@ -30,7 +29,7 @@ namespace Tes.Runner.Test
 
             blobContainerClient = blobService.GetBlobContainerClient(containerId.ToString());
 
-            blobContainerClient.Create(PublicAccessType.None);
+            await blobContainerClient.CreateAsync();
 
             blobDownloader = new BlobDownloader(blobPipelineOptions,
                 await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(10, blobPipelineOptions.BlockSizeBytes));

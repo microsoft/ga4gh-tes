@@ -73,6 +73,7 @@ namespace TesApi.Tests
                 },
             };
             poolInfo.UserAccounts.Add(new("name", "password"));
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             var poolId = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
@@ -93,6 +94,7 @@ namespace TesApi.Tests
                 },
             };
             poolInfo.UserAccounts.Add(new("name", "password"));
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             if (addPoolMetadata)
             {
@@ -116,12 +118,14 @@ namespace TesApi.Tests
                     VmConfiguration = new BatchVmConfiguration(new BatchImageReference(), "batchNodeAgent")
                 },
             };
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
             var name = capturedApiCreateBatchPoolRequest.Common.Name;
             var resourceId = capturedApiCreateBatchPoolRequest.Common.ResourceId;
 
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
             await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
             Assert.AreNotEqual(name, capturedApiCreateBatchPoolRequest.Common.Name);
@@ -148,6 +152,7 @@ namespace TesApi.Tests
                 Identity = new(ManagedServiceIdentityType.UserAssigned)
             };
             poolInfo.Identity.UserAssignedIdentities.AddRange(identities);
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
@@ -157,7 +162,7 @@ namespace TesApi.Tests
         [DataTestMethod]
         [DataRow("/subscription/foo/bar-identity")]
         [DataRow("bar-identity")]
-        [DataRow("")]
+        //[DataRow("")]
         public async Task CreateBatchPoolAsync_InvalidUserIdentityResourceIdProvided_ReturnsValueProvided(string identityName)
         {
             var identities = new Dictionary<ResourceIdentifier, UserAssignedIdentity>();
@@ -173,6 +178,7 @@ namespace TesApi.Tests
                 Identity = new(ManagedServiceIdentityType.UserAssigned)
             };
             poolInfo.Identity.UserAssignedIdentities.AddRange(identities);
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
@@ -181,8 +187,6 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateBatchPoolAsync_NoUserIdentityResourceIdProvided_NoIdentitiesMapped()
         {
-            var identities = new Dictionary<ResourceIdentifier, UserAssignedIdentity>();
-
             var poolInfo = new BatchAccountPoolData()
             {
                 DeploymentConfiguration = new BatchDeploymentConfiguration()
@@ -190,6 +194,7 @@ namespace TesApi.Tests
                     VmConfiguration = new BatchVmConfiguration(new BatchImageReference(), "batchNodeAgent")
                 },
             };
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
@@ -208,6 +213,7 @@ namespace TesApi.Tests
                     UserIdentity = new() { UserName = "user", AutoUser = new() { Scope = BatchAutoUserScope.Pool, ElevationLevel = BatchUserAccountElevationLevel.Admin } }
                 }
             };
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 

@@ -629,9 +629,9 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual("TES-hostname-edicated1-lwsfq7ml3bfuzw3kjwvp55cpykgfdtpm-", pool.Name[0..^8]);
+                Assert.AreEqual("TES-hostname-edicated1-lwsfq7ml3bfuzw3kjwvp55cpykgfdtpm-", tesTask.PoolId[0..^8]);
                 Assert.AreEqual("VmSizeDedicated1", pool.VmSize);
-                Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(pool.Name, out _));
+                Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(tesTask.PoolId, out _));
             });
         }
 
@@ -1153,10 +1153,8 @@ namespace TesApi.Tests
 
             static BlobItem CloudBlobFromTesInput(TesInput input)
             {
-                Mock<BlobItem> mock = new();
                 BlobUriBuilder builder = new(UriFromTesInput(input));
-                mock.Setup(b => b.Name).Returns(builder.BlobName);
-                return mock.Object;
+                return BlobsModelFactory.BlobItem(name: builder.BlobName);
             }
 
             static Uri UriFromTesInput(TesInput input)
@@ -1613,10 +1611,7 @@ namespace TesApi.Tests
 
         private static BatchVmFamilyCoreQuota CreateBatchVmFamilyCoreQuota(string name, int? quota)
         {
-            Mock<BatchVmFamilyCoreQuota> mock = new();
-            mock.Setup(q => q.Name).Returns(name);
-            mock.Setup(q => q.CoreQuota).Returns(quota);
-            return mock.Object;
+            return ArmBatchModelFactory.BatchVmFamilyCoreQuota(name, quota);
         }
 
         private class TestBatchQuotaVerifierQuotaMaxedOut : TestBatchQuotaVerifierBase

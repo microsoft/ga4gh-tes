@@ -13,5 +13,13 @@ static async Task<int> StartUpAsync(string[] args)
     CommandFactory.CreateExecutorCommand(rootCommand);
     CommandFactory.CreateDownloadCommand(rootCommand);
 
-    return await rootCommand.InvokeAsync(args);
+    try
+    {
+        return await rootCommand.InvokeAsync(args);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine(ex.ToString());
+        return (int)ProcessExitCode.UncategorizedError;
+    }
 }

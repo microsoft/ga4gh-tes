@@ -6,7 +6,6 @@ using System.Net.Http;
 using System.Threading;
 using Azure.ResourceManager;
 using CommonUtilities;
-using CommonUtilities.Options;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -37,11 +36,18 @@ namespace TesApi.Web
         /// <returns><see cref="IWebHostBuilder"/></returns>
         public static IWebHostBuilder CreateWebHostBuilder(string[] args)
         {
+            Console.WriteLine($"TES v{Startup.TesVersion}");
+
             Options.ApplicationInsightsOptions applicationInsightsOptions = default;
             ArmEnvironmentEndpoints armEnvironmentEndpoints = default;
             var builder = WebHost.CreateDefaultBuilder<Startup>(args);
             builder.ConfigureServices(services => services.AddTransient<AzureServicesConnectionStringCredentialOptions>());
             builder.ConfigureServices(services => services.AddSingleton(armEnvironmentEndpoints));
+
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
+            {
+                builder.UseUrls("http://0.0.0.0:80");
+            }
 
             builder.ConfigureAppConfiguration((context, config) =>
             {

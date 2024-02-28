@@ -28,7 +28,7 @@ namespace TesApi.Web.Management
         {
             ArgumentException.ThrowIfNullOrEmpty(accountName);
 
-            return GetAzureResourceAsync<string, Azure.ResourceManager.ApplicationInsights.ApplicationInsightsComponentResource, Azure.ResourceManager.ApplicationInsights.ApplicationInsightsComponentData>(
+            return GetAzureResourceAsync(
                 tokenCredential, armEnvironment,
                 listAsync: Azure.ResourceManager.ApplicationInsights.ApplicationInsightsExtensions.GetApplicationInsightsComponentsAsync,
                 getDataAsync: async (subscriptionResource, token) => await subscriptionResource.GetAsync(token),
@@ -51,14 +51,14 @@ namespace TesApi.Web.Management
         {
             ArgumentException.ThrowIfNullOrEmpty(batchAccountName);
 
-            return GetAzureResourceAsync<BatchAccountResourceInformation, Azure.ResourceManager.Batch.BatchAccountResource, Azure.ResourceManager.Batch.BatchAccountData>(
+            return GetAzureResourceAsync(
                 tokenCredential, armEnvironment,
                 listAsync: Azure.ResourceManager.Batch.BatchExtensions.GetBatchAccountsAsync,
                 getDataAsync: async (subscriptionResource, token) => await subscriptionResource.GetAsync(token),
                 getData: subscriptionResource => subscriptionResource.Data,
                 predicate: a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase),
                 cancellationToken: cancellationToken,
-                finalize: batchAccount => BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id.ToString(), batchAccount.Location?.Name, $"https://{batchAccount.AccountEndpoint}"));
+                finalize: batchAccount => BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id.ToString(), batchAccount.Location?.Name, $"{Uri.UriSchemeHttps}://{batchAccount.AccountEndpoint}"));
         }
 
         /// <summary>

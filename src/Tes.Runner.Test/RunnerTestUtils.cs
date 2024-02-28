@@ -56,7 +56,14 @@ public class RunnerTestUtils
     {
         if (File.Exists(file))
         {
-            File.Delete(file);
+            try
+            {
+                File.Delete(file);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
         }
     }
 

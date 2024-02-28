@@ -7,7 +7,6 @@ using System.Net;
 using System.Reflection;
 using System.Threading;
 using Azure.Core;
-using Azure.Identity;
 using CommonUtilities;
 using CommonUtilities.Options;
 using Microsoft.AspNetCore.Builder;
@@ -40,7 +39,7 @@ namespace TesApi.Web
     public class Startup
     {
         // TODO centralize in single location
-        private const string TesVersion = "5.2.1";
+        internal const string TesVersion = "5.2.1";
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;

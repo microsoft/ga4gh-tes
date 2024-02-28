@@ -239,10 +239,11 @@ namespace TesApi.Tests
 
             internal string CreateBatchPoolImpl(Azure.ResourceManager.Batch.BatchAccountPoolData pool)
             {
-                var poolId = pool.Name;
+                var poolIdItem = pool.Metadata.Single(i => string.IsNullOrEmpty(i.Name));
+                pool.Metadata.Remove(poolIdItem);
 
-                poolState.Add(poolId, (default, default, default, default, Microsoft.Azure.Batch.Common.AllocationState.Steady, default, default, true, default, pool.Metadata?.Select(ConvertMetadata).ToList()));
-                return poolId;
+                poolState.Add(poolIdItem.Value, (default, default, default, default, Microsoft.Azure.Batch.Common.AllocationState.Steady, default, default, true, default, pool.Metadata?.Select(ConvertMetadata).ToList()));
+                return poolIdItem.Value;
 
                 static MetadataItem ConvertMetadata(Azure.ResourceManager.Batch.Models.BatchAccountPoolMetadataItem item)
                     => new(item.Name, item.Value);
@@ -354,7 +355,8 @@ namespace TesApi.Tests
         private static IEnumerable<(string Key, string Value)> GetMockConfig()
             => Enumerable
                 .Empty<(string Key, string Value)>()
-                .Append(("BatchScheduling:PoolRotationForcedDays", "0.000694444"));
+                .Append(("BatchScheduling:PoolRotationForcedDays", "0.000694444"))
+                .Append(("BatchScheduling:Prefix", "0123456789"));
 
         private sealed class MockServiceClient : Microsoft.Azure.Batch.Protocol.BatchServiceClient
         {

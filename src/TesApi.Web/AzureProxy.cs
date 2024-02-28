@@ -70,7 +70,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(retryHandler);
             ArgumentNullException.ThrowIfNull(logger);
 
-            credentialOptions.AuthorityHost = this.armEndpoints.AuthorityHost;
+            credentialOptions.AuthorityHost = armEndpoints.AuthorityHost;
 
             this.armEndpoints = armEndpoints;
             this.credentialOptions = credentialOptions;
@@ -107,7 +107,7 @@ namespace TesApi.Web
                 location = batchAccountInformation.Region;
                 var credentials = new AzureServicesConnectionStringCredential(credentialOptions);
                 serviceClientCredentials = new TokenCredentials(new BatchProtocol.BatchTokenProvider(async () =>
-                    (await credentials.GetTokenAsync(new Azure.Core.TokenRequestContext(
+                    (await credentials.GetTokenAsync(new TokenRequestContext(
                         [armEndpoints.BatchResource.AbsoluteUri.TrimEnd('/') + "/.default"],
                         tenantId: armEndpoints.Tenant), CancellationToken.None)).Token));
             }
