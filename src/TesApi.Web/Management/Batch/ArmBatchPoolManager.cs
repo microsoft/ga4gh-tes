@@ -45,11 +45,11 @@ namespace TesApi.Web.Management.Batch
 
                 logger.LogInformation("Creating manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", nameItem.Value, poolSpec.VmSize, isPreemptable);
 
-                var pool = await batchManagementClient.GetBatchAccountPools().CreateOrUpdateAsync(Azure.WaitUntil.Completed, nameItem.Value, poolSpec, cancellationToken: cancellationToken);
+                _ = await batchManagementClient.GetBatchAccountPools().CreateOrUpdateAsync(Azure.WaitUntil.Completed, nameItem.Value, poolSpec, cancellationToken: cancellationToken);
 
                 logger.LogInformation("Successfully created manual batch pool named {PoolName} with vmSize {PoolVmSize} and low priority {IsPreemptable}", nameItem.Value, poolSpec.VmSize, isPreemptable);
 
-                return poolSpec.Name;
+                return nameItem.Value;
             }
             catch (Exception exc)
             {
