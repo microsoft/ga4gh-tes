@@ -347,7 +347,7 @@ namespace TesDeployer
                         }
                     }
 
-                    if (installedVersion is null || installedVersion < new Version(5, 3, 0))
+                    if (installedVersion is null || installedVersion < new Version(5, 2, 2))
                     {
                         await EnableWorkloadIdentity(existingAksCluster, managedIdentity, resourceGroup);
                         await kubernetesManager.RemovePodAadChart();
