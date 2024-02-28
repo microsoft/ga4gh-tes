@@ -127,7 +127,15 @@ namespace TesApi.Web.Runner
             logger.LogInformation($"Creating and uploading Batch script for Task ID: {tesTask.Id}");
 
             var nodeTaskRunnerUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
-            var nodeVMPerfArchiveUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken);
+            Uri nodeVMPerfArchiveUrl;
+            try
+            {
+                nodeVMPerfArchiveUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken);
+            }
+            catch (Exception e)
+            {
+                nodeVMPerfArchiveUrl = null;
+            }
 
             var batchNodeScript = batchNodeScriptBuilder
                 .WithAlpineWgetInstallation()
