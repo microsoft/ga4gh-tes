@@ -42,9 +42,6 @@ namespace TesDeployer
         private const string NginxIngressVersion = "4.7.1";
         private const string CertManagerRepo = "https://charts.jetstack.io";
         private const string CertManagerVersion = "v1.12.3";
-        private const string AadPluginGithubReleaseVersion = "v1.8.17";
-        private const string AadPluginRepo = $"https://raw.githubusercontent.com/Azure/aad-pod-identity/{AadPluginGithubReleaseVersion}/charts";
-        private const string AadPluginVersion = "4.1.18";
 
         private Configuration configuration { get; set; }
         private AzureCredentials azureCredentials { get; set; }
@@ -129,19 +126,6 @@ namespace TesDeployer
                       restartPolicy: Always
                 status: {}
                 """));
-
-        public async Task DeployCoADependenciesAsync()
-        {
-            var helmRepoList = await ExecHelmProcessAsync($"repo list", workingDirectory: null, throwOnNonZeroExitCode: false);
-
-            if (string.IsNullOrWhiteSpace(helmRepoList) || !helmRepoList.Contains("aad-pod-identity", StringComparison.OrdinalIgnoreCase))
-            {
-                await ExecHelmProcessAsync($"repo add aad-pod-identity {AadPluginRepo}");
-            }
-
-            await ExecHelmProcessAsync($"repo update");
-            await ExecHelmProcessAsync($"install aad-pod-identity aad-pod-identity/aad-pod-identity --namespace kube-system --version {AadPluginVersion} --kubeconfig \"{kubeConfigPath}\"");
-        }
 
         /// <summary>
         /// Enable ingress for TES
@@ -250,6 +234,10 @@ namespace TesDeployer
             await ExecHelmProcessAsync($"upgrade --install tesonazure ./helm --kubeconfig \"{kubeConfigPath}\" --namespace {configuration.AksCoANamespace} --create-namespace",
                 workingDirectory: workingDirectoryTemp);
             await WaitForWorkloadAsync(kubernetesClient, "tes", configuration.AksCoANamespace, cancellationToken);
+        }
+        public async Task RemovePodAadChart()
+        {
+            await ExecHelmProcessAsync($"uninstall aad-pod-identity", throwOnNonZeroExitCode: false);
         }
 
         public async Task<HelmValues> GetHelmValuesAsync(string valuesTemplatePath)
