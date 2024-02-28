@@ -3,6 +3,8 @@
 
 using System;
 using System.Text;
+using System.Threading;
+using Tes.Models;
 using TesApi.Web.Extensions;
 using TesApi.Web.Runner;
 
@@ -69,9 +71,20 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="runnerBinaryUrl"></param>
         /// <param name="runnerTaskInfoUrl"></param>
-        /// /// <param name="vmPerfArchiveUrl"></param>
         /// <returns></returns>
-        public BatchNodeScriptBuilder WithRunnerFilesDownloadUsingWget(Uri runnerBinaryUrl, Uri runnerTaskInfoUrl, Uri vmPerfArchiveUrl)
+        public BatchNodeScriptBuilder WithRunnerFilesDownloadUsingWget(Uri runnerBinaryUrl, Uri runnerTaskInfoUrl)
+        {
+            return WithRunnerFilesDownloadUsingWget(runnerBinaryUrl, runnerTaskInfoUrl, null);
+        }
+
+        /// <summary>
+        /// Adds lines to download Runner binary and its task information file using wget
+        /// </summary>
+        /// <param name="runnerBinaryUrl"></param>
+        /// <param name="runnerTaskInfoUrl"></param>
+        /// <param name="vmPerfArchiveUrl"></param>
+        /// <returns></returns>
+        public BatchNodeScriptBuilder WithRunnerFilesDownloadUsingWget(Uri runnerBinaryUrl, Uri runnerTaskInfoUrl, Uri? vmPerfArchiveUrl)
         {
             ArgumentNullException.ThrowIfNull(runnerBinaryUrl);
             ArgumentNullException.ThrowIfNull(runnerTaskInfoUrl);
@@ -83,7 +96,7 @@ namespace TesApi.Web
 
             batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerBinaryUrl, $"{BatchTaskDirEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)} && \\");
             batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{BatchTaskDirEnvVar}/{NodeRunnerTaskDefinitionFilename}", setExecutable: false)} && \\");
-            if (vmPerfArchiveUrl != null )
+            if (vmPerfArchiveUrl != null)
             {
                 batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{BatchTaskDirEnvVar}/{NodeRunnerTaskDefinitionFilename}", setExecutable: false)} && \\");
             }
