@@ -14,6 +14,9 @@ namespace TesApi.Web.Runner
     /// </summary>
     public static class StorageUrlUtils
     {
+        /// <summary>
+        /// Default Azure Blob storage endpoint hostname suffix. 
+        /// </summary>
         public const string DefaultBlobEndpointHostNameSuffix = ".blob.core.windows.net";
         /// <summary>
         /// Blob endpoint Host name suffix.  This is set at starup in Program.cs

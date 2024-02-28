@@ -37,6 +37,7 @@ namespace TesApi.Web.Storage
         /// <param name="logger">Logger <see cref="ILogger"/></param>
         /// <param name="storageOptions">Configuration of <see cref="StorageOptions"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
+        /// <param name="azureEnvironmentConfig"></param>
         public DefaultStorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IOptions<StorageOptions> storageOptions, IAzureProxy azureProxy, AzureEnvironmentConfig azureEnvironmentConfig) : base(logger, azureProxy)
         {
             ArgumentNullException.ThrowIfNull(storageOptions);
