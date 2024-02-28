@@ -140,7 +140,7 @@ namespace TesDeployer
             try
             {
                 ConsoleEx.WriteLine("Running...");
-                
+
                 await Execute($"Getting cloud configuration for {configuration.AzureCloudName}...", async () =>
                 {
                     azureCloudConfig = await AzureCloudConfig.CreateAsync(configuration.AzureCloudName);
@@ -152,9 +152,9 @@ namespace TesDeployer
                 });
 
                 await ValidateTokenProviderAsync();
-                
+
                 await Execute("Connecting to Azure Services...", async () =>
-                { 
+                {
                     tokenProvider = new RefreshableAzureServiceTokenProvider(azureCloudConfig.ResourceManagerUrl, null, azureCloudConfig.Authentication.LoginEndpointUrl);
                     tokenCredentials = new(tokenProvider);
                     azureCredentials = new(tokenCredentials, null, null, azureCloudConfig.AzureEnvironment);

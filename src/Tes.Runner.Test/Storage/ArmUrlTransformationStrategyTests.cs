@@ -27,7 +27,7 @@ namespace Tes.Runner.Test.Storage
             mockBlobServiceClient = new Mock<BlobServiceClient>();
             var options = new RuntimeOptions();
             options.AzureEnvironmentConfig = ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig;
-           
+
             armUrlTransformationStrategy = new ArmUrlTransformationStrategy(_ => mockBlobServiceClient.Object, options);
             userDelegationKey = BlobsModelFactory.UserDelegationKey(Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow.AddHours(1), "SIGNED_SERVICE", "V1_0", RunnerTestUtils.GenerateRandomTestAzureStorageKey());
