@@ -53,7 +53,6 @@ namespace TesApi.Web.Runner
         /// <param name="storageAccessProvider"></param>
         /// <param name="storageOptions"></param>
         /// <param name="batchAccountOptions"></param>
-        /// <param name="tesOptions"></param>
         /// <param name="azureCloudIdentityConfig"></param>
         /// <param name="logger"></param>
         public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, IOptions<StorageOptions> storageOptions, IOptions<BatchAccountOptions> batchAccountOptions, AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<TaskToNodeTaskConverter> logger)

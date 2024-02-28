@@ -38,6 +38,7 @@ namespace Tes.ApiClients
 
         public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig)
         {
+            
             var retryPolicyOptions = new RetryPolicyOptions();
             var cacheRetryHandler = new CachingRetryPolicyBuilder(sharedMemoryCache,
                  Microsoft.Extensions.Options.Options.Create(retryPolicyOptions));

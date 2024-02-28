@@ -50,6 +50,7 @@ using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
 using Microsoft.Azure.Management.Storage.Fluent;
+using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Rest;
 using Newtonsoft.Json;
 using Polly;

@@ -20,6 +20,8 @@ namespace TesApi.Web.Management
     /// </summary>
     public static class ArmResourceInformationFinder
     {
+        const string DefaultScope = "https://management.azure.com//.default";
+
         /// <summary>
         /// Looks up the AppInsights instrumentation key in subscriptions the TES services has access to 
         /// </summary>
@@ -60,8 +62,12 @@ namespace TesApi.Web.Management
                 finalize: batchAccount => BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id, batchAccount.Location, $"https://{batchAccount.AccountEndpoint}"));
         }
 
-        private static async Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string scope = "https://management.azure.com//.default")
-            => (await (new DefaultAzureCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { scope }))).Token;
+        private static async Task<string> GetAzureAccessTokenAsync(string? scope, CancellationToken cancellationToken = default)
+        {
+            var requestedScope = string.IsNullOrWhiteSpace(scope) ? DefaultScope : scope;
+
+            return (await (new DefaultAzureCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { requestedScope }), cancellationToken)).Token;
+        } 
 
         /// <summary>
         /// Looks up an Azure resource with management clients that use <see cref="Microsoft.Rest.Azure.IPage{T}"/> enumerators

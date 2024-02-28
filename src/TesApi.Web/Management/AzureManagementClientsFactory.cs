@@ -58,8 +58,8 @@ namespace TesApi.Web.Management
         /// </summary>
         protected AzureManagementClientsFactory() { }
 
-        private static async Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string scope = "https://management.azure.com//.default")
-            => (await (new DefaultAzureCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { scope }), cancellationToken)).Token;
+        private static async Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string resource = "https://management.azure.com//.default")
+            => (await (new DefaultAzureCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { resource }), cancellationToken)).Token;
 
         /// <summary>
         /// Creates Batch Account management client using AAD authentication.
