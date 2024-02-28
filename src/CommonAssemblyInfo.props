@@ -1,7 +1,6 @@
 ﻿<Project>
   <PropertyGroup>
-    <FileVersion>5.2.1.10475</FileVersion>
-    <!--<FileVersion>0.0.0.0</FileVersion>-->
+    <FileVersion>0.0.0.0</FileVersion>
     <Company>Microsoft Corporation</Company>
     <Product>TES on Azure</Product>
     <Copyright>Copyright © Microsoft Corporation</Copyright>
