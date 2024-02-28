@@ -44,8 +44,14 @@ namespace Tes.Runner.Docker
             .CreateClient(), new ConsoleStreamLogPublisher(), new ContainerRegistryAuthorizationManager(new CredentialsManager()))
         { }
 
+        // Retry for ~91s for ACR 1-minute throttle window
+        internal static RetryPolicyOptions dockerPullRetryPolicyOptions = new()
+        {
+            MaxRetryCount = 6,
+            ExponentialBackOffExponent = 2
+        };
+
         public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager)
-            : this() // Add logging to retries
         {
             ArgumentNullException.ThrowIfNull(dockerClient);
             ArgumentNullException.ThrowIfNull(streamLogReader);
@@ -54,13 +60,6 @@ namespace Tes.Runner.Docker
             this.dockerClient = dockerClient;
             this.streamLogReader = streamLogReader;
             this.containerRegistryAuthorizationManager = containerRegistryAuthorizationManager;
-
-            // Retry for ~91s for ACR 1-minute throttle window
-            var dockerPullRetryPolicyOptions = new RetryPolicyOptions
-            {
-                MaxRetryCount = 6,
-                ExponentialBackOffExponent = 2
-            };
 
             dockerPullRetryPolicy = new RetryPolicyBuilder(Options.Create(dockerPullRetryPolicyOptions))
                 .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy
