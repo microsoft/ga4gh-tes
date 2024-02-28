@@ -8,10 +8,7 @@
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Title>$(Product) deployment utility</Title>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -19,10 +16,6 @@
     <AssemblyName Condition="'$(Configuration)' == 'linux'">deploy-tes-on-azure-linux</AssemblyName>
     <AssemblyName Condition="'$(Configuration)' == 'osx'">deploy-tes-on-azure-osx.app</AssemblyName>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Compile Include="..\CommonAssemblyInfo.cs" Link="Properties\CommonAssemblyInfo.cs" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Azure.Identity" Version="1.10.4" />
