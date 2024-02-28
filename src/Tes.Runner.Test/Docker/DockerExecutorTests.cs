@@ -68,7 +68,7 @@ namespace Tes.Runner.Test.Docker
             var exception = new DockerApiException(statusCode, responseBody);
             dockerImageMock.Setup(d => d.CreateImageAsync(It.IsAny<ImagesCreateParameters>(), It.IsAny<AuthConfig>(), It.IsAny<IProgress<JSONMessage>>(), It.IsAny<CancellationToken>()))
                 .Throws(exception);
-            
+
             DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager);
             Models.RuntimeOptions runtimeOptions = new();
             try
