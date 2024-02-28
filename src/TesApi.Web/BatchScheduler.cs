@@ -393,6 +393,14 @@ namespace TesApi.Web
             }
         }
 
+        /// <inheritdoc/>
+        public async Task UploadMonitoringScriptIfNeeded(CancellationToken cancellationToken)
+        {
+            const string VMPerformanceArchiverFilename = "tes_vm_perf.tar.gz";
+            var blobUri = await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken);
+            await azureProxy.UploadBlobFromFileAsync(blobUri, $"scripts/{VMPerformanceArchiverFilename}", cancellationToken);
+        }
+
         /// <summary>
         /// Iteratively manages execution of a <see cref="TesTask"/> on Azure Batch until completion or failure
         /// </summary>

@@ -89,6 +89,8 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(runnerBinaryUrl);
             ArgumentNullException.ThrowIfNull(runnerTaskInfoUrl);
 
+            const string VMPerformanceArchiverFilename = "tes_vm_perf.tar.gz";
+
             if (useMetricsFile)
             {
                 batchScript.AppendLinuxLine("write_ts DownloadRunnerFileStart && \\");
@@ -96,11 +98,12 @@ namespace TesApi.Web
 
             batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerBinaryUrl, $"{BatchTaskDirEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)} && \\");
             batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{BatchTaskDirEnvVar}/{NodeRunnerTaskDefinitionFilename}", setExecutable: false)} && \\");
+
             if (vmPerfArchiveUrl != null)
             {
-                batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{BatchTaskDirEnvVar}/{NodeRunnerTaskDefinitionFilename}", setExecutable: false)} && \\");
+                batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(vmPerfArchiveUrl, $"{BatchTaskDirEnvVar}/{VMPerformanceArchiverFilename}", setExecutable: false)} && \\");
             }
-
+            
             if (useMetricsFile)
             {
                 batchScript.AppendLinuxLine("write_ts DownloadRunnerFileEnd && \\");
@@ -109,7 +112,7 @@ namespace TesApi.Web
             if (vmPerfArchiveUrl != null)
             {
                 // TES vm performance monitoring is bootstrapped and begun by the script inside the archive:
-                batchScript.AppendLinuxLine("tar zxvf tes_vm_perf.tar.gz start_vm_node_monitoring.sh && \\");
+                batchScript.AppendLinuxLine($"tar zxvf {VMPerformanceArchiverFilename} start_vm_node_monitoring.sh && \\");
                 batchScript.AppendLinuxLine("chmod +x \"${AZ_BATCH_TASK_DIR}/start_vm_node_monitoring.sh\" && \\");
                 batchScript.AppendLinuxLine("/usr/bin/bash -c \"${AZ_BATCH_TASK_DIR}/start_vm_node_monitoring.sh &\" && \\");
             }

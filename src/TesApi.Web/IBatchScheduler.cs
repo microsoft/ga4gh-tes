@@ -35,6 +35,8 @@ namespace TesApi.Web
         /// <remarks>This should be called only once after the <see cref="BatchScheduler"/> is created before any other methods are called.</remarks>
         Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken);
 
+        Task UploadMonitoringScriptIfNeeded(CancellationToken cancellationToken);
+
         /// <summary>
         /// Iteratively schedule a <see cref="TesTask"/> on a batch system until completion or failure
         /// </summary>
