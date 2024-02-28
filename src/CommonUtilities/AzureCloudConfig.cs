@@ -89,7 +89,7 @@ namespace CommonUtilities.AzureCloud
                     defaultTokenScope = $"https://management.{domain}//.default";
                     azureEnvironment = AzureEnvironment.AzureGlobalCloud;
                     armEnvironment = ArmEnvironment.AzurePublicCloud;
-                    break; 
+                    break;
                 case "AZUREUSGOVERNMENT":
                     domain = "usgovcloudapi.net";
                     defaultTokenScope = $"https://management.{domain}/.default";

@@ -4,8 +4,8 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using CommonUtilities;
 using Azure.Identity;
+using CommonUtilities;
 using CommonUtilities.AzureCloud;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;

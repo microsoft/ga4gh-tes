@@ -476,7 +476,7 @@ namespace TesApi.Web
             return new(pool.AllocationState, pool.AllocationStateTransitionTime, pool.AutoScaleEnabled, pool.TargetLowPriorityComputeNodes, pool.CurrentLowPriorityComputeNodes, pool.TargetDedicatedComputeNodes, pool.CurrentDedicatedComputeNodes);
         }
 
-        private static async Task<IAsyncEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync(AzureCloudConfig azureCloudConfig,CancellationToken cancellationToken)
+        private static async Task<IAsyncEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync(AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)
         {
             var azureClient = await GetAzureManagementClientAsync(azureCloudConfig, cancellationToken);
             return (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken))

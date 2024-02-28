@@ -67,7 +67,7 @@ namespace TesApi.Web.Management
             var requestedScope = string.IsNullOrWhiteSpace(scope) ? DefaultScope : scope;
 
             return (await (new DefaultAzureCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { requestedScope }), cancellationToken)).Token;
-        } 
+        }
 
         /// <summary>
         /// Looks up an Azure resource with management clients that use <see cref="Microsoft.Rest.Azure.IPage{T}"/> enumerators

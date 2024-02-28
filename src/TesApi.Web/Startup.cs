@@ -8,8 +8,8 @@ using System.Reflection;
 using System.Threading;
 using Azure.Core;
 using Azure.Identity;
-using CommonUtilities.AzureCloud;
 using CommonUtilities;
+using CommonUtilities.AzureCloud;
 using CommonUtilities.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
@@ -56,7 +56,7 @@ namespace TesApi.Web
             this.hostingEnvironment = hostingEnvironment;
             this.logger = logger;
         }
-        
+
         /// <summary>
         /// This method gets called by the runtime. Use this method to add services to the container.
         /// </summary>
