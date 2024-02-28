@@ -34,8 +34,8 @@ namespace Tes.Runner.Docker
                 // a user-readable rendition/description of the failure, the status code from the remote registry server, and the textual description of that status code
                 // (often with a web link). Note that complete validation of the structure of the error report object is not performed.
                 (e.StatusCode == HttpStatusCode.InternalServerError && (
-                    (e.ResponseBody?.Contains(": unauthorized:") ?? false) ||
-                    (e.ResponseBody?.Contains(": forbidden:") ?? false)
+                    (e.ResponseBody?.Contains(": unauthorized:", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (e.ResponseBody?.Contains(": forbidden:", StringComparison.OrdinalIgnoreCase) ?? false)
         )));
 
         const int LogStreamingMaxWaitTimeInSeconds = 30;
