@@ -171,7 +171,7 @@ EOF
             batchNodeScript += "azcopy copy \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\" \"$LOG_URL\"\n";
             batchNodeScript += "if [ $EXIT_CODE -ne 0 ]; then\n";
             batchNodeScript += "    exit $EXIT_CODE\n";
-            batchNodeScript += "fi\n"
+            batchNodeScript += "fi\n";
             batchNodeScript += "echo Task complete\n";
 
             var batchNodeScriptUrl = await UploadContentAsBlobToInternalTesLocationAsync(tesTask, batchNodeScript, BatchScriptFileName, cancellationToken);
