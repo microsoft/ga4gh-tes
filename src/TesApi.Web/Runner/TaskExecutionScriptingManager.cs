@@ -137,20 +137,22 @@ namespace TesApi.Web.Runner
                 .WithLocalRuntimeSystemInformation()
                 .Build();
 
-            // Extract a log destination for the batch script output
-            var scheme = nodeTaskUrl.Scheme;
-            var host = nodeTaskUrl.Host;
-            var path = nodeTaskUrl.AbsolutePath;
-            var segments = path.Split('/');
-            var newPath = string.Join("/", segments, 0, segments.Length - 1);
-            var batchScriptLogUrl = $"{scheme}://{host}{newPath}/batch_script_log.txt";
-
             // Wrap the batch_script so we can call it with logging in screen:
             batchNodeScript = "#!/bin/bash\nbatch_script_task(){\n" + batchNodeScript;
             batchNodeScript += "\n}\n";
             batchNodeScript += "export -f batch_script_task\n";
             batchNodeScript += "rm -f \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\"\n";
-            batchNodeScript += $"LOG_URL=\"{batchScriptLogUrl}\"\n";
+            string pythonCommand = $@"
+get_log_destination_from_runner_url() {{
+python3 <<EOF
+nodeTaskUrl = '{nodeTaskUrl}'
+import urllib.parse
+print(f'{{urllib.parse.urlparse(nodeTaskUrl).scheme}}://{{urllib.parse.urlparse(nodeTaskUrl).netloc}}{{'/'.join(urllib.parse.urlparse(nodeTaskUrl).path.split('/')[:-1])}}/batch_script_log.txt')
+EOF
+}}
+";
+            batchNodeScript += pythonCommand;
+            batchNodeScript += "LOG_URL=$(get_log_destination_from_runner_url)\n";
             batchNodeScript += "echo $LOG_URL\n";
             batchNodeScript += "screen -L -Logfile \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\" -S batch_task bash -c 'batch_script_task'\n";
             batchNodeScript += "azcopy copy \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\" \"$LOG_URL\"\n";
