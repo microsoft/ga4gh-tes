@@ -159,7 +159,7 @@ namespace TesApi.Web
                 BatchNodeAgentSkuId = batchGen1Options.Value.NodeAgentSkuId
             };
 
-            logger.LogInformation($"usePreemptibleVmsOnly: {usePreemptibleVmsOnly}");
+            logger.LogInformation("usePreemptibleVmsOnly: {UsePreemptibleVmsOnly}", usePreemptibleVmsOnly);
 
             static bool tesTaskIsQueuedInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum || tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
             static bool tesTaskIsInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
@@ -193,33 +193,33 @@ namespace TesApi.Web
                 }
                 else if (!string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem))
                 {
-                    tesTask.AddToSystemLog(new[] { batchInfo.AlternateSystemLogItem });
+                    tesTask.AddToSystemLog([batchInfo.AlternateSystemLogItem]);
                 }
             }
 
             async Task SetTaskCompleted(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await DeleteBatchTaskAsync(azureProxy, tesTask, batchInfo, cancellationToken);
                 SetTaskStateAndLog(tesTask, TesState.COMPLETEEnum, batchInfo);
+                await DeleteBatchTaskAsync(azureProxy, tesTask, batchInfo, cancellationToken);
             }
 
             async Task SetTaskExecutorError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await DeleteBatchTaskAsync(azureProxy, tesTask, batchInfo, cancellationToken);
                 await AddProcessLogsIfAvailable(tesTask, cancellationToken);
                 SetTaskStateAndLog(tesTask, TesState.EXECUTORERROREnum, batchInfo);
+                await DeleteBatchTaskAsync(azureProxy, tesTask, batchInfo, cancellationToken);
             }
 
             async Task SetTaskSystemError(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await DeleteBatchTaskAsync(azureProxy, tesTask, batchInfo, cancellationToken);
                 SetTaskStateAndLog(tesTask, TesState.SYSTEMERROREnum, batchInfo);
+                await DeleteBatchTaskAsync(azureProxy, tesTask, batchInfo, cancellationToken);
             }
 
             async Task DeleteBatchJobAndSetTaskStateAsync(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
-                await DeleteBatchTaskAsync(tesTask, batchInfo.Pool, cancellationToken);
                 SetTaskStateAndLog(tesTask, newTaskState, batchInfo);
+                await DeleteBatchTaskAsync(tesTask, batchInfo.Pool, cancellationToken);
             }
 
             Task DeleteBatchJobAndSetTaskExecutorErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken) => DeleteBatchJobAndSetTaskStateAsync(tesTask, TesState.EXECUTORERROREnum, batchInfo, cancellationToken);
@@ -249,8 +249,8 @@ namespace TesApi.Web
                 return Task.CompletedTask;
             }
 
-            tesTaskStateTransitions = new List<TesTaskStateTransition>()
-            {
+            tesTaskStateTransitions =
+            [
                 new(tesTaskCancellationRequested, batchTaskState: null, alternateSystemLogItem: null, CancelTaskAsync),
                 new(tesTaskIsQueued, BatchTaskState.JobNotFound, alternateSystemLogItem: null, (tesTask, _, ct) => AddBatchTaskAsync(tesTask, ct)),
                 new(tesTaskIsQueued, BatchTaskState.MissingBatchTask, alternateSystemLogItem: null, (tesTask, batchInfo, ct) => AddBatchTaskAsync(tesTask, ct)),
@@ -266,7 +266,7 @@ namespace TesApi.Web
                 new(tesTaskIsInitializingOrRunning, BatchTaskState.JobNotFound, BatchTaskState.JobNotFound.ToString(), SetTaskSystemError),
                 new(tesTaskIsInitializingOrRunning, BatchTaskState.MissingBatchTask, BatchTaskState.MissingBatchTask.ToString(), DeleteBatchJobAndSetTaskSystemErrorAsync),
                 new(tesTaskIsInitializingOrRunning, BatchTaskState.NodePreempted, alternateSystemLogItem: null, HandlePreemptedNodeAsync)
-            };
+            ];
         }
 
         private async Task AddProcessLogsIfAvailable(TesTask tesTask, CancellationToken cancellationToken)
