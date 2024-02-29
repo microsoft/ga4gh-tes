@@ -109,6 +109,7 @@ namespace TesApi.Web
                 batchScript.AppendLinuxLine("write_ts DownloadRunnerFileEnd && \\");
             }
 
+            /*
             if (vmPerfArchiveUrl != null)
             {
                 // TES vm performance monitoring is bootstrapped and begun by the script inside the archive:
@@ -116,6 +117,7 @@ namespace TesApi.Web
                 batchScript.AppendLinuxLine("chmod +x \"${AZ_BATCH_TASK_DIR}/start_vm_node_monitoring.sh\" && \\");
                 batchScript.AppendLinuxLine("/usr/bin/bash -c \"${AZ_BATCH_TASK_DIR}/start_vm_node_monitoring.sh &\" && \\");
             }
+            */
 
             return this;
         }
