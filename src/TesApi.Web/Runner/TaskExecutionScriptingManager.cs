@@ -160,6 +160,7 @@ print(new_url)
 EOF
 }}
 ";
+            pythonCommand = pythonCommand.Replace("\r\n", "\n");
             batchNodeScript += pythonCommand;
             batchNodeScript += "LOG_URL=$(get_log_destination_from_runner_url)\n";
             batchNodeScript += "echo $LOG_URL\n\n";
