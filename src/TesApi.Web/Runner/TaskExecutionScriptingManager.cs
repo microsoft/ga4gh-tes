@@ -138,7 +138,7 @@ namespace TesApi.Web.Runner
                 .Build();
 
             // Wrap the batch_script so we can call it with logging in screen:
-            batchNodeScript = "#!/bin/bash\nbatch_script_task(){\n" + batchNodeScript;
+            batchNodeScript = "#!/bin/bash\nbatch_script_task(){\nlocal task_dir=$1\nsource $task_dir/batch_script_env.sh\n" + batchNodeScript;
             batchNodeScript += "\n}\n";
             batchNodeScript += "export -f batch_script_task\n";
             batchNodeScript += "rm -f \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\"\n";
@@ -162,12 +162,17 @@ EOF
             batchNodeScript += pythonCommand;
             batchNodeScript += "LOG_URL=$(get_log_destination_from_runner_url)\n";
             batchNodeScript += "echo $LOG_URL\n";
+            batchNodeScript += "export -p > $AZ_BATCH_TASK_DIR/batch_script_env.sh\n";
+            batchNodeScript += "set > $AZ_BATCH_TASK_DIR/batch_script_env.sh\n";
             batchNodeScript += "# Run the batch_script_task in a screen session, and capture the exit code (with trap)\n";
-            batchNodeScript += "screen -L -Logfile \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\" -S batch_task bash -c \"trap 'echo \\$? > $AZ_BATCH_TASK_DIR/exit_code.txt' EXIT; batch_script_task\"\n";
+            batchNodeScript += "trap 'echo \\$? > $AZ_BATCH_TASK_DIR/exit_code.txt' EXIT; batch_script_task $AZ_BATCH_TASK_DIR\"n";
+            batchNodeScript += "screen -L -Logfile \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\" -S batch_task bash -c \"trap 'echo \\$? > $AZ_BATCH_TASK_DIR/exit_code.txt' EXIT; batch_script_task $AZ_BATCH_TASK_DIR\"\n";
             batchNodeScript += "EXIT_CODE=$(cat \"$AZ_BATCH_TASK_DIR/exit_code.txt\")\n";
             batchNodeScript += "echo -e \"\\n\\nExit code: $EXIT_CODE\" >> \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\"\n";
             batchNodeScript += "export AZCOPY_AUTO_LOGIN_TYPE=MSI\n";
             batchNodeScript += "azcopy copy \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\" \"$LOG_URL\"\n";
+            batchNodeScript += "LOG_ENV_URL=${LOG_URL/%batch_script_log.txt/batch_script_env.sh}\n";
+            batchNodeScript += "azcopy copy \"$AZ_BATCH_TASK_DIR/batch_script_env.sh\" \"$LOG_ENV_URL\"\n";
             batchNodeScript += "if [ $EXIT_CODE -ne 0 ]; then\n";
             batchNodeScript += "    exit $EXIT_CODE\n";
             batchNodeScript += "fi\n";
