@@ -146,16 +146,33 @@ namespace TesApi.Web.Runner
 get_log_destination_from_runner_url() {{
 python3 <<EOF
 nodeTaskUrl = '{nodeTaskUrl}'
-import urllib.parse
-print(f'{{urllib.parse.urlparse(nodeTaskUrl).scheme}}://{{urllib.parse.urlparse(nodeTaskUrl).netloc}}{{'/'.join(urllib.parse.urlparse(nodeTaskUrl).path.split('/')[:-1])}}/batch_script_log.txt')
+from urllib.parse import urlparse, urlunparse
+
+url_parts = urlparse(nodeTaskUrl)
+container_path = url_parts.path
+if container_path.endswith('/') == False:
+    path_segment = container_path.split('/')
+    container_path = '/'.join(path_segment[:-1]) + '/'
+
+container_path = container_path + 'batch_script_log.txt'
+new_url = urlunparse((url_parts.scheme, url_parts.netloc, container_path, '', '', ''))
+print(new_url)
 EOF
 }}
 ";
             batchNodeScript += pythonCommand;
             batchNodeScript += "LOG_URL=$(get_log_destination_from_runner_url)\n";
-            batchNodeScript += "echo $LOG_URL\n";
-            batchNodeScript += "screen -L -Logfile \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\" -S batch_task bash -c 'batch_script_task'\n";
+            batchNodeScript += "echo $LOG_URL\n\n";
+            batchNodeScript += "# Run the batch_script_task in a screen session, and capture the exit code (with trap)\n";
+            batchNodeScript += "screen -L -Logfile \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\" -S batch_task bash -c \"trap 'echo \\$? > $AZ_BATCH_TASK_DIR/exit_code.txt' EXIT; batch_script_task\"\n";
+            batchNodeScript += "EXIT_CODE=$(cat \"$AZ_BATCH_TASK_DIR/exit_code.txt\")\n";
+            batchNodeScript += "echo -e \"\\n\\nExit code: $EXIT_CODE\" >> \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\"\n\n";
+            batchNodeScript += "export AZCOPY_AUTO_LOGIN_TYPE=MSI\n";
             batchNodeScript += "azcopy copy \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\" \"$LOG_URL\"\n";
+            batchNodeScript += "if [ $EXIT_CODE -ne 0 ]; then\n";
+            batchNodeScript += "    exit $EXIT_CODE\n";
+            batchNodeScript += "fi\n"
+            batchNodeScript += "echo Task complete\n";
 
             var batchNodeScriptUrl = await UploadContentAsBlobToInternalTesLocationAsync(tesTask, batchNodeScript, BatchScriptFileName, cancellationToken);
 
