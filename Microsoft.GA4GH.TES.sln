@@ -7,6 +7,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.editorconfig = .editorconfig
 		CodeCoverage.runsettings = CodeCoverage.runsettings
 		src\CommonAssemblyInfo.props = src\CommonAssemblyInfo.props
+		src\deploy-tes-docker-image.sh = src\deploy-tes-docker-image.sh
 		src\Directory.Build.props = src\Directory.Build.props
 		src\Dockerfile-Tes = src\Dockerfile-Tes
 	EndProjectSection
