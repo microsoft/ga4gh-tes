@@ -3,6 +3,7 @@
 
 using System;
 using System.Net.Http;
+using System.Reflection;
 using System.Threading;
 using Azure.ResourceManager;
 using CommonUtilities;
@@ -36,7 +37,7 @@ namespace TesApi.Web
         /// <returns><see cref="IWebHostBuilder"/></returns>
         public static IWebHostBuilder CreateWebHostBuilder(string[] args)
         {
-            Console.WriteLine($"TES v{Startup.TesVersion}");
+            Console.WriteLine($"TES v{Startup.TesVersion} Build: {Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion}");
 
             Options.ApplicationInsightsOptions applicationInsightsOptions = default;
             ArmEnvironmentEndpoints armEnvironmentEndpoints = default;
