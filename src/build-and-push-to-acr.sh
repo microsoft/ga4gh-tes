@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 if [ "$#" -ne 1 ]; then
     echo "Usage: $0 <acr_name>"
