@@ -137,11 +137,15 @@ namespace TesApi.Web.Runner
                 .WithLocalRuntimeSystemInformation()
                 .Build();
 
+
+            
             // Wrap the batch_script so we can call it with logging in screen:
+            /*
             batchNodeScript = "#!/bin/bash\nbatch_script_task(){\nlocal task_dir=$1\nsource $task_dir/batch_script_env.sh\n" + batchNodeScript;
             batchNodeScript += "\n}\n";
             batchNodeScript += "export -f batch_script_task\n";
             batchNodeScript += "rm -f \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\"\n";
+            */
             string pythonCommand = $@"
 get_log_destination_from_runner_url() {{
 python3 <<EOF
@@ -159,6 +163,7 @@ EOF
 }}
 ";
             pythonCommand = pythonCommand.Replace("\r\n", "\n");
+            /*
             batchNodeScript += pythonCommand;
             batchNodeScript += "LOG_URL=$(get_log_destination_from_runner_url)\n";
             batchNodeScript += "echo $LOG_URL\n";
@@ -177,6 +182,50 @@ EOF
             batchNodeScript += "    exit $EXIT_CODE\n";
             batchNodeScript += "fi\n";
             batchNodeScript += "echo Task complete\n";
+            */
+
+            batchNodeScript = $@"
+set_defaults() {{
+    if [ -z ""$AZ_BATCH_TASK_WORKING_DIR"" ]; then
+        echo ""AZ_BATCH_TASK_WORKING_DIR is not set. Using default value of /mnt/cromwell/wd""
+        export AZ_BATCH_TASK_WORKING_DIR=/mnt/cromwell/wd
+    fi
+    if [ -z ""$AZ_BATCH_TASK_DIR"" ]; then
+        echo ""AZ_BATCH_TASK_DIR is not set. Using default value of /mnt/cromwell""
+        export AZ_BATCH_TASK_DIR=/mnt/cromwell
+    fi
+}}
+batch_script_task(){{
+    local task_dir=$1
+    source ""$task_dir/batch_script_env.sh"" || true
+    set_defaults
+{batchNodeScript}
+}}
+{pythonCommand}
+export -f batch_script_task
+export -f set_defaults
+set_defaults
+rm -f ""$AZ_BATCH_TASK_DIR/batch_script_log.txt""
+export -p > ""$AZ_BATCH_TASK_DIR/batch_script_env.sh""
+set >> ""$AZ_BATCH_TASK_DIR/batch_script_env.sh""
+trap 'echo \\$? > ""$AZ_BATCH_TASK_DIR/exit_code.txt""' EXIT; batch_script_task ""$AZ_BATCH_TASK_DIR""
+screen -L -Logfile ""$AZ_BATCH_TASK_DIR/batch_script_log.txt"" -S batch_task bash -c ""trap 'echo \\$? > $AZ_BATCH_TASK_DIR/exit_code.txt' EXIT; batch_script_task $AZ_BATCH_TASK_DIR""
+EXIT_CODE=$(cat ""$AZ_BATCH_TASK_DIR/exit_code.txt"")
+echo -e ""\\n\\nExit code: $EXIT_CODE"" >> ""$AZ_BATCH_TASK_DIR/batch_script_log.txt""
+OUTPUT_URL=$(get_log_destination_from_runner_url)
+LOG_URL=""${{OUTPUT_URL}}batch_script_log.txt""
+LOG_ENV_URL=""${{OUTPUT_URL}}batch_script_env.sh""
+echo ""$LOG_URL""
+export AZCOPY_AUTO_LOGIN_TYPE=MSI
+azcopy copy ""$AZ_BATCH_TASK_DIR/batch_script_log.txt"" ""$LOG_URL""
+azcopy copy ""$AZ_BATCH_TASK_DIR/batch_script_env.sh"" ""$LOG_ENV_URL""
+if [ ""$EXIT_CODE"" -ne 0 ]; then
+    exit ""$EXIT_CODE""
+fi
+echo Task complete
+exit 0
+";
+            batchNodeScript = batchNodeScript.Replace("\r\n", "\n");
 
             var batchNodeScriptUrl = await UploadContentAsBlobToInternalTesLocationAsync(tesTask, batchNodeScript, BatchScriptFileName, cancellationToken);
 
