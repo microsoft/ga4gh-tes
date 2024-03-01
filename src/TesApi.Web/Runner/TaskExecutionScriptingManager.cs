@@ -146,7 +146,7 @@ namespace TesApi.Web.Runner
             batchNodeScript += "export -f batch_script_task\n";
             batchNodeScript += "rm -f \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\"\n";
             */
-            string pythonCommand = $@"
+            string pythonCommand = $@"#!/bin/bash
 get_log_destination_from_runner_url() {{
 python3 <<EOF
 nodeTaskUrl = '{nodeTaskUrl}'
@@ -156,7 +156,7 @@ container_path = url_parts.path
 if container_path.endswith('/') == False:
     path_segment = container_path.split('/')
     container_path = '/'.join(path_segment[:-1]) + '/'
-container_path = container_path + 'batch_script_log.txt'
+container_path = container_path
 new_url = urlunparse((url_parts.scheme, url_parts.netloc, container_path, '', '', ''))
 print(new_url)
 EOF
@@ -208,7 +208,7 @@ set_defaults
 rm -f ""$AZ_BATCH_TASK_DIR/batch_script_log.txt""
 export -p > ""$AZ_BATCH_TASK_DIR/batch_script_env.sh""
 set >> ""$AZ_BATCH_TASK_DIR/batch_script_env.sh""
-trap 'echo \\$? > ""$AZ_BATCH_TASK_DIR/exit_code.txt""' EXIT; batch_script_task ""$AZ_BATCH_TASK_DIR""
+# trap 'echo \\$? > ""$AZ_BATCH_TASK_DIR/exit_code.txt""' EXIT; batch_script_task ""$AZ_BATCH_TASK_DIR""
 screen -L -Logfile ""$AZ_BATCH_TASK_DIR/batch_script_log.txt"" -S batch_task bash -c ""trap 'echo \\$? > $AZ_BATCH_TASK_DIR/exit_code.txt' EXIT; batch_script_task $AZ_BATCH_TASK_DIR""
 EXIT_CODE=$(cat ""$AZ_BATCH_TASK_DIR/exit_code.txt"")
 echo -e ""\\n\\nExit code: $EXIT_CODE"" >> ""$AZ_BATCH_TASK_DIR/batch_script_log.txt""
