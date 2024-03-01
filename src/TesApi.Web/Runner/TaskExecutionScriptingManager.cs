@@ -165,7 +165,7 @@ EOF
             batchNodeScript += "export -p > $AZ_BATCH_TASK_DIR/batch_script_env.sh\n";
             batchNodeScript += "set > $AZ_BATCH_TASK_DIR/batch_script_env.sh\n";
             batchNodeScript += "# Run the batch_script_task in a screen session, and capture the exit code (with trap)\n";
-            batchNodeScript += "trap 'echo \\$? > $AZ_BATCH_TASK_DIR/exit_code.txt' EXIT; batch_script_task $AZ_BATCH_TASK_DIR\"n";
+            batchNodeScript += "trap 'echo \\$? > $AZ_BATCH_TASK_DIR/exit_code.txt' EXIT; batch_script_task \"$AZ_BATCH_TASK_DIR\"n";
             batchNodeScript += "screen -L -Logfile \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\" -S batch_task bash -c \"trap 'echo \\$? > $AZ_BATCH_TASK_DIR/exit_code.txt' EXIT; batch_script_task $AZ_BATCH_TASK_DIR\"\n";
             batchNodeScript += "EXIT_CODE=$(cat \"$AZ_BATCH_TASK_DIR/exit_code.txt\")\n";
             batchNodeScript += "echo -e \"\\n\\nExit code: $EXIT_CODE\" >> \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\"\n";
