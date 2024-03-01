@@ -279,52 +279,61 @@ namespace TesApi.Web
 
         private async Task AddProcessLogsIfAvailable(TesTask tesTask, CancellationToken cancellationToken)
         {
-            var directoryUri = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, cancellationToken);
-
-            // Process log naming convention is (mostly) established in Tes.Runner.Logs.AppendBlobLogPublisher, specifically these methods:
-            // https://github.com/microsoft/ga4gh-tes/blob/6e120d33f78c7a36cffe953c74b55cba7cfbf7fc/src/Tes.Runner/Logs/AppendBlobLogPublisher.cs#L28
-            // https://github.com/microsoft/ga4gh-tes/blob/6e120d33f78c7a36cffe953c74b55cba7cfbf7fc/src/Tes.Runner/Logs/AppendBlobLogPublisher.cs#L39
-
-            // Get any logs the task runner left. Look for the latest set in this order: upload, exec, download
-            foreach (var prefix in new[] { "upload_std", "exec_std", "download_std" })
+            try
             {
-                var logs = FilterByPrefix(prefix, await azureProxy.ListBlobsAsync(directoryUri, cancellationToken));
+                var directoryUri = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, string.Empty, cancellationToken);
 
-                if (logs.Any())
+                // Process log naming convention is (mostly) established in Tes.Runner.Logs.AppendBlobLogPublisher, specifically these methods:
+                // https://github.com/microsoft/ga4gh-tes/blob/6e120d33f78c7a36cffe953c74b55cba7cfbf7fc/src/Tes.Runner/Logs/AppendBlobLogPublisher.cs#L28
+                // https://github.com/microsoft/ga4gh-tes/blob/6e120d33f78c7a36cffe953c74b55cba7cfbf7fc/src/Tes.Runner/Logs/AppendBlobLogPublisher.cs#L39
+
+                // Get any logs the task runner left. Look for the latest set in this order: upload, exec, download
+                foreach (var prefix in new[] { "upload_std", "exec_std", "download_std" })
                 {
-                    if (prefix.StartsWith("exec_"))
+                    var logs = FilterByPrefix(directoryUri, prefix, await azureProxy.ListBlobsAsync(directoryUri, cancellationToken));
+
+                    if (logs.Any())
                     {
-                        var log = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
-
-                        foreach (var (type, action) in new (string, Action<string>)[] { ("stderr", list => log.Stderr = list), ("stdout", list => log.Stdout = list) })
+                        if (prefix.StartsWith("exec_"))
                         {
-                            var list = logs.Where(blob => type.Equals(blob.BlobNameParts[1], StringComparison.OrdinalIgnoreCase)).ToList();
+                            var log = tesTask.GetOrAddTesTaskLog().GetOrAddExecutorLog();
 
-                            if (list.Any())
+                            foreach (var (type, action) in new (string, Action<string>)[] { ("stderr", list => log.Stderr = list), ("stdout", list => log.Stdout = list) })
                             {
-                                action(JsonArray(list.Select(blob => blob.BlobUri.AbsoluteUri)));
+                                var list = logs.Where(blob => type.Equals(blob.BlobNameParts[1], StringComparison.OrdinalIgnoreCase)).ToList();
+
+                                if (list.Any())
+                                {
+                                    action(JsonArray(list.Select(blob => blob.BlobUri.AbsoluteUri)));
+                                }
                             }
                         }
+
+                        tesTask.AddToSystemLog(Enumerable.Empty<string>()
+                            .Append("Possibly relevant logs:")
+                            .Concat(logs.Select(log => log.BlobUri.AbsoluteUri)));
+
+                        return;
                     }
-
-                    tesTask.AddToSystemLog(Enumerable.Empty<string>()
-                        .Append("Possibly relevant logs:")
-                        .Concat(logs.Select(log => log.BlobUri.AbsoluteUri)));
-
-                    return;
                 }
+
+#pragma warning disable IDE0305 // Simplify collection initialization
+                static IList<(Uri BlobUri, string[] BlobNameParts)> FilterByPrefix(Uri directoryUri, string blobNameStartsWith, IEnumerable<Azure.Storage.Blobs.Models.BlobItem> blobs)
+                    => blobs.Select(blob => (BlobUri: new BlobUriBuilder(directoryUri) { Sas = null, BlobName = blob.Name }.ToUri(), BlobName: blob.Name.Split('/').Last()))
+                       .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.StartsWith(blobNameStartsWith))
+                        .Select(blob => (blob.BlobUri, BlobNameParts: blob.BlobName.Split('_', 4)))
+                        .OrderBy(blob => string.Join('_', blob.BlobNameParts.Take(3)))
+                        .ThenBy(blob => blob.BlobNameParts.Length < 3 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture))
+                        .ToList();
+#pragma warning restore IDE0305 // Simplify collection initialization
+
+                static string JsonArray(IEnumerable<string> items)
+                    => System.Text.Json.JsonSerializer.Serialize(items.ToArray(), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerOptions.Default) { WriteIndented = true });
             }
-
-            IList<(Uri BlobUri, string[] BlobNameParts)> FilterByPrefix(string blobNameStartsWith, IEnumerable<Azure.Storage.Blobs.Models.BlobItem> blobs)
-                => blobs.Select(blob => (BlobUri: new Azure.Storage.Blobs.BlobUriBuilder(directoryUri) { Sas = null, BlobName = blob.Name }.ToUri(), BlobName: blob.Name.Split('/').Last()))
-                    .Where(blob => blob.BlobName.EndsWith(".txt") && blob.BlobName.StartsWith(blobNameStartsWith))
-                    .Select(blob => (blob.BlobUri, BlobNameParts: blob.BlobName.Split('_', 4)))
-                    .OrderBy(blob => string.Join('_', blob.BlobNameParts.Take(3)))
-                    .ThenBy(blob => blob.BlobNameParts.Length < 3 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture))
-                    .ToList();
-
-            static string JsonArray(IEnumerable<string> items)
-                => System.Text.Json.JsonSerializer.Serialize(items.ToArray(), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerOptions.Default) { WriteIndented = true });
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to find and append process logs on task {TesTask}", tesTask.Id);
+            }
         }
 
         private Task DeleteBatchTaskAsync(TesTask tesTask, string poolId, CancellationToken cancellationToken)
