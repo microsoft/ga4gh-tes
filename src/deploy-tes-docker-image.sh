@@ -4,13 +4,14 @@
 
 # This script builds a new TES image, pushes it the ACR, gives AKS AcrPull on the ACR, and updates the TES deployment
 
+RESOURCE_GROUP_NAME=$1
+ACR_NAME=$2
+
 if [ -z "$RESOURCE_GROUP_NAME" ] || [ -z "$ACR_NAME" ]; then
     echo "Usage: $0 <ResourceGroupName> <AcrName>"
     exit 1
 fi
 
-RESOURCE_GROUP_NAME=$1
-ACR_NAME=$2
 IMAGE_NAME=tes
 DOCKERFILE=Dockerfile-Tes
 TAG=latest
@@ -41,7 +42,6 @@ AKS_IDENTITY_CLIENT_ID=$(az aks show \
 # Get the ACR resource ID
 ACR_RESOURCE_ID=$(az acr show \
     --name $ACR_NAME \
-    --resource-group $RESOURCE_GROUP_NAME \
     --query id \
     -o tsv)
 
@@ -66,4 +66,15 @@ else
 fi
 
 # Update the AKS cluster
+echo "Updating AKS with the new image..."
+az aks get-credentials --resource-group $RESOURCE_GROUP_NAME --name $AKS_CLUSTER_NAME --overwrite-existing
 kubectl set image deployment/tes tes=$NEW_IMAGE -n tes
+echo "Deployment complete."
+
+# Run a test task and get it's status
+# Get these from TesCredentials.json after running deploy-tes-on-azure
+# TesHostname="REMOVED"
+# TesPassword="REMOVED"
+# response=$(curl -u "tes:$TesPassword" -H "Content-Type: application/json" -X POST -d '{"resources": {"cpu_cores": 1, "ram_gb": 1},"executors":[{"image":"ubuntu","command":["/bin/sh","-c","cat /proc/sys/kernel/random/uuid"]}]}' "https://$TesHostname/v1/tasks")
+# taskId=$(echo $response | jq -r '.id')
+# curl -u "tes:$TesPassword" -H "Content-Type: application/json" -X GET "https://$TesHostname/v1/tasks/$taskId?view=full"

@@ -5,11 +5,10 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{EF518D6D-FA52-4B12-AF47-0C46C0BC434D}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
-		src\build-and-push-to-acr.bat = src\build-and-push-to-acr.bat
 		CodeCoverage.runsettings = CodeCoverage.runsettings
 		src\CommonAssemblyInfo.props = src\CommonAssemblyInfo.props
-		src\Directory.Build.props = src\Directory.Build.props
 		src\deploy-tes-docker-image.sh = src\deploy-tes-docker-image.sh
+		src\Directory.Build.props = src\Directory.Build.props
 		src\Dockerfile-Tes = src\Dockerfile-Tes
 	EndProjectSection
 EndProject
