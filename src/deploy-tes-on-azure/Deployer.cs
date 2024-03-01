@@ -565,7 +565,8 @@ namespace TesDeployer
                             appInsights = await CreateAppInsightsResourceAsync(configuration.LogAnalyticsArmId);
                             await AssignVmAsContributorToAppInsightsAsync(managedIdentity, appInsights);
                         }),
-                        Task.Run(async () => {
+                        Task.Run(async () =>
+                        {
                             postgreSqlFlexServer ??= await CreatePostgreSqlServerAndDatabaseAsync(vnetAndSubnet.Value.postgreSqlSubnet, postgreSqlDnsZone);
                         })
                     ]);
