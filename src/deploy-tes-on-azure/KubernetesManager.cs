@@ -11,12 +11,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure.Core;
 using Azure.ResourceManager;
 using Azure.ResourceManager.ContainerService;
 using Azure.ResourceManager.ManagedServiceIdentities;
-using Azure.ResourceManager.Models;
-using Azure.ResourceManager.Resources;
 using Azure.Storage.Blobs;
 using k8s;
 using k8s.Models;
@@ -58,11 +55,19 @@ namespace TesDeployer
         public string TesHostname { get; set; }
         public string AzureDnsLabelName { get; set; }
 
-        public KubernetesManager(Configuration config, ArmClient armClient, CancellationToken cancellationToken)
+        public delegate BlobClient GetBlobClient(Azure.ResourceManager.Storage.StorageAccountData storageAccount, string containerName, string blobName);
+        private readonly GetBlobClient getBlobClient;
+
+        public KubernetesManager(Configuration config, ArmClient armClient, GetBlobClient getBlobClient, CancellationToken cancellationToken)
         {
+            ArgumentNullException.ThrowIfNull(config);
+            ArgumentNullException.ThrowIfNull(armClient);
+            ArgumentNullException.ThrowIfNull(getBlobClient);
+
             this.cancellationToken = cancellationToken;
             configuration = config;
             ArmClient = armClient;
+            this.getBlobClient = getBlobClient;
 
             CreateAndInitializeWorkingDirectoriesAsync().Wait(cancellationToken);
         }
@@ -257,7 +262,7 @@ namespace TesDeployer
             return values;
         }
 
-        public async Task UpdateHelmValuesAsync(BlobServiceClient storageAccount, Uri keyVaultUrl, string resourceGroupName, Dictionary<string, string> settings, UserAssignedIdentityData managedId)
+        public async Task UpdateHelmValuesAsync(Azure.ResourceManager.Storage.StorageAccountData storageAccount, Uri keyVaultUrl, string resourceGroupName, Dictionary<string, string> settings, UserAssignedIdentityData managedId)
         {
             var values = await GetHelmValuesAsync(valuesTemplatePath);
             UpdateValuesFromSettings(values, settings);
@@ -274,7 +279,7 @@ namespace TesDeployer
                 {
                     var containerConfig = new Dictionary<string, string>()
                     {
-                        { "accountName",  storageAccount.AccountName },
+                        { "accountName",  storageAccount.Name },
                         { "containerName", container },
                         { "keyVaultURL", keyVaultUrl.AbsoluteUri },
                         { "keyVaultSecretName", Deployer.StorageAccountKeySecretName}
@@ -291,7 +296,7 @@ namespace TesDeployer
                 {
                     var containerConfig = new Dictionary<string, string>()
                     {
-                        { "accountName",  storageAccount.AccountName },
+                        { "accountName",  storageAccount.Name },
                         { "containerName", container },
                         { "resourceGroup", resourceGroupName },
                     };
@@ -302,21 +307,22 @@ namespace TesDeployer
 
             var valuesString = KubernetesYaml.Serialize(values);
             await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString, cancellationToken);
-            await Deployer.UploadTextToStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cancellationToken);
+            await Deployer.UploadTextToStorageAccountAsync(getBlobClient(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml"), valuesString, cancellationToken);
         }
 
-        public async Task UpgradeValuesYamlAsync(BlobServiceClient storageAccount, Dictionary<string, string> settings)
+        public async Task UpgradeValuesYamlAsync(Azure.ResourceManager.Storage.StorageAccountData storageAccount, Dictionary<string, string> settings)
         {
-            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", cancellationToken));
+            var blobClient = getBlobClient(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml");
+            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(blobClient, cancellationToken));
             UpdateValuesFromSettings(values, settings);
             var valuesString = KubernetesYaml.Serialize(values);
             await File.WriteAllTextAsync(TempHelmValuesYamlPath, valuesString, cancellationToken);
-            await Deployer.UploadTextToStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", valuesString, cancellationToken);
+            await Deployer.UploadTextToStorageAccountAsync(blobClient, valuesString, cancellationToken);
         }
 
-        public async Task<Dictionary<string, string>> GetAKSSettingsAsync(BlobServiceClient storageAccount)
+        public async Task<Dictionary<string, string>> GetAKSSettingsAsync(Azure.ResourceManager.Storage.StorageAccountData storageAccount)
         {
-            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml", cancellationToken));
+            var values = KubernetesYaml.Deserialize<HelmValues>(await Deployer.DownloadTextFromStorageAccountAsync(getBlobClient(storageAccount, Deployer.ConfigurationContainerName, "aksValues.yaml"), cancellationToken));
             return ValuesToSettings(values);
         }
 
