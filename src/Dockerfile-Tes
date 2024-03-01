@@ -14,7 +14,6 @@ COPY . .
 RUN dotnet publish "TesApi.Web/TesApi.Web.csproj" -c Release -o /app/publish
 RUN dotnet publish "Tes.RunnerCLI/Tes.RunnerCLI.csproj" -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true /p:DebugType=none /p:IncludeNativeLibrariesForSelfExtract=true -o /app/publish-output
 
-# Final stage to create the runtime image
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
