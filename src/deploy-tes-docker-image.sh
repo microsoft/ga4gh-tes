@@ -6,7 +6,7 @@
 
 RESOURCE_GROUP_NAME=$1
 ACR_NAME=$2
-IS_US_GOVERNMENT=$3 # New variable for the optional third parameter
+IS_US_GOVERNMENT=$3
 
 if [ -z "$RESOURCE_GROUP_NAME" ] || [ -z "$ACR_NAME" ]; then
     echo "Usage: $0 <ResourceGroupName> <AcrName> [IsUsGovernment]"
@@ -17,11 +17,10 @@ IMAGE_NAME=tes
 DOCKERFILE=Dockerfile-Tes
 TAG=$(date +"%Y%m%d%H%M")
 
-# Check if the IsUsGovernment parameter is provided and equals "true"
 if [[ "$IS_US_GOVERNMENT" == "true" ]]; then
     ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.us" # Adjusted for US Government cloud
 else
-    ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io" # Default for commercial cloud
+    ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io" # Default for public cloud
 fi
 
 NEW_IMAGE="${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${TAG}"
@@ -74,17 +73,19 @@ else
     echo "AcrPull role assignment already exists. No action required."
 fi
 
-# Update the AKS cluster
+# Update the AKS cluster with the new TES image
 echo "Updating AKS with the new image..."
 az aks get-credentials --resource-group $RESOURCE_GROUP_NAME --name $AKS_CLUSTER_NAME --overwrite-existing
 kubectl set image deployment/tes tes=$NEW_IMAGE -n tes
 echo "Deployment complete for: $NEW_IMAGE"
 
+# Get logs of the new TES pod
 # kubectl get pods -n tes | awk '{print $1}' | xargs -I {} kubectl logs -n tes {}
-# Run a test task and get it's status
-# Get these from TesCredentials.json after running deploy-tes-on-azure
+
+# Run a test task and get it's status (Get these from TesCredentials.json after running deploy-tes-on-azure)
 # TesHostname="REMOVED"
 # TesPassword="REMOVED"
+
 # response=$(curl -u "tes:$TesPassword" -H "Content-Type: application/json" -X POST -d '{"resources": {"cpu_cores": 1, "ram_gb": 1},"executors":[{"image":"ubuntu","command":["/bin/sh","-c","cat /proc/sys/kernel/random/uuid"]}]}' "https://$TesHostname/v1/tasks")
 # taskId=$(echo $response | jq -r '.id')
 # curl -u "tes:$TesPassword" -H "Content-Type: application/json" -X GET "https://$TesHostname/v1/tasks/$taskId?view=full"
