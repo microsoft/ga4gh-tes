@@ -20,8 +20,6 @@ namespace TesApi.Web.Management
     /// </summary>
     public static class ArmResourceInformationFinder
     {
-        const string DefaultScope = "https://management.azure.com//.default";
-
         /// <summary>
         /// Looks up the AppInsights instrumentation key in subscriptions the TES services has access to 
         /// </summary>
@@ -62,11 +60,11 @@ namespace TesApi.Web.Management
                 finalize: batchAccount => BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id, batchAccount.Location, $"https://{batchAccount.AccountEndpoint}"));
         }
 
-        private static async Task<string> GetAzureAccessTokenAsync(string? scope, CancellationToken cancellationToken = default)
+        private static async Task<string> GetAzureAccessTokenAsync(AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken = default)
         {
-            var requestedScope = string.IsNullOrWhiteSpace(scope) ? DefaultScope : scope;
-
-            return (await (new DefaultAzureCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { requestedScope }), cancellationToken)).Token;
+            var defaultCredential = new DefaultAzureCredential(new DefaultAzureCredentialOptions { AuthorityHost = new Uri(azureCloudConfig.Authentication.LoginEndpointUrl) });
+            var accessToken = await defaultCredential.GetTokenAsync(new Azure.Core.TokenRequestContext([azureCloudConfig.DefaultTokenScope]), cancellationToken);
+            return accessToken.Token;
         }
 
         /// <summary>
@@ -104,7 +102,7 @@ namespace TesApi.Web.Management
             ArgumentNullException.ThrowIfNull(predicate);
             ArgumentNullException.ThrowIfNull(finalize);
 
-            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync(azureCloudConfig.ResourceManagerUrl));
+            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync(azureCloudConfig, cancellationToken));
             var azureManagementClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(azureCloudConfig, cancellationToken);
 
             var subscriptions = (await azureManagementClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
