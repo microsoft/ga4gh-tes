@@ -66,10 +66,10 @@ namespace CommonUtilities.AzureCloud
         public string? OssrDbmsResourceUrl { get; set; }
 
         public string? DefaultTokenScope { get; set; }
-        public AzureEnvironment AzureEnvironment { get; set; }
+        public AzureEnvironment? AzureEnvironment { get; set; }
         public ArmEnvironment ArmEnvironment { get; set; }
-        public string Domain { get; set; }
-        public AzureEnvironmentConfig AzureEnvironmentConfig { get; set; }
+        public string? Domain { get; set; }
+        public AzureEnvironmentConfig? AzureEnvironmentConfig { get; set; }
 
         public static async Task<AzureCloudConfig> CreateAsync(string azureCloudName = DefaultAzureCloudName, string azureCloudMetadataUrlApiVersion = defaultAzureCloudMetadataUrlApiVersion)
         {
