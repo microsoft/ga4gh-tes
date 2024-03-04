@@ -83,6 +83,9 @@ namespace TesApi.Tests
 
         [TestCategory("TES 1.1")]
         [TestMethod]
+        [Ignore]
+        [Obsolete]
+        /// 2/1/2024 - this has been removed to ensure all keys from Cromwell are stored and returned to the client for better reporting and analysis
         public async Task CreateTaskAsync_ReturnsTesCreateTaskResponseWithBackendParameters_UnsupportedKey()
         {
             const string unsupportedKey = "unsupported_key_2021";
