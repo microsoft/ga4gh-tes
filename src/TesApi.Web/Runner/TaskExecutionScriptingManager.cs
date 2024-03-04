@@ -137,16 +137,8 @@ namespace TesApi.Web.Runner
                 .WithLocalRuntimeSystemInformation()
                 .Build();
 
-
-            
-            // Wrap the batch_script so we can call it with logging in screen:
-            /*
-            batchNodeScript = "#!/bin/bash\nbatch_script_task(){\nlocal task_dir=$1\nsource $task_dir/batch_script_env.sh\n" + batchNodeScript;
-            batchNodeScript += "\n}\n";
-            batchNodeScript += "export -f batch_script_task\n";
-            batchNodeScript += "rm -f \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\"\n";
-            */
-            string pythonCommand = $@"#!/bin/bash
+            // Python command to extract the log destination from the runner URL
+            string pythonCommand = $@"
 get_log_destination_from_runner_url() {{
 python3 <<EOF
 nodeTaskUrl = '{nodeTaskUrl}'
@@ -162,39 +154,10 @@ print(new_url)
 EOF
 }}
 ";
-            pythonCommand = pythonCommand.Replace("\r\n", "\n");
-            /*
-            batchNodeScript += pythonCommand;
-            batchNodeScript += "LOG_URL=$(get_log_destination_from_runner_url)\n";
-            batchNodeScript += "echo $LOG_URL\n";
-            batchNodeScript += "export -p > $AZ_BATCH_TASK_DIR/batch_script_env.sh\n";
-            batchNodeScript += "set > $AZ_BATCH_TASK_DIR/batch_script_env.sh\n";
-            batchNodeScript += "# Run the batch_script_task in a screen session, and capture the exit code (with trap)\n";
-            batchNodeScript += "trap 'echo \\$? > $AZ_BATCH_TASK_DIR/exit_code.txt' EXIT; batch_script_task \"$AZ_BATCH_TASK_DIR\"n";
-            batchNodeScript += "screen -L -Logfile \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\" -S batch_task bash -c \"trap 'echo \\$? > $AZ_BATCH_TASK_DIR/exit_code.txt' EXIT; batch_script_task $AZ_BATCH_TASK_DIR\"\n";
-            batchNodeScript += "EXIT_CODE=$(cat \"$AZ_BATCH_TASK_DIR/exit_code.txt\")\n";
-            batchNodeScript += "echo -e \"\\n\\nExit code: $EXIT_CODE\" >> \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\"\n";
-            batchNodeScript += "export AZCOPY_AUTO_LOGIN_TYPE=MSI\n";
-            batchNodeScript += "azcopy copy \"$AZ_BATCH_TASK_DIR/batch_script_log.txt\" \"$LOG_URL\"\n";
-            batchNodeScript += "LOG_ENV_URL=${LOG_URL/%batch_script_log.txt/batch_script_env.sh}\n";
-            batchNodeScript += "azcopy copy \"$AZ_BATCH_TASK_DIR/batch_script_env.sh\" \"$LOG_ENV_URL\"\n";
-            batchNodeScript += "if [ $EXIT_CODE -ne 0 ]; then\n";
-            batchNodeScript += "    exit $EXIT_CODE\n";
-            batchNodeScript += "fi\n";
-            batchNodeScript += "echo Task complete\n";
-            */
 
-            batchNodeScript = $@"
-set_defaults() {{
-    if [ -z ""$AZ_BATCH_TASK_WORKING_DIR"" ]; then
-        echo ""AZ_BATCH_TASK_WORKING_DIR is not set. Using default value of /mnt/cromwell/wd""
-        export AZ_BATCH_TASK_WORKING_DIR=/mnt/cromwell/wd
-    fi
-    if [ -z ""$AZ_BATCH_TASK_DIR"" ]; then
-        echo ""AZ_BATCH_TASK_DIR is not set. Using default value of /mnt/cromwell""
-        export AZ_BATCH_TASK_DIR=/mnt/cromwell
-    fi
-}}
+            // Write out the entire bash script with variable substitution turned on
+            batchNodeScript = $@"#!/bin/bash
+set -x
 batch_script_task(){{
     local task_dir=$1
     source ""$task_dir/batch_script_env.sh"" || true
@@ -202,28 +165,61 @@ batch_script_task(){{
 {batchNodeScript}
 }}
 {pythonCommand}
-export -f batch_script_task
-export -f set_defaults
-set_defaults
-rm -f ""$AZ_BATCH_TASK_DIR/batch_script_log.txt""
-export -p > ""$AZ_BATCH_TASK_DIR/batch_script_env.sh""
-set >> ""$AZ_BATCH_TASK_DIR/batch_script_env.sh""
-# trap 'echo \\$? > ""$AZ_BATCH_TASK_DIR/exit_code.txt""' EXIT; batch_script_task ""$AZ_BATCH_TASK_DIR""
-screen -L -Logfile ""$AZ_BATCH_TASK_DIR/batch_script_log.txt"" -S batch_task bash -c ""trap 'echo \\$? > $AZ_BATCH_TASK_DIR/exit_code.txt' EXIT; batch_script_task $AZ_BATCH_TASK_DIR""
-EXIT_CODE=$(cat ""$AZ_BATCH_TASK_DIR/exit_code.txt"")
-echo -e ""\\n\\nExit code: $EXIT_CODE"" >> ""$AZ_BATCH_TASK_DIR/batch_script_log.txt""
-OUTPUT_URL=$(get_log_destination_from_runner_url)
-LOG_URL=""${{OUTPUT_URL}}batch_script_log.txt""
-LOG_ENV_URL=""${{OUTPUT_URL}}batch_script_env.sh""
-echo ""$LOG_URL""
-export AZCOPY_AUTO_LOGIN_TYPE=MSI
-azcopy copy ""$AZ_BATCH_TASK_DIR/batch_script_log.txt"" ""$LOG_URL""
-azcopy copy ""$AZ_BATCH_TASK_DIR/batch_script_env.sh"" ""$LOG_ENV_URL""
-if [ ""$EXIT_CODE"" -ne 0 ]; then
-    exit ""$EXIT_CODE""
+
+# Upload the stdout and stderr logs:
+upload_logs() {{
+    LOGGING_URL=$(get_log_destination_from_runner_url)
+    
+    echo ""Uploading logs to storage account: $LOG_URL""
+    export AZCOPY_AUTO_LOGIN_TYPE=MSI
+    do_upload stdout.txt ""$AZ_BATCH_TASK_DIR"" ""$LOGGING_URL""
+    do_upload stderr.txt ""$AZ_BATCH_TASK_DIR"" ""$LOGGING_URL""
+}}
+do_upload() {{
+    local file_name=${{2}}/${{1}}
+    echo ""Uploadings $1 to $3""
+    if [ -f ""$1"" ]; then
+        touch ""$1""
+    fi
+    cp ""$file_name"" ""${{file_name}}.snap""
+    azcopy copy --log-level=ERROR --output-level essential ""${{file_name}}.snap"" ""${{3}}${{1}}""
+}}
+
+# Trap helper functions:
+on_error() {{
+    trap - ERR EXIT
+    if [ -f ""$AZ_BATCH_TASK_DIR/exit_code.txt"" ]; then
+        EXIT_CODE=$(cat ""$AZ_BATCH_TASK_DIR/exit_code.txt"")
+        echo ""Return code trapped from exit code file: $EXIT_CODE""
+    fi
+    echo ""Error was trapped during batch_script execution""
+    echo ""Current directory: $(pwd)""
+    echo ""Environment: $(env)""
+    echo ""Exports in the current shell: $(export -p)""
+}}
+
+# Run the trask and attempt to capture any errors:
+trap 'echo \\$? > ""$AZ_BATCH_TASK_DIR/exit_code.txt""; on_error; upload_logs' ERR EXIT
+batch_script_task ""$AZ_BATCH_TASK_DIR""
+
+# Capture the exit code and upload the log files
+bath_script_return_code=$?
+trap - ERR EXIT
+if [ -f ""$AZ_BATCH_TASK_DIR/exit_code.txt"" ]; then
+    EXIT_CODE=$(cat ""$AZ_BATCH_TASK_DIR/exit_code.txt"")
+    echo ""Return code trapped from exit code file: $EXIT_CODE""
+    on_error
+    upload_logs
+else
+    EXIT_CODE=$bath_script_return_code
+    echo ""Return code: $EXIT_CODE""
+    upload_logs
 fi
+
+# Return the exit code
+echo ""Exiting with code: $EXIT_CODE""
 echo Task complete
-exit 0
+exit $EXIT_CODE
 ";
             batchNodeScript = batchNodeScript.Replace("\r\n", "\n");
 
