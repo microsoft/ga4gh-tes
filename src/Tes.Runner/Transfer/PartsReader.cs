@@ -1,8 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Threading;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
@@ -15,8 +13,8 @@ public class PartsReader : PartsProcessor
 {
     private readonly ILogger logger = PipelineLoggerFactory.Create<PartsReader>();
 
-    public PartsReader(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel) :
-        base(blobPipeline, blobPipelineOptions, memoryBufferChannel)
+    public PartsReader(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel, IScalingStrategy scalingStrategy) :
+        base(blobPipeline, blobPipelineOptions, memoryBufferChannel, scalingStrategy)
     {
     }
 
@@ -27,8 +25,9 @@ public class PartsReader : PartsProcessor
     /// </summary>
     /// <param name="readBufferChannel">Source channel from which the parts are read</param>
     /// <param name="writeBufferChannel">Target channel where read parts are written</param>
+    /// <param name="cancellationSource">Cancellation source used to cancel working threads if an error occurs</param>
     /// <returns>A tasks that completes when all tasks complete</returns>
-    public async Task StartPartsReaderAsync(Channel<PipelineBuffer> readBufferChannel, Channel<PipelineBuffer> writeBufferChannel)
+    public async Task StartPartsReaderAsync(Channel<PipelineBuffer> readBufferChannel, Channel<PipelineBuffer> writeBufferChannel, CancellationTokenSource cancellationSource)
     {
         async Task ReadPartAsync(PipelineBuffer buffer, CancellationToken cancellationToken)
         {
@@ -39,11 +38,10 @@ public class PartsReader : PartsProcessor
             await writeBufferChannel.Writer.WriteAsync(buffer, cancellationToken);
         }
 
-        var tasks = StartProcessors(BlobPipelineOptions.NumberOfReaders, readBufferChannel, ReadPartAsync);
 
         try
         {
-            await Task.WhenAll(tasks);
+            await StartProcessorsWithScalingStrategyAsync(BlobPipelineOptions.NumberOfReaders, readBufferChannel, ReadPartAsync, cancellationSource);
         }
         catch (Exception e)
         {

@@ -7,6 +7,7 @@
     <PreserveCompilationContext>true</PreserveCompilationContext>
     <AssemblyName>tesapi</AssemblyName>
     <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+    <Title>GA4GH Task Execution Service</Title>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,7 +27,6 @@
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
     <PackageReference Include="Microsoft.Azure.Batch" Version="16.1.0" />
-    <PackageReference Include="Microsoft.Azure.Services.AppAuthentication" Version="1.6.2" />
     <PackageReference Include="Microsoft.Extensions.Logging.ApplicationInsights" Version="2.22.0" />
     <!--Mitigate reported security issues-->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />

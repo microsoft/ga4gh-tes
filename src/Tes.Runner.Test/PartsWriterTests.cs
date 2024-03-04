@@ -20,6 +20,7 @@ namespace Tes.Runner.Test
         private Channel<PipelineBuffer>? writeBufferChannel;
         private readonly long fileSize = BlobSizeUtils.MiB * 100;
         private readonly string fileName = "tempFile";
+        private CancellationTokenSource cancellationSource = null!;
 
         [TestInitialize]
         public void SetUp()
@@ -28,9 +29,10 @@ namespace Tes.Runner.Test
             memoryBufferChannel = Channel.CreateBounded<byte[]>(RunnerTestUtils.MemBuffersCapacity);
             options = new BlobPipelineOptions();
             pipeline = new Mock<IBlobPipeline>();
-            partsWriter = new PartsWriter(pipeline.Object, options, memoryBufferChannel);
+            partsWriter = new PartsWriter(pipeline.Object, options, memoryBufferChannel, new SimpleScalingStrategy());
             processedBufferChannel = Channel.CreateBounded<ProcessedBuffer>(RunnerTestUtils.PipelineBufferCapacity);
             writeBufferChannel = Channel.CreateBounded<PipelineBuffer>(RunnerTestUtils.PipelineBufferCapacity);
+            cancellationSource = new CancellationTokenSource();
         }
 
         [TestMethod]
@@ -38,7 +40,7 @@ namespace Tes.Runner.Test
         {
             var numberOfParts = await PrepareWriterChannelAsync();
 
-            await partsWriter!.StartPartsWritersAsync(writeBufferChannel!, processedBufferChannel!);
+            await partsWriter!.StartPartsWritersAsync(writeBufferChannel!, processedBufferChannel!, cancellationSource);
 
             pipeline!.Verify(p => p.ExecuteWriteAsync(It.IsAny<PipelineBuffer>(), It.IsAny<CancellationToken>()), Times.Exactly(numberOfParts));
             Assert.AreEqual(numberOfParts, processedBufferChannel!.Reader.Count);
@@ -48,7 +50,7 @@ namespace Tes.Runner.Test
         {
             var numberOfParts = await PrepareWriterChannelAsync();
 
-            await partsWriter!.StartPartsWritersAsync(writeBufferChannel!, processedBufferChannel!);
+            await partsWriter!.StartPartsWritersAsync(writeBufferChannel!, processedBufferChannel!, cancellationSource);
 
             //The writers write to the memory channel/pool after processing, the number of items in the memory
             //buffer must the number of parts to that read from the writer's channel.

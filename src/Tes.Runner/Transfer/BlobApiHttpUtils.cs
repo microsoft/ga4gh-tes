@@ -19,7 +19,7 @@ public class BlobApiHttpUtils
     public const string DefaultApiVersion = "2023-05-03";
     public const string BlockBlobType = "BlockBlob";
     public const string AppendBlobType = "AppendBlob";
-    private const int MaxRetryCount = 9;
+
     private readonly HttpClient httpClient;
     private static readonly ILogger Logger = PipelineLoggerFactory.Create<BlobApiHttpUtils>();
     private readonly AsyncRetryPolicy retryPolicy;
@@ -33,7 +33,7 @@ public class BlobApiHttpUtils
         this.retryPolicy = retryPolicy;
     }
 
-    public BlobApiHttpUtils() : this(new HttpClient(), DefaultAsyncRetryPolicy(MaxRetryCount))
+    public BlobApiHttpUtils() : this(new HttpClient(), HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy())
     {
     }
 
@@ -346,18 +346,5 @@ public class BlobApiHttpUtils
 
         request.Headers.Range = new RangeHeaderValue(buffer.Offset, buffer.Offset + buffer.Length);
         return request;
-    }
-
-    public static AsyncRetryPolicy DefaultAsyncRetryPolicy(int retryAttempts)
-    {
-        return Policy
-            .Handle<RetriableException>()
-            .WaitAndRetryAsync(retryAttempts, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-                onRetryAsync:
-                (exception, _, retryCount, _) =>
-                {
-                    Logger.LogError(exception, "Retrying failed request. Retry count: {retryCount}", retryCount);
-                    return Task.CompletedTask;
-                });
     }
 }
