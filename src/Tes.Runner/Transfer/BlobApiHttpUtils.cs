@@ -6,7 +6,6 @@ using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Text;
 using Microsoft.Extensions.Logging;
-using Polly;
 using Polly.Retry;
 
 namespace Tes.Runner.Transfer;

@@ -19,6 +19,7 @@ using Tes.Models;
 using Tes.Repository;
 using TesApi.Web;
 using TesApi.Web.Management;
+using TesApi.Web.Management.Batch;
 using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
 using TesApi.Web.Runner;
@@ -36,6 +37,7 @@ namespace TesApi.Tests.TestServices
             IEnumerable<(string Key, string Value)> configuration = default,
             BatchAccountResourceInformation accountResourceInformation = default,
             Action<Mock<IAzureProxy>> azureProxy = default,
+            Action<Mock<IBatchPoolManager>> batchPoolManager = default,
             Action<Mock<IRepository<TesTask>>> tesTaskRepository = default,
             Action<Mock<IStorageAccessProvider>> storageAccessProvider = default,
             Action<Mock<IBatchSkuInformationProvider>> batchSkuInformationProvider = default,
@@ -90,6 +92,7 @@ namespace TesApi.Tests.TestServices
                         .AddSingleton<TaskToNodeTaskConverter>()
                         .AddSingleton<TaskExecutionScriptingManager>()
                         .AddSingleton<BatchNodeScriptBuilder>()
+                        .AddSingleton(GetBatchPoolManager(batchPoolManager).Object)
                         .IfThenElse(additionalActions is null, s => { }, s => additionalActions(s))
                     .BuildServiceProvider();
 
@@ -105,6 +108,7 @@ namespace TesApi.Tests.TestServices
         internal Mock<IRepository<TesTask>> TesTaskRepository { get; private set; }
         internal Mock<IStorageAccessProvider> StorageAccessProvider { get; private set; }
         internal Mock<IAllowedVmSizesService> AllowedVmSizesServiceProvider { get; private set; }
+        internal Mock<IBatchPoolManager> BatchPoolManager { get; private set; }
 
         internal T GetT()
             => GetT(Array.Empty<Type>(), Array.Empty<object>());
@@ -165,6 +169,13 @@ namespace TesApi.Tests.TestServices
             var proxy = new Mock<IAzureProxy>();
             action?.Invoke(proxy);
             return AzureProxy = proxy;
+        }
+
+        private Mock<IBatchPoolManager> GetBatchPoolManager(Action<Mock<IBatchPoolManager>> action)
+        {
+            var proxy = new Mock<IBatchPoolManager>();
+            action?.Invoke(proxy);
+            return BatchPoolManager = proxy;
         }
 
         private Mock<IAllowedVmSizesService> GetAllowedVmSizesServiceProviderProvider(Action<Mock<IAllowedVmSizesService>> action)

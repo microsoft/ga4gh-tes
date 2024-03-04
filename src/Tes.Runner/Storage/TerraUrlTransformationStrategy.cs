@@ -34,7 +34,7 @@ namespace Tes.Runner.Storage
             ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
             ArgumentException.ThrowIfNullOrEmpty(terraRuntimeOptions.WsmApiHost, nameof(terraRuntimeOptions.WsmApiHost));
 
-            terraWsmApiClient = TerraWsmApiClient.CreateTerraWsmApiClient(terraRuntimeOptions.WsmApiHost, tokenCredential);
+            terraWsmApiClient = TerraWsmApiClient.CreateTerraWsmApiClient(terraRuntimeOptions.WsmApiHost, tokenCredential, LzStorageAccountNamePattern);
             this.terraRuntimeOptions = terraRuntimeOptions;
             this.cacheExpirationInSeconds = cacheExpirationInSeconds;
         }

@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Azure.Core;
+using CommonUtilities;
 using Microsoft.Extensions.Logging;
 
 namespace Tes.ApiClients
@@ -11,7 +12,6 @@ namespace Tes.ApiClients
     /// </summary>
     public abstract class TerraApiClient : HttpApiClient
     {
-        private const string TokenScope = @"https://management.azure.com/.default";
         protected readonly string ApiUrl = null!;
 
         /// <summary>
@@ -24,9 +24,10 @@ namespace Tes.ApiClients
         /// </summary>
         /// <param name="apiUrl">API Host</param>
         /// <param name="tokenCredential"><see cref="TokenCredential"/></param>
+        /// <param name="tokenScope"></param>
         /// <param name="cachingRetryHandler"><see cref="CachingRetryPolicyBuilder"/></param>
         /// <param name="logger"><see cref="ILogger{TCategoryName}"/></param>
-        protected TerraApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryPolicyBuilder cachingRetryHandler, ILogger logger) : base(tokenCredential, TokenScope, cachingRetryHandler, logger)
+        protected TerraApiClient(string apiUrl, TokenCredential tokenCredential, string tokenScope, CachingRetryPolicyBuilder cachingRetryHandler, ILogger logger) : base(tokenCredential, tokenScope, cachingRetryHandler, logger)
         {
             ArgumentException.ThrowIfNullOrEmpty(apiUrl);
 

@@ -7,7 +7,6 @@ using System.Net;
 using System.Reflection;
 using System.Threading;
 using Azure.Core;
-using Azure.Identity;
 using CommonUtilities;
 using CommonUtilities.Options;
 using Microsoft.AspNetCore.Builder;
@@ -85,7 +84,6 @@ namespace TesApi.Web
                     .AddTransient<BatchPool>()
                     .AddSingleton<IBatchPoolFactory, BatchPoolFactory>()
                     .AddSingleton(CreateTerraApiClient)
-                    .AddSingleton(CreateBatchPoolManagerFromConfiguration)
 
                     .AddControllers(options => options.Filters.Add<Controllers.OperationCancelledExceptionFilter>())
                         .AddNewtonsoftJson(opts =>
@@ -96,6 +94,7 @@ namespace TesApi.Web
                     .Services
 
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
+                    .AddSingleton<IBatchPoolManager>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesBatchPoolManager>(sp, CreateBatchPoolManagerFromConfiguration(sp)))
                     .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
                     .AddSingleton<IRepository<TesTask>>(sp => ActivatorUtilities.CreateInstance<RepositoryRetryHandler<TesTask>>(sp, (IRepository<TesTask>)sp.GetRequiredService(typeof(TesTaskPostgreSqlRepository))))
 
@@ -111,9 +110,16 @@ namespace TesApi.Web
                     .AddSingleton<AzureManagementClientsFactory>()
                     .AddSingleton<ConfigurationUtils>()
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
-                    .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
+                    .AddSingleton<TokenCredential>(s =>
+                    {
+                        var env = s.GetRequiredService<ArmEnvironmentEndpoints>();
+                        var options = s.GetRequiredService<AzureServicesConnectionStringCredentialOptions>();
+                        options.AuthorityHost = env.AuthorityHost;
+                        return new AzureServicesConnectionStringCredential(options);
+                    })
                     .AddSingleton<TaskToNodeTaskConverter>()
                     .AddSingleton<TaskExecutionScriptingManager>()
+                    .AddSingleton<PoolMetadataReader>()
                     .AddTransient<BatchNodeScriptBuilder>()
 
                     .AddSwaggerGen(c =>
@@ -155,7 +161,6 @@ namespace TesApi.Web
             }
 
             logger?.LogInformation("TES successfully configured dependent services in ConfigureServices(IServiceCollection services)");
-
 
             IBatchQuotaProvider CreateBatchQuotaProviderFromConfiguration(IServiceProvider services)
             {
@@ -257,8 +262,14 @@ namespace TesApi.Web
 
                 if (string.IsNullOrWhiteSpace(options.Value.AppKey))
                 {
+                    var endpoints = services.GetRequiredService<ArmEnvironmentEndpoints>();
+                    var credentialOptions = services.GetRequiredService<AzureServicesConnectionStringCredentialOptions>();
                     //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
-                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName, System.Threading.CancellationToken.None);
+                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(
+                        new AzureServicesConnectionStringCredential(credentialOptions),
+                        new(endpoints.ResourceManager, endpoints.Audience),
+                        options.Value.AccountName,
+                        System.Threading.CancellationToken.None);
                     task.Wait();
 
                     if (task.Result is null)

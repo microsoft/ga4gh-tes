@@ -4,6 +4,7 @@
 using System.Net;
 using System.Web;
 using Azure.Core;
+using CommonUtilities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.ApiClients.Models.Terra;
@@ -24,6 +25,8 @@ namespace Tes.ApiClients.Tests
         public void SetUp()
         {
             terraApiStubData = new TerraApiStubData();
+            var armEnv = Azure.ResourceManager.ArmEnvironment.AzurePublicCloud;
+            ArmEnvironmentEndpoints armEnvironmentEndpoints = new(Azure.Identity.AzureAuthorityHosts.AzurePublicCloud, armEnv.Audience, "common", armEnv.Endpoint, default!, default!, default!, default!, default!, default!, default!);
             tokenCredential = new Mock<TokenCredential>();
             cacheAndRetryBuilder = new Mock<CachingRetryPolicyBuilder>();
             var cache = new Mock<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
@@ -31,7 +34,7 @@ namespace Tes.ApiClients.Tests
             cacheAndRetryBuilder.SetupGet(c => c.AppCache).Returns(cache.Object);
             cacheAndRetryHandler = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock(cacheAndRetryBuilder, c => c.DefaultRetryHttpResponseMessagePolicyBuilder()));
             terraWsmApiClient = new TerraWsmApiClient(TerraApiStubData.WsmApiHost, tokenCredential.Object,
-                cacheAndRetryBuilder.Object, NullLogger<TerraWsmApiClient>.Instance);
+                armEnvironmentEndpoints, cacheAndRetryBuilder.Object, NullLogger<TerraWsmApiClient>.Instance);
         }
 
         [TestMethod]

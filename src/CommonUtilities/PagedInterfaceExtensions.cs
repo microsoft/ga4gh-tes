@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
+using Azure;
 using Microsoft.Rest.Azure;
 using static CommonUtilities.RetryHandler;
 
@@ -13,15 +13,14 @@ namespace CommonUtilities
     public static class PagedInterfaceExtensions
     {
         /// <summary>
-        /// Creates an <see cref="IAsyncEnumerable{T}"/> from an <see cref="IPagedCollection{T}"/>
+        /// Splits an <see cref="AsyncPageable{T}"/> into pages and re-presents it as an <see cref="IAsyncEnumerable{T}"/> to facilitate retry logic
         /// </summary>
         /// <typeparam name="T">The type of objects to enumerate.</typeparam>
-        /// <param name="source">The <see cref="IPagedCollection{T}"/> to enumerate.</param>
+        /// <param name="source">The <see cref="AsyncPageable{T}"/> to enumerate.</param>
         /// <returns>An <see cref="IAsyncEnumerable{T}"/></returns>
         /// <exception cref="ArgumentNullException"></exception>
-        public static IAsyncEnumerable<T> ToAsyncEnumerable<T>(this IPagedCollection<T> source)
-            => new AsyncEnumerable<T>(source);
-
+        public static IAsyncEnumerable<T> ToAsyncEnumerable<T>(this AsyncPageable<T> source) where T : notnull
+            => new AsyncPageableEnumerable<T>(source);
 
         /// <summary>
         /// Creates an <see cref="IAsyncEnumerable{T}"/> from an <see cref="IPage{T}"/>
@@ -90,16 +89,44 @@ namespace CommonUtilities
         }
 
         #region Implementation classes
-        private readonly struct AsyncEnumerable<T> : IAsyncEnumerable<T>
+        private readonly struct AsyncPageableEnumerable<T> : IAsyncEnumerable<T> where T : notnull
         {
             private readonly Func<CancellationToken, IAsyncEnumerator<T>> _getEnumerator;
+            private readonly AsyncPageable<T> _source;
 
-            public AsyncEnumerable(IPagedCollection<T> source)
+            public AsyncPageableEnumerable(AsyncPageable<T> source)
             {
                 ArgumentNullException.ThrowIfNull(source);
 
-                _getEnumerator = c => new PagedCollectionEnumerator<T>(source, c);
+                _source = source;
+                _getEnumerator = c => new AsyncPageableEnumerator<T>(null!, GetNextPage, c);
             }
+
+            /// <inheritdoc/>
+            IAsyncEnumerator<T> IAsyncEnumerable<T>.GetAsyncEnumerator(CancellationToken cancellationToken)
+                => _getEnumerator(cancellationToken);
+
+            private async Task<Page<T>> GetNextPage(Page<T> page, CancellationToken cancellationToken)
+            {
+                var enumerator = (page switch
+                {
+                    null => _source.AsPages(),
+                    var x when string.IsNullOrEmpty(page.ContinuationToken) => null!,
+                    _ => _source.AsPages(continuationToken: page.ContinuationToken)
+                })?.GetAsyncEnumerator(cancellationToken);
+
+                if (await (enumerator?.MoveNextAsync(cancellationToken) ?? ValueTask.FromResult(false)))
+                {
+                    return enumerator!.Current;
+                }
+
+                return null!;
+            }
+        }
+
+        private readonly struct AsyncEnumerable<T> : IAsyncEnumerable<T>
+        {
+            private readonly Func<CancellationToken, IAsyncEnumerator<T>> _getEnumerator;
 
             public AsyncEnumerable(IPage<T> source, Func<string, CancellationToken, Task<IPage<T>?>> nextPageFunc)
             {
@@ -174,10 +201,12 @@ namespace CommonUtilities
             { }
         }
 
-        private sealed class PagedCollectionEnumerator<T> : PagingEnumerator<T, IPagedCollection<T>>
+        private sealed class AsyncPageableEnumerator<T> : PagingEnumerator<T, Page<T>> where T : notnull
         {
-            public PagedCollectionEnumerator(IPagedCollection<T> source, CancellationToken cancellationToken)
-                : base(source, s => s.GetEnumerator(), (s, ct) => s.GetNextPageAsync(ct), cancellationToken)
+            public AsyncPageableEnumerator(Page<T> source, Func<Page<T>, CancellationToken, Task<Page<T>>> nextPageFunc, CancellationToken cancellationToken)
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type.
+                : base(source, s => (s.Values ?? []).GetEnumerator(), (s, ct) => nextPageFunc(s, ct), cancellationToken)
+#pragma warning restore CS8619 // Nullability of reference types in value doesn't match target type.
             { }
         }
 

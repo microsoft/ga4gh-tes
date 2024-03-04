@@ -2,7 +2,11 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Net.Http;
 using System.Reflection;
+using System.Threading;
+using Azure.ResourceManager;
+using CommonUtilities;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -36,7 +40,10 @@ namespace TesApi.Web
             Console.WriteLine($"TES v{Startup.TesVersion} Build: {Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion}");
 
             Options.ApplicationInsightsOptions applicationInsightsOptions = default;
+            ArmEnvironmentEndpoints armEnvironmentEndpoints = default;
             var builder = WebHost.CreateDefaultBuilder<Startup>(args);
+            builder.ConfigureServices(services => services.AddTransient<AzureServicesConnectionStringCredentialOptions>());
+            builder.ConfigureServices(services => services.AddSingleton(armEnvironmentEndpoints));
 
             if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
             {
@@ -45,15 +52,21 @@ namespace TesApi.Web
 
             builder.ConfigureAppConfiguration((context, config) =>
             {
-                config.AddEnvironmentVariables();
-                applicationInsightsOptions = GetApplicationInsightsConnectionString(config.Build());
+                var configuration = config.AddEnvironmentVariables().Build();
+
+                armEnvironmentEndpoints = GetArmEnvironment(configuration);
+
+                applicationInsightsOptions = GetApplicationInsightsConnectionString(
+                    configuration,
+                    new(armEnvironmentEndpoints.ResourceManager, armEnvironmentEndpoints.Audience),
+                    new AzureServicesConnectionStringCredential(new(configuration, armEnvironmentEndpoints)));
 
                 if (!string.IsNullOrEmpty(applicationInsightsOptions?.ConnectionString))
                 {
                     config.AddApplicationInsightsSettings(applicationInsightsOptions.ConnectionString, developerMode: context.HostingEnvironment.IsDevelopment() ? true : null);
                 }
 
-                static Options.ApplicationInsightsOptions GetApplicationInsightsConnectionString(IConfiguration configuration)
+                static Options.ApplicationInsightsOptions GetApplicationInsightsConnectionString(IConfiguration configuration, ArmEnvironment armEnvironment, Azure.Core.TokenCredential credential)
                 {
                     var applicationInsightsOptions = configuration.GetSection(Options.ApplicationInsightsOptions.SectionName).Get<Options.ApplicationInsightsOptions>();
                     var applicationInsightsAccountName = applicationInsightsOptions?.AccountName;
@@ -67,7 +80,7 @@ namespace TesApi.Web
 
                     if (string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
                     {
-                        applicationInsightsConnectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, System.Threading.CancellationToken.None).Result;
+                        applicationInsightsConnectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringAsync(credential, armEnvironment, applicationInsightsAccountName, CancellationToken.None).Result;
                     }
 
                     if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
@@ -77,6 +90,48 @@ namespace TesApi.Web
                     }
 
                     return applicationInsightsOptions;
+                }
+
+                static ArmEnvironmentEndpoints GetArmEnvironment(IConfiguration configuration)
+                {
+                    var retryOptions = Microsoft.Extensions.Options.Options.Create(configuration.GetSection(CommonUtilities.Options.RetryPolicyOptions.SectionName).Get<CommonUtilities.Options.RetryPolicyOptions>());
+                    var armEnvironmentOptions = configuration.GetSection(Options.ArmEnvironmentOptions.SectionName).Get<Options.ArmEnvironmentOptions>();
+                    var armEndpoint = NullIfEnpty(armEnvironmentOptions?.Endpoint);
+                    var armName = NullIfEnpty(armEnvironmentOptions?.Name);
+
+                    if (armEndpoint is null && armName is null)
+                    {
+                        // Ask the VM for the cloud Name https://learn.microsoft.com/azure/virtual-machines/instance-metadata-service?tabs=linux#sample-5-get-the-azure-environment-where-the-vm-is-running
+                        var retryPolicy = new RetryPolicyBuilder(retryOptions).DefaultRetryHttpResponseMessagePolicyBuilder().SetOnRetryBehavior().AsyncBuildPolicy();
+                        HttpRequestMessage request = new(HttpMethod.Get, new UriBuilder("http://169.254.169.254/")
+                        {
+                            Path = "/metadata/instance/compute/azEnvironment",
+                            Query = "api-version=2018-10-01&format=text"
+                        }.Uri);
+                        request.Headers.Add("Metadata", "true");
+
+                        using HttpClient client = new(new HttpClientHandler() { UseProxy = false });
+                        var response = retryPolicy.ExecuteAsync(
+                            () => client.SendAsync(request))
+                            .Result;
+
+                        response.EnsureSuccessStatusCode();
+                        armName = response.Content.ReadAsStringAsync().Result;
+                    }
+
+                    try
+                    {
+                        return armEndpoint is null
+                            ? ArmEnvironmentEndpoints.FromKnownCloudNameAsync(armName, retryOptions).GetAwaiter().GetResult()
+                            : ArmEnvironmentEndpoints.FromMetadataEndpointsAsync(new(armEndpoint), retryOptions).GetAwaiter().GetResult();
+                    }
+                    catch (ArgumentException exception)
+                    {
+                        throw new InvalidOperationException($"The azure cloud '{armName}' is not recognized. Please confgure {Options.ArmEnvironmentOptions.SectionName}:{nameof(Options.ArmEnvironmentOptions.Endpoint)}.", exception);
+                    }
+
+                    static string NullIfEnpty(string value)
+                        => string.IsNullOrWhiteSpace(value) ? null : value;
                 }
             });
 

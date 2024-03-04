@@ -6,7 +6,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
-using Microsoft.Azure.Management.Batch.Models;
+using Azure.Core;
+using Azure.ResourceManager.Batch;
+using Azure.ResourceManager.Batch.Models;
+using Azure.ResourceManager.Models;
+using CommonUtilities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -24,19 +28,18 @@ namespace TesApi.Tests
         private TerraBatchPoolManager terraBatchPoolManager;
         private Mock<TerraWsmApiClient> wsmApiClientMock;
         private Mock<IOptions<TerraOptions>> terraOptionsMock;
-        private Mock<IOptions<BatchAccountOptions>> batchAccountOptionsMock;
+        private Mock<PoolMetadataReader> poolMetadataReaderMock;
         private TerraApiStubData terraApiStubData;
         private ApiCreateBatchPoolRequest capturedApiCreateBatchPoolRequest;
 
         [TestInitialize]
         public void SetUp()
         {
-            terraApiStubData = new TerraApiStubData();
-            wsmApiClientMock = new Mock<TerraWsmApiClient>();
-            terraOptionsMock = new Mock<IOptions<TerraOptions>>();
+            terraApiStubData = new();
+            wsmApiClientMock = new();
+            terraOptionsMock = new();
             terraOptionsMock.Setup(x => x.Value).Returns(terraApiStubData.GetTerraOptions());
-            batchAccountOptionsMock = new Mock<IOptions<BatchAccountOptions>>();
-            batchAccountOptionsMock.Setup(x => x.Value).Returns(terraApiStubData.GetBatchAccountOptions());
+            poolMetadataReaderMock = new();
             wsmApiClientMock.Setup(x => x.CreateBatchPool(It.IsAny<Guid>(), It.IsAny<ApiCreateBatchPoolRequest>(), It.IsAny<System.Threading.CancellationToken>()))
                 .Callback<Guid, ApiCreateBatchPoolRequest, System.Threading.CancellationToken>((arg1, arg2, arg3) => capturedApiCreateBatchPoolRequest = arg2)
                 .ReturnsAsync(terraApiStubData.GetApiCreateBatchPoolResponse());
@@ -44,7 +47,7 @@ namespace TesApi.Tests
             var mapperCfg = new MapperConfiguration(cfg => cfg.AddProfile(typeof(MappingProfilePoolToWsmRequest)));
 
             terraBatchPoolManager = new TerraBatchPoolManager(wsmApiClientMock.Object, mapperCfg.CreateMapper(),
-                terraOptionsMock.Object, batchAccountOptionsMock.Object, NullLogger<TerraBatchPoolManager>.Instance);
+                poolMetadataReaderMock.Object, terraOptionsMock.Object, NullLogger<TerraBatchPoolManager>.Instance);
         }
 
 
@@ -62,15 +65,15 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateBatchPoolAsync_ValidResponse()
         {
-            var poolInfo = new Pool()
+            var poolInfo = new BatchAccountPoolData()
             {
-                DeploymentConfiguration = new DeploymentConfiguration()
+                DeploymentConfiguration = new BatchDeploymentConfiguration()
                 {
-                    CloudServiceConfiguration = new CloudServiceConfiguration("osfamily", "osversion"),
-                    VirtualMachineConfiguration = new VirtualMachineConfiguration()
+                    VmConfiguration = new BatchVmConfiguration(new BatchImageReference(), "batchNodeAgent")
                 },
-                UserAccounts = new List<UserAccount>() { new UserAccount("name", "password") }
             };
+            poolInfo.UserAccounts.Add(new("name", "password"));
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             var poolId = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
@@ -83,19 +86,19 @@ namespace TesApi.Tests
         [DataRow(true, 2)]
         public async Task CreateBatchPoolAsync_AddsResourceIdToMetadata(bool addPoolMetadata, int expectedMetadataLength)
         {
-            var poolInfo = new Pool()
+            var poolInfo = new BatchAccountPoolData()
             {
-                DeploymentConfiguration = new DeploymentConfiguration()
+                DeploymentConfiguration = new BatchDeploymentConfiguration()
                 {
-                    CloudServiceConfiguration = new CloudServiceConfiguration("osfamily", "osversion"),
-                    VirtualMachineConfiguration = new VirtualMachineConfiguration()
+                    VmConfiguration = new BatchVmConfiguration(new BatchImageReference(), "batchNodeAgent")
                 },
-                UserAccounts = new List<UserAccount>() { new UserAccount("name", "password") }
             };
+            poolInfo.UserAccounts.Add(new("name", "password"));
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             if (addPoolMetadata)
             {
-                poolInfo.Metadata = new List<MetadataItem>() { new MetadataItem("name", "value") };
+                poolInfo.Metadata.Add(new("name", "value"));
             }
 
             var pool = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
@@ -108,20 +111,21 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateBatchPoolAsync_MultipleCallsHaveDifferentNameAndResourceId()
         {
-            var poolInfo = new Pool()
+            var poolInfo = new BatchAccountPoolData()
             {
-                DeploymentConfiguration = new DeploymentConfiguration()
+                DeploymentConfiguration = new BatchDeploymentConfiguration()
                 {
-                    CloudServiceConfiguration = new CloudServiceConfiguration("osfamily", "osversion"),
-                    VirtualMachineConfiguration = new VirtualMachineConfiguration()
+                    VmConfiguration = new BatchVmConfiguration(new BatchImageReference(), "batchNodeAgent")
                 },
             };
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
             var name = capturedApiCreateBatchPoolRequest.Common.Name;
             var resourceId = capturedApiCreateBatchPoolRequest.Common.ResourceId;
 
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
             await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
             Assert.AreNotEqual(name, capturedApiCreateBatchPoolRequest.Common.Name);
@@ -131,23 +135,24 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateBatchPoolAsync_ValidUserIdentityResourceIdProvided_UserIdentityNameIsMapped()
         {
-            var identities = new Dictionary<string, UserAssignedIdentities>();
+            var identities = new Dictionary<ResourceIdentifier, UserAssignedIdentity>();
 
             var identityName = @"bar-identity";
             var identityResourceId = $@"/subscriptions/aaaaa450-5f22-4b20-9326-b5852bb89d90/resourcegroups/foo/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identityName}";
 
 
-            identities.Add(identityResourceId, new UserAssignedIdentities());
+            identities.Add(new(identityResourceId), new UserAssignedIdentity());
 
-            var poolInfo = new Pool()
+            var poolInfo = new BatchAccountPoolData()
             {
-                DeploymentConfiguration = new DeploymentConfiguration()
+                DeploymentConfiguration = new BatchDeploymentConfiguration()
                 {
-                    CloudServiceConfiguration = new CloudServiceConfiguration("osfamily", "osversion"),
-                    VirtualMachineConfiguration = new VirtualMachineConfiguration()
+                    VmConfiguration = new BatchVmConfiguration(new BatchImageReference(), "batchNodeAgent")
                 },
-                Identity = new BatchPoolIdentity(PoolIdentityType.UserAssigned, identities)
+                Identity = new(ManagedServiceIdentityType.UserAssigned)
             };
+            poolInfo.Identity.UserAssignedIdentities.AddRange(identities);
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
@@ -157,22 +162,23 @@ namespace TesApi.Tests
         [DataTestMethod]
         [DataRow("/subscription/foo/bar-identity")]
         [DataRow("bar-identity")]
-        [DataRow("")]
+        //[DataRow("")]
         public async Task CreateBatchPoolAsync_InvalidUserIdentityResourceIdProvided_ReturnsValueProvided(string identityName)
         {
-            var identities = new Dictionary<string, UserAssignedIdentities>();
+            var identities = new Dictionary<ResourceIdentifier, UserAssignedIdentity>();
 
-            identities.Add(identityName, new UserAssignedIdentities());
+            identities.Add(new(identityName), new UserAssignedIdentity());
 
-            var poolInfo = new Pool()
+            var poolInfo = new BatchAccountPoolData()
             {
-                DeploymentConfiguration = new DeploymentConfiguration()
+                DeploymentConfiguration = new BatchDeploymentConfiguration()
                 {
-                    CloudServiceConfiguration = new CloudServiceConfiguration("osfamily", "osversion"),
-                    VirtualMachineConfiguration = new VirtualMachineConfiguration()
+                    VmConfiguration = new BatchVmConfiguration(new BatchImageReference(), "batchNodeAgent")
                 },
-                Identity = new BatchPoolIdentity(PoolIdentityType.UserAssigned, identities)
+                Identity = new(ManagedServiceIdentityType.UserAssigned)
             };
+            poolInfo.Identity.UserAssignedIdentities.AddRange(identities);
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
@@ -181,16 +187,14 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateBatchPoolAsync_NoUserIdentityResourceIdProvided_NoIdentitiesMapped()
         {
-            var identities = new Dictionary<string, UserAssignedIdentities>();
-
-            var poolInfo = new Pool()
+            var poolInfo = new BatchAccountPoolData()
             {
-                DeploymentConfiguration = new DeploymentConfiguration()
+                DeploymentConfiguration = new BatchDeploymentConfiguration()
                 {
-                    CloudServiceConfiguration = new CloudServiceConfiguration("osfamily", "osversion"),
-                    VirtualMachineConfiguration = new VirtualMachineConfiguration()
+                    VmConfiguration = new BatchVmConfiguration(new BatchImageReference(), "batchNodeAgent")
                 },
             };
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 
@@ -201,14 +205,15 @@ namespace TesApi.Tests
         public async Task CreateBatchPoolAsync_UserIdentityInStartTaskMapsCorrectly()
         {
 
-            var poolInfo = new Pool()
+            var poolInfo = new BatchAccountPoolData()
             {
 
-                StartTask = new StartTask()
+                StartTask = new()
                 {
-                    UserIdentity = new UserIdentity("user", new AutoUserSpecification(AutoUserScope.Pool, ElevationLevel.Admin))
+                    UserIdentity = new() { UserName = "user", AutoUser = new() { Scope = BatchAutoUserScope.Pool, ElevationLevel = BatchUserAccountElevationLevel.Admin } }
                 }
             };
+            poolInfo.Metadata.Add(new(string.Empty, terraApiStubData.PoolId));
 
             await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
 

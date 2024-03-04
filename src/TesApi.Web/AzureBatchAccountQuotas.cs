@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Collections.Generic;
-using Microsoft.Azure.Management.Batch.Models;
+using Azure.ResourceManager.Batch.Models;
 
 namespace TesApi.Web
 {
@@ -28,7 +28,7 @@ namespace TesApi.Web
         ///     account. For accounts with PoolAllocationMode set to UserSubscription, quota
         ///     is managed on the subscription so this value is not returned.
         /// </summary>
-        public IList<VirtualMachineFamilyCoreQuota> DedicatedCoreQuotaPerVMFamily { get; set; }
+        public IReadOnlyList<BatchVmFamilyCoreQuota> DedicatedCoreQuotaPerVMFamily { get; set; }
         /// <summary>
         /// Gets a value indicating whether core quotas per Virtual Machine family are enforced
         ///     for this account

@@ -4,7 +4,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Channels;
-using Microsoft.VisualStudio.TestTools.UnitTesting.Logging;
 using Tes.Runner.Transfer;
 namespace Tes.Runner.Test;
 
