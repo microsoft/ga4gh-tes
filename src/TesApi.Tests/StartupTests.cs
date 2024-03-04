@@ -79,7 +79,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        public void ConfigureServices_TerraOptionsAreConfigured_TerraStorageProvidedIsResolved()
+        public void ConfigureServices_TerraOptionsAreConfigured_TerraStorageProviderIsResolved()
         {
             ConfigureTerraOptions();
 

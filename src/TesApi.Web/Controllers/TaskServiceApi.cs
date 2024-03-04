@@ -211,7 +211,7 @@ namespace TesApi.Controllers
 
                 if (unsupportedKeys.Count > 0)
                 {
-                    logger.LogWarning($"Unsupported keys were passed to TesResources.backend_parameters: {string.Join(",", unsupportedKeys)}");
+                    logger.LogWarning("Unsupported keys were passed to TesResources.backend_parameters: '{UnsupportedKeys}'", string.Join(",", unsupportedKeys));
                 }
 
                 // If backend_parameters_strict equals true, backends should fail the task if any key / values are unsupported

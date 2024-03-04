@@ -6,10 +6,10 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
-using Tes.ApiClients.Options;
 using Tes.Repository;
 
 namespace TesApi.Web
