@@ -159,9 +159,6 @@ EOF
             batchNodeScript = $@"#!/bin/bash
 set -x
 batch_script_task(){{
-    local task_dir=$1
-    source ""$task_dir/batch_script_env.sh"" || true
-    set_defaults
 {batchNodeScript}
 }}
 {pythonCommand}
@@ -200,7 +197,7 @@ on_error() {{
 
 # Run the trask and attempt to capture any errors:
 trap 'echo \\$? > ""$AZ_BATCH_TASK_DIR/exit_code.txt""; on_error; upload_logs' ERR EXIT
-batch_script_task ""$AZ_BATCH_TASK_DIR""
+batch_script_task
 
 # Capture the exit code and upload the log files
 bath_script_return_code=$?
