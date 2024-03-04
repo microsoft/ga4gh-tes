@@ -4,6 +4,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Channels;
+using Microsoft.VisualStudio.TestTools.UnitTesting.Logging;
 using Tes.Runner.Transfer;
 namespace Tes.Runner.Test;
 
@@ -56,7 +57,14 @@ public class RunnerTestUtils
     {
         if (File.Exists(file))
         {
-            File.Delete(file);
+            try
+            {
+                File.Delete(file);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
         }
     }
 
