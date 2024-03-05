@@ -220,6 +220,8 @@ if [ -f ""$AZ_BATCH_TASK_DIR/exit_code.txt"" ]; then
 else
     EXIT_CODE=$bath_script_return_code
     echo ""Return code: $EXIT_CODE""
+    # Always capture the state:
+    on_error
     upload_logs
 fi
 
