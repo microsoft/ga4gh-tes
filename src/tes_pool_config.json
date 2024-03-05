@@ -1,0 +1,56 @@
+{
+    "id": "TES_POOL_NAME",
+    "displayName": "TES_POOL_NAME",
+    "vmSize": "TES_VM_SIZE",    
+    "virtualMachineConfiguration": {
+        "imageReference": {
+            "publisher": "microsoft-dsvm",
+            "offer": "ubuntu-hpc",
+            "sku": "2004",
+            "version": "latest",
+            "virtualMachineImageId": null,
+            "exactVersion": "latest"
+        },
+        "nodeAgentSKUId": "batch.node.ubuntu 20.04"
+    },
+    "resizeTimeout": "PT15M",
+    "targetDedicatedNodes": 0,
+    "targetLowPriorityNodes": TES_LOW_PRIORITY_NODES,
+    "enableAutoScale": false,
+    "enableInterNodeCommunication": false,
+    "startTask": {
+        "commandLine": "/usr/bin/bash -c 'trap \"echo Error trapped; exit 0\" ERR; sudo touch tmp2.json && (sudo cp /etc/docker/daemon.json tmp1.json || sudo echo {} > tmp1.json) && sudo chmod a+w tmp?.json && if fgrep \"$(dirname \"$(dirname \"$AZ_BATCH_NODE_ROOT_DIR\")\")/docker\" tmp1.json; then echo grep \"found docker path\"; elif [ $? -eq 1 ]; then sudo apt-get install -y jq && jq \\.\\[\\\"data-root\\\"\\]=\\\"\"$(dirname \"$(dirname \"$AZ_BATCH_NODE_ROOT_DIR\")\")/docker\"\\\" tmp1.json >> tmp2.json && sudo cp tmp2.json /etc/docker/daemon.json && sudo chmod 644 /etc/docker/daemon.json && sudo systemctl restart docker && echo \"updated docker data-root\"; else (echo \"grep failed\" || exit 1); fi'",
+        "userIdentity": {
+            "username": null,
+            "autoUser": {
+                "scope": "pool",
+                "elevationLevel": "admin"
+            }
+        },
+        "maxTaskRetryCount": 0,
+        "waitForSuccess": true
+    },
+    "taskSlotsPerNode": 1,
+    "taskSchedulingPolicy": {
+        "nodeFillType": "Spread"
+    },
+    "metadata": [
+        {
+            "name": "CoA-TES-HostName",
+            "value": "OY5BKMMX"
+        },
+        {
+            "name": "CoA-TES-IsDedicated",
+            "value": "False"
+        }
+    ],
+    "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": [
+            {
+                "resourceId": "/subscriptions/a0e0e744-06b2-4fd3-9230-ebf8ef1ac4c8/resourceGroups/test-coa4-southcentral-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-coa4-southcentral-rg-identity"
+            }
+        ]
+    },
+    "targetNodeCommunicationMode": "simplified"
+}
