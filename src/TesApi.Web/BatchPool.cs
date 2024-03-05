@@ -708,7 +708,40 @@ namespace TesApi.Web
         {
             ArgumentNullException.ThrowIfNull(pool);
 
-            if (pool.Id is null || pool.CreationTime is null || pool.Metadata is null || !pool.Metadata.Any(m => BatchScheduler.PoolHostName.Equals(m.Name, StringComparison.Ordinal)) || !pool.Metadata.Any(m => BatchScheduler.PoolIsDedicated.Equals(m.Name, StringComparison.Ordinal)))
+            var broken = pool.Id is null || pool.CreationTime is null || pool.Metadata is null || !pool.Metadata.Any();
+
+            // Immediately remove old-style pools. Tasks will be requeued.
+            if (!broken && !pool.Metadata.Any(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)) && pool.Metadata.Any(m => BatchScheduler.PoolDeprecated.Equals(m.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                PoolId = pool.Id;
+                IsAvailable = false;
+                await _azureProxy.DeleteBatchJobAsync(pool.Id, cancellationToken);
+                return;
+            }
+
+            try
+            {
+                broken |= !pool.Metadata.Any(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)) ||
+                    !IBatchScheduler.PoolMetadata.Create(pool.Metadata.Single(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).Validate();
+            }
+            catch (InvalidOperationException)
+            {
+                broken = true;
+            }
+            catch (ArgumentNullException)
+            {
+                broken = true;
+            }
+            catch (NotSupportedException)
+            {
+                broken = true;
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                broken = true;
+            }
+
+            if (broken)
             {
                 throw new ArgumentException("CloudPool is either not configured correctly or was not retrieved with all required metadata.", nameof(pool));
             }
@@ -736,7 +769,7 @@ namespace TesApi.Web
                 Creation = pool.CreationTime.Value;
             }
 
-            IsDedicated = bool.Parse(pool.Metadata.First(m => BatchScheduler.PoolIsDedicated.Equals(m.Name, StringComparison.Ordinal)).Value);
+            IsDedicated = IBatchScheduler.PoolMetadata.Create(pool.Metadata.First(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).IsDedicated;
             _ = _batchPools.AddPool(this);
         }
     }
