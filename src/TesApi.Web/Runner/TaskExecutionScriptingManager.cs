@@ -157,13 +157,14 @@ EOF
 
             // Write out the entire bash script with variable substitution turned on
             batchNodeScript = $@"#!/bin/bash
+# set -x will print each command before it is executed
 set -x
 batch_script_task(){{
 {batchNodeScript}
 }}
 {pythonCommand}
 
-# Upload the stdout and stderr logs:
+# Upload the stdout and stderr logs (a snapshot is uploaded to avoid azcopy errors)
 upload_logs() {{
     LOGGING_URL=$(get_log_destination_from_runner_url)
     
@@ -182,7 +183,7 @@ do_upload() {{
     azcopy copy --log-level=ERROR --output-level essential ""${{file_name}}.snap"" ""${{3}}${{1}}""
 }}
 
-# Trap helper functions:
+# Trap helper functions, this will log/run only on a trap trigger
 on_error() {{
     trap - ERR EXIT
     if [ -f ""$AZ_BATCH_TASK_DIR/exit_code.txt"" ]; then
@@ -193,9 +194,18 @@ on_error() {{
     echo ""Current directory: $(pwd)""
     echo ""Environment: $(env)""
     echo ""Exports in the current shell: $(export -p)""
+    echo ""Listing files in the current directory: $(ls -R -la \""$AZ_BATCH_TASK_DIR\"")""
+    echo ""Disk usage: $(df -h)""
+    echo ""Memory usage: $(free -m)""
+    echo ""CPU info: $(lscpu)""
+    echo ""Docker processes: $(docker ps -a || true)""
+    echo ""Docker images: $(docker images || true)""
+    echo ""Docker system info: $(docker system info || true)""
+    echo ""Docker system df: $(docker system df || true)""
+    echo ""dmesg out of memory: $(dmesg | grep -i 'out of memory' || true)""
 }}
 
-# Run the trask and attempt to capture any errors:
+# Run the task and attempt to capture any errors:
 trap 'echo \\$? > ""$AZ_BATCH_TASK_DIR/exit_code.txt""; on_error; upload_logs' ERR EXIT
 batch_script_task
 
@@ -218,6 +228,7 @@ echo ""Exiting with code: $EXIT_CODE""
 echo Task complete
 exit $EXIT_CODE
 ";
+            // Remove any windows line endings, bash doesn't like them
             batchNodeScript = batchNodeScript.Replace("\r\n", "\n");
 
             var batchNodeScriptUrl = await UploadContentAsBlobToInternalTesLocationAsync(tesTask, batchNodeScript, BatchScriptFileName, cancellationToken);

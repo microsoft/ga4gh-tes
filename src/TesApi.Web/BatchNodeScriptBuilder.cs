@@ -30,6 +30,10 @@ namespace TesApi.Web
         /// Name of the TES runner task definition file
         /// </summary>
         public const string NodeRunnerTaskDefinitionFilename = "runner-task.json";
+        /// <summary>
+        /// Name of the TES VM performance archive
+        /// </summary>
+        const string VMPerformanceArchiverFilename = "tes_vm_perf.tar.gz";
 
         private readonly StringBuilder batchScript;
         private bool useMetricsFile;
@@ -88,8 +92,6 @@ namespace TesApi.Web
         {
             ArgumentNullException.ThrowIfNull(runnerBinaryUrl);
             ArgumentNullException.ThrowIfNull(runnerTaskInfoUrl);
-
-            const string VMPerformanceArchiverFilename = "tes_vm_perf.tar.gz";
 
             if (useMetricsFile)
             {
