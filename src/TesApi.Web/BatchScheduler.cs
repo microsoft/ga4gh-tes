@@ -1116,7 +1116,7 @@ namespace TesApi.Web
 
             return new()
             {
-                CommandLine = $"/bin/sh -c {cmd}",
+                CommandLine = $"/bin/sh -c \"{cmd}\"",
                 UserIdentity = new BatchModels.UserIdentity(autoUser: new(elevationLevel: BatchModels.ElevationLevel.Admin, scope: BatchModels.AutoUserScope.Pool)),
                 ResourceFiles = files,
                 MaxTaskRetryCount = 1,
