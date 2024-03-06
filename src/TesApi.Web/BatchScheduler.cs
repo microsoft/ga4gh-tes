@@ -44,7 +44,7 @@ namespace TesApi.Web
         /// <summary>
         /// Name of environment variable to place resources shared by all tasks on each compute node in a pool.
         /// </summary>
-        public const string BatchNodeSharedEnvVarName = "AZ_BATCH_NODE_SHARED_DIR";
+        public const string BatchNodeSharedEnvVar = "$AZ_BATCH_NODE_SHARED_DIR";
 
         private const string AzureSupportUrl = "https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
         private const int PoolKeyLength = 55; // 64 max pool name length - 9 chars generating unique pool names
@@ -1083,7 +1083,7 @@ namespace TesApi.Web
                 && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.InvariantCultureIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.InvariantCultureIgnoreCase));
 
             StringBuilder cmd = new();
-            cmd.AppendLinuxLine($"mkdir -p ${BatchNodeSharedEnvVarName} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"${BatchNodeSharedEnvVarName}/{NodeTaskRunnerFilename}", setExecutable: true)}");
+            cmd.AppendLinuxLine($"mkdir -p {BatchNodeSharedEnvVar} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
             List<BatchModels.ResourceFile> files = [];
 
             if (!dockerConfigured)
