@@ -2,6 +2,7 @@
   {
     "VmSize": "Standard_A1_v2",
     "VmFamily": "standardAv2Family",
+    "TesVmGroups": [ "A", "AV2" ],
     "LowPriority": false,
     "PricePerHour": 0.041,
     "MemoryInGiB": 2,

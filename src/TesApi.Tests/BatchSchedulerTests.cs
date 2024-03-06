@@ -230,6 +230,28 @@ namespace TesApi.Tests
             GuardAssertsWithTesTask(task, () => Assert.AreEqual(vmSize, size.VmSize));
         }
 
+        [TestCategory("TES 1.1")]
+        [DataRow("[ 'Dasv5', ['Dasv4', 'Ddv5'], 'Dasv4', 'Standard_D32_v4' ]", true)]
+        [TestMethod]
+        public async Task TestIfVmSizeIsAvailable2(string vmSize, bool preemptible)
+        {
+            var task = GetTesTask();
+            task.Resources.Preemptible = preemptible;
+            task.Resources.BackendParameters = new() { { "temp_wdl_11_azure_vm_family", vmSize } };
+
+            var config = GetMockConfig()();
+            using var serviceProvider = GetServiceProvider(
+                config,
+                GetMockAzureProxy(AzureProxyReturnValues.Defaults),
+                GetMockQuotaProvider(AzureProxyReturnValues.Defaults),
+                GetMockSkuInfoProvider(AzureProxyReturnValues.Defaults),
+                GetMockAllowedVms(config));
+            var batchScheduler = serviceProvider.GetT();
+
+            var size = await ((BatchScheduler)batchScheduler).GetVmSizeAsync(task, System.Threading.CancellationToken.None);
+            GuardAssertsWithTesTask(task, () => Assert.AreEqual(vmSize, size.VmSize));
+        }
+
         private static BatchAccountResourceInformation GetNewBatchResourceInfo()
           => new("batchAccount", "mrg", "sub-id", "eastus", "batchAccount/endpoint");
 

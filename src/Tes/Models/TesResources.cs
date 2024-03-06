@@ -30,7 +30,7 @@ namespace Tes.Models
         public TesResources()
             => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
-        public enum SupportedBackendParameters { internal_path_prefix, vm_size, workflow_execution_identity };
+        public enum SupportedBackendParameters { internal_path_prefix, vm_size, workflow_execution_identity, required_vm_families };
 
         /// <summary>
         /// Requested number of CPUs

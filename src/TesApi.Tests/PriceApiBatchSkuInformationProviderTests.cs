@@ -64,5 +64,15 @@ namespace TesApi.Tests
             Assert.IsTrue(results.Any(r => r.LowPriority && r.PricePerHour is not null && r.PricePerHour > 0));
             Assert.IsTrue(results.Any(r => !r.LowPriority && r.PricePerHour is not null && r.PricePerHour > 0));
         }
+
+        [TestMethod]
+        public async Task GetVmSizesAndPricesAsync_VmFamily()
+        {
+            //provider = serviceProvider.GetT();
+            var results = await provider.GetVmSizesAndPricesAsync("eastus", System.Threading.CancellationToken.None);
+
+            //results.Any(r => r.LowPriority && r.PricePerHour is not null && r.PricePerHour > 0);
+            
+        }
     }
 }

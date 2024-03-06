@@ -1224,6 +1224,31 @@ namespace TesApi.Web
             var noVmFoundMessage = string.Empty;
 
             var vmSize = tesResources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.vm_size);
+            var tesTaskVmFamily = tesResources?.GetBackendParameterValue(TesResources.SupportedBackendParameters.required_vm_families);
+            //string tesTaskVmFamily = "[ 'Dasv5', ['Dasv4', 'Ddv5'], 'Dasv4', 'Standard_D32_v4' ]";
+            tesTaskVmFamily = tesTaskVmFamily.Replace("'", "\""); // convert single quotes to double for valid JSON
+
+            var families = new List<List<string>>
+            {
+                new List<string> { "standardDASv4Family" },
+                new List<string> { "standardDASv4Family", "standardDDv5Family" },
+                new List<string> { "standardDSv3Family" },
+                new List<string> { "Standard_D32_v4" },
+                new List<string> { "all" }
+            };
+
+            // "all" and "none" are special cases   
+
+            // 1.  Filter by LowPri, Cpu, Memory, Disk, THEN by Family
+            // 1b.  If results, then order by COST thenby Family
+            // 1c.  If NO results, repeat until 
+            // 2a.  
+
+            // TODO:
+            // 1.  Add to GenerateVmSkus program the code/regex to generate the list of VM families from existing
+            // 2.  Publish to file in repo
+            // 3.  
+
 
             if (!string.IsNullOrWhiteSpace(vmSize))
             {
@@ -1248,6 +1273,13 @@ namespace TesApi.Web
                         && vm.MemoryInGiB >= requiredMemoryInGB
                         && vm.ResourceDiskSizeInGiB >= requiredDiskSizeInGB)
                     .ToList();
+
+                if (!string.IsNullOrWhiteSpace(tesTaskVmFamily))
+                {
+                    eligibleVms = eligibleVms
+                        .Where(vm => families.Any(family => family.Contains(vm.VmFamily, StringComparer.OrdinalIgnoreCase)))
+                        .ToList();
+                }
 
                 noVmFoundMessage = $"No VM (out of {virtualMachineInfoList.Count}) available with the required resources (cores: {requiredNumberOfCores}, memory: {requiredMemoryInGB} GB, disk: {requiredDiskSizeInGB} GB, preemptible: {preemptible}) for task id {tesTask.Id}.";
             }
