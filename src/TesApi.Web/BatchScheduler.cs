@@ -1083,7 +1083,7 @@ namespace TesApi.Web
                 && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.InvariantCultureIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.InvariantCultureIgnoreCase));
 
             StringBuilder cmd = new();
-            cmd.AppendLinuxLine(CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"${BatchNodeSharedEnvVarName}/{NodeTaskRunnerFilename}", setExecutable: true));
+            cmd.AppendLinuxLine($"mkdir -p ${BatchNodeSharedEnvVarName} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"${BatchNodeSharedEnvVarName}/{NodeTaskRunnerFilename}", setExecutable: true)}");
             List<BatchModels.ResourceFile> files = [];
 
             if (!dockerConfigured)
@@ -1116,7 +1116,7 @@ namespace TesApi.Web
 
             return new()
             {
-                CommandLine = $"/usr/bin/env {cmd}",
+                CommandLine = $"/bin/sh -c {cmd}",
                 UserIdentity = new BatchModels.UserIdentity(autoUser: new(elevationLevel: BatchModels.ElevationLevel.Admin, scope: BatchModels.AutoUserScope.Pool)),
                 ResourceFiles = files,
                 MaxTaskRetryCount = 1,
