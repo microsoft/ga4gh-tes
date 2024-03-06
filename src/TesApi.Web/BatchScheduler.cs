@@ -1083,7 +1083,7 @@ namespace TesApi.Web
                 && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.InvariantCultureIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.InvariantCultureIgnoreCase));
 
             StringBuilder cmd = new();
-            cmd.AppendLinuxLine(CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"{BatchNodeSharedEnvVarName}/{NodeTaskRunnerFilename}", setExecutable: true));
+            cmd.AppendLinuxLine(CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"${BatchNodeSharedEnvVarName}/{NodeTaskRunnerFilename}", setExecutable: true));
             List<BatchModels.ResourceFile> files = [];
 
             if (!dockerConfigured)
