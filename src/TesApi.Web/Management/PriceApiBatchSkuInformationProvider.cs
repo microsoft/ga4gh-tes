@@ -85,6 +85,12 @@ namespace TesApi.Web.Management
 
                 logger.LogInformation($"Received {pricingItems.Count} pricing items");
 
+                if (pricingItems == null || pricingItems.Count == 0)
+                {
+                    logger.LogWarning("No pricing information received from the retail pricing API. Reverting to local pricing data.");
+                    return new List<VirtualMachineInformation>(localVmSizeInfoForBatchSupportedSkus);
+                }
+
                 var vmInfoList = new List<VirtualMachineInformation>();
 
                 foreach (var vm in localVmSizeInfoForBatchSupportedSkus.Where(v => !v.LowPriority))
