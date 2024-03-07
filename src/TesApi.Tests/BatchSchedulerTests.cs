@@ -1299,7 +1299,11 @@ namespace TesApi.Tests
         }
 
         private static TesTask GetTesTask()
-            => JsonConvert.DeserializeObject<TesTask>(File.ReadAllText("testask1.json"));
+        {
+            var task = JsonConvert.DeserializeObject<TesTask>(File.ReadAllText("testask1.json"));
+            task.TaskSubmitter = TaskSubmitter.Parse(task);
+            return task;
+        }
 
         private static Action<Mock<IAzureProxy>> GetMockAzureProxy(AzureProxyReturnValues azureProxyReturnValues)
             => azureProxy =>

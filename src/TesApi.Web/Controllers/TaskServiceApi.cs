@@ -160,17 +160,9 @@ namespace TesApi.Controllers
 
             tesTask.State = TesState.QUEUEDEnum;
             tesTask.CreationTime = DateTimeOffset.UtcNow;
+            tesTask.TaskSubmitter = TaskSubmitter.Parse(tesTask);
 
-            // example: /cromwell-executions/test/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/execution/script
-            tesTask.WorkflowId = tesTask
-                ?.Inputs
-                ?.FirstOrDefault(i => i?.Name?.Equals("commandScript", StringComparison.OrdinalIgnoreCase) == true)
-                ?.Path
-                ?.Split('/', StringSplitOptions.RemoveEmptyEntries)
-                ?.Skip(2)
-                ?.FirstOrDefault();
-
-            // Prefix the TES task id with first eight characters of root Cromwell job id to facilitate easier debugging
+            // Prefix the TES task id with first eight characters of workflow id to facilitate easier debugging
             tesTask.Id = tesTask.CreateId();
 
             if (tesTask?.Resources is not null)

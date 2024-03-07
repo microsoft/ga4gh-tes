@@ -12,14 +12,25 @@ namespace Tes.Models
 {
     public partial class TesTask : RepositoryItem<TesTask>
     {
-        private static readonly Regex CromwellTaskInstanceNameRegex = new("(.*):[^:]*:[^:]*");
-        private static readonly Regex CromwellShardRegex = new(".*:([^:]*):[^:]*");
-        private static readonly Regex CromwellAttemptRegex = new(".*:([^:]*)");
-        public static readonly List<TesState> ActiveStates = new List<TesState> {
+        [GeneratedRegex("(.*):[^:]*:[^:]*")]
+        private static partial Regex GetCromwellTaskInstanceNameRegex();
+        private static readonly Regex CromwellTaskInstanceNameRegex = GetCromwellTaskInstanceNameRegex();
+
+        [GeneratedRegex(".*:([^:]*):[^:]*")]
+        private static partial Regex GetCromwellShardRegex();
+        private static readonly Regex CromwellShardRegex = GetCromwellShardRegex();
+
+        [GeneratedRegex(".*:([^:]*)")]
+        private static partial Regex GetCromwellAttemptRegex();
+        private static readonly Regex CromwellAttemptRegex = GetCromwellAttemptRegex();
+
+        public static readonly List<TesState> ActiveStates =
+        [
             TesState.QUEUEDEnum,
             TesState.RUNNINGEnum,
             TesState.PAUSEDEnum,
-            TesState.INITIALIZINGEnum};
+            TesState.INITIALIZINGEnum
+        ];
 
         /// <summary>
         /// Number of retries attempted
@@ -43,8 +54,14 @@ namespace Tes.Models
         /// <summary>
         /// Top-most parent workflow ID from the workflow engine
         /// </summary>
-        [DataMember(Name = "workflow_id")]
-        public string WorkflowId { get; set; }
+        [IgnoreDataMember]
+        public string WorkflowId => TaskSubmitter?.WorkflowId;
+
+        /// <summary>
+        /// Workflow engine task metadata
+        /// </summary>
+        [DataMember(Name = "task_submitter")]
+        public TaskSubmitter TaskSubmitter { get; set; }
 
         /// <summary>
         /// Assigned Azure Batch PoolId

@@ -13,6 +13,16 @@ namespace Tes.Extensions
     public static class TesTaskExtensions
     {
         /// <summary>
+        /// Reports if task was submitted by Cromwell.
+        /// </summary>
+        /// <param name="tesTask"><see cref="TesTask"/></param>
+        /// <returns><see cref="true"/> if task is from Cromwell, false otherwise.</returns>
+        public static bool IsCromwell(this TesTask tesTask)
+        {
+            return tesTask.TaskSubmitter is CromwellTaskSubmitter;
+        }
+
+        /// <summary>
         /// Writes to <see cref="TesTask"/> system log.
         /// </summary>
         /// <param name="tesTask"><see cref="TesTask"/></param>
@@ -22,7 +32,7 @@ namespace Tes.Extensions
             if (logEntries is not null && logEntries.Any(e => !string.IsNullOrEmpty(e)))
             {
                 var tesTaskLog = tesTask.GetOrAddTesTaskLog();
-                tesTaskLog.SystemLogs ??= new();
+                tesTaskLog.SystemLogs ??= [];
                 tesTaskLog.SystemLogs.AddRange(logEntries);
             }
         }
@@ -36,7 +46,7 @@ namespace Tes.Extensions
         public static void SetFailureReason(this TesTask tesTask, string failureReason, params string[] additionalSystemLogItems)
         {
             tesTask.GetOrAddTesTaskLog().FailureReason = failureReason;
-            tesTask.AddToSystemLog(new[] { failureReason });
+            tesTask.AddToSystemLog([failureReason]);
             tesTask.AddToSystemLog(additionalSystemLogItems.Where(i => !string.IsNullOrEmpty(i)));
         }
 
@@ -57,7 +67,7 @@ namespace Tes.Extensions
         public static void SetWarning(this TesTask tesTask, string warning, params string[] additionalSystemLogItems)
         {
             tesTask.GetOrAddTesTaskLog().Warning = warning;
-            tesTask.AddToSystemLog(new[] { warning });
+            tesTask.AddToSystemLog([warning]);
             tesTask.AddToSystemLog(additionalSystemLogItems.Where(i => !string.IsNullOrEmpty(i)));
         }
 
@@ -70,7 +80,7 @@ namespace Tes.Extensions
         {
             if (tesTask.Logs is null || !tesTask.Logs.Any())
             {
-                tesTask.Logs = new() { new() };
+                tesTask.Logs = [new()];
             }
 
             return tesTask.Logs.Last();
@@ -83,7 +93,7 @@ namespace Tes.Extensions
         /// <returns>Last <see cref="TesTaskLog"/></returns>
         public static TesTaskLog AddTesTaskLog(this TesTask tesTask)
         {
-            tesTask.Logs ??= new();
+            tesTask.Logs ??= [];
             tesTask.Logs.Add(new());
 
             return tesTask.Logs.Last();
@@ -114,7 +124,7 @@ namespace Tes.Extensions
         {
             if (tesTaskLog.Logs is null || !tesTaskLog.Logs.Any())
             {
-                tesTaskLog.Logs = new() { new() };
+                tesTaskLog.Logs = [new()];
             }
 
             return tesTaskLog.Logs.Last();
