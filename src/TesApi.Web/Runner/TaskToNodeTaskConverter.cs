@@ -197,6 +197,14 @@ namespace TesApi.Web.Runner
                     inputs.AddRange(distinctAdditionalInputs);
                 }
 
+                foreach (var input in inputs)
+                {
+                    if (input?.Path.Contains('?') == true)
+                    {
+                        logger.LogWarning("Warning: TES task with ID {taskId} contains a question mark in its path. The last one will be removed along with all text after it.", task.Id);
+                    }
+                }
+
                 MapInputs(inputs, pathParentDirectory, containerMountParentDirectory, builder);
             }
         }
