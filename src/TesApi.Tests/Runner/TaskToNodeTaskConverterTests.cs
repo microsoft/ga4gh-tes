@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Storage.Blobs;
+using CommonUtilities.AzureCloud;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -44,7 +45,7 @@ namespace TesApi.Tests.Runner
 
         const string ExternalStorageAccountName = "external";
         const string ExternalStorageContainer =
-            $"https://{ExternalStorageAccountName}{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont";
+            $"https://{ExternalStorageAccountName}{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/cont";
         const string ExternalStorageContainerWithSas =
             $"{ExternalStorageContainer}?{SasToken}";
         const string ResourceGroup = "myResourceGroup";
@@ -67,9 +68,9 @@ namespace TesApi.Tests.Runner
                     x.GetInternalTesTaskBlobUrlWithoutSasToken(It.IsAny<TesTask>(), It.IsAny<string>()))
                 .Returns(InternalBlobUrl);
 
-
+            var azureCloudIdentityConfig = AzureCloudConfig.CreateAsync().Result.AzureEnvironmentConfig;
             taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), storageAccessProviderMock.Object,
-                Options.Create(storageOptions), Options.Create(batchAccountOptions), new NullLogger<TaskToNodeTaskConverter>());
+                Options.Create(storageOptions), Options.Create(batchAccountOptions), azureCloudIdentityConfig, new NullLogger<TaskToNodeTaskConverter>());
         }
 
 

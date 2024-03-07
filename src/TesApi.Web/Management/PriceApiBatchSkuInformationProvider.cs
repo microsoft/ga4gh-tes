@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using CommonUtilities.AzureCloud;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -22,6 +23,7 @@ namespace TesApi.Web.Management
     {
         private readonly PriceApiClient priceApiClient;
         private readonly IMemoryCache appCache;
+        private readonly AzureCloudConfig azureCloudConfig;
         private readonly ILogger logger;
 
         /// <summary>
@@ -29,15 +31,18 @@ namespace TesApi.Web.Management
         /// </summary>
         /// <param name="appCache">Cache instance. If null, calls to the retail pricing API won't be cached.</param>
         /// <param name="priceApiClient">Retail pricing API client.</param>
+        /// <param name="azureCloudConfig"></param>
         /// <param name="logger">Logger instance. </param>
-        public PriceApiBatchSkuInformationProvider(IMemoryCache appCache, PriceApiClient priceApiClient,
+        public PriceApiBatchSkuInformationProvider(IMemoryCache appCache, PriceApiClient priceApiClient, AzureCloudConfig azureCloudConfig,
             ILogger<PriceApiBatchSkuInformationProvider> logger)
         {
             ArgumentNullException.ThrowIfNull(priceApiClient);
+            ArgumentNullException.ThrowIfNull(azureCloudConfig);
             ArgumentNullException.ThrowIfNull(logger);
 
             this.appCache = appCache;
             this.priceApiClient = priceApiClient;
+            this.azureCloudConfig = azureCloudConfig;
             this.logger = logger;
         }
 
@@ -45,10 +50,11 @@ namespace TesApi.Web.Management
         /// Constructor of PriceApiBatchSkuInformationProvider.
         /// </summary>
         /// <param name="priceApiClient">Retail pricing API client.</param>
+        /// <param name="azureCloudConfig"></param>
         /// <param name="logger">Logger instance.</param>
-        public PriceApiBatchSkuInformationProvider(PriceApiClient priceApiClient,
+        public PriceApiBatchSkuInformationProvider(PriceApiClient priceApiClient, AzureCloudConfig azureCloudConfig,
             ILogger<PriceApiBatchSkuInformationProvider> logger)
-            : this(null, priceApiClient, logger)
+            : this(null, priceApiClient, azureCloudConfig, logger)
         {
         }
 
@@ -67,15 +73,23 @@ namespace TesApi.Web.Management
 
         private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsyncImpl(string region, CancellationToken cancellationToken)
         {
-            logger.LogInformation($"Getting VM sizes and price information for region:{region}");
+            logger.LogInformation($"Getting VM sizes and price information for region: {region}");
 
-            var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync(cancellationToken)).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase));
+            var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync(cancellationToken)).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase)).ToList();
+
+            logger.LogInformation($"localVmSizeInfoForBatchSupportedSkus.Count: {localVmSizeInfoForBatchSupportedSkus.Count}");
 
             try
             {
                 var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region, cancellationToken).ToListAsync(cancellationToken);
 
                 logger.LogInformation($"Received {pricingItems.Count} pricing items");
+
+                if (pricingItems == null || pricingItems.Count == 0)
+                {
+                    logger.LogWarning("No pricing information received from the retail pricing API. Reverting to local pricing data.");
+                    return new List<VirtualMachineInformation>(localVmSizeInfoForBatchSupportedSkus);
+                }
 
                 var vmInfoList = new List<VirtualMachineInformation>();
 
@@ -131,11 +145,13 @@ namespace TesApi.Web.Management
                 EncryptionAtHostSupported = vmReference.EncryptionAtHostSupported
             };
 
-        private static async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync(CancellationToken cancellationToken)
+        private async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync(CancellationToken cancellationToken)
         {
+            string filePath = Path.Combine(AppContext.BaseDirectory, $"BatchSupportedVmSizeInformation_{azureCloudConfig.Name.ToUpperInvariant()}.json");
+            logger.LogInformation("Reading local VM size information from file: {0}", filePath);
+
             return JsonConvert.DeserializeObject<List<VirtualMachineInformation>>(
-                await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,
-                    "BatchSupportedVmSizeInformation.json"), cancellationToken));
+                await File.ReadAllTextAsync(filePath, cancellationToken));
         }
     }
 }

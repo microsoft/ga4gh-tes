@@ -5,13 +5,14 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
+using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Storage
 {
     public class ArmUrlTransformationStrategy : IUrlTransformationStrategy
     {
-        const string StorageHostSuffix = ".blob.core.windows.net";
+        const string blobUrlPrefix = ".blob."; // "core.windows.net";
         private const int BlobSasTokenExpirationInHours = 24 * 7; //7 days which is the Azure Batch node runtime;
         const int UserDelegationKeyExpirationInHours = 1;
 
@@ -19,12 +20,17 @@ namespace Tes.Runner.Storage
         private readonly Dictionary<string, UserDelegationKey> userDelegationKeyDictionary;
         private readonly SemaphoreSlim semaphoreSlim = new SemaphoreSlim(1, 1);
         private readonly Func<Uri, BlobServiceClient> blobServiceClientFactory;
+        private readonly RuntimeOptions runtimeOptions;
+        private readonly string storageHostSuffix;
 
-        public ArmUrlTransformationStrategy(Func<Uri, BlobServiceClient> blobServiceClientFactory)
+        public ArmUrlTransformationStrategy(Func<Uri, BlobServiceClient> blobServiceClientFactory, RuntimeOptions runtimeOptions)
         {
             ArgumentNullException.ThrowIfNull(blobServiceClientFactory);
+            ArgumentNullException.ThrowIfNull(runtimeOptions);
 
             this.blobServiceClientFactory = blobServiceClientFactory;
+            this.runtimeOptions = runtimeOptions;
+            storageHostSuffix = blobUrlPrefix + this.runtimeOptions!.AzureEnvironmentConfig!.StorageUrlSuffix;
             userDelegationKeyDictionary = new Dictionary<string, UserDelegationKey>();
         }
 
@@ -119,11 +125,11 @@ namespace Tes.Runner.Storage
             }
         }
 
-        private static bool IsValidAzureStorageAccountUri(string uri)
+        private bool IsValidAzureStorageAccountUri(string uri)
         {
             return Uri.TryCreate(uri, UriKind.Absolute, out var result) &&
                    result.Scheme == "https" &&
-                   result.Host.EndsWith(StorageHostSuffix);
+                   result.Host.EndsWith(storageHostSuffix);
         }
     }
 }
