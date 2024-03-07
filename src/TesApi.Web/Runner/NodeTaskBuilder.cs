@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using CommonUtilities;
 using Tes.Runner.Models;
 
 namespace TesApi.Web.Runner
@@ -289,6 +290,23 @@ namespace TesApi.Web.Runner
 
             nodeTask.RuntimeOptions ??= new RuntimeOptions();
             nodeTask.RuntimeOptions.NodeManagedIdentityResourceId = resourceId;
+            return this;
+        }
+
+        /// <summary>
+        /// (Optional) sets the azure authority host for the node task.  If not set, the default Azure Public cloud is used.
+        /// </summary>
+        /// <param name="azureCloudIdentityConfig">Azure cloud identity config</param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithAzureCloudIdentityConfig(AzureEnvironmentConfig azureCloudIdentityConfig)
+        {
+            if (azureCloudIdentityConfig == null)
+            {
+                return this;
+            }
+
+            nodeTask.RuntimeOptions ??= new RuntimeOptions();
+            nodeTask.RuntimeOptions.AzureEnvironmentConfig = azureCloudIdentityConfig;
             return this;
         }
 

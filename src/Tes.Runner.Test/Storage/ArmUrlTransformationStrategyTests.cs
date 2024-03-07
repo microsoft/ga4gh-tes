@@ -4,7 +4,10 @@
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
+using CommonUtilities;
+using CommonUtilities.AzureCloud;
 using Moq;
+using Tes.Runner.Models;
 using Tes.Runner.Storage;
 
 namespace Tes.Runner.Test.Storage
@@ -22,7 +25,10 @@ namespace Tes.Runner.Test.Storage
         public void SetUp()
         {
             mockBlobServiceClient = new Mock<BlobServiceClient>();
-            armUrlTransformationStrategy = new ArmUrlTransformationStrategy(_ => mockBlobServiceClient.Object);
+            var options = new RuntimeOptions();
+            options.AzureEnvironmentConfig = ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig;
+
+            armUrlTransformationStrategy = new ArmUrlTransformationStrategy(_ => mockBlobServiceClient.Object, options);
             userDelegationKey = BlobsModelFactory.UserDelegationKey(Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow.AddHours(1), "SIGNED_SERVICE", "V1_0", RunnerTestUtils.GenerateRandomTestAzureStorageKey());
             mockBlobServiceClient.Setup(c => c.GetUserDelegationKeyAsync(It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))

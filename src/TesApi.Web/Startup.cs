@@ -9,6 +9,7 @@ using System.Threading;
 using Azure.Core;
 using Azure.Identity;
 using CommonUtilities;
+using CommonUtilities.AzureCloud;
 using CommonUtilities.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
@@ -44,6 +45,7 @@ namespace TesApi.Web
         private readonly IConfiguration configuration;
         private readonly ILogger logger;
         private readonly IWebHostEnvironment hostingEnvironment;
+        internal static AzureCloudConfig AzureCloudConfig;
 
         /// <summary>
         /// Startup class for ASP.NET core
@@ -64,9 +66,11 @@ namespace TesApi.Web
             try
             {
                 services
+                    .AddSingleton(AzureCloudConfig)
+                    .AddSingleton(AzureCloudConfig.AzureEnvironmentConfig)
                     .AddLogging()
                     .AddApplicationInsightsTelemetry(configuration)
-
+                    .Configure<GeneralOptions>(configuration.GetSection(GeneralOptions.SectionName))
                     .Configure<BatchAccountOptions>(configuration.GetSection(BatchAccountOptions.SectionName))
                     .Configure<PostgreSqlOptions>(configuration.GetSection(PostgreSqlOptions.GetConfigurationSectionName("Tes")))
                     .Configure<RetryPolicyOptions>(configuration.GetSection(RetryPolicyOptions.SectionName))
@@ -95,7 +99,6 @@ namespace TesApi.Web
                             opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
                         })
                     .Services
-
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
                     .AddSingleton<IAzureProxy>(sp => ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(sp, (IAzureProxy)sp.GetRequiredService(typeof(AzureProxy))))
                     .AddSingleton<IRepository<TesTask>>(sp => ActivatorUtilities.CreateInstance<RepositoryRetryHandler<TesTask>>(sp, (IRepository<TesTask>)sp.GetRequiredService(typeof(TesTaskPostgreSqlRepository))))
@@ -112,7 +115,11 @@ namespace TesApi.Web
                     .AddSingleton<AzureManagementClientsFactory>()
                     .AddSingleton<ConfigurationUtils>()
                     .AddSingleton<IAllowedVmSizesService, AllowedVmSizesService>()
-                    .AddSingleton<TokenCredential>(s => new DefaultAzureCredential())
+                    .AddSingleton<TokenCredential>(s =>
+                    {
+                        return new DefaultAzureCredential(
+                            new DefaultAzureCredentialOptions { AuthorityHost = new Uri(AzureCloudConfig.Authentication.LoginEndpointUrl) });
+                    })
                     .AddSingleton<TaskToNodeTaskConverter>()
                     .AddSingleton<TaskExecutionScriptingManager>()
                     .AddTransient<BatchNodeScriptBuilder>()
@@ -259,7 +266,7 @@ namespace TesApi.Web
                 if (string.IsNullOrWhiteSpace(options.Value.AppKey))
                 {
                     //we are assuming Arm with MI/RBAC if no key is provided. Try to get info from the batch account.
-                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName, System.Threading.CancellationToken.None);
+                    var task = ArmResourceInformationFinder.TryGetResourceInformationFromAccountNameAsync(options.Value.AccountName, AzureCloudConfig, System.Threading.CancellationToken.None);
                     task.Wait();
 
                     if (task.Result is null)
