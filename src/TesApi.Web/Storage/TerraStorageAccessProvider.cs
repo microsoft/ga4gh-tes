@@ -195,7 +195,7 @@ namespace TesApi.Web.Storage
 
         private TerraBlobInfo GetTerraBlobInfoForInternalTesTask(TesTask task, string blobPath)
         {
-            var internalPath = $"{GetInternalTesPath()}/{task.Id}";
+            var internalPath = $"{GetInternalTesPath()}{DefaultTasksPrefix}{task.Id}";
 
             if (task.Resources != null && task.Resources.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix))
             {

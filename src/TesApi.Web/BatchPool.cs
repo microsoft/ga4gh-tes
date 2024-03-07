@@ -711,7 +711,7 @@ namespace TesApi.Web
             var broken = pool.Id is null || pool.CreationTime is null || pool.Metadata is null || !pool.Metadata.Any();
 
             // Immediately remove old-style pools. Tasks will be requeued.
-            if (!broken && !pool.Metadata.Any(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)) && pool.Metadata.Any(m => BatchScheduler.PoolDeprecated.Equals(m.Name, StringComparison.OrdinalIgnoreCase)))
+            if (!broken && pool.Metadata.Any(m => BatchScheduler.PoolDeprecated.Equals(m.Name, StringComparison.OrdinalIgnoreCase)))
             {
                 PoolId = pool.Id;
                 IsAvailable = false;
