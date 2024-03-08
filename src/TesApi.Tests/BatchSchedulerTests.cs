@@ -486,7 +486,7 @@ namespace TesApi.Tests
                             break;
 
                         default:
-                            Assert.Fail("Unexpected TesState: {State}." ,tesTask.State);
+                            Assert.Fail("Unexpected TesState: {State}.", tesTask.State);
                             break;
                     }
                 });
