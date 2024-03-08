@@ -19,6 +19,19 @@ namespace Tes.Models
         private static partial Regex CromwellPathRegex();
         private static readonly Regex cromwellPathRegex = CromwellPathRegex();
 
+        protected TaskSubmitter()
+        { }
+
+        protected TaskSubmitter(string submitter_name, string workflow_id)
+        {
+            if (!Name.Equals(submitter_name, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(null, nameof(submitter_name));
+            }
+
+            WorkflowId = workflow_id;
+        }
+
         /// <summary>
         /// Submitter engine name.
         /// </summary>
@@ -103,6 +116,14 @@ namespace Tes.Models
     /// </summary>
     public sealed class UnknownTaskSubmitter : TaskSubmitter
     {
+        public UnknownTaskSubmitter()
+        { }
+
+        [Newtonsoft.Json.JsonConstructor]
+        [System.Text.Json.Serialization.JsonConstructor]
+        public UnknownTaskSubmitter(string submitter_name, string workflow_id)
+            : base(submitter_name, workflow_id) { }
+
         public override string Name => "unknown";
     }
 
@@ -111,6 +132,14 @@ namespace Tes.Models
     /// </summary>
     public sealed class CromwellTaskSubmitter : TaskSubmitter
     {
+        public CromwellTaskSubmitter()
+        { }
+
+        [Newtonsoft.Json.JsonConstructor]
+        [System.Text.Json.Serialization.JsonConstructor]
+        public CromwellTaskSubmitter(string submitter_name, string workflow_id)
+            : base(submitter_name, workflow_id) { }
+
         /// <inheritdoc/>
         public override string Name => "cromwell";
 
