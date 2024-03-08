@@ -3,8 +3,13 @@
 
 using System;
 using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using System.Text.RegularExpressions;
+using Tes.Extensions;
 
 namespace Tes.Models
 {
@@ -106,6 +111,32 @@ namespace Tes.Models
             catch (Exception) { }
 
             return new UnknownTaskSubmitter();
+        }
+    }
+
+    internal sealed class TaskSubmitterTypeInfoResolver : DefaultJsonTypeInfoResolver
+    {
+        private static readonly Type taskSubitterType = typeof(TaskSubmitter);
+        private static readonly JsonPolymorphicAttribute taskSubmitterJsonPolymorphic = taskSubitterType.GetCustomAttribute<JsonPolymorphicAttribute>();
+
+        public override JsonTypeInfo GetTypeInfo(Type type, JsonSerializerOptions options)
+        {
+            var jsonTypeInfo = base.GetTypeInfo(type, options);
+
+            if (taskSubitterType.Equals(jsonTypeInfo.Type))
+            {
+                jsonTypeInfo.PolymorphismOptions = new()
+                {
+                    TypeDiscriminatorPropertyName = taskSubmitterJsonPolymorphic.TypeDiscriminatorPropertyName,
+                    IgnoreUnrecognizedTypeDiscriminators = taskSubmitterJsonPolymorphic.IgnoreUnrecognizedTypeDiscriminators,
+                    UnknownDerivedTypeHandling = taskSubmitterJsonPolymorphic.UnknownDerivedTypeHandling
+                };
+
+                jsonTypeInfo.PolymorphismOptions.DerivedTypes.AddRange(
+                    taskSubitterType.GetCustomAttributes<JsonDerivedTypeAttribute>().Select(a => new JsonDerivedType(a.DerivedType, (string)a.TypeDiscriminator)));
+            }
+
+            return jsonTypeInfo;
         }
     }
 

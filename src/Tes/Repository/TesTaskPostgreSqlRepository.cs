@@ -23,10 +23,19 @@ namespace Tes.Repository
     /// <typeparam name="TesTask"></typeparam>
     public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem>, IRepository<TesTask>
     {
+        // Creator of JsonSerializerOptions
+        private static System.Text.Json.JsonSerializerOptions GetSerializerOptions()
+        {
+            System.Text.Json.JsonSerializerOptions options = new();
+            options.TypeInfoResolverChain.Add(new TaskSubmitterTypeInfoResolver());
+            return options;
+        }
+
         // Creator of NpgsqlDataSource
         public static Func<string, Npgsql.NpgsqlDataSource> NpgsqlDataSourceBuilder
             => connectionString => new Npgsql.NpgsqlDataSourceBuilder(connectionString)
-                            .EnableDynamicJson(jsonbClrTypes: new[] { typeof(TesTask) })
+                            .EnableDynamicJson(jsonbClrTypes: [typeof(TesTask)])
+                            .ConfigureJsonOptions(serializerOptions: GetSerializerOptions())
                             .Build();
 
         // Configuration of NpgsqlDbContext
