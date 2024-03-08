@@ -3,7 +3,7 @@
 
 using System;
 using System.IO;
-using System.Runtime.Serialization;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace Tes.Models
@@ -11,6 +11,9 @@ namespace Tes.Models
     /// <summary>
     /// Workflow engine task metadata.
     /// </summary>
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "submitterName", IgnoreUnrecognizedTypeDiscriminators = false, UnknownDerivedTypeHandling = JsonUnknownDerivedTypeHandling.FailSerialization)]
+    [JsonDerivedType(typeof(UnknownTaskSubmitter), "unknown")]
+    [JsonDerivedType(typeof(CromwellTaskSubmitter), "cromwell")]
     public abstract partial class TaskSubmitter
     {
         // examples: /cromwell-executions/test/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/execution/rc
@@ -22,26 +25,21 @@ namespace Tes.Models
         protected TaskSubmitter()
         { }
 
-        protected TaskSubmitter(string submitter_name, string workflow_id)
+        protected TaskSubmitter(string workflow_id)
         {
-            if (!Name.Equals(submitter_name, StringComparison.Ordinal))
-            {
-                throw new ArgumentException(null, nameof(submitter_name));
-            }
-
             WorkflowId = workflow_id;
         }
 
         /// <summary>
         /// Submitter engine name.
         /// </summary>
-        [DataMember(Name = "submitter_name")]
+        [JsonIgnore]
         public abstract string Name { get; }
 
         /// <summary>
         /// Top level workflow identifier.
         /// </summary>
-        [DataMember(Name = "workflow_id")]
+        [JsonPropertyName("workflowId")]
         public virtual string WorkflowId { get; init; }
 
         /// <summary>
@@ -119,10 +117,9 @@ namespace Tes.Models
         public UnknownTaskSubmitter()
         { }
 
-        [Newtonsoft.Json.JsonConstructor]
-        [System.Text.Json.Serialization.JsonConstructor]
-        public UnknownTaskSubmitter(string submitter_name, string workflow_id)
-            : base(submitter_name, workflow_id) { }
+        [JsonConstructor]
+        public UnknownTaskSubmitter(string workflow_id)
+            : base(workflow_id) { }
 
         public override string Name => "unknown";
     }
@@ -135,10 +132,9 @@ namespace Tes.Models
         public CromwellTaskSubmitter()
         { }
 
-        [Newtonsoft.Json.JsonConstructor]
-        [System.Text.Json.Serialization.JsonConstructor]
-        public CromwellTaskSubmitter(string submitter_name, string workflow_id)
-            : base(submitter_name, workflow_id) { }
+        [JsonConstructor]
+        public CromwellTaskSubmitter(string workflow_id)
+            : base(workflow_id) { }
 
         /// <inheritdoc/>
         public override string Name => "cromwell";
@@ -146,43 +142,43 @@ namespace Tes.Models
         /// <summary>
         /// Workflow name.
         /// </summary>
-        [DataMember(Name = "workflow_name")]
+        [JsonPropertyName("workflowName")]
         public string WorkflowName { get; init; }
 
         /// <summary>
         /// Workflow stage AKA WDL workflow task.
         /// </summary>
-        [DataMember(Name = "workflow_stage")]
+        [JsonPropertyName("workflowStage")]
         public string WorkflowStage { get; init; }
 
         /// <summary>
         /// Sub workflow name.
         /// </summary>
-        [DataMember(Name = "sub_workflow_name")]
+        [JsonPropertyName("subWorkflowName")]
         public string SubWorkflowName { get; init; }
 
         /// <summary>
         /// Sub workflow id.
         /// </summary>
-        [DataMember(Name = "sub_workflow_id")]
+        [JsonPropertyName("subWorkflowId")]
         public string SubWorkflowId { get; init; }
 
         /// <summary>
         /// Sub workflow stage.
         /// </summary>
-        [DataMember(Name = "sub_workflow_stage")]
+        [JsonPropertyName("subWorkflowStage")]
         public string SubWorkflowStage { get; init; }
 
         /// <summary>
         /// Workflow shard.
         /// </summary>
-        [DataMember(Name = "shard")]
+        [JsonPropertyName("shard")]
         public string Shard { get; init; }
 
         /// <summary>
         /// Cromwell task execution directory.
         /// </summary>
-        [DataMember(Name = "cromwell_execution_dir")]
+        [JsonPropertyName("cromwellExecutionDir")]
         public string ExecutionDir { get; init; }
     }
 }
