@@ -66,15 +66,16 @@ namespace TesApi.Tests
             // The current working directory is this: /mnt/vss/_work/r1/a/CoaArtifacts/AllSource/TesApi.Tests/bin/Debug/net8.0/
             // And the file is available here: /mnt/vss/_work/r1/a/CoaArtifacts/AllSource/TesApi.Tests/TesCredentials.json
             const string storageAccountNamePath = "../../../TesCredentials.json";
+            string path = Path.GetFullPath(storageAccountNamePath);
 
-            if (!File.Exists(storageAccountNamePath))
+            if (!File.Exists(path))
             {
-                Console.WriteLine($"Path not found - exiting integration test: {storageAccountNamePath}");
+                Console.WriteLine($"Path not found - exiting integration test: {path}");
                 return null;
             }
 
-            Console.WriteLine($"Found path: {storageAccountNamePath}");
-            var stream = File.OpenRead(storageAccountNamePath);
+            Console.WriteLine($"Found path: {path}");
+            var stream = File.OpenRead(path);
             var (hostname, username, password) = System.Text.Json.JsonSerializer.Deserialize<TesCredentials>(stream,
                                 new System.Text.Json.JsonSerializerOptions() { IncludeFields = true, PropertyNameCaseInsensitive = true });
 
