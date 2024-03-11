@@ -28,6 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Tes.SDK\Tes.SDK.csproj" />
     <ProjectReference Include="..\TesApi.Web\TesApi.Web.csproj" />
     <ProjectReference Include="..\Tes\Tes.csproj" />
   </ItemGroup>

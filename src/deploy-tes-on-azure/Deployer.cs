@@ -56,6 +56,7 @@ using Newtonsoft.Json;
 using Polly;
 using Polly.Retry;
 using Tes.Models;
+using Tes.SDK;
 using static Microsoft.Azure.Management.PostgreSQL.FlexibleServers.DatabasesOperationsExtensions;
 using static Microsoft.Azure.Management.PostgreSQL.FlexibleServers.ServersOperationsExtensions;
 using static Microsoft.Azure.Management.PostgreSQL.ServersOperationsExtensions;
@@ -91,8 +92,6 @@ namespace TesDeployer
         public const string InputsContainerName = "inputs";
         public const string StorageAccountKeySecretName = "CoAStorageKey";
         public const string PostgresqlSslMode = "VerifyFull";
-
-        private record TesCredentials(string TesHostname, string TesUsername, string TesPassword);
 
         private readonly CancellationTokenSource cts = new();
 
