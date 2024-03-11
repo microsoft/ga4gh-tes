@@ -11,12 +11,20 @@ namespace Tes.SDK
 {
     public class TesClient : ITesClient
     {
-        private static readonly HttpClient _httpClient = new HttpClient();
+        private readonly HttpClient _httpClient = new HttpClient();
         private readonly string _baseUrl;
         private readonly string? _username;
         private readonly string? _password;
 
         public string SdkVersion { get; } = "0.1.0";
+
+        public TesClient(HttpClient httpClient, string baseUrl, string? username = null, string? password = null)
+        {
+            _httpClient = httpClient;
+            _baseUrl = baseUrl ?? throw new ArgumentNullException(nameof(baseUrl));
+            _username = username;
+            _password = password;
+        }
 
         public TesClient(string baseUrl)
         {
