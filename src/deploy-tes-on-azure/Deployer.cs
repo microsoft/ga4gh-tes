@@ -14,6 +14,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure;
 using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
@@ -654,7 +655,7 @@ namespace TesDeployer
 
                             var portForwardTask = startPortForward(tokenSource.Token);
                             await Task.Delay(longRetryWaitTime * 2, tokenSource.Token); // Give enough time for kubectl to standup the port forwarding.
-                            var runTestTask = RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+                            var runTestTask = RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0);
 
                             for (var task = await Task.WhenAny(portForwardTask, runTestTask);
                                 runTestTask != task;
@@ -792,57 +793,33 @@ namespace TesDeployer
             }
         }
 
-        private async Task<int> TestTaskAsync(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
+        private async Task<bool> RunTesTaskAsync(string tesHostname, bool isPreemptible)
         {
-            using var client = new HttpClient();
-
-            var task = new TesTask()
+            var tesClient = new TesClient($"http://{tesHostname}");
+            var testTesTask = new TesTask();
+            testTesTask.Resources.Preemptible = isPreemptible;
+            testTesTask.Executors.Add(new TesExecutor
             {
-                Inputs = new(),
-                Outputs = new(),
-                Executors = new()
-                {
-                    new()
-                    {
-                        Image = "ubuntu:22.04",
-                        Command = new() { "echo", "hello world" },
-                    }
-                },
-                Resources = new()
-                {
-                    Preemptible = preemptible
-                }
-            };
+                Image = "ubuntu",
+                Command = new() { "/bin/sh", "-c", "cat /proc/sys/kernel/random/uuid" },
+            });
 
-            var content = new StringContent(JsonConvert.SerializeObject(task), Encoding.UTF8, "application/json");
-            var requestUri = $"http://{tesEndpoint}/v1/tasks";
+            var completedTask = await tesClient.CreateAndWaitTilDoneAsync(testTesTask);
+            ConsoleEx.WriteLine($"TES Task State: {completedTask.State}");
 
-            Dictionary<string, string> response = null;
-            await longRetryPolicy.ExecuteAsync(
-                async ct =>
-                {
-                    var responseBody = await client.PostAsync(requestUri, content, ct);
-                    var body = await responseBody.Content.ReadAsStringAsync(ct);
-                    try
-                    {
-                        response = JsonConvert.DeserializeObject<Dictionary<string, string>>(body);
-                    }
-                    catch (JsonReaderException exception)
-                    {
-                        exception.Data.Add("Body", body);
-                        throw;
-                    }
-                },
-                cts.Token);
+            if (completedTask.State != TesState.COMPLETEEnum)
+            {
+                ConsoleEx.WriteLine($"Failure reason: {completedTask.FailureReason}");
+            }
 
-            return await IsTaskSuccessfulAfterLongPollingAsync(client, $"{requestUri}/{response["id"]}?view=full") ? 0 : 1;
+            return completedTask.State == TesState.COMPLETEEnum;
         }
 
-        private async Task<bool> RunTestTask(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
+        private async Task<bool> RunTestTask(string tesEndpoint, bool isPreemptible)
         {
             var startTime = DateTime.UtcNow;
             var line = ConsoleEx.WriteLine("Running a test task...");
-            var isTestWorkflowSuccessful = (await TestTaskAsync(tesEndpoint, preemptible, tesUsername, tesPassword)) < 1;
+            var isTestWorkflowSuccessful = await RunTesTaskAsync(tesEndpoint, isPreemptible);
             WriteExecutionTime(line, startTime);
 
             if (isTestWorkflowSuccessful)
@@ -863,50 +840,6 @@ namespace TesDeployer
             }
 
             return isTestWorkflowSuccessful;
-        }
-
-        private async Task<bool> IsTaskSuccessfulAfterLongPollingAsync(HttpClient client, string taskEndpoint)
-        {
-            while (true)
-            {
-                try
-                {
-                    var responseBody = await client.GetAsync(taskEndpoint, cts.Token);
-                    var content = await responseBody.Content.ReadAsStringAsync(cts.Token);
-                    var response = JsonConvert.DeserializeObject<TesTask>(content);
-
-                    if (response.State == TesState.COMPLETEEnum)
-                    {
-                        if (string.IsNullOrWhiteSpace(response.FailureReason))
-                        {
-                            ConsoleEx.WriteLine($"TES Task State: {response.State}");
-                            return true;
-                        }
-
-                        ConsoleEx.WriteLine($"Failure reason: {response.FailureReason}");
-                        return false;
-                    }
-                    else if (response.State == TesState.EXECUTORERROREnum || response.State == TesState.SYSTEMERROREnum || response.State == TesState.CANCELEDEnum)
-                    {
-                        ConsoleEx.WriteLine($"TES Task State: {response.State}");
-                        ConsoleEx.WriteLine(content);
-
-                        if (!string.IsNullOrWhiteSpace(response.FailureReason))
-                        {
-                            ConsoleEx.WriteLine($"Failure reason: {response.FailureReason}");
-                        }
-
-                        return false;
-                    }
-                }
-                catch (Exception exc)
-                {
-                    // "Server is busy" occasionally can be ignored
-                    ConsoleEx.WriteLine($"Transient error: '{exc.Message}' Will retry again in 10s.");
-                }
-
-                await Task.Delay(System.TimeSpan.FromSeconds(10), cts.Token);
-            }
         }
 
         private async Task<Vault> ValidateAndGetExistingKeyVaultAsync()

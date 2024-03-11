@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Polly;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -8,7 +9,7 @@ using Tes.Models;
 
 namespace Tes.SDK
 {
-    public class TesClient
+    public class TesClient : ITesClient
     {
         private static readonly HttpClient _httpClient = new HttpClient();
         private readonly string _baseUrl;
@@ -38,9 +39,9 @@ namespace Tes.SDK
             }
         }
 
-        private async Task<HttpResponseMessage> SendRequestAsync(HttpMethod method, string endpoint, HttpContent? content = null, CancellationToken cancellationToken = default)
+        private async Task<HttpResponseMessage> SendRequestAsync(HttpMethod method, string urlPath, HttpContent? content = null, CancellationToken cancellationToken = default)
         {
-            var request = new HttpRequestMessage(method, _baseUrl + endpoint);
+            var request = new HttpRequestMessage(method, _baseUrl + urlPath);
             request.Content = content;
             SetAuthorizationHeader(request);
             var response = await _httpClient.SendAsync(request, cancellationToken);
@@ -102,6 +103,32 @@ namespace Tes.SDK
                     yield break;
                 }
             } while (pageToken != null && (cancellationToken == default || !cancellationToken.IsCancellationRequested));
+        }
+
+        /// <summary>
+        /// Creates a new TES task and blocks forever until it's done
+        /// </summary>
+        /// <param name="tesTask">The TES task to create</param>
+        /// <param name="cancellationToken">The cancellationToken</param>
+        /// <returns>The created TES task</returns>
+        public async Task<TesTask> CreateAndWaitTilDoneAsync(TesTask tesTask, CancellationToken cancellationToken = default)
+        {
+            var taskId = await CreateTaskAsync(tesTask, cancellationToken);
+            var retryPolicy = Policy
+                .Handle<Exception>()
+                .WaitAndRetryAsync(10, _ => TimeSpan.FromSeconds(5));
+
+            while (true)
+            {
+                var task = await retryPolicy.ExecuteAsync(() => GetTaskAsync(taskId, TesView.MINIMAL, cancellationToken));
+
+                if (!task.IsActiveState())
+                {
+                    return task;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(1));
+            }
         }
     }
 }
