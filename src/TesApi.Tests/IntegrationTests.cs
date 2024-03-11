@@ -15,8 +15,9 @@ namespace TesApi.Tests
     {
         [TestCategory("Integration")]
         [TestMethod]
-        public async Task RunScaleTestAsync(int count = 1000)
+        public async Task RunScaleTestAsync()
         {
+            int count = 1000;
             var tesClient = GetTesClientFromAzureDevopsPipelineFileSystem();
 
             if (tesClient == null)
