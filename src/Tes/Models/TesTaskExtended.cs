@@ -5,25 +5,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
-using System.Text.RegularExpressions;
 using Tes.Repository;
 
 namespace Tes.Models
 {
     public partial class TesTask : RepositoryItem<TesTask>
     {
-        [GeneratedRegex("(.*):[^:]*:[^:]*")]
-        private static partial Regex GetCromwellTaskInstanceNameRegex();
-        private static readonly Regex CromwellTaskInstanceNameRegex = GetCromwellTaskInstanceNameRegex();
-
-        [GeneratedRegex(".*:([^:]*):[^:]*")]
-        private static partial Regex GetCromwellShardRegex();
-        private static readonly Regex CromwellShardRegex = GetCromwellShardRegex();
-
-        [GeneratedRegex(".*:([^:]*)")]
-        private static partial Regex GetCromwellAttemptRegex();
-        private static readonly Regex CromwellAttemptRegex = GetCromwellAttemptRegex();
-
         public static readonly List<TesState> ActiveStates =
         [
             TesState.QUEUEDEnum,
@@ -91,19 +78,19 @@ namespace Tes.Models
         /// Cromwell task description without shard and attempt numbers
         /// </summary>
         [IgnoreDataMember]
-        public string CromwellTaskInstanceName => this.Description == null ? null : CromwellTaskInstanceNameRegex.Match(this.Description).Groups[1].Value;
+        public string CromwellTaskInstanceName => (TaskSubmitter as CromwellTaskSubmitter)?.CromwellTaskInstanceName;
 
         /// <summary>
         /// Cromwell shard number
         /// </summary>
         [IgnoreDataMember]
-        public int? CromwellShard => this.Description == null ? null : (int.TryParse(CromwellShardRegex.Match(this.Description).Groups[1].Value, out var result) ? result : null);
+        public int? CromwellShard => (TaskSubmitter as CromwellTaskSubmitter)?.CromwellShard;
 
         /// <summary>
         /// Cromwell attempt number
         /// </summary>
         [IgnoreDataMember]
-        public int? CromwellAttempt => this.Description == null ? null : (int.TryParse(CromwellAttemptRegex.Match(this.Description).Groups[1].Value, out var result) ? result : null);
+        public int? CromwellAttempt => (TaskSubmitter as CromwellTaskSubmitter)?.CromwellAttempt;
 
         public bool IsActiveState()
         {

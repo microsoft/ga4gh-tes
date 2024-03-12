@@ -125,7 +125,7 @@ namespace Tes.Models
         /// </summary>
         /// <param name="id">TesTask ID</param>
         /// <returns>True if valid, false if not</returns>
-        /// <remarks>Letter, digit, _, -, length 32, 36, 41.  Supports GUID for backwards compatibility.</remarks>
+        /// <remarks>Letter, digit, _, -, length 32, 36, 41.  Supports dashed GUID for backwards compatibility.</remarks>
         public static bool IsValidId(string id)
         {
             return (id.Length == 32 || id.Length == 36 || id.Length == 41) && !id.Any(c => !(char.IsLetterOrDigit(c) || c == '_' || c == '-'));

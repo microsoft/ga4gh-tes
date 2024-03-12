@@ -2,39 +2,23 @@
 // Licensed under the MIT License.
 
 using System;
-using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using System.Text.RegularExpressions;
-using Tes.Extensions;
 
 namespace Tes.Models
 {
     /// <summary>
     /// Workflow engine task metadata.
     /// </summary>
-    [JsonPolymorphic(TypeDiscriminatorPropertyName = "submitterName", IgnoreUnrecognizedTypeDiscriminators = false, UnknownDerivedTypeHandling = JsonUnknownDerivedTypeHandling.FailSerialization)]
+    // Regarding TypeDiscriminatorPropertyName : https://github.com/dotnet/runtime/issues/72604#issuecomment-1544811970 (fix won't be present until system.text.json v9 preview 2)
+    // tl;dr - System.Text.Json requires that the discriminator property be the first json property returned. postgres jsonb returns properties in name-length order (shorter before longer). Upshot: we use a very short json property name.
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "$t", IgnoreUnrecognizedTypeDiscriminators = false, UnknownDerivedTypeHandling = JsonUnknownDerivedTypeHandling.FailSerialization)]
     [JsonDerivedType(typeof(UnknownTaskSubmitter), "unknown")]
     [JsonDerivedType(typeof(CromwellTaskSubmitter), "cromwell")]
     public abstract partial class TaskSubmitter
     {
-        // examples: /cromwell-executions/test/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/execution/rc
-        // examples: /cromwell-executions/test/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/test-subworkflow/b5227f73-f6e8-43be-8b18-520b1fd789b6/call-subworkflow/shard-8/execution/rc
-        [GeneratedRegex("/[^/]*?/([^/]+)/([0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12})/call-([^/]+)(?:/([^/]+)/([0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12})/call-([^/]+)/([^/]+))?/execution/rc", RegexOptions.Singleline)]
-        private static partial Regex CromwellPathRegex();
-        private static readonly Regex cromwellPathRegex = CromwellPathRegex();
-
-        protected TaskSubmitter()
-        { }
-
-        protected TaskSubmitter(string workflow_id)
-        {
-            WorkflowId = workflow_id;
-        }
-
         /// <summary>
         /// Submitter engine name.
         /// </summary>
@@ -45,7 +29,7 @@ namespace Tes.Models
         /// Top level workflow identifier.
         /// </summary>
         [JsonPropertyName("workflowId")]
-        public virtual string WorkflowId { get; init; }
+        public virtual string WorkflowId { get; set; }
 
         /// <summary>
         /// <paramref name="task"/> parser to determine workflow engine.
@@ -54,103 +38,34 @@ namespace Tes.Models
         /// <returns>Task metadata from workflow engine.</returns>
         public static TaskSubmitter Parse(TesTask task)
         {
-            // Check for cromwell
-            try
+            var result = Attempt(CromwellTaskSubmitter.Parse, task);
+            // TODO: add more submitters here
+            result ??= Attempt(UnknownTaskSubmitter.Parse, task);
+            return result;
+
+            static TaskSubmitter Attempt(Func<TesTask, TaskSubmitter> parser, TesTask task)
             {
-                var descriptionWorkflowId = Guid.Parse(task.Description.Split(':')[0]);
-                TesOutput rcOutput = default;
-                var hasStdErrOutput = false;
-                var hasStdOutOutput = false;
-
-                foreach (var output in task.Outputs)
+                try
                 {
-                    if (output.Path.EndsWith("/execution/rc"))
-                    {
-                        rcOutput = output;
-                    }
-                    else
-                    {
-                        hasStdErrOutput |= output.Path.EndsWith("/execution/stderr");
-                        hasStdOutOutput |= output.Path.EndsWith("/execution/stdout");
-                    }
+                    return parser(task);
                 }
-
-                if (rcOutput is not null && !rcOutput.Path.Contains('\n') && hasStdErrOutput && hasStdOutOutput)
+                catch (Exception)
                 {
-                    var match = cromwellPathRegex.Match(rcOutput.Path);
-
-                    if (match.Success && 1 == match.Captures.Count && match.Groups.Count == 8)
-                    {
-                        var workflowName = match.Groups[1].Value;
-                        var workflowId = match.Groups[2].Value;
-                        var callName = match.Groups[3].Value;
-                        var subWorkflowName = NullIfWhiteSpace(match.Groups[4].Value);
-                        var subWorkflowId = NullIfWhiteSpace(match.Groups[5].Value);
-                        var subCallName = NullIfWhiteSpace(match.Groups[6].Value);
-                        var shard = NullIfWhiteSpace(match.Groups[7].Value);
-
-                        if (Guid.TryParse(subWorkflowId ?? workflowId, out var result) && descriptionWorkflowId.Equals(result))
-                        {
-                            return new CromwellTaskSubmitter
-                            {
-                                WorkflowId = workflowId,
-                                WorkflowName = workflowName,
-                                WorkflowStage = callName,
-                                SubWorkflowName = subWorkflowName,
-                                SubWorkflowId = subWorkflowId,
-                                SubWorkflowStage = subCallName,
-                                Shard = shard,
-                                ExecutionDir = Path.GetDirectoryName(rcOutput.Path)
-                            };
-                        }
-
-                        static string NullIfWhiteSpace(string value) => string.IsNullOrWhiteSpace(value) ? null : value;
-                    }
+                    return null;
                 }
             }
-            catch (Exception) { }
-
-            return new UnknownTaskSubmitter();
-        }
-    }
-
-    internal sealed class TaskSubmitterTypeInfoResolver : DefaultJsonTypeInfoResolver
-    {
-        private static readonly Type taskSubitterType = typeof(TaskSubmitter);
-        private static readonly JsonPolymorphicAttribute taskSubmitterJsonPolymorphic = taskSubitterType.GetCustomAttribute<JsonPolymorphicAttribute>();
-
-        public override JsonTypeInfo GetTypeInfo(Type type, JsonSerializerOptions options)
-        {
-            var jsonTypeInfo = base.GetTypeInfo(type, options);
-
-            if (taskSubitterType.Equals(jsonTypeInfo.Type))
-            {
-                jsonTypeInfo.PolymorphismOptions = new()
-                {
-                    TypeDiscriminatorPropertyName = taskSubmitterJsonPolymorphic.TypeDiscriminatorPropertyName,
-                    IgnoreUnrecognizedTypeDiscriminators = taskSubmitterJsonPolymorphic.IgnoreUnrecognizedTypeDiscriminators,
-                    UnknownDerivedTypeHandling = taskSubmitterJsonPolymorphic.UnknownDerivedTypeHandling
-                };
-
-                jsonTypeInfo.PolymorphismOptions.DerivedTypes.AddRange(
-                    taskSubitterType.GetCustomAttributes<JsonDerivedTypeAttribute>().Select(a => new JsonDerivedType(a.DerivedType, (string)a.TypeDiscriminator)));
-            }
-
-            return jsonTypeInfo;
         }
     }
 
     /// <summary>
     /// Unknown task workflow engine metadata.
     /// </summary>
-    public sealed class UnknownTaskSubmitter : TaskSubmitter
+    public class UnknownTaskSubmitter : TaskSubmitter
     {
-        public UnknownTaskSubmitter()
-        { }
-
-        [JsonConstructor]
-        public UnknownTaskSubmitter(string workflow_id)
-            : base(workflow_id) { }
+        internal static new UnknownTaskSubmitter Parse(TesTask _)
+        {
+            return new();
+        }
 
         public override string Name => "unknown";
     }
@@ -158,53 +73,117 @@ namespace Tes.Models
     /// <summary>
     /// Cromwell workflow engine metadata.
     /// </summary>
-    public sealed class CromwellTaskSubmitter : TaskSubmitter
+    public partial class CromwellTaskSubmitter : TaskSubmitter
     {
-        public CromwellTaskSubmitter()
-        { }
-
-        [JsonConstructor]
-        public CromwellTaskSubmitter(string workflow_id)
-            : base(workflow_id) { }
-
         /// <inheritdoc/>
         public override string Name => "cromwell";
+
+        // examples: /cromwell-executions/test/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/execution/rc
+        // examples: /cromwell-executions/test/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/test-subworkflow/b5227f73-f6e8-43be-8b18-520b1fd789b6/call-subworkflow/shard-8/execution/rc
+        [GeneratedRegex("/*?/(.+)/([^/]+)/([0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12})/call-([^/]+)(?:/shard-([^/]+))?/execution/rc", RegexOptions.Singleline)]
+        private static partial Regex CromwellPathRegex();
+
+        [GeneratedRegex("(.*):[^:]*:[^:]*", RegexOptions.Singleline)]
+        private static partial Regex GetCromwellTaskInstanceNameRegex();
+
+        [GeneratedRegex(".*:([^:]*):[^:]*", RegexOptions.Singleline)]
+        private static partial Regex GetCromwellShardRegex();
+
+        [GeneratedRegex(".*:([^:]*)", RegexOptions.Singleline)]
+        private static partial Regex GetCromwellAttemptRegex();
+
+        private static readonly Regex cromwellTaskInstanceNameRegex = GetCromwellTaskInstanceNameRegex();
+        private static readonly Regex cromwellShardRegex = GetCromwellShardRegex();
+        private static readonly Regex cromwellAttemptRegex = GetCromwellAttemptRegex();
+        private static readonly Regex cromwellPathRegex = CromwellPathRegex();
+
+        internal static new CromwellTaskSubmitter Parse(TesTask task)
+        {
+            if (string.IsNullOrWhiteSpace(task.Description))
+            {
+                return null;
+            }
+
+            var descriptionWorkflowId = Guid.Parse(task.Description.Split(':')[0]);
+            TesOutput rcOutput = default;
+            var hasStdErrOutput = false;
+            var hasStdOutOutput = false;
+
+            foreach (var output in task.Outputs ?? [])
+            {
+                if (output.Path.EndsWith("/execution/rc"))
+                {
+                    rcOutput = output;
+                }
+                else
+                {
+                    hasStdErrOutput |= output.Path.EndsWith("/execution/stderr");
+                    hasStdOutOutput |= output.Path.EndsWith("/execution/stdout");
+                }
+            }
+
+            if (hasStdErrOutput && hasStdOutOutput && rcOutput is not null && !rcOutput.Path.Contains('\n'))
+            {
+                var path = rcOutput.Path.Split('/');
+                // path[0] <= string.Empty
+                // path[1] <= cromwell execution directory
+                // path[2] <= top workflow name
+                // path[3] <= top workflow id
+
+                var match = cromwellPathRegex.Match(rcOutput.Path);
+                // match.Groups[1] <= execution directory path below root until last sub workflow name (not including beginning or ending '/')
+                // match.Groups[2] <= final workflow name, possibly prefixed with parent workflow name separated by '-'
+                // match.Groups[3] <= final workflow id
+                // match.Groups[4] <= final task
+                // match.Groups[5] <= final shard, if present
+
+                if (match.Success && match.Captures.Count == 1 && match.Groups.Count == 6)
+                {
+                    var workflowName = path[2];
+                    var workflowId = path[3];
+                    var subWorkflowId = match.Groups[3].Value;
+
+                    if (Guid.TryParse(subWorkflowId, out var workflowIdAsGuid) && descriptionWorkflowId.Equals(workflowIdAsGuid))
+                    {
+                        return new()
+                        {
+                            WorkflowId = workflowId,
+                            WorkflowName = workflowName,
+                            CromwellTaskInstanceName = cromwellTaskInstanceNameRegex.Match(task.Description).Groups[1].Value,
+                            CromwellShard = int.TryParse(cromwellShardRegex.Match(task.Description).Groups[1].Value, out var shard) ? shard : null,
+                            CromwellAttempt = int.TryParse(cromwellAttemptRegex.Match(task.Description).Groups[1].Value, out var attempt) ? attempt : null,
+                            ExecutionDir = string.Join('/', path.Take(path.Length - 1))
+                        };
+                    }
+                }
+            }
+
+            return null;
+        }
 
         /// <summary>
         /// Workflow name.
         /// </summary>
-        [JsonPropertyName("workflowName")]
+        [JsonPropertyName("cromwellWorkflowName")]
         public string WorkflowName { get; init; }
 
         /// <summary>
-        /// Workflow stage AKA WDL workflow task.
+        /// Cromwell task description without shard and attempt numbers
         /// </summary>
-        [JsonPropertyName("workflowStage")]
-        public string WorkflowStage { get; init; }
+        [JsonPropertyName("cromwellTaskInstanceName")]
+        public string CromwellTaskInstanceName { get; init; }
 
         /// <summary>
-        /// Sub workflow name.
+        /// Cromwell shard number
         /// </summary>
-        [JsonPropertyName("subWorkflowName")]
-        public string SubWorkflowName { get; init; }
+        [JsonPropertyName("cromwellShard")]
+        public int? CromwellShard { get; init; }
 
         /// <summary>
-        /// Sub workflow id.
+        /// Cromwell attempt number
         /// </summary>
-        [JsonPropertyName("subWorkflowId")]
-        public string SubWorkflowId { get; init; }
-
-        /// <summary>
-        /// Sub workflow stage.
-        /// </summary>
-        [JsonPropertyName("subWorkflowStage")]
-        public string SubWorkflowStage { get; init; }
-
-        /// <summary>
-        /// Workflow shard.
-        /// </summary>
-        [JsonPropertyName("shard")]
-        public string Shard { get; init; }
+        [JsonPropertyName("cromwellAttempt")]
+        public int? CromwellAttempt { get; init; }
 
         /// <summary>
         /// Cromwell task execution directory.

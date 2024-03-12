@@ -8,6 +8,8 @@ namespace Tes.Repository
     using System.Diagnostics;
     using System.Linq;
     using System.Linq.Expressions;
+    using System.Text.Json;
+    using System.Text.Json.Serialization.Metadata;
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.EntityFrameworkCore;
@@ -24,23 +26,99 @@ namespace Tes.Repository
     public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem>, IRepository<TesTask>
     {
         // Creator of JsonSerializerOptions
-        private static System.Text.Json.JsonSerializerOptions GetSerializerOptions()
+        private static readonly Lazy<JsonSerializerOptions> GetSerializerOptions = new(() =>
         {
-            System.Text.Json.JsonSerializerOptions options = new();
-            options.TypeInfoResolverChain.Add(new TaskSubmitterTypeInfoResolver());
+            // Create JsonSerializerOptions
+            JsonSerializerOptions options = new(JsonSerializerOptions.Default)
+            {
+                // Be somewhat minimilistic when storing data in the repository.
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+
+                // Create and configure TypeInfoResolver.
+                TypeInfoResolver = new InheritedPolymorphismResolver()
+            };
+
+            // Resolver contract updates
+            ((DefaultJsonTypeInfoResolver)options.TypeInfoResolver).Modifiers.Add(TesTaskJsonTypeInfoResolverModifier);
+
             return options;
+        }, LazyThreadSafetyMode.PublicationOnly);
+
+        private static void TesTaskJsonTypeInfoResolverModifier(JsonTypeInfo typeInfo)
+        {
+            switch (typeInfo.Type)
+            {
+                case Type type when typeof(TesTask).Equals(type):
+                    // Configure tasks created with previous versions of TES when tasks are retrieved. This does not automatically cause the task to be updated in the repository.
+                    typeInfo.OnDeserialized = obj => ((TesTask)obj).TaskSubmitter ??= TaskSubmitter.Parse((TesTask)obj);
+                    break;
+
+                case Type type when new[] { typeof(UnknownTaskSubmitter), typeof(CromwellTaskSubmitter) }.Contains(type):
+                    typeInfo.CreateObject ??= () => Activator.CreateInstance(type); // Apparent bug. However, it doesn't manifest outside of E/F. TODO: open issue somewhere.
+                    break;
+
+                case Type type when typeof(TaskSubmitter).Equals(type):
+                    typeInfo.CreateObject ??= () => null!; // Apparent bug. However, it doesn't manifest outside of E/F. TODO: open issue somewhere.
+                    break;
+            }
         }
 
+        // based on https://github.com/dotnet/runtime/issues/77532#issuecomment-1300541631
+        private sealed class InheritedPolymorphismResolver : DefaultJsonTypeInfoResolver
+        {
+            /// <inheritdoc/>
+            public override JsonTypeInfo GetTypeInfo(Type type, JsonSerializerOptions options)
+            {
+                ArgumentNullException.ThrowIfNull(type);
+                ArgumentNullException.ThrowIfNull(options);
+
+                var typeInfo = base.GetTypeInfo(type, options);
+
+                if (typeInfo.PolymorphismOptions is null)
+                {
+                    // Only handles class hierarchies -- interface hierarchies left out intentionally here
+                    for (var baseType = type; !baseType.IsSealed && baseType.BaseType is not null; baseType = baseType.BaseType)
+                    {
+                        // recursively resolve metadata for the base type and extract any derived type declarations that overlap with the current type
+                        if (base.GetTypeInfo(baseType.BaseType, options).PolymorphismOptions is JsonPolymorphismOptions basePolymorphismOptions)
+                        {
+                            foreach (var derivedType in basePolymorphismOptions.DerivedTypes)
+                            {
+                                if (type.IsAssignableFrom(derivedType.DerivedType))
+                                {
+                                    typeInfo.PolymorphismOptions ??= new()
+                                    {
+                                        IgnoreUnrecognizedTypeDiscriminators = basePolymorphismOptions.IgnoreUnrecognizedTypeDiscriminators,
+                                        TypeDiscriminatorPropertyName = basePolymorphismOptions.TypeDiscriminatorPropertyName,
+                                        UnknownDerivedTypeHandling = basePolymorphismOptions.UnknownDerivedTypeHandling,
+                                    };
+
+                                    typeInfo.PolymorphismOptions.DerivedTypes.Add(derivedType);
+                                }
+                            }
+
+                            return typeInfo;
+                        }
+                    }
+                }
+
+                return typeInfo;
+            }
+        }
+
+
         // Creator of NpgsqlDataSource
-        public static Func<string, Npgsql.NpgsqlDataSource> NpgsqlDataSourceBuilder
-            => connectionString => new Npgsql.NpgsqlDataSourceBuilder(connectionString)
+        public static Lazy<Func<string, Npgsql.NpgsqlDataSource>> NpgsqlDataSourceBuilder => new(
+            () => connectionString => new Npgsql.NpgsqlDataSourceBuilder(connectionString)
+                            .ConfigureJsonOptions(serializerOptions: GetSerializerOptions.Value)
                             .EnableDynamicJson(jsonbClrTypes: [typeof(TesTask)])
-                            .ConfigureJsonOptions(serializerOptions: GetSerializerOptions())
-                            .Build();
+                            .Build(),
+            LazyThreadSafetyMode.PublicationOnly);
 
         // Configuration of NpgsqlDbContext
-        public static Action<Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder> NpgsqlDbContextOptionsBuilder => options =>
-            options.MaxBatchSize(1000);
+        public static Lazy<Action<Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder>> NpgsqlDbContextOptionsBuilder => new(
+            () => options => options.MaxBatchSize(1000),
+            LazyThreadSafetyMode.PublicationOnly);
 
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
@@ -52,9 +130,8 @@ namespace Tes.Repository
         public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTaskDatabaseItem> cache = null)
             : base(hostApplicationLifetime, logger, cache)
         {
-            var npgsqlDataSource = NpgsqlDataSourceBuilder(ConnectionStringUtility.GetPostgresConnectionString(options)); // This must be run just once, do not move it into the lambda below.
-            CreateDbContext = Initialize(() => new TesDbContext(npgsqlDataSource, NpgsqlDbContextOptionsBuilder));
-            WarmCacheAsync(CancellationToken.None).Wait();
+            CreateDbContext = Initialize(() => new TesDbContext(NpgsqlDataSourceBuilder.Value(ConnectionStringUtility.GetPostgresConnectionString(options)), NpgsqlDbContextOptionsBuilder.Value));
+            WarmCacheAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -70,7 +147,7 @@ namespace Tes.Repository
         private static Func<TesDbContext> Initialize(Func<TesDbContext> createDbContext)
         {
             using var dbContext = createDbContext();
-            dbContext.Database.MigrateAsync(CancellationToken.None).Wait();
+            dbContext.Database.MigrateAsync(CancellationToken.None).GetAwaiter().GetResult();
             return createDbContext;
         }
 
@@ -102,7 +179,7 @@ namespace Tes.Repository
                 .ExecuteAsync(async ct =>
                 {
                     var activeTasksCount = (await InternalGetItemsAsync(task => TesTask.ActiveStates.Contains(task.State), ct, q => q.OrderBy(t => t.Json.CreationTime))).Count();
-                    Logger?.LogInformation("Cache warmed successfully in {TotalSeconds} seconds. Added {TasksAddedCount} items to the cache.", $"{sw.Elapsed.TotalSeconds:n3}", $"{activeTasksCount:n0}");
+                    Logger?.LogInformation("Cache warmed successfully in {TotalSeconds:n3} seconds. Added {TasksAddedCount:n0} items to the cache.", sw.Elapsed.TotalSeconds, activeTasksCount);
                 }, cancellationToken);
         }
 

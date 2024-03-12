@@ -64,8 +64,8 @@ namespace Tes.Repository.Tests
                 }));
 
             repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(
-                TesTaskPostgreSqlRepository.NpgsqlDataSourceBuilder(connectionString),
-                TesTaskPostgreSqlRepository.NpgsqlDbContextOptionsBuilder));
+                TesTaskPostgreSqlRepository.NpgsqlDataSourceBuilder.Value(connectionString),
+                TesTaskPostgreSqlRepository.NpgsqlDbContextOptionsBuilder.Value));
             Console.WriteLine("Creation complete.");
         }
 
@@ -81,7 +81,7 @@ namespace Tes.Repository.Tests
         public async Task TryGetItemAsyncTest()
         {
             var id = Guid.NewGuid().ToString();
-            var createdItem = await repository.CreateItemAsync(new TesTask
+            var createdItem = await repository.CreateItemAsync(new()
             {
                 Id = id,
                 Description = Guid.NewGuid().ToString(),
@@ -130,7 +130,7 @@ namespace Tes.Repository.Tests
 
                     for (var i = 0; i < itemCount; i++)
                     {
-                        items.Add(new Models.TesTask
+                        items.Add(new()
                         {
                             Id = Guid.NewGuid().ToString(),
                             Description = Guid.NewGuid().ToString(),
@@ -151,7 +151,7 @@ namespace Tes.Repository.Tests
                 while (true)
                 {
                     var result = await controller.ListTasks(null, 2047, pageToken, "FULL", default);
-                    JsonResult jr = (JsonResult)result;
+                    var jr = (JsonResult)result;
                     var content = (TesListTasksResponse)jr.Value;
                     pageToken = content.NextPageToken;
 
@@ -159,7 +159,7 @@ namespace Tes.Repository.Tests
                     {
                         if (tesTaskIds.Contains(tesTask.Id))
                         {
-                            int count = tesTaskIds.Count;
+                            var count = tesTaskIds.Count;
                             Debugger.Break();
                             Assert.Fail("Duplicate task id");
                         }
@@ -202,7 +202,7 @@ namespace Tes.Repository.Tests
 
                 for (var i = 0; i < itemCount; i++)
                 {
-                    items.Add(new Models.TesTask
+                    items.Add(new()
                     {
                         Id = Guid.NewGuid().ToString(),
                         Description = Guid.NewGuid().ToString(),
@@ -273,7 +273,7 @@ namespace Tes.Repository.Tests
         {
             var itemId = Guid.NewGuid().ToString();
 
-            var task = await repository.CreateItemAsync(new TesTask
+            var task = await repository.CreateItemAsync(new()
             {
                 Id = itemId,
                 Description = Guid.NewGuid().ToString(),
@@ -290,7 +290,7 @@ namespace Tes.Repository.Tests
             var description = $"created at {DateTime.UtcNow}";
             var id = Guid.NewGuid().ToString();
 
-            var createdItem = await repository.CreateItemAsync(new TesTask
+            var createdItem = await repository.CreateItemAsync(new()
             {
                 Id = id,
                 Description = Guid.NewGuid().ToString(),
@@ -319,7 +319,7 @@ namespace Tes.Repository.Tests
         {
             var id = Guid.NewGuid().ToString();
 
-            var createdItem = await repository.CreateItemAsync(new TesTask
+            var createdItem = await repository.CreateItemAsync(new()
             {
                 Id = id,
                 Description = Guid.NewGuid().ToString(),
@@ -351,7 +351,8 @@ namespace Tes.Repository.Tests
         {
             const string postgreSqlVersion = "14";
 
-            var tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider("https://management.azure.com//.default"));
+            ArgumentException.ThrowIfNullOrWhiteSpace(subscriptionId);
+            var tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider("https://management.azure.com/"));
             var azureCredentials = new AzureCredentials(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
             var postgresManagementClient = new FlexibleServer.PostgreSQLManagementClient(azureCredentials) { SubscriptionId = subscriptionId, LongRunningOperationRetryTimeout = 1200 };
             var azureClient = GetAzureClient(azureCredentials);
@@ -390,10 +391,12 @@ namespace Tes.Repository.Tests
             var endIp = "255.255.255.255";
 
             // Many networks have non-deterministic client IP addresses
-            //using var client = new HttpClient();
-            //var ip = (await client.GetStringAsync("https://checkip.amazonaws.com")).Trim();
-            //startIp = ip;
-            //endIp = ip;
+            //{
+            //    using var client = new System.Net.Http.HttpClient();
+            //    var ip = (await client.GetStringAsync("https://checkip.amazonaws.com")).Trim();
+            //    startIp = ip;
+            //    endIp = ip;
+            //}
 
             await postgresManagementClient.FirewallRules.CreateOrUpdateAsync(
                 resourceGroupName,
@@ -404,7 +407,8 @@ namespace Tes.Repository.Tests
 
         public static async Task DeleteResourceGroupAsync(string subscriptionId, string resourceGroupName)
         {
-            var tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider("https://management.azure.com//.default"));
+            ArgumentException.ThrowIfNullOrWhiteSpace(subscriptionId);
+            var tokenCredentials = new TokenCredentials(new RefreshableAzureServiceTokenProvider("https://management.azure.com/"));
             var azureCredentials = new AzureCredentials(tokenCredentials, null, null, AzureEnvironment.AzureGlobalCloud);
             var azureClient = GetAzureClient(azureCredentials);
             var azureSubscriptionClient = azureClient.WithSubscription(subscriptionId);

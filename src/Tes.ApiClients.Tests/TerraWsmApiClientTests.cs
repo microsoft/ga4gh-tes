@@ -32,7 +32,7 @@ namespace Tes.ApiClients.Tests
             cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(new Mock<Microsoft.Extensions.Caching.Memory.ICacheEntry>().Object);
             cacheAndRetryBuilder.SetupGet(c => c.AppCache).Returns(cache.Object);
             cacheAndRetryHandler = new(TestServices.RetryHandlersHelpers.GetCachingAsyncRetryPolicyMock(cacheAndRetryBuilder, c => c.DefaultRetryHttpResponseMessagePolicyBuilder()));
-            azureEnvironmentConfig = ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig;
+            azureEnvironmentConfig = ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig!;
 
             terraWsmApiClient = new TerraWsmApiClient(TerraApiStubData.WsmApiHost, tokenCredential.Object,
                 cacheAndRetryBuilder.Object, azureEnvironmentConfig, NullLogger<TerraWsmApiClient>.Instance);
