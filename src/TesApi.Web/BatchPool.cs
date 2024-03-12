@@ -288,15 +288,15 @@ namespace TesApi.Web
         */
         {
             var targetVariable = preemptable ? "TargetLowPriorityNodes" : "TargetDedicated";
-            return string.Join(Environment.NewLine, new[]
-            {
+            return string.Join(Environment.NewLine,
+            [
                 "$NodeDeallocationOption = taskcompletion;",
                 $"""lifespan = time() - time("{DateTime.UtcNow:r}");""",
                 "span = TimeInterval_Second * 90;",
                 "startup = TimeInterval_Minute * 2;",
                 "ratio = 10;",
                 $"${targetVariable} = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : {initialTarget});"
-            });
+            ]);
         }
 
         private async ValueTask ServicePoolManagePoolScalingAsync(CancellationToken cancellationToken)
@@ -479,20 +479,6 @@ namespace TesApi.Web
                 return false;
             }
 
-            //await foreach (var node in _azureProxy.ListComputeNodesAsync(PoolId, new ODATADetailLevel(selectClause: "state")).WithCancellation(cancellationToken))
-            //{
-            //    switch (node.State)
-            //    {
-            //        case ComputeNodeState.Rebooting:
-            //        case ComputeNodeState.Reimaging:
-            //        case ComputeNodeState.Running:
-            //        case ComputeNodeState.Creating:
-            //        case ComputeNodeState.Starting:
-            //        case ComputeNodeState.WaitingForStartTask:
-            //            return false;
-            //    }
-            //}
-
             return true;
         }
 
@@ -656,8 +642,8 @@ namespace TesApi.Web
             }
         }
 
-        private readonly List<CloudTask> _foundTasks = new();
-        private readonly Dictionary<string, string> _taskPreviousComputeNodeIds = new();
+        private readonly List<CloudTask> _foundTasks = [];
+        private readonly Dictionary<string, string> _taskPreviousComputeNodeIds = [];
 
         private Lazy<Task<IAsyncEnumerable<ComputeNode>>> _lazyComputeNodes;
         private const string EjectableComputeNodesFilterClause = @"state eq 'starttaskfailed' or state eq 'preempted' or state eq 'unusable'";
@@ -719,7 +705,7 @@ namespace TesApi.Web
                 // In the extremely unlikely event that there are no innerexceptions, we don't want to change the existing code flow nor do we want to complicate the (less than 2 inner exceptions) path.
                 if (exception.InnerExceptions?.Count != 1)
                 {
-                    throw new AggregateException(exception.Message, exception.InnerExceptions?.Select(HandleException) ?? Enumerable.Empty<Exception>());
+                    throw new AggregateException(exception.Message, exception.InnerExceptions?.Select(HandleException) ?? []);
                 }
 
                 throw HandleException(exception.InnerException);

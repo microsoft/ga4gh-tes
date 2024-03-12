@@ -26,7 +26,7 @@ namespace Tes.Repository
         // Creator of NpgsqlDataSource
         public static Func<string, Npgsql.NpgsqlDataSource> NpgsqlDataSourceBuilder
             => connectionString => new Npgsql.NpgsqlDataSourceBuilder(connectionString)
-                            .EnableDynamicJson(jsonbClrTypes: new[] { typeof(TesTask) })
+                            .EnableDynamicJson(jsonbClrTypes: [typeof(TesTask)])
                             .Build();
 
         // Configuration of NpgsqlDbContext
@@ -149,6 +149,7 @@ namespace Tes.Repository
         /// <param name="item">TesTask to store as JSON in the database</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0305:Simplify collection initialization", Justification = "ToList() is very explicit as well as consise without being confusing.")]
         public async Task<List<TesTask>> CreateItemsAsync(List<TesTask> items, CancellationToken cancellationToken)
              => (await Task.WhenAll(items.Select(task => CreateItemAsync(task, cancellationToken)))).ToList();
 
