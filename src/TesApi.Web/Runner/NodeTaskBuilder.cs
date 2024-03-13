@@ -88,6 +88,20 @@ namespace TesApi.Web.Runner
         public NodeTaskBuilder WithInputUsingCombinedTransformationStrategy(string path, string sourceUrl, string mountParentDirectory)
         {
             ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
+            TransformationStrategy transformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions();
+
+            if (path.Contains('?'))
+            {
+                // Cromwell bug - when the WDL input contains a SAS token, it's being included in the path
+                // Remove the SAS token
+                path = path[..path.LastIndexOf('?')];
+            }
+
+            if (sourceUrl.Contains('?'))
+            {
+                // When the input is a SAS token, don't transform
+                transformationStrategy = TransformationStrategy.None;
+            }
 
             nodeTask.Inputs ??= new List<FileInput>();
 
@@ -97,7 +111,7 @@ namespace TesApi.Web.Runner
                     MountParentDirectory = mountParentDirectory,
                     Path = path,
                     SourceUrl = sourceUrl,
-                    TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions()
+                    TransformationStrategy = transformationStrategy
                 }
             );
 

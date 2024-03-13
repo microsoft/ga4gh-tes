@@ -74,6 +74,27 @@ namespace TesApi.Tests.Runner
         }
 
         [TestMethod]
+        public void WhenInputContainsUriQuery_ValidInput_AllPropertiesSet()
+        {
+            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input", "http://foo.bar/input?test", "/root");
+            var input = nodeTaskBuilder.Build().Inputs![0];
+            Assert.AreEqual("/root/input", input.Path);
+            Assert.AreEqual("http://foo.bar/input?test", input.SourceUrl);
+            Assert.AreEqual("/root", input.MountParentDirectory);
+            Assert.AreEqual(TransformationStrategy.None, input.TransformationStrategy);
+        }
+
+        [TestMethod]
+        public void WhenInputPathContainsUriQuery_ValidInput_AllPropertiesSet()
+        {
+            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input?test", "http://foo.bar/input", "/root");
+            var input = nodeTaskBuilder.Build().Inputs![0];
+            Assert.AreEqual("/root/input", input.Path);
+            Assert.AreEqual("http://foo.bar/input", input.SourceUrl);
+            Assert.AreEqual("/root", input.MountParentDirectory);
+        }
+
+        [TestMethod]
         public void WithOutputUsingCombinedTransformationStrategy_WithTerraRuntimeSet_OutputUsesCombinedTerraTransformationStrategy()
         {
             nodeTaskBuilder.WithTerraAsRuntimeEnvironment("https://wsm.foo", "https://lz.foo", sasAllowedIpRange: String.Empty);
