@@ -25,112 +25,77 @@ namespace Tes.Repository
     /// <typeparam name="TesTask"></typeparam>
     public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem>, IRepository<TesTask>
     {
-        // Creator of JsonSerializerOptions
+        // JsonSerializerOptions singleton factory
         private static readonly Lazy<JsonSerializerOptions> GetSerializerOptions = new(() =>
         {
-            // Create JsonSerializerOptions
-            JsonSerializerOptions options = new(JsonSerializerOptions.Default)
+            // Create, configure and return JsonSerializerOptions.
+            return new(JsonSerializerOptions.Default)
             {
-                // Be somewhat minimilistic when storing data in the repository.
+                // Be somewhat minimilistic when serializing. Non-null property values (for any given type) are still written.
                 DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
 
-                // Create and configure TypeInfoResolver.
-                TypeInfoResolver = new InheritedPolymorphismResolver()
+                // Required since adding modifiers to the default TypeInfoResolver appears to not be possible.
+                TypeInfoResolver = GetAndConfigureTypeInfoResolver()
             };
 
-            // Resolver contract updates
-            ((DefaultJsonTypeInfoResolver)options.TypeInfoResolver).Modifiers.Add(TesTaskJsonTypeInfoResolverModifier);
-
-            return options;
+            static IJsonTypeInfoResolver GetAndConfigureTypeInfoResolver()
+            {
+                DefaultJsonTypeInfoResolver typeInfoResolver = new();
+                typeInfoResolver.Modifiers.Add(JsonTypeInfoResolverModifier);
+                return typeInfoResolver;
+            }
         }, LazyThreadSafetyMode.PublicationOnly);
 
-        private static void TesTaskJsonTypeInfoResolverModifier(JsonTypeInfo typeInfo)
+        // DefaultJsonTypeInfoResolver contract modifier to deal with changes to the task JSON.
+        // Actions taken:
+        //     1) Replace the previous WorkflowId property on TesTask (with the TaskSubmitter implementation).
+        //     2) Remove the RegionsAvailable array from VirtualMachineInformation.
+        private static void JsonTypeInfoResolverModifier(JsonTypeInfo typeInfo)
         {
             switch (typeInfo.Type)
             {
                 case Type type when typeof(TesTask).Equals(type):
-                    // Configure tasks created with previous versions of TES when tasks are retrieved. This does not automatically cause the task to be updated in the repository.
-                    typeInfo.OnDeserialized = obj => ((TesTask)obj).TaskSubmitter ??= TaskSubmitter.Parse((TesTask)obj);
+                    // Configure tasks created with previous versions of TES when tasks are retrieved.
+                    typeInfo.UnmappedMemberHandling ??= System.Text.Json.Serialization.JsonUnmappedMemberHandling.Skip;
+                    typeInfo.OnDeserialized ??= obj => ((TesTask)obj).TaskSubmitter ??= TaskSubmitter.Parse((TesTask)obj);
                     break;
 
-                case Type type when new[] { typeof(UnknownTaskSubmitter), typeof(CromwellTaskSubmitter) }.Contains(type):
-                    typeInfo.CreateObject ??= () => Activator.CreateInstance(type); // Apparent bug. However, it doesn't manifest outside of E/F. TODO: open issue somewhere.
-                    break;
-
-                case Type type when typeof(TaskSubmitter).Equals(type):
-                    typeInfo.CreateObject ??= () => null!; // Apparent bug. However, it doesn't manifest outside of E/F. TODO: open issue somewhere.
+                case Type type when typeof(VirtualMachineInformation).Equals(type):
+                    // Configure tasks created with previous versions of TES when tasks are retrieved.
+                    typeInfo.OnDeserialized ??= obj => ((VirtualMachineInformation)obj).RegionsAvailable = null;
                     break;
             }
         }
 
-        // based on https://github.com/dotnet/runtime/issues/77532#issuecomment-1300541631
-        private sealed class InheritedPolymorphismResolver : DefaultJsonTypeInfoResolver
+        /// <summary>
+        /// NpgsqlDataSource factory
+        /// </summary>
+        public static Func<string, Npgsql.NpgsqlDataSource> NpgsqlDataSourceFunc => connectionString =>
+            new Npgsql.NpgsqlDataSourceBuilder(connectionString)
+                .ConfigureJsonOptions(serializerOptions: GetSerializerOptions.Value)
+                .EnableDynamicJson(jsonbClrTypes: [typeof(TesTask)])
+                .Build();
+
+        /// <summary>
+        /// Configure options specific to PostgreSQL for a <see cref="DbContext" />
+        /// </summary>
+        public static void NpgsqlDbContextOptionsBuilder(Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder options)
         {
-            /// <inheritdoc/>
-            public override JsonTypeInfo GetTypeInfo(Type type, JsonSerializerOptions options)
-            {
-                ArgumentNullException.ThrowIfNull(type);
-                ArgumentNullException.ThrowIfNull(options);
-
-                var typeInfo = base.GetTypeInfo(type, options);
-
-                if (typeInfo.PolymorphismOptions is null)
-                {
-                    // Only handles class hierarchies -- interface hierarchies left out intentionally here
-                    for (var baseType = type; !baseType.IsSealed && baseType.BaseType is not null; baseType = baseType.BaseType)
-                    {
-                        // recursively resolve metadata for the base type and extract any derived type declarations that overlap with the current type
-                        if (base.GetTypeInfo(baseType.BaseType, options).PolymorphismOptions is JsonPolymorphismOptions basePolymorphismOptions)
-                        {
-                            foreach (var derivedType in basePolymorphismOptions.DerivedTypes)
-                            {
-                                if (type.IsAssignableFrom(derivedType.DerivedType))
-                                {
-                                    typeInfo.PolymorphismOptions ??= new()
-                                    {
-                                        IgnoreUnrecognizedTypeDiscriminators = basePolymorphismOptions.IgnoreUnrecognizedTypeDiscriminators,
-                                        TypeDiscriminatorPropertyName = basePolymorphismOptions.TypeDiscriminatorPropertyName,
-                                        UnknownDerivedTypeHandling = basePolymorphismOptions.UnknownDerivedTypeHandling,
-                                    };
-
-                                    typeInfo.PolymorphismOptions.DerivedTypes.Add(derivedType);
-                                }
-                            }
-
-                            return typeInfo;
-                        }
-                    }
-                }
-
-                return typeInfo;
-            }
+            options.MaxBatchSize(1000);
         }
-
-
-        // Creator of NpgsqlDataSource
-        public static Lazy<Func<string, Npgsql.NpgsqlDataSource>> NpgsqlDataSourceBuilder => new(
-            () => connectionString => new Npgsql.NpgsqlDataSourceBuilder(connectionString)
-                            .ConfigureJsonOptions(serializerOptions: GetSerializerOptions.Value)
-                            .EnableDynamicJson(jsonbClrTypes: [typeof(TesTask)])
-                            .Build(),
-            LazyThreadSafetyMode.PublicationOnly);
-
-        // Configuration of NpgsqlDbContext
-        public static Lazy<Action<Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder>> NpgsqlDbContextOptionsBuilder => new(
-            () => options => options.MaxBatchSize(1000),
-            LazyThreadSafetyMode.PublicationOnly);
 
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
         /// <param name="options"></param>
         /// <param name="hostApplicationLifetime">Used for requesting termination of the current application if the writer task unexpectedly exits.</param>
-        /// <param name="logger"></param>
-        /// <param name="cache"></param>
+        /// <param name="logger">Logging interface.</param>
+        /// <param name="cache">Memory cache for fast access to active items.</param>
         public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTaskDatabaseItem> cache = null)
             : base(hostApplicationLifetime, logger, cache)
         {
-            CreateDbContext = Initialize(() => new TesDbContext(NpgsqlDataSourceBuilder.Value(ConnectionStringUtility.GetPostgresConnectionString(options)), NpgsqlDbContextOptionsBuilder.Value));
+            var dataSource = NpgsqlDataSourceFunc(ConnectionStringUtility.GetPostgresConnectionString(options)); // The datasource itself must be essentially a singleton.
+            CreateDbContext = Initialize(() => new TesDbContext(dataSource, NpgsqlDbContextOptionsBuilder));
             WarmCacheAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
 
@@ -331,7 +296,7 @@ namespace Tes.Repository
 
                 if (throwIfNotFound && item is null)
                 {
-                    throw new KeyNotFoundException($"No TesTask with ID {item.Id} found in the database.");
+                    throw new KeyNotFoundException($"No TesTask with ID {id} found in the database.");
                 }
             }
 
