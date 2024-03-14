@@ -1087,7 +1087,7 @@ namespace TesApi.Web
                 && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.InvariantCultureIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.InvariantCultureIgnoreCase));
 
             StringBuilder cmd = new("#!/bin/sh\n");
-            cmd.AppendLinuxLine($"mkdir -p {BatchNodeSharedEnvVar} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
+            cmd.Append($"mkdir -p {BatchNodeSharedEnvVar} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
 
             if (!dockerConfigured)
             {
@@ -1122,9 +1122,11 @@ namespace TesApi.Web
 
             async ValueTask<Uri> UploadScriptAsync(string name, StringBuilder content)
             {
+	        content.AppendLinuxLine();
                 var path = $"/pools/{poolId}/{name}";
                 var url = await storageAccessProvider.GetInternalTesBlobUrlAsync(path, cancellationToken);
                 await azureProxy.UploadBlobAsync(url, content.ToString(), cancellationToken);
+	        content.Clear();
                 return url;
             }
         }
