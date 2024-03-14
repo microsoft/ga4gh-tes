@@ -409,7 +409,7 @@ namespace TesApi.Web.Events
                     .Select(blob => (blob.BlobUri, BlobNameParts: blob.BlobName.Split('_', 4))) // split name into sections
                     .Where(blob => blob.BlobNameParts.Length > 2 && !blob.BlobNameParts.Any(string.IsNullOrWhiteSpace)) // 3 or 4 sections and no sections are empty
                     .OrderBy(blob => string.Join('_', blob.BlobNameParts.Take(3))) // sort by "root" names
-                    .ThenBy(blob => blob.BlobNameParts.Length < 3 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture)) // then by extended numbers
+                    .ThenBy(blob => blob.BlobNameParts.Length < 4 ? -1 : int.Parse(blob.BlobNameParts[3][..blob.BlobNameParts[3].IndexOf('.')], System.Globalization.CultureInfo.InvariantCulture)) // then by extended numbers
                     .Select(blob => (blob.BlobUri, blob.BlobNameParts[1])) // uri and which standard stream
                     .WithCancellation(cancellationToken))
                 {
