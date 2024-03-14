@@ -57,7 +57,7 @@ namespace Tes.Repository
                 case Type type when typeof(TesTask).Equals(type):
                     // Configure tasks created with previous versions of TES when tasks are retrieved.
                     typeInfo.UnmappedMemberHandling ??= System.Text.Json.Serialization.JsonUnmappedMemberHandling.Skip;
-                    typeInfo.OnDeserialized ??= obj => ((TesTask)obj).TaskSubmitter ??= TaskSubmitter.Parse((TesTask)obj);
+                    typeInfo.OnDeserialized ??= obj => ((TesTask)obj).TaskSubmitter ??= TaskSubmitters.TaskSubmitter.Parse((TesTask)obj);
                     break;
 
                 case Type type when typeof(VirtualMachineInformation).Equals(type):

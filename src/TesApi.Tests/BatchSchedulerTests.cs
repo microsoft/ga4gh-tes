@@ -20,6 +20,7 @@ using Moq;
 using Newtonsoft.Json;
 using Tes.Extensions;
 using Tes.Models;
+using Tes.TaskSubmitters;
 using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
