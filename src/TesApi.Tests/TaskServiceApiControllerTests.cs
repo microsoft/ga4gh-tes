@@ -478,7 +478,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = [new() { Image = "ubuntu" }],
-                Inputs = [new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" }],
+                Inputs = [new() { Type = TesFileType.FILEEnum, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" }],
                 Outputs =
                 [
                     new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" },
@@ -507,7 +507,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = [new() { Image = "ubuntu" }],
-                Inputs = [new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" }],
+                Inputs = [new() { Type = TesFileType.FILEEnum, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" }],
                 Outputs =
                 [
                     new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" },
@@ -536,7 +536,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = [new() { Image = "ubuntu" }],
-                Inputs = [new() { Name = "commandScript", Path = $"{path}/script" }],
+                Inputs = [new() { Type = TesFileType.FILEEnum, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"{path}/script" }],
                 Outputs =
                 [
                     new() { Name = "commandScript", Path = $"{path}/script" },
