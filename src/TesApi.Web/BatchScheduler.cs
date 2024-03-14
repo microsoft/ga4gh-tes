@@ -1122,7 +1122,7 @@ namespace TesApi.Web
 
             async ValueTask<Uri> UploadScriptAsync(string name, StringBuilder content)
             {
-	        content.AppendLinuxLine();
+	        content.AppendLinuxLine(string.Empty);
                 var path = $"/pools/{poolId}/{name}";
                 var url = await storageAccessProvider.GetInternalTesBlobUrlAsync(path, cancellationToken);
                 await azureProxy.UploadBlobAsync(url, content.ToString(), cancellationToken);
