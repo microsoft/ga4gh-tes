@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommonUtilities;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Management.AppService.Fluent;
 using Microsoft.Azure.Management.PostgreSQL;
 using Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
@@ -63,9 +64,8 @@ namespace Tes.Repository.Tests
                     DatabaseUserPassword = adminPw
                 }));
 
-            repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(
-                TesTaskPostgreSqlRepository.NpgsqlDataSourceBuilder.Value(connectionString),
-                TesTaskPostgreSqlRepository.NpgsqlDbContextOptionsBuilder.Value));
+            var dataSource = TesTaskPostgreSqlRepository.NpgsqlDataSourceFunc(connectionString);
+            repository = new TesTaskPostgreSqlRepository(() => new TesDbContext(dataSource, TesTaskPostgreSqlRepository.NpgsqlDbContextOptionsBuilder));
             Console.WriteLine("Creation complete.");
         }
 
