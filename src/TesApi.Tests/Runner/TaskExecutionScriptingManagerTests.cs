@@ -28,7 +28,7 @@ namespace TesApi.Tests.Runner
         private Mock<TaskToNodeTaskConverter> taskToNodeTaskConverterMock;
         private Mock<IStorageAccessProvider> storageAccessProviderMock;
         private Mock<BatchNodeScriptBuilder> batchNodeScriptBuilderMock;
-        private const string WgetOptions = "--https-only --no-verbose --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue";
+        private const string WgetOptions = "--no-verbose --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue";
         private static readonly Uri AssetUrl = new("http://foo.bar/bar");
         private TesTask tesTask;
         private NodeTask nodeTask;
@@ -37,7 +37,6 @@ namespace TesApi.Tests.Runner
         [TestInitialize]
         public void SetUp()
         {
-
             tesTask = GetTestTesTask();
             nodeTask = new NodeTask();
             storageAccessProviderMock = new Mock<IStorageAccessProvider>();
