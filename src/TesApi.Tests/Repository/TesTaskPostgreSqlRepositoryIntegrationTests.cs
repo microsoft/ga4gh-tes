@@ -14,9 +14,11 @@ using Microsoft.Azure.Management.PostgreSQL.FlexibleServers;
 using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Rest;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
 using Tes.Models;
 using Tes.Utilities;
 using TesApi.Controllers;
@@ -38,7 +40,7 @@ namespace Tes.Repository.Tests
     [TestCategory("Integration")]
     public class TesTaskPostgreSqlRepositoryIntegrationTests
     {
-        private static TesTaskPostgreSqlRepository repository;
+        private static IRepository<Models.TesTask> repository;
         private static readonly string subscriptionId = "";
         private static readonly string regionName = "southcentralus";
         private static readonly string resourceGroupName = $"tes-test-{Guid.NewGuid().ToString()[..8]}";
@@ -141,7 +143,7 @@ namespace Tes.Repository.Tests
 
                     Assert.IsTrue(items.Select(i => i.Id).Distinct().Count() == itemCount);
 
-                    await repository.CreateItemsAsync(items, System.Threading.CancellationToken.None);
+                    await Parallel.ForEachAsync(items, CancellationToken.None, async (item, token) => await repository.CreateItemAsync(item, token));
                 }
 
                 var controller = new TaskServiceApiController(repository, null, null);
@@ -150,9 +152,9 @@ namespace Tes.Repository.Tests
 
                 while (true)
                 {
-                    var result = await controller.ListTasks(null, 2047, pageToken, "FULL", default);
+                    var result = await controller.ListTasksAsync(null, null, null, null, 2047, pageToken, "FULL", default);
                     JsonResult jr = (JsonResult)result;
-                    var content = (TesListTasksResponse)jr.Value;
+                    var content = (Models.TesListTasksResponse)jr.Value;
                     pageToken = content.NextPageToken;
 
                     foreach (var tesTask in content.Tasks)
@@ -213,7 +215,7 @@ namespace Tes.Repository.Tests
 
                 Assert.IsTrue(items.Select(i => i.Id).Distinct().Count() == itemCount);
 
-                await repository.CreateItemsAsync(items, CancellationToken.None);
+                await (repository as TesTaskPostgreSqlRepository).CreateItemsAsync(items, CancellationToken.None);
                 Console.WriteLine($"Total seconds to insert {items.Count} items: {sw.Elapsed.TotalSeconds:n2}s");
                 sw.Restart();
             }
@@ -244,17 +246,98 @@ namespace Tes.Repository.Tests
         }
 
         [TestMethod]
+        public async Task GetItemsTagsAsyncTest()
+        {
+            var controller = new TesApi.Controllers.TaskServiceApiController(repository, Mock.Of<ILogger<TesApi.Controllers.TaskServiceApiController>>(), Mock.Of<TesApi.Web.IAzureProxy>());
+
+            foreach (var testSpec in GetTestData())
+            {
+                var createdItem = await repository.CreateItemAsync(new()
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Description = Guid.NewGuid().ToString(),
+                    CreationTime = DateTime.UtcNow,
+                    State = Models.TesState.UNKNOWNEnum,
+                    Tags = testSpec.Tags
+                }, CancellationToken.None);
+
+                var (raw, ef) = controller.GenerateSearchPredicates(null, null, testSpec.Filter);
+                var (_, items) = await repository.GetItemsAsync(null, 2048, CancellationToken.None, raw, ef is null ? null : t => ef(t));
+
+                items = items.ToList(); // Enumerate received enumeration only once
+
+                if (testSpec.Match)
+                {
+                    Assert.AreEqual(1, items.Count());
+                    Assert.IsTrue(items.Select(t => t.Id).Contains(createdItem.Id));
+                }
+                else
+                {
+                    Assert.IsFalse(items.Select(t => t.Id).Contains(createdItem.Id));
+                    Assert.AreEqual(0, items.Count());
+                }
+
+                await repository.DeleteItemAsync(createdItem.Id, CancellationToken.None);
+            }
+
+            static List<(Dictionary<string, string> Filter, Dictionary<string, string> Tags, bool Match)> GetTestData()
+                => new()
+                {
+                    (
+                        new(StringComparer.Ordinal) { {"foo", "bar"} },
+                        new(StringComparer.Ordinal) { {"foo", "bar"} },
+                        true
+                    ),
+                    (
+                        new(StringComparer.Ordinal) { {"foo", "bar"} },
+                        new(StringComparer.Ordinal) { {"foo", "bat" } },
+                        false
+                    ),
+                    (
+                        new(StringComparer.Ordinal) { {"foo", ""} },
+                        new(StringComparer.Ordinal) { {"foo", ""} },
+                        true
+                    ),
+                    (
+                        new(StringComparer.Ordinal) { {"foo", "bar"}, { "baz", "bat" } },
+                        new(StringComparer.Ordinal) { {"foo", "bar"}, { "baz", "bat" } },
+                        true
+                    ),
+                    (
+                        new(StringComparer.Ordinal) { {"foo", "bar"} },
+                        new(StringComparer.Ordinal) { {"foo", "bar"}, { "baz", "bat" } },
+                        true
+                    ),
+                    (
+                        new(StringComparer.Ordinal) { {"foo", "bar"}, { "baz", "bat" } },
+                        new(StringComparer.Ordinal) { {"foo", "bar"} },
+                        false
+                    ),
+                    (
+                        new(StringComparer.Ordinal) { {"foo", ""} },
+                        new(StringComparer.Ordinal) { {"foo", "bar"} },
+                        true
+                    ),
+                    (
+                        new(StringComparer.Ordinal) { {"foo", ""} },
+                        new(StringComparer.Ordinal) { },
+                        false
+                    ),
+                };
+        }
+
+        [TestMethod]
         public async Task GetItemsContinuationAsyncTest()
         {
             const int pageSize = 256;
 
-            var (continuation, items) = await repository.GetItemsAsync(c => c.Id != null, pageSize, null, CancellationToken.None);
+            var (continuation, items) = await repository.GetItemsAsync(null, pageSize, CancellationToken.None);
             var itemsList = items.ToList();
             Assert.IsTrue(itemsList.Count <= pageSize);
 
             while (!string.IsNullOrWhiteSpace(continuation))
             {
-                (continuation, items) = await repository.GetItemsAsync(c => c.Id != null, pageSize, continuation, CancellationToken.None);
+                (continuation, items) = await repository.GetItemsAsync(continuation, pageSize, CancellationToken.None);
                 itemsList.AddRange(items);
             }
 

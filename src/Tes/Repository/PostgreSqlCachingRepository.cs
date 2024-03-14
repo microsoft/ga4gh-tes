@@ -9,8 +9,10 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using LinqKit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using Polly;
 
 namespace Tes.Repository
@@ -80,46 +82,57 @@ namespace Tes.Repository
         /// Adds item to cache if active and not already present or updates it if already present.
         /// </summary>
         /// <param name="item"><see cref="T"/> to add or update to the cache.</param>
-        /// <param name="getKey">Function to provide cache key from <see cref="T"/>.</param>
-        /// <param name="isActive">Predicate to determine if <see cref="T"/> is active.</param>
+        /// <param name="GetKey">Function to provide cache key from <see cref="T"/>.</param>
+        /// <param name="IsActive">Predicate to determine if <see cref="T"/> is active.</param>
+        /// <param name="GetResult">Converts (extracts and/or copies) the desired portion of <typeparamref name="T"/>.</param>
         /// <returns><paramref name="item"/> (for convenience in fluent/LINQ usage patterns).</returns>
-        protected T EnsureActiveItemInCache(T item, Func<T, string> getKey, Predicate<T> isActive)
+        protected TResult EnsureActiveItemInCache<TResult>(T item, Func<T, string> GetKey, Predicate<T> IsActive, Func<T, TResult> GetResult = default) where TResult : class
         {
             if (Cache is not null)
             {
-                if (Cache.TryGetValue(getKey(item), out _))
+                if (Cache.TryGetValue(GetKey(item), out _))
                 {
-                    _ = Cache.TryUpdate(getKey(item), item, isActive(item) ? default : defaultCompletedTaskCacheExpiration);
+                    _ = Cache.TryUpdate(GetKey(item), item, IsActive(item) ? default : defaultCompletedTaskCacheExpiration);
                 }
-                else if (isActive(item))
+                else if (IsActive(item))
                 {
-                    _ = Cache.TryAdd(getKey(item), item);
+                    _ = Cache.TryAdd(GetKey(item), item);
                 }
             }
 
-            return item;
+            return GetResult?.Invoke(item) ?? default;
         }
 
         /// <summary>
         /// Retrieves items from the database in a consistent fashion.
         /// </summary>
         /// <param name="dbSet">The <see cref="DbSet{TEntity}"/> of <typeparamref name="TDatabaseItem"/> to query.</param>
-        /// <param name="predicate">The WHERE clause <see cref="Expression"/> for <typeparamref name="TDatabaseItem"/> selection in the query.</param>
+        /// <param name="readerFunc">The function that returns an item of type <typeparamref name="T"/> from the <see cref="System.Data.Common.DbDataReader"/>.</param>
         /// <param name="cancellationToken"></param>
         /// <param name="orderBy"></param>
         /// <param name="pagination"></param>
+        /// <param name="eFpredicate">The WHERE clause <see cref="Expression"/> for <typeparamref name="TDatabaseItem"/> selection in the query.</param>
+        /// <param name="rawPredicate">The WHERE clause for raw SQL for <typeparamref name="TDatabaseItem"/> selection in the query.</param>
         /// <returns></returns>
         /// <remarks>Ensure that the <see cref="DbContext"/> from which <paramref name="dbSet"/> comes isn't disposed until the entire query completes.</remarks>
-        protected async Task<IEnumerable<T>> GetItemsAsync(DbSet<T> dbSet, Expression<Func<T, bool>> predicate, CancellationToken cancellationToken, Func<IQueryable<T>, IQueryable<T>> orderBy = default, Func<IQueryable<T>, IQueryable<T>> pagination = default)
+        protected async Task<IEnumerable<T>> GetItemsAsync(DbSet<T> dbSet, Func<System.Data.Common.DbDataReader, T> readerFunc, CancellationToken cancellationToken, Func<IQueryable<T>, IQueryable<T>> orderBy = default, Func<IQueryable<T>, IQueryable<T>> pagination = default, Expression<Func<T, bool>> eFpredicate = default, FormattableString rawPredicate = default)
         {
             ArgumentNullException.ThrowIfNull(dbSet);
-            ArgumentNullException.ThrowIfNull(predicate);
+
             orderBy ??= q => q;
             pagination ??= q => q;
 
+            var tableQuery = rawPredicate is null
+                ? dbSet.AsQueryable()
+                : dbSet.FromSql(new PrependableFormattableString($"SELECT *\r\nFROM {dbSet.EntityType.GetTableName()}\r\nWHERE ", rawPredicate));
+
+            tableQuery = eFpredicate is null
+                ? tableQuery
+                : tableQuery/*.AsExpandable()*/.Where(eFpredicate);
+
             // Search for items in the JSON
-            var query = pagination(orderBy(dbSet.Where(predicate)));
-            //var sqlQuery = query.ToQueryString();
+            var query = pagination(orderBy(tableQuery));
+            var sqlQuery = query.ToQueryString();
             //System.Diagnostics.Debugger.Break();
 
             return await asyncPolicy.ExecuteAsync(query.ToListAsync, cancellationToken);
@@ -249,6 +262,40 @@ namespace Tes.Repository
         {
             Dispose(disposing: true);
             GC.SuppressFinalize(this);
+        }
+
+        internal class PrependableFormattableString : FormattableString
+        {
+            private readonly FormattableString source;
+            private readonly string prefix;
+
+            public PrependableFormattableString(string prefix, FormattableString formattableString)
+            {
+                ArgumentNullException.ThrowIfNull(formattableString);
+                ArgumentNullException.ThrowIfNullOrEmpty(prefix);
+
+                source = formattableString;
+                this.prefix = prefix;
+            }
+
+            public override int ArgumentCount => source.ArgumentCount;
+
+            public override string Format => prefix + source.Format;
+
+            public override object GetArgument(int index)
+            {
+                return source.GetArgument(index);
+            }
+
+            public override object[] GetArguments()
+            {
+                return source.GetArguments();
+            }
+
+            public override string ToString(IFormatProvider formatProvider)
+            {
+                return prefix + source.ToString(formatProvider);
+            }
         }
     }
 }

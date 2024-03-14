@@ -8,8 +8,6 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using Microsoft.VisualStudio.TestPlatform.ObjectModel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
@@ -260,7 +258,7 @@ namespace TesApi.Tests
             var controller = services.GetT();
 
             // Act
-            var result = await controller.CancelTask(testId, CancellationToken.None);
+            var result = await controller.CancelTaskAsync(testId, CancellationToken.None);
 
             // Assert
             if (result is ObjectResult objectResult)
@@ -299,7 +297,7 @@ namespace TesApi.Tests
             var controller = services.GetT();
 
             // Act
-            var result = await controller.CancelTask(tesTaskId, CancellationToken.None) as ConflictObjectResult;
+            var result = await controller.CancelTaskAsync(tesTaskId, CancellationToken.None) as ConflictObjectResult;
 
             // Assert
             Assert.IsNotNull(result);
@@ -318,7 +316,7 @@ namespace TesApi.Tests
                 .ReturnsAsync(true));
             var controller = services.GetT();
 
-            var result = await controller.CancelTask(tesTask.Id, System.Threading.CancellationToken.None) as ObjectResult;
+            var result = await controller.CancelTaskAsync(tesTask.Id, System.Threading.CancellationToken.None) as ObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(200, result.StatusCode);
@@ -407,7 +405,7 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            var result = await controller.ListTasks(null, 0, null, "BASIC", System.Threading.CancellationToken.None) as BadRequestObjectResult;
+            var result = await controller.ListTasksAsync(null, null, Array.Empty<string>(), Array.Empty<string>(), 0, null, "BASIC", System.Threading.CancellationToken.None) as BadRequestObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(400, result.StatusCode);
@@ -425,12 +423,13 @@ namespace TesApi.Tests
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo
-                .GetItemsAsync(It.IsAny<Expression<Func<TesTask, bool>>>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
-                .ReturnsAsync((Expression<Func<TesTask, bool>> predicate, int pageSize, string continuationToken, System.Threading.CancellationToken _1) =>
-                    (string.Empty, tesTasks.Where(i => predicate.Compile().Invoke(i)).Take(pageSize))));
+                // string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString predicate, Expression<Func<T, bool>> predicate
+                .GetItemsAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<System.Threading.CancellationToken>(), It.IsAny<FormattableString>(), It.IsAny<Expression<Func<TesTask, bool>>>()))
+                .ReturnsAsync((string _1, int pageSize, System.Threading.CancellationToken _2, FormattableString _3, Expression<Func<TesTask, bool>> predicate) =>
+                    ("continuation-token=1", tesTasks.Where(i => predicate.Compile().Invoke(i)).Take(pageSize))));
             var controller = services.GetT();
 
-            var result = await controller.ListTasks(namePrefix, 1, null, "BASIC", System.Threading.CancellationToken.None) as JsonResult;
+            var result = await controller.ListTasksAsync(namePrefix, null, Array.Empty<string>(), Array.Empty<string>(), 1, null, "BASIC", System.Threading.CancellationToken.None) as JsonResult;
             var listOfTesTasks = (TesListTasksResponse)result.Value;
 
             Assert.IsNotNull(result);
