@@ -129,12 +129,18 @@ namespace TesApi.Tests
         public async Task GetMappedSasUrlFromWsmAsync_WithOrWithOutBlobName_ReturnsValidURLWithBlobName(string responseBlobName)
         {
             SetUpTerraApiClient(responseBlobName);
+            responseBlobName ??= string.Empty;
 
-            var blobInfo = new TerraBlobInfo(terraApiStubData.GetWorkspaceIdFromContainerName(WorkspaceStorageContainerName), terraApiStubData.ContainerResourceId, TerraApiStubData.WorkspaceStorageContainerName, "blobName");
+            var blobInfo = new TerraBlobInfo(terraApiStubData.GetWorkspaceIdFromContainerName(WorkspaceStorageContainerName), terraApiStubData.ContainerResourceId, TerraApiStubData.WorkspaceStorageContainerName, responseBlobName);
             var uri = await terraStorageAccessProvider.GetMappedSasUrlFromWsmAsync(blobInfo, needsTags: false, CancellationToken.None);
 
+            if (!string.IsNullOrEmpty(responseBlobName))
+            {
+                responseBlobName = "/" + responseBlobName;
+            }
+
             Assert.IsNotNull(uri);
-            Assert.AreEqual(uri.AbsolutePath, $"/{TerraApiStubData.WorkspaceStorageContainerName}/blobName");
+            Assert.AreEqual(uri.AbsolutePath, $"/{TerraApiStubData.WorkspaceStorageContainerName}{responseBlobName}");
         }
 
         [TestMethod]
@@ -163,7 +169,7 @@ namespace TesApi.Tests
             var uri = await terraStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, Azure.Storage.Sas.BlobSasPermissions.Read, CancellationToken.None);
 
             Assert.IsNotNull(uri);
-            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{batchSchedulingOptions.Prefix}{StorageAccessProvider.TesExecutionsPathPrefix}/{task.Id}{expectedBlobName}", uri.AbsolutePath);
+            Assert.AreEqual($"/{TerraApiStubData.WorkspaceStorageContainerName}/{batchSchedulingOptions.Prefix}{StorageAccessProvider.TesExecutionsPathPrefix}/tasks/{task.Id}{expectedBlobName}", uri.AbsolutePath);
         }
 
         [TestMethod]

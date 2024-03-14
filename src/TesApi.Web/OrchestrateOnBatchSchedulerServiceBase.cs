@@ -17,27 +17,15 @@ namespace TesApi.Web
     /// <summary>
     /// Common functionality for <see cref="IHostedService"/>s that perform operations in the batch system, including common functionality for services using <see cref="BackgroundService"/>.
     /// </summary>
-    internal abstract class OrchestrateOnBatchSchedulerServiceBase : BackgroundService
+    /// <param name="hostApplicationLifetime">Used for requesting termination of the current application. Pass null to allow this service to stop during initialization without taking down the application.</param>
+    /// <param name="repository">The main TES task database repository implementation.</param>
+    /// <param name="batchScheduler">The batch scheduler implementation.</param>
+    /// <param name="logger">The logger instance.</param>
+    internal abstract class OrchestrateOnBatchSchedulerServiceBase(IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger logger) : BackgroundService
     {
-        private readonly IHostApplicationLifetime hostApplicationLifetime;
-        protected readonly IRepository<TesTask> repository;
-        protected readonly IBatchScheduler batchScheduler;
-        protected readonly ILogger logger;
-
-        /// <summary>
-        /// Default constructor
-        /// </summary>
-        /// <param name="hostApplicationLifetime">Used for requesting termination of the current application. Pass null to allow this service to stop during initialization without taking down the application.</param>
-        /// <param name="repository">The main TES task database repository implementation.</param>
-        /// <param name="batchScheduler">The batch scheduler implementation.</param>
-        /// <param name="logger">The logger instance.</param>
-        protected OrchestrateOnBatchSchedulerServiceBase(IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger logger)
-        {
-            this.hostApplicationLifetime = hostApplicationLifetime;
-            this.repository = repository;
-            this.batchScheduler = batchScheduler;
-            this.logger = logger;
-        }
+        protected readonly IRepository<TesTask> Repository = repository;
+        protected readonly IBatchScheduler BatchScheduler = batchScheduler;
+        protected readonly ILogger Logger = logger;
 
         /// <summary>
         /// Prepends the log message with the ultimately derived class's name.
@@ -53,7 +41,7 @@ namespace TesApi.Web
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2254:Template should be a static expression", Justification = "Used to provide service's name in log message.")]
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
-            logger.LogInformation(MarkLogMessage("stopping..."));
+            Logger.LogInformation(MarkLogMessage("stopping..."));
             await base.StopAsync(cancellationToken);
         }
 
@@ -61,7 +49,7 @@ namespace TesApi.Web
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2254:Template should be a static expression", Justification = "Used to provide service's name in log message.")]
         protected sealed override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            logger.LogInformation(MarkLogMessage("starting..."));
+            Logger.LogInformation(MarkLogMessage("starting..."));
 
             try
             {
@@ -71,15 +59,15 @@ namespace TesApi.Web
             }
             catch (Exception ex) when (ex is not OperationCanceledException oce || oce.CancellationToken == CancellationToken.None)
             {
-                logger.LogCritical(ex, "Service {ServiceName} was unable to initialize due to '{Message}'.", GetType().Name, ex.Message);
+                Logger.LogCritical(ex, "Service {ServiceName} was unable to initialize due to '{Message}'.", GetType().Name, ex.Message);
                 hostApplicationLifetime?.StopApplication();
             }
 
-            logger.LogInformation(MarkLogMessage("started."));
+            Logger.LogInformation(MarkLogMessage("started."));
 
             await ExecuteCoreAsync(stoppingToken);
 
-            logger.LogInformation(MarkLogMessage("gracefully stopped."));
+            Logger.LogInformation(MarkLogMessage("gracefully stopped."));
         }
 
         /// <summary>
@@ -133,7 +121,7 @@ namespace TesApi.Web
                     }
                     catch (Exception exc)
                     {
-                        logger.LogError(exc, "{Message}", exc.Message);
+                        Logger.LogError(exc, "{Message}", exc.Message);
                     }
                 }
                 while (await timer.WaitForNextTickAsync(cancellationToken));
@@ -209,8 +197,8 @@ namespace TesApi.Web
                             tesTask.AddToSystemLog(logs);
                         }
 
-                        logger.LogError(exc, "TES task: {TesTask} threw an exception in OrchestrateTesTasksOnBatch({Poll}).", tesTask.Id, pollName);
-                        await repository.UpdateItemAsync(tesTask, cancellationToken);
+                        Logger.LogError(exc, "TES task: {TesTask} threw an exception in OrchestrateTesTasksOnBatch({Poll}).", tesTask.Id, pollName);
+                        await Repository.UpdateItemAsync(tesTask, cancellationToken);
                     }
 
                     if (isModified)
@@ -242,15 +230,15 @@ namespace TesApi.Web
 
                         if (hasErrored)
                         {
-                            logger.LogDebug("{TesTask} failed, state: {TesTaskState}, reason: {TesTaskFailureReason}", tesTask.Id, tesTask.State, tesTask.FailureReason);
+                            Logger.LogDebug("{TesTask} failed, state: {TesTaskState}, reason: {TesTaskFailureReason}", tesTask.Id, tesTask.State, tesTask.FailureReason);
                         }
 
-                        await repository.UpdateItemAsync(tesTask, cancellationToken);
+                        await Repository.UpdateItemAsync(tesTask, cancellationToken);
                     }
                 }
                 catch (RepositoryCollisionException<TesTask> rce)
                 {
-                    logger.LogError(rce, "RepositoryCollisionException in OrchestrateTesTasksOnBatch({Poll})", pollName);
+                    Logger.LogError(rce, "RepositoryCollisionException in OrchestrateTesTasksOnBatch({Poll})", pollName);
 
                     try
                     {
@@ -265,28 +253,28 @@ namespace TesApi.Web
                                 // TODO: merge tesTask and currentTesTask
                             }
 
-                            await repository.UpdateItemAsync(currentTesTask, cancellationToken);
+                            await Repository.UpdateItemAsync(currentTesTask, cancellationToken);
                         }
                     }
                     catch (Exception exc)
                     {
                         // Consider retrying repository.UpdateItemAsync() if this exception was thrown from 'await rce.Task'
-                        logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
+                        Logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
                     }
                 }
                 catch (Exception exc)
                 {
-                    logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
+                    Logger.LogError(exc, "Updating TES Task '{TesTask}' threw {ExceptionType}: '{ExceptionMessage}'. Stack trace: {ExceptionStackTrace}", tesTask.Id, exc.GetType().FullName, exc.Message, exc.StackTrace);
                 }
             }
 
-            if (batchScheduler.NeedPoolFlush)
+            if (BatchScheduler.NeedPoolFlush)
             {
-                var pools = (await repository.GetItemsAsync(task => task.State == TesState.INITIALIZINGEnum || task.State == TesState.RUNNINGEnum, cancellationToken)).Select(task => task.PoolId).Distinct();
-                await batchScheduler.FlushPoolsAsync(pools, cancellationToken);
+                var pools = (await Repository.GetItemsAsync(task => task.State == TesState.INITIALIZINGEnum || task.State == TesState.RUNNINGEnum, cancellationToken)).Select(task => task.PoolId).Distinct();
+                await BatchScheduler.FlushPoolsAsync(pools, cancellationToken);
             }
 
-            logger.LogDebug("OrchestrateTesTasksOnBatch({Poll}) for {TaskCount} {UnitsLabel} completed in {TotalSeconds:c}.", pollName, tesTasks.Where(task => task is not null).Count(), unitsLabel, DateTime.UtcNow.Subtract(startTime));
+            Logger.LogDebug("OrchestrateTesTasksOnBatch({Poll}) for {TaskCount} {UnitsLabel} completed in {TotalSeconds:c}.", pollName, tesTasks.Where(task => task is not null).Count(), unitsLabel, DateTime.UtcNow.Subtract(startTime));
         }
     }
 }

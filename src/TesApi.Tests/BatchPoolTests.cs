@@ -198,7 +198,7 @@ namespace TesApi.Tests
                 public bool? EnableAutoScale { get; set; }
             }
 
-            private readonly Dictionary<string, PoolState> poolState = new();
+            private readonly Dictionary<string, PoolState> poolState = [];
 
             internal void SetPoolState(
                 string id,
@@ -216,8 +216,8 @@ namespace TesApi.Tests
             {
                 if (poolState.TryGetValue(id, out var state))
                 {
-                    var metadata = state.PoolMetadata?.ToDictionary(p => p.Name, p => p.Value) ?? new Dictionary<string, string>();
-                    foreach (var meta in poolMetadata ?? new List<Microsoft.Azure.Batch.MetadataItem>())
+                    var metadata = state.PoolMetadata?.ToDictionary(p => p.Name, p => p.Value) ?? [];
+                    foreach (var meta in poolMetadata ?? [])
                     {
                         if (metadata.ContainsKey(meta.Name))
                         {
@@ -448,7 +448,7 @@ namespace TesApi.Tests
                 creationTime = DateTime.UtcNow;
             }
 
-            metadata ??= new List<Microsoft.Azure.Batch.MetadataItem>();
+            metadata ??= [];
 
             var computeNodeOperations = new Mock<Microsoft.Azure.Batch.Protocol.IComputeNodeOperations>();
             var batchServiceClient = new MockServiceClient(computeNodeOperations.Object);
@@ -470,7 +470,7 @@ namespace TesApi.Tests
                 creationTime: creationTime,
                 metadata: metadata.Select(ConvertMetadata).ToList());
             var pool = (CloudPool)typeof(CloudPool).GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, default, new Type[] { typeof(BatchClient), typeof(Microsoft.Azure.Batch.Protocol.Models.CloudPool), typeof(IEnumerable<BatchClientBehavior>) }, default)
-                .Invoke(new object[] { parentClient, modelPool, null });
+                .Invoke([parentClient, modelPool, null]);
             return pool;
 
             static Microsoft.Azure.Batch.Protocol.Models.MetadataItem ConvertMetadata(Microsoft.Azure.Batch.MetadataItem item)

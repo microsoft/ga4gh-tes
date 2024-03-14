@@ -52,12 +52,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="scripts\clean-executor.sh">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="scripts\task-run.sh">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <Folder Include="scripts\" />
   </ItemGroup>
 
   <ItemGroup>
@@ -72,4 +67,5 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+
 </Project>

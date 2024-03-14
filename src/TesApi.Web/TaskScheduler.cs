@@ -19,25 +19,17 @@ namespace TesApi.Web
     /// This should only be used as a system-wide singleton service.  This class does not support scale-out on multiple machines,
     /// nor does it implement a leasing mechanism.  In the future, consider using the Lease Blob operation.
     /// </summary>
-    internal class TaskScheduler : OrchestrateOnBatchSchedulerServiceBase
+    /// <param name="nodeEventProcessor">The task node event processor.</param>
+    /// <param name="hostApplicationLifetime">Used for requesting termination of the current application during initialization.</param>
+    /// <param name="repository">The main TES task database repository implementation.</param>
+    /// <param name="batchScheduler">The batch scheduler implementation.</param>
+    /// <param name="taskSchedulerLogger">The logger instance.</param>
+    internal class TaskScheduler(RunnerEventsProcessor nodeEventProcessor, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<TaskScheduler> taskSchedulerLogger)
+        : OrchestrateOnBatchSchedulerServiceBase(hostApplicationLifetime, repository, batchScheduler, taskSchedulerLogger)
     {
         private readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(5);
         private readonly TimeSpan batchRunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs uses a 30 second polling interval
-        private readonly RunnerEventsProcessor nodeEventProcessor;
-
-        /// <summary>
-        /// Default constructor
-        /// </summary>
-        /// <param name="nodeEventProcessor">The task node event processor.</param>
-        /// <param name="hostApplicationLifetime">Used for requesting termination of the current application during initialization.</param>
-        /// <param name="repository">The main TES task database repository implementation.</param>
-        /// <param name="batchScheduler">The batch scheduler implementation.</param>
-        /// <param name="logger">The logger instance.</param>
-        public TaskScheduler(RunnerEventsProcessor nodeEventProcessor, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<TaskScheduler> logger)
-            : base(hostApplicationLifetime, repository, batchScheduler, logger)
-        {
-            this.nodeEventProcessor = nodeEventProcessor;
-        }
+        private readonly RunnerEventsProcessor nodeEventProcessor = nodeEventProcessor;
 
         /// <inheritdoc />
         protected override async ValueTask ExecuteSetupAsync(CancellationToken cancellationToken)
@@ -45,11 +37,11 @@ namespace TesApi.Web
             try
             {
                 // Delay "starting" TaskScheduler until this completes to finish initializing BatchScheduler.
-                await batchScheduler.UploadTaskRunnerIfNeeded(cancellationToken);
+                await BatchScheduler.UploadTaskRunnerIfNeededAsync(cancellationToken);
             }
             catch (Exception exc)
             {
-                logger.LogError(exc, @"Checking/storing the node task runner binary failed with {Message}", exc.Message);
+                Logger.LogError(exc, @"Checking/storing the node task runner binary failed with {Message}", exc.Message);
                 throw;
             }
         }
@@ -70,14 +62,14 @@ namespace TesApi.Web
         private async Task ExecuteQueuedTesTasksOnBatchAsync(CancellationToken cancellationToken)
         {
             var query = new Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>>(
-                async token => (await repository.GetItemsAsync(
+                async token => (await Repository.GetItemsAsync(
                     predicate: t => t.State == TesState.QUEUEDEnum,
                     cancellationToken: token))
                 .OrderBy(t => t.CreationTime)
                 .ToAsyncEnumerable());
 
             await ExecuteActionOnIntervalAsync(batchRunInterval,
-                token => OrchestrateTesTasksOnBatchAsync("Queued", query, batchScheduler.ProcessQueuedTesTasksAsync, token),
+                token => OrchestrateTesTasksOnBatchAsync("Queued", query, BatchScheduler.ProcessQueuedTesTasksAsync, token),
                 cancellationToken);
         }
 
@@ -89,7 +81,7 @@ namespace TesApi.Web
         private async Task ExecuteCancelledTesTasksOnBatchAsync(CancellationToken cancellationToken)
         {
             var query = new Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>>(
-                async token => (await repository.GetItemsAsync(
+                async token => (await Repository.GetItemsAsync(
                     predicate: t => t.State == TesState.CANCELINGEnum,
                     cancellationToken: token))
                 .OrderByDescending(t => t.CreationTime)
@@ -99,7 +91,7 @@ namespace TesApi.Web
                 token => OrchestrateTesTasksOnBatchAsync(
                     "Cancelled",
                     query,
-                    (tasks, ct) => batchScheduler.ProcessTesTaskBatchStatesAsync(
+                    (tasks, ct) => BatchScheduler.ProcessTesTaskBatchStatesAsync(
                         tasks,
                         Enumerable.Repeat<AzureBatchTaskState>(new(AzureBatchTaskState.TaskState.CancellationRequested), tasks.Length).ToArray(),
                         ct),
@@ -132,7 +124,7 @@ namespace TesApi.Web
             var messages = new ConcurrentBag<(RunnerEventsMessage Message, TesTask Task, AzureBatchTaskState State, Func<CancellationToken, Task> MarkProcessedAsync)>();
 
             // Get and parse event blobs
-            await Parallel.ForEachAsync(batchScheduler.GetEventMessagesAsync(cancellationToken), cancellationToken, async (eventMessage, token) =>
+            await Parallel.ForEachAsync(BatchScheduler.GetEventMessagesAsync(cancellationToken), cancellationToken, async (eventMessage, token) =>
             {
                 var tesTask = await GetTesTaskAsync(eventMessage.Tags["task-id"], eventMessage.Tags["event-name"]);
 
@@ -150,30 +142,30 @@ namespace TesApi.Web
                 }
                 catch (ArgumentException ex)
                 {
-                    logger.LogError(ex, @"Verifying event metadata failed: {ErrorMessage}", ex.Message);
+                    Logger.LogError(ex, @"Verifying event metadata failed: {ErrorMessage}", ex.Message);
 
                     messages.Add((
                         eventMessage,
                         tesTask,
-                        new(AzureBatchTaskState.TaskState.InfoUpdate, Warning: new List<string>
-                        {
+                        new(AzureBatchTaskState.TaskState.InfoUpdate, Warning:
+                        [
                             "EventParsingFailed",
                             $"{ex.GetType().FullName}: {ex.Message}"
-                        }),
+                        ]),
                         ct => nodeEventProcessor.RemoveMessageFromReattemptsAsync(eventMessage, ct)));
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, @"Downloading and parsing event failed: {ErrorMessage}", ex.Message);
+                    Logger.LogError(ex, @"Downloading and parsing event failed: {ErrorMessage}", ex.Message);
 
                     messages.Add((
                         eventMessage,
                         tesTask,
-                        new(AzureBatchTaskState.TaskState.InfoUpdate, Warning: new List<string>
-                        {
+                        new(AzureBatchTaskState.TaskState.InfoUpdate, Warning:
+                        [
                             "EventParsingFailed",
                             $"{ex.GetType().FullName}: {ex.Message}"
-                        }),
+                        ]),
                         (ex is System.Diagnostics.UnreachableException || ex is RunnerEventsProcessor.DownloadOrParseException)
                             ? ct => nodeEventProcessor.MarkMessageProcessedAsync(eventMessage, ct) // Mark event processed to prevent retries
                             : default));  // Retry this event.
@@ -183,14 +175,14 @@ namespace TesApi.Web
                 async ValueTask<TesTask> GetTesTaskAsync(string id, string @event)
                 {
                     TesTask tesTask = default;
-                    if (await repository.TryGetItemAsync(id, token, task => tesTask = task) && tesTask is not null)
+                    if (await Repository.TryGetItemAsync(id, token, task => tesTask = task) && tesTask is not null)
                     {
-                        logger.LogDebug("Completing event '{TaskEvent}' for task {TesTask}.", @event, tesTask.Id);
+                        Logger.LogDebug("Completing event '{TaskEvent}' for task {TesTask}.", @event, tesTask.Id);
                         return tesTask;
                     }
                     else
                     {
-                        logger.LogDebug("Could not find task {TesTask} for event '{TaskEvent}'.", id, @event);
+                        Logger.LogDebug("Could not find task {TesTask} for event '{TaskEvent}'.", id, @event);
                         return null;
                     }
                 }
@@ -217,10 +209,8 @@ namespace TesApi.Web
             // Update TesTasks
             await OrchestrateTesTasksOnBatchAsync(
                 "NodeEvent",
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-                async _ => eventStates.Select(@event => @event.Task).ToAsyncEnumerable(),
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
-                (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, eventStates.Select(@event => @event.State).ToArray(), token),
+                _ => ValueTask.FromResult(eventStates.Select(@event => @event.Task).ToAsyncEnumerable()),
+                (tesTasks, token) => BatchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, eventStates.Select(@event => @event.State).ToArray(), token),
                 cancellationToken,
                 "events");
 
@@ -232,7 +222,7 @@ namespace TesApi.Web
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, @"Failed to tag event as processed.");
+                    Logger.LogError(ex, @"Failed to tag event as processed.");
                 }
             });
         }

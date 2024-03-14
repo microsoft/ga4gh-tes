@@ -21,15 +21,21 @@ namespace TesApi.Web
     /// This should only be used as a system-wide singleton service.  This class does not support scale-out on multiple machines,
     /// nor does it implement a leasing mechanism.  In the future, consider using the Lease Blob operation.
     /// </summary>
-    internal class PoolScheduler : OrchestrateOnBatchSchedulerServiceBase
+    /// <param name="hostApplicationLifetime">Used for requesting termination of the current application during initialization.</param>
+    /// <param name="repository">The main TES task database repository implementation.</param>
+    /// <param name="batchScheduler">The batch scheduler implementation.</param>
+    /// <param name="logger">The logger instance.</param>
+    /// <exception cref="ArgumentNullException"></exception>
+    internal class PoolScheduler(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<PoolScheduler> logger)
+        : OrchestrateOnBatchSchedulerServiceBase(hostApplicationLifetime, repository, batchScheduler, logger)
     {
         /// <summary>
         /// Interval between each call to <see cref="IBatchPool.ServicePoolAsync(CancellationToken)"/>.
         /// </summary>
         public static readonly TimeSpan RunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs uses a 30 second polling interval
 
-        private static readonly TimeSpan StateTransitionTimeForDeletionTimeSpan = 0.75 * BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
-        private static readonly TimeSpan CompletedTaskListTimeSpan = 0.5 * BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
+        private static readonly TimeSpan StateTransitionTimeForDeletionTimeSpan = 0.75 * Web.BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
+        private static readonly TimeSpan CompletedTaskListTimeSpan = 0.5 * Web.BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
 
         /// <summary>
         /// Predicate to obtain <see cref="CloudTask"/>s (recently) running on <see cref="ComputeNode"/>s. Used to connect tasks and nodes together.
@@ -46,21 +52,10 @@ namespace TesApi.Web
         /// </summary>
         private static bool CompletedTaskListPredicate(CloudTask task, DateTime now) => TaskState.Completed.Equals(task.State) && task.StateTransitionTime < now - CompletedTaskListTimeSpan;
 
-        /// <summary>
-        /// Default constructor
-        /// </summary>
-        /// <param name="hostApplicationLifetime">Used for requesting termination of the current application during initialization.</param>
-        /// <param name="repository">The main TES task database repository implementation.</param>
-        /// <param name="batchScheduler">The batch scheduler implementation.</param>
-        /// <param name="logger">The logger instance.</param>
-        /// <exception cref="ArgumentNullException"></exception>
-        public PoolScheduler(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<PoolScheduler> logger)
-            : base(hostApplicationLifetime, repository, batchScheduler, logger) { }
-
         /// <inheritdoc />
         protected override void ExecuteSetup(CancellationToken cancellationToken)
         {
-            batchScheduler.LoadExistingPoolsAsync(cancellationToken).Wait(cancellationToken); // Delay starting TaskScheduler until this completes to finish initializing the shared parts of BatchScheduler.
+            BatchScheduler.LoadExistingPoolsAsync(cancellationToken).Wait(cancellationToken); // Delay starting TaskScheduler until this completes to finish initializing the shared parts of BatchScheduler.
         }
 
         /// <inheritdoc />
@@ -88,7 +83,7 @@ namespace TesApi.Web
         {
             ArgumentNullException.ThrowIfNull(action);
 
-            var pools = batchScheduler.GetPools().ToList();
+            var pools = BatchScheduler.GetPools().ToList();
 
             if (0 == pools.Count)
             {
@@ -105,11 +100,11 @@ namespace TesApi.Web
                 }
                 catch (Exception exc)
                 {
-                    logger.LogError(exc, @"Batch pool {PoolId} threw an exception when serviced.", pool.PoolId);
+                    Logger.LogError(exc, @"Batch pool {PoolId} threw an exception when serviced.", pool.PoolId);
                 }
             });
 
-            logger.LogDebug(@"Service Batch Pools for {PoolsCount} pools completed in {TotalSeconds} seconds.", pools.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
+            Logger.LogDebug(@"Service Batch Pools for {PoolsCount} pools completed in {TotalSeconds} seconds.", pools.Count, DateTime.UtcNow.Subtract(startTime).TotalSeconds);
         }
 
         /// <summary>
@@ -125,7 +120,7 @@ namespace TesApi.Web
             var batchStateCandidateTasks = Enumerable.Empty<CloudTaskWithPreviousComputeNodeId>();
             var deletionCandidateTasks = AsyncEnumerable.Empty<IBatchScheduler.CloudTaskId>();
 
-            var deletionCandidateCreationCutoff = now - BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
+            var deletionCandidateCreationCutoff = now - Web.BatchScheduler.BatchDeleteNewTaskWorkaroundTimeSpan;
             var stateTransitionTimeCutoffForDeletions = now - StateTransitionTimeForDeletionTimeSpan;
 
             foreach (var taskWithNodeId in tasks)
@@ -162,13 +157,13 @@ namespace TesApi.Web
             await Parallel.ForEachAsync(states, cancellationToken, async (state, token) =>
             {
                 TesTask tesTask = default;
-                if (await repository.TryGetItemAsync(batchScheduler.GetTesTaskIdFromCloudTaskId(state.CloudTaskId), token, task => tesTask = task) && tesTask is not null)
+                if (await Repository.TryGetItemAsync(BatchScheduler.GetTesTaskIdFromCloudTaskId(state.CloudTaskId), token, task => tesTask = task) && tesTask is not null)
                 {
                     list.Add((tesTask, state.TaskState));
                 }
                 else
                 {
-                    logger.LogError(@"Unable to locate TesTask for CloudTask '{CloudTask}' with action state {ActionState}.", state.CloudTaskId, state.TaskState.State);
+                    Logger.LogError(@"Unable to locate TesTask for CloudTask '{CloudTask}' with action state {ActionState}.", state.CloudTaskId, state.TaskState.State);
                 }
             });
 
@@ -176,15 +171,13 @@ namespace TesApi.Web
             {
                 await OrchestrateTesTasksOnBatchAsync(
                     $"NodeState ({poolId})",
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-                    async _ => list.Select(t => t.TesTask).ToAsyncEnumerable(),
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
-                    (tesTasks, token) => batchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, list.Select(t => t.State).ToArray(), token),
+                    _ => ValueTask.FromResult(list.Select(t => t.TesTask).ToAsyncEnumerable()),
+                    (tesTasks, token) => BatchScheduler.ProcessTesTaskBatchStatesAsync(tesTasks, list.Select(t => t.State).ToArray(), token),
                     cancellationToken);
             }
             else
             {
-                logger.LogDebug("No task state changes from pool/node information this time: PoolId: {PoolId}.", poolId);
+                Logger.LogDebug("No task state changes from pool/node information this time: PoolId: {PoolId}.", poolId);
             }
         }
 
@@ -196,24 +189,24 @@ namespace TesApi.Web
         /// <returns></returns>
         private async ValueTask ProcessTasksToDelete(IAsyncEnumerable<IBatchScheduler.CloudTaskId> tasks, CancellationToken cancellationToken)
         {
-            await foreach (var taskResult in batchScheduler.DeleteCloudTasksAsync(tasks, cancellationToken).WithCancellation(cancellationToken))
+            await foreach (var taskResult in BatchScheduler.DeleteCloudTasksAsync(tasks, cancellationToken).WithCancellation(cancellationToken))
             {
                 try
                 {
                     switch (await taskResult)
                     {
                         case true:
-                            logger.LogDebug(@"Azure task {CloudTask} was deleted.", taskResult.Related.TaskId);
+                            Logger.LogDebug(@"Azure task {CloudTask} was deleted.", taskResult.Related.TaskId);
                             break;
 
                         case false:
-                            logger.LogDebug(@"Azure task {CloudTask} was NOT deleted.", taskResult.Related.TaskId);
+                            Logger.LogDebug(@"Azure task {CloudTask} was NOT deleted.", taskResult.Related.TaskId);
                             break;
                     }
                 }
                 catch (Exception exc)
                 {
-                    logger.LogError(exc, @"Failed to delete azure task '{CloudTask}': '{ExceptionType}': '{ExceptionMessage}'", taskResult.Related.TaskId, exc.GetType().FullName, exc.Message);
+                    Logger.LogError(exc, @"Failed to delete azure task '{CloudTask}': '{ExceptionType}': '{ExceptionMessage}'", taskResult.Related.TaskId, exc.GetType().FullName, exc.Message);
                 }
             }
         }
@@ -237,13 +230,13 @@ namespace TesApi.Web
                 var tasksWithNodeIds = tasks.ToList();
                 taskListWithComputeNodeInfo = tasksWithNodeIds.Where(task => !string.IsNullOrWhiteSpace(task.PreviousComputeNodeId)).ToList();
                 var taskList = tasksWithNodeIds.Select(task => task.CloudTask).ToList();
-                activeTaskList = taskList.Where(ActiveTaskListPredicate).OrderByDescending(task => task.StateTransitionTime?.ToUniversalTime()).ToList();
+                activeTaskList = [.. taskList.Where(ActiveTaskListPredicate).OrderByDescending(task => task.StateTransitionTime?.ToUniversalTime())];
                 completedTaskList = taskList.Where(task => CompletedTaskListPredicate(task, now)).ToList();
             }
 
             if (taskListWithComputeNodeInfo.Count > 0)
             {
-                logger.LogDebug("{PoolId} reported nodes that will be removed. There are {tasksWithComputeNodeInfo} tasks that might be impacted.", pool.PoolId, taskListWithComputeNodeInfo.Count);
+                Logger.LogDebug("{PoolId} reported nodes that will be removed. There are {tasksWithComputeNodeInfo} tasks that might be impacted.", pool.PoolId, taskListWithComputeNodeInfo.Count);
 
                 await foreach (var node in (await pool.ListEjectableComputeNodesAsync()).WithCancellation(cancellationToken))
                 {
@@ -251,7 +244,7 @@ namespace TesApi.Web
                         .Where(task => node.Id.Equals(task.PreviousComputeNodeId, StringComparison.InvariantCultureIgnoreCase))
                         .Select(task => task.CloudTask))
                     {
-                        logger.LogDebug("{TaskId} connected to node {NodeId} in state {NodeState}.", task.Id, node.Id, node.State);
+                        Logger.LogDebug("{TaskId} connected to node {NodeId} in state {NodeState}.", task.Id, node.Id, node.State);
 
                         yield return new(task.Id, node.State switch
                         {
@@ -260,7 +253,7 @@ namespace TesApi.Web
                             _ => throw new System.Diagnostics.UnreachableException(),
                         });
 
-                        logger.LogDebug("Removing {TaskId} from consideration for other errors.", task.Id);
+                        Logger.LogDebug("Removing {TaskId} from consideration for other errors.", task.Id);
                         _ = activeTaskList.Remove(task);
                     }
                 }
@@ -330,7 +323,7 @@ namespace TesApi.Web
 
             AzureBatchTaskState GetCompletedBatchState(CloudTask task)
             {
-                logger.LogDebug("Getting batch task state from completed task {TesTask}.", batchScheduler.GetTesTaskIdFromCloudTaskId(task.Id));
+                Logger.LogDebug("Getting batch task state from completed task {TesTask}.", BatchScheduler.GetTesTaskIdFromCloudTaskId(task.Id));
                 return task.ExecutionInformation.Result switch
                 {
                     TaskExecutionResult.Success => new(

@@ -34,7 +34,7 @@ namespace TesApi.Web
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         /// <remarks>This should be called only once after the <see cref="BatchScheduler"/> is created before any other methods are called.</remarks>
-        Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken);
+        Task UploadTaskRunnerIfNeededAsync(CancellationToken cancellationToken);
 
         /// <summary>
         /// Update <see cref="TesTask"/>s with task-related state on a batch system
@@ -119,5 +119,37 @@ namespace TesApi.Web
         /// <param name="TaskId"><see cref="CloudTask.Id"/>.</param>
         /// <param name="Created"><see cref="CloudTask.CreationTime"/></param>
         public record struct CloudTaskId(string JobId, string TaskId, DateTime Created);
+
+        /// <summary>
+        /// TES metadata carried in the batch pool.
+        /// </summary>
+        /// <param name="HostName"></param>
+        /// <param name="IsDedicated"></param>
+        /// <param name="RunnerMD5"></param>
+        record struct PoolMetadata(string HostName, bool IsDedicated, string RunnerMD5)
+        {
+            private static readonly System.Text.Json.JsonSerializerOptions Options = new(System.Text.Json.JsonSerializerDefaults.Web);
+
+            /// <inheritdoc/>
+            public override readonly string ToString()
+            {
+                return System.Text.Json.JsonSerializer.Serialize(this, Options);
+            }
+
+            /// <summary>
+            /// Create <see cref="PoolMetadata"/> from batch pool metadata value.
+            /// </summary>
+            /// <param name="value">Batch pool '<see cref="BatchScheduler.PoolMetadata"/>' metadata value.</param>
+            /// <returns><see cref="PoolMetadata"/>.</returns>
+            public static PoolMetadata Create(string value)
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<PoolMetadata>(value, Options);
+            }
+
+            internal readonly bool Validate()
+            {
+                return !(string.IsNullOrWhiteSpace(HostName) || string.IsNullOrWhiteSpace(RunnerMD5));
+            }
+        }
     }
 }

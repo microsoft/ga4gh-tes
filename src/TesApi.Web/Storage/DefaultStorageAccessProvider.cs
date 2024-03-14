@@ -247,7 +247,7 @@ namespace TesApi.Web.Storage
         public override Uri GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath)
         {
             var normalizedBlobPath = NormalizedBlobPath(blobPath);
-            var blobPathWithPrefix = $"{TesExecutionsPathPrefix}/{task.Id}{normalizedBlobPath}";
+            var blobPathWithPrefix = $"{TesExecutionsPathPrefix}{DefaultTasksPrefix}{task.Id}{normalizedBlobPath}";
 
             if (task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters
                     .internal_path_prefix) == true)

@@ -145,11 +145,10 @@ namespace TesDeployer
                     azureCloudConfig = await AzureCloudConfig.CreateAsync(configuration.AzureCloudName);
                 });
 
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-                await Execute("Validating command line arguments...", async () =>
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+                await Execute("Validating command line arguments...", () =>
                 {
                     ValidateInitialCommandLineArgs();
+                    return Task.CompletedTask;
                 });
 
                 await ValidateTokenProviderAsync();

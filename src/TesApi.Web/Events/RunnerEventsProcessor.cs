@@ -7,7 +7,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Storage.Blobs;
-using Microsoft.Azure.Management.Storage.Fluent.PolicyRule.Update;
 using Microsoft.Extensions.Logging;
 using Tes.Extensions;
 
@@ -449,7 +448,7 @@ namespace TesApi.Web.Events
                 }
 
                 static string JsonArrayAsIndentedString(IEnumerable<string> array)
-                    => System.Text.Json.JsonSerializer.Serialize(array, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerOptions.Default) { WriteIndented = true });
+                    => System.Text.Json.JsonSerializer.Serialize(array, jsonIndentedSerializerOptions);
             }
 
             async ValueTask AddProcessLogsAsync(Tes.Models.TesTask tesTask, CancellationToken cancellationToken)
@@ -458,6 +457,8 @@ namespace TesApi.Web.Events
                 { }
             }
         }
+
+        private static readonly System.Text.Json.JsonSerializerOptions jsonIndentedSerializerOptions = new(System.Text.Json.JsonSerializerOptions.Default) { WriteIndented = true };
 
         /// <summary>
         /// Marks the event message as processed.
@@ -485,7 +486,12 @@ namespace TesApi.Web.Events
         /// <remarks>This method assumes <paramref name="message"/>'s <see cref="RunnerEventsMessage.Tags"/> and <see cref="RunnerEventsMessage.BlobUri"/> are intact and correct.</remarks>
         public async Task RemoveMessageFromReattemptsAsync(RunnerEventsMessage message, CancellationToken cancellationToken)
         {
-            message.Tags.Remove("task-id");
+            if (message.Tags.Count > 9)
+            {
+                _ = message.Tags.Remove(message.Tags.Last());
+            }
+
+            message.Tags.Add(new(ProcessedTag, "error"));
             await azureProxy.SetBlobTags(
                 message.BlobUri,
                 message.Tags,
