@@ -941,7 +941,7 @@ namespace TesApi.Web
             var additionalInputFiles = new List<TesInput>();
             var metadata = task.GetCromwellMetadata();
 
-            var cromwellExecutionDirectory = Uri.TryCreate(metadata.CromwellRcUri, UriKind.Absolute, out _)
+            var cromwellExecutionDirectory = (Uri.TryCreate(metadata.CromwellRcUri, UriKind.Absolute, out var uri) && !uri.IsFile)
                 ? GetParentUrl(metadata.CromwellRcUri)
                 : $"/{GetParentUrl(metadata.CromwellRcUri)}";
 

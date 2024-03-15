@@ -1053,11 +1053,11 @@ namespace TesApi.Tests
         }
 
         [DataTestMethod]
-        [DataRow(new string[] { null, "echo hello" }, "blob1.tmp", false)]
-        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", false)]
-        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", true)]
-        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/privateworkspacecontainer/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", false)]
-        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/privateworkspacecontainer/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", true)]
+        [DataRow(new string[] { null, "echo hello" }, "blob1.tmp", false, DisplayName = "commandScript via content")]
+        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", false, DisplayName = "default url with file missing")]
+        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", true, DisplayName = "default url with file present")]
+        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/privateworkspacecontainer/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", false, DisplayName = "custom container with file missing")]
+        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/privateworkspacecontainer/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", true, DisplayName = "custom container with file present")]
         public async Task CromwellWriteFilesAreDiscoveredAndAddedIfMissedWithContentScript(string[] script, string fileName, bool fileIsInInputs)
         {
             var tesTask = GetTesTask();
