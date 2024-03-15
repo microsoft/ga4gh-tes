@@ -1085,16 +1085,84 @@ namespace TesApi.Web
             if (!dockerConfigured)
             {
                 var commandLine = new StringBuilder();
-                commandLine.Append(@"/usr/bin/bash -c 'trap ""echo Error trapped; exit 0"" ERR; sudo touch tmp2.json && (sudo cp /etc/docker/daemon.json tmp1.json || sudo echo {} > tmp1.json) && sudo chmod a+w tmp?.json && if fgrep ""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker"" tmp1.json; then echo grep ""found docker path""; elif [ $? -eq 1 ]; then ");
+
+                // Build the bash script as @-string (note do not change whitespace/line-endings, they are required for bash to work properly)
+                commandLine.Append(
+@"/usr/bin/bash -c '
+trap ""echo Error trapped; exit 0"" ERR
+# set -e will cause any error to exit the script
+set -e
+sudo touch tmp2.json
+sudo cp /etc/docker/daemon.json tmp1.json || sudo echo {} > tmp1.json
+sudo chmod a+w tmp?.json;
+if fgrep ""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker"" tmp1.json; then
+    echo grep ""found docker path""
+elif [ $? -eq 1 ]; then 
+");
 
                 commandLine.Append(machineConfiguration.NodeAgentSkuId switch
                 {
-                    var s when s.StartsWith("batch.node.ubuntu ") => "sudo apt-get install -y jq",
-                    var s when s.StartsWith("batch.node.centos ") => "sudo yum install epel-release -y && sudo yum update -y && sudo yum install -y jq wget",
+                    var s when s.StartsWith("batch.node.ubuntu ") => "echo \"Ubuntu OS detected\"",
+                    var s when s.StartsWith("batch.node.centos ") => "sudo yum install epel-release -y && sudo yum update -y && sudo yum install -y wget",
                     _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message: ({machineConfiguration.NodeAgentSkuId})")
                 });
 
-                commandLine.Append(@" && jq \.\[\""data-root\""\]=\""""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker""\"" tmp1.json >> tmp2.json && sudo cp tmp2.json /etc/docker/daemon.json && sudo chmod 644 /etc/docker/daemon.json && sudo systemctl restart docker && echo ""updated docker data-root""; else (echo ""grep failed"" || exit 1); fi'");
+                // Complete the docker configuration:
+                commandLine.Append(
+@"
+    python3 <<INNEREOF
+import json,os
+data=json.load(open(""tmp1.json""))
+data[""data-root""]=os.path.join(os.path.dirname(os.path.dirname(os.getenv(""AZ_BATCH_NODE_ROOT_DIR""))), ""docker"")
+json.dump(data, open(""tmp2.json"", ""w""), indent=2)
+INNEREOF
+    sudo cp tmp2.json /etc/docker/daemon.json 
+    sudo chmod 644 /etc/docker/daemon.json 
+    sudo systemctl restart docker 
+    echo ""updated docker data-root""
+else 
+    echo ""grep failed"" || exit 1
+fi
+");
+
+                // Add nvme device mounting (software RAID and mount all nvme devices to the task working directory ${AZ_BATCH_NODE_ROOT_DIR}/tasks/workitems)
+                // Note: this nvme mounting will only work for freshly booted machines with no existing RAID arrays
+                //       for testing purposes it will not work if re-run on the same machine
+                commandLine.Append(
+@"# Get nvme device paths without jq being installed
+nvme_devices=$(nvme list -o json | grep -oP ""\""DevicePath\"" : \""\K[^\""]+"" || true)
+nvme_device_count=$(echo $nvme_devices | wc -w)
+if [ -z ""$nvme_devices"" ]; then
+    echo ""No NVMe devices found""
+else
+    # Mount all nvme devices as RAID0 (striped) onto /mnt/batch/tasks/workitems using XFS
+    md_device=""/dev/md0""
+    mdadm --create $md_device --level=0 --raid-devices=$nvme_device_count $nvme_devices
+    # Partition and format using XFS.
+    partition=""${md_device}p1""
+    parted ""${md_device}"" --script mklabel gpt mkpart xfspart xfs 0% 100% 
+    mkfs.xfs ""${partition}""
+    partprobe ""${partition}""
+    # Save permissions of the existing /mnt/batch/tasks/workitems/
+    mount_dir=""${AZ_BATCH_NODE_ROOT_DIR}/tasks/workitems""
+    permissions=$(stat -c ""%a"" $mount_dir)
+    owner=$(stat -c ""%U"" $mount_dir)
+    group=$(stat -c ""%G"" $mount_dir)
+    # Mount the new nvme array at /mnt/batch/tasks/workitems/
+    rm -rf ""${mount_dir}""
+    mkdir -p ""${mount_dir}""
+    mount ""${partition}"" ""${mount_dir}""
+    chown $owner:$group ""${mount_dir}""
+    chmod $permissions ""${mount_dir}""
+    echo ""Mounted $nvme_device_count drives to $mount_dir: $nvme_devices""
+fi
+");
+
+                // End the script by making sure it writes output to a startup.log file
+                commandLine.Append(
+@"
+set +e' 2>&1 startup.log
+");
 
                 var startTask = new BatchModels.StartTask
                 {
