@@ -542,7 +542,7 @@ namespace TesApi.Tests
                     new() { Name = "commandScript", Path = $"{path}/script" },
                     new() { Name = "stderr", Path = $"{path}/stderr" },
                     new() { Name = "stdout", Path = $"{path}/stdout" },
-                    new() { Name = "rc", Path = $"{path}/rc" }
+                    new() { Name = "rc", Path = $"{path}/rc", Url = $"{path}/rc" }
                 ]
             };
 

@@ -436,15 +436,6 @@ namespace TesApi.Web
             }
         }
 
-        private static string GetCromwellExecutionDirectoryPath(TesTask task)
-        {
-            return task.TaskSubmitter.Name switch
-            {
-                CromwellTaskSubmitter.SubmitterName => ((CromwellTaskSubmitter)task.TaskSubmitter).ExecutionDir,
-                _ => null,
-            };
-        }
-
         /// <summary>
         /// Get the parent path of the given path
         /// </summary>
@@ -895,9 +886,9 @@ namespace TesApi.Web
         // tesTask.Log[].Log[].StartTime
         // tesTask.Log[].Log[].EndTime
         private ValueTask<bool> HandleTesTaskTransitionAsync(TesTask tesTask, CombinedBatchTaskInfo combinedBatchTaskInfo, CancellationToken cancellationToken)
-            => (tesTaskStateTransitions
+            => tesTaskStateTransitions
                 .FirstOrDefault(m => (m.Condition is null || m.Condition(tesTask)) && (m.CurrentBatchTaskState is null || m.CurrentBatchTaskState == combinedBatchTaskInfo.BatchTaskState))
-                ?.ActionAsync(tesTask, combinedBatchTaskInfo, cancellationToken) ?? ValueTask.FromResult(false));
+                ?.ActionAsync(tesTask, combinedBatchTaskInfo, cancellationToken) ?? ValueTask.FromResult(false);
 
         private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task,
             CancellationToken cancellationToken)
@@ -931,28 +922,28 @@ namespace TesApi.Web
 
         private async Task<List<TesInput>> GetAdditionalCromwellInputsAsync(TesTask task, CancellationToken cancellationToken)
         {
-            var cromwellExecutionDirectory = GetCromwellExecutionDirectoryPath(task);
-            var isCromwell = cromwellExecutionDirectory is not null;
-
-
             // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
             // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
             // TODO: Verify whether this workaround is still needed.
-            var additionalInputs = new List<TesInput>();
-            if (isCromwell)
+            List<TesInput> additionalInputs = [];
+
+            if (task.IsCromwell())
             {
                 additionalInputs =
-                    await GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(task, cromwellExecutionDirectory,
-                        cancellationToken);
+                    await GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(task, cancellationToken);
             }
 
             return additionalInputs;
         }
 
-        private async Task<List<TesInput>> GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(TesTask task,
-            string cromwellExecutionDirectory, CancellationToken cancellationToken)
+        private async Task<List<TesInput>> GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(TesTask task, CancellationToken cancellationToken)
         {
             var additionalInputFiles = new List<TesInput>();
+            var metadata = task.GetCromwellMetadata();
+
+            var cromwellExecutionDirectory = Uri.TryCreate(metadata.CromwellRcUri, UriKind.Absolute, out _)
+                ? GetParentUrl(metadata.CromwellRcUri)
+                : $"/{GetParentUrl(metadata.CromwellRcUri)}";
 
             var executionDirectoryUri = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectory,
                 cancellationToken, getContainerSas: true);
@@ -975,7 +966,7 @@ namespace TesApi.Web
                 {
                     var commandScriptPathParts = commandScript.Path.Split('/').ToList();
                     additionalInputFiles = await blobsInExecutionDirectory
-                        .Select(b => (Path: $"/{cromwellExecutionDirectory.TrimStart('/')}/{b.Name.Split('/').Last()}",
+                        .Select(b => (Path: $"/{metadata.CromwellExecutionDir.TrimStart('/')}/{b.Name.Split('/').Last()}",
                             b.Uri))
                         .ToAsyncEnumerable()
                         .SelectAwait(async b => new TesInput
@@ -1335,8 +1326,7 @@ namespace TesApi.Web
             {
                 if (tesTask.IsCromwell())
                 {
-                    var cromwellRcContentPath = $"/{GetCromwellExecutionDirectoryPath(tesTask)}/rc";
-                    var cromwellRcContent = await storageAccessProvider.DownloadBlobAsync(cromwellRcContentPath, cancellationToken);
+                    var cromwellRcContent = await storageAccessProvider.DownloadBlobAsync(tesTask.GetCromwellMetadata().CromwellRcUri, cancellationToken);
 
                     if (cromwellRcContent is not null && int.TryParse(cromwellRcContent, out var temp))
                     {

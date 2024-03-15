@@ -17,11 +17,21 @@ namespace Tes.Extensions
         /// <summary>
         /// Reports if task was submitted by Cromwell.
         /// </summary>
-        /// <param name="tesTask"><see cref="TesTask"/></param>
+        /// <param name="tesTask"><see cref="TesTask"/>.</param>
         /// <returns><see cref="true"/> if task is from Cromwell, false otherwise.</returns>
         public static bool IsCromwell(this TesTask tesTask)
         {
             return tesTask.TaskSubmitter is CromwellTaskSubmitter;
+        }
+
+        /// <summary>
+        /// Gets Cromwell task metadata
+        /// </summary>
+        /// <param name="tesTask"><see cref="TesTask"/>.</param>
+        /// <returns><see cref="CromwellTaskSubmitter"/>.</returns>
+        public static CromwellTaskSubmitter GetCromwellMetadata(this TesTask tesTask)
+        {
+            return tesTask.TaskSubmitter as CromwellTaskSubmitter;
         }
 
         /// <summary>

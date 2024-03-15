@@ -47,7 +47,7 @@ namespace Tes.TaskSubmitters
         /// <returns>True if the input represents a Cromwell command script</returns>
         private static bool IsCromwellCommandScript(TesInput inputFile) =>
             inputFile.Type == TesFileType.FILEEnum &&
-            (inputFile.Name?.Equals("commandScript") ?? false)
+            (inputFile.Name?.Equals("commandScript", StringComparison.Ordinal) ?? false)
             && (inputFile.Description?.EndsWith(".commandScript") ?? false)
             && inputFile.Path.EndsWith($"/script");
 
@@ -65,14 +65,14 @@ namespace Tes.TaskSubmitters
 
             foreach (var output in task.Outputs ?? [])
             {
-                if (output.Path.EndsWith("/execution/rc"))
+                if (output.Name.Equals("rc", StringComparison.Ordinal))
                 {
                     rcOutput = output;
                 }
                 else
                 {
-                    hasStdErrOutput |= output.Path.EndsWith("/execution/stderr");
-                    hasStdOutOutput |= output.Path.EndsWith("/execution/stdout");
+                    hasStdErrOutput |= output.Name.Equals("stderr", StringComparison.Ordinal);
+                    hasStdOutOutput |= output.Name.Equals("stdout", StringComparison.Ordinal);
                 }
             }
 
@@ -80,21 +80,21 @@ namespace Tes.TaskSubmitters
             {
                 var path = rcOutput.Path.Split('/');
                 // path[0] <= string.Empty
-                // path[1] <= cromwell execution directory
+                // path[1] <= cromwell executions root directory (without beginning or ending '/')
                 // path[2] <= top workflow name
                 // path[3] <= top workflow id
 
                 var match = cromwellPathRegex.Match(rcOutput.Path);
-                // match.Groups[1] <= execution directory path below root until last sub workflow name (not including beginning or ending '/')
-                // match.Groups[2] <= final workflow name, possibly prefixed with parent workflow name separated by '-'
-                // match.Groups[3] <= final workflow id
-                // match.Groups[4] <= final task
-                // match.Groups[5] <= final shard, if present
+                // match.Groups[1] <= execution directory path from root to deepest workflow name (not including beginning or ending '/')
+                // match.Groups[2] <= subworkflow name, possibly prefixed with its parent workflow name separated by '-'
+                // match.Groups[3] <= subworkflow id
+                // match.Groups[4] <= task name
+                // match.Groups[5] <= shard, if present
 
                 if (match.Success && match.Captures.Count == 1 && match.Groups.Count == 6)
                 {
                     var workflowName = path[2];
-                    var workflowId = path[3];
+                    var workflowId = path[3]; // This is how we set WorkflowId before making this pre-submitter determinable
                     var subWorkflowId = match.Groups[3].Value;
 
                     if (Guid.TryParse(subWorkflowId, out var workflowIdAsGuid) && descriptionWorkflowId.Equals(workflowIdAsGuid))
@@ -106,7 +106,8 @@ namespace Tes.TaskSubmitters
                             CromwellTaskInstanceName = cromwellTaskInstanceNameRegex.Match(task.Description).Groups[1].Value,
                             CromwellShard = int.TryParse(cromwellShardRegex.Match(task.Description).Groups[1].Value, out var shard) ? shard : null,
                             CromwellAttempt = int.TryParse(cromwellAttemptRegex.Match(task.Description).Groups[1].Value, out var attempt) ? attempt : null,
-                            ExecutionDir = string.Join('/', path.Take(path.Length - 1))
+                            CromwellExecutionDir = string.Join('/', path.Take(path.Length - 1)),
+                            CromwellRcUri = rcOutput.Url,
                         };
                     }
                 }
@@ -119,30 +120,36 @@ namespace Tes.TaskSubmitters
         /// Workflow name.
         /// </summary>
         [JsonPropertyName("cromwellWorkflowName")]
-        public string WorkflowName { get; init; }
+        public string WorkflowName { get; set; }
 
         /// <summary>
         /// Cromwell task description without shard and attempt numbers
         /// </summary>
         [JsonPropertyName("cromwellTaskInstanceName")]
-        public string CromwellTaskInstanceName { get; init; }
+        public string CromwellTaskInstanceName { get; set; }
 
         /// <summary>
         /// Cromwell shard number
         /// </summary>
         [JsonPropertyName("cromwellShard")]
-        public int? CromwellShard { get; init; }
+        public int? CromwellShard { get; set; }
 
         /// <summary>
         /// Cromwell attempt number
         /// </summary>
         [JsonPropertyName("cromwellAttempt")]
-        public int? CromwellAttempt { get; init; }
+        public int? CromwellAttempt { get; set; }
 
         /// <summary>
-        /// Cromwell task execution directory.
+        /// Cromwell task execution directory
         /// </summary>
         [JsonPropertyName("cromwellExecutionDir")]
-        public string ExecutionDir { get; init; }
+        public string CromwellExecutionDir { get; set; }
+
+        /// <summary>
+        /// Cromwell task execution rc file url
+        /// </summary>
+        [JsonPropertyName("cromwellRcUrl")]
+        public string CromwellRcUri { get; set; }
     }
 }
