@@ -8,18 +8,20 @@ namespace Tes.RunnerCLI.Commands
 {
     internal class CommandFactory
     {
-        const string DefaultTaskDefinitionFile = "runner-task.json";
+        internal const string DefaultTaskDefinitionFile = "runner-task.json";
 
         private static readonly Uri DefaultDockerUri = new("unix:///var/run/docker.sock");
 
         internal const string UploadCommandName = "upload";
         internal const string DownloadCommandName = "download";
         internal const string ExecutorCommandName = "exec";
+        internal const string PreparatoryCommandName = "preparatory";
         internal const string DockerUriOption = "docker-url";
 
         private static readonly IReadOnlyCollection<Option> GlobalOptions = new List<Option>()
         {
-            CreateOption<FileInfo>(BlobPipelineOptionsConverter.FileOption, "The file with the task definition",  "-f", required: true, defaultValue: GetDefaultTaskDefinitionFile())
+            CreateOption<FileInfo>(BlobPipelineOptionsConverter.FileOption, "The file with the task definition",  "-f", defaultValue: GetDefaultTaskDefinitionFile()),
+            CreateOption<Uri>(BlobPipelineOptionsConverter.UrlOption, "A URL to the blob with the task definition", "-i")
         }.AsReadOnly();
 
         private static readonly IReadOnlyCollection<Option> TransferOptions = new List<Option>()
@@ -49,12 +51,26 @@ namespace Tes.RunnerCLI.Commands
 
             rootCommand.SetHandler(CommandHandlers.ExecuteRootCommandAsync,
                 GetOptionByName<FileInfo>(rootCommand, BlobPipelineOptionsConverter.FileOption),
+                GetOptionByName<Uri>(rootCommand, BlobPipelineOptionsConverter.UrlOption),
                 GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.BlockSizeOption),
                 GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.WritersOption),
                 GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.ReadersOption),
                 GetOptionByName<int>(rootCommand, BlobPipelineOptionsConverter.BufferCapacityOption),
                 GetOptionByName<string>(rootCommand, BlobPipelineOptionsConverter.ApiVersionOption),
                 GetOptionByName<Uri>(rootCommand, CommandFactory.DockerUriOption));
+
+            rootCommand.AddValidator(r =>
+            {
+                var fileNotFound = r.FindResultFor(GetOptionByName<FileInfo>(rootCommand, BlobPipelineOptionsConverter.FileOption)) is null;
+                var urlNotFound = r.FindResultFor(GetOptionByName<Uri>(rootCommand, BlobPipelineOptionsConverter.UrlOption)) is null;
+
+                r.ErrorMessage = (fileNotFound, urlNotFound) switch
+                {
+                    (true, true) => "Option '--file' or '--url' is required.",
+                    (false, false) => "Option '--file' and '--url' must not both be provided.",
+                    _ => null,
+                };
+            });
 
             return rootCommand;
         }
@@ -114,9 +130,10 @@ namespace Tes.RunnerCLI.Commands
             return cmd;
         }
 
-        private static FileInfo GetDefaultTaskDefinitionFile()
+        private static FileInfo? GetDefaultTaskDefinitionFile()
         {
-            return new FileInfo(DefaultTaskDefinitionFile);
+            FileInfo value = new(DefaultTaskDefinitionFile);
+            return value.Exists ? value : null;
         }
 
         private static Option<T> GetOptionByName<T>(Command command, string optionName)

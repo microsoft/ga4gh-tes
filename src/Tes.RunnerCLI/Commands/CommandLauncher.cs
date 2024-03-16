@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Tes.Runner.Exceptions;
+using Tes.Runner.Logs;
 using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
@@ -32,6 +33,7 @@ namespace Tes.RunnerCLI.Commands
                 throw new CommandExecutionException(results.ExitCode, $"Failed to execute command: {command}. Exit code returned by sub-process: {results.ExitCode}");
             }
         }
+
         /// <summary>
         /// Executes a transfer command as a sub-process. A transfer command is upload or download.
         /// </summary>
@@ -39,13 +41,13 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="file">Node task definition file</param>
         /// <param name="options">Transfer options</param>
         ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
-        public static async Task LaunchTransferCommandAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
+        public static async Task LaunchTransferCommandAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options, string? transferCommand = default)
         {
             ProcessExecutionResult results = null!;
             try
             {
                 var processLauncher = await ProcessLauncher.CreateLauncherAsync(file, logNamePrefix: command);
-                results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
+                results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(transferCommand ?? command, file.FullName, options));
             }
             catch (Exception ex)
             {
@@ -66,7 +68,6 @@ namespace Tes.RunnerCLI.Commands
 
             throw new CommandExecutionException(exitCode, $"Failed to launch command: {command}", ex);
         }
-
 
         /// <summary>
         /// Executes the exec (executor) command as a sub-process.
@@ -90,7 +91,7 @@ namespace Tes.RunnerCLI.Commands
                     args.Add($"--{BlobPipelineOptionsConverter.FileOption} {file.FullName}");
                 }
 
-                results = await processLauncher.LaunchProcessAndWaitAsync(args.ToArray());
+                results = await processLauncher.LaunchProcessAndWaitAsync([.. args]);
             }
             catch (Exception ex)
             {
@@ -98,6 +99,29 @@ namespace Tes.RunnerCLI.Commands
             }
 
             HandleResult(results, CommandFactory.ExecutorCommandName);
+        }
+
+        /// <summary>
+        /// Executes the root command as a sub-process.
+        /// </summary>
+        /// <param name="file">Node task definition file</param>
+        /// <param name="args"></param>
+        ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
+        public static async Task LaunchesRootCommandAsSubProcessAsync(FileInfo file, BlobPipelineOptions options, Uri dockerUri)
+        {
+            ProcessExecutionResult results = null!;
+            try
+            {
+                var args = BlobPipelineOptionsConverter.ToCommandArgs("ignored", file.FullName, options).Skip(1).Append($"--{CommandFactory.DockerUriOption} {dockerUri}");
+                ProcessLauncher processLauncher = new(new ConsoleStreamLogPublisher());
+                results = await processLauncher.LaunchProcessAndWaitAsync([.. args]);
+            }
+            catch (Exception ex)
+            {
+                HandleFatalLauncherError(CommandFactory.PreparatoryCommandName, ex);
+            }
+
+            HandleResult(results, CommandFactory.PreparatoryCommandName);
         }
     }
 }

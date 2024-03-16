@@ -17,6 +17,15 @@ static async Task<int> StartUpAsync(string[] args)
     {
         return await rootCommand.InvokeAsync(args);
     }
+    catch (CommandExecutionException ex)
+    {
+        if (ex.InnerException is not null)
+        {
+            Console.WriteLine(ex.InnerException.Message);
+        }
+
+        return ex.ExitCode;
+    }
     catch (Exception ex)
     {
         Console.WriteLine(ex.ToString());
