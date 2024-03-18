@@ -146,9 +146,10 @@ namespace TesDeployer
                     azureCloudConfig = await AzureCloudConfig.CreateAsync(configuration.AzureCloudName);
                 });
 
-                await Execute("Validating command line arguments...", async () =>
+                await Execute("Validating command line arguments...", () =>
                 {
                     ValidateInitialCommandLineArgs();
+                    return Task.CompltedTask;
                 });
 
                 await ValidateTokenProviderAsync();
