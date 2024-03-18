@@ -25,6 +25,11 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     public const string TesExecutionsPathPrefix = "/tes-internal";
 
     /// <summary>
+    /// Prefix in tes-internal container for tasks (when using default location)
+    /// </summary>
+    protected const string DefaultTasksPrefix = "/tasks/";
+
+    /// <summary>
     /// Logger instance. 
     /// </summary>
     protected readonly ILogger Logger;
