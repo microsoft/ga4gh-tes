@@ -149,7 +149,7 @@ namespace TesDeployer
                 await Execute("Validating command line arguments...", () =>
                 {
                     ValidateInitialCommandLineArgs();
-                    return Task.CompltedTask;
+                    return Task.CompletedTask;
                 });
 
                 await ValidateTokenProviderAsync();
