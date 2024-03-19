@@ -100,28 +100,5 @@ namespace Tes.RunnerCLI.Commands
 
             HandleResult(results, CommandFactory.ExecutorCommandName);
         }
-
-        /// <summary>
-        /// Executes the root command as a sub-process.
-        /// </summary>
-        /// <param name="file">Node task definition file</param>
-        /// <param name="args"></param>
-        ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
-        public static async Task LaunchesRootCommandAsSubProcessAsync(FileInfo file, BlobPipelineOptions options, Uri dockerUri)
-        {
-            ProcessExecutionResult results = null!;
-            try
-            {
-                var args = BlobPipelineOptionsConverter.ToCommandArgs("ignored", file.FullName, options).Skip(1).Append($"--{CommandFactory.DockerUriOption} {dockerUri}");
-                ProcessLauncher processLauncher = new(new ConsoleStreamLogPublisher());
-                results = await processLauncher.LaunchProcessAndWaitAsync([.. args]);
-            }
-            catch (Exception ex)
-            {
-                HandleFatalLauncherError(CommandFactory.PreparatoryCommandName, ex);
-            }
-
-            HandleResult(results, CommandFactory.PreparatoryCommandName);
-        }
     }
 }
