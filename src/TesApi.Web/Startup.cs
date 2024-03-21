@@ -3,10 +3,10 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Threading;
-using System.Linq;
 using Azure.Core;
 using Azure.Identity;
 using CommonUtilities;
