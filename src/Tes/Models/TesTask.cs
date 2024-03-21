@@ -30,6 +30,30 @@ namespace Tes.Models
         public TesTask()
             => NewtonsoftJsonSafeInit.SetDefaultSettings();
 
+        public TesTask(TesExecutor executor,
+                        string name = null,
+                        string description = null,
+                        Dictionary<string, string> tags = null,
+                        List<TesInput> inputs = default,
+                        List<TesOutput> outputs = default,
+                        TesResources resources = default)
+        {
+            // Required properties
+            Executors = new List<TesExecutor> { executor };
+
+            // Core properties
+            Description = description;
+            Name = name;
+            Tags = tags;
+
+            // Input/output properties
+            Inputs = inputs ?? new List<TesInput>();
+            Outputs = outputs ?? new List<TesOutput>();
+
+            // Resource properties
+            Resources = resources ?? new TesResources();
+        }
+
         /// <summary>
         /// Task identifier assigned by the server.
         /// </summary>
