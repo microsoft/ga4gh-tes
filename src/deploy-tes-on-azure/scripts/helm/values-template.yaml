@@ -4,6 +4,7 @@
   enableIngress: false
 
 config:
+  azureCloudName: RUNTIME_PARAMETER
   coaNamespace: RUNTIME_PARAMETER
   resourceGroup: RUNTIME_PARAMETER
   azureServicesAuthConnectionString: RUNTIME_PARAMETER

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Azure.Identity;
 using CommonUtilities;
+using CommonUtilities.AzureCloud;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Auth;
 using Microsoft.Azure.Batch.Common;
@@ -50,7 +51,7 @@ namespace TesApi.Web
         private readonly string location;
         //TODO: This dependency should be injected at a higher level (e.g. scheduler), but that requires significant refactoring that should be done separately.
         private readonly IBatchPoolManager batchPoolManager;
-
+        private readonly AzureCloudConfig azureCloudConfig;
 
         /// <summary>
         /// Constructor of AzureProxy
@@ -58,10 +59,11 @@ namespace TesApi.Web
         /// <param name="batchAccountOptions">The Azure Batch Account options</param>
         /// <param name="batchAccountInformation">The Azure Batch Account information</param>
         /// <param name="batchPoolManager"><inheritdoc cref="IBatchPoolManager"/></param>
+        /// <param name="azureCloudConfig"></param>
         /// <param name="retryHandler">Retry builder</param>
         /// <param name="logger">The logger</param>
         /// <exception cref="InvalidOperationException"></exception>
-        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, BatchAccountResourceInformation batchAccountInformation, IBatchPoolManager batchPoolManager, RetryPolicyBuilder retryHandler, ILogger<AzureProxy> logger)
+        public AzureProxy(IOptions<BatchAccountOptions> batchAccountOptions, BatchAccountResourceInformation batchAccountInformation, IBatchPoolManager batchPoolManager, AzureCloudConfig azureCloudConfig, RetryPolicyBuilder retryHandler, ILogger<AzureProxy> logger)
         {
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
             ArgumentNullException.ThrowIfNull(batchAccountInformation);
@@ -69,7 +71,9 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(batchPoolManager);
             ArgumentNullException.ThrowIfNull(retryHandler);
             ArgumentNullException.ThrowIfNull(logger);
+            ArgumentNullException.ThrowIfNull(azureCloudConfig);
 
+            this.azureCloudConfig = azureCloudConfig;
             this.batchPoolManager = batchPoolManager;
             this.logger = logger;
 
@@ -101,7 +105,7 @@ namespace TesApi.Web
             else
             {
                 location = batchAccountInformation.Region;
-                batchClient = BatchClient.Open(new BatchTokenCredentials(batchAccountInformation.BaseUrl, () => GetAzureAccessTokenAsync(CancellationToken.None, "https://batch.core.windows.net//.default")));
+                batchClient = BatchClient.Open(new BatchTokenCredentials(batchAccountInformation.BaseUrl, () => GetAzureAccessTokenAsync(CancellationToken.None, azureCloudConfig.Authentication.LoginEndpointUrl, azureCloudConfig.BatchUrl + "/.default")));
             }
         }
 
@@ -404,7 +408,12 @@ namespace TesApi.Web
             };
 
             return batchClient.PoolOperations.ListPools(activePoolsFilter).ToAsyncEnumerable()
-                .Where(p => hostName.Equals(p.Metadata?.FirstOrDefault(m => BatchScheduler.PoolHostName.Equals(m.Name, StringComparison.Ordinal))?.Value, StringComparison.OrdinalIgnoreCase));
+                .Where(p => p.Metadata.Any(metadata => metadata.Name switch
+                {
+                    BatchScheduler.PoolMetadata => IBatchScheduler.PoolMetadata.Create(metadata.Value).HostName.Equals(hostName, StringComparison.OrdinalIgnoreCase),
+                    BatchScheduler.PoolDeprecated => metadata.Value.Equals(hostName, StringComparison.OrdinalIgnoreCase),
+                    _ => false
+                }));
         }
 
         /// <inheritdoc/>
@@ -472,9 +481,9 @@ namespace TesApi.Web
             return new(pool.AllocationState, pool.AllocationStateTransitionTime, pool.AutoScaleEnabled, pool.TargetLowPriorityComputeNodes, pool.CurrentLowPriorityComputeNodes, pool.TargetDedicatedComputeNodes, pool.CurrentDedicatedComputeNodes);
         }
 
-        private static async Task<IAsyncEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync(CancellationToken cancellationToken)
+        private static async Task<IAsyncEnumerable<StorageAccountInfo>> GetAccessibleStorageAccountsAsync(AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)
         {
-            var azureClient = await GetAzureManagementClientAsync(cancellationToken);
+            var azureClient = await GetAzureManagementClientAsync(azureCloudConfig, cancellationToken);
             return (await azureClient.Subscriptions.ListAsync(cancellationToken: cancellationToken))
                 .ToAsyncEnumerable()
                 .Select(s => s.SubscriptionId).SelectManyAwait(async (subscriptionId, ct) =>
@@ -488,7 +497,7 @@ namespace TesApi.Web
         {
             try
             {
-                var azureClient = await GetAzureManagementClientAsync(cancellationToken);
+                var azureClient = await GetAzureManagementClientAsync(azureCloudConfig, cancellationToken);
                 var storageAccount = await azureClient.WithSubscription(storageAccountInfo.SubscriptionId).StorageAccounts.GetByIdAsync(storageAccountInfo.Id, cancellationToken);
 
                 return (await storageAccount.GetKeysAsync(cancellationToken))[0].Value;
@@ -554,18 +563,19 @@ namespace TesApi.Web
         public string GetArmRegion()
             => location;
 
-        private static async Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string scope = "https://management.azure.com//.default")
-            => (await (new DefaultAzureCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { scope }), cancellationToken)).Token;
+        private static async Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string authorityHost, string scope)
+            => (await new DefaultAzureCredential(new DefaultAzureCredentialOptions { AuthorityHost = new Uri(authorityHost) }).GetTokenAsync(new Azure.Core.TokenRequestContext([scope]), cancellationToken)).Token;
 
         /// <summary>
         /// Gets an authenticated Azure Client instance
         /// </summary>
+        /// <param name="azureCloudConfig"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>An authenticated Azure Client instance</returns>
-        private static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(CancellationToken cancellationToken)
+        private static async Task<FluentAzure.IAuthenticated> GetAzureManagementClientAsync(AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)
         {
-            var accessToken = await GetAzureAccessTokenAsync(cancellationToken);
-            var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, AzureEnvironment.AzureGlobalCloud);
+            var accessToken = await GetAzureAccessTokenAsync(cancellationToken, authorityHost: azureCloudConfig.Authentication.LoginEndpointUrl, scope: azureCloudConfig.DefaultTokenScope);
+            var azureCredentials = new AzureCredentials(new TokenCredentials(accessToken), null, null, azureCloudConfig.AzureEnvironment);
             var azureClient = FluentAzure.Authenticate(azureCredentials);
 
             return azureClient;
@@ -577,7 +587,7 @@ namespace TesApi.Web
 
         /// <inheritdoc/>
         public async Task<StorageAccountInfo> GetStorageAccountInfoAsync(string storageAccountName, CancellationToken cancellationToken)
-            => await (await GetAccessibleStorageAccountsAsync(cancellationToken))
+            => await (await GetAccessibleStorageAccountsAsync(azureCloudConfig, cancellationToken))
                 .FirstOrDefaultAsync(storageAccount => storageAccount.Name.Equals(storageAccountName, StringComparison.OrdinalIgnoreCase), cancellationToken);
 
         /// <inheritdoc/>

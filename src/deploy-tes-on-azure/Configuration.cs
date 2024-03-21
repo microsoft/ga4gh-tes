@@ -4,6 +4,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using CommonUtilities.AzureCloud;
 using Microsoft.Extensions.Configuration;
 
 namespace TesDeployer
@@ -26,6 +27,7 @@ namespace TesDeployer
 
     public abstract class UserAccessibleConfiguration
     {
+        public string AzureCloudName { get; set; } = AzureCloudConfig.DefaultAzureCloudName;
         public string BatchPrefix { get; set; }
         public string SubscriptionId { get; set; }
         public string RegionName { get; set; }
@@ -71,7 +73,7 @@ namespace TesDeployer
         public bool? DisableBatchNodesPublicIpAddress { get; set; } = null;
         public bool DebugLogging { get; set; } = false;
         public string PostgreSqlServerName { get; set; }
-        public string PostgreSqlServerNameSuffix { get; set; } = ".postgres.database.azure.com";
+        public string PostgreSqlServerNameSuffix { get; set; } = null;
         public int PostgreSqlServerPort { get; set; } = 5432;
         public string PostgreSqlServerSslMode { get; set; } = "VerifyFull";
         public string KeyVaultName { get; set; }

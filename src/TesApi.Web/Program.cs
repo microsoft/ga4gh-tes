@@ -3,6 +3,8 @@
 
 using System;
 using System.Reflection;
+using System.Threading.Tasks;
+using CommonUtilities.AzureCloud;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -11,6 +13,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.ApplicationInsights;
 using TesApi.Web.Management;
+using TesApi.Web.Options;
+using TesApi.Web.Runner;
 
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("TesApi.Tests")]
 
@@ -25,8 +29,18 @@ namespace TesApi.Web
         /// Main
         /// </summary>
         /// <param name="args"></param>
-        public static void Main(string[] args)
-            => CreateWebHostBuilder(args).Build().Run();
+        public static async Task Main(string[] args)
+        {
+            try
+            {
+                await CreateWebHostBuilder(args).Build().RunAsync();
+            }
+            catch (Exception exc)
+            {
+                Console.WriteLine($"Main critical error: {exc.Message} {exc}");
+                throw;
+            }
+        }
 
         /// <summary>
         /// Create the web host builder.
@@ -45,17 +59,20 @@ namespace TesApi.Web
                 builder.UseUrls("http://0.0.0.0:80");
             }
 
-            builder.ConfigureAppConfiguration((context, config) =>
+            builder.ConfigureAppConfiguration((context, configBuilder) =>
             {
-                config.AddEnvironmentVariables();
-                applicationInsightsOptions = GetApplicationInsightsConnectionString(config.Build());
+                configBuilder.AddEnvironmentVariables();
+                var config = configBuilder.Build();
+                Startup.AzureCloudConfig = GetAzureCloudConfig(config);
+                StorageUrlUtils.BlobEndpointHostNameSuffix = $".blob.{Startup.AzureCloudConfig.Suffixes.StorageSuffix}";
+                applicationInsightsOptions = GetApplicationInsightsConnectionString(config);
 
                 if (!string.IsNullOrEmpty(applicationInsightsOptions?.ConnectionString))
                 {
-                    config.AddApplicationInsightsSettings(applicationInsightsOptions.ConnectionString, developerMode: context.HostingEnvironment.IsDevelopment() ? true : null);
+                    configBuilder.AddApplicationInsightsSettings(applicationInsightsOptions.ConnectionString, developerMode: context.HostingEnvironment.IsDevelopment() ? true : null);
                 }
 
-                static Options.ApplicationInsightsOptions GetApplicationInsightsConnectionString(IConfiguration configuration)
+                static ApplicationInsightsOptions GetApplicationInsightsConnectionString(IConfiguration configuration)
                 {
                     var applicationInsightsOptions = configuration.GetSection(Options.ApplicationInsightsOptions.SectionName).Get<Options.ApplicationInsightsOptions>();
                     var applicationInsightsAccountName = applicationInsightsOptions?.AccountName;
@@ -69,7 +86,7 @@ namespace TesApi.Web
 
                     if (string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
                     {
-                        applicationInsightsConnectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, System.Threading.CancellationToken.None).Result;
+                        applicationInsightsConnectionString = ArmResourceInformationFinder.GetAppInsightsConnectionStringAsync(applicationInsightsAccountName, Startup.AzureCloudConfig, System.Threading.CancellationToken.None).Result;
                     }
 
                     if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
@@ -125,6 +142,14 @@ namespace TesApi.Web
             });
 
             return builder;
+
+            static AzureCloudConfig GetAzureCloudConfig(IConfiguration configuration)
+            {
+                var tesOptions = new GeneralOptions();
+                configuration.Bind(GeneralOptions.SectionName, tesOptions);
+                Console.WriteLine($"tesOptions.AzureCloudName: {tesOptions.AzureCloudName}");
+                return AzureCloudConfig.CreateAsync(tesOptions.AzureCloudName, tesOptions.AzureCloudMetadataUrlApiVersion).Result;
+            }
         }
     }
 }
