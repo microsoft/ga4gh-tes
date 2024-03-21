@@ -39,7 +39,7 @@ namespace TesApi.Controllers
         private readonly IRepository<TesTask> repository;
         private readonly ILogger<TaskServiceApiController> logger;
         private readonly IAzureProxy azureProxy;
-        private readonly IEquatable<TesServiceInfo>  serviceInfo;
+        private readonly IEquatable<TesServiceInfo> serviceInfo;
 
         private static readonly Dictionary<TesView, JsonSerializerSettings> TesJsonSerializerSettings = new()
         {
