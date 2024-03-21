@@ -144,7 +144,7 @@ namespace Tes.Repository.Tests
                     await repository.CreateItemsAsync(items, System.Threading.CancellationToken.None);
                 }
 
-                var controller = new TaskServiceApiController(repository, null, null, null );
+                var controller = new TaskServiceApiController(repository, null, null, null);
                 string pageToken = null;
                 var tesTaskIds = new HashSet<string>();
 
