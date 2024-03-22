@@ -32,6 +32,7 @@ namespace TesApi.Web
             Tuple.Create(typeof(TesTask), nameof(TesTask.ErrorCount)),
             Tuple.Create(typeof(TesTask), nameof(TesTask.EndTime)),
             Tuple.Create(typeof(TesTask), nameof(TesTask.PoolId)),
+            Tuple.Create(typeof(TesTask), nameof(TesTask.TaskSubmitter)),
             Tuple.Create(typeof(TesTask), nameof(TesTask.WorkflowId)),
             Tuple.Create(typeof(RepositoryItem<TesTask>), nameof(RepositoryItem<TesTask>.ETag)),
             Tuple.Create(typeof(RepositoryItem<TesTask>), nameof(RepositoryItem<TesTask>.PartitionKey))

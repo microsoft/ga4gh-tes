@@ -66,24 +66,24 @@ namespace TesApi.Web.Management
                 return await GetVmSizesAndPricesAsyncImpl(region, cancellationToken);
             }
 
-            logger.LogInformation($"Trying to get pricing information from the cache for region: {region}.");
+            logger.LogInformation("Trying to get pricing information from the cache for region: {Region}.", region);
 
             return await appCache.GetOrCreateAsync(region, async _1 => await GetVmSizesAndPricesAsyncImpl(region, cancellationToken));
         }
 
         private async Task<List<VirtualMachineInformation>> GetVmSizesAndPricesAsyncImpl(string region, CancellationToken cancellationToken)
         {
-            logger.LogInformation($"Getting VM sizes and price information for region: {region}");
+            logger.LogInformation("Getting VM sizes and price information for region: {Region}", region);
 
             var localVmSizeInfoForBatchSupportedSkus = (await GetLocalVmSizeInformationForBatchSupportedSkusAsync(cancellationToken)).Where(x => x.RegionsAvailable.Contains(region, StringComparer.OrdinalIgnoreCase)).ToList();
 
-            logger.LogInformation($"localVmSizeInfoForBatchSupportedSkus.Count: {localVmSizeInfoForBatchSupportedSkus.Count}");
+            logger.LogInformation("localVmSizeInfoForBatchSupportedSkus.Count: {CountOfPrepreparedSkuRecordsInRegion}", localVmSizeInfoForBatchSupportedSkus.Count);
 
             try
             {
                 var pricingItems = await priceApiClient.GetAllPricingInformationForNonWindowsAndNonSpotVmsAsync(region, cancellationToken).ToListAsync(cancellationToken);
 
-                logger.LogInformation($"Received {pricingItems.Count} pricing items");
+                logger.LogInformation("Received {CountOfSkuPrice} pricing items", pricingItems.Count);
 
                 if (pricingItems == null || pricingItems.Count == 0)
                 {
@@ -116,7 +116,7 @@ namespace TesApi.Web.Management
                 }
 
                 logger.LogInformation(
-                    $"Returning {vmInfoList.Count} Vm information entries with pricing for Azure Batch Supported Vm types");
+                    "Returning {CountOfSupportedVmSkus} Vm information entries with pricing for Azure Batch Supported Vm types", vmInfoList.Count);
 
                 return vmInfoList;
             }
@@ -124,7 +124,7 @@ namespace TesApi.Web.Management
             {
                 logger.LogWarning(ex,
                     $"Exception encountered retrieving live pricing data, reverting to local pricing data.");
-                return new List<VirtualMachineInformation>(localVmSizeInfoForBatchSupportedSkus);
+                return new(localVmSizeInfoForBatchSupportedSkus.Select(sku => { sku.RegionsAvailable = []; return sku; }));
             }
         }
 
@@ -140,14 +140,14 @@ namespace TesApi.Web.Management
                 ResourceDiskSizeInGiB = vmReference.ResourceDiskSizeInGiB,
                 VmFamily = vmReference.VmFamily,
                 VmSize = vmReference.VmSize,
-                RegionsAvailable = vmReference.RegionsAvailable,
+                RegionsAvailable = [], // Not used by TES outside of this method & this array inflates object sizes in task returns and task repository needlessly.
                 HyperVGenerations = vmReference.HyperVGenerations,
                 EncryptionAtHostSupported = vmReference.EncryptionAtHostSupported
             };
 
         private async Task<List<VirtualMachineInformation>> GetLocalVmSizeInformationForBatchSupportedSkusAsync(CancellationToken cancellationToken)
         {
-            string filePath = Path.Combine(AppContext.BaseDirectory, $"BatchSupportedVmSizeInformation_{azureCloudConfig.Name.ToUpperInvariant()}.json");
+            var filePath = Path.Combine(AppContext.BaseDirectory, $"BatchSupportedVmSizeInformation_{azureCloudConfig.Name.ToUpperInvariant()}.json");
             logger.LogInformation("Reading local VM size information from file: {0}", filePath);
 
             return JsonConvert.DeserializeObject<List<VirtualMachineInformation>>(
