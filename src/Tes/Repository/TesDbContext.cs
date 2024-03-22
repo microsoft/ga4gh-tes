@@ -21,7 +21,7 @@ namespace Tes.Repository
 
         public TesDbContext(NpgsqlDataSource dataSource, Action<NpgsqlDbContextOptionsBuilder> contextOptionsBuilder = default)
         {
-            ArgumentNullException.ThrowIfNull(dataSource, nameof(dataSource));
+            ArgumentNullException.ThrowIfNull(dataSource);
             DataSource = dataSource;
             ContextOptionsBuilder = contextOptionsBuilder;
         }

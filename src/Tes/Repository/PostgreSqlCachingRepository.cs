@@ -28,7 +28,8 @@ namespace Tes.Repository
             .Handle<Npgsql.NpgsqlException>(e => e.IsTransient)
             .WaitAndRetryAsync(10, i => TimeSpan.FromSeconds(Math.Pow(2, i)));
 
-        private readonly Channel<(T, WriteAction, TaskCompletionSource<T>)> itemsToWrite = Channel.CreateUnbounded<(T, WriteAction, TaskCompletionSource<T>)>();
+        private record struct WriteItem(T DbItem, WriteAction Action, TaskCompletionSource<T> TaskSource);
+        private readonly Channel<WriteItem> itemsToWrite = Channel.CreateUnbounded<WriteItem>();
         private readonly ConcurrentDictionary<T, object> updatingItems = new(); // Collection of all pending updates to be written, to faciliate detection of simultaneous parallel updates.
         private readonly CancellationTokenSource writerWorkerCancellationTokenSource = new();
         private readonly Task writerWorkerTask;
@@ -45,8 +46,8 @@ namespace Tes.Repository
         /// Constructor
         /// </summary>
         /// <param name="hostApplicationLifetime">Used for requesting termination of the current application if the writer task unexpectedly exits.</param>
-        /// <param name="logger"></param>
-        /// <param name="cache"></param>
+        /// <param name="logger">Logging interface.</param>
+        /// <param name="cache">Memory cache for fast access to active items.</param>
         /// <exception cref="System.Diagnostics.UnreachableException"></exception>
         protected PostgreSqlCachingRepository(Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger logger = default, ICache<T> cache = default)
         {
@@ -61,17 +62,16 @@ namespace Tes.Repository
 
                     if (task.Status == TaskStatus.Faulted)
                     {
-                        Console.WriteLine($"Repository WriterWorkerAsync failed unexpectedly with: {task.Exception.Message}.");
                         Logger.LogCritical(task.Exception, "Repository WriterWorkerAsync failed unexpectedly with: {ErrorMessage}.", task.Exception.Message);
+                        Console.WriteLine($"Repository WriterWorkerAsync failed unexpectedly with: {task.Exception.Message}.");
                     }
 
-                    const string errMessage = "Repository WriterWorkerAsync unexpectedly completed. The TES application will now be stopped.";
+                    const string errMessage = "Repository WriterWorkerAsync unexpectedly completed. The service will now be stopped.";
                     Logger.LogCritical(errMessage);
                     Console.WriteLine(errMessage);
 
                     await Task.Delay(TimeSpan.FromSeconds(40)); // Give the logger time to flush; default flush is 30s
                     hostApplicationLifetime?.StopApplication();
-                    return;
                 }, TaskContinuationOptions.NotOnCanceled)
                 .ContinueWith(task => Logger.LogInformation("The repository WriterWorkerAsync ended normally"), TaskContinuationOptions.OnlyOnCanceled);
         }
@@ -148,7 +148,7 @@ namespace Tes.Repository
                 }
             }
 
-            if (!itemsToWrite.Writer.TryWrite((item, action, source)))
+            if (!itemsToWrite.Writer.TryWrite(new(item, action, source)))
             {
                 throw new InvalidOperationException("Failed to TryWrite to _itemsToWrite channel.");
             }
@@ -172,7 +172,7 @@ namespace Tes.Repository
         /// </summary>
         private async Task WriterWorkerAsync(CancellationToken cancellationToken)
         {
-            var list = new List<(T, WriteAction, TaskCompletionSource<T>)>();
+            var list = new List<WriteItem>();
 
             await foreach (var itemToWrite in itemsToWrite.Reader.ReadAllAsync(cancellationToken))
             {
@@ -191,7 +191,7 @@ namespace Tes.Repository
             // If cancellation is requested, do not write any more items
         }
 
-        private async ValueTask WriteItemsAsync(IList<(T DbItem, WriteAction Action, TaskCompletionSource<T> TaskSource)> dbItems, CancellationToken cancellationToken)
+        private async ValueTask WriteItemsAsync(IList<WriteItem> dbItems, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -208,19 +208,25 @@ namespace Tes.Repository
                 dbContext.UpdateRange(dbItems.Where(e => WriteAction.Update.Equals(e.Action)).Select(e => e.DbItem));
                 dbContext.RemoveRange(dbItems.Where(e => WriteAction.Delete.Equals(e.Action)).Select(e => e.DbItem));
                 await asyncPolicy.ExecuteAsync(dbContext.SaveChangesAsync, cancellationToken);
+                var action = ActionOnSuccess();
+                OperateOnAll(dbItems, action);
             }
             catch (Exception ex)
             {
                 // It doesn't matter which item the failure was for, we will fail all items in this round.
                 // TODO: are there exceptions Postgre will send us that will tell us which item(s) failed or alternately succeeded?
-                FailAll(dbItems.Select(e => e.TaskSource), ex);
-                return;
+                var action = ActionOnFailure(ex);
+                OperateOnAll(dbItems, action);
             }
 
-            _ = Parallel.ForEach(dbItems, e => e.TaskSource.TrySetResult(e.DbItem));
+            static void OperateOnAll(IEnumerable<WriteItem> sources, Action<WriteItem> action)
+                => _ = Parallel.ForEach(sources, e => action(e));
 
-            static void FailAll(IEnumerable<TaskCompletionSource<T>> sources, Exception ex)
-                => _ = Parallel.ForEach(sources, s => s.TrySetException(new AggregateException(Enumerable.Empty<Exception>().Append(ex))));
+            static Action<WriteItem> ActionOnFailure(Exception ex) =>
+                e => _ = e.TaskSource.TrySetException(new AggregateException(Enumerable.Empty<Exception>().Append(ex)));
+
+            static Action<WriteItem> ActionOnSuccess() =>
+                e => _ = e.TaskSource.TrySetResult(e.DbItem);
         }
 
         protected virtual void Dispose(bool disposing)
@@ -233,7 +239,7 @@ namespace Tes.Repository
 
                     try
                     {
-                        writerWorkerTask.Wait();
+                        writerWorkerTask.GetAwaiter().GetResult();
                     }
                     catch (AggregateException aex) when (aex?.InnerException is TaskCanceledException ex && writerWorkerCancellationTokenSource.Token == ex.CancellationToken)
                     { } // Expected return from Wait().

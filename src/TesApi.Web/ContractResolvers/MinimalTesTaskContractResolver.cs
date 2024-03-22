@@ -16,13 +16,13 @@ namespace TesApi.Web
     public class MinimalTesTaskContractResolver : DefaultContractResolver
     {
         // MINIMAL: Task message will include ONLY the fields: Task.Id Task.State
-        private static readonly List<Tuple<Type, string>> PropertiesToInclude = new()
-        {
-                Tuple.Create(typeof(TesTask), nameof(TesTask.Id)),
-                Tuple.Create(typeof(TesTask), nameof(TesTask.State)),
-                Tuple.Create(typeof(TesListTasksResponse), nameof(TesListTasksResponse.Tasks)),
-                Tuple.Create(typeof(TesListTasksResponse), nameof(TesListTasksResponse.NextPageToken))
-            };
+        private static readonly List<Tuple<Type, string>> PropertiesToInclude =
+        [
+            Tuple.Create(typeof(TesTask), nameof(TesTask.Id)),
+            Tuple.Create(typeof(TesTask), nameof(TesTask.State)),
+            Tuple.Create(typeof(TesListTasksResponse), nameof(TesListTasksResponse.Tasks)),
+            Tuple.Create(typeof(TesListTasksResponse), nameof(TesListTasksResponse.NextPageToken))
+        ];
 
         /// <summary>
         /// Singleton instance
