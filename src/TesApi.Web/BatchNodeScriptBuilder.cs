@@ -33,7 +33,7 @@ namespace TesApi.Web
         /// <summary>
         /// Name of the TES VM performance archive
         /// </summary>
-        const string VMPerformanceArchiverFilename = "tes_vm_perf.tar.gz";
+        const string VMPerformanceArchiverFilename = "tes_vm_monitor.tar.gz";
 
         private readonly StringBuilder batchScript;
         private bool useMetricsFile;
@@ -113,12 +113,40 @@ namespace TesApi.Web
 
             if (vmPerfArchiveUrl != null)
             {
-                // TES vm performance monitoring is bootstrapped and begun by the script inside the archive:
-                batchScript.AppendLinuxLine($"if [ -f \"$AZ_BATCH_TASK_DIR/{VMPerformanceArchiverFilename}\" ]; then");
-                batchScript.AppendLinuxLine($"    tar zxvf \"$AZ_BATCH_TASK_DIR/{VMPerformanceArchiverFilename}\" -C \"${{AZ_BATCH_TASK_DIR}}\" start_vm_node_monitoring.sh");
+                // TES vm performance monitoring is bootstrapped and begun by the start_vm_node_monitoring.sh script inside the archive.
+                // It is preferable for this to be installed during the start-task. See below for the updated batch_task version if already installed
+                //
+                // start_vm_node_monitoring.sh will only extract/setup everything in AZ_BATCH_NODE_SHARED_DIR if
+                // ${AZ_BATCH_TASK_DIR}/runner-task.json does not exist. Setup will create the {AZ_BATCH_NODE_SHARED_DIR}/vm_monitor/ dir
+                // and extracts the contents of the archive into it
+                // Note: {AZ_BATCH_NODE_SHARED_DIR}/vm_monitor/start_vm_monitoring.sh is unused. It is easier to call
+                //       AZ_BATCH_NODE_SHARED_DIR/start_vm_monitoring.sh
+                // When run as normal task and downloaded to $AZ_BATCH_TASK_DIR:
+                //      AZ_BATCH_TASK_DIR=/mnt/batch/tasks/workitems/TES_DEBUG_JOB/job-1/debug_task
+                //      AZ_BATCH_TASK_DIR=/mnt/batch/tasks/workitems/TES_DEBUG_JOB/job-1/debug_task/wd
+                //      AZ_BATCH_NODE_SHARED_DIR=/mnt/batch/tasks/shared
+                batchScript.AppendLinuxLine($"if [ -f \"${{AZ_BATCH_TASK_DIR}}/{VMPerformanceArchiverFilename}\" ]; then");
+                batchScript.AppendLinuxLine($"    tar zxvf \"${{AZ_BATCH_TASK_DIR}}/{VMPerformanceArchiverFilename}\" -C \"${{AZ_BATCH_TASK_DIR}}\" start_vm_node_monitoring.sh");
                 batchScript.AppendLinuxLine("    chmod +x \"${AZ_BATCH_TASK_DIR}/start_vm_node_monitoring.sh\"");
                 batchScript.AppendLinuxLine("    /usr/bin/bash -c \"${AZ_BATCH_TASK_DIR}/start_vm_node_monitoring.sh &\" || true");
                 batchScript.AppendLinuxLine($"fi;");
+
+                // When run as start task and downloaded to $AZ_BATCH_NODE_SHARED_DIR/vm_monitor:
+                // mkdir -p $AZ_BATCH_NODE_SHARED_DIR/vm_monitor/
+                // wget $url -O $AZ_BATCH_NODE_SHARED_DIR/vm_monitor/tes_vm_monitor.tar.gz
+                //      AZ_BATCH_TASK_DIR=/mnt/batch/tasks/startup
+                //      AZ_BATCH_TASK_WORKING_DIR=/mnt/batch/tasks/startup/wd
+                //      AZ_BATCH_NODE_SHARED_DIR=/mnt/batch/tasks/shared
+                // batchScript.AppendLinuxLine($"if [ -f \"${{AZ_BATCH_NODE_SHARED_DIR}}/{VMPerformanceArchiverFilename}\" ]; then");
+                // batchScript.AppendLinuxLine($"    tar zxvf \"${{AZ_BATCH_NODE_SHARED_DIR}}/vm_monitor/{VMPerformanceArchiverFilename}\" -C \"${{AZ_BATCH_NODE_SHARED_DIR}}/vm_monitor\" start_vm_node_monitoring.sh");
+                // batchScript.AppendLinuxLine("    chmod +x \"${AZ_BATCH_NODE_SHARED_DIR}/vm_monitor/start_vm_node_monitoring.sh\"");
+                // batchScript.AppendLinuxLine("    /usr/bin/bash -c \"${AZ_BATCH_NODE_SHARED_DIR}/vm_monitor/start_vm_node_monitoring.sh &\" || true");
+                // batchScript.AppendLinuxLine($"fi;");
+
+                // To start the monitor on a task:
+                // batchScript.AppendLinuxLine($"if [ -f \"AZ_BATCH_NODE_SHARED_DIR/vm_monitor/start_vm_monitoring.sh\" ]; then");
+                // batchScript.AppendLinuxLine("    /usr/bin/bash -c \"${AZ_BATCH_NODE_SHARED_DIR}/vm_monitor/start_vm_node_monitoring.sh &\" || true");
+                // batchScript.AppendLinuxLine($"fi;");
             }
 
             return this;

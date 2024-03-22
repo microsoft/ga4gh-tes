@@ -21,7 +21,7 @@
 # If these variables are already defined in the environment, use them, otherwise use the defaults in this script
 export SUBSCRIPTION_ID=${SUBSCRIPTION_ID:-a0e0e744-06b2-4fd3-9230-ebf8ef1ac4c8}
 export RESOURCE_GROUP=${RESOURCE_GROUP:-test-coa4-southcentral-rg}
-export WGET_URL=${WGET_URL:-https://cromwellsc95a88970e25.blob.core.windows.net/cromwell-executions/test/32c33212-3744-411b-b083-246a34a9832c/call-hello/tes_task/batch_script}
+export WGET_URL=${WGET_URL:-https://cromwellsc95a88970e25.blob.core.windows.net/cromwell-executions/test/f7fd31e3-61e7-48b3-b895-8b291bbecbdb/call-hello/tes_task/batch_script}
 
 # If we were passed in 3 arguments use them:
 if [ $# -eq 3 ]; then
@@ -30,8 +30,8 @@ if [ $# -eq 3 ]; then
     export WGET_URL=$3
 fi
 
-export JOB_ID="TES_DEBUG_JOB"
-export POOL_ID="TES_DEBUG_POOL"
+export JOB_ID="DEBUG_TES_JOB"
+export POOL_ID="DEBUG_TES_POOL"
 export DEBUG_TASK_NAME="debug_task"
 VM_SIZE="Standard_D2s_v3"
 LOW_PRI_TARGET_NODES=1

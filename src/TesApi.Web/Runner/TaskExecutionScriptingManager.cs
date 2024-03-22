@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Tes.Extensions;
 using Tes.Models;
 using TesApi.Web.Storage;
 
@@ -19,7 +20,7 @@ namespace TesApi.Web.Runner
     {
         private const string NodeTaskFilename = "runner-task.json";
         private const string NodeTaskRunnerFilename = "tes-runner";
-        private const string VMPerformanceArchiverFilename = "tes_vm_perf.tar.gz";
+        private const string VMPerformanceArchiverFilename = "tes_vm_monitor.tar.gz";
         private const string BatchScriptFileName = "batch_script";
 
         private readonly IStorageAccessProvider storageAccessProvider;
@@ -128,6 +129,7 @@ namespace TesApi.Web.Runner
 
             var nodeTaskRunnerUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
             var nodeVMPerfArchiveUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken);
+            var batchScriptLoggerUrl = storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(tesTask, "");
 
             var batchNodeScript = batchNodeScriptBuilder
                 .WithAlpineWgetInstallation()
@@ -137,50 +139,70 @@ namespace TesApi.Web.Runner
                 .WithLocalRuntimeSystemInformation()
                 .Build();
 
-            // Python command to extract the log destination from the runner URL
-            string pythonCommand = $@"
-get_log_destination_from_runner_url() {{
-python3 <<EOF
-nodeTaskUrl = '{nodeTaskUrl}'
-from urllib.parse import urlparse, urlunparse
-url_parts = urlparse(nodeTaskUrl)
-container_path = url_parts.path
-if container_path.endswith('/') == False:
-    path_segment = container_path.split('/')
-    container_path = '/'.join(path_segment[:-1]) + '/'
-container_path = container_path
-new_url = urlunparse((url_parts.scheme, url_parts.netloc, container_path, '', '', ''))
-print(new_url)
-EOF
-}}
-";
+            // TODO: add Terra check from TerraOptionsAreConfigured
+            // Outside the Terra environment:
+            //  - MSI is available, upload is performed with azcopy using MSI auth
+            //  - if more than one MSI is available, the MSI client ID must be specified
+            // Inside the Terra environment:
+            //  - TODO: upload could be done with tes-runner and an auto-generated runner-task.json just for logs (outputs are just stdout and stderr)
+            //  - for the moment with no MSI uploads are not done
+            bool MSIAvailable = true;
+            string MSIAvailableStr = MSIAvailable.ToString().ToLower();
+            // On VMs with more than one MSI you must specify the client ID of the MSI you want to use
+            // On VMs with a single MSI (the default CoA MSI) you can leave the MSIClientID as an empty string
+            string MSIClientID = "";
 
             // Write out the entire bash script with variable substitution turned on
+            // print_debug_info and upload_logs are called to capture stderr, stdout, and some env information on all running tasks
+            // This is especially useful when tes-runner fails to produce any output
             batchNodeScript = $@"#!/bin/bash
 # set -x will print each command before it is executed
 set -x
 batch_script_task(){{
+# set -e will cause any error to exit the script
+set -e
+
 {batchNodeScript}
+
+set +e
 }}
-{pythonCommand}
 
 # Upload the stdout and stderr logs (a snapshot is uploaded to avoid azcopy errors)
+# Azcopy will authenticate using the MSI (managed service identity)
+UPLOAD_LOGS_DONE=false
 upload_logs() {{
-    LOGGING_URL=$(get_log_destination_from_runner_url)
-    
-    echo ""Uploading logs to storage account: $LOG_URL""
-    export AZCOPY_AUTO_LOGIN_TYPE=MSI
-    do_upload stdout.txt ""$AZ_BATCH_TASK_DIR"" ""$LOGGING_URL""
-    do_upload stderr.txt ""$AZ_BATCH_TASK_DIR"" ""$LOGGING_URL""
-}}
-do_upload() {{
-    local file_name=${{2}}/${{1}}
-    echo ""Uploadings $1 to $3""
-    if [ -f ""$1"" ]; then
-        touch ""$1""
+    if [ ""$UPLOAD_LOGS_DONE"" = true ]; then
+        echo ""Warning: upload_logs was already called once, running again""
     fi
-    cp ""$file_name"" ""${{file_name}}.snap""
-    azcopy copy --log-level=ERROR --output-level essential ""${{file_name}}.snap"" ""${{3}}${{1}}""
+    LOGGING_URL=""{batchScriptLoggerUrl}""
+    if [[ ""${{LOGGING_URL: -1}}"" != ""/"" ]]; then
+        LOGGING_URL+=""/""
+    fi
+
+    echo ""Uploading logs to storage account: $LOGGING_URL""
+    export AZCOPY_AUTO_LOGIN_TYPE=MSI
+    MSIClientID=""{MSIClientID}""
+    if [[ -n ""$MSIClientID"" ]]; then
+        export AZCOPY_MSI_CLIENT_ID=""$MSIClientID""
+        echo ""Using MSI with client ID: $AZCOPY_MSI_CLIENT_ID""
+    fi
+    if [[ ""{MSIAvailableStr}"" == ""true"" ]]; then
+        prep_logfile stdout.txt ""$AZ_BATCH_TASK_DIR"" ""$LOGGING_URL""
+        prep_logfile stderr.txt ""$AZ_BATCH_TASK_DIR"" ""$LOGGING_URL""
+        azcopy copy --skip-version-check --log-level=ERROR --output-level essential ""${{AZ_BATCH_TASK_DIR}}/*.snap.txt"" ""$LOGGING_URL""
+        UPLOAD_LOGS_DONE=true
+    fi
+}}
+
+# Take a snapshot of the log file to avoid azcopy errors
+prep_logfile() {{
+    local file_name=""${{2}}/${{1}}""
+    local new_file_name=""${{file_name%.txt}}.snap.txt""
+    echo ""Uploading $1 to $3""
+    if [ ! -f ""$file_name"" ]; then
+        touch ""$file_name""
+    fi
+    cp ""$file_name"" ""$new_file_name""
 }}
 
 # Trap helper functions, this will log/run only on a trap trigger
@@ -191,18 +213,61 @@ on_error() {{
         echo ""Return code trapped from exit code file: $EXIT_CODE""
     fi
     echo ""Error was trapped during batch_script execution""
+}}
+
+# Print debugging information that may be useful for troubleshooting
+print_debug_info(){{
+    # Save current state of 'set -x'
+    [[ $- = *x* ]] && XTRACE_SETTING=""on"" || XTRACE_SETTING=""off""
+    # Turn off 'set -x'
+    set +x
+
+    print_heading(){{
+        echo ""----------------------------------------""
+        echo ""  $1""
+        echo ""----------------------------------------""
+    }}
+
     echo ""Current directory: $(pwd)""
-    echo ""Environment: $(env)""
-    echo ""Exports in the current shell: $(export -p)""
-    echo ""Listing files in the current directory: $(ls -R -la \""$AZ_BATCH_TASK_DIR\"")""
-    echo ""Disk usage: $(df -h)""
-    echo ""Memory usage: $(free -m)""
-    echo ""CPU info: $(lscpu)""
-    echo ""Docker processes: $(docker ps -a || true)""
-    echo ""Docker images: $(docker images || true)""
-    echo ""Docker system info: $(docker system info || true)""
-    echo ""Docker system df: $(docker system df || true)""
-    echo ""dmesg out of memory: $(dmesg | grep -i 'out of memory' || true)""
+    print_heading ""System info:""
+    uname -a || true
+    print_heading ""System release:""
+    lsb_release -a || true
+    print_heading ""Current running processes:""
+    ps -ef || true
+    print_heading ""Environment:""
+    env || true
+    print_heading ""Exports in the current shell:""
+    export -p || true
+    print_heading ""Listing files in the AZ_BATCH_TASK_DIR directory: [\""$AZ_BATCH_TASK_DIR\""]""
+    ls -R -la ""$AZ_BATCH_TASK_DIR"" || true
+    print_heading ""Listing files in the current directory: [\""$(pwd)\""]""
+    ls -R -la || true
+    print_heading ""Disk usage:""
+    df -h || true
+    print_heading ""Memory usage:""
+    free -m || true
+    print_heading ""CPU info:""
+    lscpu || true
+    print_heading ""Docker processes:""
+    docker ps -a || true
+    print_heading ""Docker images:""
+    docker images || true
+    print_heading ""Docker system info:""
+    docker system info || true
+    print_heading ""Docker system df:""
+    docker system df || true
+    print_heading ""Listing files in the /mnt/docker directory:""
+    ls -R -la /mnt/docker || true
+    print_heading ""dmesg out of memory:""
+    dmesg | grep -i 'out of memory' || true
+    print_heading ""Last 200 lines of jounralctl:""
+    journalctl -n 200 --no-pager --no-hostname -m || true
+
+    # Restore 'set -x' to its original state
+    if [[ $XTRACE_SETTING = ""on"" ]]; then
+        set -x
+    fi
 }}
 
 # Run the task and attempt to capture any errors:
@@ -212,25 +277,34 @@ batch_script_task
 # Capture the exit code and upload the log files
 bath_script_return_code=$?
 trap - ERR EXIT
-if [ -f ""$AZ_BATCH_TASK_DIR/exit_code.txt"" ]; then
+if [ -f ""$AZ_BATCH_TASK_DIR/exit_code.txt"" ] && [ ! ""$UPLOAD_LOGS_DONE"" ]; then
     EXIT_CODE=$(cat ""$AZ_BATCH_TASK_DIR/exit_code.txt"")
     echo ""Return code trapped from exit code file: $EXIT_CODE""
     on_error
-    upload_logs
+
+    # Upload only if an error occurred
+    if [[ ""{MSIAvailableStr}"" == ""true"" ]]; then
+        print_debug_info
+        upload_logs
+    fi
 else
     EXIT_CODE=$bath_script_return_code
     echo ""Return code: $EXIT_CODE""
-    # Always capture the state:
-    on_error
-    upload_logs
 fi
 
+# Always capture the state if we can upload:
+# if [[ ""{MSIAvailableStr}"" == ""true"" ]]; then
+#     print_debug_info
+#     upload_logs
+# fi
+
 # Return the exit code
+trap - ERR EXIT
 echo ""Exiting with code: $EXIT_CODE""
 echo Task complete
 exit $EXIT_CODE
 ";
-            // Remove any windows line endings, bash doesn't like them
+            // Remove any accidental windows line endings, bash doesn't like them
             batchNodeScript = batchNodeScript.Replace("\r\n", "\n");
 
             var batchNodeScriptUrl = await UploadContentAsBlobToInternalTesLocationAsync(tesTask, batchNodeScript, BatchScriptFileName, cancellationToken);

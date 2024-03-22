@@ -1,24 +1,23 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build-env
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
 WORKDIR /app
+RUN apt update && apt full-upgrade -y && apt autoremove -y && \
+    apt install -y libcap2-bin && \
+    adduser --home /home/tes -u 1000 tes && \
+    setcap CAP_NET_BIND_SERVICE=+eip /usr/share/dotnet/dotnet
 
-# Restore packages in separate layer
-COPY CommonUtilities/CommonUtilities.csproj CommonUtilities/
-COPY Tes/Tes.csproj Tes/
-COPY TesApi.Web/TesApi.Web.csproj TesApi.Web/
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS publish
+WORKDIR /src
+COPY . .
+RUN dotnet publish "TesApi.Web/TesApi.Web.csproj" -c Release -o /app/publish
+RUN dotnet publish "Tes.RunnerCLI/Tes.RunnerCLI.csproj" -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true /p:DebugType=none /p:IncludeNativeLibrariesForSelfExtract=true -o /app/publish-output
 
-# Copy the rest of the files and publish
-COPY . ./
-RUN dotnet publish -c Release /p:PublishDir=/app/out TesApi.Web/TesApi.Web.csproj
-
-# Build runtime image
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+FROM base AS final
 WORKDIR /app
-COPY --from=build-env /app/out .
-RUN apt update && apt full-upgrade -y && apt autoremove -y
-RUN adduser --home /home/tes -u 1000 tes
-RUN apt install -y libcap2-bin
-RUN setcap CAP_NET_BIND_SERVICE=+eip /usr/share/dotnet/dotnet
+COPY --from=publish /app/publish .
+COPY --from=publish /app/publish-output/tes-runner /app/scripts/tes-runner
+COPY --from=publish /app/publish-output/tes-runner.md5 /app/scripts/tes-runner.md5
+COPY ./vm_monitor/tes_vm_monitor.tar.gz /app/scripts/tes_vm_monitor.tar.gz
 ENTRYPOINT ["dotnet", "tesapi.dll"]
