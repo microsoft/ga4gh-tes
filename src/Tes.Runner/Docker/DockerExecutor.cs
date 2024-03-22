@@ -113,7 +113,10 @@ namespace Tes.Runner.Docker
 
             await streamLogReader.WaitUntilAsync(TimeSpan.FromSeconds(LogStreamingMaxWaitTimeInSeconds));
 
-            await DeleteAllImagesAsync();
+            var images = await dockerClient.Images.ListImagesAsync(new ImagesListParameters { All = true });
+            logger.LogInformation("Docker Images: " + string.Join(",", images.Select(x => $"{x.ID} {x.RepoTags.FirstOrDefault()}").ToArray()));
+            await DeleteImageAsync(executionOptions.ImageName);
+            logger.LogInformation("Docker Images: " + string.Join(",", images.Select(x => $"{x.ID} {x.RepoTags.FirstOrDefault()}").ToArray()));
 
             return new ContainerExecutionResult(createResponse.ID, runResponse.Error?.Message, runResponse.StatusCode);
         }
@@ -186,34 +189,16 @@ namespace Tes.Runner.Docker
                     new Progress<JSONMessage>(message => logger.LogDebug(message.Status))));
         }
 
-        private async Task DeleteAllImagesAsync()
+        private async Task DeleteImageAsync(string imageName)
         {
             try
             {
-                var images = await dockerClient.Images.ListImagesAsync(new ImagesListParameters { All = true });
-
-                if (images is null)
-                {
-                    return;
-                }
-
-                foreach (var image in images)
-                {
-                    try
-                    {
-                        await dockerClient.Images.DeleteImageAsync(image.ID, new ImageDeleteParameters { Force = true });
-                        logger.LogInformation(@"Deleted Docker image ({ImageName}) with ID: {ImageID}", image.RepoTags.FirstOrDefault(), image.ID);
-                    }
-                    catch (Exception e)
-                    {
-                        logger.LogWarning(@"Failed to delete image ({ImageName}) with ID: {ImageID}. Error: {ErrorMessage}", image.RepoTags.FirstOrDefault(), image.ID, e.Message);
-                    }
-                }
+                await dockerClient.Images.DeleteImageAsync(imageName, new ImageDeleteParameters { Force = true });
+                logger.LogInformation(@"Deleted Docker image {ImageName}", imageName);
             }
             catch (Exception e)
             {
-                logger.LogError(e, "Exception in DeleteAllImagesAsync");
-                throw;
+                logger.LogWarning(@"Failed to delete image {ImageName}. Error: {ErrorMessage}", imageName, e.Message);
             }
         }
 
