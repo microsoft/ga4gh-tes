@@ -90,12 +90,12 @@ namespace TesApi.Tests
                     CloudServiceConfiguration = new CloudServiceConfiguration("osfamily", "osversion"),
                     VirtualMachineConfiguration = new VirtualMachineConfiguration()
                 },
-                UserAccounts = new List<UserAccount>() { new UserAccount("name", "password") }
+                UserAccounts = [new UserAccount("name", "password")]
             };
 
             if (addPoolMetadata)
             {
-                poolInfo.Metadata = new List<MetadataItem>() { new MetadataItem("name", "value") };
+                poolInfo.Metadata = [new MetadataItem("name", "value")];
             }
 
             var pool = await terraBatchPoolManager.CreateBatchPoolAsync(poolInfo, false, System.Threading.CancellationToken.None);
@@ -160,9 +160,10 @@ namespace TesApi.Tests
         [DataRow("")]
         public async Task CreateBatchPoolAsync_InvalidUserIdentityResourceIdProvided_ReturnsValueProvided(string identityName)
         {
-            var identities = new Dictionary<string, UserAssignedIdentities>();
-
-            identities.Add(identityName, new UserAssignedIdentities());
+            var identities = new Dictionary<string, UserAssignedIdentities>
+            {
+                { identityName, new UserAssignedIdentities() }
+            };
 
             var poolInfo = new Pool()
             {
@@ -181,8 +182,6 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateBatchPoolAsync_NoUserIdentityResourceIdProvided_NoIdentitiesMapped()
         {
-            var identities = new Dictionary<string, UserAssignedIdentities>();
-
             var poolInfo = new Pool()
             {
                 DeploymentConfiguration = new DeploymentConfiguration()
@@ -217,7 +216,6 @@ namespace TesApi.Tests
             Assert.AreEqual(poolInfo.StartTask.UserIdentity.UserName, captureUserIdentity.UserName);
             Assert.AreEqual(poolInfo.StartTask.UserIdentity.AutoUser.Scope.ToString(), captureUserIdentity.AutoUser.Scope.ToString());
             Assert.AreEqual(poolInfo.StartTask.UserIdentity.AutoUser.ElevationLevel.ToString(), captureUserIdentity.AutoUser.ElevationLevel.ToString());
-
         }
     }
 }

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Storage.Blobs;
+using CommonUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tes.Extensions;
@@ -43,6 +44,7 @@ namespace TesApi.Web.Runner
         private readonly ILogger<TaskToNodeTaskConverter> logger;
         private readonly IList<ExternalStorageContainerInfo> externalStorageContainers;
         private readonly BatchAccountOptions batchAccountOptions;
+        private readonly AzureEnvironmentConfig azureCloudIdentityConfig;
 
         /// <summary>
         /// Constructor of TaskToNodeTaskConverter
@@ -51,20 +53,22 @@ namespace TesApi.Web.Runner
         /// <param name="storageAccessProvider"></param>
         /// <param name="storageOptions"></param>
         /// <param name="batchAccountOptions"></param>
+        /// <param name="azureCloudIdentityConfig"></param>
         /// <param name="logger"></param>
-        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, IOptions<StorageOptions> storageOptions, IOptions<BatchAccountOptions> batchAccountOptions, ILogger<TaskToNodeTaskConverter> logger)
+        public TaskToNodeTaskConverter(IOptions<TerraOptions> terraOptions, IStorageAccessProvider storageAccessProvider, IOptions<StorageOptions> storageOptions, IOptions<BatchAccountOptions> batchAccountOptions, AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<TaskToNodeTaskConverter> logger)
         {
             ArgumentNullException.ThrowIfNull(terraOptions);
             ArgumentNullException.ThrowIfNull(storageOptions);
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(batchAccountOptions);
+            ArgumentNullException.ThrowIfNull(azureCloudIdentityConfig);
             ArgumentNullException.ThrowIfNull(logger);
-
 
             this.terraOptions = terraOptions.Value;
             this.logger = logger;
             this.storageAccessProvider = storageAccessProvider;
             this.batchAccountOptions = batchAccountOptions.Value;
+            this.azureCloudIdentityConfig = azureCloudIdentityConfig;
             externalStorageContainers = StorageUrlUtils.GetExternalStorageContainerInfos(storageOptions.Value);
         }
 
@@ -91,6 +95,7 @@ namespace TesApi.Web.Runner
                 var executor = task.Executors.First();
 
                 builder.WithId(task.Id)
+                    .WithAzureCloudIdentityConfig(azureCloudIdentityConfig)
                     .WithResourceIdManagedIdentity(GetNodeManagedIdentityResourceId(task, nodeTaskConversionOptions.GlobalManagedIdentity))
                     .WithWorkflowId(task.WorkflowId)
                     .WithContainerCommands(executor.Command)
@@ -190,6 +195,15 @@ namespace TesApi.Web.Runner
                 if (distinctAdditionalInputs != null)
                 {
                     inputs.AddRange(distinctAdditionalInputs);
+                }
+
+                foreach (var input in inputs)
+                {
+                    if (input?.Path.Contains('?') == true)
+                    {
+                        logger.LogWarning("Warning: TES task with ID {TesTask} contains a question mark in its path. The last one will be removed along with all text after it.", task.Id);
+                        task.SetWarning("A task input path contains the character '?'. The path was modified to remove it and all text after.");
+                    }
                 }
 
                 MapInputs(inputs, pathParentDirectory, containerMountParentDirectory, builder);

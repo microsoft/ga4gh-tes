@@ -23,9 +23,9 @@ namespace TesApi.Tests
         {
             Uri url = new("https://foo.bar");
             var local = "/local";
-            var expectedCommand = $"wget --https-only --no-verbose --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {local} '{url}'";
+            var expectedCommand = $"wget --no-verbose --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {local} '{url}'";
 
-            var result = BatchNodeScriptBuilder.CreateWgetDownloadCommand(url, "/local");
+            var result = BatchScheduler.CreateWgetDownloadCommand(url, "/local");
 
             Assert.AreEqual(expectedCommand, result);
         }
@@ -35,7 +35,7 @@ namespace TesApi.Tests
         {
             Uri url = null;
             var local = "/local";
-            Assert.ThrowsException<ArgumentNullException>(() => BatchNodeScriptBuilder.CreateWgetDownloadCommand(url, local));
+            Assert.ThrowsException<ArgumentNullException>(() => BatchScheduler.CreateWgetDownloadCommand(url, local));
         }
 
 
@@ -52,15 +52,14 @@ namespace TesApi.Tests
         [TestMethod]
         public void WithRunnerFilesDownloadUsingWget_BuildCalled_WgetCallsAreCreated()
         {
-            var expectedLine1 = BatchNodeScriptBuilder.CreateWgetDownloadCommand(new("https://foo.bar1"), $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{BatchNodeScriptBuilder.NodeTaskRunnerFilename}", setExecutable: true);
-            var expectedLine2 = BatchNodeScriptBuilder.CreateWgetDownloadCommand(new("https://foo.bar2"), $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{BatchNodeScriptBuilder.NodeRunnerTaskDefinitionFilename}", setExecutable: false);
+            //var expectedLine1 = BatchScheduler.CreateWgetDownloadCommand(new("https://foo.bar1"), $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{BatchNodeScriptBuilder.NodeTaskRunnerFilename}", setExecutable: true);
+            var expectedLine = BatchScheduler.CreateWgetDownloadCommand(new("https://foo.bar"), $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{BatchNodeScriptBuilder.NodeRunnerTaskDefinitionFilename}", setExecutable: false);
 
             var result = builder
-                .WithRunnerFilesDownloadUsingWget(new("https://foo.bar1"), new("https://foo.bar2"))
+                .WithRunnerTaskDownloadUsingWget(new("https://foo.bar"))
                 .Build();
 
-            Assert.IsTrue(result.Contains(expectedLine1));
-            Assert.IsTrue(result.Contains(expectedLine2));
+            Assert.IsTrue(result.Contains(expectedLine));
         }
 
         [TestMethod]

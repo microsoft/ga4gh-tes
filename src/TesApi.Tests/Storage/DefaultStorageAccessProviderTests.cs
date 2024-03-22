@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using CommonUtilities;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -42,7 +43,8 @@ namespace TesApi.Tests.Storage
             };
             azureProxyMock.Setup(p => p.GetStorageAccountKeyAsync(It.IsAny<StorageAccountInfo>(), It.IsAny<CancellationToken>())).ReturnsAsync(GenerateRandomTestAzureStorageKey());
             azureProxyMock.Setup(p => p.GetStorageAccountInfoAsync(It.Is<string>(s => s.Equals(DefaultStorageAccountName)), It.IsAny<CancellationToken>())).ReturnsAsync(storageAccountInfo);
-            defaultStorageAccessProvider = new DefaultStorageAccessProvider(NullLogger<DefaultStorageAccessProvider>.Instance, Options.Create(storageOptions), azureProxyMock.Object);
+            var config = ExpensiveObjectTestUtility.AzureCloudConfig.AzureEnvironmentConfig;
+            defaultStorageAccessProvider = new DefaultStorageAccessProvider(NullLogger<DefaultStorageAccessProvider>.Instance, Options.Create(storageOptions), azureProxyMock.Object, config);
         }
 
         [DataTestMethod]
@@ -55,7 +57,7 @@ namespace TesApi.Tests.Storage
             var uri = await defaultStorageAccessProvider.GetInternalTesTaskBlobUrlAsync(task, blobName, CancellationToken.None);
 
             Assert.IsNotNull(uri);
-            Assert.AreEqual($"{StorageAccountBlobEndpoint}{StorageAccessProvider.TesExecutionsPathPrefix}/{task.Id}/{blobName.TrimStart('/')}", ToHostWithAbsolutePathOnly(uri));
+            Assert.AreEqual($"{StorageAccountBlobEndpoint}{StorageAccessProvider.TesExecutionsPathPrefix}/tasks/{task.Id}/{blobName.TrimStart('/')}", ToHostWithAbsolutePathOnly(uri));
         }
 
         private static string ToHostWithAbsolutePathOnly(Uri uri)
@@ -109,10 +111,12 @@ namespace TesApi.Tests.Storage
         {
             var internalPathPrefix = "internalPathPrefix";
             var task = CreateNewTesTask();
-            task.Resources = new TesResources();
-            task.Resources.BackendParameters = new Dictionary<string, string>
+            task.Resources = new()
             {
-                { TesResources.SupportedBackendParameters.internal_path_prefix.ToString(), internalPathPrefix }
+                BackendParameters = new()
+                {
+                    { TesResources.SupportedBackendParameters.internal_path_prefix.ToString(), internalPathPrefix }
+                }
             };
 
             var blobPathInUrl = (!string.IsNullOrEmpty(blobPath)) ? $"/{blobPath}" : string.Empty;
@@ -133,7 +137,7 @@ namespace TesApi.Tests.Storage
 
             var blobPathInUrl = (!string.IsNullOrEmpty(blobPath)) ? $"/{blobPath}" : string.Empty;
 
-            var expectedUrl = $"{StorageAccountBlobEndpoint}{StorageAccessProvider.TesExecutionsPathPrefix}/{task.Id}{blobPathInUrl}";
+            var expectedUrl = $"{StorageAccountBlobEndpoint}{StorageAccessProvider.TesExecutionsPathPrefix}/tasks/{task.Id}{blobPathInUrl}";
 
             var url = defaultStorageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath);
 
@@ -147,7 +151,7 @@ namespace TesApi.Tests.Storage
             var random = new Random();
             var result = new StringBuilder(length);
 
-            for (int i = 0; i < length; i++)
+            for (var i = 0; i < length; i++)
             {
                 result.Append(chars[random.Next(chars.Length)]);
             }
