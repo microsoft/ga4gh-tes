@@ -4,100 +4,126 @@
 using Polly;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Text.Json;
+using Newtonsoft.Json;
 using Tes.Models;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Net.Http.Headers;
 
 namespace Tes.SDK
 {
     public class TesClient : ITesClient
     {
-        private readonly HttpClient _httpClient = new HttpClient();
-        private readonly string _baseUrl;
+        private static readonly JsonSerializerSettings serializerSettings = new()
+        {
+            DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate,
+            NullValueHandling = NullValueHandling.Ignore,
+        };
+
+        private readonly HttpClient _httpClient;
+        private readonly Uri _baseUrl;
         private readonly string? _username;
         private readonly string? _password;
+        private bool disposedValue;
 
+        private static StringContent Serialize<T>(T obj)
+        {
+            using StringWriter writer = new();
+            JsonSerializer.Create(serializerSettings).Serialize(writer, obj);
+            return new(writer.ToString(), Encoding.UTF8, new MediaTypeHeaderValue("application/json"));
+        }
+
+        private static async ValueTask<T> DeserializeAsync<T>(HttpContent content, CancellationToken cancellationToken)
+        {
+            using StreamReader streamReader = new(await content.ReadAsStreamAsync(cancellationToken));
+            using JsonTextReader jsonReader = new(streamReader);
+            return JsonSerializer.Create(serializerSettings).Deserialize<T>(jsonReader)!;
+        }
+
+        /// <inheritdoc/>
         public string SdkVersion { get; } = "0.1.0";
 
-        public TesClient(HttpClient httpClient, string baseUrl, string? username = null, string? password = null)
+        public TesClient(HttpClient httpClient, Uri baseUrl, string? username = null, string? password = null)
         {
+            ArgumentNullException.ThrowIfNull(baseUrl);
             _httpClient = httpClient;
-            _baseUrl = baseUrl ?? throw new ArgumentNullException(nameof(baseUrl));
+            _baseUrl = baseUrl;
             _username = username;
             _password = password;
         }
 
-        public TesClient(string baseUrl)
-        {
-            _baseUrl = baseUrl ?? throw new ArgumentNullException(nameof(baseUrl));
-        }
+        public TesClient(Uri baseUrl)
+            : this(new(), baseUrl)
+        { }
 
-        public TesClient(string baseUrl, string username, string password)
+        public TesClient(Uri baseUrl, string username, string password)
+            : this(new(), baseUrl, username, password)
         {
-            _baseUrl = baseUrl ?? throw new ArgumentNullException(nameof(baseUrl));
-            _username = username ?? throw new ArgumentNullException(nameof(username));
-            _password = password ?? throw new ArgumentNullException(nameof(password));
+            ArgumentException.ThrowIfNullOrWhiteSpace(username);
+            ArgumentException.ThrowIfNullOrEmpty(password);
         }
 
         private void SetAuthorizationHeader(HttpRequestMessage request)
         {
             if (!string.IsNullOrWhiteSpace(_username) && !string.IsNullOrWhiteSpace(_password))
             {
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic",
-                    Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_username}:{_password}")));
+                request.Headers.Authorization = new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_username}:{_password}")));
             }
         }
 
-        private async Task<HttpResponseMessage> SendRequestAsync(HttpMethod method, string urlPath, HttpContent? content = null, CancellationToken cancellationToken = default)
+        private HttpRequestMessage GetRequest(HttpMethod method, string urlPath, string? query = null, HttpContent? content = null)
         {
-            var request = new HttpRequestMessage(method, _baseUrl + urlPath);
-            request.Content = content;
+            var uri = new UriBuilder(_baseUrl) { Path = urlPath, Query = query }.Uri;
+            return new(method, uri) { Content = content };
+        }
+
+        private async Task<HttpResponseMessage> SendRequestAsync(HttpRequestMessage request, CancellationToken cancellationToken = default)
+        {
             SetAuthorizationHeader(request);
-            var response = await _httpClient.SendAsync(request, cancellationToken);
+            var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
-                throw new HttpRequestException($"Failed to {method} task. Status Code: {response.StatusCode}");
+                throw new HttpRequestException($"Failed to {request.Method} task(s). Status Code: {response.StatusCode}");
             }
 
             return response;
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="tesTask"></param>
-        /// <returns>The created TES task's ID</returns>
-        public async Task<string> CreateTaskAsync(TesTask tesTask, CancellationToken cancellationToken = default)
+        /// <inheritdoc/>
+        public async Task<string> CreateTaskAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
-            var response = await SendRequestAsync(HttpMethod.Post, "/v1/tasks",
-                new StringContent(JsonSerializer.Serialize(tesTask), Encoding.UTF8, "application/json"), cancellationToken);
+            var response = await SendRequestAsync(GetRequest(HttpMethod.Post, "/v1/tasks", content: Serialize(tesTask)), cancellationToken);
 
-            return JsonSerializer.Deserialize<TesCreateTaskResponse>(await response.Content.ReadAsStringAsync())!.Id;
+            var result = await DeserializeAsync<TesCreateTaskResponse>(response.Content, cancellationToken)!;
+            return result!.Id;
         }
 
-        public async Task<TesTask> GetTaskAsync(string taskId, TesView view = TesView.MINIMAL, CancellationToken cancellationToken = default)
+        /// <inheritdoc/>
+        public async Task<TesTask> GetTaskAsync(string taskId, TesView view, CancellationToken cancellationToken)
         {
-            var response = await SendRequestAsync(HttpMethod.Get, $"/v1/tasks/{taskId}?view={view}", null, cancellationToken);
-            return JsonSerializer.Deserialize<TesTask>(await response.Content.ReadAsStringAsync())!;
+            var response = await SendRequestAsync(GetRequest(HttpMethod.Get, $"/v1/tasks/{taskId}", query: $"view={view}"), cancellationToken: cancellationToken);
+            return await DeserializeAsync<TesTask>(response.Content, cancellationToken)!;
         }
 
-        public async Task CancelTaskAsync(string taskId, CancellationToken cancellationToken = default)
+        /// <inheritdoc/>
+        public async Task CancelTaskAsync(string taskId, CancellationToken cancellationToken)
         {
-            await SendRequestAsync(HttpMethod.Post, $"/v1/tasks/{taskId}:cancel", null, cancellationToken);
+            await SendRequestAsync(GetRequest(HttpMethod.Post, $"/v1/tasks/{taskId}:cancel"), cancellationToken: cancellationToken);
         }
 
-        public async IAsyncEnumerable<TesTask> ListTasksAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+        /// <inheritdoc/>
+        public async IAsyncEnumerable<TesTask> ListTasksAsync(TesView view, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             string? pageToken = null;
 
             do
             {
-                string url = $"/v1/tasks{(string.IsNullOrWhiteSpace(pageToken) ? "" : $"?pageToken={pageToken}")}";
-                var response = await SendRequestAsync(HttpMethod.Get, url, null, cancellationToken);
-                var jsonContent = await response.Content.ReadAsStringAsync();
-                var tesListTasksResponse = JsonSerializer.Deserialize<TesListTasksResponse>(jsonContent);
+                var query = $"view={view}{(string.IsNullOrWhiteSpace(pageToken) ? string.Empty : $"&pageToken={pageToken}")}";
+                var response = await SendRequestAsync(GetRequest(HttpMethod.Get, "/v1/tasks", query), cancellationToken: cancellationToken);
+                var tesListTasksResponse = await DeserializeAsync<TesListTasksResponse>(response.Content, cancellationToken);
 
-                if (tesListTasksResponse?.Tasks.Count > 0)
+                if (tesListTasksResponse?.Tasks?.Count > 0)
                 {
                     foreach (var task in tesListTasksResponse.Tasks)
                     {
@@ -110,21 +136,16 @@ namespace Tes.SDK
                 {
                     yield break;
                 }
-            } while (pageToken != null && (cancellationToken == default || !cancellationToken.IsCancellationRequested));
+            } while (pageToken != null && !cancellationToken.IsCancellationRequested);
         }
 
-        /// <summary>
-        /// Creates a new TES task and blocks forever until it's done
-        /// </summary>
-        /// <param name="tesTask">The TES task to create</param>
-        /// <param name="cancellationToken">The cancellationToken</param>
-        /// <returns>The created TES task</returns>
-        public async Task<TesTask> CreateAndWaitTilDoneAsync(TesTask tesTask, CancellationToken cancellationToken = default)
+        /// <inheritdoc/>
+        public async Task<TesTask> CreateAndWaitTilDoneAsync(TesTask tesTask, CancellationToken cancellationToken)
         {
             var taskId = await CreateTaskAsync(tesTask, cancellationToken);
             var retryPolicy = Policy
                 .Handle<Exception>()
-                .WaitAndRetryAsync(10, _ => TimeSpan.FromSeconds(5));
+                .WaitAndRetryAsync(60, _ => TimeSpan.FromSeconds(15));
 
             while (true)
             {
@@ -132,11 +153,30 @@ namespace Tes.SDK
 
                 if (!task.IsActiveState())
                 {
-                    return task;
+                    return await GetTaskAsync(taskId, TesView.FULL, cancellationToken);
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(1));
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             }
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    _httpClient.Dispose();
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        void IDisposable.Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

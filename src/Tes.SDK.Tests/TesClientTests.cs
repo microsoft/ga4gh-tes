@@ -10,14 +10,20 @@ namespace Tes.SDK.Tests
     [TestClass]
     public class TesClientTests
     {
-        private ITesClient _client;
-        private Mock<HttpClient> _httpClientMock;
+        private ITesClient _client = null!;
+        private Mock<HttpClient> _httpClientMock = null!;
 
         [TestInitialize]
         public void Initialize()
         {
             _httpClientMock = new Mock<HttpClient>();
-            _client = new TesClient(_httpClientMock.Object, "https://example.com");
+            _client = new TesClient(_httpClientMock.Object, new("https://example.com"));
+        }
+
+        [TestCleanup]
+        public void Cleanup()
+        {
+            _client.Dispose();
         }
 
         [TestMethod]
@@ -25,7 +31,7 @@ namespace Tes.SDK.Tests
         {
             // Arrange
             var tesTask = CreateTestTask();
-            var expectedResponse = new TesCreateTaskResponse { Id = tesTask.Id };
+            TesCreateTaskResponse expectedResponse = new() { Id = tesTask.Id };
 
             _httpClientMock
                 .Setup(client => client.SendAsync(It.IsAny<HttpRequestMessage>(), It.IsAny<CancellationToken>()))
@@ -59,6 +65,7 @@ namespace Tes.SDK.Tests
 
             // Assert
             Assert.IsNotNull(result);
+            Assert.AreEqual(tesTask.Id, result.Id);
         }
 
         private static TesTask CreateTestTask()
@@ -66,10 +73,10 @@ namespace Tes.SDK.Tests
             var task = new TesTask();
             task.Id = task.CreateId();
             task.Resources.Preemptible = true;
-            task.Executors.Add(new TesExecutor
+            task.Executors.Add(new()
             {
                 Image = "ubuntu",
-                Command = new() { "/bin/sh", "-c", "cat /proc/sys/kernel/random/uuid" },
+                Command = ["/bin/sh", "-c", "cat /proc/sys/kernel/random/uuid"],
             });
 
             return task;
