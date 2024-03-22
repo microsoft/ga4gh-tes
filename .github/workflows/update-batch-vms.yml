@@ -10,6 +10,9 @@ jobs:
     name: Update Batch VMs db
     runs-on: ubuntu-latest
     environment: test
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
     - name: Azure login
@@ -34,10 +37,15 @@ jobs:
       run: dotnet restore
 
     - name: Build
-      run: dotnet build
+      run: dotnet build --no-restore
+
+    - name: Retrieve configuration
+      run: echo "$APPSETTINGS" > src/GenerateBatchVmSkus/bin/Debug/net7.0/appsettings.json
+      env:
+        APPSETTINGS: ${{ secrets.AZURE_VM_TEST_CONFIG }}
 
     - name: Run GenerateBatchVmSkus
-      run: ./src/GenerateBatchVmSkus/bin/Debug/net7.0/GenerateBatchVmSkus --subscriptionId ${{ secrets.AZURE_SUBSCRIPTION_ID }} --outputFilePath src/TesApi.Web/BatchSupportedVmSizeInformation.json --TestedVmSkus src/TesApi.Web/DefaultVmPrices.json
+      run: ./src/GenerateBatchVmSkus/bin/Debug/net7.0/GenerateBatchVmSkus --outputFilePath src/TesApi.Web/BatchSupportedVmSizeInformation.json
 
     - name: Restore nuget.config
       run: git restore nuget.config
