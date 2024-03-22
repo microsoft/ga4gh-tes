@@ -36,7 +36,7 @@ namespace Tes.Models
         /// </summary>
         /// <value>Logs for each executor</value>
         [DataMember(Name = "logs")]
-        public List<TesExecutorLog> Logs { get; set; } = new List<TesExecutorLog>();
+        public List<TesExecutorLog> Logs { get; set; } = [];
 
         /// <summary>
         /// Arbitrary logging metadata included by the implementation.
@@ -66,14 +66,14 @@ namespace Tes.Models
         /// </summary>
         /// <value>Information about all output files. Directory outputs are flattened into separate items.</value>
         [DataMember(Name = "outputs")]
-        public List<TesOutputFileLog> Outputs { get; set; } = new List<TesOutputFileLog>();
+        public List<TesOutputFileLog> Outputs { get; set; } = [];
 
         /// <summary>
         /// System logs are any logs the system decides are relevant, which are not tied directly to an Executor process. Content is implementation specific: format, size, etc.  System logs may be collected here to provide convenient access.  For example, the system may include the name of the host where the task is executing, an error message that caused a SYSTEM_ERROR state (e.g. disk is full), etc.  System logs are only included in the FULL task view.
         /// </summary>
         /// <value>System logs are any logs the system decides are relevant, which are not tied directly to an Executor process. Content is implementation specific: format, size, etc.  System logs may be collected here to provide convenient access.  For example, the system may include the name of the host where the task is executing, an error message that caused a SYSTEM_ERROR state (e.g. disk is full), etc.  System logs are only included in the FULL task view.</value>
         [DataMember(Name = "system_logs")]
-        public List<string> SystemLogs { get; set; } = new List<string>();
+        public List<string> SystemLogs { get; set; } = [];
 
         /// <summary>
         /// Returns the string presentation of the object

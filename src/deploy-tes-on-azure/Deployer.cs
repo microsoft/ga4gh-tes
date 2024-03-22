@@ -67,7 +67,7 @@ using KeyVaultManagementClient = Microsoft.Azure.Management.KeyVault.KeyVaultMan
 
 namespace TesDeployer
 {
-    public class Deployer
+    public class Deployer(Configuration configuration)
     {
         private static readonly AsyncRetryPolicy roleAssignmentHashConflictRetryPolicy = Policy
             .Handle<Microsoft.Rest.Azure.CloudException>(cloudException => cloudException.Body.Code.Equals("HashConflictOnDifferentRoleAssignmentIds"))
@@ -115,9 +115,9 @@ namespace TesDeployer
         {
             { "Microsoft.Compute", new() { "EncryptionAtHost" } }
         };
-
-        private Configuration configuration { get; set; }
+#pragma warning disable CA1859 // Use concrete types when possible for improved performance
         private ITokenProvider tokenProvider;
+#pragma warning restore CA1859 // Use concrete types when possible for improved performance
         private TokenCredentials tokenCredentials;
         private IAzure azureSubscriptionClient { get; set; }
         private Microsoft.Azure.Management.Fluent.Azure.IAuthenticated azureClient { get; set; }
@@ -129,9 +129,6 @@ namespace TesDeployer
         private bool isResourceGroupCreated { get; set; }
         private KubernetesManager kubernetesManager { get; set; }
         internal static AzureCloudConfig azureCloudConfig { get; set; }
-
-        public Deployer(Configuration configuration)
-            => this.configuration = configuration;
 
         public async Task<int> DeployAsync()
         {
@@ -146,9 +143,10 @@ namespace TesDeployer
                     azureCloudConfig = await AzureCloudConfig.CreateAsync(configuration.AzureCloudName);
                 });
 
-                await Execute("Validating command line arguments...", async () =>
+                await Execute("Validating command line arguments...", () =>
                 {
                     ValidateInitialCommandLineArgs();
+                    return Task.CompletedTask;
                 });
 
                 await ValidateTokenProviderAsync();
@@ -498,9 +496,9 @@ namespace TesDeployer
                                     configuration.VmSubnetName = string.IsNullOrEmpty(configuration.VmSubnetName) ? configuration.DefaultVmSubnetName : configuration.VmSubnetName;
                                     vnetAndSubnet = await CreateVnetAndSubnetsAsync(resourceGroup);
 
-                                    if (string.IsNullOrEmpty(this.configuration.BatchNodesSubnetId))
+                                    if (string.IsNullOrEmpty(configuration.BatchNodesSubnetId))
                                     {
-                                        this.configuration.BatchNodesSubnetId = vnetAndSubnet.Value.batchSubnet.Inner.Id;
+                                        configuration.BatchNodesSubnetId = vnetAndSubnet.Value.batchSubnet.Inner.Id;
                                     }
                                 }
                             }),
