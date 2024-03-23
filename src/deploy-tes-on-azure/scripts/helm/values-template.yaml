@@ -26,8 +26,6 @@ config:
     environment: RUNTIME_PARAMETER
     created: RUNTIME_PARAMETER
     updated: RUNTIME_PARAMETER
-  nodeImages:
-    docker: RUNTIME_PARAMETER
   batchImageGen2:
     offer: RUNTIME_PARAMETER
     publisher: RUNTIME_PARAMETER

@@ -129,11 +129,17 @@ namespace TesApi.Web
                     {
                         var deployment = c.GetRequiredService<IOptions<DeploymentOptions>>().Value;
 
-                        var serviceInfo = new TesServiceInfo
+                        TesServiceInfo serviceInfo = new()
                         {
                             Id = GetServiceId(),
                             Organization = GetOrganization(),
-                            Storage = c.GetRequiredService<IOptions<StorageOptions>>().Value.ExternalStorageContainers?.Split(';').Select(ParseStorageUri).ToList() ?? new()
+                            Storage = c.GetRequiredService<IOptions<StorageOptions>>()
+                                .Value
+                                .ExternalStorageContainers?
+                                .Split(';')
+                                .Select(ParseStorageUri)
+                                .Where(s => !string.IsNullOrWhiteSpace(s))
+                                .ToList() ?? []
                         };
 
                         if (!string.IsNullOrWhiteSpace(deployment.Environment))
@@ -155,7 +161,12 @@ namespace TesApi.Web
 
                                 serviceInfo.Environment = configuration switch
                                 {
-                                    "Release" => tag.StartsWith(":int-") ? "test" : "prod",
+                                    "Release" => tag switch
+                                    {
+                                        var x when x.StartsWith(":int-") => "test",
+                                        var x when x.Equals(":main") => "test",
+                                        _ => "prod",
+                                    },
                                     "Debug" => "dev",
                                     _ => default
                                 };
@@ -211,7 +222,7 @@ namespace TesApi.Web
                         {
                             if (!string.IsNullOrWhiteSpace(deployment.OrganizationName) && !string.IsNullOrWhiteSpace(deployment.OrganizationUrl))
                             {
-                                return new TesOrganization
+                                return new()
                                 {
                                     Name = deployment.OrganizationName,
                                     Url = deployment.OrganizationUrl
@@ -227,7 +238,7 @@ namespace TesApi.Web
                                 logger.LogWarning(@"Organizational information is missing.");
                             }
 
-                            return new TesOrganization
+                            return new()
                             {
                                 Name = @"Example Organization",
                                 Url = @"https://www.example.com"
@@ -236,14 +247,21 @@ namespace TesApi.Web
 
                         static string ParseStorageUri(string uri)
                         {
-                            var builder = new UriBuilder(uri.Trim())
+                            try
                             {
-                                Query = null // remove SAS
-                            };
+                                var builder = new UriBuilder(uri.Trim())
+                                {
+                                    Query = null // remove SAS
+                                };
 
-                            // TODO: change schema and reduce host to account name, if name is azure storage blob. Similar for other cloud storage techs
+                                // TODO: change schema and reduce host to account name, if name is azure storage blob. Similar for other cloud storage techs
 
-                            return builder.Uri.AbsoluteUri;
+                                return builder.Uri.AbsoluteUri;
+                            }
+                            catch
+                            {
+                                return null;
+                            }
                         }
                     })
 

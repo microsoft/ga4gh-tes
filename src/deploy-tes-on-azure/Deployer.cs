@@ -1102,8 +1102,8 @@ namespace TesDeployer
 
         private Dictionary<string, string> ConfigureSettings(string managedIdentityClientId, Dictionary<string, string> settings = null, Version installedVersion = null)
         {
-            settings ??= new();
-            var defaults = GetDefaultValues(new[] { "env-00-tes-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt" });
+            settings ??= [];
+            var defaults = GetDefaultValues(["env-00-tes-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt"]);
             var currentTime = DateTime.UtcNow;
 
             // We always overwrite the CoA version

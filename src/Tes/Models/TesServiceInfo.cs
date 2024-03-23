@@ -130,7 +130,7 @@ namespace Tes.Models
         /// List keys supported in TesResources.backend_parameters
         /// </summary>
         [DataMember(Name = "tesResources_backend_parameters")]
-        public List<string> TesResourcesSupportedBackendParameters { get; set; } = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList();
+        public List<string> TesResourcesSupportedBackendParameters { get; set; } = [.. Enum.GetNames(typeof(TesResources.SupportedBackendParameters))];
 
         /// <summary>
         /// Returns the string presentation of the object
@@ -153,12 +153,12 @@ namespace Tes.Models
                 .Append("  Storage: ")
                 .Append(
                     Storage?.Count > 0 ?
-                    string.Join(",", Storage) : null ?? string.Empty)
+                        string.Join(",", Storage) : null ?? string.Empty)
                 .Append('\n')
                 .Append("  TesResourcesSupportedBackendParameters: ")
                 .Append(
                     TesResourcesSupportedBackendParameters?.Count > 0 ?
-                    string.Join(",", Enum.GetNames(typeof(TesResources.SupportedBackendParameters))) : null ?? string.Empty)
+                        string.Join(",", TesResourcesSupportedBackendParameters) : null ?? string.Empty)
                 .Append('\n')
                 .Append("}\n")
                 .ToString();
