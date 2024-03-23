@@ -108,15 +108,13 @@ namespace Tes.Runner.Docker
             var logs = await StartContainerWithStreamingOutput(createResponse);
 
             streamLogReader.StartReadingFromLogStreams(logs);
-
+            var container = await dockerClient.Containers.InspectContainerAsync(createResponse.ID);
             var runResponse = await dockerClient.Containers.WaitContainerAsync(createResponse.ID);
 
             await streamLogReader.WaitUntilAsync(TimeSpan.FromSeconds(LogStreamingMaxWaitTimeInSeconds));
 
             var images = await dockerClient.Images.ListImagesAsync(new ImagesListParameters { All = true });
             logger.LogInformation("Docker Images: " + string.Join(",", images.Select(x => $"{x.ID} {x.RepoTags.FirstOrDefault()}").ToArray()));
-            var container = await dockerClient.Containers.InspectContainerAsync(createResponse.ID);
-            
             await DeleteImageAsync(container.Image);
             logger.LogInformation("Docker Images: " + string.Join(",", images.Select(x => $"{x.ID} {x.RepoTags.FirstOrDefault()}").ToArray()));
 
