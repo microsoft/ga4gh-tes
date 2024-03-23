@@ -115,7 +115,9 @@ namespace Tes.Runner.Docker
 
             var images = await dockerClient.Images.ListImagesAsync(new ImagesListParameters { All = true });
             logger.LogInformation("Docker Images: " + string.Join(",", images.Select(x => $"{x.ID} {x.RepoTags.FirstOrDefault()}").ToArray()));
-            await DeleteImageAsync(executionOptions.ImageName);
+            var container = await dockerClient.Containers.InspectContainerAsync(createResponse.ID);
+            
+            await DeleteImageAsync(container.Image);
             logger.LogInformation("Docker Images: " + string.Join(",", images.Select(x => $"{x.ID} {x.RepoTags.FirstOrDefault()}").ToArray()));
 
             return new ContainerExecutionResult(createResponse.ID, runResponse.Error?.Message, runResponse.StatusCode);
