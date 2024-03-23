@@ -16,8 +16,6 @@ using TesApi.Web.Management;
 using TesApi.Web.Options;
 using TesApi.Web.Runner;
 
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("TesApi.Tests")]
-
 namespace TesApi.Web
 {
     /// <summary>
