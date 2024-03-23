@@ -8,8 +8,6 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using Microsoft.VisualStudio.TestPlatform.ObjectModel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.Models;
@@ -34,7 +32,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = new() { new() { Image = "ubuntu" } },
+                Executors = [new() { Image = "ubuntu" }],
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
@@ -64,7 +62,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = new() { new() { Image = "ubuntu" } },
+                Executors = [new() { Image = "ubuntu" }],
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
@@ -94,7 +92,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = new() { new() { Image = "ubuntu" } },
+                Executors = [new() { Image = "ubuntu" }],
                 Resources = new() { BackendParameters = backendParameters }
             };
 
@@ -126,7 +124,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = new() { new() { Image = "ubuntu" } },
+                Executors = [new() { Image = "ubuntu" }],
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
@@ -158,7 +156,7 @@ namespace TesApi.Tests
 
             var tesTask = new TesTask
             {
-                Executors = new() { new() { Image = "ubuntu" } },
+                Executors = [new() { Image = "ubuntu" }],
                 Resources = new() { BackendParameters = backendParameters, BackendParametersStrict = true }
             };
 
@@ -201,7 +199,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CreateTaskAsync_ReturnsTesCreateTaskResponse()
         {
-            var tesTask = new TesTask() { Executors = new() { new() { Image = "ubuntu" } } };
+            var tesTask = new TesTask() { Executors = [new() { Image = "ubuntu" }] };
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
@@ -216,35 +214,12 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        public async Task CreateTaskAsync_CromwellWorkflowIdIsUsedAsTaskIdPrefix()
-        {
-            var cromwellWorkflowId = Guid.NewGuid().ToString();
-            var cromwellSubWorkflowId = Guid.NewGuid().ToString();
-            var taskDescription = $"{cromwellSubWorkflowId}:BackendJobDescriptorKey_CommandCallNode_wf_hello.hello:-1:1";
-
-            var tesTask = new TesTask()
-            {
-                Description = taskDescription,
-                Executors = new() { new() { Image = "ubuntu" } },
-                Inputs = new() { new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" } }
-            };
-
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
-            var controller = services.GetT();
-
-            await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None);
-
-            Assert.AreEqual(41, tesTask.Id.Length); // First eight characters of Cromwell's job id + underscore + GUID without dashes
-            Assert.IsTrue(tesTask.Id.StartsWith(cromwellWorkflowId[..8] + "_"));
-        }
-
-        [TestMethod]
         [DataRow("IdWith@InvalidCharacter$", 400, "Invalid ID")]
         [DataRow("abcde123_ca8e57a5746f4436b864808b0fbf0a64", 200, null)]
         [DataRow("ca8e57a5746f4436b864808b0fbf0a64", 200, null)]
         public async Task CancelTaskAsync_ValidatesIdCorrectly(string testId, int expectedStatusCode, string expectedMessage)
         {
-            TesTask mockTesTask = new TesTask { State = TesState.RUNNINGEnum };
+            var mockTesTask = new TesTask { State = TesState.RUNNINGEnum };
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
             {
@@ -281,7 +256,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CancelTaskAsync_ReturnsConflict_ForRepositoryCollision()
         {
-            TesTask mockTesTask = new TesTask { State = TesState.RUNNINGEnum };
+            var mockTesTask = new TesTask { State = TesState.RUNNINGEnum };
             var tesTaskId = mockTesTask.CreateId();
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
@@ -439,28 +414,6 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        public async Task CreateTaskAsync_ExtractsWorkflowId()
-        {
-            var cromwellWorkflowId = Guid.NewGuid().ToString();
-            var cromwellSubWorkflowId = Guid.NewGuid().ToString();
-            var taskDescription = $"{cromwellSubWorkflowId}:BackendJobDescriptorKey_CommandCallNode_wf_hello.hello:-1:1";
-
-            var tesTask = new TesTask()
-            {
-                Description = taskDescription,
-                Executors = new() { new() { Image = "ubuntu" } },
-                Inputs = new() { new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" } }
-            };
-
-            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
-            var controller = services.GetT();
-
-            await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None);
-
-            Assert.AreEqual(cromwellWorkflowId, tesTask.WorkflowId);
-        }
-
-        [TestMethod]
         public async Task CreateTaskAsync_InvalidInputsAndPathDoNotThrow()
         {
             var cromwellWorkflowId = "daf1a044-d741-4db9-8eb5-d6fd0519b1f1";
@@ -469,7 +422,7 @@ namespace TesApi.Tests
             var tesTask1 = new TesTask()
             {
                 Description = taskDescription,
-                Executors = new() { new() { Image = "ubuntu" } }
+                Executors = [new() { Image = "ubuntu" }]
             };
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
@@ -482,8 +435,8 @@ namespace TesApi.Tests
             var tesTask2 = new TesTask()
             {
                 Description = taskDescription,
-                Executors = new() { new() { Image = "ubuntu" } },
-                Inputs = new() { new() { Path = "/cromwell-executions/" } }
+                Executors = [new() { Image = "ubuntu" }],
+                Inputs = [new() { Path = "/cromwell-executions/" }]
             };
 
             await controller.CreateTaskAsync(tesTask2, System.Threading.CancellationToken.None);
@@ -493,8 +446,8 @@ namespace TesApi.Tests
             var tesTask3 = new TesTask()
             {
                 Description = taskDescription,
-                Executors = new() { new() { Image = "ubuntu" } },
-                Inputs = new() { new() { Path = "/cromwell-executions/" } }
+                Executors = [new() { Image = "ubuntu" }],
+                Inputs = [new() { Path = "/cromwell-executions/" }]
             };
 
             await controller.CreateTaskAsync(tesTask3, System.Threading.CancellationToken.None);
@@ -504,13 +457,104 @@ namespace TesApi.Tests
             var tesTask4 = new TesTask()
             {
                 Description = taskDescription,
-                Executors = new() { new() { Image = "ubuntu" } },
-                Inputs = new() { new() { Path = "/cromwell-executions/test/" } }
+                Executors = [new() { Image = "ubuntu" }],
+                Inputs = [new() { Path = "/cromwell-executions/test/" }]
             };
 
             await controller.CreateTaskAsync(tesTask4, System.Threading.CancellationToken.None);
 
             Assert.IsNull(tesTask4.WorkflowId);
+        }
+
+        // TODO: create similar tests for other submitters
+        [TestMethod]
+        public async Task CreateTaskAsync_ExtractsCromwellWorkflowId()
+        {
+            var cromwellWorkflowId = Guid.NewGuid().ToString();
+            var cromwellSubWorkflowId = Guid.NewGuid().ToString();
+            var taskDescription = $"{cromwellSubWorkflowId}:BackendJobDescriptorKey_CommandCallNode_wf_hello.hello:-1:1";
+
+            var tesTask = new TesTask()
+            {
+                Description = taskDescription,
+                Executors = [new() { Image = "ubuntu" }],
+                Inputs = [new() { Type = TesFileType.FILEEnum, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" }],
+                Outputs =
+                [
+                    new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" },
+                    new() { Name = "stderr", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/stderr" },
+                    new() { Name = "stdout", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/stdout" },
+                    new() { Name = "rc", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/rc" }
+                ]
+            };
+
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            var controller = services.GetT();
+
+            await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None);
+
+            Assert.AreEqual(cromwellWorkflowId, tesTask.WorkflowId);
+        }
+
+        [TestMethod]
+        public async Task CreateTaskAsync_CromwellWorkflowIdIsUsedAsTaskIdPrefix()
+        {
+            var cromwellWorkflowId = Guid.NewGuid().ToString();
+            var cromwellSubWorkflowId = Guid.NewGuid().ToString();
+            var taskDescription = $"{cromwellSubWorkflowId}:BackendJobDescriptorKey_CommandCallNode_wf_hello.hello:-1:1";
+
+            var tesTask = new TesTask()
+            {
+                Description = taskDescription,
+                Executors = [new() { Image = "ubuntu" }],
+                Inputs = [new() { Type = TesFileType.FILEEnum, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" }],
+                Outputs =
+                [
+                    new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" },
+                    new() { Name = "stderr", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/stderr" },
+                    new() { Name = "stdout", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/stdout" },
+                    new() { Name = "rc", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/rc" }
+                ]
+            };
+
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            var controller = services.GetT();
+
+            await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None);
+
+            Assert.AreEqual(41, tesTask.Id.Length); // First eight characters of Cromwell's job id + underscore + GUID without dashes
+            Assert.IsTrue(tesTask.Id.StartsWith(cromwellWorkflowId[..8] + "_"));
+        }
+
+        [DataTestMethod]
+        [DataRow("0fbdb535-4afd-45e3-a8a8-c8e50585ee4e:BackendJobDescriptorKey_CommandCallNode_workflow1.Task1:-1:1", "/cromwell-executions/test/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-hello/execution", "0fbdb535-4afd-45e3-a8a8-c8e50585ee4e", "0fbdb535-4afd-45e3-a8a8-c8e50585ee4e:BackendJobDescriptorKey_CommandCallNode_workflow1.Task1", -1, 1)]
+        [DataRow("0fbdb535-4afd-45e3-a8a8-c8e50585ee4e:BackendJobDescriptorKey_CommandCallNode_workflow1.Task1:8:1", "/cromwell-executions/test/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-hello/shard-8/execution", "0fbdb535-4afd-45e3-a8a8-c8e50585ee4e", "0fbdb535-4afd-45e3-a8a8-c8e50585ee4e:BackendJobDescriptorKey_CommandCallNode_workflow1.Task1", 8, 1)]
+        [DataRow("b16af660-32b7-4aac-a812-3c22409fb385:BackendJobDescriptorKey_CommandCallNode_workflow1.Task1:8:1", "/cromwell-executions/test/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-hello/test-subworkflow/b16af660-32b7-4aac-a812-3c22409fb385/call-subworkflow/shard-8/execution", "0fbdb535-4afd-45e3-a8a8-c8e50585ee4e", "b16af660-32b7-4aac-a812-3c22409fb385:BackendJobDescriptorKey_CommandCallNode_workflow1.Task1", 8, 1)]
+        public async Task CreateTaskAsync_CromwellMetadataForTriggerServiceIsGenerated(string taskDescription, string path, string workflowid, string taskName, int? shard, int? attempt)
+        {
+            var tesTask = new TesTask()
+            {
+                Description = taskDescription,
+                Executors = [new() { Image = "ubuntu" }],
+                Inputs = [new() { Type = TesFileType.FILEEnum, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"{path}/script" }],
+                Outputs =
+                [
+                    new() { Name = "commandScript", Path = $"{path}/script" },
+                    new() { Name = "stderr", Path = $"{path}/stderr" },
+                    new() { Name = "stdout", Path = $"{path}/stdout" },
+                    new() { Name = "rc", Path = $"{path}/rc", Url = $"{path}/rc" }
+                ]
+            };
+
+            using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
+            var controller = services.GetT();
+
+            await controller.CreateTaskAsync(tesTask, System.Threading.CancellationToken.None);
+
+            Assert.AreEqual(workflowid, tesTask.WorkflowId);
+            Assert.AreEqual(taskName, tesTask.CromwellTaskInstanceName);
+            Assert.AreEqual(shard, tesTask.CromwellShard);
+            Assert.AreEqual(attempt, tesTask.CromwellAttempt);
         }
     }
 }

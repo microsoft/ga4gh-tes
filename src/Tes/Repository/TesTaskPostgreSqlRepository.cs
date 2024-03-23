@@ -8,6 +8,8 @@ namespace Tes.Repository
     using System.Diagnostics;
     using System.Linq;
     using System.Linq.Expressions;
+    using System.Text.Json;
+    using System.Text.Json.Serialization.Metadata;
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.EntityFrameworkCore;
@@ -23,29 +25,78 @@ namespace Tes.Repository
     /// <typeparam name="TesTask"></typeparam>
     public sealed class TesTaskPostgreSqlRepository : PostgreSqlCachingRepository<TesTaskDatabaseItem, TesTask>, IRepository<TesTask>
     {
-        // Creator of NpgsqlDataSource
-        public static Func<string, Npgsql.NpgsqlDataSource> NpgsqlDataSourceBuilder
-            => connectionString => new Npgsql.NpgsqlDataSourceBuilder(connectionString)
-                            .EnableDynamicJson(jsonbClrTypes: [typeof(TesTask)])
-                            .Build();
+        // JsonSerializerOptions singleton factory
+        private static readonly Lazy<JsonSerializerOptions> GetSerializerOptions = new(() =>
+        {
+            // Create, configure and return JsonSerializerOptions.
+            return new(JsonSerializerOptions.Default)
+            {
+                // Be somewhat minimilistic when serializing. Non-null property values (for any given type) are still written.
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
 
-        // Configuration of NpgsqlDbContext
-        public static Action<Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder> NpgsqlDbContextOptionsBuilder => options =>
+                // Required since adding modifiers to the default TypeInfoResolver appears to not be possible.
+                TypeInfoResolver = GetAndConfigureTypeInfoResolver()
+            };
+
+            static IJsonTypeInfoResolver GetAndConfigureTypeInfoResolver()
+            {
+                DefaultJsonTypeInfoResolver typeInfoResolver = new();
+                typeInfoResolver.Modifiers.Add(JsonTypeInfoResolverModifier);
+                return typeInfoResolver;
+            }
+        }, LazyThreadSafetyMode.PublicationOnly);
+
+        // DefaultJsonTypeInfoResolver contract modifier to deal with changes to the task JSON.
+        // Actions taken:
+        //     1) Replace the previous WorkflowId property on TesTask (with the TaskSubmitter implementation).
+        //     2) Remove the RegionsAvailable array from VirtualMachineInformation.
+        private static void JsonTypeInfoResolverModifier(JsonTypeInfo typeInfo)
+        {
+            switch (typeInfo.Type)
+            {
+                case Type type when typeof(TesTask).Equals(type):
+                    // Configure tasks created with previous versions of TES when tasks are retrieved.
+                    typeInfo.UnmappedMemberHandling ??= System.Text.Json.Serialization.JsonUnmappedMemberHandling.Skip;
+                    typeInfo.OnDeserialized ??= obj => ((TesTask)obj).TaskSubmitter ??= TaskSubmitters.TaskSubmitter.Parse((TesTask)obj);
+                    break;
+
+                case Type type when typeof(VirtualMachineInformation).Equals(type):
+                    // Configure tasks created with previous versions of TES when tasks are retrieved.
+                    typeInfo.OnDeserialized ??= obj => ((VirtualMachineInformation)obj).RegionsAvailable = null;
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// NpgsqlDataSource factory
+        /// </summary>
+        public static Func<string, Npgsql.NpgsqlDataSource> NpgsqlDataSourceFunc => connectionString =>
+            new Npgsql.NpgsqlDataSourceBuilder(connectionString)
+                .ConfigureJsonOptions(serializerOptions: GetSerializerOptions.Value)
+                .EnableDynamicJson(jsonbClrTypes: [typeof(TesTask)])
+                .Build();
+
+        /// <summary>
+        /// Configure options specific to PostgreSQL for a <see cref="DbContext" />
+        /// </summary>
+        public static void NpgsqlDbContextOptionsBuilder(Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder options)
+        {
             options.MaxBatchSize(1000);
+        }
 
         /// <summary>
         /// Default constructor that also will create the schema if it does not exist
         /// </summary>
         /// <param name="options"></param>
         /// <param name="hostApplicationLifetime">Used for requesting termination of the current application if the writer task unexpectedly exits.</param>
-        /// <param name="logger"></param>
-        /// <param name="cache"></param>
+        /// <param name="logger">Logging interface.</param>
+        /// <param name="cache">Memory cache for fast access to active items.</param>
         public TesTaskPostgreSqlRepository(IOptions<PostgreSqlOptions> options, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, ILogger<TesTaskPostgreSqlRepository> logger, ICache<TesTaskDatabaseItem> cache = null)
             : base(hostApplicationLifetime, logger, cache)
         {
-            var npgsqlDataSource = NpgsqlDataSourceBuilder(ConnectionStringUtility.GetPostgresConnectionString(options)); // This must be run just once, do not move it into the lambda below.
-            CreateDbContext = Initialize(() => new TesDbContext(npgsqlDataSource, NpgsqlDbContextOptionsBuilder));
-            WarmCacheAsync(CancellationToken.None).Wait();
+            var dataSource = NpgsqlDataSourceFunc(ConnectionStringUtility.GetPostgresConnectionString(options)); // The datasource itself must be essentially a singleton.
+            CreateDbContext = Initialize(() => new TesDbContext(dataSource, NpgsqlDbContextOptionsBuilder));
+            WarmCacheAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -61,7 +112,7 @@ namespace Tes.Repository
         private static Func<TesDbContext> Initialize(Func<TesDbContext> createDbContext)
         {
             using var dbContext = createDbContext();
-            dbContext.Database.MigrateAsync(CancellationToken.None).Wait();
+            dbContext.Database.MigrateAsync(CancellationToken.None).GetAwaiter().GetResult();
             return createDbContext;
         }
 
@@ -93,7 +144,7 @@ namespace Tes.Repository
                 .ExecuteAsync(async ct =>
                 {
                     var activeTasksCount = (await InternalGetItemsAsync(task => !TesTask.TerminalStates.Contains(task.State), ct, orderBy: q => q.OrderBy(t => t.Json.CreationTime))).Count();
-                    Logger?.LogInformation("Cache warmed successfully in {TotalSeconds} seconds. Added {TasksAddedCount} items to the cache.", $"{sw.Elapsed.TotalSeconds:n3}", $"{activeTasksCount:n0}");
+                    Logger?.LogInformation("Cache warmed successfully in {TotalSeconds:n3} seconds. Added {TasksAddedCount:n0} items to the cache.", sw.Elapsed.TotalSeconds, activeTasksCount);
                 }, cancellationToken);
         }
 
@@ -246,7 +297,7 @@ namespace Tes.Repository
 
                 if (throwIfNotFound && item is null)
                 {
-                    throw new KeyNotFoundException($"No TesTask with ID {item.Id} found in the database.");
+                    throw new KeyNotFoundException($"No TesTask with ID {id} found in the database.");
                 }
             }
 

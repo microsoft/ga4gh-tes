@@ -66,7 +66,7 @@ using KeyVaultManagementClient = Microsoft.Azure.Management.KeyVault.KeyVaultMan
 
 namespace TesDeployer
 {
-    public class Deployer
+    public class Deployer(Configuration configuration)
     {
         private static readonly AsyncRetryPolicy roleAssignmentHashConflictRetryPolicy = Policy
             .Handle<Microsoft.Rest.Azure.CloudException>(cloudException => cloudException.Body.Code.Equals("HashConflictOnDifferentRoleAssignmentIds"))
@@ -95,8 +95,8 @@ namespace TesDeployer
 
         private readonly CancellationTokenSource cts = new();
 
-        private readonly List<string> requiredResourceProviders = new()
-        {
+        private readonly List<string> requiredResourceProviders =
+        [
             "Microsoft.Authorization",
             "Microsoft.Batch",
             "Microsoft.Compute",
@@ -108,15 +108,15 @@ namespace TesDeployer
             "Microsoft.Network",
             "Microsoft.Storage",
             "Microsoft.DBforPostgreSQL"
-        };
+        ];
 
         private readonly Dictionary<string, List<string>> requiredResourceProviderFeatures = new()
         {
             { "Microsoft.Compute", new() { "EncryptionAtHost" } }
         };
-
-        private Configuration configuration { get; set; }
+#pragma warning disable CA1859 // Use concrete types when possible for improved performance
         private ITokenProvider tokenProvider;
+#pragma warning restore CA1859 // Use concrete types when possible for improved performance
         private TokenCredentials tokenCredentials;
         private IAzure azureSubscriptionClient { get; set; }
         private Microsoft.Azure.Management.Fluent.Azure.IAuthenticated azureClient { get; set; }
@@ -128,9 +128,6 @@ namespace TesDeployer
         private bool isResourceGroupCreated { get; set; }
         private KubernetesManager kubernetesManager { get; set; }
         internal static AzureCloudConfig azureCloudConfig { get; set; }
-
-        public Deployer(Configuration configuration)
-            => this.configuration = configuration;
 
         public async Task<int> DeployAsync()
         {
@@ -500,9 +497,9 @@ namespace TesDeployer
                                 configuration.VmSubnetName = string.IsNullOrEmpty(configuration.VmSubnetName) ? configuration.DefaultVmSubnetName : configuration.VmSubnetName;
                                 vnetAndSubnet = await CreateVnetAndSubnetsAsync(resourceGroup);
 
-                                if (string.IsNullOrEmpty(this.configuration.BatchNodesSubnetId))
+                                if (string.IsNullOrEmpty(configuration.BatchNodesSubnetId))
                                 {
-                                    this.configuration.BatchNodesSubnetId = vnetAndSubnet.Value.batchSubnet.Inner.Id;
+                                    configuration.BatchNodesSubnetId = vnetAndSubnet.Value.batchSubnet.Inner.Id;
                                 }
                             }
                         }),
@@ -781,7 +778,7 @@ namespace TesDeployer
                 ConsoleEx.WriteLine($"Helm chart written to disk at: {kubernetesManager.helmScriptsRootDirectory}");
                 ConsoleEx.WriteLine($"Please update values file if needed here: {kubernetesManager.TempHelmValuesYamlPath}");
 
-                foreach (var line in manualPrecommands ?? Enumerable.Empty<string>())
+                foreach (var line in manualPrecommands ?? [])
                 {
                     ConsoleEx.WriteLine(line);
                 }
@@ -803,16 +800,16 @@ namespace TesDeployer
 
             var task = new TesTask()
             {
-                Inputs = new(),
-                Outputs = new(),
-                Executors = new()
-                {
+                Inputs = [],
+                Outputs = [],
+                Executors =
+                [
                     new()
                     {
                         Image = "ubuntu:22.04",
-                        Command = new() { "echo", "hello world" },
+                        Command = ["echo", "hello world"],
                     }
-                },
+                ],
                 Resources = new()
                 {
                     Preemptible = preemptible
@@ -1038,8 +1035,8 @@ namespace TesDeployer
                 { "kubeletidentity", new(managedIdentity.Id, managedIdentity.ClientId, managedIdentity.PrincipalId) }
             };
 
-            cluster.AgentPoolProfiles = new List<ManagedClusterAgentPoolProfile>
-            {
+            cluster.AgentPoolProfiles =
+            [
                 new()
                 {
                     Name = nodePoolName,
@@ -1056,7 +1053,7 @@ namespace TesDeployer
                     Mode = "System",
                     VnetSubnetID = virtualNetwork.Subnets[subnetName].Inner.Id,
                 }
-            };
+            ];
 
             if (privateNetworking)
             {
@@ -1109,8 +1106,8 @@ namespace TesDeployer
 
         private Dictionary<string, string> ConfigureSettings(string managedIdentityClientId, Dictionary<string, string> settings = null, Version installedVersion = null)
         {
-            settings ??= new();
-            var defaults = GetDefaultValues(new[] { "env-00-tes-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt" });
+            settings ??= [];
+            var defaults = GetDefaultValues(["env-00-tes-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt"]);
 
             // We always overwrite the CoA version
             UpdateSetting(settings, defaults, "TesOnAzureVersion", default(string), ignoreDefaults: false);
@@ -1637,15 +1634,16 @@ namespace TesDeployer
                     var serverPath = $"{configuration.PostgreSqlServerName}.{azureCloudConfig.Suffixes.PostgresqlServerEndpointSuffix}";
                     var adminUser = configuration.PostgreSqlAdministratorLogin;
 
-                    var commands = new List<string[]> {
-                        new string[] { "apt", "-qq", "update" },
-                        new string[] { "apt", "-qq", "install", "-y", "postgresql-client" },
-                        new string[] { "bash", "-lic", $"echo '{configuration.PostgreSqlServerName}{configuration.PostgreSqlServerNameSuffix}:{configuration.PostgreSqlServerPort}:{configuration.PostgreSqlTesDatabaseName}:{adminUser}:{configuration.PostgreSqlAdministratorPassword}' >> ~/.pgpass" },
-                        new string[] { "bash", "-lic", "chmod 0600 ~/.pgpass" },
+                    List<string[]> commands =
+                    [
+                        ["apt", "-qq", "update"],
+                        ["apt", "-qq", "install", "-y", "postgresql-client"],
+                        ["bash", "-lic", $"echo '{configuration.PostgreSqlServerName}{configuration.PostgreSqlServerNameSuffix}:{configuration.PostgreSqlServerPort}:{configuration.PostgreSqlTesDatabaseName}:{adminUser}:{configuration.PostgreSqlAdministratorPassword}' >> ~/.pgpass"],
+                        ["bash", "-lic", "chmod 0600 ~/.pgpass"],
                         // Set the PGPASSFILE environment variable to point to the .pgpass file
-                        new string[] { "bash", "-lic", "export PGPASSFILE=~/.pgpass" },
-                        new string[] { "/usr/bin/psql", "-h", serverPath, "-U", adminUser, "-d", configuration.PostgreSqlTesDatabaseName, "-c", tesScript }
-                    };
+                        ["bash", "-lic", "export PGPASSFILE=~/.pgpass"],
+                        ["/usr/bin/psql", "-h", serverPath, "-U", adminUser, "-d", configuration.PostgreSqlTesDatabaseName, "-c", tesScript]
+                    ];
 
                     await kubernetesManager.ExecuteCommandsOnPodAsync(kubernetesClient, podName, commands, aksNamespace);
                 });
@@ -1671,7 +1669,7 @@ namespace TesDeployer
 
                     if (configuration.EnableIngress.GetValueOrDefault())
                     {
-                        tesPorts = new List<int> { 80, 443 };
+                        tesPorts = [80, 443];
                     }
 
                     var defaultNsg = await CreateNetworkSecurityGroupAsync(resourceGroup, $"{configuration.VnetName}-default-nsg");
@@ -1802,8 +1800,8 @@ namespace TesDeployer
                             {
                                 DefaultAction = configuration.PrivateNetworking.GetValueOrDefault() ? "Deny" : "Allow"
                             },
-                            AccessPolicies = new List<AccessPolicyEntry>()
-                            {
+                            AccessPolicies =
+                            [
                                 new()
                                 {
                                     TenantId = new(tenantId),
@@ -1822,7 +1820,7 @@ namespace TesDeployer
                                         Secrets = secrets
                                     }
                                 }
-                            }
+                            ]
                         }
                     };
 
@@ -2019,7 +2017,7 @@ namespace TesDeployer
             var currentPrincipalSubscriptionRoleIds = (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeWithHttpMessagesAsync(
                     $"/subscriptions/{configuration.SubscriptionId}", new($"atScope() and assignedTo('{currentPrincipalObjectId}')"), cancellationToken: cts.Token)).Body
                 .ToAsyncEnumerable(async (link, ct) => (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeNextWithHttpMessagesAsync(link, cancellationToken: ct)).Body)
-                .Select(b => b.RoleDefinitionId.Split(new[] { '/' }).Last());
+                .Select(b => b.RoleDefinitionId.Split(['/']).Last());
 
             if (!await currentPrincipalSubscriptionRoleIds.AnyAsync(role => ownerRoleId.Equals(role, StringComparison.OrdinalIgnoreCase) || contributorRoleId.Equals(role, StringComparison.OrdinalIgnoreCase), cts.Token))
             {
@@ -2031,7 +2029,7 @@ namespace TesDeployer
                 var currentPrincipalRgRoleIds = (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeWithHttpMessagesAsync(
                         $"/subscriptions/{configuration.SubscriptionId}/resourceGroups/{configuration.ResourceGroupName}", new($"atScope() and assignedTo('{currentPrincipalObjectId}')"), cancellationToken: cts.Token)).Body
                     .ToAsyncEnumerable(async (link, ct) => (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeNextWithHttpMessagesAsync(link, cancellationToken: ct)).Body)
-                    .Select(b => b.RoleDefinitionId.Split(new[] { '/' }).Last());
+                    .Select(b => b.RoleDefinitionId.Split(['/']).Last());
 
                 if (!await currentPrincipalRgRoleIds.AnyAsync(role => ownerRoleId.Equals(role, StringComparison.OrdinalIgnoreCase), cts.Token))
                 {
@@ -2121,7 +2119,7 @@ namespace TesDeployer
             }
 
             var resourcesInPostgreSqlSubnetQuery = $"where type =~ 'Microsoft.Network/networkInterfaces' | where properties.ipConfigurations[0].properties.subnet.id == '{postgreSqlSubnet.Inner.Id}'";
-            var resourcesExist = (await resourceGraphClient.ResourcesAsync(new(new[] { configuration.SubscriptionId }, resourcesInPostgreSqlSubnetQuery), cts.Token)).TotalRecords > 0;
+            var resourcesExist = (await resourceGraphClient.ResourcesAsync(new([configuration.SubscriptionId], resourcesInPostgreSqlSubnetQuery), cts.Token)).TotalRecords > 0;
 
             if (hasNoDelegations && resourcesExist)
             {
