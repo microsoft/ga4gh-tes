@@ -63,7 +63,7 @@ public class BlobApiHttpUtils
     }
 
     public static HttpRequestMessage CreatePutBlobRequestAsync(Uri blobUrl, string? content, string apiVersion,
-        Dictionary<string, string>? tags, string blobType = BlockBlobType)
+        IDictionary<string, string>? tags, string blobType = BlockBlobType)
     {
         ArgumentNullException.ThrowIfNull(blobUrl);
         ArgumentException.ThrowIfNullOrEmpty(apiVersion, nameof(apiVersion));
@@ -81,7 +81,7 @@ public class BlobApiHttpUtils
         return request;
     }
 
-    private static void AddPutBlobHeaders(HttpRequestMessage request, string apiVersion, Dictionary<string, string>? tags, string blobType)
+    private static void AddPutBlobHeaders(HttpRequestMessage request, string apiVersion, IDictionary<string, string>? tags, string blobType)
     {
         request.Headers.Add("x-ms-blob-type", blobType);
 
@@ -99,6 +99,7 @@ public class BlobApiHttpUtils
     {
         return new Uri($"{baseUri?.AbsoluteUri}&comp=block&blockid={ToBlockId(ordinal)}");
     }
+
     public static Uri ParsePutAppendBlockUrl(Uri? baseUri)
     {
         ArgumentNullException.ThrowIfNull(baseUri);

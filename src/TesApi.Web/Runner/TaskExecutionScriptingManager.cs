@@ -15,10 +15,9 @@ namespace TesApi.Web.Runner
     /// <summary>
     /// Manages the creation and uploading of the Batch script to execute and all its dependencies
     /// </summary>
-    public class TaskExecutionScriptingManager
+    public partial class TaskExecutionScriptingManager
     {
         private const string NodeTaskFilename = "runner-task.json";
-        private const string NodeTaskRunnerFilename = "tes-runner";
         private const string BatchScriptFileName = "batch_script";
 
         private readonly IStorageAccessProvider storageAccessProvider;
@@ -57,7 +56,7 @@ namespace TesApi.Web.Runner
         {
             try
             {
-                await TryUploadServerTesTask(tesTask, cancellationToken);
+                await TryUploadServerTesTask(tesTask, "server-tes-task.json", cancellationToken);
 
                 var nodeTaskUrl = await CreateAndUploadNodeTaskAsync(tesTask, nodeTaskConversionOptions, cancellationToken);
 
@@ -73,7 +72,7 @@ namespace TesApi.Web.Runner
             }
         }
 
-        private async Task TryUploadServerTesTask(TesTask tesTask, CancellationToken cancellationToken)
+        private async Task TryUploadServerTesTask(TesTask tesTask, string blobName, CancellationToken cancellationToken)
         {
             try
             {
@@ -84,7 +83,7 @@ namespace TesApi.Web.Runner
                         DefaultValueHandling = DefaultValueHandling.Ignore
                     });
 
-                await UploadContentAsBlobToInternalTesLocationAsync(tesTask, severTesTaskContent, "server-tes-task.json",
+                await UploadContentAsBlobToInternalTesLocationAsync(tesTask, severTesTaskContent, blobName,
                     cancellationToken);
             }
             catch (Exception e)
@@ -108,22 +107,24 @@ namespace TesApi.Web.Runner
             // Replace any URL query strings with the word REMOVED
             var sanitizedLogEntry = RemoveQueryStringsFromText(batchRunCommand);
 
-            logger.LogInformation("Run command (sanitized): " + sanitizedLogEntry);
+            logger.LogInformation("Run command (sanitized): {RunCommand}", sanitizedLogEntry);
 
             return batchRunCommand;
         }
 
+        [GeneratedRegex(@"(https?:\/\/[^?\s]+)\?[^?\s]*")]
+        private static partial Regex SASRemovalRegex();
+
         private static string RemoveQueryStringsFromText(string batchRunCommand)
         {
-            const string pattern = @"(https?:\/\/[^?\s]+)\?[^?\s]*";
             const string replacement = "$1?REMOVED";
-            string sanitizedLogEntry = Regex.Replace(batchRunCommand, pattern, replacement);
+            var sanitizedLogEntry = SASRemovalRegex().Replace(batchRunCommand, replacement);
             return sanitizedLogEntry;
         }
 
         private async Task<Uri> CreateAndUploadBatchScriptAsync(TesTask tesTask, Uri nodeTaskUrl, CancellationToken cancellationToken)
         {
-            logger.LogInformation($"Creating and uploading Batch script for Task ID: {tesTask.Id}");
+            logger.LogInformation("Creating and uploading Batch script for Task ID: {TesTask}", tesTask.Id);
 
             var batchNodeScript = batchNodeScriptBuilder
                 .WithAlpineWgetInstallation()
@@ -135,14 +136,14 @@ namespace TesApi.Web.Runner
 
             var batchNodeScriptUrl = await UploadContentAsBlobToInternalTesLocationAsync(tesTask, batchNodeScript, BatchScriptFileName, cancellationToken);
 
-            logger.LogInformation($"Successfully created and uploaded Batch script for Task ID: {tesTask.Id}");
+            logger.LogInformation("Successfully created and uploaded Batch script for Task ID: {TesTask}", tesTask.Id);
 
             return batchNodeScriptUrl;
         }
 
         private async Task<Uri> CreateAndUploadNodeTaskAsync(TesTask tesTask, NodeTaskConversionOptions nodeTaskConversionOptions, CancellationToken cancellationToken)
         {
-            logger.LogInformation($"Creating and uploading node task definition file for Task ID: {tesTask.Id}");
+            logger.LogInformation("Creating and uploading node task definition file for Task ID: {TesTask}", tesTask.Id);
 
             var nodeTask = await taskToNodeConverter.ToNodeTaskAsync(tesTask, nodeTaskConversionOptions, cancellationToken);
 
@@ -155,7 +156,7 @@ namespace TesApi.Web.Runner
 
             var nodeTaskUrl = await UploadContentAsBlobToInternalTesLocationAsync(tesTask, nodeTaskContent, NodeTaskFilename, cancellationToken);
 
-            logger.LogInformation($"Successfully created and uploaded node task definition file for Task ID: {tesTask.Id}");
+            logger.LogInformation("Successfully created and uploaded node task definition file for Task ID: {TesTask}", tesTask.Id);
 
             return nodeTaskUrl;
         }
@@ -164,7 +165,7 @@ namespace TesApi.Web.Runner
             string content, string fileName, CancellationToken cancellationToken)
         {
             var blobUrl =
-                await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, fileName, cancellationToken);
+                await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, fileName, storageAccessProvider.BlobPermissionsWithWrite, cancellationToken);
 
             await storageAccessProvider.UploadBlobAsync(blobUrl, content, cancellationToken);
             return blobUrl;

@@ -59,7 +59,7 @@ namespace TesApi.Tests.Runner
             batchAccountOptions = new BatchAccountOptions() { SubscriptionId = SubscriptionId, ResourceGroup = ResourceGroup };
             storageAccessProviderMock = new Mock<IStorageAccessProvider>();
             storageAccessProviderMock.Setup(x =>
-                    x.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                    x.GetInternalTesTaskBlobUrlAsync(It.IsAny<TesTask>(), It.IsAny<string>(), It.IsAny<Azure.Storage.Sas.BlobSasPermissions>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(InternalBlobUrlWithSas);
             storageAccessProviderMock.Setup(x =>
                     x.GetInternalTesBlobUrlWithoutSasToken(It.IsAny<string>()))

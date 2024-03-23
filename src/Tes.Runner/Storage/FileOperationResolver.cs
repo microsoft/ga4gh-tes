@@ -182,23 +182,26 @@ namespace Tes.Runner.Storage
             }
         }
 
-        private static FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string absoluteFilePath, string relativePathToSearchPath)
+        private FileOutput CreateExpandedFileOutputWithCombinedTargetUrl(FileOutput output, string absoluteFilePath, string relativePathToSearchPath)
         {
             return new FileOutput()
             {
                 Path = absoluteFilePath,
                 TargetUrl = ToCombinedTargetUrl(output.TargetUrl!, prefixToRemoveFromPath: string.Empty, relativePathToSearchPath),
                 TransformationStrategy = output.TransformationStrategy,
+                MountParentDirectory = string.IsNullOrWhiteSpace(output.MountParentDirectory) ? null : fileInfoProvider.GetExpandedFileName(output.MountParentDirectory),
                 FileType = FileType.File,
             };
         }
-        private static FileOutput CreateExpandedFileOutputUsingTargetUrl(FileOutput output, string absoluteFilePath)
+
+        private FileOutput CreateExpandedFileOutputUsingTargetUrl(FileOutput output, string absoluteFilePath)
         {
             return new FileOutput()
             {
                 Path = absoluteFilePath,
                 TargetUrl = output.TargetUrl,
                 TransformationStrategy = output.TransformationStrategy,
+                MountParentDirectory = string.IsNullOrWhiteSpace(output.MountParentDirectory) ? null : fileInfoProvider.GetExpandedFileName(output.MountParentDirectory),
                 FileType = FileType.File,
             };
         }

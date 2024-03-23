@@ -4,6 +4,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
 using Tes.Models;
 
@@ -43,7 +44,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// </summary>
     /// <param name="logger">Logger <see cref="ILogger"/></param>
     /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
-    public StorageAccessProvider(ILogger logger, IAzureProxy azureProxy)
+    protected StorageAccessProvider(ILogger logger, IAzureProxy azureProxy)
     {
         this.Logger = logger;
         this.AzureProxy = azureProxy;
@@ -52,7 +53,7 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     /// <inheritdoc />
     public async Task<string> DownloadBlobAsync(string blobRelativePath, CancellationToken cancellationToken)
     {
-        var blobUrl = await MapLocalPathToSasUrlAsync(blobRelativePath, cancellationToken);
+        var blobUrl = await MapLocalPathToSasUrlAsync(blobRelativePath, BlobSasPermissions.Read, cancellationToken, sasTokenDuration: default);
 
         if (blobUrl is null)
         {
@@ -94,13 +95,13 @@ public abstract class StorageAccessProvider : IStorageAccessProvider
     public abstract Task<bool> IsPublicHttpUrlAsync(string uriString, CancellationToken cancellationToken);
 
     /// <inheritdoc />
-    public abstract Task<Uri> MapLocalPathToSasUrlAsync(string path, CancellationToken cancellationToken, TimeSpan? sasTokenDuration = default, bool getContainerSas = false);
+    public abstract Task<Uri> MapLocalPathToSasUrlAsync(string path, BlobSasPermissions sasPermissions, CancellationToken cancellationToken, TimeSpan? sasTokenDuration);
 
     /// <inheritdoc />
-    public abstract Task<Uri> GetInternalTesBlobUrlAsync(string blobPath, CancellationToken cancellationToken);
+    public abstract Task<Uri> GetInternalTesBlobUrlAsync(string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken);
 
     /// <inheritdoc />
-    public abstract Task<Uri> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, CancellationToken cancellationToken);
+    public abstract Task<Uri> GetInternalTesTaskBlobUrlAsync(TesTask task, string blobPath, BlobSasPermissions sasPermissions, CancellationToken cancellationToken);
 
     /// <inheritdoc />
     public abstract Uri GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath);

@@ -325,7 +325,7 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
-        /// Returns true of the value provided is a valid resource id for a managed identity. 
+        /// Returns true of the value provided is a valid resource id for a managed identity.
         /// </summary>
         /// <param name="resourceId"></param>
         /// <returns></returns>
@@ -335,7 +335,8 @@ namespace TesApi.Web.Runner
             {
                 return false;
             }
-            //Ignore the case because constant segments could be lower case, pascal case or camel case. 
+
+            //Ignore the case because constant segments could be lower case, pascal case or camel case.
             // e.g. /resourcegroup/ or /resourceGroup/
             return Regex.IsMatch(resourceId, ManagedIdentityResourceIdPattern, RegexOptions.IgnoreCase);
         }

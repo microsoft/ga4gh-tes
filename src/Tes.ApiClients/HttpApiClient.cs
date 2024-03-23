@@ -19,14 +19,18 @@ namespace Tes.ApiClients
         private static readonly HttpClient HttpClient = new();
         private readonly TokenCredential tokenCredential = null!;
         private readonly SHA256 sha256 = SHA256.Create();
-        /// <summary>
-        /// Logger instance
-        /// </summary>
-        protected readonly ILogger Logger = null!;
         private readonly string tokenScope = null!;
         private readonly SemaphoreSlim semaphore = new(1, 1);
         private AccessToken accessToken;
 
+        /// <summary>
+        /// Logger instance
+        /// </summary>
+        protected readonly ILogger Logger = null!;
+
+        /// <summary>
+        /// <see cref="HttpResponseMessage"/> retry handler
+        /// </summary>
         protected readonly CachingRetryHandler.CachingAsyncRetryHandlerPolicy<HttpResponseMessage> cachingRetryHandler;
 
         /// <summary>
@@ -80,7 +84,8 @@ namespace Tes.ApiClients
         /// </summary>
         /// <returns><see cref="RetryHandler.OnRetryHandler{HttpResponseMessage}"/></returns>
         private RetryHandler.OnRetryHandler<HttpResponseMessage> LogRetryErrorOnRetryHttpResponseMessageHandler()
-            => new((result, timeSpan, retryCount, correlationId, caller) =>
+        {
+            return new((result, timeSpan, retryCount, correlationId, caller) =>
             {
                 if (result.Exception is null)
                 {
@@ -93,6 +98,7 @@ namespace Tes.ApiClients
                         caller, result.Exception.Message, retryCount, timeSpan.ToString("c"), correlationId.ToString("D"));
                 }
             });
+        }
 
         /// <summary>
         /// Sends request with a retry policy
@@ -104,7 +110,8 @@ namespace Tes.ApiClients
         /// <returns></returns>
         protected async Task<HttpResponseMessage> HttpSendRequestWithRetryPolicyAsync(
             Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
-            => await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
+        {
+            return await cachingRetryHandler.ExecuteWithRetryAsync(async ct =>
             {
                 var request = httpRequestFactory();
 
@@ -115,6 +122,7 @@ namespace Tes.ApiClients
 
                 return await HttpClient.SendAsync(request, ct);
             }, cancellationToken);
+        }
 
         /// <summary>
         /// Sends a Http Get request to the URL and deserializes the body response to the specified type
@@ -169,7 +177,8 @@ namespace Tes.ApiClients
         /// <returns></returns>
         protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(Uri requestUrl,
             CancellationToken cancellationToken, bool setAuthorizationHeader = false)
-            => await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
+        {
+            return await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
             {
                 //request must be recreated in every retry.
                 var httpRequest = await CreateGetHttpRequest(requestUrl, setAuthorizationHeader, ct);
@@ -177,6 +186,7 @@ namespace Tes.ApiClients
                 return await HttpClient.SendAsync(httpRequest, ct);
             },
             GetApiResponseContentAsync<TResponse>, cancellationToken);
+        }
 
         /// <summary>
         /// Returns an query string key-value, with the value escaped. If the value is null or empty returns an empty string
@@ -236,7 +246,7 @@ namespace Tes.ApiClients
         }
 
         /// <summary>
-        /// Sends an Http request to the URL and deserializes the body response to the specified type 
+        /// Sends an Http request to the URL and deserializes the body response to the specified type
         /// </summary>
         /// <param name="httpRequestFactory">Factory that creates new http requests, in the event of retry the factory is called again
         /// and must be idempotent</param>

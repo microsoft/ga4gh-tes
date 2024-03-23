@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
+using Newtonsoft.Json;
 using Tes.Repository;
 using Tes.TaskSubmitters;
 
@@ -12,25 +13,24 @@ namespace Tes.Models
 {
     public partial class TesTask : RepositoryItem<TesTask>
     {
-        public static readonly List<TesState> ActiveStates =
+        public static readonly List<TesState> TerminalStates =
         [
-            TesState.QUEUEDEnum,
-            TesState.RUNNINGEnum,
-            TesState.PAUSEDEnum,
-            TesState.INITIALIZINGEnum
+            TesState.COMPLETEEnum,
+            TesState.EXECUTORERROREnum,
+            TesState.SYSTEMERROREnum,
+            TesState.CANCELEDEnum,
         ];
+
+        public static readonly List<TesState> TerminalStatesWithPreempted = new(TerminalStates)
+        {
+            TesState.PREEMPTEDEnum,
+        };
 
         /// <summary>
         /// Number of retries attempted
         /// </summary>
         [DataMember(Name = "error_count")]
         public int ErrorCount { get; set; }
-
-        /// <summary>
-        /// Boolean of whether cancellation was requested
-        /// </summary>
-        [DataMember(Name = "is_cancel_requested")]
-        public bool IsCancelRequested { get; set; }
 
         /// <summary>
         /// Date + time the task was completed, in RFC 3339 format. This is set by the system, not the client.
@@ -93,9 +93,22 @@ namespace Tes.Models
         [IgnoreDataMember]
         public int? CromwellAttempt => (TaskSubmitter as CromwellTaskSubmitter)?.CromwellAttempt;
 
-        public bool IsActiveState()
+        /// <summary>
+        /// True if task should be kept in the cache.
+        /// </summary>
+        /// <returns></returns>
+        public bool IsActiveState(bool includePreempted = false) // TODO: consider using TesResources.BackendParameters to signal whether PREEMPTEDEnum is considered a terminal state
         {
-            return ActiveStates.Contains(this.State);
+            return !(includePreempted ? TerminalStatesWithPreempted : TerminalStates).Contains(this.State);
+        }
+
+        /// <summary>
+        /// Performs a deep copy.
+        /// </summary>
+        /// <returns></returns>
+        public TesTask Clone()
+        {
+            return JsonConvert.DeserializeObject<TesTask>(ToJson());
         }
     }
 }

@@ -182,7 +182,6 @@ namespace Tes.ApiClients.Tests
             tokenCredential.Verify(t => t.GetTokenAsync(It.IsAny<TokenRequestContext>(),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
-
         }
 
         [TestMethod]
@@ -192,7 +191,6 @@ namespace Tes.ApiClients.Tests
             var expectedUrl = $"{TerraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/landingzone";
 
             Assert.AreEqual(expectedUrl, url.ToString());
-
         }
 
         [TestMethod]
@@ -202,7 +200,6 @@ namespace Tes.ApiClients.Tests
             var expectedUrl = $"{TerraApiStubData.WsmApiHost}/api/workspaces/v1/{terraApiStubData.WorkspaceId}/resources/controlled/azure/landingzone/quota?azureResourceId={Uri.EscapeDataString(terraApiStubData.BatchAccountId)}";
 
             Assert.AreEqual(expectedUrl, url.ToString());
-
         }
     }
 }
