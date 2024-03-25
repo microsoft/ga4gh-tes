@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Azure.Identity;
 using CommonUtilities;
+using CommonUtilities.AzureCloud;
 using Microsoft.Azure.Management.ApplicationInsights.Management;
 using Microsoft.Azure.Management.Batch;
 using Microsoft.Rest;
@@ -23,15 +24,17 @@ namespace TesApi.Web.Management
         /// Looks up the AppInsights instrumentation key in subscriptions the TES services has access to 
         /// </summary>
         /// <param name="accountName"></param>
+        /// <param name="azureCloudConfig">Azure cloud identity configuration</param>
         /// <returns></returns>
         /// <param name="cancellationToken"></param>
-        public static Task<string> GetAppInsightsConnectionStringAsync(string accountName, CancellationToken cancellationToken)
+        public static Task<string> GetAppInsightsConnectionStringAsync(string accountName, AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)
         {
             return GetAzureResourceAsync(
-                clientFactory: (tokenCredentials, subscription) => new ApplicationInsightsManagementClient(tokenCredentials) { SubscriptionId = subscription },
+                clientFactory: (tokenCredentials, subscription) => new ApplicationInsightsManagementClient(tokenCredentials) { SubscriptionId = subscription, BaseUri = new Uri(azureCloudConfig.ResourceManagerUrl) },
                 listAsync: (client, ct) => client.Components.ListAsync(ct),
                 listNextAsync: (client, link, ct) => client.Components.ListNextAsync(link, ct),
                 predicate: a => a.ApplicationId.Equals(accountName, StringComparison.OrdinalIgnoreCase),
+                azureCloudConfig: azureCloudConfig,
                 cancellationToken: cancellationToken,
                 finalize: a => a.ConnectionString);
         }
@@ -41,22 +44,28 @@ namespace TesApi.Web.Management
         /// Returns null if the resource was not found or the account does not have access.
         /// </summary>
         /// <param name="batchAccountName">batch account name</param>
+        /// <param name="azureCloudConfig">Azure cloud identity configuration</param>
         /// <returns></returns>
         /// <param name="cancellationToken"></param>
-        public static Task<BatchAccountResourceInformation> TryGetResourceInformationFromAccountNameAsync(string batchAccountName, CancellationToken cancellationToken)
+        public static Task<BatchAccountResourceInformation> TryGetResourceInformationFromAccountNameAsync(string batchAccountName, AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)
         {
             //TODO: look if a newer version of the management SDK provides a simpler way to look for this information .
             return GetAzureResourceAsync(
-                clientFactory: (tokenCredentials, subscription) => new BatchManagementClient(tokenCredentials) { SubscriptionId = subscription },
+                clientFactory: (tokenCredentials, subscription) => new BatchManagementClient(tokenCredentials) { SubscriptionId = subscription, BaseUri = new Uri(azureCloudConfig.ResourceManagerUrl) },
                 listAsync: (client, ct) => client.BatchAccount.ListAsync(ct),
                 listNextAsync: (client, link, ct) => client.BatchAccount.ListNextAsync(link, ct),
                 predicate: a => a.Name.Equals(batchAccountName, StringComparison.OrdinalIgnoreCase),
+                azureCloudConfig: azureCloudConfig,
                 cancellationToken: cancellationToken,
                 finalize: batchAccount => BatchAccountResourceInformation.FromBatchResourceId(batchAccount.Id, batchAccount.Location, $"https://{batchAccount.AccountEndpoint}"));
         }
 
-        private static async Task<string> GetAzureAccessTokenAsync(CancellationToken cancellationToken, string scope = "https://management.azure.com//.default")
-            => (await (new DefaultAzureCredential()).GetTokenAsync(new Azure.Core.TokenRequestContext(new string[] { scope }))).Token;
+        private static async Task<string> GetAzureAccessTokenAsync(AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken = default)
+        {
+            var defaultCredential = new DefaultAzureCredential(new DefaultAzureCredentialOptions { AuthorityHost = new Uri(azureCloudConfig.Authentication.LoginEndpointUrl) });
+            var accessToken = await defaultCredential.GetTokenAsync(new Azure.Core.TokenRequestContext([azureCloudConfig.DefaultTokenScope]), cancellationToken);
+            return accessToken.Token;
+        }
 
         /// <summary>
         /// Looks up an Azure resource with management clients that use <see cref="Microsoft.Rest.Azure.IPage{T}"/> enumerators
@@ -68,6 +77,7 @@ namespace TesApi.Web.Management
         /// <param name="listAsync"><c>ListAsync</c> method from operational parameter on <typeparamref name="TAzManagementClient"/>. Parameters are the <typeparamref name="TAzManagementClient"/> returned by <paramref name="clientFactory"/> and <paramref name="cancellationToken"/>.</param>
         /// <param name="listNextAsync"><c>ListNextAsync</c> method from operational parameter on <typeparamref name="TAzManagementClient"/>. Parameters are the <typeparamref name="TAzManagementClient"/> returned by <paramref name="clientFactory"/>, the <see cref="Microsoft.Rest.Azure.IPage{T}.NextPageLink"/> from the previous server call, and <paramref name="cancellationToken"/>.</param>
         /// <param name="predicate">Returns true when the desired <typeparamref name="TResource"/> is found.</param>
+        /// <param name="azureCloudConfig"></param>
         /// <param name="cancellationToken"></param>
         /// <param name="finalize">Converts <typeparamref name="TResource"/> to <typeparamref name="TResult"/>. Required if <typeparamref name="TResource"/> is not <typeparamref name="TResult"/>.</param>
         /// <returns>The <typeparamref name="TResult"/> derived from the first <typeparamref name="TResource"/> that satisfies the condition in <paramref name="predicate"/>, else <c>default</c>.</returns>
@@ -76,6 +86,7 @@ namespace TesApi.Web.Management
                 Func<TAzManagementClient, CancellationToken, Task<Microsoft.Rest.Azure.IPage<TResource>>> listAsync,
                 Func<TAzManagementClient, string, CancellationToken, Task<Microsoft.Rest.Azure.IPage<TResource>>> listNextAsync,
                 Predicate<TResource> predicate,
+                AzureCloudConfig azureCloudConfig,
                 CancellationToken cancellationToken,
                 Func<TResource, TResult> finalize = default)
             where TAzManagementClient : Microsoft.Rest.Azure.IAzureClient, IDisposable
@@ -91,8 +102,8 @@ namespace TesApi.Web.Management
             ArgumentNullException.ThrowIfNull(predicate);
             ArgumentNullException.ThrowIfNull(finalize);
 
-            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync(cancellationToken));
-            var azureManagementClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(cancellationToken);
+            var tokenCredentials = new TokenCredentials(await GetAzureAccessTokenAsync(azureCloudConfig, cancellationToken));
+            var azureManagementClient = await AzureManagementClientsFactory.GetAzureManagementClientAsync(azureCloudConfig, cancellationToken);
 
             var subscriptions = (await azureManagementClient.Subscriptions.ListAsync(cancellationToken: cancellationToken)).ToAsyncEnumerable().Select(s => s.SubscriptionId);
 

@@ -15,9 +15,13 @@ namespace TesApi.Web.Runner
     public static class StorageUrlUtils
     {
         /// <summary>
-        /// Blob endpoint Host name suffix
+        /// Default Azure Blob storage endpoint hostname suffix. 
         /// </summary>
-        public const string BlobEndpointHostNameSuffix = ".blob.core.windows.net";
+        public const string DefaultBlobEndpointHostNameSuffix = ".blob.core.windows.net";
+        /// <summary>
+        /// Blob endpoint Host name suffix.  This is set at starup in Program.cs
+        /// </summary>
+        public static string BlobEndpointHostNameSuffix = DefaultBlobEndpointHostNameSuffix;
 
         /// <summary>
         /// Converts a local path with the format /storageAccount/container/blobName to an Azure storage URL.

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using Azure.Storage.Blobs;
+using CommonUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.WindowsAzure.Storage;
@@ -15,7 +16,6 @@ using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Tes.Extensions;
 using Tes.Models;
-using TesApi.Web.Management.Configuration;
 using TesApi.Web.Options;
 
 namespace TesApi.Web.Storage
@@ -29,6 +29,7 @@ namespace TesApi.Web.Storage
         private static readonly TimeSpan SasTokenDuration = TimeSpan.FromDays(7); //TODO: refactor this to drive it from configuration.
         private readonly StorageOptions storageOptions;
         private readonly List<ExternalStorageContainerInfo> externalStorageContainers;
+        private readonly AzureEnvironmentConfig azureEnvironmentConfig;
 
         /// <summary>
         /// Provides methods for blob storage access by using local path references in form of /storageaccount/container/blobpath
@@ -36,11 +37,13 @@ namespace TesApi.Web.Storage
         /// <param name="logger">Logger <see cref="ILogger"/></param>
         /// <param name="storageOptions">Configuration of <see cref="StorageOptions"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
-        public DefaultStorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IOptions<StorageOptions> storageOptions, IAzureProxy azureProxy) : base(logger, azureProxy)
+        /// <param name="azureEnvironmentConfig"></param>
+        public DefaultStorageAccessProvider(ILogger<DefaultStorageAccessProvider> logger, IOptions<StorageOptions> storageOptions, IAzureProxy azureProxy, AzureEnvironmentConfig azureEnvironmentConfig) : base(logger, azureProxy)
         {
             ArgumentNullException.ThrowIfNull(storageOptions);
 
             this.storageOptions = storageOptions.Value;
+            this.azureEnvironmentConfig = azureEnvironmentConfig;
 
             externalStorageContainers = storageOptions.Value.ExternalStorageContainers?.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(uri =>
@@ -183,7 +186,7 @@ namespace TesApi.Web.Storage
         public override Uri GetInternalTesTaskBlobUrlWithoutSasToken(TesTask task, string blobPath)
         {
             var normalizedBlobPath = NormalizedBlobPath(blobPath);
-            var blobPathWithPrefix = $"{TesExecutionsPathPrefix}/{task.Id}{normalizedBlobPath}";
+            var blobPathWithPrefix = $"{TesExecutionsPathPrefix}{DefaultTasksPrefix}{task.Id}{normalizedBlobPath}";
 
             if (task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters
                     .internal_path_prefix) == true)
@@ -199,7 +202,7 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net/{blobPathWithPrefix.TrimStart('/')}"));
+            var builder = new BlobUriBuilder(new($"https://{storageOptions.DefaultAccountName}.blob.{azureEnvironmentConfig.StorageUrlSuffix}/{blobPathWithPrefix.TrimStart('/')}"));
 
             return builder.ToUri();
         }
@@ -210,7 +213,7 @@ namespace TesApi.Web.Storage
             var normalizedBlobPath = NormalizedBlobPath(blobPath);
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new($"https://{storageOptions.DefaultAccountName}.blob.core.windows.net{TesExecutionsPathPrefix}{normalizedBlobPath}"));
+            var builder = new BlobUriBuilder(new($"https://{storageOptions.DefaultAccountName}.blob.{azureEnvironmentConfig.StorageUrlSuffix}{TesExecutionsPathPrefix}{normalizedBlobPath}"));
 
             return builder.ToUri();
         }

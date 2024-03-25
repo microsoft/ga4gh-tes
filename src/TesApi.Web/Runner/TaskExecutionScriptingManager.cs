@@ -105,7 +105,7 @@ namespace TesApi.Web.Runner
         /// <returns></returns>
         public string ParseBatchRunCommand(BatchScriptAssetsInfo batchScriptAssets)
         {
-            var batchRunCommand = $"/bin/bash -c \"{BatchNodeScriptBuilder.CreateWgetDownloadCommand(batchScriptAssets.BatchScriptUrl, $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{batchScriptAssets.BatchScriptFileName}", setExecutable: true)} && ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{batchScriptAssets.BatchScriptFileName}\"";
+            var batchRunCommand = $"/bin/bash -c \"{BatchScheduler.CreateWgetDownloadCommand(batchScriptAssets.BatchScriptUrl, $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{batchScriptAssets.BatchScriptFileName}", setExecutable: true)} && ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{batchScriptAssets.BatchScriptFileName}\"";
 
             // Replace any URL query strings with the word REMOVED
             var sanitizedLogEntry = RemoveQueryStringsFromText(batchRunCommand);
