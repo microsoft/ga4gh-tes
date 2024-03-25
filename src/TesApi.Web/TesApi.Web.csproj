@@ -66,7 +66,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="scripts\tes_vm_perf.tar.gz">
+    <None Update="scripts\tes_vm_monitor.tar.gz">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="tes-compliance-test\entrypoint.sh">
