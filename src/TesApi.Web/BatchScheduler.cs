@@ -520,6 +520,7 @@ namespace TesApi.Web
                         displayName: displayName,
                         poolIdentity: GetBatchPoolIdentity(identities.ToArray()),
                         vmSize: virtualMachineInfo.VmSize,
+                        vmFamily: virtualMachineInfo.VmFamily,
                         preemptable: virtualMachineInfo.LowPriority,
                         nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                         encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
@@ -1014,18 +1015,28 @@ namespace TesApi.Web
             }
         }
 
+        enum StartScriptVmFamilies
+        {
+            standardLSFamily,
+            standardLSv2Family,
+            standardLSv3Family,
+            standardLASv3Family,
+        }
+
         /// <summary>
         /// Constructs a universal Azure Start Task instance
         /// </summary>
         /// <param name="poolId">Pool Id</param>
         /// <param name="machineConfiguration">A <see cref="BatchModels.VirtualMachineConfiguration"/> describing the OS of the pool's nodes.</param>
+        /// <param name="vmFamily"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         /// <remarks>This method also mitigates errors associated with docker daemons that are not configured to place their filesystem assets on the data drive.</remarks>
-        private async Task<BatchModels.StartTask> GetStartTaskAsync(string poolId, BatchModels.VirtualMachineConfiguration machineConfiguration, CancellationToken cancellationToken)
+        private async Task<BatchModels.StartTask> GetStartTaskAsync(string poolId, BatchModels.VirtualMachineConfiguration machineConfiguration, string vmFamily, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
             ArgumentNullException.ThrowIfNull(machineConfiguration);
+            ArgumentNullException.ThrowIfNull(vmFamily);
 
             var globalStartTaskConfigured = !string.IsNullOrWhiteSpace(globalStartTaskPath);
 
@@ -1047,28 +1058,39 @@ namespace TesApi.Web
             }
 
             // https://learn.microsoft.com/azure/batch/batch-docker-container-workloads#linux-support
-            var dockerConfigured = machineConfiguration.ImageReference.Publisher.Equals("microsoft-azure-batch", StringComparison.InvariantCultureIgnoreCase)
-                && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.InvariantCultureIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.InvariantCultureIgnoreCase));
+            var dockerConfigured = machineConfiguration.ImageReference.Publisher.Equals("microsoft-azure-batch", StringComparison.OrdinalIgnoreCase)
+                && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.OrdinalIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.OrdinalIgnoreCase));
 
             StringBuilder cmd = new("#!/bin/sh\n");
             cmd.Append($"mkdir -p {BatchNodeSharedEnvVar} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
 
             if (!dockerConfigured)
             {
-                var commandLine = new StringBuilder("#!/usr/bin/bash\n");
-                commandLine.Append(@"trap ""echo Error trapped; exit 0"" ERR; sudo touch tmp2.json && (sudo cp /etc/docker/daemon.json tmp1.json || sudo echo {} > tmp1.json) && sudo chmod a+w tmp?.json && if fgrep ""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker"" tmp1.json; then echo grep ""found docker path""; elif [ $? -eq 1 ]; then ");
-
-                commandLine.Append(machineConfiguration.NodeAgentSkuId switch
+                var packageInstallScript = machineConfiguration.NodeAgentSkuId switch
                 {
-                    var s when s.StartsWith("batch.node.ubuntu ") => "sudo apt-get install -y jq",
-                    var s when s.StartsWith("batch.node.centos ") => "sudo yum install epel-release -y && sudo yum update -y && sudo yum install -y jq wget",
-                    _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message: Please add support for '{machineConfiguration.NodeAgentSkuId}'")
-                });
-
-                commandLine.Append(@" && jq \.\[\""data-root\""\]=\""""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker""\"" tmp1.json >> tmp2.json && sudo cp tmp2.json /etc/docker/daemon.json && sudo chmod 644 /etc/docker/daemon.json && sudo systemctl restart docker && echo ""updated docker data-root""; else (echo ""grep failed"" || exit 1); fi");
+                    var s when s.StartsWith("batch.node.ubuntu ", StringComparison.OrdinalIgnoreCase) => "echo \"Ubuntu OS detected\"",
+                    var s when s.StartsWith("batch.node.centos ", StringComparison.OrdinalIgnoreCase) => "sudo yum install epel-release -y && sudo yum update -y && sudo yum install -y wget",
+                    _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message ({machineConfiguration.NodeAgentSkuId})")
+                };
 
                 var script = "config-docker.sh";
-                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, commandLine), script, setExecutable: true)} && ./{script}");
+                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new((await ReadScript("config-docker.sh")).Replace("{PackageInstalls}", packageInstallScript))), script, setExecutable: true)} && ./{script}");
+            }
+
+            var vmFamilyStartupScript = (Enum.TryParse(typeof(StartScriptVmFamilies), vmFamily, out var family) ? family : default) switch
+            {
+                StartScriptVmFamilies.standardLSFamily => @"config-nvme.sh",
+                StartScriptVmFamilies.standardLSv2Family => @"config-nvme.sh",
+                StartScriptVmFamilies.standardLSv3Family => @"config-nvme.sh",
+                StartScriptVmFamilies.standardLASv3Family => @"config-nvme.sh",
+                _ => null
+            };
+
+            if (!string.IsNullOrWhiteSpace(vmFamilyStartupScript))
+            {
+                var script = "config-vmfamily.sh";
+                // TODO: optimize this by uploading all vmfamily scripts when uploading runner binary rather then for each individual pool
+                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new(await ReadScript(vmFamilyStartupScript))), script, setExecutable: true)} && ./{script}");
             }
 
             if (globalStartTaskConfigured)
@@ -1093,6 +1115,12 @@ namespace TesApi.Web
                 content.Clear();
                 return url;
             }
+
+            async ValueTask<string> ReadScript(string name)
+            {
+                var path = Path.Combine(AppContext.BaseDirectory, "scripts", name);
+                return await File.ReadAllTextAsync(path, cancellationToken);
+            }
         }
 
         /// <summary>
@@ -1110,6 +1138,7 @@ namespace TesApi.Web
         /// <param name="displayName"></param>
         /// <param name="poolIdentity"></param>
         /// <param name="vmSize"></param>
+        /// <param name="vmFamily"></param>
         /// <param name="preemptable"></param>
         /// <param name="nodeInfo"></param>
         /// <param name="encryptionAtHostSupported">VM supports encryption at host.</param>
@@ -1118,7 +1147,7 @@ namespace TesApi.Web
         /// <remarks>
         /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the possible exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
         /// </remarks>
-        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, bool preemptable, BatchNodeInfo nodeInfo, bool? encryptionAtHostSupported, CancellationToken cancellationToken)
+        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, string vmFamily, bool preemptable, BatchNodeInfo nodeInfo, bool? encryptionAtHostSupported, CancellationToken cancellationToken)
         {
             // TODO: (perpetually) add new properties we set in the future on <see cref="PoolSpecification"/> and/or its contained objects, if possible. When not, update CreateAutoPoolModePoolInformation().
 
@@ -1145,7 +1174,7 @@ namespace TesApi.Web
                 ScaleSettings = new(autoScale: new(BatchPool.AutoPoolFormula(preemptable, 1), BatchPool.AutoScaleEvaluationInterval)),
                 DeploymentConfiguration = new(virtualMachineConfiguration: vmConfig),
                 //ApplicationPackages = ,
-                StartTask = await GetStartTaskAsync(name, vmConfig, cancellationToken),
+                StartTask = await GetStartTaskAsync(name, vmConfig, vmFamily, cancellationToken),
                 TargetNodeCommunicationMode = BatchModels.NodeCommunicationMode.Simplified,
             };
 
