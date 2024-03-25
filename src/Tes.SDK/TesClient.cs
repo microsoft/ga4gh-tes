@@ -1,14 +1,14 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Polly;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Newtonsoft.Json;
+using Polly;
 using Tes.Models;
-using System.Net.Http;
-using System.Net.Http.Json;
-using System.Net.Http.Headers;
 
 namespace Tes.SDK
 {

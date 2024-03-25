@@ -551,7 +551,8 @@ namespace TesDeployer
                             appInsights = await CreateAppInsightsResourceAsync(configuration.LogAnalyticsArmId);
                             await AssignVmAsContributorToAppInsightsAsync(managedIdentity, appInsights);
                         }),
-                        Task.Run(async () => {
+                        Task.Run(async () =>
+                        {
                             postgreSqlFlexServer ??= await CreatePostgreSqlServerAndDatabaseAsync(postgreSqlFlexManagementClient, vnetAndSubnet.Value.postgreSqlSubnet, postgreSqlDnsZone);
                         })
                     ]);
@@ -562,8 +563,8 @@ namespace TesDeployer
                     await kubernetesManager.UpdateHelmValuesAsync(storageAccount, keyVaultUri, resourceGroup.Name, settings, managedIdentity);
                     await PerformHelmDeploymentAsync(resourceGroup,
                         [
-                                "Run the following postgresql command to setup the database.",
-                                $"\tPostgreSQL command: psql postgresql://{configuration.PostgreSqlAdministratorLogin}:{configuration.PostgreSqlAdministratorPassword}@{configuration.PostgreSqlServerName}.{azureCloudConfig.Suffixes.PostgresqlServerEndpointSuffix}/{configuration.PostgreSqlTesDatabaseName} -c \"{GetCreateTesUserString()}\""
+                            "Run the following postgresql command to setup the database.",
+                            $"\tPostgreSQL command: psql postgresql://{configuration.PostgreSqlAdministratorLogin}:{configuration.PostgreSqlAdministratorPassword}@{configuration.PostgreSqlServerName}.{azureCloudConfig.Suffixes.PostgresqlServerEndpointSuffix}/{configuration.PostgreSqlTesDatabaseName} -c \"{GetCreateTesUserString()}\""
                         ],
                         async kubernetesClient =>
                         {
