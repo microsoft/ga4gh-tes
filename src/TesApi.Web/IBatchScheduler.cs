@@ -35,6 +35,12 @@ namespace TesApi.Web
         /// <remarks>This should be called only once after the <see cref="BatchScheduler"/> is created before any other methods are called.</remarks>
         Task UploadTaskRunnerIfNeeded(CancellationToken cancellationToken);
 
+        /// <summary>
+        /// Stores the compute node performance monitor in the default storage account
+        /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <returns></returns>
+        /// <remarks>This should be called only once after the <see cref="BatchScheduler"/> is created before any other methods are called.</remarks>
         Task UploadMonitoringScriptIfNeeded(CancellationToken cancellationToken);
 
         /// <summary>

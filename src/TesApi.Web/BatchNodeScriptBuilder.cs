@@ -1,10 +1,8 @@
-// Copyright (c) Microsoft Corporation.
+﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 using System;
 using System.Text;
-using System.Threading;
-using Tes.Models;
 using TesApi.Web.Extensions;
 using TesApi.Web.Runner;
 
@@ -71,26 +69,13 @@ namespace TesApi.Web
         }
 
         /// <summary>
-        /// Adds lines to download Runner binary and its task information file using wget
+        /// Adds lines to download Runner task information file using wget
         /// </summary>
-        /// <param name="runnerBinaryUrl"></param>
-        /// <param name="runnerTaskInfoUrl"></param>
-        /// <returns></returns>
-        public BatchNodeScriptBuilder WithRunnerFilesDownloadUsingWget(Uri runnerBinaryUrl, Uri runnerTaskInfoUrl)
-        {
-            return WithRunnerFilesDownloadUsingWget(runnerBinaryUrl, runnerTaskInfoUrl, null);
-        }
-
-        /// <summary>
-        /// Adds lines to download Runner binary and its task information file using wget
-        /// </summary>
-        /// <param name="runnerBinaryUrl"></param>
         /// <param name="runnerTaskInfoUrl"></param>
         /// <param name="vmPerfArchiveUrl"></param>
         /// <returns></returns>
-        public BatchNodeScriptBuilder WithRunnerFilesDownloadUsingWget(Uri runnerBinaryUrl, Uri runnerTaskInfoUrl, Uri? vmPerfArchiveUrl)
+        public BatchNodeScriptBuilder WithRunnerTaskDownloadUsingWget(Uri runnerTaskInfoUrl, Uri vmPerfArchiveUrl = null)
         {
-            ArgumentNullException.ThrowIfNull(runnerBinaryUrl);
             ArgumentNullException.ThrowIfNull(runnerTaskInfoUrl);
 
             if (useMetricsFile)
@@ -98,20 +83,19 @@ namespace TesApi.Web
                 batchScript.AppendLinuxLine("write_ts DownloadRunnerFileStart && \\");
             }
 
-            batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerBinaryUrl, $"{BatchTaskDirEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)} && \\");
-            batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{BatchTaskDirEnvVar}/{NodeRunnerTaskDefinitionFilename}", setExecutable: false)} && \\");
+            batchScript.AppendLinuxLine($"{BatchScheduler.CreateWgetDownloadCommand(runnerTaskInfoUrl, $"{BatchTaskDirEnvVar}/{NodeRunnerTaskDefinitionFilename}", setExecutable: false)} && \\");
 
-            if (vmPerfArchiveUrl != null)
+            if (vmPerfArchiveUrl is not null)
             {
-                batchScript.AppendLinuxLine($"{CreateWgetDownloadCommand(vmPerfArchiveUrl, $"{BatchTaskDirEnvVar}/{VMPerformanceArchiverFilename}", setExecutable: false)} && \\");
+                batchScript.AppendLinuxLine($"{BatchScheduler.CreateWgetDownloadCommand(vmPerfArchiveUrl, $"{BatchTaskDirEnvVar}/{VMPerformanceArchiverFilename}", setExecutable: false)} && \\");
             }
-            
+
             if (useMetricsFile)
             {
                 batchScript.AppendLinuxLine("write_ts DownloadRunnerFileEnd && \\");
             }
 
-            if (vmPerfArchiveUrl != null)
+            if (vmPerfArchiveUrl is not null)
             {
                 // TES vm performance monitoring is bootstrapped and begun by the start_vm_node_monitoring.sh script inside the archive.
                 // It is preferable for this to be installed during the start-task. See below for the updated batch_task version if already installed
@@ -163,7 +147,7 @@ namespace TesApi.Web
                 batchScript.AppendLinuxLine("write_ts ExecuteNodeTesTaskStart && \\");
             }
 
-            batchScript.AppendLinuxLine($"{BatchTaskDirEnvVar}/{NodeTaskRunnerFilename} -f {BatchTaskDirEnvVar}/{NodeRunnerTaskDefinitionFilename} && \\");
+            batchScript.AppendLinuxLine($"{BatchScheduler.BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename} -f {BatchTaskDirEnvVar}/{NodeRunnerTaskDefinitionFilename} && \\");
 
             if (useMetricsFile)
             {
@@ -200,28 +184,6 @@ namespace TesApi.Web
             batchScript.Clear();
 
             return builtScript;
-        }
-
-        /// <summary>
-        /// Creates a wget command to robustly download a file
-        /// </summary>
-        /// <param name="urlToDownload">URL to download</param>
-        /// <param name="localFilePathDownloadLocation">Filename for the output file</param>
-        /// <param name="setExecutable">Whether the file should be made executable or not</param>
-        /// <returns>The command to execute</returns>
-        public static string CreateWgetDownloadCommand(Uri urlToDownload, string localFilePathDownloadLocation, bool setExecutable = false)
-        {
-            ArgumentNullException.ThrowIfNull(urlToDownload);
-            ArgumentException.ThrowIfNullOrEmpty(localFilePathDownloadLocation);
-
-            var command = $"wget --https-only --no-verbose --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload.AbsoluteUri}'";
-
-            if (setExecutable)
-            {
-                command += $" && chmod +x {localFilePathDownloadLocation}";
-            }
-
-            return command;
         }
     }
 }

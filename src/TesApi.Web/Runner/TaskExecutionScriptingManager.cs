@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Tes.Extensions;
 using Tes.Models;
 using TesApi.Web.Storage;
 
@@ -19,7 +18,6 @@ namespace TesApi.Web.Runner
     public class TaskExecutionScriptingManager
     {
         private const string NodeTaskFilename = "runner-task.json";
-        private const string NodeTaskRunnerFilename = "tes-runner";
         private const string VMPerformanceArchiverFilename = "tes_vm_monitor.tar.gz";
         private const string BatchScriptFileName = "batch_script";
 
@@ -127,14 +125,13 @@ namespace TesApi.Web.Runner
         {
             logger.LogInformation($"Creating and uploading Batch script for Task ID: {tesTask.Id}");
 
-            var nodeTaskRunnerUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
             var nodeVMPerfArchiveUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken);
             var batchScriptLoggerUrl = storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(tesTask, "");
 
             var batchNodeScript = batchNodeScriptBuilder
                 .WithAlpineWgetInstallation()
                 .WithMetrics()
-                .WithRunnerFilesDownloadUsingWget(nodeTaskRunnerUrl, nodeTaskUrl, nodeVMPerfArchiveUrl)
+                .WithRunnerTaskDownloadUsingWget(nodeTaskUrl, nodeVMPerfArchiveUrl)
                 .WithExecuteRunner()
                 .WithLocalRuntimeSystemInformation()
                 .Build();
