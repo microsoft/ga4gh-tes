@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Azure.Core;
 using CommonUtilities;
 using Microsoft.Extensions.Logging;
@@ -363,6 +364,13 @@ namespace Tes.ApiClients
         protected static async Task<string> ReadResponseBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
         {
             return await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+
+        protected static HttpContent CreateJsonStringContent<T>(T contentObject) {
+            var stringContent = new StringContent(JsonSerializer.Serialize(contentObject,
+                new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }), Encoding.UTF8, "application/json");
+
+            return stringContent;
         }
     }
 }
