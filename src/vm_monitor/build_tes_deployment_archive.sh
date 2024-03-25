@@ -66,6 +66,11 @@ build_telegraf_remote
 # the paths to remove the leading directories.
 rm -f "${ARCHIVE_NAME}.tar"
 rm -f "${ARCHIVE_NAME}.tar.gz"
+# If the telegraf binary was not built, error out:
+if [ ! -f "$TELEGRAF_BUILD_FILENAME" ]; then
+    echo "Error: telegraf binary not found"
+    exit 1
+fi
 ( printf "%s\0" "$TELEGRAF_BUILD_FILENAME"  ; find "${AGENT_PERF_SCRIPT_DIR}" -type f -print0 ) | tar --null -cvf "${ARCHIVE_NAME}.tar" --transform 's,^.*/,,S' -T -
 # Compress using gzip for size and decompression speed:
 gzip --best "${ARCHIVE_NAME}.tar"

@@ -1,10 +1,19 @@
+# Get the latest telegraf release tag:
+FROM ubuntu:latest AS fetcher
+RUN apt-get update && apt-get install -y curl jq
+WORKDIR /app
+RUN curl --silent "https://api.github.com/repos/influxdata/telegraf/releases/latest" | jq -r .tag_name > /app/latest_release
+RUN echo "Latest telegraf release: $(cat /app/latest_release)"
+
 # Build a custom telegraf plugin with the Azure Append Blob output plugin enabled
-FROM golang:1.22
+FROM golang:latest
 
 WORKDIR /app
+COPY --from=fetcher /app/latest_release ./latest_release
 RUN git clone https://github.com/influxdata/telegraf.git /app/telegraf/
 WORKDIR /app/telegraf
-RUN git checkout tags/v1.29.4
+RUN echo "Fetching the latest release: $(cat /app/latest_release)"
+RUN git checkout tags/$(cat /app/latest_release)
 
 # Add the Azure Append Blob patches:
 COPY ./azure_append_blob/ /app/telegraf/plugins/outputs/azure_append_blob/
