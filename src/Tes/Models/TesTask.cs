@@ -60,48 +60,48 @@ namespace Tes.Models
         /// </summary>
         /// <value>Input files. Inputs will be downloaded and mounted into the executor container.</value>
         [DataMember(Name = "inputs")]
-        public List<TesInput> Inputs { get; set; } = new List<TesInput>();
+        public List<TesInput> Inputs { get; set; } = [];
 
         /// <summary>
         /// Output files. Outputs will be uploaded from the executor container to long-term storage.
         /// </summary>
         /// <value>Output files. Outputs will be uploaded from the executor container to long-term storage.</value>
         [DataMember(Name = "outputs")]
-        public List<TesOutput> Outputs { get; set; } = new List<TesOutput>();
+        public List<TesOutput> Outputs { get; set; } = [];
 
         /// <summary>
         /// Gets or Sets Resources
         /// </summary>
         [DataMember(Name = "resources")]
-        public TesResources Resources { get; set; } = new TesResources();
+        public TesResources Resources { get; set; } = new();
 
         /// <summary>
         /// A list of executors to be run, sequentially. Execution stops on the first error.
         /// </summary>
         /// <value>A list of executors to be run, sequentially. Execution stops on the first error.</value>
         [DataMember(Name = "executors")]
-        public List<TesExecutor> Executors { get; set; } = new List<TesExecutor>();
+        public List<TesExecutor> Executors { get; set; } = [];
 
         /// <summary>
         /// Volumes are directories which may be used to share data between Executors. Volumes are initialized as empty directories by the system when the task starts and are mounted at the same path in each Executor.  For example, given a volume defined at \&quot;/vol/A\&quot;, executor 1 may write a file to \&quot;/vol/A/exec1.out.txt\&quot;, then executor 2 may read from that file.  (Essentially, this translates to a &#x60;docker run -v&#x60; flag where the container path is the same for each executor).
         /// </summary>
         /// <value>Volumes are directories which may be used to share data between Executors. Volumes are initialized as empty directories by the system when the task starts and are mounted at the same path in each Executor.  For example, given a volume defined at \&quot;/vol/A\&quot;, executor 1 may write a file to \&quot;/vol/A/exec1.out.txt\&quot;, then executor 2 may read from that file.  (Essentially, this translates to a &#x60;docker run -v&#x60; flag where the container path is the same for each executor).</value>
         [DataMember(Name = "volumes")]
-        public List<string> Volumes { get; set; } = new List<string>();
+        public List<string> Volumes { get; set; } = [];
 
         /// <summary>
         /// A key-value map of arbitrary tags.
         /// </summary>
         /// <value>A key-value map of arbitrary tags.</value>
         [DataMember(Name = "tags")]
-        public Dictionary<string, string> Tags { get; set; } = new Dictionary<string, string>();
+        public Dictionary<string, string> Tags { get; set; } = [];
 
         /// <summary>
         /// Task logging information. Normally, this will contain only one entry, but in the case where a task fails and is retried, an entry will be appended to this list.
         /// </summary>
         /// <value>Task logging information. Normally, this will contain only one entry, but in the case where a task fails and is retried, an entry will be appended to this list.</value>
         [DataMember(Name = "logs")]
-        public List<TesTaskLog> Logs { get; set; } = new List<TesTaskLog>();
+        public List<TesTaskLog> Logs { get; set; } = [];
 
         /// <summary>
         /// Date + time the task was created, in RFC 3339 format. This is set by the system, not the client.
