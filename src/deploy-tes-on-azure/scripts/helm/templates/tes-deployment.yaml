@@ -58,6 +58,8 @@ spec:
               value: {{ .Values.config.batchAccount.accountName }}
             - name: BatchNodes__SubnetId
               value: {{ .Values.config.batchNodes.subnetId }}
+            - name: BatchNodes__AdvancedVmPerformanceMonitoringEnabled
+              value: {{ .Values.config.batchNodes.advancedVmPerformanceMonitoringEnabled | quote }}
             - name: BatchNodes__DisablePublicIpAddress
               value: {{ .Values.config.batchNodes.disablePublicIpAddress | quote }}
             - name: BatchNodes__GlobalStartTask

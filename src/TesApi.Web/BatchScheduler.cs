@@ -65,6 +65,7 @@ namespace TesApi.Web
         private readonly bool usePreemptibleVmsOnly;
         private readonly string batchNodesSubnetId;
         private readonly bool disableBatchNodesPublicIpAddress;
+        private readonly bool advancedVmPerformanceMonitoring;
         private readonly TimeSpan poolLifetime;
         private readonly BatchNodeInfo gen2BatchNodeInfo;
         private readonly BatchNodeInfo gen1BatchNodeInfo;
@@ -131,6 +132,7 @@ namespace TesApi.Web
             this.cromwellDrsLocalizerImageName = marthaOptions.Value.CromwellDrsLocalizer;
             if (string.IsNullOrWhiteSpace(this.cromwellDrsLocalizerImageName)) { this.cromwellDrsLocalizerImageName = Options.MarthaOptions.DefaultCromwellDrsLocalizer; }
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
+            this.advancedVmPerformanceMonitoring = batchNodesOptions.Value.AdvancedVmPerformanceMonitoringEnabled;
             this.poolLifetime = TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.PoolRotationForcedDays);
             this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
             this.globalStartTaskPath = StandardizeStartTaskPath(batchNodesOptions.Value.GlobalStartTask, this.defaultStorageAccountName);
@@ -404,9 +406,12 @@ namespace TesApi.Web
         /// <inheritdoc/>
         public async Task UploadMonitoringScriptIfNeeded(CancellationToken cancellationToken)
         {
-            const string VMPerformanceArchiverFilename = "tes_vm_monitor.tar.gz";
-            var blobUri = await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken);
-            await azureProxy.UploadBlobFromFileAsync(blobUri, $"scripts/{VMPerformanceArchiverFilename}", cancellationToken);
+            if (advancedVmPerformanceMonitoring)
+            {
+                const string VMPerformanceArchiverFilename = "tes_vm_monitor.tar.gz";
+                var blobUri = await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken);
+                await azureProxy.UploadBlobFromFileAsync(blobUri, $"scripts/{VMPerformanceArchiverFilename}", cancellationToken);
+            }
         }
 
         /// <summary>

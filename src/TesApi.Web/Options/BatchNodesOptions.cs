@@ -29,5 +29,9 @@ namespace TesApi.Web.Options
         /// Path to the global start task script
         /// </summary>
         public string GlobalStartTask { get; set; } = string.Empty;
+        /// <summary>
+        /// True to enable advanced VM performance monitoring, False otherwise
+        /// </summary>
+        public bool AdvancedVmPerformanceMonitoringEnabled { get; set; } = false;
     }
 }

@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Tes.Models;
 using TesApi.Web.Storage;
@@ -24,6 +25,7 @@ namespace TesApi.Web.Runner
         private readonly IStorageAccessProvider storageAccessProvider;
         private readonly TaskToNodeTaskConverter taskToNodeConverter;
         private readonly ILogger<TaskExecutionScriptingManager> logger;
+        private readonly bool advancedVmPerformanceMonitoring;
         private readonly BatchNodeScriptBuilder batchNodeScriptBuilder;
 
         /// <summary>
@@ -32,8 +34,9 @@ namespace TesApi.Web.Runner
         /// <param name="storageAccessProvider"></param>
         /// <param name="taskToNodeConverter"></param>
         /// <param name="batchNodeScriptBuilder"></param>
+        /// <param name="batchNodesOptions"></param>
         /// <param name="logger"></param>
-        public TaskExecutionScriptingManager(IStorageAccessProvider storageAccessProvider, TaskToNodeTaskConverter taskToNodeConverter, BatchNodeScriptBuilder batchNodeScriptBuilder, ILogger<TaskExecutionScriptingManager> logger)
+        public TaskExecutionScriptingManager(IStorageAccessProvider storageAccessProvider, TaskToNodeTaskConverter taskToNodeConverter, BatchNodeScriptBuilder batchNodeScriptBuilder, IOptions<Options.BatchNodesOptions> batchNodesOptions, ILogger<TaskExecutionScriptingManager> logger)
         {
             ArgumentNullException.ThrowIfNull(storageAccessProvider);
             ArgumentNullException.ThrowIfNull(taskToNodeConverter);
@@ -43,6 +46,7 @@ namespace TesApi.Web.Runner
             this.storageAccessProvider = storageAccessProvider;
             this.taskToNodeConverter = taskToNodeConverter;
             this.batchNodeScriptBuilder = batchNodeScriptBuilder;
+            this.advancedVmPerformanceMonitoring = batchNodesOptions.Value.AdvancedVmPerformanceMonitoringEnabled;
             this.logger = logger;
         }
 
@@ -125,7 +129,7 @@ namespace TesApi.Web.Runner
         {
             logger.LogInformation($"Creating and uploading Batch script for Task ID: {tesTask.Id}");
 
-            var nodeVMPerfArchiveUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken);
+            var nodeVMPerfArchiveUrl = advancedVmPerformanceMonitoring ? await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken) : default;
             var batchScriptLoggerUrl = storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(tesTask, "");
 
             var batchNodeScript = batchNodeScriptBuilder
@@ -136,23 +140,25 @@ namespace TesApi.Web.Runner
                 .WithLocalRuntimeSystemInformation()
                 .Build();
 
-            // TODO: add Terra check from TerraOptionsAreConfigured
-            // Outside the Terra environment:
-            //  - MSI is available, upload is performed with azcopy using MSI auth
-            //  - if more than one MSI is available, the MSI client ID must be specified
-            // Inside the Terra environment:
-            //  - TODO: upload could be done with tes-runner and an auto-generated runner-task.json just for logs (outputs are just stdout and stderr)
-            //  - for the moment with no MSI uploads are not done
-            bool MSIAvailable = true;
-            string MSIAvailableStr = MSIAvailable.ToString().ToLower();
-            // On VMs with more than one MSI you must specify the client ID of the MSI you want to use
-            // On VMs with a single MSI (the default CoA MSI) you can leave the MSIClientID as an empty string
-            string MSIClientID = "";
+            if (advancedVmPerformanceMonitoring)
+            {
+                // TODO: add Terra check from TerraOptionsAreConfigured
+                // Outside the Terra environment:
+                //  - MSI is available, upload is performed with azcopy using MSI auth
+                //  - if more than one MSI is available, the MSI client ID must be specified
+                // Inside the Terra environment:
+                //  - TODO: upload could be done with tes-runner and an auto-generated runner-task.json just for logs (outputs are just stdout and stderr)
+                //  - for the moment with no MSI uploads are not done
+                bool MSIAvailable = true;
+                string MSIAvailableStr = MSIAvailable.ToString().ToLower();
+                // On VMs with more than one MSI you must specify the client ID of the MSI you want to use
+                // On VMs with a single MSI (the default CoA MSI) you can leave the MSIClientID as an empty string
+                string MSIClientID = "";
 
-            // Write out the entire bash script with variable substitution turned on
-            // print_debug_info and upload_logs are called to capture stderr, stdout, and some env information on all running tasks
-            // This is especially useful when tes-runner fails to produce any output
-            batchNodeScript = $@"#!/bin/bash
+                // Write out the entire bash script with variable substitution turned on
+                // print_debug_info and upload_logs are called to capture stderr, stdout, and some env information on all running tasks
+                // This is especially useful when tes-runner fails to produce any output
+                batchNodeScript = $@"#!/bin/bash
 # set -x will print each command before it is executed
 set -x
 batch_script_task(){{
@@ -301,8 +307,9 @@ echo ""Exiting with code: $EXIT_CODE""
 echo Task complete
 exit $EXIT_CODE
 ";
-            // Remove any accidental windows line endings, bash doesn't like them
-            batchNodeScript = batchNodeScript.Replace("\r\n", "\n");
+                // Remove any accidental windows line endings, bash doesn't like them
+                batchNodeScript = batchNodeScript.Replace("\r\n", "\n");
+            }
 
             var batchNodeScriptUrl = await UploadContentAsBlobToInternalTesLocationAsync(tesTask, batchNodeScript, BatchScriptFileName, cancellationToken);
 
