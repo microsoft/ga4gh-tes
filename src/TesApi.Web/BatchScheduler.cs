@@ -1074,10 +1074,10 @@ namespace TesApi.Web
                 && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.OrdinalIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.OrdinalIgnoreCase));
 
             StringBuilder cmd = new("#!/bin/sh\n");
+            cmd.Append($"mkdir -p {BatchNodeSharedEnvVar} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
 
-            // universal start-task entries
+            if (advancedVmPerformanceMonitoring)
             {
-                cmd.Append($"mkdir -p {BatchNodeSharedEnvVar} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
                 cmd.Append($" && mkdir -p {BatchNodeSharedEnvVar}/vm_monitor && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/vm_monitor/{VMPerformanceArchiverFilename}")}");
                 var script = "vm-monitor.sh";
                 cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new((await ReadScript(script)).Replace("{VMPerformanceArchiverFilename}", VMPerformanceArchiverFilename))), script, setExecutable: true)} && ./{script}");
