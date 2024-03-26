@@ -55,6 +55,7 @@ namespace TesApi.Web
         private const string StartTaskScriptFilename = "start-task.sh";
         private const string NodeTaskRunnerFilename = "tes-runner";
         private const string NodeTaskRunnerMD5HashFilename = NodeTaskRunnerFilename + ".md5";
+        private const string VMPerformanceArchiverFilename = "tes_vm_monitor.tar.gz";
         private readonly string cromwellDrsLocalizerImageName;
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
@@ -408,7 +409,6 @@ namespace TesApi.Web
         {
             if (advancedVmPerformanceMonitoring)
             {
-                const string VMPerformanceArchiverFilename = "tes_vm_monitor.tar.gz";
                 var blobUri = await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken);
                 await azureProxy.UploadBlobFromFileAsync(blobUri, $"scripts/{VMPerformanceArchiverFilename}", cancellationToken);
             }
@@ -1074,19 +1074,26 @@ namespace TesApi.Web
                 && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.OrdinalIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.OrdinalIgnoreCase));
 
             StringBuilder cmd = new("#!/bin/sh\n");
-            cmd.Append($"mkdir -p {BatchNodeSharedEnvVar} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
+
+            // universal start-task entries
+            {
+                cmd.Append($"mkdir -p {BatchNodeSharedEnvVar} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
+                cmd.Append($" && mkdir -p {BatchNodeSharedEnvVar}/vm_monitor && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(VMPerformanceArchiverFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/vm_monitor/{VMPerformanceArchiverFilename}")}");
+                var script = "vm-monitor.sh";
+                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new((await ReadScript(script)).Replace("{VMPerformanceArchiverFilename}", VMPerformanceArchiverFilename))), script, setExecutable: true)} && ./{script}");
+            }
 
             if (!dockerConfigured)
             {
                 var packageInstallScript = machineConfiguration.NodeAgentSkuId switch
                 {
-                    var s when s.StartsWith("batch.node.ubuntu ", StringComparison.OrdinalIgnoreCase) => "echo \"Ubuntu OS detected\"",
+                    var s when s.StartsWith("batch.node.ubuntu ", StringComparison.OrdinalIgnoreCase) => string.Empty,
                     var s when s.StartsWith("batch.node.centos ", StringComparison.OrdinalIgnoreCase) => "sudo yum install epel-release -y && sudo yum update -y && sudo yum install -y wget",
                     _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message ({machineConfiguration.NodeAgentSkuId})")
                 };
 
                 var script = "config-docker.sh";
-                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new((await ReadScript("config-docker.sh")).Replace("{PackageInstalls}", packageInstallScript))), script, setExecutable: true)} && ./{script}");
+                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new((await ReadScript(script)).Replace("{PackageInstalls}", packageInstallScript))), script, setExecutable: true)} && ./{script}");
             }
 
             var vmFamilyStartupScript = (Enum.TryParse(typeof(StartScriptVmFamilies), vmFamily, out var family) ? family : default) switch
@@ -1131,7 +1138,8 @@ namespace TesApi.Web
             async ValueTask<string> ReadScript(string name)
             {
                 var path = Path.Combine(AppContext.BaseDirectory, "scripts", name);
-                return await File.ReadAllTextAsync(path, cancellationToken);
+                return (await File.ReadAllTextAsync(path, cancellationToken))
+                    .ReplaceLineEndings("\n");
             }
         }
 
