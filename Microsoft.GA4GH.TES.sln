@@ -44,6 +44,56 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.ApiClients", "src\Tes.A
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.ApiClients.Tests", "src\Tes.ApiClients.Tests\Tes.ApiClients.Tests.csproj", "{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "VM Monitoring", "VM Monitoring", "{1166E860-5DBB-478F-9A1E-848A74D6D1AD}"
+	ProjectSection(SolutionItems) = preProject
+		src\build_tes_remote.sh = src\build_tes_remote.sh
+		src\create_tes_debug_pool.sh = src\create_tes_debug_pool.sh
+		src\docker_deploy.sh = src\docker_deploy.sh
+		src\tes_pool_config.json = src\tes_pool_config.json
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "vm_monitor", "vm_monitor", "{DDF9389C-F5D0-4998-A53C-9505608B1FF6}"
+	ProjectSection(SolutionItems) = preProject
+		src\vm_monitor\build_tes_deployment_archive.sh = src\vm_monitor\build_tes_deployment_archive.sh
+		src\vm_monitor\README.md = src\vm_monitor\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "telegraf", "telegraf", "{28A0F8E6-A63B-4378-90B0-773F61CF7C15}"
+	ProjectSection(SolutionItems) = preProject
+		src\vm_monitor\telegraf\build_telegraf_remote.sh = src\vm_monitor\telegraf\build_telegraf_remote.sh
+		src\vm_monitor\telegraf\Dockerfile = src\vm_monitor\telegraf\Dockerfile
+		src\vm_monitor\telegraf\telegraf = src\vm_monitor\telegraf\telegraf
+		src\vm_monitor\telegraf\telegraf.dummy.conf = src\vm_monitor\telegraf\telegraf.dummy.conf
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "azure_append_blob", "azure_append_blob", "{34E5A67E-9E8A-413C-B437-2E60A0658E93}"
+	ProjectSection(SolutionItems) = preProject
+		src\vm_monitor\telegraf\azure_append_blob\azure_append_blob.go = src\vm_monitor\telegraf\azure_append_blob\azure_append_blob.go
+		src\vm_monitor\telegraf\azure_append_blob\README.md = src\vm_monitor\telegraf\azure_append_blob\README.md
+		src\vm_monitor\telegraf\azure_append_blob\sample.conf = src\vm_monitor\telegraf\azure_append_blob\sample.conf
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "all", "all", "{63D64305-E8F5-48CA-974A-1B59CF8E68FB}"
+	ProjectSection(SolutionItems) = preProject
+		src\vm_monitor\telegraf\all\azure_append_blob.go = src\vm_monitor\telegraf\all\azure_append_blob.go
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "vm_monitor_scripts", "vm_monitor_scripts", "{63ACE1DA-967C-4416-BD83-2540B84E8FE4}"
+	ProjectSection(SolutionItems) = preProject
+		src\vm_monitor\vm_monitor_scripts\clean_log.py = src\vm_monitor\vm_monitor_scripts\clean_log.py
+		src\vm_monitor\vm_monitor_scripts\collect_azure_vm_perf.sh = src\vm_monitor\vm_monitor_scripts\collect_azure_vm_perf.sh
+		src\vm_monitor\vm_monitor_scripts\get_batch_agent_values.sh = src\vm_monitor\vm_monitor_scripts\get_batch_agent_values.sh
+		src\vm_monitor\vm_monitor_scripts\get_imds_and_nvme_metatada.sh = src\vm_monitor\vm_monitor_scripts\get_imds_and_nvme_metatada.sh
+		src\vm_monitor\vm_monitor_scripts\get_linux_boot_iso_timestamp.sh = src\vm_monitor\vm_monitor_scripts\get_linux_boot_iso_timestamp.sh
+		src\vm_monitor\vm_monitor_scripts\parse_extended_cpu_info.py = src\vm_monitor\vm_monitor_scripts\parse_extended_cpu_info.py
+		src\vm_monitor\vm_monitor_scripts\parse_imds_and_nvme_metadata.py = src\vm_monitor\vm_monitor_scripts\parse_imds_and_nvme_metadata.py
+		src\vm_monitor\vm_monitor_scripts\run_telegraf.sh = src\vm_monitor\vm_monitor_scripts\run_telegraf.sh
+		src\vm_monitor\vm_monitor_scripts\start_vm_node_monitoring.sh = src\vm_monitor\vm_monitor_scripts\start_vm_node_monitoring.sh
+		src\vm_monitor\vm_monitor_scripts\telegraf_helper.py = src\vm_monitor\vm_monitor_scripts\telegraf_helper.py
+		src\vm_monitor\vm_monitor_scripts\tes_vm_monitor.continuous.conf = src\vm_monitor\vm_monitor_scripts\tes_vm_monitor.continuous.conf
+		src\vm_monitor\vm_monitor_scripts\tes_vm_monitor.once.conf = src\vm_monitor\vm_monitor_scripts\tes_vm_monitor.once.conf
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -105,6 +155,14 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{1166E860-5DBB-478F-9A1E-848A74D6D1AD} = {EF518D6D-FA52-4B12-AF47-0C46C0BC434D}
+		{DDF9389C-F5D0-4998-A53C-9505608B1FF6} = {1166E860-5DBB-478F-9A1E-848A74D6D1AD}
+		{28A0F8E6-A63B-4378-90B0-773F61CF7C15} = {DDF9389C-F5D0-4998-A53C-9505608B1FF6}
+		{34E5A67E-9E8A-413C-B437-2E60A0658E93} = {28A0F8E6-A63B-4378-90B0-773F61CF7C15}
+		{63D64305-E8F5-48CA-974A-1B59CF8E68FB} = {28A0F8E6-A63B-4378-90B0-773F61CF7C15}
+		{63ACE1DA-967C-4416-BD83-2540B84E8FE4} = {DDF9389C-F5D0-4998-A53C-9505608B1FF6}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {67AD4797-6B55-4CF7-A9BB-A83921479EA7}
