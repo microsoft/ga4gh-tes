@@ -16,9 +16,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
-using Newtonsoft.Json;
 using Tes.Converters;
 using Tes.Utilities;
+using NewtonsoftJson = Newtonsoft.Json;
+using STJSerialization = System.Text.Json.Serialization;
 
 namespace Tes.Models
 {
@@ -108,7 +109,8 @@ namespace Tes.Models
         /// Date + time the task was created, in RFC 3339 format. This is set by the system, not the client.
         /// </summary>
         /// <value>Date + time the task was created, in RFC 3339 format. This is set by the system, not the client.</value>
-        [JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339))]
+        [STJSerialization.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_JsonText))]
+        [NewtonsoftJson.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_Newtonsoft))]
         [DataMember(Name = "creation_time")]
         public DateTimeOffset? CreationTime { get; set; }
 
@@ -160,7 +162,7 @@ namespace Tes.Models
         /// </summary>
         /// <returns>JSON string presentation of the object</returns>
         public string ToJson()
-            => JsonConvert.SerializeObject(this, Formatting.Indented);
+            => NewtonsoftJson.JsonConvert.SerializeObject(this, NewtonsoftJson.Formatting.Indented);
 
         /// <summary>
         /// Returns true if objects are equal
