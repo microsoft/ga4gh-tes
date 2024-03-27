@@ -55,7 +55,8 @@ namespace Tes.ApiClients.Tests
         }
 
         [TestMethod]
-        public async Task GetDrsResolveApiResponse_ResponseWithAccessUrl_CanDeserializeJSon() { 
+        public async Task GetDrsResolveApiResponse_ResponseWithAccessUrl_CanDeserializeJSon()
+        {
             var httpResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK);
             httpResponse.Content = new StringContent(ExpectedRsResolveResponseJson);
 
@@ -63,7 +64,7 @@ namespace Tes.ApiClients.Tests
 
             Assert.IsNotNull(drsResolveResponse);
             Assert.IsNotNull(drsResolveResponse.AccessUrl);
-            Assert.AreEqual("https://storage.foo/bar",drsResolveResponse.AccessUrl.Url);
+            Assert.AreEqual("https://storage.foo/bar", drsResolveResponse.AccessUrl.Url);
         }
 
         private const string ExpectedRsResolveResponseJson = @"{

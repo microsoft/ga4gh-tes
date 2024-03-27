@@ -21,7 +21,7 @@ namespace Tes.Runner.Storage
         private readonly DrsHubApiClient drsHubApiClient;
         private const string DrsScheme = "drs";
 
-        public DrsTransformationStrategy(DrsHubApiClient drsHubApiClient) 
+        public DrsTransformationStrategy(DrsHubApiClient drsHubApiClient)
         {
             ArgumentNullException.ThrowIfNull(drsHubApiClient);
 

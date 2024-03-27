@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Tes.ApiClients.Models.Terra
 {
-  
+
     public class DrsResolveRequestContent
     {
         [JsonPropertyName("url")]

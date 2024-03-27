@@ -53,7 +53,7 @@ namespace Tes.ApiClients
                 .AddCaching()
                 .AsyncBuild();
         }
-       
+
         /// <summary>
         /// Constructor of base HttpApiClient
         /// </summary>
@@ -69,7 +69,7 @@ namespace Tes.ApiClients
 
             this.tokenCredential = tokenCredential;
             this.tokenScope = tokenScope;
-        }        
+        }
 
         /// <summary>
         /// Protected parameter-less constructor of HttpApiClient
@@ -370,7 +370,8 @@ namespace Tes.ApiClients
         /// <summary>
         /// Creates a string content from an object
         /// </summary>
-        protected static HttpContent CreateJsonStringContent<T>(T contentObject) {
+        protected static HttpContent CreateJsonStringContent<T>(T contentObject)
+        {
             var stringContent = new StringContent(JsonSerializer.Serialize(contentObject,
                 new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }), Encoding.UTF8, "application/json");
 

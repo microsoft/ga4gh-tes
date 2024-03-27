@@ -41,15 +41,16 @@ namespace Tes.ApiClients
             ApiUrl = apiUrl;
         }
 
-        protected static T CreateTerraApiClient<T>(string apiUrl, IMemoryCache sharedMemoryCache, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig) where T : TerraApiClient {
+        protected static T CreateTerraApiClient<T>(string apiUrl, IMemoryCache sharedMemoryCache, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig) where T : TerraApiClient
+        {
             var retryPolicyOptions = new RetryPolicyOptions();
             var cacheRetryHandler = new CachingRetryPolicyBuilder(sharedMemoryCache, Microsoft.Extensions.Options.Options.Create(retryPolicyOptions));
 
-            return (T)Activator.CreateInstance(typeof(T), 
-                apiUrl, 
-                tokenCredential, 
-                cacheRetryHandler, 
-                azureCloudIdentityConfig, 
+            return (T)Activator.CreateInstance(typeof(T),
+                apiUrl,
+                tokenCredential,
+                cacheRetryHandler,
+                azureCloudIdentityConfig,
                 ApiClientsLoggerFactory.Create<T>());
         }
     }

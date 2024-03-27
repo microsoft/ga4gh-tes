@@ -1,3 +1,6 @@
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 namespace Tes.Runner.Storage;
 
 public static class TerraConfigConstants
