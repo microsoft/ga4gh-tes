@@ -3,7 +3,6 @@
 
 using Azure.Core;
 using CommonUtilities.Options;
-using Microsoft.Azure.Management.Compute.Fluent.Models;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -15,10 +14,10 @@ namespace Tes.ApiClients.Tests
     [TestCategory("Unit")]
     public class DrsHubApiClientTests
     {
-        private Mock<TokenCredential> tokenCredentialsMock;
-        private CachingRetryPolicyBuilder cachingRetryPolicyBuilder;
-        private CommonUtilities.AzureEnvironmentConfig azureEnvironmentConfig;
-        private DrsHubApiClient apiClient;
+        private Mock<TokenCredential> tokenCredentialsMock = null!;
+        private CachingRetryPolicyBuilder cachingRetryPolicyBuilder = null!;
+        private CommonUtilities.AzureEnvironmentConfig azureEnvironmentConfig = null!;
+        private DrsHubApiClient apiClient = null!;
 
         private const string DrsApiHost = "https://drshub.foo";
 

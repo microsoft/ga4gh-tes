@@ -15,6 +15,13 @@ namespace Tes.ApiClients
         private static readonly IMemoryCache SharedMemoryCache = new MemoryCache(new MemoryCacheOptions());
 
         /// <summary>
+        /// Parameterless constructor for mocking
+        /// </summary>
+        protected DrsHubApiClient()
+        {
+        }
+
+        /// <summary>
         /// Constructor of DrsHubApiClient
         /// </summary>
         /// <param name="apiUrl">WSM API host</param>
