@@ -17,9 +17,9 @@ namespace Tes.ApiClients
         /// <summary>
         /// Constructor of the Price API Client.
         /// </summary>
-        /// <param name="cachingRetryPolicyHandler"><see cref="CachingRetryPolicyBuilder"/></param>
+        /// <param name="cachingRetryPolicyBuilder"><see cref="CachingRetryPolicyBuilder"/></param>
         /// <param name="logger"><see cref="ILogger{TCategoryName}"/></param>
-        public PriceApiClient(CachingRetryPolicyBuilder cachingRetryPolicyHandler, ILogger<PriceApiClient> logger) : base(cachingRetryPolicyHandler, logger)
+        public PriceApiClient(CachingRetryPolicyBuilder cachingRetryPolicyBuilder, ILogger<PriceApiClient> logger) : base(cachingRetryPolicyBuilder, logger)
         {
         }
 
