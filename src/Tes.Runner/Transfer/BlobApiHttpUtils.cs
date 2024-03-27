@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Text;
+using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
@@ -164,6 +165,17 @@ public class BlobApiHttpUtils
         return await retryPolicy.ExecuteAsync(ct => ExecuteHttpRequestImplAsync(requestFactory, ct), cancellationToken);
     }
 
+    public static bool UrlContainsSasToken(string sourceUrl)
+    {
+        if (string.IsNullOrWhiteSpace(sourceUrl))
+        {
+            return false;
+        }
+
+        var blobBuilder = new BlobUriBuilder(new Uri(sourceUrl));
+
+        return !string.IsNullOrWhiteSpace(blobBuilder?.Sas?.Signature);
+    }
     private async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request, CancellationToken cancellationToken)
     {
         HttpResponseMessage? response = null;
