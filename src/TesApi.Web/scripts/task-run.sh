@@ -1,4 +1,5 @@
 trap 'cleanup_task $?' ERR
+
 cleanup_task() {
     ../clean-executor.sh; exit $1
 }

@@ -396,6 +396,7 @@ namespace TesDeployer
             batchNodes["subnetId"] = GetValueOrDefault(settings, "BatchNodesSubnetId");
             values.Config["coaNamespace"] = GetValueOrDefault(settings, "AksCoANamespace");
             batchNodes["disablePublicIpAddress"] = GetValueOrDefault(settings, "DisableBatchNodesPublicIpAddress");
+            batchNodes["advancedVmPerformanceMonitoringEnabled"] = GetValueOrDefault(settings, "AdvancedVmPerformanceMonitoringEnabled");
             batchScheduling["usePreemptibleVmsOnly"] = GetValueOrDefault(settings, "UsePreemptibleVmsOnly");
             batchImageGen2["offer"] = GetValueOrDefault(settings, "Gen2BatchImageOffer");
             batchImageGen2["publisher"] = GetValueOrDefault(settings, "Gen2BatchImagePublisher");
@@ -460,6 +461,7 @@ namespace TesDeployer
                 ["BatchNodesSubnetId"] = GetValueOrDefault(batchNodes, "subnetId"),
                 ["AksCoANamespace"] = GetValueOrDefault(values.Config, "coaNamespace") as string,
                 ["DisableBatchNodesPublicIpAddress"] = GetValueOrDefault(batchNodes, "disablePublicIpAddress"),
+                ["AdvancedVmPerformanceMonitoringEnabled"] = GetValueOrDefault(batchNodes, "advancedVmPerformanceMonitoringEnabled"),
                 ["UsePreemptibleVmsOnly"] = GetValueOrDefault(batchScheduling, "usePreemptibleVmsOnly"),
                 ["Gen2BatchImageOffer"] = GetValueOrDefault(batchImageGen2, "offer"),
                 ["Gen2BatchImagePublisher"] = GetValueOrDefault(batchImageGen2, "publisher"),

@@ -13,6 +13,7 @@ config:
     accountName: RUNTIME_PARAMETER
   batchNodes:
     subnetId: RUNTIME_PARAMETER
+    advancedVmPerformanceMonitoringEnabled: RUNTIME_PARAMETER
     disablePublicIpAddress: RUNTIME_PARAMETER
     globalStartTask: /configuration/start-task.sh
   batchScheduling:

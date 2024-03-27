@@ -19,7 +19,6 @@ using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.ContainerService;
 using Azure.ResourceManager.ManagedServiceIdentities;
-using Azure.ResourceManager.ManagedServiceIdentities.Models;
 using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Network.Models;
 using Azure.ResourceManager.Resources;
@@ -232,6 +231,14 @@ namespace TesDeployer
                     if (!aksValues.Any())
                     {
                         throw new ValidationException($"Could not retrieve account names from stored configuration in {storageAccount.Name}.", displayExample: false);
+                    }
+
+                    // validate update-once settings
+                    {
+                        if (configuration.BatchNodesSubnetId is not null && !string.IsNullOrEmpty(aksValues.TryGetValue("BatchNodesSubnetId", out var subnetId) ? subnetId : null))
+                        {
+                            throw new ValidationException("'BatchNodesSubnetId' is already set.", displayExample: false);
+                        }
                     }
 
                     if (aksValues.TryGetValue("EnableIngress", out var enableIngress) && aksValues.TryGetValue("TesHostname", out var tesHostname))
@@ -1117,6 +1124,7 @@ namespace TesDeployer
 
             // Additional non-personalized settings
             UpdateSetting(settings, defaults, "BatchNodesSubnetId", configuration.BatchNodesSubnetId);
+            UpdateSetting(settings, defaults, "AdvancedVmPerformanceMonitoringEnabled", configuration.AdvancedVmPerformanceMonitoringEnabled);
             UpdateSetting(settings, defaults, "DisableBatchNodesPublicIpAddress", configuration.DisableBatchNodesPublicIpAddress, b => b.GetValueOrDefault().ToString(), configuration.DisableBatchNodesPublicIpAddress.GetValueOrDefault().ToString());
 
             if (installedVersion is null)
@@ -2362,6 +2370,7 @@ namespace TesDeployer
             ThrowIfProvidedForUpdate(configuration.VnetName, nameof(configuration.VnetName));
             ThrowIfProvidedForUpdate(configuration.VnetResourceGroupName, nameof(configuration.VnetResourceGroupName));
             ThrowIfProvidedForUpdate(configuration.SubnetName, nameof(configuration.SubnetName));
+            ThrowIfProvidedForUpdate(configuration.BatchSubnetName, nameof(configuration.BatchSubnetName));
             ThrowIfProvidedForUpdate(configuration.Tags, nameof(configuration.Tags));
 
             ThrowIfTagsFormatIsUnacceptable(configuration.Tags, nameof(configuration.Tags));

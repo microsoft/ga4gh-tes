@@ -600,7 +600,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual("TES-hostname-edicated1-rpsd645merzfkqmdnj7pkqrase2ancnh-", pool.Name[0..^8]);
+                Assert.AreEqual("TES-hostname-edicated1-uwfbf4i7k5gxjl3rbptahzvbecak4ery-", pool.Name[0..^8]);
                 Assert.AreEqual("VmSizeDedicated1", pool.VmSize);
                 Assert.IsTrue(((BatchScheduler)batchScheduler).TryGetPool(pool.Name, out _));
             });

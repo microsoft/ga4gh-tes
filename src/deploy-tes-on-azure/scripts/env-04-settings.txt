@@ -16,3 +16,4 @@ MarthaKeyVaultName=
 MarthaSecretName=
 GlobalStartTaskPath=/configuration/start-task.sh
 GlobalManagedIdentity=
+AdvancedVmPerformanceMonitoringEnabled=false

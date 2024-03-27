@@ -2,6 +2,7 @@
 trap "echo Error trapped; exit 0" ERR
 # set -e will cause any error to exit the script
 set -e
+
 sudo touch tmp2.json
 sudo cp /etc/docker/daemon.json tmp1.json || sudo echo {} > tmp1.json
 sudo chmod a+w tmp?.json;

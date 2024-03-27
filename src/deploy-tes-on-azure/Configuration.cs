@@ -83,6 +83,7 @@ namespace TesDeployer
         public string TesUsername { get; set; } = "tes";
         public string TesPassword { get; set; }
         public string AadGroupIds { get; set; }
+        public bool? AdvancedVmPerformanceMonitoringEnabled { get; set; }
 
         public static Configuration BuildConfiguration(string[] args)
         {

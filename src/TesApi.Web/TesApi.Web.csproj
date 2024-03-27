@@ -58,6 +58,15 @@
     <None Include="scripts\task-run.sh">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+      <None Include="scripts\config-docker.sh">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Include="scripts\config-nvme.sh">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Include="scripts\vm-monitor.sh">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
   </ItemGroup>
 
   <ItemGroup>
@@ -67,6 +76,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="scripts\tes_vm_monitor.tar.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="tes-compliance-test\entrypoint.sh">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
