@@ -58,6 +58,14 @@ namespace Tes.Runner.Storage
                 return blobUriBuilder.ToUri();
             }
 
+            if (BlobApiHttpUtils.UrlContainsSasToken(sourceUrl))
+            {
+                var uri = new Uri(sourceUrl);
+                logger.LogWarning($"The URL provided has SAS token. The resolution strategy won't be applied. Host: {uri.Host}");
+
+                return uri;
+            }
+
             var blobInfo = await GetTerraBlobInfoFromContainerNameAsync(sourceUrl);
 
             return await GetMappedSasUrlFromWsmAsync(blobInfo, blobSasPermissions);

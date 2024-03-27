@@ -27,12 +27,14 @@ namespace Tes.Runner.Storage
                 case TransformationStrategy.CombinedTerra:
                     return new CombinedTransformationStrategy(new List<IUrlTransformationStrategy>
                     {
+                        new DrsTransformationStrategy(runtimeOptions.Terra!, TokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureEnvironmentConfig!),
                         new CloudProviderSchemeConverter(),
                         new TerraUrlTransformationStrategy(runtimeOptions.Terra!, TokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureEnvironmentConfig!),
                     });
                 case TransformationStrategy.CombinedAzureResourceManager:
                     return new CombinedTransformationStrategy(new List<IUrlTransformationStrategy>
                     {
+                        new DrsTransformationStrategy(runtimeOptions.Terra!, TokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureEnvironmentConfig!),
                         new CloudProviderSchemeConverter(),
                         new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, TokenCredentialsManager.GetTokenCredential(runtimeOptions)), runtimeOptions)
                     });
