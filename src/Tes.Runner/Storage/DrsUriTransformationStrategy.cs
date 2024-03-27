@@ -15,19 +15,19 @@ namespace Tes.Runner.Storage
     /// Terra DRS transformation strategy. Uses the configured DRSHub service to resolve a DRS URI.
     /// If the URI is not a valid DRS URI, the URI is not transformed.
     /// </summary>
-    public class DrsTransformationStrategy : IUrlTransformationStrategy
+    public class DrsUriTransformationStrategy : IUrlTransformationStrategy
     {
-        private readonly ILogger<DrsTransformationStrategy> logger = PipelineLoggerFactory.Create<DrsTransformationStrategy>();
+        private readonly ILogger<DrsUriTransformationStrategy> logger = PipelineLoggerFactory.Create<DrsUriTransformationStrategy>();
         private readonly DrsHubApiClient drsHubApiClient;
         private const string DrsScheme = "drs";
 
-        public DrsTransformationStrategy(DrsHubApiClient drsHubApiClient)
+        public DrsUriTransformationStrategy(DrsHubApiClient drsHubApiClient)
         {
             ArgumentNullException.ThrowIfNull(drsHubApiClient);
 
             this.drsHubApiClient = drsHubApiClient;
         }
-        public DrsTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig)
+        public DrsUriTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig)
         {
             ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
             ArgumentException.ThrowIfNullOrEmpty(terraRuntimeOptions.DrsHubApiHost, nameof(terraRuntimeOptions.DrsHubApiHost));
