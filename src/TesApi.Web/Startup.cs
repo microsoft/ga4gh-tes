@@ -80,7 +80,7 @@ namespace TesApi.Web
                     .Configure<BatchNodesOptions>(configuration.GetSection(BatchNodesOptions.SectionName))
                     .Configure<BatchSchedulingOptions>(configuration.GetSection(BatchSchedulingOptions.SectionName))
                     .Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName))
-                    .Configure<MarthaOptions>(configuration.GetSection(MarthaOptions.SectionName))
+                    .Configure<DrsHubOptions>(configuration.GetSection(DrsHubOptions.SectionName))
 
                     .AddMemoryCache(o => o.ExpirationScanFrequency = TimeSpan.FromHours(12))
                     .AddSingleton<ICache<TesTaskDatabaseItem>, TesRepositoryCache<TesTaskDatabaseItem>>()

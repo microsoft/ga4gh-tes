@@ -12,7 +12,7 @@ namespace Tes.ApiClients
     /// <summary>
     /// Contains an App Cache instances and retry policies.
     /// </summary>
-    public partial class CachingRetryPolicyBuilder : RetryPolicyBuilder, CachingRetryPolicyBuilder.ICachingPolicyBuilderHandler
+    public class CachingRetryPolicyBuilder : RetryPolicyBuilder, CachingRetryPolicyBuilder.ICachingPolicyBuilderHandler
     {
         private readonly IMemoryCache appCache = null!;
         public virtual IMemoryCache AppCache => appCache;

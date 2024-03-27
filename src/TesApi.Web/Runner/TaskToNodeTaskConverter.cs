@@ -102,6 +102,7 @@ namespace TesApi.Web.Runner
                     .WithContainerImage(executor.Image)
                     .WithStorageEventSink(storageAccessProvider.GetInternalTesBlobUrlWithoutSasToken(blobPath: string.Empty))
                     .WithLogPublisher(storageAccessProvider.GetInternalTesTaskBlobUrlWithoutSasToken(task, blobPath: string.Empty))
+                    .WithDrsHubUrl(nodeTaskConversionOptions.DrsHubApiHost)
                     .WithMetricsFile(MetricsFileName);
 
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
@@ -462,6 +463,7 @@ namespace TesApi.Web.Runner
     /// <param name="AdditionalInputs"></param>
     /// <param name="DefaultStorageAccountName"></param>
     /// <param name="GlobalManagedIdentity"></param>
+    /// <param name="DrsHubApiHost"></param>
     public record NodeTaskConversionOptions(IList<TesInput> AdditionalInputs = default, string DefaultStorageAccountName = default,
-        string GlobalManagedIdentity = default);
+        string GlobalManagedIdentity = default, string DrsHubApiHost = default);
 }
