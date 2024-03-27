@@ -360,6 +360,18 @@ namespace TesDeployer
                         await kubernetesManager.RemovePodAadChart();
                     }
 
+                    if (installedVersion is null || installedVersion < new Version(5, 3, 1))
+                    {
+                        if (string.IsNullOrWhiteSpace(settings["DeploymentCreated"]))
+                        {
+                            settings["DeploymentCreated"] = settings["DeploymentUpdated"];
+                        }
+                    }
+
+                    //if (installedVersion is null || installedVersion < new Version(x, y, z))
+                    //{
+                    //}
+
                     if (waitForRoleAssignmentPropagation)
                     {
                         await Execute("Waiting 5 minutes for role assignment propagation...",
