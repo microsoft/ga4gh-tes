@@ -63,7 +63,7 @@ namespace TesApi.Tests.TestServices
                 .AddSingleton(BindHelper<BatchNodesOptions>(BatchNodesOptions.SectionName))
                 .AddSingleton(BindHelper<BatchSchedulingOptions>(BatchSchedulingOptions.SectionName))
                 .AddSingleton(BindHelper<StorageOptions>(StorageOptions.SectionName))
-                .AddSingleton(BindHelper<MarthaOptions>(MarthaOptions.SectionName))
+                .AddSingleton(BindHelper<DrsHubOptions>(DrsHubOptions.SectionName))
                 .AddSingleton(s => wrapAzureProxy ? ActivatorUtilities.CreateInstance<CachingWithRetriesAzureProxy>(s, GetAzureProxy(azureProxy).Object) : GetAzureProxy(azureProxy).Object)
                 .AddSingleton(_ => GetTesTaskRepository(tesTaskRepository).Object)
                 .AddSingleton(s => mockStorageAccessProvider ? GetStorageAccessProvider(storageAccessProvider).Object : ActivatorUtilities.CreateInstance<DefaultStorageAccessProvider>(s))
