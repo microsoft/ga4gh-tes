@@ -65,6 +65,12 @@ namespace Tes.Runner.Models
         public string? SasAllowedIpRange { get; set; }
     }
 
+    public class PreparatoryOptions
+    {
+        public RuntimeOptions? RuntimeOptions { get; set; }
+        public TransformationStrategy TransformationStrategy { get; set; }
+    }
+
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum TransformationStrategy
     {

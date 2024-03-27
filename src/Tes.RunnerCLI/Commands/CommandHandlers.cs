@@ -25,7 +25,8 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="apiVersion"></param>
         /// <param name="dockerUri"></param>
         /// <returns></returns>
-        internal static async Task<int> ExecuteRootCommandAsync(FileInfo file,
+        internal static async Task<int> ExecuteRootCommandAsync(
+            FileInfo file,
             int blockSize,
             int writers,
             int readers,
@@ -63,17 +64,78 @@ namespace Tes.RunnerCLI.Commands
                 }
                 catch (CommandExecutionException commandExecutionException)
                 {
-                    Logger.LogError(commandExecutionException, $"Failed to execute Node Task: {file.FullName}");
+                    Logger.LogError(commandExecutionException, "Failed to execute Node Task: {NodeTaskPath}", file.FullName);
                     return commandExecutionException.ExitCode;
                 }
 
-                Logger.LogError(e, $"Failed to execute Node Task: {file.FullName}");
+                Logger.LogError(e, "Failed to execute Node Task: {NodeTaskPath}", file.FullName);
 
                 return (int)ProcessExitCode.UncategorizedError;
             }
 
             return (int)ProcessExitCode.Success;
         }
+
+        /// <summary>
+        /// Preparatory command of the CLI. Downloads argument as sub-process and then runs the root command.
+        /// </summary>
+        /// <param name="fileUri"></param>
+        /// <param name="file"></param>
+        /// <param name="blockSize"></param>
+        /// <param name="writers"></param>
+        /// <param name="readers"></param>
+        /// <param name="bufferCapacity"></param>
+        /// <param name="apiVersion"></param>
+        /// <param name="dockerUri"></param>
+        /// <returns></returns>
+        internal static async Task<int> ExecutePreparatoryCommandAsync(
+            Uri fileUri,
+            FileInfo file,
+            int blockSize,
+            int writers,
+            int readers,
+            int bufferCapacity,
+            string apiVersion)
+        {
+            var options =
+                BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity,
+                    apiVersion);
+            FileInfo commandFile = new(Path.GetTempFileName());
+
+            try
+            {
+                await GetDownloadNodeTask(fileUri, file)
+                    .SerializeNodeTaskAsync(commandFile.FullName);
+                commandFile.Refresh();
+
+                await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.PreparatoryCommandName, commandFile, options, CommandFactory.DownloadCommandName);
+
+                file.Refresh();
+            }
+            catch (Exception e)
+            {
+                try
+                {
+                    CommandLauncher.HandleFatalLauncherError(CommandFactory.ExecutorCommandName, e);
+                }
+                catch (CommandExecutionException commandExecutionException)
+                {
+                    Logger.LogError(commandExecutionException, "Failed to execute Node Task: {NodeTaskPath}", commandFile.FullName);
+                    return commandExecutionException.ExitCode;
+                }
+
+                Logger.LogError(e, "Failed to execute Node Task: {NodeTaskPath}", commandFile.FullName);
+
+                return (int)ProcessExitCode.UncategorizedError;
+            }
+            finally
+            {
+                commandFile.Delete();
+            }
+
+            return (int)ProcessExitCode.Success;
+        }
+
         /// <summary>
         /// Executor (exec) command. Executes the executor operation as defined in the node task definition file.
         /// </summary>
@@ -87,7 +149,7 @@ namespace Tes.RunnerCLI.Commands
             {
                 var nodeTask = await NodeTaskUtils.DeserializeNodeTaskAsync(file.FullName);
 
-                Logger.LogDebug($"Executing commands in container for Task ID: {nodeTask.Id}");
+                Logger.LogDebug("Executing commands in container for Task ID: {NodeTaskId}", nodeTask.Id);
 
                 await using var executor = await Executor.CreateExecutorAsync(nodeTask);
 
@@ -98,11 +160,11 @@ namespace Tes.RunnerCLI.Commands
                     throw new InvalidOperationException("The container task failed to return results");
                 }
 
-                Logger.LogInformation($"Docker container execution status code: {result.ContainerResult.ExitCode}");
+                Logger.LogInformation("Docker container execution status code: {ContainerResultExitCode}", result.ContainerResult.ExitCode);
 
                 if (!string.IsNullOrWhiteSpace(result.ContainerResult.Error))
                 {
-                    Logger.LogInformation($"Docker container result error: {result.ContainerResult.Error}");
+                    Logger.LogInformation("Docker container result error: {ContainerResultError}", result.ContainerResult.Error);
                 }
             }
             catch (Exception e)
@@ -189,9 +251,27 @@ namespace Tes.RunnerCLI.Commands
             catch (Exception e)
             {
                 Console.WriteLine($"Failed to perform transfer. Error: {e.Message} Operation: {transferOperation.Method.Name}");
-                Logger.LogError(e, $"Failed to perform transfer. Operation: {transferOperation}");
+                Logger.LogError(e, "Failed to perform transfer. Operation: {TransferOperation}", transferOperation.Method.Name);
                 return (int)ProcessExitCode.UncategorizedError;
             }
+        }
+
+        private static Runner.Models.NodeTask GetDownloadNodeTask(Uri uri, FileInfo file)
+        {
+            var optionsValue = Environment.GetEnvironmentVariable(nameof(Runner.Models.PreparatoryOptions)) ??
+                throw new InvalidOperationException($"Environment variable '{nameof(Runner.Models.PreparatoryOptions)}' is missing.");
+
+            var options = NodeTaskUtils.DeserializeJson<Runner.Models.PreparatoryOptions>(optionsValue);
+            return new()
+            {
+                RuntimeOptions = options.RuntimeOptions ?? new(),
+                Inputs = new([new Runner.Models.FileInput()
+                {
+                    SourceUrl = uri.AbsoluteUri,
+                    Path = file.FullName,
+                    TransformationStrategy = options.TransformationStrategy
+                }]),
+            };
         }
     }
 }

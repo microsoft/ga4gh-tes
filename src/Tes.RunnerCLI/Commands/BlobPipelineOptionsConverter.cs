@@ -8,6 +8,7 @@ namespace Tes.RunnerCLI.Commands
     public class BlobPipelineOptionsConverter
     {
         public const string FileOption = "file";
+        public const string UrlOption = "url";
         public const string BlockSizeOption = "blockSize";
         public const string WritersOption = "writers";
         public const string ReadersOption = "readers";
@@ -17,7 +18,7 @@ namespace Tes.RunnerCLI.Commands
         public static string[] ToCommandArgs(string command, string fileOption, BlobPipelineOptions blobPipelineOptions)
         {
             ArgumentNullException.ThrowIfNull(blobPipelineOptions);
-            ArgumentException.ThrowIfNullOrEmpty(command, nameof(command));
+            ArgumentException.ThrowIfNullOrEmpty(command);
 
             var args = new List<string>
             {
@@ -34,7 +35,7 @@ namespace Tes.RunnerCLI.Commands
                 args.Add($"--{FileOption} {fileOption}");
             }
 
-            return args.ToArray();
+            return [.. args];
         }
 
         public static BlobPipelineOptions ToBlobPipelineOptions(int blockSize, int writers, int readers,

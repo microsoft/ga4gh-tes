@@ -10,9 +10,9 @@ namespace Tes.Runner.Test
     [TestCategory("Unit")]
     public class NetworkUtilityTests
     {
-        private const string testUrl = "https://github.com";
-        private const string ruleChain = "OUTPUT";
-        private readonly NetworkUtility utility = new NetworkUtility();
+        private const string TestUrl = "https://github.com";
+        private const string RuleChain = "OUTPUT";
+        private readonly NetworkUtility utility = new();
 
         [TestMethod]
         [TestCategory("Unit")]
@@ -27,13 +27,13 @@ namespace Tes.Runner.Test
                 return;
             }
 
-            var uri = new Uri(testUrl);
+            var uri = new Uri(TestUrl);
             var ipAddress = Dns.GetHostAddresses(uri.Host).First().ToString();
 
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             await client.GetStringAsync(uri);
 
-            await utility.BlockIpAddressAsync(ipAddress, ruleChain);
+            await utility.BlockIpAddressAsync(ipAddress, RuleChain);
 
             await Assert.ThrowsExceptionAsync<TaskCanceledException>(async () =>
             {
@@ -41,9 +41,9 @@ namespace Tes.Runner.Test
                 await client.GetStringAsync(uri);
             }, "IP address was not blocked");
 
-            Console.WriteLine($"Successfully blocked {ipAddress} ({testUrl})");
+            Console.WriteLine($"Successfully blocked {ipAddress} ({TestUrl})");
 
-            await utility.UnblockIpAddressAsync(ipAddress, ruleChain);
+            await utility.UnblockIpAddressAsync(ipAddress, RuleChain);
             await client.GetStringAsync(uri);
         }
 
@@ -60,14 +60,14 @@ namespace Tes.Runner.Test
                 return;
             }
 
-            var uri = new Uri(testUrl);
+            var uri = new Uri(TestUrl);
             var ipAddress = Dns.GetHostAddresses(uri.Host).First().ToString();
 
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             await client.GetStringAsync(uri);
 
-            await utility.BlockIpAddressAsync(ipAddress, ruleChain);
-            await utility.BlockIpAddressAsync(ipAddress, ruleChain);
+            await utility.BlockIpAddressAsync(ipAddress, RuleChain);
+            await utility.BlockIpAddressAsync(ipAddress, RuleChain);
 
             await Assert.ThrowsExceptionAsync<TaskCanceledException>(async () =>
             {
@@ -75,10 +75,10 @@ namespace Tes.Runner.Test
                 await client.GetStringAsync(uri);
             }, "IP address was not blocked");
 
-            Console.WriteLine($"Successfully blocked {ipAddress} ({testUrl})");
+            Console.WriteLine($"Successfully blocked {ipAddress} ({TestUrl})");
 
-            await utility.UnblockIpAddressAsync(ipAddress, ruleChain);
-            await utility.UnblockIpAddressAsync(ipAddress, ruleChain);
+            await utility.UnblockIpAddressAsync(ipAddress, RuleChain);
+            await utility.UnblockIpAddressAsync(ipAddress, RuleChain);
             await client.GetStringAsync(uri);
         }
     }
