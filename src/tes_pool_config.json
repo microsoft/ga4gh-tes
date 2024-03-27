@@ -1,56 +1,92 @@
 {
-    "id": "TES_POOL_NAME",
-    "displayName": "TES_POOL_NAME",
-    "vmSize": "TES_VM_SIZE",    
-    "virtualMachineConfiguration": {
-        "imageReference": {
-            "publisher": "microsoft-dsvm",
-            "offer": "ubuntu-hpc",
-            "sku": "2004",
-            "version": "latest",
-            "virtualMachineImageId": null,
-            "exactVersion": "latest"
-        },
-        "nodeAgentSKUId": "batch.node.ubuntu 20.04"
+  "allocationState": "steady",
+  "allocationStateTransitionTime": "2024-03-23T06:46:12.450896+00:00",
+  "applicationLicenses": null,
+  "applicationPackageReferences": null,
+  "autoScaleEvaluationInterval": "0:05:00",
+  "autoScaleFormula": "$NodeDeallocationOption = taskcompletion;\nlifespan = time() - time(\"Fri, 22 Mar 2024 22:14:45 GMT\");\nspan = TimeInterval_Second * 90;\nstartup = TimeInterval_Minute * 2;\nratio = 10;\n$TargetLowPriorityNodes = (lifespan > startup ? min($PendingTasks.GetSample(span, ratio)) : 1);",
+  "autoScaleRun": {
+    "error": null,
+    "results": "$TargetDedicatedNodes=0;$TargetLowPriorityNodes=0;$NodeDeallocationOption=taskcompletion;lifespan=4d22h14m53.7821283s;ratio=10;span=1m30s;startup=2m",
+    "timestamp": "2024-03-27T20:29:38.783253+00:00"
+  },
+  "certificateReferences": null,
+  "cloudServiceConfiguration": null,
+  "creationTime": "2024-03-22T22:14:46.378367+00:00",
+  "currentDedicatedNodes": 0,
+  "currentLowPriorityNodes": 0,
+  "currentNodeCommunicationMode": null,
+  "displayName": "OY5BKMMX:Standard_A1_v2:True:/subscriptions/a0e0e744-06b2-4fd3-9230-ebf8ef1ac4c8/resourcegroups/test-coa4-southcentral-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-coa4-southcentral-rg-identity",
+  "eTag": "0x8DC4B04BB1CADBE",
+  "enableAutoScale": true,
+  "enableInterNodeCommunication": false,
+  "id": "TES-OY5BKMMX-A1_v2-2m4tvpnjrgv74kjiyxtffht2mqzd2nqn-yhlj3wwu",
+  "identity": {
+    "type": "UserAssigned",
+    "userAssignedIdentities": [
+      {
+        "clientId": "261634f9-6e34-4716-997b-21e5311ea45a",
+        "principalId": "05ed1543-d6bd-4eda-b414-f4856c30b4f6",
+        "resourceId": "/subscriptions/a0e0e744-06b2-4fd3-9230-ebf8ef1ac4c8/resourcegroups/test-coa4-southcentral-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-coa4-southcentral-rg-identity"
+      }
+    ]
+  },
+  "lastModified": "2024-03-23T06:44:47.093907+00:00",
+  "metadata": [
+    {
+      "name": "CoA-TES-HostName",
+      "value": "OY5BKMMX"
     },
-    "resizeTimeout": "PT15M",
-    "targetDedicatedNodes": 0,
-    "targetLowPriorityNodes": TES_LOW_PRIORITY_NODES,
-    "enableAutoScale": false,
-    "enableInterNodeCommunication": false,
-    "startTask": {
-        "commandLine": "/usr/bin/bash -c 'trap \"echo Error trapped; exit 0\" ERR; sudo touch tmp2.json && (sudo cp /etc/docker/daemon.json tmp1.json || sudo echo {} > tmp1.json) && sudo chmod a+w tmp?.json && if fgrep \"$(dirname \"$(dirname \"$AZ_BATCH_NODE_ROOT_DIR\")\")/docker\" tmp1.json; then echo grep \"found docker path\"; elif [ $? -eq 1 ]; then sudo apt-get install -y jq && jq \\.\\[\\\"data-root\\\"\\]=\\\"\"$(dirname \"$(dirname \"$AZ_BATCH_NODE_ROOT_DIR\")\")/docker\"\\\" tmp1.json >> tmp2.json && sudo cp tmp2.json /etc/docker/daemon.json && sudo chmod 644 /etc/docker/daemon.json && sudo systemctl restart docker && echo \"updated docker data-root\"; else (echo \"grep failed\" || exit 1); fi'",
-        "userIdentity": {
-            "username": null,
-            "autoUser": {
-                "scope": "pool",
-                "elevationLevel": "admin"
-            }
-        },
-        "maxTaskRetryCount": 0,
-        "waitForSuccess": true
+    {
+      "name": "CoA-TES-IsDedicated",
+      "value": "False"
+    }
+  ],
+  "mountConfiguration": null,
+  "networkConfiguration": {
+    "dynamicVnetAssignmentScope": "none",
+    "enableAcceleratedNetworking": false,
+    "endpointConfiguration": null,
+    "publicIpAddressConfiguration": {
+      "ipAddressIds": null,
+      "provision": "batchmanaged"
     },
-    "taskSlotsPerNode": 1,
-    "taskSchedulingPolicy": {
-        "nodeFillType": "Spread"
+    "subnetId": "/subscriptions/a0e0e744-06b2-4fd3-9230-ebf8ef1ac4c8/resourceGroups/test-coa4-southcentral-rg/providers/Microsoft.Network/virtualNetworks/cromwellsc-67645/subnets/default"
+  },
+  "odata.metadata": "https://cromwellsc19387.southcentralus.batch.azure.com/$metadata#pools/@Element",
+  "resizeErrors": null,
+  "resizeTimeout": "0:15:00",
+  "startTask": null,
+  "state": "active",
+  "stateTransitionTime": "2024-03-22T22:14:46.378367+00:00",
+  "stats": null,
+  "targetDedicatedNodes": 0,
+  "targetLowPriorityNodes": 0,
+  "targetNodeCommunicationMode": "simplified",
+  "taskSchedulingPolicy": {
+    "nodeFillType": "spread"
+  },
+  "taskSlotsPerNode": 1,
+  "url": "https://cromwellsc19387.southcentralus.batch.azure.com/pools/TES-OY5BKMMX-A1_v2-2m4tvpnjrgv74kjiyxtffht2mqzd2nqn-yhlj3wwu",
+  "userAccounts": null,
+  "virtualMachineConfiguration": {
+    "containerConfiguration": null,
+    "dataDisks": null,
+    "diskEncryptionConfiguration": null,
+    "extensions": null,
+    "imageReference": {
+      "exactVersion": null,
+      "offer": "ubuntu-server-container",
+      "publisher": "microsoft-azure-batch",
+      "sku": "20-04-lts",
+      "version": "latest",
+      "virtualMachineImageId": null
     },
-    "metadata": [
-        {
-            "name": "CoA-TES-HostName",
-            "value": "OY5BKMMX"
-        },
-        {
-            "name": "CoA-TES-IsDedicated",
-            "value": "False"
-        }
-    ],
-    "identity": {
-        "type": "UserAssigned",
-        "userAssignedIdentities": [
-            {
-                "resourceId": "/subscriptions/a0e0e744-06b2-4fd3-9230-ebf8ef1ac4c8/resourceGroups/test-coa4-southcentral-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-coa4-southcentral-rg-identity"
-            }
-        ]
-    },
-    "targetNodeCommunicationMode": "simplified"
+    "licenseType": null,
+    "nodeAgentSkuId": "batch.node.ubuntu 20.04",
+    "nodePlacementConfiguration": null,
+    "osDisk": null,
+    "windowsConfiguration": null
+  },
+  "vmSize": "standard_a1_v2"
 }

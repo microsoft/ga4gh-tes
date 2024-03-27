@@ -1,14 +1,15 @@
 #!/bin/bash
-
 ## This script is for debugging of batch_scripts in TES. It will create a DEBUG pool and job in an Azure Batch
 ## account and then allow you to rapidly execute a task on a node that is already allocated and waiting.
-## Turn around time for adding a task to the job is about 30 seconds.
+## Turn around time from running this script to the job running on the node is about 30 seconds.
 ##
 ## You must have the Azure CLI installed and logged in to use this script.
 ## 
-## Usage, pass in 3 args: SUBSCRIPTION_ID RESOURCE_GROUP WGET_URL 
-## Make sure you change the managed identity in the tes_pool_config.json 
-## ['identity']['userAssignedIdentities'][0]['resourceId'] to your own
+## Already setup pool JSON usage, pass in 3 args: SUBSCRIPTION_ID RESOURCE_GROUP WGET_URL 
+##      Make sure you change the managed identity in the tes_pool_config.json 
+##      ['identity']['userAssignedIdentities'][0]['resourceId'] to your own
+##
+## Create a pool config, pass in 5 args: SUBSCRIPTION_ID RESOURCE_GROUP WGET_URL TEMPLATE_POOL_ID POOL_CONFIG_JSON
 ##
 ## You can also export and define these in your shell environment, and the script will use them as defaults.
 ## The values here won't work and are just for illutstrative purposes.
@@ -17,6 +18,7 @@
 ## NOTE: You must be familiar with how to remove Azure Batch pools before using this script. The script never sizes down
 ## the pool, so you must do this manually. Otherwise you will be charged for the VMs in the pool (which will run forever).
 ##
+## tes_pool_config.json must also be in the same directory as this script
 
 # If these variables are already defined in the environment, use them, otherwise use the defaults in this script
 export SUBSCRIPTION_ID=${SUBSCRIPTION_ID:-a0e0e744-06b2-4fd3-9230-ebf8ef1ac4c8}
@@ -24,17 +26,24 @@ export RESOURCE_GROUP=${RESOURCE_GROUP:-test-coa4-southcentral-rg}
 export WGET_URL=${WGET_URL:-https://cromwellsc95a88970e25.blob.core.windows.net/cromwell-executions/test/f7fd31e3-61e7-48b3-b895-8b291bbecbdb/call-hello/tes_task/batch_script}
 
 # If we were passed in 3 arguments use them:
+export POOL_CONFIG_JSON="tes_pool_config.json"
 if [ $# -eq 3 ]; then
     export SUBSCRIPTION_ID=$1
     export RESOURCE_GROUP=$2
     export WGET_URL=$3
+elif [ $# -eq 5 ]; then
+    export SUBSCRIPTION_ID=$1
+    export RESOURCE_GROUP=$2
+    export WGET_URL=$3
+    export TEMPLATE_POOL_ID=$4
+    export POOL_CONFIG_JSON=$5
 fi
 
 export JOB_ID="DEBUG_TES_JOB"
 export POOL_ID="DEBUG_TES_POOL"
 export DEBUG_TASK_NAME="debug_task"
-VM_SIZE="Standard_D2s_v3"
-LOW_PRI_TARGET_NODES=1
+export VM_SIZE="Standard_D2s_v3"
+export LOW_PRI_TARGET_NODES=1
 
 echo "REMINDER: You must manually delete the pool after you are done debugging. The script never sizes down the pool."
 echo "REMINDER: This means you will be charged for 1 low-pri node until you delete the pool!"
@@ -46,7 +55,26 @@ echo -e "Resource Group: \t$RESOURCE_GROUP"
 echo -e "Job ID: \t\t$JOB_ID"
 echo -e "Pool ID: \t\t$POOL_ID"
 echo -e "Task Name: \t\t$DEBUG_TASK_NAME"
+echo -e "VM Size: \t\t$VM_SIZE"
+echo -e "Pool Config JSON: \t$POOL_CONFIG_JSON"
+
+# Get the Azure Batch account in the resource group, error if there are more than 1
+function get_az_batch_account {
+    local RESOURCE_GROUP=$1
+    local BATCH_ACCOUNTS=$(az batch account list --resource-group "$RESOURCE_GROUP" --query "[].name" --output tsv)
+    local NUM_BATCH_ACCOUNTS=$(echo "$BATCH_ACCOUNTS" | wc -l)
+    if [ "$NUM_BATCH_ACCOUNTS" -ne 1 ]; then
+        echo "Error: There must be exactly 1 Azure Batch account in the resource group. Found ${NUM_BATCH_ACCOUNTS}."
+        exit 1
+    fi
+    echo "$BATCH_ACCOUNTS"
+}
+export BATCH_ACCOUNT_NAME=$(get_az_batch_account "$RESOURCE_GROUP")
+echo -e "Azure Batch account: \t$BATCH_ACCOUNT_NAME"
+export BATCH_ACCOUNT_URL=$(az batch account show --name "$BATCH_ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" --query "accountEndpoint" --output tsv)
+echo -e "Azure Batch URL: \t$BATCH_ACCOUNT_URL"
 echo -e "\n\n"
+
 
 # Generate a user delegation SAS token for the batch_script
 function add_sas_token_to_wget_url() {
@@ -65,94 +93,74 @@ if [[ $WGET_URL != *"?"* ]]; then
     export WGET_URL=$(add_sas_token_to_wget_url "$WGET_URL")
 fi
 
-# Get the Azure Batch account in the resource group, error if there are more than 1
-function get_az_batch_account {
-    local RESOURCE_GROUP=$1
-    local BATCH_ACCOUNTS=$(az batch account list --resource-group "$RESOURCE_GROUP" --query "[].name" --output tsv)
-    local NUM_BATCH_ACCOUNTS=$(echo "$BATCH_ACCOUNTS" | wc -l)
-    if [ "$NUM_BATCH_ACCOUNTS" -ne 1 ]; then
-        echo "Error: There must be exactly 1 Azure Batch account in the resource group. Found ${NUM_BATCH_ACCOUNTS}."
-        exit 1
-    fi
-    echo "$BATCH_ACCOUNTS"
-}
-export BATCH_ACCOUNT_NAME=$(get_az_batch_account "$RESOURCE_GROUP")
-echo -e "Azure Batch account name: \t$BATCH_ACCOUNT_NAME"
-export BATCH_ACCOUNT_URL=$(az batch account show --name "$BATCH_ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" --query "accountEndpoint" --output tsv)
-echo -e "Azure Batch account URL: \t$BATCH_ACCOUNT_URL"
-
 # Authenticate with Azure Batch account
 az batch account login --name "$BATCH_ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP"
-
-# Create a copy of tes_pool_config.json and do the following replacements:
-# - Replace "TES_POOL_NAME" with $POOL_ID
-# - Replace "TES_VM_SIZE" with $VM_SIZE
-# - Replace "TES_LOW_PRIORITY_NODES" with LOW_PRI_TARGET_NODES
-sed -e "s/TES_POOL_NAME/$POOL_ID/g" -e "s/TES_VM_SIZE/$VM_SIZE/g" -e "s/TES_LOW_PRIORITY_NODES/$LOW_PRI_TARGET_NODES/g" tes_pool_config.json > tes_pool_config_TMP.json
+if [ -n "$TEMPLATE_POOL_ID" ]; then
+    echo "Downloading pool config to template file: $POOL_CONFIG_JSON"
+    az batch pool show --account-name "$BATCH_ACCOUNT_NAME" --pool-id "$TEMPLATE_POOL_ID"  > "$POOL_CONFIG_JSON"
+fi
 
 # If the pool doesn't exist, create it
 # NOTE: Do not assign a principalID or ClientID to the managed identity otherwise it will not be added to the pool
-# az batch pool show --pool-id $POOL_ID >/dev/null 2>&1 || az batch pool create --json-file tes_pool_config_TMP.json
 # If there's already a pool
-if [ "$(az batch pool show --pool-id "$POOL_ID" --query "id" --output tsv)" == "$POOL_ID" ]; then
+POOL_RESULT="$(az batch pool show --pool-id "$POOL_ID" --query "id" --output tsv 2>/dev/null)"
+if [ "$POOL_RESULT" == "$POOL_ID" ]; then
     echo "The pool $POOL_ID already exists."
 else
     echo "The pool $POOL_ID does not exist or is not in a steady state. Creating the pool..."
-    # az batch pool create --json-file tes_pool_config_TMP.json
+    # The Azure cli doesn't offer enough support for the type of pool we want so we must use the python SDK
     python3 <<EOF
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.batch import BatchManagementClient
-from azure.mgmt.batch.models import Pool, UserAssignedIdentities, ScaleSettings, FixedScaleSettings, AutoUserSpecification, UserIdentity, StartTask, BatchPoolIdentity, VirtualMachineConfiguration, ImageReference, DeploymentConfiguration, VirtualMachineConfiguration
+from azure.mgmt.batch.models import Pool, UserAssignedIdentities, ScaleSettings, FixedScaleSettings, AutoUserSpecification, UserIdentity, StartTask, BatchPoolIdentity, VirtualMachineConfiguration, ImageReference, DeploymentConfiguration, VirtualMachineConfiguration, DiskEncryptionConfiguration 
 import os, json
+from datetime import datetime
 
 # Get the environment variables
 SUBSCRIPTION_ID = os.environ["SUBSCRIPTION_ID"]
 RESOURCE_GROUP = os.environ["RESOURCE_GROUP"]
 BATCH_ACCOUNT_NAME = os.environ["BATCH_ACCOUNT_NAME"]
 BATCH_ACCOUNT_URL = os.environ["BATCH_ACCOUNT_URL"]
+VM_SIZE = os.environ["VM_SIZE"]
+LOW_PRI_TARGET_NODES = os.environ["LOW_PRI_TARGET_NODES"]
 WGET_URL = os.environ["WGET_URL"]
 POOL_ID = os.environ['POOL_ID']
+POOL_CONFIG_JSON = os.environ['POOL_CONFIG_JSON']
 
 # Create a Batch management client
 credential = DefaultAzureCredential()
 batch_management_client = BatchManagementClient(credential, SUBSCRIPTION_ID)
 
-# Load the parameters from tes_pool_config_temp.json:
-with open('tes_pool_config_TMP.json', 'r') as file:
+# Load the parameters from tes_pool_config.json:
+with open(POOL_CONFIG_JSON, 'r') as file:
     pool_config = json.load(file)
+
+# If resizeTimeout is a quasi-date convert it to a timedelta = 'PT15M'
+if isinstance(pool_config['resizeTimeout'], str):
+    time_obj = datetime.strptime(pool_config['resizeTimeout'], "%H:%M:%S")
+    pool_config['resizeTimeout'] = f"PT{time_obj.hour}H{time_obj.minute}M{time_obj.second}S"
+    print(f"Converted resizeTimeout to {pool_config['resizeTimeout']}")
 
 # Create a pool with a user-assigned managed identity (this may only be done with the management client)
 pool = Pool(
     # id=POOL_ID,
     display_name=POOL_ID,
-    vm_size=pool_config['vmSize'],
+    vm_size=VM_SIZE,
     task_slots_per_node=pool_config['taskSlotsPerNode'],
     target_node_communication_mode=pool_config['targetNodeCommunicationMode'],
     metadata=pool_config['metadata'],
-    start_task=StartTask(
-        command_line=pool_config['startTask']['commandLine'],
-        user_identity=UserIdentity(
-            auto_user=AutoUserSpecification(scope='pool', elevation_level='admin')
-        ),
-        max_task_retry_count=pool_config['startTask']['maxTaskRetryCount'],
-        wait_for_success=pool_config['startTask']['waitForSuccess']
-    ),
+    start_task=StartTask.from_dict(pool_config['startTask']),
     scale_settings=ScaleSettings(
         fixed_scale=FixedScaleSettings(
             resize_timeout=pool_config['resizeTimeout'],
             target_dedicated_nodes=0,
-            target_low_priority_nodes=pool_config['targetLowPriorityNodes'],
+            target_low_priority_nodes=LOW_PRI_TARGET_NODES,
             node_deallocation_option='Requeue') # We specifically ignore this setting
     ),
     deployment_configuration=DeploymentConfiguration(
         virtual_machine_configuration=VirtualMachineConfiguration(
-            image_reference=ImageReference(
-                publisher=pool_config['virtualMachineConfiguration']['imageReference']['publisher'],
-                offer=pool_config['virtualMachineConfiguration']['imageReference']['offer'],
-                sku=pool_config['virtualMachineConfiguration']['imageReference']['sku'],
-                version='latest'
-            ),
-            node_agent_sku_id=pool_config['virtualMachineConfiguration']['nodeAgentSKUId']
+            image_reference=ImageReference.from_dict(pool_config['virtualMachineConfiguration']['imageReference']),
+            node_agent_sku_id=pool_config['virtualMachineConfiguration']['nodeAgentSkuId']
         ),
     ),
     identity=BatchPoolIdentity(
@@ -162,12 +170,19 @@ pool = Pool(
         }
     )
 )
+# Add disk encryption settings if they are present
+if ('diskEncryptionConfiguration' in pool_config['virtualMachineConfiguration'] and pool_config['virtualMachineConfiguration']['diskEncryptionConfiguration'] and 'targets' in pool_config['virtualMachineConfiguration']['diskEncryptionConfiguration']):
+    pool.deployment_configuration.virtual_machine_configuration.disk_encryption_configuration = DiskEncryptionConfiguration.from_dict(pool_config['virtualMachineConfiguration']['diskEncryptionConfiguration'])
+# TODO: Add data disks if they are present
+
 
 batch_management_client.pool.create(
     resource_group_name=RESOURCE_GROUP, 
     account_name=BATCH_ACCOUNT_NAME, 
     pool_name=POOL_ID, parameters=pool)
+print(f"Pool {POOL_ID} created on resource group {RESOURCE_GROUP}, account {BATCH_ACCOUNT_NAME}, pool {POOL_ID}")
 EOF
+    echo -e "\n\n"
 fi
 
 # # Check if the lowpriority target nodes is 0, if so set it to 1
@@ -177,6 +192,7 @@ fi
 # fi
 
 # Create a new job, if the job doesn't exist
+echo "Creating a job $JOB_ID in pool $POOL_ID"
 az batch job show --job-id $JOB_ID >/dev/null 2>&1 || az batch job create --id $JOB_ID --pool-id $POOL_ID
 
 # Get the task state
@@ -190,6 +206,7 @@ if [ "$TASK_STATE" ]; then
 fi
 
 # Add a task to the job (we must use python3 so we can have the task run as admin)
+echo "Adding task $DEBUG_TASK_NAME to job $JOB_ID"
 export PRIMARY_KEY=$(az batch account keys list --name "$BATCH_ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" --query "primary" -o tsv)
 
 python3 <<EOF
@@ -225,3 +242,4 @@ batch_service_client.task.add(JOB_ID, task)
 
 print(f"Task {DEBUG_TASK_NAME} added to job {JOB_ID}")
 EOF
+
