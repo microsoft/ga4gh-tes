@@ -41,6 +41,7 @@ namespace TesApi.Tests.Runner
         static readonly Uri InternalBlobUrl = new("http://foo.bar/tes-internal");
         static readonly Uri InternalBlobUrlWithSas = new($"{InternalBlobUrl}?{SasToken}");
         const string GlobalManagedIdentity = $@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/globalId";
+        private const string DrsHubApiHost = "https://drshub.foo.bar";
 
 
         const string ExternalStorageAccountName = "external";
@@ -142,7 +143,7 @@ namespace TesApi.Tests.Runner
 
             Assert.IsNotNull(nodeTask);
 
-            Assert.IsTrue(nodeTask.Inputs.Count == tesTask.Inputs.Count - 1);
+            Assert.IsTrue(nodeTask.Inputs!.Count == tesTask.Inputs.Count - 1);
         }
 
 
@@ -332,6 +333,17 @@ namespace TesApi.Tests.Runner
             Assert.AreEqual("file", url.BlobName);
         }
 
+        [TestMethod]
+        public async Task ToNodeTaskAsync_DrsHubApiHostIsProvided_DrsHubApiHostIsSetInNodeTask()
+        {
+            var options = OptionsWithoutAdditionalInputs();
+
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
+
+            Assert.IsNotNull(nodeTask);
+            Assert.AreEqual(DrsHubApiHost, nodeTask.RuntimeOptions.Terra!.DrsHubApiHost);
+        }
+
         private static NodeTaskConversionOptions OptionsWithAdditionalInputs()
         {
             var inputs = new[]
@@ -360,7 +372,8 @@ namespace TesApi.Tests.Runner
         {
             return new NodeTaskConversionOptions(AdditionalInputs: null,
                 DefaultStorageAccountName: DefaultStorageAccountName,
-                GlobalManagedIdentity: GlobalManagedIdentity);
+                GlobalManagedIdentity: GlobalManagedIdentity,
+                DrsHubApiHost: DrsHubApiHost);
         }
 
         private static TesTask GetTestTesTask()

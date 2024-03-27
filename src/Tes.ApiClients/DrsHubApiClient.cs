@@ -11,7 +11,7 @@ namespace Tes.ApiClients
 {
     public class DrsHubApiClient : TerraApiClient
     {
-        private const string DrsHubApiSegments = "/api/v4/drs";       
+        private const string DrsHubApiSegments = "/api/v4/drs";
         private static readonly IMemoryCache SharedMemoryCache = new MemoryCache(new MemoryCacheOptions());
 
         /// <summary>
@@ -36,8 +36,8 @@ namespace Tes.ApiClients
         }
 
         public static DrsHubApiClient CreateDrsHubApiClient(string apiUrl, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig)
-        {            
-            return CreateTerraApiClient<DrsHubApiClient>(apiUrl, SharedMemoryCache, tokenCredential,azureCloudIdentityConfig);
+        {
+            return CreateTerraApiClient<DrsHubApiClient>(apiUrl, SharedMemoryCache, tokenCredential, azureCloudIdentityConfig);
         }
 
         public virtual async Task<DrsResolveApiResponse> ResolveDrsUriAsync(Uri drsUri, CancellationToken cancellationToken = default)
@@ -75,14 +75,14 @@ namespace Tes.ApiClients
         }
 
         public HttpContent GetDrsResolveRequestContent(Uri drsUri)
-        {        
+        {
             ArgumentNullException.ThrowIfNull(drsUri);
 
             var drsResolveApiRequestBody = new DrsResolveRequestContent
             {
-                    Url = drsUri.AbsoluteUri,
-                    CloudPlatform = CloudPlatform.Azure,
-                    Fields = new List<string> { "accessUrl" }
+                Url = drsUri.AbsoluteUri,
+                CloudPlatform = CloudPlatform.Azure,
+                Fields = new List<string> { "accessUrl" }
             };
 
             return CreateJsonStringContent(drsResolveApiRequestBody);
