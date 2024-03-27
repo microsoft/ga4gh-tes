@@ -31,14 +31,13 @@ namespace Tes.Repository
             // Create, configure and return JsonSerializerOptions.
             JsonSerializerOptions options = new(JsonSerializerOptions.Default)
             {
-                // Be somewhat minimilistic when serializing. Non-null property values (for any given type) are still written.
+                // Be somewhat minimilistic when serializing. Non-null default property values (for any given type) are still written.
                 DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
 
                 // Required since adding modifiers to the default TypeInfoResolver appears to not be possible.
                 TypeInfoResolver = GetAndConfigureTypeInfoResolver()
             };
 
-            options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
             options.MakeReadOnly(populateMissingResolver: true);
             return options;
 
