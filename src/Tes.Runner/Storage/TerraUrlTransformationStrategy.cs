@@ -18,9 +18,6 @@ namespace Tes.Runner.Storage
 {
     public class TerraUrlTransformationStrategy : IUrlTransformationStrategy
     {
-        public const int TokenExpirationInSeconds = 3600 * 24; //1 day, max time allowed by Terra. 
-        public const int CacheExpirationInSeconds = TokenExpirationInSeconds - 1800; // 30 minutes less than token expiration
-
         private const int MaxNumberOfContainerResources = 10000;
         private const string LzStorageAccountNamePattern = "lz[0-9a-f]*";
 
@@ -30,7 +27,7 @@ namespace Tes.Runner.Storage
         private static IMemoryCache memoryCache = new MemoryCache(new MemoryCacheOptions());
         private readonly int cacheExpirationInSeconds;
 
-        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig, int cacheExpirationInSeconds = CacheExpirationInSeconds)
+        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig, int cacheExpirationInSeconds = TerraConfigConstants.CacheExpirationInSeconds)
         {
             ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
             ArgumentException.ThrowIfNullOrEmpty(terraRuntimeOptions.WsmApiHost, nameof(terraRuntimeOptions.WsmApiHost));
@@ -41,7 +38,7 @@ namespace Tes.Runner.Storage
         }
 
 
-        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TerraWsmApiClient terraWsmApiClient, int cacheExpirationInSeconds = CacheExpirationInSeconds)
+        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TerraWsmApiClient terraWsmApiClient, int cacheExpirationInSeconds = TerraConfigConstants.CacheExpirationInSeconds)
         {
             ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
             ArgumentNullException.ThrowIfNull(terraWsmApiClient);
@@ -128,8 +125,7 @@ namespace Tes.Runner.Storage
         private SasTokenApiParameters CreateTokenParamsFromOptions(BlobSasPermissions sasPermissions)
         {
             return new(
-                terraRuntimeOptions.SasAllowedIpRange ?? string.Empty,
-                TokenExpirationInSeconds,
+                terraRuntimeOptions.SasAllowedIpRange ?? string.Empty, TerraConfigConstants.TokenExpirationInSeconds,
                 //setting blob name to empty string to get a SAS token for the container
                 ToWsmBlobSasPermissions(sasPermissions), SasBlobName: String.Empty);
         }
@@ -263,7 +259,7 @@ namespace Tes.Runner.Storage
 
                 var resourceId = Guid.Parse(metadata.ResourceId);
 
-                memoryCache.Set(cacheKey, resourceId, TimeSpan.FromSeconds(CacheExpirationInSeconds));
+                memoryCache.Set(cacheKey, resourceId, TimeSpan.FromSeconds(TerraConfigConstants.CacheExpirationInSeconds));
 
                 return resourceId;
             }

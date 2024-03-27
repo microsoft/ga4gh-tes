@@ -1,13 +1,12 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Azure.Core;
 using Azure.Storage.Sas;
+using CommonUtilities;
 using Microsoft.Extensions.Logging;
+using Tes.ApiClients;
+using Tes.Runner.Models;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Storage
@@ -15,30 +14,43 @@ namespace Tes.Runner.Storage
     internal class DrsTransformationStrategy : IUrlTransformationStrategy
     {
         private readonly ILogger<DrsTransformationStrategy> logger = PipelineLoggerFactory.Create<DrsTransformationStrategy>();
-        private static DrsHubApiClient drsHubApiClient; 
+        private static DrsHubApiClient drsHubApiClient;
         private const string DrsScheme = "drs://";
 
 
         private readonly Uri drsHubUri;
 
-        public DrsTransformationStrategy(string drsHubUrl)
+        public DrsTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig, int cacheExpirationInSeconds = TerraConfigConstants.CacheExpirationInSeconds)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(drsHubUrl);
-            drsHubApiClient = new DrsHubApiClient(drsHubUrl);
+            ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
+            ArgumentException.ThrowIfNullOrEmpty(terraRuntimeOptions.DrsHubApiHost, nameof(terraRuntimeOptions.DrsHubApiHost));
 
-            drsHubUri = new Uri(drsHubUrl);
+            drsHubApiClient = DrsHubApiClient.CreateDrsHubApiClient(terraRuntimeOptions.DrsHubApiHost, tokenCredential, azureCloudIdentityConfig);
         }
 
         public async Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions = 0)
         {
             var sourceUri = new Uri(sourceUrl);
 
-            if(!ContainsDrsScheme(sourceUri.Scheme))
+            if (!ContainsDrsScheme(sourceUri.Scheme))
             {
                 return sourceUri;
             }
 
+            var response = await drsHubApiClient.ResolveDrsUriAsync(sourceUri);
 
+            try
+            {
+                var sasUri = new Uri(response.AccessUrl.Url);
+
+                return sasUri;
+            }
+            catch (Exception e)
+            {
+                //we are not logging the response content here as it may contain sensitive information
+                logger.LogError(e, "The URL returned by DRSHub API is invalid.");
+                throw;
+            }
         }
 
         private bool ContainsDrsScheme(string scheme)
