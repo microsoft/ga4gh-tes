@@ -17,7 +17,7 @@ namespace Tes.Runner.Test.Storage
 
         [TestInitialize]
         public void SetUp()
-        {           
+        {
             drsHubApiClientMock = new Mock<DrsHubApiClient>();
             drsUriTransformationStrategy = new DrsUriTransformationStrategy(drsHubApiClientMock.Object);
         }
