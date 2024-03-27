@@ -10,6 +10,10 @@
 ##      ['identity']['userAssignedIdentities'][0]['resourceId'] to your own
 ##
 ## Create a pool config, pass in 5 args: SUBSCRIPTION_ID RESOURCE_GROUP WGET_URL TEMPLATE_POOL_ID POOL_CONFIG_JSON
+##      Example: a0e0e744-06b2-4fd3-9230-ebf8ef1ac4c8 test-coa4-southcentral-rg 
+##               https://cromwellsc95a88970e25.blob.core.windows.net/cromwell-executions/test/f7fd31e3-61e7-48b3-b895-8b291bbecbdb/call-hello/tes_task/batch_script 
+##               TES-OY5BKMMX-A1_v2-2m4tvpnjrgv74kjiyxtffht2mqzd2nqn-yhlj3wwu (pool to copy from)
+##               tes_pool_config.json (dest pool config file)
 ##
 ## You can also export and define these in your shell environment, and the script will use them as defaults.
 ## The values here won't work and are just for illutstrative purposes.
@@ -18,7 +22,7 @@
 ## NOTE: You must be familiar with how to remove Azure Batch pools before using this script. The script never sizes down
 ## the pool, so you must do this manually. Otherwise you will be charged for the VMs in the pool (which will run forever).
 ##
-## tes_pool_config.json must also be in the same directory as this script
+## Dependencies: Azure CLI, Python3, jq, wget + pyhton depdencies azure-batch, azure-mgmt-batch, azure-identity
 
 # If these variables are already defined in the environment, use them, otherwise use the defaults in this script
 export SUBSCRIPTION_ID=${SUBSCRIPTION_ID:-a0e0e744-06b2-4fd3-9230-ebf8ef1ac4c8}
