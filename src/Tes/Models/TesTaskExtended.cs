@@ -5,9 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
-using Newtonsoft.Json;
+using Tes.Converters;
 using Tes.Repository;
 using Tes.TaskSubmitters;
+using NewtonsoftJson = Newtonsoft.Json;
+using STJSerialization = System.Text.Json.Serialization;
 
 namespace Tes.Models
 {
@@ -36,6 +38,8 @@ namespace Tes.Models
         /// Date + time the task was completed, in RFC 3339 format. This is set by the system, not the client.
         /// </summary>
         /// <value>Date + time the task was completed, in RFC 3339 format. This is set by the system, not the client.</value>
+        [STJSerialization.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_JsonText))]
+        [NewtonsoftJson.JsonConverter(typeof(JsonValueConverterDateTimeOffsetRFC3339_Newtonsoft))]
         [DataMember(Name = "end_time")]
         public DateTimeOffset? EndTime { get; set; }
 
@@ -108,7 +112,7 @@ namespace Tes.Models
         /// <returns></returns>
         public TesTask Clone()
         {
-            return JsonConvert.DeserializeObject<TesTask>(ToJson());
+            return NewtonsoftJson.JsonConvert.DeserializeObject<TesTask>(ToJson());
         }
     }
 }

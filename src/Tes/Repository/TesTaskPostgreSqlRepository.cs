@@ -29,14 +29,17 @@ namespace Tes.Repository
         private static readonly Lazy<JsonSerializerOptions> GetSerializerOptions = new(() =>
         {
             // Create, configure and return JsonSerializerOptions.
-            return new(JsonSerializerOptions.Default)
+            JsonSerializerOptions options = new(JsonSerializerOptions.Default)
             {
-                // Be somewhat minimilistic when serializing. Non-null property values (for any given type) are still written.
+                // Be somewhat minimilistic when serializing. Non-null default property values (for any given type) are still written.
                 DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
 
                 // Required since adding modifiers to the default TypeInfoResolver appears to not be possible.
                 TypeInfoResolver = GetAndConfigureTypeInfoResolver()
             };
+
+            options.MakeReadOnly(populateMissingResolver: true);
+            return options;
 
             static IJsonTypeInfoResolver GetAndConfigureTypeInfoResolver()
             {
