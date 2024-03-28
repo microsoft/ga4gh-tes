@@ -354,12 +354,5 @@ namespace TesApi.Controllers
 
             return jsonResult;
         }
-
-        private enum TesView
-        {
-            MINIMAL,
-            BASIC,
-            FULL
-        }
     }
 }

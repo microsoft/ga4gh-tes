@@ -44,6 +44,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.ApiClients", "src\Tes.A
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.ApiClients.Tests", "src\Tes.ApiClients.Tests\Tes.ApiClients.Tests.csproj", "{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tes.SDK", "src\Tes.SDK\Tes.SDK.csproj", "{9625CB30-4159-4257-9032-B693EDCB5E9B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tes.SDK.Tests", "src\Tes.SDK.Tests\Tes.SDK.Tests.csproj", "{AE7ADB92-BEC6-4030-B62F-BDBB6AC53CB4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -102,6 +106,14 @@ Global
 		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FDD8FB67-8C8D-4D84-8D4C-FEEA644F4745}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9625CB30-4159-4257-9032-B693EDCB5E9B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9625CB30-4159-4257-9032-B693EDCB5E9B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9625CB30-4159-4257-9032-B693EDCB5E9B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9625CB30-4159-4257-9032-B693EDCB5E9B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AE7ADB92-BEC6-4030-B62F-BDBB6AC53CB4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AE7ADB92-BEC6-4030-B62F-BDBB6AC53CB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AE7ADB92-BEC6-4030-B62F-BDBB6AC53CB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AE7ADB92-BEC6-4030-B62F-BDBB6AC53CB4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
