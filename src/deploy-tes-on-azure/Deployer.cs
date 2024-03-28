@@ -10,7 +10,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -55,6 +54,7 @@ using Newtonsoft.Json;
 using Polly;
 using Polly.Retry;
 using Tes.Models;
+using Tes.SDK;
 using static Microsoft.Azure.Management.PostgreSQL.FlexibleServers.DatabasesOperationsExtensions;
 using static Microsoft.Azure.Management.PostgreSQL.FlexibleServers.ServersOperationsExtensions;
 using static Microsoft.Azure.Management.PostgreSQL.ServersOperationsExtensions;
@@ -78,11 +78,6 @@ namespace TesDeployer
 
         private static readonly System.TimeSpan longRetryWaitTime = System.TimeSpan.FromSeconds(15);
 
-        private static readonly AsyncRetryPolicy longRetryPolicy = Policy
-            .Handle<Exception>()
-            .WaitAndRetryAsync(60, retryAttempt => longRetryWaitTime,
-                (exception, timespan) => ConsoleEx.WriteLine($"Retrying task creation in {timespan} due to {exception.GetType().FullName}: {exception.Message}"));
-
         public const string ConfigurationContainerName = "configuration";
         public const string TesInternalContainerName = "tes-internal";
         public const string AllowedVmSizesFileName = "allowed-vm-sizes";
@@ -90,8 +85,6 @@ namespace TesDeployer
         public const string InputsContainerName = "inputs";
         public const string StorageAccountKeySecretName = "CoAStorageKey";
         public const string PostgresqlSslMode = "VerifyFull";
-
-        private record TesCredentials(string TesHostname, string TesUsername, string TesPassword);
 
         private readonly CancellationTokenSource cts = new();
 
@@ -247,8 +240,7 @@ namespace TesDeployer
                             try
                             {
                                 using var stream = tesCredentials.OpenRead();
-                                var (hostname, tesUsername, tesPassword) = System.Text.Json.JsonSerializer.Deserialize<TesCredentials>(stream,
-                                    new System.Text.Json.JsonSerializerOptions() { IncludeFields = true, PropertyNameCaseInsensitive = true });
+                                var (hostname, tesUsername, tesPassword) = TesCredentials.Deserialize(stream);
 
                                 if (kubernetesManager.TesHostname.Equals(hostname, StringComparison.InvariantCultureIgnoreCase) && string.IsNullOrEmpty(configuration.TesPassword))
                                 {
@@ -508,7 +500,7 @@ namespace TesDeployer
                                 configuration.VmSubnetName = string.IsNullOrEmpty(configuration.VmSubnetName) ? configuration.DefaultVmSubnetName : configuration.VmSubnetName;
                                 vnetAndSubnet = await CreateVnetAndSubnetsAsync(resourceGroup);
 
-                                if (string.IsNullOrEmpty(configuration.BatchNodesSubnetId))
+                                if (string.IsNullOrWhiteSpace(configuration.BatchNodesSubnetId))
                                 {
                                     configuration.BatchNodesSubnetId = vnetAndSubnet.Value.batchSubnet.Inner.Id;
                                 }
@@ -557,11 +549,8 @@ namespace TesDeployer
                         {
                             if (aksCluster is null && !configuration.ManualHelmDeployment)
                             {
-                                if (aksCluster is null && !configuration.ManualHelmDeployment)
-                                {
-                                    aksCluster = await ProvisionManagedClusterAsync(resourceGroup, managedIdentity, logAnalyticsWorkspace, vnetAndSubnet?.virtualNetwork, vnetAndSubnet?.vmSubnet.Name, configuration.PrivateNetworking.GetValueOrDefault());
-                                    await EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup);
-                                }
+                                aksCluster = await ProvisionManagedClusterAsync(resourceGroup, managedIdentity, logAnalyticsWorkspace, vnetAndSubnet?.virtualNetwork, vnetAndSubnet?.vmSubnet.Name, configuration.PrivateNetworking.GetValueOrDefault());
+                                await EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup);
                             }
                         }),
                         Task.Run(async () =>
@@ -614,8 +603,8 @@ namespace TesDeployer
                 if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
                 {
                     // Write credentials to JSON file in working directory
-                    var credentialsJson = System.Text.Json.JsonSerializer.Serialize<TesCredentials>(
-                        new(kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword));
+                    var credentialsJson = new TesCredentials(kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword)
+                        .Serialize();
 
                     var credentialsPath = Path.Combine(Directory.GetCurrentDirectory(), TesCredentialsFileName);
                     await File.WriteAllTextAsync(credentialsPath, credentialsJson, cts.Token);
@@ -667,7 +656,7 @@ namespace TesDeployer
 
                             var portForwardTask = startPortForward(tokenSource.Token);
                             await Task.Delay(longRetryWaitTime * 2, tokenSource.Token); // Give enough time for kubectl to standup the port forwarding.
-                            var runTestTask = RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+                            var runTestTask = RunTestTaskAsync("localhost:8088", batchAccount.LowPriorityCoreQuota > 0);
 
                             for (var task = await Task.WhenAny(portForwardTask, runTestTask);
                                 runTestTask != task;
@@ -805,57 +794,34 @@ namespace TesDeployer
             }
         }
 
-        private async Task<int> TestTaskAsync(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859:Use concrete types when possible for improved performance", Justification = "We are explicitly using the contract specified in the ITesClient interface.")]
+        private async Task<bool> RunTesTaskImplAsync(string tesHostname, bool isPreemptible)
         {
-            using var client = new HttpClient();
-
-            var task = new TesTask()
+            TesTask testTesTask = new();
+            testTesTask.Resources.Preemptible = isPreemptible;
+            testTesTask.Executors.Add(new TesExecutor
             {
-                Inputs = [],
-                Outputs = [],
-                Executors =
-                [
-                    new()
-                    {
-                        Image = "ubuntu:22.04",
-                        Command = ["echo", "hello world"],
-                    }
-                ],
-                Resources = new()
-                {
-                    Preemptible = preemptible
-                }
-            };
+                Image = "ubuntu",
+                Command = ["/bin/sh", "-c", "cat /proc/sys/kernel/random/uuid"],
+            });
 
-            var content = new StringContent(JsonConvert.SerializeObject(task), Encoding.UTF8, "application/json");
-            var requestUri = $"http://{tesEndpoint}/v1/tasks";
+            using ITesClient tesClient = new TesClient(new($"http://{tesHostname}"));
+            var completedTask = await tesClient.CreateAndWaitTilDoneAsync(testTesTask, cts.Token);
+            ConsoleEx.WriteLine($"TES Task State: {completedTask.State}");
 
-            Dictionary<string, string> response = null;
-            await longRetryPolicy.ExecuteAsync(
-                async ct =>
-                {
-                    var responseBody = await client.PostAsync(requestUri, content, ct);
-                    var body = await responseBody.Content.ReadAsStringAsync(ct);
-                    try
-                    {
-                        response = JsonConvert.DeserializeObject<Dictionary<string, string>>(body);
-                    }
-                    catch (JsonReaderException exception)
-                    {
-                        exception.Data.Add("Body", body);
-                        throw;
-                    }
-                },
-                cts.Token);
+            if (completedTask.State != TesState.COMPLETEEnum)
+            {
+                ConsoleEx.WriteLine($"Failure reason: {completedTask.FailureReason}");
+            }
 
-            return await IsTaskSuccessfulAfterLongPollingAsync(client, $"{requestUri}/{response["id"]}?view=full") ? 0 : 1;
+            return completedTask.State == TesState.COMPLETEEnum;
         }
 
-        private async Task<bool> RunTestTask(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
+        private async Task<bool> RunTestTaskAsync(string tesEndpoint, bool isPreemptible)
         {
             var startTime = DateTime.UtcNow;
             var line = ConsoleEx.WriteLine("Running a test task...");
-            var isTestWorkflowSuccessful = (await TestTaskAsync(tesEndpoint, preemptible, tesUsername, tesPassword)) < 1;
+            var isTestWorkflowSuccessful = await RunTesTaskImplAsync(tesEndpoint, isPreemptible);
             WriteExecutionTime(line, startTime);
 
             if (isTestWorkflowSuccessful)
@@ -876,50 +842,6 @@ namespace TesDeployer
             }
 
             return isTestWorkflowSuccessful;
-        }
-
-        private async Task<bool> IsTaskSuccessfulAfterLongPollingAsync(HttpClient client, string taskEndpoint)
-        {
-            while (true)
-            {
-                try
-                {
-                    var responseBody = await client.GetAsync(taskEndpoint, cts.Token);
-                    var content = await responseBody.Content.ReadAsStringAsync(cts.Token);
-                    var response = JsonConvert.DeserializeObject<TesTask>(content);
-
-                    if (response.State == TesState.COMPLETEEnum)
-                    {
-                        if (string.IsNullOrWhiteSpace(response.FailureReason))
-                        {
-                            ConsoleEx.WriteLine($"TES Task State: {response.State}");
-                            return true;
-                        }
-
-                        ConsoleEx.WriteLine($"Failure reason: {response.FailureReason}");
-                        return false;
-                    }
-                    else if (response.State == TesState.EXECUTORERROREnum || response.State == TesState.SYSTEMERROREnum || response.State == TesState.CANCELEDEnum)
-                    {
-                        ConsoleEx.WriteLine($"TES Task State: {response.State}");
-                        ConsoleEx.WriteLine(content);
-
-                        if (!string.IsNullOrWhiteSpace(response.FailureReason))
-                        {
-                            ConsoleEx.WriteLine($"Failure reason: {response.FailureReason}");
-                        }
-
-                        return false;
-                    }
-                }
-                catch (Exception exc)
-                {
-                    // "Server is busy" occasionally can be ignored
-                    ConsoleEx.WriteLine($"Transient error: '{exc.Message}' Will retry again in 10s.");
-                }
-
-                await Task.Delay(System.TimeSpan.FromSeconds(10), cts.Token);
-            }
         }
 
         private async Task<Vault> ValidateAndGetExistingKeyVaultAsync()
@@ -2277,7 +2199,7 @@ namespace TesDeployer
             }
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1861:Avoid constant arrays as arguments", Justification = "<Pending>")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1861:Avoid constant arrays as arguments", Justification = "Called only once")]
         private void ValidateInitialCommandLineArgs()
         {
             void ThrowIfProvidedForUpdate(object attributeValue, string attributeName)
@@ -2523,16 +2445,10 @@ namespace TesDeployer
             await container.GetBlobClient(blobName).UploadAsync(BinaryData.FromString(content), true, token);
         }
 
-        private class ValidationException : Exception
+        private class ValidationException(string reason, bool displayExample = true) : Exception
         {
-            public string Reason { get; set; }
-            public bool DisplayExample { get; set; }
-
-            public ValidationException(string reason, bool displayExample = true)
-            {
-                Reason = reason;
-                DisplayExample = displayExample;
-            }
+            public string Reason { get; } = reason;
+            public bool DisplayExample { get; } = displayExample;
         }
     }
 }
