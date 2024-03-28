@@ -19,6 +19,7 @@ namespace Tes.SDK
         };
 
         private readonly HttpClient _httpClient;
+        private readonly bool _httpClientAllocated;
         private readonly Uri _baseUrl;
         private readonly string? _username;
         private readonly string? _password;
@@ -41,21 +42,39 @@ namespace Tes.SDK
         /// <inheritdoc/>
         public string SdkVersion { get; } = "0.1.0";
 
-        public TesClient(HttpClient httpClient, Uri baseUrl, string? username = null, string? password = null)
+        private TesClient(bool clientAllocated, HttpClient httpClient, Uri baseUrl, string? username = null, string? password = null)
         {
+            ArgumentNullException.ThrowIfNull(httpClient);
             ArgumentNullException.ThrowIfNull(baseUrl);
+
+            if (string.IsNullOrWhiteSpace(username) != string.IsNullOrEmpty(password))
+            {
+                throw new ArgumentException("'username' and 'password' must be both provided or neither provided.", nameof(password));
+            }
+
+            // https://datatracker.ietf.org/doc/html/rfc7617#section-2 paragraph starting "Furthermore, a user-id containing a colon character is invalid,"
+            if (username?.Contains(':') ?? false)
+            {
+                throw new ArgumentException("'username' must not contain ':'.", nameof(username));
+            }
+
+            _httpClientAllocated = clientAllocated;
             _httpClient = httpClient;
             _baseUrl = baseUrl;
             _username = username;
             _password = password;
         }
 
+        public TesClient(HttpClient httpClient, Uri baseUrl, string? username = null, string? password = null)
+            : this(false, httpClient, baseUrl, username, password)
+        { }
+
         public TesClient(Uri baseUrl)
-            : this(new(), baseUrl)
+            : this(true, new(), baseUrl)
         { }
 
         public TesClient(Uri baseUrl, string username, string password)
-            : this(new(), baseUrl, username, password)
+            : this(true, new(), baseUrl, username, password)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(username);
             ArgumentException.ThrowIfNullOrEmpty(password);
@@ -63,7 +82,7 @@ namespace Tes.SDK
 
         private void SetAuthorizationHeader(HttpRequestMessage request)
         {
-            if (!string.IsNullOrWhiteSpace(_username) && !string.IsNullOrWhiteSpace(_password))
+            if (!string.IsNullOrWhiteSpace(_username) && !string.IsNullOrEmpty(_password))
             {
                 request.Headers.Authorization = new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_username}:{_password}")));
             }
@@ -164,7 +183,10 @@ namespace Tes.SDK
             {
                 if (disposing)
                 {
-                    _httpClient.Dispose();
+                    if (_httpClientAllocated)
+                    {
+                        _httpClient.Dispose();
+                    }
                 }
 
                 disposedValue = true;
