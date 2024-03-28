@@ -25,6 +25,7 @@ using Newtonsoft.Json;
 using Swashbuckle.AspNetCore.Annotations;
 using Tes.Models;
 using Tes.Repository;
+using Tes.TaskSubmitters;
 using TesApi.Attributes;
 using TesApi.Web;
 
@@ -39,6 +40,7 @@ namespace TesApi.Controllers
         private readonly IRepository<TesTask> repository;
         private readonly ILogger<TaskServiceApiController> logger;
         private readonly IAzureProxy azureProxy;
+        private readonly TesServiceInfo serviceInfo;
 
         private static readonly Dictionary<TesView, JsonSerializerSettings> TesJsonSerializerSettings = new()
         {
@@ -53,11 +55,13 @@ namespace TesApi.Controllers
         /// <param name="repository">The main <see cref="TesTask"/> database repository</param>
         /// <param name="logger">The logger instance</param>
         /// <param name="azureProxy">The Azure Proxy instance</param>
-        public TaskServiceApiController(IRepository<TesTask> repository, ILogger<TaskServiceApiController> logger, IAzureProxy azureProxy)
+        /// <param name="serviceInfo">The GA4GH TES service information</param>
+        public TaskServiceApiController(IRepository<TesTask> repository, ILogger<TaskServiceApiController> logger, IAzureProxy azureProxy, TesServiceInfo serviceInfo)
         {
             this.repository = repository;
             this.logger = logger;
             this.azureProxy = azureProxy;
+            this.serviceInfo = serviceInfo;
         }
 
         /// <summary>
@@ -160,17 +164,9 @@ namespace TesApi.Controllers
 
             tesTask.State = TesState.QUEUEDEnum;
             tesTask.CreationTime = DateTimeOffset.UtcNow;
+            tesTask.TaskSubmitter = TaskSubmitter.Parse(tesTask);
 
-            // example: /cromwell-executions/test/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/execution/script
-            tesTask.WorkflowId = tesTask
-                ?.Inputs
-                ?.FirstOrDefault(i => i?.Name?.Equals("commandScript", StringComparison.OrdinalIgnoreCase) == true)
-                ?.Path
-                ?.Split('/', StringSplitOptions.RemoveEmptyEntries)
-                ?.Skip(2)
-                ?.FirstOrDefault();
-
-            // Prefix the TES task id with first eight characters of root Cromwell job id to facilitate easier debugging
+            // Prefix the TES task id with first eight characters of workflow id to facilitate easier debugging
             tesTask.Id = tesTask.CreateId();
 
             if (tesTask?.Resources is not null)
@@ -244,15 +240,7 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(TesServiceInfo), description: "")]
         public virtual IActionResult GetServiceInfo()
         {
-            var serviceInfo = new TesServiceInfo
-            {
-                Name = "GA4GH Task Execution Service",
-                Doc = string.Empty,
-                Storage = [],
-                TesResourcesSupportedBackendParameters = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList()
-            };
-
-            logger.LogInformation($"Name: {serviceInfo.Name} Doc: {serviceInfo.Doc} Storage: {serviceInfo.Storage} TesResourcesSupportedBackendParameters: {string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters)}");
+            logger.LogInformation($"Id: {serviceInfo.Id} Name: {serviceInfo.Name} Type: {serviceInfo.Type} Description: {serviceInfo.Description} Organization: {serviceInfo.Organization} ContactUrl: {serviceInfo.ContactUrl} DocumentationUrl: {serviceInfo.DocumentationUrl} CreatedAt:{serviceInfo.CreatedAt} UpdatedAt:{serviceInfo.UpdatedAt} Environment: {serviceInfo.Environment} Version: {serviceInfo.Version} Storage: {string.Join(",", serviceInfo.Storage ?? new())} TesResourcesSupportedBackendParameters: {string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters ?? new())}");
             return StatusCode(200, serviceInfo);
         }
 
@@ -365,13 +353,6 @@ namespace TesApi.Controllers
             var jsonResult = new JsonResult(value, TesJsonSerializerSettings[viewEnum]) { StatusCode = 200 };
 
             return jsonResult;
-        }
-
-        private enum TesView
-        {
-            MINIMAL,
-            BASIC,
-            FULL
         }
     }
 }

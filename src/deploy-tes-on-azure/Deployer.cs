@@ -10,7 +10,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +18,6 @@ using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.ContainerService;
 using Azure.ResourceManager.ManagedServiceIdentities;
-using Azure.ResourceManager.ManagedServiceIdentities.Models;
 using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Network.Models;
 using Azure.ResourceManager.Resources;
@@ -56,6 +54,7 @@ using Newtonsoft.Json;
 using Polly;
 using Polly.Retry;
 using Tes.Models;
+using Tes.SDK;
 using static Microsoft.Azure.Management.PostgreSQL.FlexibleServers.DatabasesOperationsExtensions;
 using static Microsoft.Azure.Management.PostgreSQL.FlexibleServers.ServersOperationsExtensions;
 using static Microsoft.Azure.Management.PostgreSQL.ServersOperationsExtensions;
@@ -67,7 +66,7 @@ using KeyVaultManagementClient = Microsoft.Azure.Management.KeyVault.KeyVaultMan
 
 namespace TesDeployer
 {
-    public class Deployer
+    public class Deployer(Configuration configuration)
     {
         private static readonly AsyncRetryPolicy roleAssignmentHashConflictRetryPolicy = Policy
             .Handle<Microsoft.Rest.Azure.CloudException>(cloudException => cloudException.Body.Code.Equals("HashConflictOnDifferentRoleAssignmentIds"))
@@ -79,11 +78,6 @@ namespace TesDeployer
 
         private static readonly System.TimeSpan longRetryWaitTime = System.TimeSpan.FromSeconds(15);
 
-        private static readonly AsyncRetryPolicy longRetryPolicy = Policy
-            .Handle<Exception>()
-            .WaitAndRetryAsync(60, retryAttempt => longRetryWaitTime,
-            (exception, timespan) => ConsoleEx.WriteLine($"Retrying task creation in {timespan} due to {exception.GetType().FullName}: {exception.Message}"));
-
         public const string ConfigurationContainerName = "configuration";
         public const string TesInternalContainerName = "tes-internal";
         public const string AllowedVmSizesFileName = "allowed-vm-sizes";
@@ -92,12 +86,10 @@ namespace TesDeployer
         public const string StorageAccountKeySecretName = "CoAStorageKey";
         public const string PostgresqlSslMode = "VerifyFull";
 
-        private record TesCredentials(string TesHostname, string TesUsername, string TesPassword);
-
         private readonly CancellationTokenSource cts = new();
 
-        private readonly List<string> requiredResourceProviders = new()
-        {
+        private readonly List<string> requiredResourceProviders =
+        [
             "Microsoft.Authorization",
             "Microsoft.Batch",
             "Microsoft.Compute",
@@ -109,15 +101,15 @@ namespace TesDeployer
             "Microsoft.Network",
             "Microsoft.Storage",
             "Microsoft.DBforPostgreSQL"
-        };
+        ];
 
         private readonly Dictionary<string, List<string>> requiredResourceProviderFeatures = new()
         {
             { "Microsoft.Compute", new() { "EncryptionAtHost" } }
         };
-
-        private Configuration configuration { get; set; }
+#pragma warning disable CA1859 // Use concrete types when possible for improved performance
         private ITokenProvider tokenProvider;
+#pragma warning restore CA1859 // Use concrete types when possible for improved performance
         private TokenCredentials tokenCredentials;
         private IAzure azureSubscriptionClient { get; set; }
         private Microsoft.Azure.Management.Fluent.Azure.IAuthenticated azureClient { get; set; }
@@ -129,9 +121,6 @@ namespace TesDeployer
         private bool isResourceGroupCreated { get; set; }
         private KubernetesManager kubernetesManager { get; set; }
         internal static AzureCloudConfig azureCloudConfig { get; set; }
-
-        public Deployer(Configuration configuration)
-            => this.configuration = configuration;
 
         public async Task<int> DeployAsync()
         {
@@ -146,9 +135,10 @@ namespace TesDeployer
                     azureCloudConfig = await AzureCloudConfig.CreateAsync(configuration.AzureCloudName);
                 });
 
-                await Execute("Validating command line arguments...", async () =>
+                await Execute("Validating command line arguments...", () =>
                 {
                     ValidateInitialCommandLineArgs();
+                    return Task.CompletedTask;
                 });
 
                 await ValidateTokenProviderAsync();
@@ -249,8 +239,7 @@ namespace TesDeployer
                             try
                             {
                                 using var stream = tesCredentials.OpenRead();
-                                var (hostname, tesUsername, tesPassword) = System.Text.Json.JsonSerializer.Deserialize<TesCredentials>(stream,
-                                    new System.Text.Json.JsonSerializerOptions() { IncludeFields = true, PropertyNameCaseInsensitive = true });
+                                var (hostname, tesUsername, tesPassword) = TesCredentials.Deserialize(stream);
 
                                 if (kubernetesManager.TesHostname.Equals(hostname, StringComparison.InvariantCultureIgnoreCase) && string.IsNullOrEmpty(configuration.TesPassword))
                                 {
@@ -345,7 +334,6 @@ namespace TesDeployer
                     {
                         var hasAssignedNetworkContributor = await TryAssignMIAsNetworkContributorToResourceAsync(managedIdentity, resourceGroup);
                         var hasAssignedDataOwner = await TryAssignVmAsDataOwnerToStorageAccountAsync(managedIdentity, storageAccount);
-
                         waitForRoleAssignmentPropagation |= hasAssignedNetworkContributor || hasAssignedDataOwner;
                     }
 
@@ -362,6 +350,18 @@ namespace TesDeployer
                         await EnableWorkloadIdentity(existingAksCluster, managedIdentity, resourceGroup);
                         await kubernetesManager.RemovePodAadChart();
                     }
+
+                    if (installedVersion is null || installedVersion < new Version(5, 3, 1))
+                    {
+                        if (string.IsNullOrWhiteSpace(settings["DeploymentCreated"]))
+                        {
+                            settings["DeploymentCreated"] = settings["DeploymentUpdated"];
+                        }
+                    }
+
+                    //if (installedVersion is null || installedVersion < new Version(x, y, z))
+                    //{
+                    //}
 
                     if (waitForRoleAssignmentPropagation)
                     {
@@ -487,44 +487,44 @@ namespace TesDeployer
                         ConsoleEx.WriteLine($"Using existing Batch Account {batchAccount.Name}");
                     }
 
-                    await Task.WhenAll(new Task[]
-                    {
-                            Task.Run(async () =>
+                    await Task.WhenAll(
+                    [
+                        Task.Run(async () =>
+                        {
+                            if (vnetAndSubnet is null)
                             {
-                                if (vnetAndSubnet is null)
-                                {
-                                    configuration.VnetName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
-                                    configuration.PostgreSqlSubnetName = string.IsNullOrEmpty(configuration.PostgreSqlSubnetName) ? configuration.DefaultPostgreSqlSubnetName : configuration.PostgreSqlSubnetName;
-                                    configuration.BatchSubnetName = string.IsNullOrEmpty(configuration.BatchSubnetName) ? configuration.DefaultBatchSubnetName : configuration.BatchSubnetName;
-                                    configuration.VmSubnetName = string.IsNullOrEmpty(configuration.VmSubnetName) ? configuration.DefaultVmSubnetName : configuration.VmSubnetName;
-                                    vnetAndSubnet = await CreateVnetAndSubnetsAsync(resourceGroup);
+                                configuration.VnetName = SdkContext.RandomResourceName($"{configuration.MainIdentifierPrefix}-", 15);
+                                configuration.PostgreSqlSubnetName = string.IsNullOrEmpty(configuration.PostgreSqlSubnetName) ? configuration.DefaultPostgreSqlSubnetName : configuration.PostgreSqlSubnetName;
+                                configuration.BatchSubnetName = string.IsNullOrEmpty(configuration.BatchSubnetName) ? configuration.DefaultBatchSubnetName : configuration.BatchSubnetName;
+                                configuration.VmSubnetName = string.IsNullOrEmpty(configuration.VmSubnetName) ? configuration.DefaultVmSubnetName : configuration.VmSubnetName;
+                                vnetAndSubnet = await CreateVnetAndSubnetsAsync(resourceGroup);
 
-                                    if (string.IsNullOrEmpty(this.configuration.BatchNodesSubnetId))
-                                    {
-                                        this.configuration.BatchNodesSubnetId = vnetAndSubnet.Value.batchSubnet.Inner.Id;
-                                    }
-                                }
-                            }),
-                            Task.Run(async () =>
-                            {
                                 if (string.IsNullOrWhiteSpace(configuration.LogAnalyticsArmId))
                                 {
-                                    var workspaceName = SdkContext.RandomResourceName(configuration.MainIdentifierPrefix, 15);
-                                    logAnalyticsWorkspace = await CreateLogAnalyticsWorkspaceResourceAsync(workspaceName);
-                                    configuration.LogAnalyticsArmId = logAnalyticsWorkspace.Id;
+                                    configuration.BatchNodesSubnetId = vnetAndSubnet.Value.batchSubnet.Inner.Id;
                                 }
-                            }),
-                            Task.Run(async () =>
+                            }
+                        }),
+                        Task.Run(async () =>
+                        {
+                            if (string.IsNullOrWhiteSpace(configuration.LogAnalyticsArmId))
                             {
-                                storageAccount ??= await CreateStorageAccountAsync();
-                                await CreateDefaultStorageContainersAsync(storageAccount);
-                                await WritePersonalizedFilesToStorageAccountAsync(storageAccount);
-                                await AssignVmAsContributorToStorageAccountAsync(managedIdentity, storageAccount);
-                                await AssignVmAsDataOwnerToStorageAccountAsync(managedIdentity, storageAccount);
-                                await AssignManagedIdOperatorToResourceAsync(managedIdentity, resourceGroup);
-                                await AssignMIAsNetworkContributorToResourceAsync(managedIdentity, resourceGroup);
-                            }),
-                    });
+                                var workspaceName = SdkContext.RandomResourceName(configuration.MainIdentifierPrefix, 15);
+                                logAnalyticsWorkspace = await CreateLogAnalyticsWorkspaceResourceAsync(workspaceName);
+                                configuration.LogAnalyticsArmId = logAnalyticsWorkspace.Id;
+                            }
+                        }),
+                        Task.Run(async () =>
+                        {
+                            storageAccount ??= await CreateStorageAccountAsync();
+                            await CreateDefaultStorageContainersAsync(storageAccount);
+                            await WritePersonalizedFilesToStorageAccountAsync(storageAccount);
+                            await AssignVmAsContributorToStorageAccountAsync(managedIdentity, storageAccount);
+                            await AssignVmAsDataOwnerToStorageAccountAsync(managedIdentity, storageAccount);
+                            await AssignManagedIdOperatorToResourceAsync(managedIdentity, resourceGroup);
+                            await AssignMIAsNetworkContributorToResourceAsync(managedIdentity, resourceGroup);
+                        }),
+                    ]);
 
                     if (configuration.CrossSubscriptionAKSDeployment.GetValueOrDefault())
                     {
@@ -542,41 +542,41 @@ namespace TesDeployer
                         postgreSqlDnsZone = await CreatePrivateDnsZoneAsync(vnetAndSubnet.Value.virtualNetwork, $"privatelink.{azureCloudConfig.Suffixes.PostgresqlServerEndpointSuffix}", "PostgreSQL Server");
                     }
 
-                    await Task.WhenAll(new[]
-                    {
-                            Task.Run(async () =>
+                    await Task.WhenAll(
+                    [
+                        Task.Run(async () =>
+                        {
+                            if (aksCluster is null && !configuration.ManualHelmDeployment)
                             {
-                                if (aksCluster is null && !configuration.ManualHelmDeployment)
-                                {
-                                    aksCluster = await ProvisionManagedClusterAsync(resourceGroup, managedIdentity, logAnalyticsWorkspace, vnetAndSubnet?.virtualNetwork, vnetAndSubnet?.vmSubnet.Name, configuration.PrivateNetworking.GetValueOrDefault());
-                                    await EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup);
-                                }
-                            }),
-                            Task.Run(async () =>
-                            {
-                                batchAccount ??= await CreateBatchAccountAsync(storageAccount.Id);
-                                await AssignVmAsContributorToBatchAccountAsync(managedIdentity, batchAccount);
-                            }),
-                            Task.Run(async () =>
-                            {
-                                appInsights = await CreateAppInsightsResourceAsync(configuration.LogAnalyticsArmId);
-                                await AssignVmAsContributorToAppInsightsAsync(managedIdentity, appInsights);
-                            }),
-                            Task.Run(async () => {
-                                postgreSqlFlexServer ??= await CreatePostgreSqlServerAndDatabaseAsync(postgreSqlFlexManagementClient, vnetAndSubnet.Value.postgreSqlSubnet, postgreSqlDnsZone);
-                            })
-                        });
+                                aksCluster = await ProvisionManagedClusterAsync(resourceGroup, managedIdentity, logAnalyticsWorkspace, vnetAndSubnet?.virtualNetwork, vnetAndSubnet?.vmSubnet.Name, configuration.PrivateNetworking.GetValueOrDefault());
+                                await EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup);
+                            }
+                        }),
+                        Task.Run(async () =>
+                        {
+                            batchAccount ??= await CreateBatchAccountAsync(storageAccount.Id);
+                            await AssignVmAsContributorToBatchAccountAsync(managedIdentity, batchAccount);
+                        }),
+                        Task.Run(async () =>
+                        {
+                            appInsights = await CreateAppInsightsResourceAsync(configuration.LogAnalyticsArmId);
+                            await AssignVmAsContributorToAppInsightsAsync(managedIdentity, appInsights);
+                        }),
+                        Task.Run(async () =>
+                        {
+                            postgreSqlFlexServer ??= await CreatePostgreSqlServerAndDatabaseAsync(postgreSqlFlexManagementClient, vnetAndSubnet.Value.postgreSqlSubnet, postgreSqlDnsZone);
+                        })
+                    ]);
 
                     var clientId = managedIdentity.ClientId;
                     var settings = ConfigureSettings(clientId);
 
                     await kubernetesManager.UpdateHelmValuesAsync(storageAccount, keyVaultUri, resourceGroup.Name, settings, managedIdentity);
                     await PerformHelmDeploymentAsync(resourceGroup,
-                        new[]
-                        {
-                                "Run the following postgresql command to setup the database.",
-                                $"\tPostgreSQL command: psql postgresql://{configuration.PostgreSqlAdministratorLogin}:{configuration.PostgreSqlAdministratorPassword}@{configuration.PostgreSqlServerName}.{azureCloudConfig.Suffixes.PostgresqlServerEndpointSuffix}/{configuration.PostgreSqlTesDatabaseName} -c \"{GetCreateTesUserString()}\""
-                        },
+                        [
+                            "Run the following postgresql command to setup the database.",
+                            $"\tPostgreSQL command: psql postgresql://{configuration.PostgreSqlAdministratorLogin}:{configuration.PostgreSqlAdministratorPassword}@{configuration.PostgreSqlServerName}.{azureCloudConfig.Suffixes.PostgresqlServerEndpointSuffix}/{configuration.PostgreSqlTesDatabaseName} -c \"{GetCreateTesUserString()}\""
+                        ],
                         async kubernetesClient =>
                         {
                             // Deploy an ubuntu pod to run PSQL commands, then delete it
@@ -602,8 +602,8 @@ namespace TesDeployer
                 if (configuration.OutputTesCredentialsJson.GetValueOrDefault())
                 {
                     // Write credentials to JSON file in working directory
-                    var credentialsJson = System.Text.Json.JsonSerializer.Serialize<TesCredentials>(
-                        new(kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword));
+                    var credentialsJson = new TesCredentials(kubernetesManager.TesHostname, configuration.TesUsername, configuration.TesPassword)
+                        .Serialize();
 
                     var credentialsPath = Path.Combine(Directory.GetCurrentDirectory(), TesCredentialsFileName);
                     await File.WriteAllTextAsync(credentialsPath, credentialsJson, cts.Token);
@@ -655,7 +655,7 @@ namespace TesDeployer
 
                             var portForwardTask = startPortForward(tokenSource.Token);
                             await Task.Delay(longRetryWaitTime * 2, tokenSource.Token); // Give enough time for kubectl to standup the port forwarding.
-                            var runTestTask = RunTestTask("localhost:8088", batchAccount.LowPriorityCoreQuota > 0, configuration.TesUsername, configuration.TesPassword);
+                            var runTestTask = RunTestTaskAsync("localhost:8088", batchAccount.LowPriorityCoreQuota > 0);
 
                             for (var task = await Task.WhenAny(portForwardTask, runTestTask);
                                 runTestTask != task;
@@ -777,7 +777,7 @@ namespace TesDeployer
                 ConsoleEx.WriteLine($"Helm chart written to disk at: {kubernetesManager.helmScriptsRootDirectory}");
                 ConsoleEx.WriteLine($"Please update values file if needed here: {kubernetesManager.TempHelmValuesYamlPath}");
 
-                foreach (var line in manualPrecommands ?? Enumerable.Empty<string>())
+                foreach (var line in manualPrecommands ?? [])
                 {
                     ConsoleEx.WriteLine(line);
                 }
@@ -793,57 +793,34 @@ namespace TesDeployer
             }
         }
 
-        private async Task<int> TestTaskAsync(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859:Use concrete types when possible for improved performance", Justification = "We are explicitly using the contract specified in the ITesClient interface.")]
+        private async Task<bool> RunTesTaskImplAsync(string tesHostname, bool isPreemptible)
         {
-            using var client = new HttpClient();
-
-            var task = new TesTask()
+            TesTask testTesTask = new();
+            testTesTask.Resources.Preemptible = isPreemptible;
+            testTesTask.Executors.Add(new TesExecutor
             {
-                Inputs = new(),
-                Outputs = new(),
-                Executors = new()
-                {
-                    new()
-                    {
-                        Image = "ubuntu:22.04",
-                        Command = new() { "echo", "hello world" },
-                    }
-                },
-                Resources = new()
-                {
-                    Preemptible = preemptible
-                }
-            };
+                Image = "ubuntu",
+                Command = ["/bin/sh", "-c", "cat /proc/sys/kernel/random/uuid"],
+            });
 
-            var content = new StringContent(JsonConvert.SerializeObject(task), Encoding.UTF8, "application/json");
-            var requestUri = $"http://{tesEndpoint}/v1/tasks";
+            using ITesClient tesClient = new TesClient(new($"http://{tesHostname}"));
+            var completedTask = await tesClient.CreateAndWaitTilDoneAsync(testTesTask, cts.Token);
+            ConsoleEx.WriteLine($"TES Task State: {completedTask.State}");
 
-            Dictionary<string, string> response = null;
-            await longRetryPolicy.ExecuteAsync(
-                async ct =>
-                {
-                    var responseBody = await client.PostAsync(requestUri, content, ct);
-                    var body = await responseBody.Content.ReadAsStringAsync(ct);
-                    try
-                    {
-                        response = JsonConvert.DeserializeObject<Dictionary<string, string>>(body);
-                    }
-                    catch (JsonReaderException exception)
-                    {
-                        exception.Data.Add("Body", body);
-                        throw;
-                    }
-                },
-                cts.Token);
+            if (completedTask.State != TesState.COMPLETEEnum)
+            {
+                ConsoleEx.WriteLine($"Failure reason: {completedTask.FailureReason}");
+            }
 
-            return await IsTaskSuccessfulAfterLongPollingAsync(client, $"{requestUri}/{response["id"]}?view=full") ? 0 : 1;
+            return completedTask.State == TesState.COMPLETEEnum;
         }
 
-        private async Task<bool> RunTestTask(string tesEndpoint, bool preemptible, string tesUsername, string tesPassword)
+        private async Task<bool> RunTestTaskAsync(string tesEndpoint, bool isPreemptible)
         {
             var startTime = DateTime.UtcNow;
             var line = ConsoleEx.WriteLine("Running a test task...");
-            var isTestWorkflowSuccessful = (await TestTaskAsync(tesEndpoint, preemptible, tesUsername, tesPassword)) < 1;
+            var isTestWorkflowSuccessful = await RunTesTaskImplAsync(tesEndpoint, isPreemptible);
             WriteExecutionTime(line, startTime);
 
             if (isTestWorkflowSuccessful)
@@ -864,50 +841,6 @@ namespace TesDeployer
             }
 
             return isTestWorkflowSuccessful;
-        }
-
-        private async Task<bool> IsTaskSuccessfulAfterLongPollingAsync(HttpClient client, string taskEndpoint)
-        {
-            while (true)
-            {
-                try
-                {
-                    var responseBody = await client.GetAsync(taskEndpoint, cts.Token);
-                    var content = await responseBody.Content.ReadAsStringAsync(cts.Token);
-                    var response = JsonConvert.DeserializeObject<TesTask>(content);
-
-                    if (response.State == TesState.COMPLETEEnum)
-                    {
-                        if (string.IsNullOrWhiteSpace(response.FailureReason))
-                        {
-                            ConsoleEx.WriteLine($"TES Task State: {response.State}");
-                            return true;
-                        }
-
-                        ConsoleEx.WriteLine($"Failure reason: {response.FailureReason}");
-                        return false;
-                    }
-                    else if (response.State == TesState.EXECUTORERROREnum || response.State == TesState.SYSTEMERROREnum || response.State == TesState.CANCELEDEnum)
-                    {
-                        ConsoleEx.WriteLine($"TES Task State: {response.State}");
-                        ConsoleEx.WriteLine(content);
-
-                        if (!string.IsNullOrWhiteSpace(response.FailureReason))
-                        {
-                            ConsoleEx.WriteLine($"Failure reason: {response.FailureReason}");
-                        }
-
-                        return false;
-                    }
-                }
-                catch (Exception exc)
-                {
-                    // "Server is busy" occasionally can be ignored
-                    ConsoleEx.WriteLine($"Transient error: '{exc.Message}' Will retry again in 10s.");
-                }
-
-                await Task.Delay(System.TimeSpan.FromSeconds(10), cts.Token);
-            }
         }
 
         private async Task<Vault> ValidateAndGetExistingKeyVaultAsync()
@@ -1034,8 +967,8 @@ namespace TesDeployer
                 { "kubeletidentity", new(managedIdentity.Id, managedIdentity.ClientId, managedIdentity.PrincipalId) }
             };
 
-            cluster.AgentPoolProfiles = new List<ManagedClusterAgentPoolProfile>
-            {
+            cluster.AgentPoolProfiles =
+            [
                 new()
                 {
                     Name = nodePoolName,
@@ -1052,7 +985,7 @@ namespace TesDeployer
                     Mode = "System",
                     VnetSubnetID = virtualNetwork.Subnets[subnetName].Inner.Id,
                 }
-            };
+            ];
 
             if (privateNetworking)
             {
@@ -1105,13 +1038,15 @@ namespace TesDeployer
 
         private Dictionary<string, string> ConfigureSettings(string managedIdentityClientId, Dictionary<string, string> settings = null, Version installedVersion = null)
         {
-            settings ??= new();
-            var defaults = GetDefaultValues(new[] { "env-00-tes-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt" });
+            settings ??= [];
+            var defaults = GetDefaultValues(["env-00-tes-version.txt", "env-01-account-names.txt", "env-02-internal-images.txt", "env-04-settings.txt"]);
+            var currentTime = DateTime.UtcNow;
 
             // We always overwrite the CoA version
             UpdateSetting(settings, defaults, "TesOnAzureVersion", default(string), ignoreDefaults: false);
             UpdateSetting(settings, defaults, "ResourceGroupName", configuration.ResourceGroupName, ignoreDefaults: false);
             UpdateSetting(settings, defaults, "RegionName", configuration.RegionName, ignoreDefaults: false);
+            UpdateSetting(settings, defaults, "DeploymentUpdated", currentTime.ToString("O"), ignoreDefaults: false);
 
             // Process images
             UpdateSetting(settings, defaults, "TesImageName", configuration.TesImageName,
@@ -1120,6 +1055,10 @@ namespace TesDeployer
             // Additional non-personalized settings
             UpdateSetting(settings, defaults, "BatchNodesSubnetId", configuration.BatchNodesSubnetId);
             UpdateSetting(settings, defaults, "DisableBatchNodesPublicIpAddress", configuration.DisableBatchNodesPublicIpAddress, b => b.GetValueOrDefault().ToString(), configuration.DisableBatchNodesPublicIpAddress.GetValueOrDefault().ToString());
+            UpdateSetting(settings, defaults, "DeploymentOrganizationName", configuration.DeploymentOrganizationName);
+            UpdateSetting(settings, defaults, "DeploymentOrganizationUrl", configuration.DeploymentOrganizationUrl);
+            UpdateSetting(settings, defaults, "DeploymentContactUri", configuration.DeploymentContactUri);
+            UpdateSetting(settings, defaults, "DeploymentEnvironment", configuration.DeploymentEnvironment);
 
             if (installedVersion is null)
             {
@@ -1144,6 +1083,7 @@ namespace TesDeployer
                 UpdateSetting(settings, defaults, "EnableIngress", configuration.EnableIngress);
                 UpdateSetting(settings, defaults, "LetsEncryptEmail", configuration.LetsEncryptEmail);
                 UpdateSetting(settings, defaults, "TesHostname", kubernetesManager.TesHostname, ignoreDefaults: true);
+                UpdateSetting(settings, defaults, "DeploymentCreated", currentTime.ToString("O"), ignoreDefaults: true);
             }
 
             BackFillSettings(settings, defaults);
@@ -1633,15 +1573,16 @@ namespace TesDeployer
                     var serverPath = $"{configuration.PostgreSqlServerName}.{azureCloudConfig.Suffixes.PostgresqlServerEndpointSuffix}";
                     var adminUser = configuration.PostgreSqlAdministratorLogin;
 
-                    var commands = new List<string[]> {
-                        new string[] { "apt", "-qq", "update" },
-                        new string[] { "apt", "-qq", "install", "-y", "postgresql-client" },
-                        new string[] { "bash", "-lic", $"echo '{configuration.PostgreSqlServerName}{configuration.PostgreSqlServerNameSuffix}:{configuration.PostgreSqlServerPort}:{configuration.PostgreSqlTesDatabaseName}:{adminUser}:{configuration.PostgreSqlAdministratorPassword}' >> ~/.pgpass" },
-                        new string[] { "bash", "-lic", "chmod 0600 ~/.pgpass" },
+                    List<string[]> commands =
+                    [
+                        ["apt", "-qq", "update"],
+                        ["apt", "-qq", "install", "-y", "postgresql-client"],
+                        ["bash", "-lic", $"echo '{configuration.PostgreSqlServerName}{configuration.PostgreSqlServerNameSuffix}:{configuration.PostgreSqlServerPort}:{configuration.PostgreSqlTesDatabaseName}:{adminUser}:{configuration.PostgreSqlAdministratorPassword}' >> ~/.pgpass"],
+                        ["bash", "-lic", "chmod 0600 ~/.pgpass"],
                         // Set the PGPASSFILE environment variable to point to the .pgpass file
-                        new string[] { "bash", "-lic", "export PGPASSFILE=~/.pgpass" },
-                        new string[] { "/usr/bin/psql", "-h", serverPath, "-U", adminUser, "-d", configuration.PostgreSqlTesDatabaseName, "-c", tesScript }
-                    };
+                        ["bash", "-lic", "export PGPASSFILE=~/.pgpass"],
+                        ["/usr/bin/psql", "-h", serverPath, "-U", adminUser, "-d", configuration.PostgreSqlTesDatabaseName, "-c", tesScript]
+                    ];
 
                     await kubernetesManager.ExecuteCommandsOnPodAsync(kubernetesClient, podName, commands, aksNamespace);
                 });
@@ -1667,7 +1608,7 @@ namespace TesDeployer
 
                     if (configuration.EnableIngress.GetValueOrDefault())
                     {
-                        tesPorts = new List<int> { 80, 443 };
+                        tesPorts = [80, 443];
                     }
 
                     var defaultNsg = await CreateNetworkSecurityGroupAsync(resourceGroup, $"{configuration.VnetName}-default-nsg");
@@ -1798,8 +1739,8 @@ namespace TesDeployer
                             {
                                 DefaultAction = configuration.PrivateNetworking.GetValueOrDefault() ? "Deny" : "Allow"
                             },
-                            AccessPolicies = new List<AccessPolicyEntry>()
-                            {
+                            AccessPolicies =
+                            [
                                 new()
                                 {
                                     TenantId = new(tenantId),
@@ -1818,7 +1759,7 @@ namespace TesDeployer
                                         Secrets = secrets
                                     }
                                 }
-                            }
+                            ]
                         }
                     };
 
@@ -2015,7 +1956,7 @@ namespace TesDeployer
             var currentPrincipalSubscriptionRoleIds = (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeWithHttpMessagesAsync(
                     $"/subscriptions/{configuration.SubscriptionId}", new($"atScope() and assignedTo('{currentPrincipalObjectId}')"), cancellationToken: cts.Token)).Body
                 .ToAsyncEnumerable(async (link, ct) => (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeNextWithHttpMessagesAsync(link, cancellationToken: ct)).Body)
-                .Select(b => b.RoleDefinitionId.Split(new[] { '/' }).Last());
+                .Select(b => b.RoleDefinitionId.Split(['/']).Last());
 
             if (!await currentPrincipalSubscriptionRoleIds.AnyAsync(role => ownerRoleId.Equals(role, StringComparison.OrdinalIgnoreCase) || contributorRoleId.Equals(role, StringComparison.OrdinalIgnoreCase), cts.Token))
             {
@@ -2027,7 +1968,7 @@ namespace TesDeployer
                 var currentPrincipalRgRoleIds = (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeWithHttpMessagesAsync(
                         $"/subscriptions/{configuration.SubscriptionId}/resourceGroups/{configuration.ResourceGroupName}", new($"atScope() and assignedTo('{currentPrincipalObjectId}')"), cancellationToken: cts.Token)).Body
                     .ToAsyncEnumerable(async (link, ct) => (await azureSubscriptionClient.AccessManagement.RoleAssignments.Inner.ListForScopeNextWithHttpMessagesAsync(link, cancellationToken: ct)).Body)
-                    .Select(b => b.RoleDefinitionId.Split(new[] { '/' }).Last());
+                    .Select(b => b.RoleDefinitionId.Split(['/']).Last());
 
                 if (!await currentPrincipalRgRoleIds.AnyAsync(role => ownerRoleId.Equals(role, StringComparison.OrdinalIgnoreCase), cts.Token))
                 {
@@ -2117,7 +2058,7 @@ namespace TesDeployer
             }
 
             var resourcesInPostgreSqlSubnetQuery = $"where type =~ 'Microsoft.Network/networkInterfaces' | where properties.ipConfigurations[0].properties.subnet.id == '{postgreSqlSubnet.Inner.Id}'";
-            var resourcesExist = (await resourceGraphClient.ResourcesAsync(new(new[] { configuration.SubscriptionId }, resourcesInPostgreSqlSubnetQuery), cts.Token)).TotalRecords > 0;
+            var resourcesExist = (await resourceGraphClient.ResourcesAsync(new([configuration.SubscriptionId], resourcesInPostgreSqlSubnetQuery), cts.Token)).TotalRecords > 0;
 
             if (hasNoDelegations && resourcesExist)
             {
@@ -2257,6 +2198,7 @@ namespace TesDeployer
             }
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1861:Avoid constant arrays as arguments", Justification = "Called only once")]
         private void ValidateInitialCommandLineArgs()
         {
             void ThrowIfProvidedForUpdate(object attributeValue, string attributeName)
@@ -2502,16 +2444,10 @@ namespace TesDeployer
             await container.GetBlobClient(blobName).UploadAsync(BinaryData.FromString(content), true, token);
         }
 
-        private class ValidationException : Exception
+        private class ValidationException(string reason, bool displayExample = true) : Exception
         {
-            public string Reason { get; set; }
-            public bool DisplayExample { get; set; }
-
-            public ValidationException(string reason, bool displayExample = true)
-            {
-                Reason = reason;
-                DisplayExample = displayExample;
-            }
+            public string Reason { get; } = reason;
+            public bool DisplayExample { get; } = displayExample;
         }
     }
 }

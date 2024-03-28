@@ -81,7 +81,8 @@ namespace TesApi.Web.Runner
                     new JsonSerializerSettings
                     {
                         NullValueHandling = NullValueHandling.Ignore,
-                        DefaultValueHandling = DefaultValueHandling.Ignore
+                        DefaultValueHandling = DefaultValueHandling.Ignore,
+                        Formatting = Formatting.Indented,
                     });
 
                 await UploadContentAsBlobToInternalTesLocationAsync(tesTask, severTesTaskContent, "server-tes-task.json",

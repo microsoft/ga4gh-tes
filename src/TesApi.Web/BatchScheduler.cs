@@ -16,6 +16,7 @@ using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Tes.Extensions;
 using Tes.Models;
+using Tes.TaskSubmitters;
 using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
@@ -51,7 +52,6 @@ namespace TesApi.Web
         private const int DefaultCoreCount = 1;
         private const int DefaultMemoryGb = 2;
         private const int DefaultDiskGb = 10;
-        private const string TesExecutionsPathPrefix = "/tes-internal";
         private const string CromwellScriptFileName = "script";
         private const string StartTaskScriptFilename = "start-task.sh";
         private const string NodeTaskRunnerFilename = "tes-runner";
@@ -78,7 +78,7 @@ namespace TesApi.Web
         private readonly TaskExecutionScriptingManager taskExecutionScriptingManager;
         private readonly string runnerMD5;
 
-        private HashSet<string> onlyLogBatchTaskStateOnce = new();
+        private HashSet<string> onlyLogBatchTaskStateOnce = [];
 
         /// <summary>
         /// Orchestrates <see cref="Tes.Models.TesTask"/>s on Azure Batch
@@ -436,24 +436,6 @@ namespace TesApi.Web
             }
         }
 
-        private static string GetCromwellExecutionDirectoryPathAsUrl(TesTask task)
-        {
-            var commandScript = task.Inputs?.FirstOrDefault(IsCromwellCommandScript);
-            return commandScript switch
-            {
-                null => null,
-                var x when string.IsNullOrEmpty(x.Content) => GetParentUrl(commandScript.Url),
-                _ => GetParentPath(commandScript.Path).TrimStart('/')
-            };
-        }
-
-        private string GetStorageUploadPath(TesTask task)
-        {
-            return task.Resources?.ContainsBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix) ?? false
-                ? $"{defaultStorageAccountName}/{task.Resources.GetBackendParameterValue(TesResources.SupportedBackendParameters.internal_path_prefix).Trim('/')}"
-                : $"{defaultStorageAccountName}{TesExecutionsPathPrefix}/{task.Id}";
-        }
-
         /// <summary>
         /// Get the parent path of the given path
         /// </summary>
@@ -494,15 +476,6 @@ namespace TesApi.Web
                 return $"/{defaultStorageAccount}{startTaskPath}";
             }
         }
-
-        /// <summary>
-        /// Determines if the <see cref="Tes.Models.TesInput"/> file is a Cromwell command script
-        /// See https://github.com/broadinstitute/cromwell/blob/17efd599d541a096dc5704991daeaefdd794fefd/supportedBackends/tes/src/main/scala/cromwell/backend/impl/tes/TesTask.scala#L58
-        /// </summary>
-        /// <param name="inputFile"><see cref="Tes.Models.TesInput"/> file</param>
-        /// <returns>True if the file is a Cromwell command script</returns>
-        private static bool IsCromwellCommandScript(TesInput inputFile)
-            => (inputFile.Name?.Equals("commandScript") ?? false) && (inputFile.Description?.EndsWith(".commandScript") ?? false) && inputFile.Type == TesFileType.FILEEnum && inputFile.Path.EndsWith($"/{CromwellScriptFileName}");
 
         /// <summary>
         /// Adds a new Azure Batch pool/job/task for the given <see cref="TesTask"/>
@@ -547,6 +520,7 @@ namespace TesApi.Web
                         displayName: displayName,
                         poolIdentity: GetBatchPoolIdentity(identities.ToArray()),
                         vmSize: virtualMachineInfo.VmSize,
+                        vmFamily: virtualMachineInfo.VmFamily,
                         preemptable: virtualMachineInfo.LowPriority,
                         nodeInfo: useGen2.GetValueOrDefault() ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                         encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
@@ -913,9 +887,9 @@ namespace TesApi.Web
         // tesTask.Log[].Log[].StartTime
         // tesTask.Log[].Log[].EndTime
         private ValueTask<bool> HandleTesTaskTransitionAsync(TesTask tesTask, CombinedBatchTaskInfo combinedBatchTaskInfo, CancellationToken cancellationToken)
-            => (tesTaskStateTransitions
+            => tesTaskStateTransitions
                 .FirstOrDefault(m => (m.Condition is null || m.Condition(tesTask)) && (m.CurrentBatchTaskState is null || m.CurrentBatchTaskState == combinedBatchTaskInfo.BatchTaskState))
-                ?.ActionAsync(tesTask, combinedBatchTaskInfo, cancellationToken) ?? ValueTask.FromResult(false));
+                ?.ActionAsync(tesTask, combinedBatchTaskInfo, cancellationToken) ?? ValueTask.FromResult(false);
 
         private async Task<CloudTask> ConvertTesTaskToBatchTaskUsingRunnerAsync(string taskId, TesTask task,
             CancellationToken cancellationToken)
@@ -949,36 +923,30 @@ namespace TesApi.Web
 
         private async Task<List<TesInput>> GetAdditionalCromwellInputsAsync(TesTask task, CancellationToken cancellationToken)
         {
-            var cromwellExecutionDirectoryUrl = GetCromwellExecutionDirectoryPathAsUrl(task);
-            var isCromwell = cromwellExecutionDirectoryUrl is not null;
-
-
             // TODO: Cromwell bug: Cromwell command write_tsv() generates a file in the execution directory, for example execution/write_tsv_3922310b441805fc43d52f293623efbc.tmp. These are not passed on to TES inputs.
             // WORKAROUND: Get the list of files in the execution directory and add them to task inputs.
             // TODO: Verify whether this workaround is still needed.
-            var additionalInputs = new List<TesInput>();
-            if (isCromwell)
+            List<TesInput> additionalInputs = [];
+
+            if (task.IsCromwell())
             {
                 additionalInputs =
-                    await GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(task, cromwellExecutionDirectoryUrl,
-                        cancellationToken);
+                    await GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(task, cancellationToken);
             }
 
             return additionalInputs;
         }
 
-        private async Task<List<TesInput>> GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(TesTask task,
-            string cromwellExecutionDirectoryUrl, CancellationToken cancellationToken)
+        private async Task<List<TesInput>> GetExistingBlobsInCromwellStorageLocationAsTesInputsAsync(TesTask task, CancellationToken cancellationToken)
         {
             var additionalInputFiles = new List<TesInput>();
+            var metadata = task.GetCromwellMetadata();
 
+            var cromwellExecutionDirectory = (Uri.TryCreate(metadata.CromwellRcUri, UriKind.Absolute, out var uri) && !uri.IsFile)
+                ? GetParentUrl(metadata.CromwellRcUri)
+                : $"/{GetParentUrl(metadata.CromwellRcUri)}";
 
-            if (!Uri.TryCreate(cromwellExecutionDirectoryUrl, UriKind.Absolute, out _))
-            {
-                cromwellExecutionDirectoryUrl = $"/{cromwellExecutionDirectoryUrl}";
-            }
-
-            var executionDirectoryUri = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectoryUrl,
+            var executionDirectoryUri = await storageAccessProvider.MapLocalPathToSasUrlAsync(cromwellExecutionDirectory,
                 cancellationToken, getContainerSas: true);
 
             if (executionDirectoryUri is not null)
@@ -988,8 +956,7 @@ namespace TesApi.Web
                 var scriptBlob =
                     blobsInExecutionDirectory.FirstOrDefault(b => b.Name.EndsWith($"/{CromwellScriptFileName}"));
                 var commandScript =
-                    task.Inputs?.FirstOrDefault(
-                        IsCromwellCommandScript); // this should never be null because it's used to set isCromwell
+                    task.Inputs?.FirstOrDefault(b => "commandScript".Equals(b.Name));
 
                 if (scriptBlob is not null)
                 {
@@ -999,10 +966,8 @@ namespace TesApi.Web
                 if (commandScript is not null)
                 {
                     var commandScriptPathParts = commandScript.Path.Split('/').ToList();
-                    var cromwellExecutionDirectory =
-                        string.Join('/', commandScriptPathParts.Take(commandScriptPathParts.Count - 1));
                     additionalInputFiles = await blobsInExecutionDirectory
-                        .Select(b => (Path: $"/{cromwellExecutionDirectory.TrimStart('/')}/{b.Name.Split('/').Last()}",
+                        .Select(b => (Path: $"/{metadata.CromwellExecutionDir.TrimStart('/')}/{b.Name.Split('/').Last()}",
                             b.Uri))
                         .ToAsyncEnumerable()
                         .SelectAwait(async b => new TesInput
@@ -1050,18 +1015,28 @@ namespace TesApi.Web
             }
         }
 
+        enum StartScriptVmFamilies
+        {
+            standardLSFamily,
+            standardLSv2Family,
+            standardLSv3Family,
+            standardLASv3Family,
+        }
+
         /// <summary>
         /// Constructs a universal Azure Start Task instance
         /// </summary>
         /// <param name="poolId">Pool Id</param>
         /// <param name="machineConfiguration">A <see cref="BatchModels.VirtualMachineConfiguration"/> describing the OS of the pool's nodes.</param>
+        /// <param name="vmFamily"></param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         /// <remarks>This method also mitigates errors associated with docker daemons that are not configured to place their filesystem assets on the data drive.</remarks>
-        private async Task<BatchModels.StartTask> GetStartTaskAsync(string poolId, BatchModels.VirtualMachineConfiguration machineConfiguration, CancellationToken cancellationToken)
+        private async Task<BatchModels.StartTask> GetStartTaskAsync(string poolId, BatchModels.VirtualMachineConfiguration machineConfiguration, string vmFamily, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
             ArgumentNullException.ThrowIfNull(machineConfiguration);
+            ArgumentNullException.ThrowIfNull(vmFamily);
 
             var globalStartTaskConfigured = !string.IsNullOrWhiteSpace(globalStartTaskPath);
 
@@ -1083,28 +1058,39 @@ namespace TesApi.Web
             }
 
             // https://learn.microsoft.com/azure/batch/batch-docker-container-workloads#linux-support
-            var dockerConfigured = machineConfiguration.ImageReference.Publisher.Equals("microsoft-azure-batch", StringComparison.InvariantCultureIgnoreCase)
-                && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.InvariantCultureIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.InvariantCultureIgnoreCase));
+            var dockerConfigured = machineConfiguration.ImageReference.Publisher.Equals("microsoft-azure-batch", StringComparison.OrdinalIgnoreCase)
+                && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.OrdinalIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.OrdinalIgnoreCase));
 
             StringBuilder cmd = new("#!/bin/sh\n");
             cmd.Append($"mkdir -p {BatchNodeSharedEnvVar} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
 
             if (!dockerConfigured)
             {
-                var commandLine = new StringBuilder("#!/usr/bin/bash\n");
-                commandLine.Append(@"trap ""echo Error trapped; exit 0"" ERR; sudo touch tmp2.json && (sudo cp /etc/docker/daemon.json tmp1.json || sudo echo {} > tmp1.json) && sudo chmod a+w tmp?.json && if fgrep ""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker"" tmp1.json; then echo grep ""found docker path""; elif [ $? -eq 1 ]; then ");
-
-                commandLine.Append(machineConfiguration.NodeAgentSkuId switch
+                var packageInstallScript = machineConfiguration.NodeAgentSkuId switch
                 {
-                    var s when s.StartsWith("batch.node.ubuntu ") => "sudo apt-get install -y jq",
-                    var s when s.StartsWith("batch.node.centos ") => "sudo yum install epel-release -y && sudo yum update -y && sudo yum install -y jq wget",
-                    _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message: Please add support for '{machineConfiguration.NodeAgentSkuId}'")
-                });
-
-                commandLine.Append(@" && jq \.\[\""data-root\""\]=\""""$(dirname ""$(dirname ""$AZ_BATCH_NODE_ROOT_DIR"")"")/docker""\"" tmp1.json >> tmp2.json && sudo cp tmp2.json /etc/docker/daemon.json && sudo chmod 644 /etc/docker/daemon.json && sudo systemctl restart docker && echo ""updated docker data-root""; else (echo ""grep failed"" || exit 1); fi");
+                    var s when s.StartsWith("batch.node.ubuntu ", StringComparison.OrdinalIgnoreCase) => "echo \"Ubuntu OS detected\"",
+                    var s when s.StartsWith("batch.node.centos ", StringComparison.OrdinalIgnoreCase) => "sudo yum install epel-release -y && sudo yum update -y && sudo yum install -y wget",
+                    _ => throw new InvalidOperationException($"Unrecognized OS. Please send open an issue @ 'https://github.com/microsoft/ga4gh-tes/issues' with this message ({machineConfiguration.NodeAgentSkuId})")
+                };
 
                 var script = "config-docker.sh";
-                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, commandLine), script, setExecutable: true)} && ./{script}");
+                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new((await ReadScript("config-docker.sh")).Replace("{PackageInstalls}", packageInstallScript))), script, setExecutable: true)} && ./{script}");
+            }
+
+            var vmFamilyStartupScript = (Enum.TryParse(typeof(StartScriptVmFamilies), vmFamily, out var family) ? family : default) switch
+            {
+                StartScriptVmFamilies.standardLSFamily => @"config-nvme.sh",
+                StartScriptVmFamilies.standardLSv2Family => @"config-nvme.sh",
+                StartScriptVmFamilies.standardLSv3Family => @"config-nvme.sh",
+                StartScriptVmFamilies.standardLASv3Family => @"config-nvme.sh",
+                _ => null
+            };
+
+            if (!string.IsNullOrWhiteSpace(vmFamilyStartupScript))
+            {
+                var script = "config-vmfamily.sh";
+                // TODO: optimize this by uploading all vmfamily scripts when uploading runner binary rather then for each individual pool
+                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new(await ReadScript(vmFamilyStartupScript))), script, setExecutable: true)} && ./{script}");
             }
 
             if (globalStartTaskConfigured)
@@ -1129,6 +1115,12 @@ namespace TesApi.Web
                 content.Clear();
                 return url;
             }
+
+            async ValueTask<string> ReadScript(string name)
+            {
+                var path = Path.Combine(AppContext.BaseDirectory, "scripts", name);
+                return await File.ReadAllTextAsync(path, cancellationToken);
+            }
         }
 
         /// <summary>
@@ -1146,6 +1138,7 @@ namespace TesApi.Web
         /// <param name="displayName"></param>
         /// <param name="poolIdentity"></param>
         /// <param name="vmSize"></param>
+        /// <param name="vmFamily"></param>
         /// <param name="preemptable"></param>
         /// <param name="nodeInfo"></param>
         /// <param name="encryptionAtHostSupported">VM supports encryption at host.</param>
@@ -1154,7 +1147,7 @@ namespace TesApi.Web
         /// <remarks>
         /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the possible exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
         /// </remarks>
-        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, bool preemptable, BatchNodeInfo nodeInfo, bool? encryptionAtHostSupported, CancellationToken cancellationToken)
+        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, string vmFamily, bool preemptable, BatchNodeInfo nodeInfo, bool? encryptionAtHostSupported, CancellationToken cancellationToken)
         {
             // TODO: (perpetually) add new properties we set in the future on <see cref="PoolSpecification"/> and/or its contained objects, if possible. When not, update CreateAutoPoolModePoolInformation().
 
@@ -1181,7 +1174,7 @@ namespace TesApi.Web
                 ScaleSettings = new(autoScale: new(BatchPool.AutoPoolFormula(preemptable, 1), BatchPool.AutoScaleEvaluationInterval)),
                 DeploymentConfiguration = new(virtualMachineConfiguration: vmConfig),
                 //ApplicationPackages = ,
-                StartTask = await GetStartTaskAsync(name, vmConfig, cancellationToken),
+                StartTask = await GetStartTaskAsync(name, vmConfig, vmFamily, cancellationToken),
                 TargetNodeCommunicationMode = BatchModels.NodeCommunicationMode.Simplified,
             };
 
@@ -1360,28 +1353,18 @@ namespace TesApi.Web
 
             try
             {
-                var cromwellExecutionDirectoryPath = GetCromwellExecutionDirectoryPathAsUrl(tesTask);
-                string cromwellRcContentPath;
+                if (tesTask.IsCromwell())
+                {
+                    var cromwellRcContent = await storageAccessProvider.DownloadBlobAsync(tesTask.GetCromwellMetadata().CromwellRcUri, cancellationToken);
 
-                if (Uri.TryCreate(cromwellExecutionDirectoryPath, UriKind.Absolute, out _))
-                {
-                    var cromwellRcContentBuilder = new UriBuilder(cromwellExecutionDirectoryPath);
-                    cromwellRcContentBuilder.Path += "/rc";
-                    cromwellRcContentPath = cromwellRcContentBuilder.ToString();
-                }
-                else
-                {
-                    cromwellRcContentPath = $"/{cromwellExecutionDirectoryPath}/rc";
+                    if (cromwellRcContent is not null && int.TryParse(cromwellRcContent, out var temp))
+                    {
+                        cromwellRcCode = temp;
+                    }
                 }
 
-                var cromwellRcContent = await storageAccessProvider.DownloadBlobAsync(cromwellRcContentPath, cancellationToken);
-
-                if (cromwellRcContent is not null && int.TryParse(cromwellRcContent, out var temp))
-                {
-                    cromwellRcCode = temp;
-                }
-
-                var metricsContent = await storageAccessProvider.DownloadBlobAsync($"/{GetStorageUploadPath(tesTask)}/metrics.txt", cancellationToken);
+                var metricsUrl = await storageAccessProvider.GetInternalTesTaskBlobUrlAsync(tesTask, "metrics.txt", cancellationToken);
+                var metricsContent = await storageAccessProvider.DownloadBlobAsync(metricsUrl, cancellationToken);
 
                 if (metricsContent is not null)
                 {
@@ -1412,13 +1395,13 @@ namespace TesApi.Web
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError($"Failed to parse metrics for task {tesTask.Id}. Error: {ex.Message}");
+                        logger.LogError("Failed to parse metrics for task {TesTask}. Error: {ExceptionMessage}", tesTask.Id, ex.Message);
                     }
                 }
             }
             catch (Exception ex)
             {
-                logger.LogError($"Failed to get batch node metrics for task {tesTask.Id}. Error: {ex.Message}");
+                logger.LogError("Failed to get batch node metrics for task {TesTask}. Error: {ExceptionMessage}", tesTask.Id, ex.Message);
             }
 
             return (batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode);

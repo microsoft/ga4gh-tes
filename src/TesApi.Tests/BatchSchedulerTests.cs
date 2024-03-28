@@ -20,6 +20,7 @@ using Moq;
 using Newtonsoft.Json;
 using Tes.Extensions;
 using Tes.Models;
+using Tes.TaskSubmitters;
 using TesApi.Web;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
@@ -182,9 +183,11 @@ namespace TesApi.Tests
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
-            azureProxyReturnValues.VmSizesAndPrices = new() {
-                new() { VmSize = "VmSize1", LowPriority = true, VCpusAvailable = 1, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 1 },
-                new() { VmSize = "VmSize2", LowPriority = true, VCpusAvailable = 2, MemoryInGiB = 8, ResourceDiskSizeInGiB = 40, PricePerHour = 2 }};
+            azureProxyReturnValues.VmSizesAndPrices =
+            [
+                new() { VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = true, VCpusAvailable = 1, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 1 },
+                new() { VmSize = "VmSize2", VmFamily = "VmFamily1", LowPriority = true, VCpusAvailable = 2, MemoryInGiB = 8, ResourceDiskSizeInGiB = 40, PricePerHour = 2 }
+            ];
 
             var state = await GetNewTesTaskStateAsync(new TesResources { Preemptible = true, BackendParameters = new() { { "vm_size", "VmSize1" } } }, azureProxyReturnValues);
             Assert.AreEqual(TesState.INITIALIZINGEnum, state);
@@ -820,13 +823,14 @@ namespace TesApi.Tests
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
-            azureProxyReturnValues.VmSizesAndPrices = new() {
-                new() { VmSize = "VmSize1", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 1 },
-                new() { VmSize = "VmSize2", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 2 },
-                new() { VmSize = "VmSize3", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 3 },
-                new() { VmSize = "VmSize4", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 4 },
-                new() { VmSize = "VmSize5", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 5 }
-            };
+            azureProxyReturnValues.VmSizesAndPrices =
+            [
+                new() { VmSize = "VmSize1", VmFamily = "VmFamily1", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 1 },
+                new() { VmSize = "VmSize2", VmFamily = "VmFamily2", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 2 },
+                new() { VmSize = "VmSize3", VmFamily = "VmFamily3", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 3 },
+                new() { VmSize = "VmSize4", VmFamily = "VmFamily4", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 4 },
+                new() { VmSize = "VmSize5", VmFamily = "VmFamily5", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 5 }
+            ];
 
             await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
             await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchJobAndTaskStates.NodeAllocationFailed)));
@@ -1052,21 +1056,31 @@ namespace TesApi.Tests
         }
 
         [DataTestMethod]
-        [DataRow(new string[] { null, "/cromwell-executions/workflowpath/execution/script", "echo hello" }, "blob1.tmp", false)]
-        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/cromwell-executions/workflowpath/execution/script", "/cromwell-executions/workflowpath/execution/script", null }, "blob1.tmp", false)]
-        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/cromwell-executions/workflowpath/execution/script", "/cromwell-executions/workflowpath/execution/script", null }, "blob1.tmp", true)]
-        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/privateworkspacecontainer/cromwell-executions/workflowpath/execution/script", "/cromwell-executions/workflowpath/execution/script", null }, "blob1.tmp", false)]
-        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/privateworkspacecontainer/cromwell-executions/workflowpath/execution/script", "/cromwell-executions/workflowpath/execution/script", null }, "blob1.tmp", true)]
+        [DataRow(new string[] { null, "echo hello" }, "blob1.tmp", false, DisplayName = "commandScript via content")]
+        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", false, DisplayName = "default url with file missing")]
+        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", true, DisplayName = "default url with file present")]
+        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/privateworkspacecontainer/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", false, DisplayName = "custom container with file missing")]
+        [DataRow(new string[] { "https://defaultstorageaccount.blob.core.windows.net/privateworkspacecontainer/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/script", null }, "blob1.tmp", true, DisplayName = "custom container with file present")]
         public async Task CromwellWriteFilesAreDiscoveredAndAddedIfMissedWithContentScript(string[] script, string fileName, bool fileIsInInputs)
         {
             var tesTask = GetTesTask();
+            var scriptPath = $"{tesTask.GetCromwellMetadata().CromwellExecutionDir}/script";
 
-            tesTask.Inputs = new()
+            tesTask.Inputs =
+            [
+                new() { Url = script[0], Path = scriptPath, Type = TesFileType.FILEEnum, Name = "commandScript", Description = "test.commandScript", Content = script[1] },
+            ];
+
+            // fixup output urls
             {
-                new() { Url = script[0], Path = script[1], Type = TesFileType.FILEEnum, Name = "commandScript", Description = "test.commandScript", Content = script[2] },
-            };
+                var executionDirectoryUrl = script[0] ?? tesTask.Outputs.First(o => o.Name.Equals("commandScript", StringComparison.Ordinal)).Url;
+                executionDirectoryUrl = executionDirectoryUrl[..^"/script".Length];
+                var textToReplace = "/cromwell-executions/workflow1/0fbdb535-4afd-45e3-a8a8-c8e50585ee4e/call-Task1/execution/";
+                tesTask.Outputs.ForEach(o => o.Url = o.Url.Replace(textToReplace, executionDirectoryUrl + "/"));
+                tesTask.TaskSubmitter = TaskSubmitter.Parse(tesTask);
+            }
 
-            var commandScriptUri = UriFromTesInput(tesTask.Inputs[0]);
+            var commandScriptUri = UriFromTesOutput(tesTask.Outputs.First(o => o.Name.Equals("commandScript", StringComparison.Ordinal)));
             var executionDirectoryBlobs = tesTask.Inputs.Select(CloudBlobFromTesInput).ToList();
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
@@ -1092,7 +1106,7 @@ namespace TesApi.Tests
                 var uri = new UriBuilder(executionDirectoryUri);
                 uri.Path = uri.Path.TrimEnd('/') + $"/{fileName}";
 
-                TesInput writeInput = new() { Url = uri.Uri.AbsoluteUri, Path = Path.Combine(Path.GetDirectoryName(script[1]), fileName).Replace('\\', '/'), Type = TesFileType.FILEEnum, Name = "write_", Content = null };
+                TesInput writeInput = new() { Url = uri.Uri.AbsoluteUri, Path = Path.Combine(Path.GetDirectoryName(scriptPath), fileName).Replace('\\', '/'), Type = TesFileType.FILEEnum, Name = "write_", Content = null };
                 executionDirectoryBlobs.Add(CloudBlobFromTesInput(writeInput));
 
                 if (fileIsInInputs)
@@ -1134,6 +1148,30 @@ namespace TesApi.Tests
                 {
                     Scheme = "file",
                     Path = input.Path
+                }.Uri;
+            }
+
+            static Uri UriFromTesOutput(TesOutput output)
+            {
+                if (Uri.IsWellFormedUriString(output.Url, UriKind.Absolute))
+                {
+                    return new Uri(output.Url);
+                }
+
+                if (Uri.IsWellFormedUriString(output.Url, UriKind.Relative))
+                {
+                    var uri = new UriBuilder
+                    {
+                        Scheme = "file",
+                        Path = output.Url
+                    };
+                    return uri.Uri;
+                }
+
+                return new UriBuilder
+                {
+                    Scheme = "file",
+                    Path = output.Path
                 }.Uri;
             }
         }
@@ -1299,7 +1337,11 @@ namespace TesApi.Tests
         }
 
         private static TesTask GetTesTask()
-            => JsonConvert.DeserializeObject<TesTask>(File.ReadAllText("testask1.json"));
+        {
+            var task = JsonConvert.DeserializeObject<TesTask>(File.ReadAllText("testask1.json"));
+            task.TaskSubmitter = TaskSubmitter.Parse(task);
+            return task;
+        }
 
         private static Action<Mock<IAzureProxy>> GetMockAzureProxy(AzureProxyReturnValues azureProxyReturnValues)
             => azureProxy =>

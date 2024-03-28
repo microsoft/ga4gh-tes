@@ -4,6 +4,7 @@
 using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Tes.Models;
+using Tes.TaskSubmitters;
 
 namespace TesApi.Tests
 {
@@ -15,23 +16,23 @@ namespace TesApi.Tests
         {
             var tesTask = new TesTask
             {
-                WorkflowId = Guid.NewGuid().ToString()
+                TaskSubmitter = new UnknownTaskSubmitter { WorkflowId = Guid.NewGuid().ToString() }
             };
 
-            string id = tesTask.CreateId();
+            var id = tesTask.CreateId();
 
             // Check that the ID is valid according to the IsValidId method
             Assert.IsTrue(TesTask.IsValidId(id));
 
             // Check that the ID starts with the first 8 characters of WorkflowId
-            Assert.IsTrue(id.StartsWith(tesTask.WorkflowId.Substring(0, 8)));
+            Assert.IsTrue(id.StartsWith(tesTask.WorkflowId[..8]));
         }
 
         [TestMethod]
         public void CreateId_Generates_Valid_Id_Without_WorkflowId()
         {
             var tesTask = new TesTask();
-            string id = tesTask.CreateId();
+            var id = tesTask.CreateId();
 
             // Check that the ID is valid according to the IsValidId method
             Assert.IsTrue(TesTask.IsValidId(id));
@@ -42,7 +43,7 @@ namespace TesApi.Tests
         {
             string[] invalidIds = { "invalid-id", "123", "ABC!", "" };
 
-            foreach (string id in invalidIds)
+            foreach (var id in invalidIds)
             {
                 Assert.IsFalse(TesTask.IsValidId(id));
             }
@@ -56,7 +57,7 @@ namespace TesApi.Tests
                 "12345678_12345678123456781234567812345678" // 41 characters
             };
 
-            foreach (string id in validIds)
+            foreach (var id in validIds)
             {
                 Assert.IsTrue(TesTask.IsValidId(id));
             }

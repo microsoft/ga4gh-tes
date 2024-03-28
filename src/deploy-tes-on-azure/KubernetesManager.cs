@@ -387,6 +387,7 @@ namespace TesDeployer
             var batchImageGen2 = GetObjectFromConfig(values, "batchImageGen2") ?? new Dictionary<string, string>();
             var batchImageGen1 = GetObjectFromConfig(values, "batchImageGen1") ?? new Dictionary<string, string>();
             var martha = GetObjectFromConfig(values, "martha") ?? new Dictionary<string, string>();
+            var deployment = GetObjectFromConfig(values, "deployment") ?? new Dictionary<string, string>();
 
             values.Config["azureCloudName"] = GetValueOrDefault(settings, "AzureCloudName");
             values.Config["tesOnAzureVersion"] = GetValueOrDefault(settings, "TesOnAzureVersion");
@@ -426,6 +427,12 @@ namespace TesDeployer
             values.TesDatabase["databaseName"] = GetValueOrDefault(settings, "PostgreSqlTesDatabaseName");
             values.TesDatabase["databaseUserLogin"] = GetValueOrDefault(settings, "PostgreSqlTesDatabaseUserLogin");
             values.TesDatabase["databaseUserPassword"] = GetValueOrDefault(settings, "PostgreSqlTesDatabaseUserPassword");
+            deployment["organizationName"] = GetValueOrDefault(settings, "DeploymentOrganizationName");
+            deployment["organizationUrl"] = GetValueOrDefault(settings, "DeploymentOrganizationUrl");
+            deployment["contactUri"] = GetValueOrDefault(settings, "DeploymentContactUri");
+            deployment["environment"] = GetValueOrDefault(settings, "DeploymentEnvironment");
+            deployment["created"] = GetValueOrDefault(settings, "DeploymentCreated");
+            deployment["updated"] = GetValueOrDefault(settings, "DeploymentUpdated");
 
             values.Config["batchAccount"] = batchAccount;
             values.Config["batchNodes"] = batchNodes;
@@ -433,10 +440,11 @@ namespace TesDeployer
             values.Config["batchImageGen2"] = batchImageGen2;
             values.Config["batchImageGen1"] = batchImageGen1;
             values.Config["martha"] = martha;
+            values.Config["deployment"] = deployment;
         }
 
         private static IDictionary<string, string> GetObjectFromConfig(HelmValues values, string key)
-            => (values?.Config[key] as IDictionary<object, object>)?.ToDictionary(p => p.Key as string, p => p.Value as string);
+            => (values?.Config.TryGetValue(key, out var config) ?? false ? (config as IDictionary<object, object>) : null)?.ToDictionary(p => p.Key as string, p => p.Value as string);
 
         private static T GetValueOrDefault<T>(IDictionary<string, T> propertyBag, string key)
             => propertyBag.TryGetValue(key, out var value) ? value : default;
@@ -449,6 +457,7 @@ namespace TesDeployer
             var batchImageGen2 = GetObjectFromConfig(values, "batchImageGen2") ?? new Dictionary<string, string>();
             var batchImageGen1 = GetObjectFromConfig(values, "batchImageGen1") ?? new Dictionary<string, string>();
             var martha = GetObjectFromConfig(values, "martha") ?? new Dictionary<string, string>();
+            var deployment = GetObjectFromConfig(values, "deployment") ?? new Dictionary<string, string>();
 
             return new()
             {
@@ -492,6 +501,12 @@ namespace TesDeployer
                 ["PostgreSqlTesDatabaseName"] = GetValueOrDefault(values.TesDatabase, "databaseName"),
                 ["PostgreSqlTesDatabaseUserLogin"] = GetValueOrDefault(values.TesDatabase, "databaseUserLogin"),
                 ["PostgreSqlTesDatabaseUserPassword"] = GetValueOrDefault(values.TesDatabase, "databaseUserPassword"),
+                ["DeploymentOrganizationName"] = GetValueOrDefault(deployment, "organizationName"),
+                ["DeploymentOrganizationUrl"] = GetValueOrDefault(deployment, "organizationUrl"),
+                ["DeploymentContactUri"] = GetValueOrDefault(deployment, "contactUri"),
+                ["DeploymentEnvironment"] = GetValueOrDefault(deployment, "environment"),
+                ["DeploymentCreated"] = GetValueOrDefault(deployment, "created"),
+                ["DeploymentUpdated"] = GetValueOrDefault(deployment, "updated"),
             };
         }
 
