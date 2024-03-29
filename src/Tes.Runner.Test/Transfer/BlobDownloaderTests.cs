@@ -25,7 +25,7 @@ namespace Tes.Runner.Transfer.Tests
 
             var part = new PipelineBuffer()
             {
-                BlobPartUrl = new Uri("https://foo.com"), //This invalid on purpose, as we don't want to make a real request
+                BlobPartUrl = new Uri("https://foo.com"), //This is invalid on purpose, as we don't want to make a real request
                 FileName = "emptyFile",
                 Length = 0,
                 Offset = 0,
