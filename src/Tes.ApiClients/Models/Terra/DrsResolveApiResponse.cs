@@ -1,12 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 namespace Tes.ApiClients.Models.Terra
 {
@@ -20,10 +15,10 @@ namespace Tes.ApiClients.Models.Terra
         public long Size { get; set; }
 
         [JsonPropertyName("timeCreated")]
-        public DateTime TimeCreated { get; set; }
+        public DateTimeOffset TimeCreated { get; set; }
 
         [JsonPropertyName("timeUpdated")]
-        public DateTime TimeUpdated { get; set; }
+        public DateTimeOffset TimeUpdated { get; set; }
 
         [JsonPropertyName("bucket")]
         public string Bucket { get; set; }
