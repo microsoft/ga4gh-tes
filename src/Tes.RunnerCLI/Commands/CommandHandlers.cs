@@ -26,7 +26,8 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="dockerUri"></param>
         /// <returns></returns>
         internal static async Task<int> ExecuteRootCommandAsync(
-            FileInfo file,
+            Uri? fileUri,
+            FileInfo? file,
             int blockSize,
             int writers,
             int readers,
@@ -38,13 +39,20 @@ namespace Tes.RunnerCLI.Commands
             {
                 var duration = Stopwatch.StartNew();
 
-                var nodeTask = await NodeTaskUtils.DeserializeNodeTaskAsync(file.FullName);
+                var nodeTask = await ResolveNodeTaskAsync(file, fileUri);
 
                 await using var eventsPublisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask);
 
                 try
                 {
-                    await ExecuteAllOperationsAsSubProcessesAsync(file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
+                    if (!file?.Exists ?? true)
+                    {
+                        file ??= new("nodeTask.json");
+                        await NodeTaskUtils.SerializeNodeTaskAsync(nodeTask, file.FullName);
+                        file.Refresh();
+                    }
+
+                    await ExecuteAllOperationsAsSubProcessesAsync(file!, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
 
                     await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
                         EventsPublisher.SuccessStatus, errorMessage: string.Empty);
@@ -64,73 +72,13 @@ namespace Tes.RunnerCLI.Commands
                 }
                 catch (CommandExecutionException commandExecutionException)
                 {
-                    Logger.LogError(commandExecutionException, "Failed to execute Node Task: {NodeTaskPath}", file.FullName);
+                    Logger.LogError(commandExecutionException, "Failed to execute Node Task: {NodeTaskPath}", file?.FullName ?? fileUri?.AbsoluteUri ?? "<missing>");
                     return commandExecutionException.ExitCode;
                 }
 
-                Logger.LogError(e, "Failed to execute Node Task: {NodeTaskPath}", file.FullName);
+                Logger.LogError(e, "Failed to execute Node Task: {NodeTaskPath}", file?.FullName ?? fileUri?.AbsoluteUri ?? "<missing>");
 
                 return (int)ProcessExitCode.UncategorizedError;
-            }
-
-            return (int)ProcessExitCode.Success;
-        }
-
-        /// <summary>
-        /// Preparatory command of the CLI. Downloads argument as sub-process and then runs the root command.
-        /// </summary>
-        /// <param name="fileUri"></param>
-        /// <param name="file"></param>
-        /// <param name="blockSize"></param>
-        /// <param name="writers"></param>
-        /// <param name="readers"></param>
-        /// <param name="bufferCapacity"></param>
-        /// <param name="apiVersion"></param>
-        /// <param name="dockerUri"></param>
-        /// <returns></returns>
-        internal static async Task<int> ExecutePreparatoryCommandAsync(
-            Uri fileUri,
-            FileInfo file,
-            int blockSize,
-            int writers,
-            int readers,
-            int bufferCapacity,
-            string apiVersion)
-        {
-            var options =
-                BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity,
-                    apiVersion);
-            FileInfo commandFile = new(Path.GetTempFileName());
-
-            try
-            {
-                await GetDownloadNodeTask(fileUri, file)
-                    .SerializeNodeTaskAsync(commandFile.FullName);
-                commandFile.Refresh();
-
-                await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.PreparatoryCommandName, commandFile, options, CommandFactory.DownloadCommandName);
-
-                file.Refresh();
-            }
-            catch (Exception e)
-            {
-                try
-                {
-                    CommandLauncher.HandleFatalLauncherError(CommandFactory.ExecutorCommandName, e);
-                }
-                catch (CommandExecutionException commandExecutionException)
-                {
-                    Logger.LogError(commandExecutionException, "Failed to execute Node Task: {NodeTaskPath}", commandFile.FullName);
-                    return commandExecutionException.ExitCode;
-                }
-
-                Logger.LogError(e, "Failed to execute Node Task: {NodeTaskPath}", commandFile.FullName);
-
-                return (int)ProcessExitCode.UncategorizedError;
-            }
-            finally
-            {
-                commandFile.Delete();
             }
 
             return (int)ProcessExitCode.Success;
@@ -256,22 +204,23 @@ namespace Tes.RunnerCLI.Commands
             }
         }
 
-        private static Runner.Models.NodeTask GetDownloadNodeTask(Uri uri, FileInfo file)
+        private static async ValueTask<Runner.Models.NodeTask> ResolveNodeTaskAsync(FileInfo? file, Uri? uri)
         {
-            var optionsValue = Environment.GetEnvironmentVariable(nameof(Runner.Models.PreparatoryOptions)) ??
-                throw new InvalidOperationException($"Environment variable '{nameof(Runner.Models.PreparatoryOptions)}' is missing.");
-
-            var options = NodeTaskUtils.DeserializeJson<Runner.Models.PreparatoryOptions>(optionsValue);
-            return new()
+            try
             {
-                RuntimeOptions = options.RuntimeOptions ?? new(),
-                Inputs = new([new Runner.Models.FileInput()
-                {
-                    SourceUrl = uri.AbsoluteUri,
-                    Path = file.FullName,
-                    TransformationStrategy = options.TransformationStrategy
-                }]),
-            };
+                return await NodeTaskUtils.ResolveNodeTaskAsync(file, uri, GetNodeTaskResolverOptions());
+            }
+            catch (ArgumentException e) when (e.ParamName == "options")
+            {
+                throw new InvalidOperationException($"Environment variable '{nameof(Runner.Models.NodeTaskResolverOptions)}' is missing.", e);
+            }
+        }
+
+        private static Runner.Models.NodeTaskResolverOptions? GetNodeTaskResolverOptions()
+        {
+            var optionsValue = Environment.GetEnvironmentVariable(nameof(Runner.Models.NodeTaskResolverOptions));
+
+            return string.IsNullOrWhiteSpace(optionsValue) ? null : NodeTaskUtils.DeserializeJson<Runner.Models.NodeTaskResolverOptions>(optionsValue);
         }
     }
 }

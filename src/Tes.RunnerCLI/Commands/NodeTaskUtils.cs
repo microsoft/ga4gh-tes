@@ -4,6 +4,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Models;
+using Tes.Runner.Storage;
 using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands;
@@ -51,7 +52,42 @@ public static class NodeTaskUtils
         }
     }
 
-    private static JsonSerializerOptions jsonSerializerOptions = new() { PropertyNameCaseInsensitive = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault };
+    public static async Task<NodeTask> ResolveNodeTaskAsync(FileInfo? file, Uri? uri, NodeTaskResolverOptions? options)
+    {
+        file?.Refresh();
+
+        if (file?.Exists ?? false)
+        {
+            return await DeserializeNodeTaskAsync(file.FullName);
+        }
+
+        ArgumentNullException.ThrowIfNull(uri);
+        ArgumentNullException.ThrowIfNull(options);
+
+        try
+        {
+            ResolutionPolicyHandler resolutionPolicy = new(options.RuntimeOptions!);
+            List<FileInput> sources = [new() { TransformationStrategy = options.TransformationStrategy, SourceUrl = uri.AbsoluteUri, Path = "_" }];
+            var blobUri = (await resolutionPolicy.ApplyResolutionPolicyAsync(sources) ?? []).FirstOrDefault()?.SourceUrl ?? throw new Exception("The JSON data blob could not be resolved.");
+
+            BlobApiHttpUtils downloader = new();
+            var response = await downloader.ExecuteHttpRequestAsync(() => new HttpRequestMessage(HttpMethod.Get, blobUri));
+            var nodeTaskText = await response.Content.ReadAsStringAsync();
+
+            var nodeTask = DeserializeJson<NodeTask>(nodeTaskText) ?? throw new Exception("Failed to deserialize task JSON file.");
+
+            AddDefaultValuesIfMissing(nodeTask);
+
+            return nodeTask;
+        }
+        catch (Exception e)
+        {
+            Logger.LogError(e, "Failed to download or deserialize task JSON file.");
+            throw;
+        }
+    }
+
+    private static readonly JsonSerializerOptions jsonSerializerOptions = new() { PropertyNameCaseInsensitive = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault };
 
     private static void AddDefaultValuesIfMissing(NodeTask nodeTask)
     {

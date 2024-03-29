@@ -65,7 +65,7 @@ namespace Tes.Runner.Models
         public string? SasAllowedIpRange { get; set; }
     }
 
-    public class PreparatoryOptions
+    public class NodeTaskResolverOptions
     {
         public RuntimeOptions? RuntimeOptions { get; set; }
         public TransformationStrategy TransformationStrategy { get; set; }
