@@ -43,6 +43,8 @@ namespace Tes.RunnerCLI.Commands
 
                 try
                 {
+                    await eventsPublisher.PublishTaskCommencementEventAsync(nodeTask);
+
                     await ExecuteAllOperationsAsSubProcessesAsync(file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
 
                     await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,

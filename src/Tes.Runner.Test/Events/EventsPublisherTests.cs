@@ -22,28 +22,28 @@ namespace Tes.Runner.Test.Events
                 WorkflowId = "workflowID",
                 ImageName = "image",
                 ImageTag = "tag",
-                CommandsToExecute = new List<string>() { "echo hello" },
-                Inputs = new List<FileInput>()
-                {
-                    new FileInput()
+                CommandsToExecute = ["echo hello"],
+                Inputs =
+                [
+                    new()
                     {
                         Path = "/mnt/data/input1.txt",
                         SourceUrl = "https://test.blob.core.windows.net/test/input1.txt"
                     }
-                },
-                Outputs = new List<FileOutput>()
-                {
-                    new FileOutput()
+                ],
+                Outputs =
+                [
+                    new()
                     {
                         Path = "/mnt/data/output1.txt",
                         TargetUrl = "https://test.blob.core.windows.net/test/output1.txt"
                     }
-                }
+                ]
             };
 
             var sink = new TestEventSink();
             sink.Start();
-            sinks = new List<IEventSink>() { sink };
+            sinks = [sink];
             eventsPublisher = new EventsPublisher(sinks);
         }
 
@@ -124,6 +124,17 @@ namespace Tes.Runner.Test.Events
             Assert.AreEqual(nodeTask.ImageTag, eventMessage.EventData!["imageTag"]);
             Assert.AreEqual(0, int.Parse(eventMessage.EventData!["exitCode"]));
             Assert.AreEqual("", eventMessage.EventData!["errorMessage"]);
+        }
+
+        [TestMethod]
+        public async Task PublishTaskCommencementEventAsync_EventIsPublished_EventContainsAllExpectedData()
+        {
+            await eventsPublisher.PublishTaskCommencementEventAsync(nodeTask);
+            await eventsPublisher.FlushPublishersAsync();
+
+            var eventMessage = ((TestEventSink)sinks[0]).EventsHandled[0];
+
+            AssertMessageBaseMapping(eventMessage, EventsPublisher.TaskCommencementEvent, EventsPublisher.StartedStatus);
         }
 
         [TestMethod]
