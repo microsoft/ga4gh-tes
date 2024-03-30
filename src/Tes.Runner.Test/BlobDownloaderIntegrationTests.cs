@@ -11,7 +11,7 @@ namespace Tes.Runner.Test
     [TestClass]
     [TestCategory("Integration")]
     [Ignore]
-    public class BlobDownloaderTest
+    public class BlobDownloaderIntegrationTests
     {
 #pragma warning disable CS8618
         private BlobContainerClient blobContainerClient;
