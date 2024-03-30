@@ -108,12 +108,8 @@ spec:
               value: {{ .Values.service.tesHostname }}
             - name: Deployment__LetsEncryptEmail
               value: {{ .Values.config.letsEncryptEmail }}
-            - name: Martha__Url
-              value: {{ .Values.config.martha.url }}
-            - name: Martha__KeyVaultName
-              value: {{ .Values.config.martha.keyVaultName }}
-            - name: Martha__SecretName
-              value: {{ .Values.config.martha.secretName }}
+            - name: DrsHub__Url
+              value: {{ .Values.config.drsHub.url }}           
             - name: Storage__ExternalStorageContainers
 {{- $containers  := list -}}
 {{- range .Values.externalSasContainers }}
