@@ -16,7 +16,6 @@ using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Tes.Extensions;
 using Tes.Models;
-using Tes.TaskSubmitters;
 using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
@@ -56,7 +55,6 @@ namespace TesApi.Web
         private const string StartTaskScriptFilename = "start-task.sh";
         private const string NodeTaskRunnerFilename = "tes-runner";
         private const string NodeTaskRunnerMD5HashFilename = NodeTaskRunnerFilename + ".md5";
-        private readonly string cromwellDrsLocalizerImageName;
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
         private readonly IStorageAccessProvider storageAccessProvider;
@@ -77,6 +75,7 @@ namespace TesApi.Web
         private readonly IAllowedVmSizesService allowedVmSizesService;
         private readonly TaskExecutionScriptingManager taskExecutionScriptingManager;
         private readonly string runnerMD5;
+        private readonly string drsHubApiHost;
 
         private HashSet<string> onlyLogBatchTaskStateOnce = [];
 
@@ -86,7 +85,7 @@ namespace TesApi.Web
         /// <param name="logger">Logger <see cref="ILogger"/></param>
         /// <param name="batchGen1Options">Configuration of <see cref="BatchImageGeneration1Options"/></param>
         /// <param name="batchGen2Options">Configuration of <see cref="BatchImageGeneration2Options"/></param>
-        /// <param name="marthaOptions">Configuration of <see cref="MarthaOptions"/></param>
+        /// <param name="drsHubOptions">Configuration of <see cref="DrsHubOptions"/></param>
         /// <param name="storageOptions">Configuration of <see cref="StorageOptions"/></param>
         /// <param name="batchNodesOptions">Configuration of <see cref="BatchNodesOptions"/></param>
         /// <param name="batchSchedulingOptions">Configuration of <see cref="BatchSchedulingOptions"/></param>
@@ -101,7 +100,7 @@ namespace TesApi.Web
             ILogger<BatchScheduler> logger,
             IOptions<Options.BatchImageGeneration1Options> batchGen1Options,
             IOptions<Options.BatchImageGeneration2Options> batchGen2Options,
-            IOptions<Options.MarthaOptions> marthaOptions,
+            IOptions<Options.DrsHubOptions> drsHubOptions,
             IOptions<Options.StorageOptions> storageOptions,
             IOptions<Options.BatchNodesOptions> batchNodesOptions,
             IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions,
@@ -129,8 +128,6 @@ namespace TesApi.Web
 
             this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
             this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
-            this.cromwellDrsLocalizerImageName = marthaOptions.Value.CromwellDrsLocalizer;
-            if (string.IsNullOrWhiteSpace(this.cromwellDrsLocalizerImageName)) { this.cromwellDrsLocalizerImageName = Options.MarthaOptions.DefaultCromwellDrsLocalizer; }
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
             this.poolLifetime = TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.PoolRotationForcedDays);
             this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
@@ -161,7 +158,7 @@ namespace TesApi.Web
                 BatchImageVersion = batchGen1Options.Value.Version,
                 BatchNodeAgentSkuId = batchGen1Options.Value.NodeAgentSkuId
             };
-
+            drsHubApiHost = drsHubOptions.Value?.Url;
             logger.LogInformation("usePreemptibleVmsOnly: {UsePreemptibleVmsOnly}", usePreemptibleVmsOnly);
 
             static bool tesTaskIsQueuedInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.QUEUEDEnum || tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
@@ -916,7 +913,8 @@ namespace TesApi.Web
             var nodeTaskCreationOptions = new NodeTaskConversionOptions(
                 DefaultStorageAccountName: defaultStorageAccountName,
                 AdditionalInputs: await GetAdditionalCromwellInputsAsync(task, cancellationToken),
-                GlobalManagedIdentity: globalManagedIdentity
+                GlobalManagedIdentity: globalManagedIdentity,
+                DrsHubApiHost: drsHubApiHost
             );
             return nodeTaskCreationOptions;
         }
