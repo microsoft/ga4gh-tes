@@ -47,7 +47,7 @@ namespace Tes.RunnerCLI.Commands
                 {
                     if (!file?.Exists ?? true)
                     {
-                        file ??= new("nodeTask.json");
+                        file ??= new(CommandFactory.DefaultTaskDefinitionFile);
                         await NodeTaskUtils.SerializeNodeTaskAsync(nodeTask, file.FullName);
                         file.Refresh();
                     }

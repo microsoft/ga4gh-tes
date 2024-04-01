@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using Tes.Runner.Exceptions;
-using Tes.Runner.Logs;
 using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
@@ -41,13 +40,13 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="file">Node task definition file</param>
         /// <param name="options">Transfer options</param>
         ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
-        public static async Task LaunchTransferCommandAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options, string? transferCommand = default)
+        public static async Task LaunchTransferCommandAsSubProcessAsync(string command, FileInfo file, BlobPipelineOptions options)
         {
             ProcessExecutionResult results = null!;
             try
             {
                 var processLauncher = await ProcessLauncher.CreateLauncherAsync(file, logNamePrefix: command);
-                results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(transferCommand ?? command, file.FullName, options));
+                results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
             }
             catch (Exception ex)
             {

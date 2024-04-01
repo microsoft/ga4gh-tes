@@ -82,7 +82,6 @@ namespace Tes.RunnerCLI.Commands
         {
             var cmd = new Command(UploadCommandName, "Uploads output files to blob storage");
             rootCommand.Add(cmd);
-            cmd.AddValidator(r => ValidateGlobalOption(r, cmd));
 
             foreach (var option in TransferOptions)
             {
@@ -104,7 +103,6 @@ namespace Tes.RunnerCLI.Commands
         {
             var cmd = new Command(ExecutorCommandName, "Executes the TES Task commands on the container");
             rootCommand.Add(cmd);
-            cmd.AddValidator(r => ValidateGlobalOption(r, cmd));
 
             cmd.AddOption(CreateOption<Uri>(CommandFactory.DockerUriOption, "local docker engine endpoint", "-u", defaultValue: DefaultDockerUri));
 
@@ -119,7 +117,6 @@ namespace Tes.RunnerCLI.Commands
         {
             var cmd = new Command(DownloadCommandName, "Downloads input files from a HTTP source");
             rootCommand.Add(cmd);
-            cmd.AddValidator(r => ValidateGlobalOption(r, cmd));
 
             foreach (var option in TransferOptions)
             {
