@@ -40,6 +40,7 @@ namespace TesApi.Controllers
         private readonly IRepository<TesTask> repository;
         private readonly ILogger<TaskServiceApiController> logger;
         private readonly IAzureProxy azureProxy;
+        private readonly TesServiceInfo serviceInfo;
 
         private static readonly Dictionary<TesView, JsonSerializerSettings> TesJsonSerializerSettings = new()
         {
@@ -54,11 +55,13 @@ namespace TesApi.Controllers
         /// <param name="repository">The main <see cref="TesTask"/> database repository</param>
         /// <param name="logger">The logger instance</param>
         /// <param name="azureProxy">The Azure Proxy instance</param>
-        public TaskServiceApiController(IRepository<TesTask> repository, ILogger<TaskServiceApiController> logger, IAzureProxy azureProxy)
+        /// <param name="serviceInfo">The GA4GH TES service information</param>
+        public TaskServiceApiController(IRepository<TesTask> repository, ILogger<TaskServiceApiController> logger, IAzureProxy azureProxy, TesServiceInfo serviceInfo)
         {
             this.repository = repository;
             this.logger = logger;
             this.azureProxy = azureProxy;
+            this.serviceInfo = serviceInfo;
         }
 
         /// <summary>
@@ -237,15 +240,7 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(TesServiceInfo), description: "")]
         public virtual IActionResult GetServiceInfo()
         {
-            var serviceInfo = new TesServiceInfo
-            {
-                Name = "GA4GH Task Execution Service",
-                Doc = string.Empty,
-                Storage = [],
-                TesResourcesSupportedBackendParameters = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList()
-            };
-
-            logger.LogInformation($"Name: {serviceInfo.Name} Doc: {serviceInfo.Doc} Storage: {serviceInfo.Storage} TesResourcesSupportedBackendParameters: {string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters)}");
+            logger.LogInformation($"Id: {serviceInfo.Id} Name: {serviceInfo.Name} Type: {serviceInfo.Type} Description: {serviceInfo.Description} Organization: {serviceInfo.Organization} ContactUrl: {serviceInfo.ContactUrl} DocumentationUrl: {serviceInfo.DocumentationUrl} CreatedAt:{serviceInfo.CreatedAt} UpdatedAt:{serviceInfo.UpdatedAt} Environment: {serviceInfo.Environment} Version: {serviceInfo.Version} Storage: {string.Join(",", serviceInfo.Storage ?? new())} TesResourcesSupportedBackendParameters: {string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters ?? new())}");
             return StatusCode(200, serviceInfo);
         }
 
@@ -294,7 +289,7 @@ namespace TesApi.Controllers
         [ValidateModelState]
         [SwaggerOperation("ListTasks")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesListTasksResponse), description: "")]
-        public virtual async Task<IActionResult> ListTasks([FromQuery] string namePrefix, [FromQuery] long? pageSize, [FromQuery] string pageToken, [FromQuery] string view, CancellationToken cancellationToken)
+        public virtual async Task<IActionResult> ListTasks([FromQuery] string namePrefix, [FromQuery] int? pageSize, [FromQuery] string pageToken, [FromQuery] string view, CancellationToken cancellationToken)
         {
             var decodedPageToken =
                 pageToken is not null ? Encoding.UTF8.GetString(Base64UrlTextEncoder.Decode(pageToken)) : null;
@@ -358,13 +353,6 @@ namespace TesApi.Controllers
             var jsonResult = new JsonResult(value, TesJsonSerializerSettings[viewEnum]) { StatusCode = 200 };
 
             return jsonResult;
-        }
-
-        private enum TesView
-        {
-            MINIMAL,
-            BASIC,
-            FULL
         }
     }
 }

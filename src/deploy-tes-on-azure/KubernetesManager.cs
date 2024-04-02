@@ -386,7 +386,8 @@ namespace TesDeployer
             var batchScheduling = GetObjectFromConfig(values, "batchScheduling") ?? new Dictionary<string, string>();
             var batchImageGen2 = GetObjectFromConfig(values, "batchImageGen2") ?? new Dictionary<string, string>();
             var batchImageGen1 = GetObjectFromConfig(values, "batchImageGen1") ?? new Dictionary<string, string>();
-            var martha = GetObjectFromConfig(values, "martha") ?? new Dictionary<string, string>();
+            var drsHub = GetObjectFromConfig(values, "drsHub") ?? new Dictionary<string, string>();
+            var deployment = GetObjectFromConfig(values, "deployment") ?? new Dictionary<string, string>();
 
             values.Config["azureCloudName"] = GetValueOrDefault(settings, "AzureCloudName");
             values.Config["tesOnAzureVersion"] = GetValueOrDefault(settings, "TesOnAzureVersion");
@@ -407,9 +408,7 @@ namespace TesDeployer
             batchImageGen1["sku"] = GetValueOrDefault(settings, "Gen1BatchImageSku");
             batchImageGen1["version"] = GetValueOrDefault(settings, "Gen1BatchImageVersion");
             batchImageGen1["nodeAgentSkuId"] = GetValueOrDefault(settings, "Gen1BatchNodeAgentSkuId");
-            martha["url"] = GetValueOrDefault(settings, "MarthaUrl");
-            martha["keyVaultName"] = GetValueOrDefault(settings, "MarthaKeyVaultName");
-            martha["secretName"] = GetValueOrDefault(settings, "MarthaSecretName");
+            drsHub["url"] = GetValueOrDefault(settings, "DrsHubUrl");
             batchScheduling["prefix"] = GetValueOrDefault(settings, "BatchPrefix");
             values.Config["crossSubscriptionAKSDeployment"] = GetValueOrDefault(settings, "CrossSubscriptionAKSDeployment");
             values.Images["tes"] = GetValueOrDefault(settings, "TesImageName");
@@ -426,17 +425,24 @@ namespace TesDeployer
             values.TesDatabase["databaseName"] = GetValueOrDefault(settings, "PostgreSqlTesDatabaseName");
             values.TesDatabase["databaseUserLogin"] = GetValueOrDefault(settings, "PostgreSqlTesDatabaseUserLogin");
             values.TesDatabase["databaseUserPassword"] = GetValueOrDefault(settings, "PostgreSqlTesDatabaseUserPassword");
+            deployment["organizationName"] = GetValueOrDefault(settings, "DeploymentOrganizationName");
+            deployment["organizationUrl"] = GetValueOrDefault(settings, "DeploymentOrganizationUrl");
+            deployment["contactUri"] = GetValueOrDefault(settings, "DeploymentContactUri");
+            deployment["environment"] = GetValueOrDefault(settings, "DeploymentEnvironment");
+            deployment["created"] = GetValueOrDefault(settings, "DeploymentCreated");
+            deployment["updated"] = GetValueOrDefault(settings, "DeploymentUpdated");
 
             values.Config["batchAccount"] = batchAccount;
             values.Config["batchNodes"] = batchNodes;
             values.Config["batchScheduling"] = batchScheduling;
             values.Config["batchImageGen2"] = batchImageGen2;
             values.Config["batchImageGen1"] = batchImageGen1;
-            values.Config["martha"] = martha;
+            values.Config["drsHub"] = drsHub;
+            values.Config["deployment"] = deployment;
         }
 
         private static IDictionary<string, string> GetObjectFromConfig(HelmValues values, string key)
-            => (values?.Config[key] as IDictionary<object, object>)?.ToDictionary(p => p.Key as string, p => p.Value as string);
+            => (values?.Config.TryGetValue(key, out var config) ?? false ? (config as IDictionary<object, object>) : null)?.ToDictionary(p => p.Key as string, p => p.Value as string);
 
         private static T GetValueOrDefault<T>(IDictionary<string, T> propertyBag, string key)
             => propertyBag.TryGetValue(key, out var value) ? value : default;
@@ -448,7 +454,8 @@ namespace TesDeployer
             var batchScheduling = GetObjectFromConfig(values, "batchScheduling") ?? new Dictionary<string, string>();
             var batchImageGen2 = GetObjectFromConfig(values, "batchImageGen2") ?? new Dictionary<string, string>();
             var batchImageGen1 = GetObjectFromConfig(values, "batchImageGen1") ?? new Dictionary<string, string>();
-            var martha = GetObjectFromConfig(values, "martha") ?? new Dictionary<string, string>();
+            var drsHub = GetObjectFromConfig(values, "drsHub") ?? new Dictionary<string, string>();
+            var deployment = GetObjectFromConfig(values, "deployment") ?? new Dictionary<string, string>();
 
             return new()
             {
@@ -471,9 +478,7 @@ namespace TesDeployer
                 ["Gen1BatchImageSku"] = GetValueOrDefault(batchImageGen1, "sku"),
                 ["Gen1BatchImageVersion"] = GetValueOrDefault(batchImageGen1, "version"),
                 ["Gen1BatchNodeAgentSkuId"] = GetValueOrDefault(batchImageGen1, "nodeAgentSkuId"),
-                ["MarthaUrl"] = GetValueOrDefault(martha, "url"),
-                ["MarthaKeyVaultName"] = GetValueOrDefault(martha, "keyVaultName"),
-                ["MarthaSecretName"] = GetValueOrDefault(martha, "secretName"),
+                ["DrsHubUrl"] = GetValueOrDefault(drsHub, "url"),
                 ["BatchPrefix"] = GetValueOrDefault(batchScheduling, "prefix"),
                 ["CrossSubscriptionAKSDeployment"] = GetValueOrDefault(values.Config, "crossSubscriptionAKSDeployment") as string,
                 ["UsePostgreSqlSingleServer"] = GetValueOrDefault(values.Config, "usePostgreSqlSingleServer") as string,
@@ -492,6 +497,12 @@ namespace TesDeployer
                 ["PostgreSqlTesDatabaseName"] = GetValueOrDefault(values.TesDatabase, "databaseName"),
                 ["PostgreSqlTesDatabaseUserLogin"] = GetValueOrDefault(values.TesDatabase, "databaseUserLogin"),
                 ["PostgreSqlTesDatabaseUserPassword"] = GetValueOrDefault(values.TesDatabase, "databaseUserPassword"),
+                ["DeploymentOrganizationName"] = GetValueOrDefault(deployment, "organizationName"),
+                ["DeploymentOrganizationUrl"] = GetValueOrDefault(deployment, "organizationUrl"),
+                ["DeploymentContactUri"] = GetValueOrDefault(deployment, "contactUri"),
+                ["DeploymentEnvironment"] = GetValueOrDefault(deployment, "environment"),
+                ["DeploymentCreated"] = GetValueOrDefault(deployment, "created"),
+                ["DeploymentUpdated"] = GetValueOrDefault(deployment, "updated"),
             };
         }
 
