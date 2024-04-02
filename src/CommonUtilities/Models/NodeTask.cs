@@ -63,6 +63,7 @@ namespace Tes.Runner.Models
         public string? WsmApiHost { get; set; }
         public string? LandingZoneApiHost { get; set; }
         public string? SasAllowedIpRange { get; set; }
+        public string? DrsHubApiHost { get; set; }
     }
 
     public class NodeTaskResolverOptions

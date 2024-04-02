@@ -49,14 +49,16 @@ namespace Tes.RunnerCLI.Commands
 
                 try
                 {
-                    if (!file?.Exists ?? true)
+                    if (!(file?.Exists ?? false))
                     {
                         file ??= new(CommandFactory.DefaultTaskDefinitionFile);
                         await nodeTaskUtils.Value.SerializeNodeTaskAsync(nodeTask, file.FullName);
                         file.Refresh();
                     }
 
-                    await ExecuteAllOperationsAsSubProcessesAsync(file!, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
+                    await eventsPublisher.PublishTaskCommencementEventAsync(nodeTask);
+
+                    await ExecuteAllOperationsAsSubProcessesAsync(file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
 
                     await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
                         EventsPublisher.SuccessStatus, errorMessage: string.Empty);
