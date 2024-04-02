@@ -9,16 +9,21 @@ using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands;
 
-public static class NodeTaskUtils
+public class NodeTaskUtils(Func<BlobApiHttpUtils>? blobApiHttpUtilsFactory = default)
 {
-    private static readonly ILogger Logger = PipelineLoggerFactory.Create(nameof(NodeTaskUtils));
+    internal static NodeTaskUtils Instance => SingletonFactory.Value;
+    private static readonly Lazy<NodeTaskUtils> SingletonFactory = new(() => new());
+
+    private readonly ILogger Logger = PipelineLoggerFactory.Create(nameof(NodeTaskUtils));
+    private readonly Lazy<BlobApiHttpUtils> blobApiHttpUtils = new(blobApiHttpUtilsFactory ?? (() => new()));
+    private static readonly JsonSerializerOptions jsonSerializerOptions = new() { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault };
 
     public static T DeserializeJson<T>(string json)
     {
         return JsonSerializer.Deserialize<T>(json, jsonSerializerOptions) ?? throw new System.Diagnostics.UnreachableException("Failure to deserialize JSON.");
     }
 
-    public static async Task<NodeTask> DeserializeNodeTaskAsync(string tesNodeTaskFilePath)
+    public async Task<NodeTask> DeserializeNodeTaskAsync(string tesNodeTaskFilePath)
     {
         try
         {
@@ -37,7 +42,7 @@ public static class NodeTaskUtils
         }
     }
 
-    public static async Task SerializeNodeTaskAsync(this NodeTask nodeTask, string tesNodeTaskFilePath)
+    public async Task SerializeNodeTaskAsync(NodeTask nodeTask, string tesNodeTaskFilePath)
     {
         try
         {
@@ -52,7 +57,7 @@ public static class NodeTaskUtils
         }
     }
 
-    public static async Task<NodeTask> ResolveNodeTaskAsync(FileInfo? file, Uri? uri, NodeTaskResolverOptions? options)
+    public async Task<NodeTask> ResolveNodeTaskAsync(FileInfo? file, Uri? uri, Lazy<NodeTaskResolverOptions> options)
     {
         file?.Refresh();
 
@@ -66,12 +71,11 @@ public static class NodeTaskUtils
 
         try
         {
-            ResolutionPolicyHandler resolutionPolicy = new(options.RuntimeOptions!);
-            List<FileInput> sources = [new() { TransformationStrategy = options.TransformationStrategy, SourceUrl = uri.AbsoluteUri, Path = "_" }];
+            ResolutionPolicyHandler resolutionPolicy = new(options.Value.RuntimeOptions ?? throw new InvalidOperationException($"Environment variable '{nameof(NodeTaskResolverOptions)}' is missing the '{nameof(NodeTaskResolverOptions.RuntimeOptions)}' property."));
+            List<FileInput> sources = [new() { TransformationStrategy = options.Value.TransformationStrategy, SourceUrl = uri.AbsoluteUri, Path = "_" }];  // Path is not used, but it is required
             var blobUri = (await resolutionPolicy.ApplyResolutionPolicyAsync(sources) ?? []).FirstOrDefault()?.SourceUrl ?? throw new Exception("The JSON data blob could not be resolved.");
 
-            BlobApiHttpUtils downloader = new();
-            var response = await downloader.ExecuteHttpRequestAsync(() => new HttpRequestMessage(HttpMethod.Get, blobUri));
+            var response = await blobApiHttpUtils.Value.ExecuteHttpRequestAsync(() => new HttpRequestMessage(HttpMethod.Get, blobUri));
             var nodeTaskText = await response.Content.ReadAsStringAsync();
 
             var nodeTask = DeserializeJson<NodeTask>(nodeTaskText) ?? throw new Exception("Failed to deserialize task JSON file.");
@@ -86,8 +90,6 @@ public static class NodeTaskUtils
             throw;
         }
     }
-
-    private static readonly JsonSerializerOptions jsonSerializerOptions = new() { PropertyNameCaseInsensitive = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault };
 
     private static void AddDefaultValuesIfMissing(NodeTask nodeTask)
     {

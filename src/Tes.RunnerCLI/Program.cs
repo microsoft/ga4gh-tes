@@ -8,10 +8,10 @@ return await StartUpAsync(args);
 
 static async Task<int> StartUpAsync(string[] args)
 {
-    var rootCommand = CommandFactory.CreateRootCommand();
-    CommandFactory.CreateUploadCommand(rootCommand);
-    CommandFactory.CreateExecutorCommand(rootCommand);
-    CommandFactory.CreateDownloadCommand(rootCommand);
+    var rootCommand = CommandFactory.Instance.CreateRootCommand();
+    CommandFactory.Instance.CreateUploadCommand(rootCommand);
+    CommandFactory.Instance.CreateExecutorCommand(rootCommand);
+    CommandFactory.Instance.CreateDownloadCommand(rootCommand);
 
     try
     {

@@ -7,8 +7,12 @@ using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
 {
-    internal class CommandFactory
+    internal class CommandFactory(CommandHandlers? handlers = default)
     {
+        private readonly CommandHandlers CommandHandlers = handlers ?? CommandHandlers.Instance;
+        internal static CommandFactory Instance => SingletonFactory.Value;
+        private static readonly Lazy<CommandFactory> SingletonFactory = new(() => new());
+
         internal const string DefaultTaskDefinitionFile = "runner-task.json";
 
         private static readonly Uri DefaultDockerUri = new("unix:///var/run/docker.sock");
@@ -37,9 +41,9 @@ namespace Tes.RunnerCLI.Commands
         {
             var urlFound = commandResult.FindResultFor(GetOptionByName<Uri>(command, BlobPipelineOptionsConverter.UrlOption)) is not null;
             var fileResult = commandResult.FindResultFor(GetOptionByName<FileInfo>(command, BlobPipelineOptionsConverter.FileOption));
-            var fileExists = fileResult?.GetValueForOption((Option<FileInfo>)fileResult.Option)?.Exists ?? false;
+            var fileValue = fileResult?.IsImplicit ?? true ? GetDefaultTaskDefinitionFile() : fileResult.GetValueOrDefault<FileInfo>();
 
-            commandResult.ErrorMessage = (fileExists, urlFound) switch
+            commandResult.ErrorMessage = (fileValue?.Exists ?? false, urlFound) switch
             {
                 (true, true) => "Option '--file' and '--url' must not both be provided.",
                 (false, false) => "Option '--file' or '--url' is required.",
@@ -47,7 +51,7 @@ namespace Tes.RunnerCLI.Commands
             };
         }
 
-        internal static RootCommand CreateRootCommand()
+        internal RootCommand CreateRootCommand()
         {
             var rootCommand = new RootCommand("Executes all operations on the node: download, exec and upload");
 
@@ -78,7 +82,7 @@ namespace Tes.RunnerCLI.Commands
             return rootCommand;
         }
 
-        internal static Command CreateUploadCommand(RootCommand rootCommand)
+        internal Command CreateUploadCommand(RootCommand rootCommand)
         {
             var cmd = new Command(UploadCommandName, "Uploads output files to blob storage");
             rootCommand.Add(cmd);
@@ -99,7 +103,7 @@ namespace Tes.RunnerCLI.Commands
             return cmd;
         }
 
-        internal static Command CreateExecutorCommand(RootCommand rootCommand)
+        internal Command CreateExecutorCommand(RootCommand rootCommand)
         {
             var cmd = new Command(ExecutorCommandName, "Executes the TES Task commands on the container");
             rootCommand.Add(cmd);
@@ -113,7 +117,7 @@ namespace Tes.RunnerCLI.Commands
             return cmd;
         }
 
-        internal static Command CreateDownloadCommand(RootCommand rootCommand)
+        internal Command CreateDownloadCommand(RootCommand rootCommand)
         {
             var cmd = new Command(DownloadCommandName, "Downloads input files from a HTTP source");
             rootCommand.Add(cmd);
@@ -134,7 +138,7 @@ namespace Tes.RunnerCLI.Commands
             return cmd;
         }
 
-        private static FileInfo? GetDefaultTaskDefinitionFile()
+        private static FileInfo GetDefaultTaskDefinitionFile()
         {
             return new(DefaultTaskDefinitionFile);
         }

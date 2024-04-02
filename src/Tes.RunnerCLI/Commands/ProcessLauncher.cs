@@ -51,7 +51,7 @@ namespace Tes.RunnerCLI.Commands
 
             await logReader.WaitUntilAsync(timeout: TimeSpan.FromSeconds(LogWaitTimeoutInSeconds));
 
-            logger.LogInformation($"Process exited. Arguments: {process.StartInfo.Arguments}");
+            logger.LogInformation("Process exited. Arguments: {ProcessArguments}", process.StartInfo.Arguments);
         }
 
         private void SetupErrorAndOutputReaders(Process process)
@@ -67,7 +67,7 @@ namespace Tes.RunnerCLI.Commands
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
 
-            logger.LogInformation($"Starting process: {process.StartInfo.FileName} {process.StartInfo.Arguments}");
+            logger.LogInformation("Starting process: {ProcessFileName} {Process.Arguments}", process.StartInfo.FileName, process.StartInfo.Arguments);
         }
 
         private static string? GetExecutableFullPath()
@@ -75,7 +75,7 @@ namespace Tes.RunnerCLI.Commands
             return Process.GetCurrentProcess().MainModule?.FileName;
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("SingleFile", "IL3000:Avoid accessing Assembly file path when publishing as a single file", Justification = "<Pending>")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("SingleFile", "IL3000:Avoid accessing Assembly file path when publishing as a single file", Justification = "Needed to include process binary in result when not assembly is not published.")]
         private static string ParseArguments(string[] options)
         {
             var argList = new List<string>(options);
@@ -87,14 +87,14 @@ namespace Tes.RunnerCLI.Commands
                 argList.Insert(0, assemblyName);
             }
 
-            return string.Join(" ", argList.ToArray());
+            return string.Join(" ", [.. argList]);
         }
 
         public static async Task<ProcessLauncher> CreateLauncherAsync(FileInfo file, string logNamePrefix)
         {
             ArgumentNullException.ThrowIfNull(file);
 
-            var nodeTask = await NodeTaskUtils.DeserializeNodeTaskAsync(file.FullName);
+            var nodeTask = await NodeTaskUtils.Instance.DeserializeNodeTaskAsync(file.FullName);
 
             var logPublisher = await LogPublisher.CreateStreamReaderLogPublisherAsync(nodeTask, logNamePrefix);
 

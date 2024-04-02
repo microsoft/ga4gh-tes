@@ -10,9 +10,13 @@ using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
 {
-    internal class CommandHandlers
+    internal class CommandHandlers(Func<NodeTaskUtils>? nodeTaskUtils = default)
     {
-        private static readonly ILogger Logger = PipelineLoggerFactory.Create<CommandHandlers>();
+        internal static CommandHandlers Instance => SingletonFactory.Value;
+        private static readonly Lazy<CommandHandlers> SingletonFactory = new(() => new());
+
+        private readonly Lazy<NodeTaskUtils> nodeTaskUtils = new(nodeTaskUtils ?? (() => NodeTaskUtils.Instance));
+        private readonly ILogger Logger = PipelineLoggerFactory.Create<CommandHandlers>();
 
         /// <summary>
         /// Root command of the CLI. Executes all operations (download, executor, upload) as sub-processes.
@@ -25,7 +29,7 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="apiVersion"></param>
         /// <param name="dockerUri"></param>
         /// <returns></returns>
-        internal static async Task<int> ExecuteRootCommandAsync(
+        internal async Task<int> ExecuteRootCommandAsync(
             Uri? fileUri,
             FileInfo? file,
             int blockSize,
@@ -48,7 +52,7 @@ namespace Tes.RunnerCLI.Commands
                     if (!file?.Exists ?? true)
                     {
                         file ??= new(CommandFactory.DefaultTaskDefinitionFile);
-                        await NodeTaskUtils.SerializeNodeTaskAsync(nodeTask, file.FullName);
+                        await nodeTaskUtils.Value.SerializeNodeTaskAsync(nodeTask, file.FullName);
                         file.Refresh();
                     }
 
@@ -91,11 +95,11 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="dockerUri"></param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        internal static async Task ExecuteExecCommandAsync(FileInfo file, Uri dockerUri)
+        internal async Task ExecuteExecCommandAsync(FileInfo file, Uri dockerUri)
         {
             try
             {
-                var nodeTask = await NodeTaskUtils.DeserializeNodeTaskAsync(file.FullName);
+                var nodeTask = await nodeTaskUtils.Value.DeserializeNodeTaskAsync(file.FullName);
 
                 Logger.LogDebug("Executing commands in container for Task ID: {NodeTaskId}", nodeTask.Id);
 
@@ -132,7 +136,7 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="bufferCapacity"></param>
         /// <param name="apiVersion"></param>
         /// <returns></returns>
-        internal static async Task<int> ExecuteUploadCommandAsync(FileInfo file,
+        internal async Task<int> ExecuteUploadCommandAsync(FileInfo file,
             int blockSize,
             int writers,
             int readers,
@@ -156,7 +160,7 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="bufferCapacity"></param>
         /// <param name="apiVersion"></param>
         /// <returns></returns>
-        internal static async Task<int> ExecuteDownloadCommandAsync(FileInfo file,
+        internal async Task<int> ExecuteDownloadCommandAsync(FileInfo file,
             int blockSize,
             int writers,
             int readers,
@@ -170,7 +174,7 @@ namespace Tes.RunnerCLI.Commands
             return await ExecuteTransferTaskAsync(file, exec => exec.DownloadInputsAsync(options));
         }
 
-        private static async Task ExecuteAllOperationsAsSubProcessesAsync(FileInfo file, int blockSize, int writers, int readers, int bufferCapacity,
+        protected virtual async Task ExecuteAllOperationsAsSubProcessesAsync(FileInfo file, int blockSize, int writers, int readers, int bufferCapacity,
             string apiVersion, Uri dockerUri)
         {
             var options =
@@ -184,11 +188,11 @@ namespace Tes.RunnerCLI.Commands
             await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.UploadCommandName, file, options);
         }
 
-        private static async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, Func<Executor, Task<long>> transferOperation)
+        private async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, Func<Executor, Task<long>> transferOperation)
         {
             try
             {
-                var nodeTask = await NodeTaskUtils.DeserializeNodeTaskAsync(taskDefinitionFile.FullName);
+                var nodeTask = await nodeTaskUtils.Value.DeserializeNodeTaskAsync(taskDefinitionFile.FullName);
 
                 await using var executor = await Executor.CreateExecutorAsync(nodeTask);
 
@@ -204,23 +208,18 @@ namespace Tes.RunnerCLI.Commands
             }
         }
 
-        private static async ValueTask<Runner.Models.NodeTask> ResolveNodeTaskAsync(FileInfo? file, Uri? uri)
+        private async ValueTask<Runner.Models.NodeTask> ResolveNodeTaskAsync(FileInfo? file, Uri? uri)
         {
-            try
-            {
-                return await NodeTaskUtils.ResolveNodeTaskAsync(file, uri, GetNodeTaskResolverOptions());
-            }
-            catch (ArgumentException e) when (e.ParamName == "options")
-            {
-                throw new InvalidOperationException($"Environment variable '{nameof(Runner.Models.NodeTaskResolverOptions)}' is missing.", e);
-            }
+            return await nodeTaskUtils.Value.ResolveNodeTaskAsync(file, uri, GetNodeTaskResolverOptions());
         }
 
-        private static Runner.Models.NodeTaskResolverOptions? GetNodeTaskResolverOptions()
+        private Lazy<Runner.Models.NodeTaskResolverOptions> GetNodeTaskResolverOptions()
         {
             var optionsValue = Environment.GetEnvironmentVariable(nameof(Runner.Models.NodeTaskResolverOptions));
 
-            return string.IsNullOrWhiteSpace(optionsValue) ? null : NodeTaskUtils.DeserializeJson<Runner.Models.NodeTaskResolverOptions>(optionsValue);
+            return new(() => string.IsNullOrWhiteSpace(optionsValue)
+                ? throw new InvalidOperationException($"Environment variable '{nameof(Runner.Models.NodeTaskResolverOptions)}' is required.")
+                : NodeTaskUtils.DeserializeJson<Runner.Models.NodeTaskResolverOptions>(optionsValue));
         }
     }
 }
