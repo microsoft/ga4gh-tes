@@ -10,3 +10,4 @@ openapi-test-runner report --server http://$tesuser:$tespassword@$teshostname/ -
 mv results/report.json results/report-tes-1.0.0.json
 openapi-test-runner report --server http://$tesuser:$tespassword@$teshostname/ --version 1.1.0 --output_path results
 mv results/report.json results/report-tes-1.1.0.json
+jq -n 'reduce inputs as $s (.; .[input_filename] += $s)'   results/report-tes-1.0.0.json results/report-tes-1.1.0.json > results/report.json
