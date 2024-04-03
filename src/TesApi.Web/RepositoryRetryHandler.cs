@@ -57,7 +57,7 @@ namespace TesApi.Web
             => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(predicate, ct), cancellationToken);
 
         /// <inheritdoc/>
-        public Task<(string, IEnumerable<T>)> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate, Expression<Func<T, bool>> predicate)
+        public Task<IRepository<T>.GetItemsResult> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate, Expression<Func<T, bool>> predicate)
             => _asyncRetryPolicy.ExecuteAsync(ct => _repository.GetItemsAsync(continuationToken, pageSize, ct, rawPredicate, predicate), cancellationToken);
 
         /// <inheritdoc/>

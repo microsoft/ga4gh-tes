@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Azure.Core;
 using Azure.Storage.Blobs;
 using Azure.Storage.Sas;
 using Tes.Runner.Authentication;
@@ -21,24 +22,50 @@ namespace Tes.Runner.Storage
                 case TransformationStrategy.SchemeConverter:
                     return new CloudProviderSchemeConverter();
                 case TransformationStrategy.AzureResourceManager:
-                    return new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, TokenCredentialsManager.GetTokenCredential(runtimeOptions)));
+                    return new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, TokenCredentialsManager.GetTokenCredential(runtimeOptions)), runtimeOptions);
                 case TransformationStrategy.TerraWsm:
-                    return new TerraUrlTransformationStrategy(runtimeOptions.Terra!, TokenCredentialsManager.GetTokenCredential(runtimeOptions));
+                    return new TerraUrlTransformationStrategy(runtimeOptions.Terra!, TokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureEnvironmentConfig!);
                 case TransformationStrategy.CombinedTerra:
-                    return new CombinedTransformationStrategy(new List<IUrlTransformationStrategy>
-                    {
-                        new CloudProviderSchemeConverter(),
-                        new TerraUrlTransformationStrategy(runtimeOptions.Terra!, TokenCredentialsManager.GetTokenCredential(runtimeOptions)),
-                    });
+                    return CreateCombineTerraTransformationStrategy(runtimeOptions, TokenCredentialsManager.GetTokenCredential(runtimeOptions));
                 case TransformationStrategy.CombinedAzureResourceManager:
-                    return new CombinedTransformationStrategy(new List<IUrlTransformationStrategy>
-                    {
-                        new CloudProviderSchemeConverter(),
-                        new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, TokenCredentialsManager.GetTokenCredential(runtimeOptions)))
-                    });
+                    return CreateCombinedArmTransformationStrategy(runtimeOptions, TokenCredentialsManager.GetTokenCredential(runtimeOptions));
             }
 
             throw new NotImplementedException();
+        }
+
+        public static CombinedTransformationStrategy CreateCombinedArmTransformationStrategy(RuntimeOptions runtimeOptions, TokenCredential tokenCredential)
+        {
+            var strategy = new CombinedTransformationStrategy(new List<IUrlTransformationStrategy>
+            {
+                new CloudProviderSchemeConverter(),
+                new ArmUrlTransformationStrategy(u => new BlobServiceClient(u, tokenCredential), runtimeOptions)
+            });
+
+            InsertDrsStrategyIfTerraSettingsAreSet(strategy, runtimeOptions, tokenCredential);
+
+            return strategy;
+        }
+
+        private static void InsertDrsStrategyIfTerraSettingsAreSet(CombinedTransformationStrategy strategy, RuntimeOptions runtime, TokenCredential tokenCredential)
+        {
+            if (runtime.Terra != null && !String.IsNullOrWhiteSpace(runtime.Terra.DrsHubApiHost))
+            {
+                strategy.InsertStrategy(0, new DrsUriTransformationStrategy(runtime.Terra, tokenCredential, runtime.AzureEnvironmentConfig!));
+            }
+        }
+
+        public static CombinedTransformationStrategy CreateCombineTerraTransformationStrategy(RuntimeOptions runtimeOptions, TokenCredential tokenCredential)
+        {
+            var strategy = new CombinedTransformationStrategy(new List<IUrlTransformationStrategy>
+            {
+                new CloudProviderSchemeConverter(),
+                new TerraUrlTransformationStrategy(runtimeOptions.Terra!, tokenCredential, runtimeOptions.AzureEnvironmentConfig!),
+            });
+
+            InsertDrsStrategyIfTerraSettingsAreSet(strategy, runtimeOptions, tokenCredential);
+
+            return strategy;
         }
 
         public static async Task<Uri> GetTransformedUrlAsync(RuntimeOptions runtimeOptions, StorageTargetLocation location, BlobSasPermissions permissions)

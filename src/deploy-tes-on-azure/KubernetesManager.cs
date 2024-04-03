@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using CommonUtilities.AzureCloud;
 using k8s;
 using k8s.Models;
 using Microsoft.Azure.Management.ContainerService;
@@ -35,8 +36,8 @@ namespace TesDeployer
             .WaitAndRetryAsync(80, retryAttempt => TimeSpan.FromSeconds(15));
 
         private static readonly AsyncRetryPolicy KubeExecRetryPolicy = Policy
-            .Handle<WebSocketException>(ex => ex.WebSocketErrorCode == WebSocketError.NotAWebSocket)
-            .WaitAndRetryAsync(200, retryAttempt => TimeSpan.FromSeconds(5));
+                    .Handle<WebSocketException>(ex => ex.WebSocketErrorCode == WebSocketError.NotAWebSocket)
+                    .WaitAndRetryAsync(200, retryAttempt => TimeSpan.FromSeconds(5));
 
         private const string NginxIngressRepo = "https://kubernetes.github.io/ingress-nginx";
         private const string NginxIngressVersion = "4.7.1";
@@ -45,6 +46,7 @@ namespace TesDeployer
 
         private Configuration configuration { get; set; }
         private AzureCredentials azureCredentials { get; set; }
+        private AzureCloudConfig azureCloudConfig { get; set; }
         private CancellationToken cancellationToken { get; set; }
         private string workingDirectoryTemp { get; set; }
         private string kubeConfigPath { get; set; }
@@ -55,8 +57,9 @@ namespace TesDeployer
         public string TesHostname { get; set; }
         public string AzureDnsLabelName { get; set; }
 
-        public KubernetesManager(Configuration config, AzureCredentials credentials, CancellationToken cancellationToken)
+        public KubernetesManager(Configuration config, AzureCredentials credentials, AzureCloudConfig azureCloudConfig, CancellationToken cancellationToken)
         {
+            this.azureCloudConfig = azureCloudConfig;
             this.cancellationToken = cancellationToken;
             configuration = config;
             azureCredentials = credentials;
@@ -67,7 +70,7 @@ namespace TesDeployer
         public void SetTesIngressNetworkingConfiguration(string prefix)
         {
             const int maxCnLength = 64;
-            var suffix = $".{configuration.RegionName}.cloudapp.azure.com";
+            var suffix = $".{configuration.RegionName}.cloudapp.{azureCloudConfig.Domain}";
             var prefixMaxLength = maxCnLength - suffix.Length;
             TesCname = GetTesCname(prefix, prefixMaxLength);
             TesHostname = $"{TesCname}{suffix}";
@@ -77,7 +80,7 @@ namespace TesDeployer
         public async Task<IKubernetes> GetKubernetesClientAsync(IResource resourceGroupObject)
         {
             var resourceGroup = resourceGroupObject.Name;
-            var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
+            var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, BaseUri = new Uri(azureCloudConfig.ResourceManagerUrl) };
 
             // Write kubeconfig in the working directory, because KubernetesClientConfiguration needs to read from a file, TODO figure out how to pass this directly. 
             var creds = await containerServiceClient.ManagedClusters.ListClusterAdminCredentialsAsync(resourceGroup, configuration.AksClusterName, cancellationToken: cancellationToken);
@@ -101,7 +104,6 @@ namespace TesDeployer
                 apiVersion: apps/v1
                 kind: Deployment
                 metadata:
-                  creationTimestamp: null
                   labels:
                     io.kompose.service: ubuntu
                   name: ubuntu
@@ -110,21 +112,16 @@ namespace TesDeployer
                   selector:
                     matchLabels:
                       io.kompose.service: ubuntu
-                  strategy: {}
                   template:
                     metadata:
-                      creationTimestamp: null
                       labels:
                         io.kompose.service: ubuntu
                     spec:
                       containers:
-                        - name: ubuntu
-                          image: mcr.microsoft.com/mirror/docker/library/ubuntu:22.04
-                          command: [ "/bin/bash", "-c", "--" ]
-                          args: [ "while true; do sleep 30; done;" ]
-                          resources: {}
-                      restartPolicy: Always
-                status: {}
+                      - name: ubuntu
+                        image: ubuntu
+                        command: ["/bin/bash", "-c", "--"]
+                        args: ["while true; do sleep 30; done;"]
                 """));
 
         /// <summary>
@@ -341,6 +338,7 @@ namespace TesDeployer
             {
                 foreach (var command in commands)
                 {
+                    // Debug: ConsoleEx.WriteLine($"Executing: {string.Join(' ', command)}");
                     _ = await client.NamespacedPodExecAsync(workloadPod.Metadata.Name, podNamespace, podName, command, true,
                         (stdIn, stdOut, stdError) => Task.WhenAll(StreamHandler(stdOut), StreamHandler(stdError)), CancellationToken.None);
                 }
@@ -388,8 +386,10 @@ namespace TesDeployer
             var batchScheduling = GetObjectFromConfig(values, "batchScheduling") ?? new Dictionary<string, string>();
             var batchImageGen2 = GetObjectFromConfig(values, "batchImageGen2") ?? new Dictionary<string, string>();
             var batchImageGen1 = GetObjectFromConfig(values, "batchImageGen1") ?? new Dictionary<string, string>();
-            var martha = GetObjectFromConfig(values, "martha") ?? new Dictionary<string, string>();
+            var drsHub = GetObjectFromConfig(values, "drsHub") ?? new Dictionary<string, string>();
+            var deployment = GetObjectFromConfig(values, "deployment") ?? new Dictionary<string, string>();
 
+            values.Config["azureCloudName"] = GetValueOrDefault(settings, "AzureCloudName");
             values.Config["tesOnAzureVersion"] = GetValueOrDefault(settings, "TesOnAzureVersion");
             values.Config["azureServicesAuthConnectionString"] = GetValueOrDefault(settings, "AzureServicesAuthConnectionString");
             values.Config["applicationInsightsAccountName"] = GetValueOrDefault(settings, "ApplicationInsightsAccountName");
@@ -408,9 +408,7 @@ namespace TesDeployer
             batchImageGen1["sku"] = GetValueOrDefault(settings, "Gen1BatchImageSku");
             batchImageGen1["version"] = GetValueOrDefault(settings, "Gen1BatchImageVersion");
             batchImageGen1["nodeAgentSkuId"] = GetValueOrDefault(settings, "Gen1BatchNodeAgentSkuId");
-            martha["url"] = GetValueOrDefault(settings, "MarthaUrl");
-            martha["keyVaultName"] = GetValueOrDefault(settings, "MarthaKeyVaultName");
-            martha["secretName"] = GetValueOrDefault(settings, "MarthaSecretName");
+            drsHub["url"] = GetValueOrDefault(settings, "DrsHubUrl");
             batchScheduling["prefix"] = GetValueOrDefault(settings, "BatchPrefix");
             values.Config["crossSubscriptionAKSDeployment"] = GetValueOrDefault(settings, "CrossSubscriptionAKSDeployment");
             values.Images["tes"] = GetValueOrDefault(settings, "TesImageName");
@@ -427,17 +425,24 @@ namespace TesDeployer
             values.TesDatabase["databaseName"] = GetValueOrDefault(settings, "PostgreSqlTesDatabaseName");
             values.TesDatabase["databaseUserLogin"] = GetValueOrDefault(settings, "PostgreSqlTesDatabaseUserLogin");
             values.TesDatabase["databaseUserPassword"] = GetValueOrDefault(settings, "PostgreSqlTesDatabaseUserPassword");
+            deployment["organizationName"] = GetValueOrDefault(settings, "DeploymentOrganizationName");
+            deployment["organizationUrl"] = GetValueOrDefault(settings, "DeploymentOrganizationUrl");
+            deployment["contactUri"] = GetValueOrDefault(settings, "DeploymentContactUri");
+            deployment["environment"] = GetValueOrDefault(settings, "DeploymentEnvironment");
+            deployment["created"] = GetValueOrDefault(settings, "DeploymentCreated");
+            deployment["updated"] = GetValueOrDefault(settings, "DeploymentUpdated");
 
             values.Config["batchAccount"] = batchAccount;
             values.Config["batchNodes"] = batchNodes;
             values.Config["batchScheduling"] = batchScheduling;
             values.Config["batchImageGen2"] = batchImageGen2;
             values.Config["batchImageGen1"] = batchImageGen1;
-            values.Config["martha"] = martha;
+            values.Config["drsHub"] = drsHub;
+            values.Config["deployment"] = deployment;
         }
 
         private static IDictionary<string, string> GetObjectFromConfig(HelmValues values, string key)
-            => (values?.Config[key] as IDictionary<object, object>)?.ToDictionary(p => p.Key as string, p => p.Value as string);
+            => (values?.Config.TryGetValue(key, out var config) ?? false ? (config as IDictionary<object, object>) : null)?.ToDictionary(p => p.Key as string, p => p.Value as string);
 
         private static T GetValueOrDefault<T>(IDictionary<string, T> propertyBag, string key)
             => propertyBag.TryGetValue(key, out var value) ? value : default;
@@ -449,10 +454,12 @@ namespace TesDeployer
             var batchScheduling = GetObjectFromConfig(values, "batchScheduling") ?? new Dictionary<string, string>();
             var batchImageGen2 = GetObjectFromConfig(values, "batchImageGen2") ?? new Dictionary<string, string>();
             var batchImageGen1 = GetObjectFromConfig(values, "batchImageGen1") ?? new Dictionary<string, string>();
-            var martha = GetObjectFromConfig(values, "martha") ?? new Dictionary<string, string>();
+            var drsHub = GetObjectFromConfig(values, "drsHub") ?? new Dictionary<string, string>();
+            var deployment = GetObjectFromConfig(values, "deployment") ?? new Dictionary<string, string>();
 
             return new()
             {
+                ["AzureCloudName"] = GetValueOrDefault(values.Config, "azureCloudName") as string,
                 ["TesOnAzureVersion"] = GetValueOrDefault(values.Config, "tesOnAzureVersion") as string,
                 ["AzureServicesAuthConnectionString"] = GetValueOrDefault(values.Config, "azureServicesAuthConnectionString") as string,
                 ["ApplicationInsightsAccountName"] = GetValueOrDefault(values.Config, "applicationInsightsAccountName") as string,
@@ -471,9 +478,7 @@ namespace TesDeployer
                 ["Gen1BatchImageSku"] = GetValueOrDefault(batchImageGen1, "sku"),
                 ["Gen1BatchImageVersion"] = GetValueOrDefault(batchImageGen1, "version"),
                 ["Gen1BatchNodeAgentSkuId"] = GetValueOrDefault(batchImageGen1, "nodeAgentSkuId"),
-                ["MarthaUrl"] = GetValueOrDefault(martha, "url"),
-                ["MarthaKeyVaultName"] = GetValueOrDefault(martha, "keyVaultName"),
-                ["MarthaSecretName"] = GetValueOrDefault(martha, "secretName"),
+                ["DrsHubUrl"] = GetValueOrDefault(drsHub, "url"),
                 ["BatchPrefix"] = GetValueOrDefault(batchScheduling, "prefix"),
                 ["CrossSubscriptionAKSDeployment"] = GetValueOrDefault(values.Config, "crossSubscriptionAKSDeployment") as string,
                 ["UsePostgreSqlSingleServer"] = GetValueOrDefault(values.Config, "usePostgreSqlSingleServer") as string,
@@ -492,6 +497,12 @@ namespace TesDeployer
                 ["PostgreSqlTesDatabaseName"] = GetValueOrDefault(values.TesDatabase, "databaseName"),
                 ["PostgreSqlTesDatabaseUserLogin"] = GetValueOrDefault(values.TesDatabase, "databaseUserLogin"),
                 ["PostgreSqlTesDatabaseUserPassword"] = GetValueOrDefault(values.TesDatabase, "databaseUserPassword"),
+                ["DeploymentOrganizationName"] = GetValueOrDefault(deployment, "organizationName"),
+                ["DeploymentOrganizationUrl"] = GetValueOrDefault(deployment, "organizationUrl"),
+                ["DeploymentContactUri"] = GetValueOrDefault(deployment, "contactUri"),
+                ["DeploymentEnvironment"] = GetValueOrDefault(deployment, "environment"),
+                ["DeploymentCreated"] = GetValueOrDefault(deployment, "created"),
+                ["DeploymentUpdated"] = GetValueOrDefault(deployment, "updated"),
             };
         }
 

@@ -56,7 +56,7 @@ namespace Tes.Repository
         /// <param name="rawPredicate">Raw 'where' clause for cases where EF does not have translations.</param>
         /// <param name="efPredicate">The 'where' clause. It is appended if both <paramref name="rawPredicate"/> and this are provided.</param>
         /// <returns>A continuation token string, and the collection of retrieved items</returns>
-        Task<(string, IEnumerable<T>)> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate = default, Expression<Func<T, bool>> efPredicate = default);
+        Task<GetItemsResult> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate = default, Expression<Func<T, bool>> efPredicate = default);
 
         /// <summary>
         /// Update the item in the repository
@@ -79,5 +79,12 @@ namespace Tes.Repository
         /// </summary>
         /// <returns>A string containing "json"->'<paramref name="property"/>' prepended to <paramref name="sql"/>.</returns>
         FormattableString JsonFormattableRawString(string property, FormattableString sql);
+
+        /// <summary>
+        /// The results of a continuable query.
+        /// </summary>
+        /// <param name="ContinuationToken">Continuation token</param>
+        /// <param name="Items">Query results.</param>
+        record struct GetItemsResult(string ContinuationToken, IEnumerable<T> Items);
     }
 }

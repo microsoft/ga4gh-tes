@@ -101,12 +101,22 @@ namespace Tes.Runner.Test.Storage
             Assert.AreEqual(wsmPermissions, capturedSasTokenApiParameters.SasPermission);
         }
 
-        [TestMethod]
+        [DataTestMethod]
         [DataRow("https://foo.blob.core.windows.net/container")]
         [DataRow("https://foo.bar.net/container")]
         [DataRow("https://foo.bar.net")]
         public async Task TransformUrlWithStrategyAsync_NonTerraStorageAccount_SourceUrlIsReturned(string sourceUrl)
         {
+            var sasUrl = await transformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
+
+            Assert.AreEqual(new Uri(sourceUrl).ToString(), sasUrl.ToString());
+        }
+
+        [TestMethod]
+        public async Task TransformUrlWithStrategyAsync_TerraStorageAccountWithSasToken_SourceUrlIsReturned()
+        {
+            var sourceUrl = $"{stubTerraBlobUrl}/blob?{StubSasToken}";
+
             var sasUrl = await transformationStrategy.TransformUrlWithStrategyAsync(sourceUrl, BlobSasPermissions.Read);
 
             Assert.AreEqual(new Uri(sourceUrl).ToString(), sasUrl.ToString());

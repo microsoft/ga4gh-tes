@@ -20,12 +20,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Swashbuckle.AspNetCore.Annotations;
 using Tes.Models;
 using Tes.Repository;
+using Tes.TaskSubmitters;
 using TesApi.Attributes;
 using TesApi.Web;
 
@@ -34,12 +34,19 @@ namespace TesApi.Controllers
     /// <summary>
     /// API endpoints for <see cref="TesTask"/>s.
     /// </summary>
-    public class TaskServiceApiController : ControllerBase
+    /// <remarks>
+    /// Contruct a <see cref="TaskServiceApiController"/>
+    /// </remarks>
+    /// <param name="repository">The main <see cref="TesTask"/> database repository</param>
+    /// <param name="logger">The logger instance</param>
+    /// <param name="serviceInfo">The GA4GH TES service information</param>
+    public class TaskServiceApiController(IRepository<TesTask> repository, ILogger<TaskServiceApiController> logger, TesServiceInfo serviceInfo)
+        : ControllerBase
     {
         //private const string rootExecutionPath = "/cromwell-executions";
-        private readonly IRepository<TesTask> repository;
-        private readonly ILogger<TaskServiceApiController> logger;
-        private readonly IAzureProxy azureProxy;
+        private readonly IRepository<TesTask> repository = repository;
+        private readonly ILogger<TaskServiceApiController> logger = logger;
+        private readonly TesServiceInfo serviceInfo = serviceInfo;
 
         private static readonly Dictionary<TesView, JsonSerializerSettings> TesJsonSerializerSettings = new()
         {
@@ -47,19 +54,6 @@ namespace TesApi.Controllers
             { TesView.BASIC, new JsonSerializerSettings{ ContractResolver = BasicTesTaskContractResolver.Instance } },
             { TesView.FULL, new JsonSerializerSettings{ ContractResolver = FullTesTaskContractResolver.Instance } }
         };
-
-        /// <summary>
-        /// Contruct a <see cref="TaskServiceApiController"/>
-        /// </summary>
-        /// <param name="repository">The main <see cref="TesTask"/> database repository</param>
-        /// <param name="logger">The logger instance</param>
-        /// <param name="azureProxy">The Azure Proxy instance</param>
-        public TaskServiceApiController(IRepository<TesTask> repository, ILogger<TaskServiceApiController> logger, IAzureProxy azureProxy)
-        {
-            this.repository = repository;
-            this.logger = logger;
-            this.azureProxy = azureProxy;
-        }
 
         /// <summary>
         /// Cancel a task
@@ -87,7 +81,7 @@ namespace TesApi.Controllers
                     tesTask.State == TesState.EXECUTORERROREnum ||
                     tesTask.State == TesState.SYSTEMERROREnum)
                 {
-                    logger.LogInformation($"Task {id} cannot be canceled because it is in {tesTask.State} state.");
+                    logger.LogInformation("Task {TesTask} cannot be canceled because it is in {TesTaskState} state.", id, tesTask.State);
                 }
                 else if (tesTask.State != TesState.CANCELEDEnum)
                 {
@@ -101,7 +95,7 @@ namespace TesApi.Controllers
                     }
                     catch (RepositoryCollisionException exc)
                     {
-                        logger.LogError(exc, $"RepositoryCollisionException in CancelTask for {id}");
+                        logger.LogError(exc, "RepositoryCollisionException in CancelTask for {TesTask}", id);
                         return Conflict(new { message = "The task could not be updated due to a conflict with the current state; please retry." });
                     }
                 }
@@ -110,7 +104,6 @@ namespace TesApi.Controllers
             {
                 return NotFound($"The task with id {id} does not exist.");
             }
-
 
             return StatusCode(200, new object());
         }
@@ -159,23 +152,10 @@ namespace TesApi.Controllers
                 }
             }
 
+            tesTask.Tags ??= new Dictionary<string, string>(StringComparer.Ordinal); // case-sensitive is the default for Dictionary<string, T> as well as the default for JSON.
             tesTask.State = TesState.QUEUEDEnum;
             tesTask.CreationTime = DateTimeOffset.UtcNow;
-
-            // example: /cromwell-executions/test/daf1a044-d741-4db9-8eb5-d6fd0519b1f1/call-hello/execution/script
-            tesTask.WorkflowId = tesTask
-                ?.Inputs
-                ?.FirstOrDefault(i => i?.Name?.Equals("commandScript", StringComparison.OrdinalIgnoreCase) == true)
-                ?.Path
-                ?.Split('/', StringSplitOptions.RemoveEmptyEntries)
-                ?.Skip(2)
-                ?.FirstOrDefault();
-
-            tesTask.Tags ??= new Dictionary<string, string>(StringComparer.Ordinal); // case-sensitive is the default for Dictionary<string, T> as well as the default for JSON.
-
-            tesTask.Tags["workflow_id"] = tesTask.WorkflowId;
-
-            // Prefix the TES task id with first eight characters of root Cromwell job id to facilitate easier debugging
+            tesTask.TaskSubmitter = TaskSubmitter.Parse(tesTask);
             tesTask.Id = tesTask.CreateId();
 
             if (tesTask?.Resources is not null)
@@ -233,7 +213,7 @@ namespace TesApi.Controllers
                 }
             }
 
-            logger.LogDebug($"Creating task with id {tesTask.Id} state {tesTask.State}");
+            logger.LogDebug("Creating task with id {TesTask} state {TesTaskState}", tesTask.Id, tesTask.State);
             await repository.CreateItemAsync(tesTask, cancellationToken);
             return StatusCode(200, new TesCreateTaskResponse { Id = tesTask.Id });
         }
@@ -249,15 +229,8 @@ namespace TesApi.Controllers
         [SwaggerResponse(statusCode: 200, type: typeof(TesServiceInfo), description: "")]
         public virtual IActionResult GetServiceInfo()
         {
-            var serviceInfo = new TesServiceInfo
-            {
-                Name = "GA4GH Task Execution Service",
-                Doc = string.Empty,
-                Storage = [],
-                TesResourcesSupportedBackendParameters = Enum.GetNames(typeof(TesResources.SupportedBackendParameters)).ToList()
-            };
-
-            logger.LogInformation($"Name: {serviceInfo.Name} Doc: {serviceInfo.Doc} Storage: {serviceInfo.Storage} TesResourcesSupportedBackendParameters: {string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters)}");
+            logger.LogInformation("Id: {ServiceInfoId} Name: {ServiceInfoName} Type: {ServiceInfoType} Description: {ServiceInfoDescription} Organization: {ServiceInfoOrganization} ContactUrl: {ServiceInfoContactUrl} DocumentationUrl: {ServiceInfoDocumentationUrl} CreatedAt:{ServiceInfoCreatedAt} UpdatedAt:{ServiceInfoUpdatedAt} Environment: {ServiceInfoEnvironment} Version: {ServiceInfoVersion} Storage: {ServiceInfoStorage} TesResourcesSupportedBackendParameters: {ServiceInfoTesResourcesSupportedBackendParameters}",
+                serviceInfo.Id, serviceInfo.Name, serviceInfo.Type, serviceInfo.Description, serviceInfo.Organization, serviceInfo.ContactUrl, serviceInfo.DocumentationUrl, serviceInfo.CreatedAt, serviceInfo.UpdatedAt, serviceInfo.Environment, serviceInfo.Version, string.Join(",", serviceInfo.Storage ?? []), string.Join(",", serviceInfo.TesResourcesSupportedBackendParameters ?? []));
             return StatusCode(200, serviceInfo);
         }
 
@@ -288,7 +261,7 @@ namespace TesApi.Controllers
             }
             catch (ArgumentOutOfRangeException exc)
             {
-                logger.LogError(exc.Message);
+                logger.LogError(exc, "{ErrorMessage}", exc.Message);
                 return BadRequest(exc.Message);
             }
 
@@ -321,7 +294,7 @@ namespace TesApi.Controllers
         [ValidateModelState]
         [SwaggerOperation("ListTasks", "List tasks tracked by the TES server. This includes queued, active and completed tasks. How long completed tasks are stored by the system may be dependent on the underlying implementation.")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesListTasksResponse), description: "")]
-        public virtual async Task<IActionResult> ListTasksAsync([FromQuery(Name = "name_prefix")] string namePrefix, [FromQuery] string state, [FromQuery(Name = "tag_key")] string[] tagKeys, [FromQuery(Name = "tag_value")] string[] tagValues, [FromQuery(Name = "page_size")] long? pageSize, [FromQuery(Name = "page_token")] string pageToken, [FromQuery] string view, CancellationToken cancellationToken)
+        public virtual async Task<IActionResult> ListTasksAsync([FromQuery(Name = "name_prefix")] string namePrefix, [FromQuery] string state, [FromQuery(Name = "tag_key")] string[] tagKeys, [FromQuery(Name = "tag_value")] string[] tagValues, [FromQuery(Name = "page_size")] int? pageSize, [FromQuery(Name = "page_token")] string pageToken, [FromQuery] string view, CancellationToken cancellationToken)
         {
             TesState? stateEnum;
 
@@ -373,7 +346,7 @@ namespace TesApi.Controllers
                 }
             }
 
-            var (rawPredicate, predicate) = GenerateSearchPredicates(stateEnum, namePrefix, tags);
+            var (rawPredicate, predicate) = GenerateSearchPredicates(repository, stateEnum, namePrefix, tags);
 
             TesView viewEnum;
 
@@ -383,7 +356,7 @@ namespace TesApi.Controllers
             }
             catch (ArgumentOutOfRangeException exc)
             {
-                logger.LogError(exc.Message);
+                logger.LogError(exc, "{ErrorMessage}", exc.Message);
                 return BadRequest(exc.Message);
             }
 
@@ -395,7 +368,7 @@ namespace TesApi.Controllers
                 pageSize.HasValue ? (int)pageSize : 256,
                 cancellationToken,
                 rawPredicate,
-                predicate is null ? null : t => predicate(t));
+                predicate);
 
             var encodedNextPageToken = nextPageToken is null ? null : Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(nextPageToken));
             var response = new TesListTasksResponse { Tasks = tasks.ToList(), NextPageToken = encodedNextPageToken };
@@ -449,7 +422,7 @@ namespace TesApi.Controllers
             return (tags, null);
         }
 
-        internal (FormattableString RawPredicate, Func<TesTask, bool> EFPredicate) GenerateSearchPredicates(TesState? state, string namePrefix, IDictionary<string, string> tags)
+        internal static (FormattableString RawPredicate, System.Linq.Expressions.Expression<Func<TesTask, bool>> EFPredicate) GenerateSearchPredicates(IRepository<TesTask> repository, TesState? state, string namePrefix, IDictionary<string, string> tags)
         {
             Func<TesTask, bool> efPredicate = null;
 
@@ -478,7 +451,7 @@ namespace TesApi.Controllers
                 }
             }
 
-            return (rawPredicate, efPredicate);
+            return (rawPredicate, efPredicate is null ? null : t => efPredicate(t));
 
             static Func<TesTask, bool> AndFunc(Func<TesTask, bool> source, Func<TesTask, bool> additional)
             {
@@ -521,7 +494,7 @@ namespace TesApi.Controllers
             catch (Exception exc)
             {
                 // Do not re-throw, since a cache issue should not fail the GET request
-                logger.LogWarning(exc, $"An exception occurred while trying to remove TesTask with ID {tesTask.Id} with view {view} from the cache");
+                logger.LogWarning(exc, "An exception occurred while trying to remove TesTask with ID {TesTask} with view {TesTaskView} from the cache", tesTask.Id, view);
             }
 
             return false;
@@ -546,7 +519,7 @@ namespace TesApi.Controllers
 
         private sealed class AppendableFormattableString : FormattableString
         {
-            private readonly List<FormattableString> strings = new();
+            private readonly List<FormattableString> strings = [];
 
             public AppendableFormattableString(FormattableString formattable)
                 => strings.Add(formattable);
@@ -572,7 +545,7 @@ namespace TesApi.Controllers
                         return format;
                     if (parts[index - 1].Length == 0 && format.Length == 0)
                         return format;
-                    var end = format.IndexOfAny(new char[] { ',', ':', '}' });
+                    var end = format.IndexOfAny([',', ':', '}']);
                     if (end == -1)
                         return format;
 
@@ -587,10 +560,7 @@ namespace TesApi.Controllers
 
             public override object GetArgument(int index) // TODO: object is nullable
             {
-                if (index >= ArgumentCount)
-                {
-                    throw new ArgumentOutOfRangeException(nameof(index));
-                }
+                ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, ArgumentCount);
 
                 foreach (var s in strings)
                 {
@@ -615,13 +585,6 @@ namespace TesApi.Controllers
             {
                 return string.Format(formatProvider, Format, GetArguments());
             }
-        }
-
-        private enum TesView
-        {
-            MINIMAL,
-            BASIC,
-            FULL
         }
     }
 }

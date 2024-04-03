@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using CommonUtilities;
 using Tes.Runner.Models;
 
 namespace TesApi.Web.Runner
@@ -87,6 +88,20 @@ namespace TesApi.Web.Runner
         public NodeTaskBuilder WithInputUsingCombinedTransformationStrategy(string path, string sourceUrl, string mountParentDirectory)
         {
             ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
+            TransformationStrategy transformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions();
+
+            if (path.Contains('?'))
+            {
+                // Cromwell bug - when the WDL input contains a SAS token, it's being included in the path
+                // Remove the SAS token
+                path = path[..path.LastIndexOf('?')];
+            }
+
+            if (sourceUrl.Contains('?'))
+            {
+                // When the input is a SAS token, don't transform
+                transformationStrategy = TransformationStrategy.None;
+            }
 
             nodeTask.Inputs ??= new List<FileInput>();
 
@@ -96,7 +111,7 @@ namespace TesApi.Web.Runner
                     MountParentDirectory = mountParentDirectory,
                     Path = path,
                     SourceUrl = sourceUrl,
-                    TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions()
+                    TransformationStrategy = transformationStrategy
                 }
             );
 
@@ -293,6 +308,23 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
+        /// (Optional) sets the azure authority host for the node task.  If not set, the default Azure Public cloud is used.
+        /// </summary>
+        /// <param name="azureCloudIdentityConfig">Azure cloud identity config</param>
+        /// <returns></returns>
+        public NodeTaskBuilder WithAzureCloudIdentityConfig(AzureEnvironmentConfig azureCloudIdentityConfig)
+        {
+            if (azureCloudIdentityConfig == null)
+            {
+                return this;
+            }
+
+            nodeTask.RuntimeOptions ??= new RuntimeOptions();
+            nodeTask.RuntimeOptions.AzureEnvironmentConfig = azureCloudIdentityConfig;
+            return this;
+        }
+
+        /// <summary>
         /// Returns true of the value provided is a valid resource id for a managed identity. 
         /// </summary>
         /// <param name="resourceId"></param>
@@ -342,6 +374,26 @@ namespace TesApi.Web.Runner
                 TargetUrl = targetUrl.AbsoluteUri,
                 TransformationStrategy = GetCombinedTransformationStrategyFromRuntimeOptions()
             };
+
+            return this;
+        }
+
+        /// <summary>
+        /// Adds DRS Hub URL to the node task, if the DRS Hub URL is not set, the property won't be set.
+        /// </summary>
+        /// <param name="drsHubApiHost"></param>
+        /// <returns></returns>
+        /// <exception cref="NotImplementedException"></exception>
+        public NodeTaskBuilder WithDrsHubUrl(string drsHubApiHost)
+        {
+            if (String.IsNullOrWhiteSpace(drsHubApiHost))
+            {
+                return this;
+            }
+
+            nodeTask.RuntimeOptions ??= new RuntimeOptions();
+            nodeTask.RuntimeOptions.Terra ??= new TerraRuntimeOptions();
+            nodeTask.RuntimeOptions.Terra.DrsHubApiHost = drsHubApiHost;
 
             return this;
         }

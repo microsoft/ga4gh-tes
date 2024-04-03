@@ -4,6 +4,7 @@
   enableIngress: false
 
 config:
+  azureCloudName: RUNTIME_PARAMETER
   coaNamespace: RUNTIME_PARAMETER
   resourceGroup: RUNTIME_PARAMETER
   azureServicesAuthConnectionString: RUNTIME_PARAMETER
@@ -18,6 +19,13 @@ config:
     usePreemptibleVmsOnly: RUNTIME_PARAMETER
     poolRotationForcedDays: "7"
     prefix: RUNTIME_PARAMETER
+  deployment:
+    organizationName: RUNTIME_PARAMETER
+    organizationUrl: RUNTIME_PARAMETER
+    contactUri: RUNTIME_PARAMETER
+    environment: RUNTIME_PARAMETER
+    created: RUNTIME_PARAMETER
+    updated: RUNTIME_PARAMETER
   batchImageGen2:
     offer: RUNTIME_PARAMETER
     publisher: RUNTIME_PARAMETER
@@ -30,10 +38,8 @@ config:
     sku: RUNTIME_PARAMETER
     version: RUNTIME_PARAMETER
     nodeAgentSkuId: RUNTIME_PARAMETER
-  martha:
+  drsHub:
     url: RUNTIME_PARAMETER
-    keyVaultName: RUNTIME_PARAMETER
-    secretName: RUNTIME_PARAMETER
   letsEncryptEmail: RUNTIME_PARAMETER
 
 tesDatabase:
