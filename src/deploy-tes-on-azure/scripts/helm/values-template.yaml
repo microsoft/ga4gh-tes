@@ -38,10 +38,8 @@ config:
     sku: RUNTIME_PARAMETER
     version: RUNTIME_PARAMETER
     nodeAgentSkuId: RUNTIME_PARAMETER
-  martha:
+  drsHub:
     url: RUNTIME_PARAMETER
-    keyVaultName: RUNTIME_PARAMETER
-    secretName: RUNTIME_PARAMETER
   letsEncryptEmail: RUNTIME_PARAMETER
 
 tesDatabase:

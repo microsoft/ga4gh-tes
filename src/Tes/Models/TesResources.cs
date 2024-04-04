@@ -37,7 +37,7 @@ namespace Tes.Models
         /// </summary>
         /// <value>Requested number of CPUs</value>
         [DataMember(Name = "cpu_cores")]
-        public long? CpuCores { get; set; }
+        public int? CpuCores { get; set; }
 
         /// <summary>
         /// Is the task allowed to run on preemptible compute instances (e.g. AWS Spot)?

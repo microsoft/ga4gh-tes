@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Azure.Core;
 using CommonUtilities;
 using Microsoft.Extensions.Logging;
@@ -41,16 +42,16 @@ namespace Tes.ApiClients
         /// <summary>
         /// Constructor of base HttpApiClient
         /// </summary>
-        /// <param name="cachingRetryBuilder"></param>
+        /// <param name="cachingRetryPolicyBuilder"></param>
         /// <param name="logger"></param>
-        protected HttpApiClient(CachingRetryPolicyBuilder cachingRetryBuilder, ILogger logger)
+        protected HttpApiClient(CachingRetryPolicyBuilder cachingRetryPolicyBuilder, ILogger logger)
         {
-            ArgumentNullException.ThrowIfNull(cachingRetryBuilder);
+            ArgumentNullException.ThrowIfNull(cachingRetryPolicyBuilder);
             ArgumentNullException.ThrowIfNull(logger);
 
             this.Logger = logger;
 
-            cachingRetryHandler = cachingRetryBuilder
+            cachingRetryHandler = cachingRetryPolicyBuilder
                 .DefaultRetryHttpResponseMessagePolicyBuilder()
                 .SetOnRetryBehavior(onRetry: LogRetryErrorOnRetryHttpResponseMessageHandler())
                 .AddCaching()
@@ -61,11 +62,11 @@ namespace Tes.ApiClients
         /// Constructor of base HttpApiClient
         /// </summary>
         /// <param name="tokenCredential"></param>
-        /// <param name="cachingRetryHandler"></param>
+        /// <param name="cachingRetryPolicyBuilder"></param>
         /// <param name="tokenScope"></param>
         /// <param name="logger"></param>
         protected HttpApiClient(TokenCredential tokenCredential, string tokenScope,
-            CachingRetryPolicyBuilder cachingRetryHandler, ILogger logger) : this(cachingRetryHandler, logger)
+            CachingRetryPolicyBuilder cachingRetryPolicyBuilder, ILogger logger) : this(cachingRetryPolicyBuilder, logger)
         {
             ArgumentNullException.ThrowIfNull(tokenCredential);
             ArgumentException.ThrowIfNullOrEmpty(tokenScope);
@@ -373,6 +374,30 @@ namespace Tes.ApiClients
         protected static async Task<string> ReadResponseBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
         {
             return await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+
+
+        /// <summary>
+        /// Creates a string content from an object
+        /// </summary>
+        protected static HttpContent CreateJsonStringContent<T>(T contentObject)
+        {
+            var stringContent = new StringContent(JsonSerializer.Serialize(contentObject,
+                new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }), Encoding.UTF8, "application/json");
+
+            return stringContent;
+        }
+
+        protected async Task LogResponseContentAsync(HttpResponseMessage response, string errMessage, Exception ex, CancellationToken cancellationToken)
+        {
+            var responseContent = string.Empty;
+
+            if (response is not null)
+            {
+                responseContent = await ReadResponseBodyAsync(response, cancellationToken);
+            }
+
+            Logger.LogError(ex, @"{ErrorMessage}. Response content:{ResponseContent}", errMessage, responseContent);
         }
     }
 }

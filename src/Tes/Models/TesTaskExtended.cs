@@ -52,6 +52,7 @@ namespace Tes.Models
         /// <summary>
         /// Workflow engine task metadata
         /// </summary>
+        [NewtonsoftJson.JsonConverter(typeof(JsonValueConverterTaskSubmitter))]
         [DataMember(Name = "task_submitter")]
         public TaskSubmitter TaskSubmitter { get; set; }
 

@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 using Tes.Extensions;
+using Tes.Models;
 using TesApi.Web.Events;
 using TesApi.Web.Extensions;
 using TesApi.Web.Management;
@@ -64,7 +65,6 @@ namespace TesApi.Web
         private const string StartTaskScriptFilename = "start-task.sh";
         private const string NodeTaskRunnerFilename = "tes-runner";
         private const string NodeTaskRunnerMD5HashFilename = NodeTaskRunnerFilename + ".md5";
-        private readonly string cromwellDrsLocalizerImageName;
         private readonly ILogger logger;
         private readonly IAzureProxy azureProxy;
         private readonly IStorageAccessProvider storageAccessProvider;
@@ -85,14 +85,15 @@ namespace TesApi.Web
         private readonly IAllowedVmSizesService allowedVmSizesService;
         private readonly TaskExecutionScriptingManager taskExecutionScriptingManager;
         private readonly string runnerMD5;
+        private readonly string drsHubApiHost;
 
         /// <summary>
-        /// Constructor for <see cref="BatchScheduler"/>
+        /// Constructor for <see cref="BatchScheduler"/>.
         /// </summary>
         /// <param name="logger">Logger <see cref="ILogger"/>.</param>
         /// <param name="batchGen1Options">Configuration of <see cref="Options.BatchImageGeneration1Options"/>.</param>
         /// <param name="batchGen2Options">Configuration of <see cref="Options.BatchImageGeneration2Options"/>.</param>
-        /// <param name="marthaOptions">Configuration of <see cref="Options.MarthaOptions"/>.</param>
+        /// <param name="drsHubOptions">Configuration of <see cref="Options.DrsHubOptions"/>.</param>
         /// <param name="storageOptions">Configuration of <see cref="Options.StorageOptions"/>.</param>
         /// <param name="batchNodesOptions">Configuration of <see cref="Options.BatchNodesOptions"/>.</param>
         /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/>.</param>
@@ -100,14 +101,14 @@ namespace TesApi.Web
         /// <param name="storageAccessProvider">Storage access provider <see cref="IStorageAccessProvider"/>.</param>
         /// <param name="quotaVerifier">Quota verifier <see cref="IBatchQuotaVerifier"/>.</param>
         /// <param name="skuInformationProvider">Sku information provider <see cref="IBatchSkuInformationProvider"/>.</param>
-        /// <param name="poolFactory"><see cref="IBatchPool"/> factory.</param>
+        /// <param name="poolFactory">Batch pool factory <see cref="IBatchPool"/>.</param>
         /// <param name="allowedVmSizesService">Service to get allowed vm sizes.</param>
         /// <param name="taskExecutionScriptingManager"><see cref="TaskExecutionScriptingManager"/>.</param>
         public BatchScheduler(
             ILogger<BatchScheduler> logger,
             IOptions<Options.BatchImageGeneration1Options> batchGen1Options,
             IOptions<Options.BatchImageGeneration2Options> batchGen2Options,
-            IOptions<Options.MarthaOptions> marthaOptions,
+            IOptions<Options.DrsHubOptions> drsHubOptions,
             IOptions<Options.StorageOptions> storageOptions,
             IOptions<Options.BatchNodesOptions> batchNodesOptions,
             IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions,
@@ -135,8 +136,6 @@ namespace TesApi.Web
 
             this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
             this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
-            this.cromwellDrsLocalizerImageName = marthaOptions.Value.CromwellDrsLocalizer;
-            if (string.IsNullOrWhiteSpace(this.cromwellDrsLocalizerImageName)) { this.cromwellDrsLocalizerImageName = Options.MarthaOptions.DefaultCromwellDrsLocalizer; }
             this.disableBatchNodesPublicIpAddress = batchNodesOptions.Value.DisablePublicIpAddress;
             this.poolLifetime = TimeSpan.FromDays(batchSchedulingOptions.Value.PoolRotationForcedDays == 0 ? Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays : batchSchedulingOptions.Value.PoolRotationForcedDays);
             this.defaultStorageAccountName = storageOptions.Value.DefaultAccountName;
@@ -167,7 +166,7 @@ namespace TesApi.Web
                 BatchImageVersion = batchGen1Options.Value.Version,
                 BatchNodeAgentSkuId = batchGen1Options.Value.NodeAgentSkuId
             };
-
+            drsHubApiHost = drsHubOptions.Value?.Url;
             logger.LogInformation("usePreemptibleVmsOnly: {UsePreemptibleVmsOnly}", usePreemptibleVmsOnly);
 
             static bool tesTaskIsInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
@@ -936,7 +935,8 @@ namespace TesApi.Web
             var nodeTaskCreationOptions = new NodeTaskConversionOptions(
                 DefaultStorageAccountName: defaultStorageAccountName,
                 AdditionalInputs: await GetAdditionalCromwellInputsAsync(task, cancellationToken),
-                GlobalManagedIdentity: globalManagedIdentity
+                GlobalManagedIdentity: globalManagedIdentity,
+                DrsHubApiHost: drsHubApiHost
             );
             return nodeTaskCreationOptions;
         }
