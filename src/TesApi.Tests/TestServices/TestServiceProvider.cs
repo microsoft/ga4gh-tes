@@ -113,30 +113,30 @@ namespace TesApi.Tests.TestServices
         internal Mock<IAllowedVmSizesService> AllowedVmSizesServiceProvider { get; private set; }
 
         internal T GetT()
-            => GetT(Array.Empty<Type>(), Array.Empty<object>());
+            => GetT([], []);
 
         internal T GetT<T1>(T1 t1)
-            => GetT(new Type[] { typeof(T1) }, new object[] { t1 });
+            => GetT([typeof(T1)], [t1]);
 
         internal T GetT<T1, T2>(T1 t1, T2 t2)
-            => GetT(new Type[] { typeof(T1), typeof(T2) }, new object[] { t1, t2 });
+            => GetT([typeof(T1), typeof(T2)], [t1, t2]);
 
         internal T GetT<T1, T2, T3>(T1 t1, T2 t2, T3 t3)
-            => GetT(new Type[] { typeof(T1), typeof(T2), typeof(T3) }, new object[] { t1, t2, t3 });
+            => GetT([typeof(T1), typeof(T2), typeof(T3)], [t1, t2, t3]);
 
         internal T GetT<T1, T2, T3, T4>(T1 t1, T2 t2, T3 t3, T4 t4)
-            => GetT(new Type[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, new object[] { t1, t2, t3, t4 });
+            => GetT([typeof(T1), typeof(T2), typeof(T3), typeof(T4)], [t1, t2, t3, t4]);
 
         internal T GetT<T1, T2, T3, T4, T5>(T1 t1, T2 t2, T3 t3, T4 t4, T5 t5)
-            => GetT(new Type[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5) }, new object[] { t1, t2, t3, t4, t5 });
+            => GetT([typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5)], [t1, t2, t3, t4, t5]);
 
         internal T GetT<T1, T2, T3, T4, T5, T6>(T1 t1, T2 t2, T3 t3, T4 t4, T5 t5, T6 t6)
-            => GetT(new Type[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6) }, new object[] { t1, t2, t3, t4, t5, t6 });
+            => GetT([typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6)], [t1, t2, t3, t4, t5, t6]);
 
         internal T GetT(Type[] types, object[] args)
         {
-            types ??= Array.Empty<Type>();
-            args ??= Array.Empty<object>();
+            types ??= [];
+            args ??= [];
             if (types.Length != args.Length) throw new ArgumentException("The quantity of argument types and arguments does not match.", nameof(types));
             foreach (var (type, arg) in types.Zip(args))
             {
@@ -158,12 +158,12 @@ namespace TesApi.Tests.TestServices
 
         private static IConfiguration GetConfiguration(IEnumerable<(string Key, string Value)> configuration)
             => new ConfigurationBuilder()
-                .AddInMemoryCollection(new KeyValuePair<string, string/*?*/>[] // defaults
-                {
+                .AddInMemoryCollection(
+                [ // defaults
                     new($"{RetryPolicyOptions.SectionName}:{nameof(RetryPolicyOptions.MaxRetryCount)}", "3"),
                     new($"{RetryPolicyOptions.SectionName}:{nameof(RetryPolicyOptions.ExponentialBackOffExponent)}", "2")
-                })
-                .AddInMemoryCollection(configuration?.Select(t => new KeyValuePair<string, string>(t.Key, t.Value)) ?? Enumerable.Empty<KeyValuePair<string, string>>())
+                ])
+                .AddInMemoryCollection(configuration?.Select(t => new KeyValuePair<string, string>(t.Key, t.Value)) ?? [])
                 .Build();
 
         private Mock<IAzureProxy> GetAzureProxy(Action<Mock<IAzureProxy>> action)
