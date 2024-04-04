@@ -289,7 +289,7 @@ namespace Tes.Repository
         private async Task<IEnumerable<GetItemsResult>> InternalGetItemsAsync(CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default, Expression<Func<TesTask, bool>> efPredicate = default, FormattableString rawPredicate = default)
         {
             using var dbContext = CreateDbContext();
-            return (await GetItemsAsync(dbContext.TesTasks, /*readerFunc, */cancellationToken, orderBy, pagination, WhereTesTask(efPredicate), rawPredicate))
+            return (await GetItemsAsync(dbContext.TesTasks, cancellationToken, orderBy, pagination, WhereTesTask(efPredicate), rawPredicate))
                 .Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState(), CopyTesTask));
         }
 

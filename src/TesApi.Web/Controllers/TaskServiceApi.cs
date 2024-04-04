@@ -313,7 +313,7 @@ namespace TesApi.Controllers
             if (pageSize.HasValue && (pageSize < 1 || pageSize > 2047))
             {
                 logger.LogError(@"pageSize invalid {InvalidPageSize}", pageSize);
-                return BadRequest("If provided, pageSize must be greater than 0 and less than 2048. Defaults to 256.");
+                return BadRequest("Invalid page_size parameter value. If provided, pageSize must be greater than 0 and less than 2048. Defaults to 256.");
             }
 
             IDictionary<string, string> tags = null;
@@ -406,8 +406,7 @@ namespace TesApi.Controllers
                 }
             }
 
-            // TODO: should tag keys be case sensitive or case insensitive? I would argue for case sensitive, as that is the default for JSON.
-            var tags = new Dictionary<string, string>(StringComparer.Ordinal); // StringComparer.OrdinalIgnoreCase
+            var tags = new Dictionary<string, string>(StringComparer.Ordinal);
 
             foreach (var (Key, Value) in list)
             {
@@ -424,7 +423,9 @@ namespace TesApi.Controllers
 
         internal static (FormattableString RawPredicate, System.Linq.Expressions.Expression<Func<TesTask, bool>> EFPredicate) GenerateSearchPredicates(IRepository<TesTask> repository, TesState? state, string namePrefix, IDictionary<string, string> tags)
         {
+            tags ??= new Dictionary<string, string>();
             Func<TesTask, bool> efPredicate = null;
+            AppendableFormattableString rawPredicate = null;
 
             if (!string.IsNullOrWhiteSpace(namePrefix))
             {
@@ -435,9 +436,6 @@ namespace TesApi.Controllers
             {
                 efPredicate = AndFunc(efPredicate, t => t.State == state);
             }
-
-            tags ??= new Dictionary<string, string>();
-            AppendableFormattableString rawPredicate = null;
 
             foreach (var tag in tags)
             {
@@ -522,15 +520,22 @@ namespace TesApi.Controllers
             private readonly List<FormattableString> strings = [];
 
             public AppendableFormattableString(FormattableString formattable)
-                => strings.Add(formattable);
+            {
+                ArgumentNullException.ThrowIfNull(formattable);
+                strings.Add(formattable);
+            }
 
             internal void Append(FormattableString formattable)
-                => strings.Add(formattable);
+            {
+                ArgumentNullException.ThrowIfNull(formattable);
+                strings.Add(formattable);
+            }
 
             public override int ArgumentCount => strings.Sum(s => s.ArgumentCount);
 
             public override string Format => string.Join(string.Empty, strings.Select(MungeFormat));
 
+            // Alter index values in the format string to match its position in the composite Format
             private string MungeFormat(FormattableString formattable, int index)
             {
                 var baseIndex = strings.Take(index).Sum(s => s.ArgumentCount);
@@ -539,26 +544,36 @@ namespace TesApi.Controllers
                 var parts = format.Split('{');
                 return string.Join('{', parts.Select(MungePart));
 
-                string MungePart(string format, int index)
+                // Add baseIndex to the reference
+                string MungePart(string partFormat, int partIndex)
                 {
-                    if (index == 0)
-                        return format;
-                    if (parts[index - 1].Length == 0 && format.Length == 0)
-                        return format;
-                    var end = format.IndexOfAny([',', ':', '}']);
-                    if (end == -1)
-                        return format;
-
-                    if (int.TryParse(format.AsSpan(0, end), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var item))
+                    if (partIndex == 0)
                     {
-                        return string.Concat((item + baseIndex).ToString("D", System.Globalization.CultureInfo.InvariantCulture), format.AsSpan(end));
+                        return partFormat;
                     }
 
-                    return format;
+                    if (parts[partIndex - 1].Length == 0 && partFormat.Length == 0)
+                    {
+                        return partFormat;
+                    }
+
+                    var end = partFormat.IndexOfAny([',', ':', '}']);
+
+                    if (end == -1)
+                    {
+                        return partFormat;
+                    }
+
+                    if (int.TryParse(partFormat.AsSpan(0, end), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var item))
+                    {
+                        return string.Concat((item + baseIndex).ToString("D", System.Globalization.CultureInfo.InvariantCulture), partFormat.AsSpan(end));
+                    }
+
+                    return partFormat;
                 }
             }
 
-            public override object GetArgument(int index) // TODO: object is nullable
+            public override object GetArgument(int index)
             {
                 ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, ArgumentCount);
 
@@ -576,12 +591,12 @@ namespace TesApi.Controllers
                 return null;
             }
 
-            public override object[] GetArguments() // TODO: object is nullable
+            public override object[] GetArguments()
             {
                 return strings.SelectMany(s => s.GetArguments()).ToArray();
             }
 
-            public override string ToString(IFormatProvider formatProvider) // TODO: IFormatProvider is nullable
+            public override string ToString(IFormatProvider formatProvider)
             {
                 return string.Format(formatProvider, Format, GetArguments());
             }

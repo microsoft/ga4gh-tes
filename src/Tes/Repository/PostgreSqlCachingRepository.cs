@@ -9,10 +9,8 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using LinqKit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Npgsql;
 using Polly;
 
 namespace Tes.Repository

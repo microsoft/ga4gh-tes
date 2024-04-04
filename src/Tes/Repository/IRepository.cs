@@ -40,7 +40,7 @@ namespace Tes.Repository
         Task<bool> TryGetItemAsync(string id, CancellationToken cancellationToken, Action<T> onSuccess = null);
 
         /// <summary>
-        /// Reads a collection of items from the repository
+        /// Reads a collection of items from the repository. Intended for task servicing
         /// </summary>
         /// <param name="predicate">The 'where' clause</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
@@ -48,14 +48,14 @@ namespace Tes.Repository
         Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Reads a collection of items from the repository
+        /// Reads a collection of items from the repository. Intended for the TES API
         /// </summary>
         /// <param name="continuationToken">A token to continue retrieving tasks if the max is returned.</param>
         /// <param name="pageSize">The max number of tasks to retrieve.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="rawPredicate">Raw 'where' clause for cases where EF does not have translations.</param>
         /// <param name="efPredicate">The 'where' clause. It is appended if both <paramref name="rawPredicate"/> and this are provided.</param>
-        /// <returns>A continuation token string, and the collection of retrieved items</returns>
+        /// <returns>A continuation token string and the retrieved items</returns>
         Task<GetItemsResult> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate = default, Expression<Func<T, bool>> efPredicate = default);
 
         /// <summary>
@@ -75,9 +75,9 @@ namespace Tes.Repository
         ValueTask<bool> TryRemoveItemFromCacheAsync(T item, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Prepends the name of the <typeparamref name="T"/> property being accessed via a raw sql string.
+        /// Prepends the name of the <typeparamref name="T"/> property being accessed via a raw sql string. Intended to be used to complete a <c>WHERE</c> clause in a POSTGRESQL JSON query.
         /// </summary>
-        /// <returns>A string containing "json"->'<paramref name="property"/>' prepended to <paramref name="sql"/>.</returns>
+        /// <returns>A string containing <c>"json"->'<paramref name="property"/>'</c> prepended to <paramref name="sql"/>.</returns>
         FormattableString JsonFormattableRawString(string property, FormattableString sql);
 
         /// <summary>
