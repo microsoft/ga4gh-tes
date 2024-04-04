@@ -322,7 +322,7 @@ namespace TesApi.Controllers
             {
                 if (tagKeys?.Length > 0)
                 {
-                    var (zippedTags, error) = ParseZipedTagsFromQuery();
+                    var (zippedTags, error) = ParseZippedTagsFromQuery();
 
                     if (string.IsNullOrEmpty(error))
                     {
@@ -377,7 +377,7 @@ namespace TesApi.Controllers
         }
 
         // ?tag_key=foo1&tag_value=bar1&tag_key=foo2&tag_value=bar2
-        private (IDictionary<string, string> Tags, string Error) ParseZipedTagsFromQuery()
+        private (IDictionary<string, string> Tags, string Error) ParseZippedTagsFromQuery()
         {
             // Per spec, every tag_value parameter must be preceded by exactly one corresponding tag_key parameter, and no tag_key parameter can be followed by more than one tag_value parameter.
             // As a result, there can be a total number of tag_key parameters that are greater than the number of tag_value parameters. It's not legal for there to be more tag_value parameters.
