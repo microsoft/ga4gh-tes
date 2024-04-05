@@ -98,7 +98,7 @@ namespace TesApi.Web
                         {
                             opts.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
                             opts.SerializerSettings.Converters.Add(new StringEnumConverter(new CamelCaseNamingStrategy()));
-                            opts.SerializerSettings.DefaultValueHandling = DefaultValueHandling.Ignore;
+                            opts.SerializerSettings.DefaultValueHandling = Newtonsoft.Json.DefaultValueHandling.Ignore;
                         })
                     .Services
                     .AddSingleton(CreateStorageAccessProviderFromConfiguration)
