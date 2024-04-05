@@ -4,33 +4,39 @@
 
 # This script builds a new TES image, pushes it the ACR, gives AKS AcrPull on the ACR, and updates the TES deployment
 
-# if we are passed two arguments, use them as the resource group and ACR name
-if [ $# -eq 2 ]; then
+# if we are passed three arguments, use them as the resource group and ACR name
+if [ $# -eq 3 ]; then
     RESOURCE_GROUP_NAME=$1
     ACR_NAME=$2
+    IS_US_GOVERNMENT=$3
 fi
 if [ -z "$RESOURCE_GROUP_NAME" ] || [ -z "$ACR_NAME" ]; then
-    echo "Usage: $0 <ResourceGroupName> <AcrName>"
+    echo "Usage: $0 <ResourceGroupName> <AcrName> [IsUsGovernment]"
     exit 1
 fi
 
 IMAGE_NAME=tes
 DOCKERFILE=Dockerfile-Tes
 TAG=$(date +%Y-%m-%d-%H-%M-%S)
-ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io"
+if [[ "$IS_US_GOVERNMENT" == "true" ]]; then
+    ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.us" # Adjusted for US Government cloud
+else
+    ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io" # Default for public cloud
+fi
 NEW_IMAGE="${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${TAG}"
 
+# Do the docker build step:
+docker build -t "$NEW_IMAGE" -f "$DOCKERFILE" .
+echo "Built image: ${NEW_IMAGE}"
+
+echo "Pushing image... ${NEW_IMAGE}"
 # Check if we're already logged in
 az account show > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     # We're not logged in, so run the az login command
     az login
 fi
-
-# Do the actual docker build and push:
 az acr login --name "$ACR_NAME"
-docker build -t "$NEW_IMAGE" -f "$DOCKERFILE" .
-echo "Pushing image... ${NEW_IMAGE}"
 docker push "$NEW_IMAGE"
 
 echo -e "\n\nYou can manually run: kubectl set image deployment/tes tes=\"$NEW_IMAGE\" -n coa\n\n"
@@ -92,16 +98,19 @@ else
     echo "AcrPull role assignment already exists. No action required."
 fi
 
-# Update the AKS cluster
+# Update the AKS cluster with the new TES image
 echo "Updating AKS with the new image..."
 az aks get-credentials --resource-group "$RESOURCE_GROUP_NAME" --subscription "$SUBSCRIPTION_ID" --name "$AKS_CLUSTER_NAME" --overwrite-existing
 kubectl set image deployment/tes tes="$NEW_IMAGE" -n coa
-echo "Deployment complete."
+echo "Deployment complete for: $NEW_IMAGE"
 
-# Run a test task and get it's status
-# Get these from TesCredentials.json after running deploy-tes-on-azure
+# Get logs of the new TES pod
+# kubectl get pods -n tes | awk '{print $1}' | xargs -I {} kubectl logs -n tes {}
+
+# Run a test task and get it's status (Get these from TesCredentials.json after running deploy-tes-on-azure)
 # TesHostname="REMOVED"
 # TesPassword="REMOVED"
+
 # response=$(curl -u "tes:$TesPassword" -H "Content-Type: application/json" -X POST -d '{"resources": {"cpu_cores": 1, "ram_gb": 1},"executors":[{"image":"ubuntu","command":["/bin/sh","-c","cat /proc/sys/kernel/random/uuid"]}]}' "https://$TesHostname/v1/tasks")
 # taskId=$(echo $response | jq -r '.id')
 # curl -u "tes:$TesPassword" -H "Content-Type: application/json" -X GET "https://$TesHostname/v1/tasks/$taskId?view=full"

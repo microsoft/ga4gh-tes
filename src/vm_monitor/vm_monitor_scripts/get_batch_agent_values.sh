@@ -37,7 +37,7 @@ get_timestamp_or_nan() {
 get_batch_agent_debug_log_values() {
     # If the batch agent debug log does not exist, return early
     if [[ ! -f "$batchAgentDebugLogPath" ]]; then
-        echo "batch_agent_data,batch_log_found=false batch_allocation_time=\"nan\",batch_vm_name=\"\",batch_pool_name=\"\",batch_boot_time=\"nan\""
+        echo "batch_agent_data batch_log_found=\"false\",batch_allocation_time=\"nan\",batch_vm_name=\"\",batch_pool_name=\"\",batch_boot_time=\"nan\""
         return
     fi
 
@@ -69,7 +69,7 @@ get_batch_agent_debug_log_values() {
     TVMBootTime=$(echo "$logline" | grep -oP "'TVMBootTime': '\K\d+")
     TVMBootTime=$(get_timestamp_or_nan "$TVMBootTime")
 
-    echo "batch_agent_data,batch_log_found=true batch_allocation_time=\"$TVMAllocationTime\",batch_vm_name=\"$TVMName\",batch_pool_name=\"$PoolName\",batch_boot_time=\"$TVMBootTime\""
+    echo "batch_agent_data batch_log_found=\"true\",batch_allocation_time=\"$TVMAllocationTime\",batch_vm_name=\"$TVMName\",batch_pool_name=\"$PoolName\",batch_boot_time=\"$TVMBootTime\""
     # Output a copy of the log lines we're pulling from the Batch Agent, these are useful for debugging if this breaks in the future
     echo "debug_batch_agent_entity_log_line data=$batch_entity_log_line_clean"
     echo "debug_batch_agent_vmtable_log_line data=$batch_vmtable_log_line_clean"
