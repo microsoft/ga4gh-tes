@@ -206,12 +206,12 @@ namespace TesApi.Web.Runner
             ArgumentException.ThrowIfNullOrEmpty(wsmApiHost, nameof(wsmApiHost));
             ArgumentException.ThrowIfNullOrEmpty(landingZoneApiHost, nameof(landingZoneApiHost));
             nodeTask.RuntimeOptions ??= new RuntimeOptions();
-            nodeTask.RuntimeOptions.Terra = new TerraRuntimeOptions()
-            {
-                WsmApiHost = wsmApiHost,
-                LandingZoneApiHost = landingZoneApiHost,
-                SasAllowedIpRange = sasAllowedIpRange
-            };
+
+            nodeTask.RuntimeOptions.Terra ??= new TerraRuntimeOptions();
+
+            nodeTask.RuntimeOptions.Terra.WsmApiHost = wsmApiHost;
+            nodeTask.RuntimeOptions.Terra.LandingZoneApiHost = landingZoneApiHost;
+            nodeTask.RuntimeOptions.Terra.SasAllowedIpRange = sasAllowedIpRange;
 
             SetCombinedTerraTransformationStrategyForAllTransformations();
 
