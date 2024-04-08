@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 
@@ -191,7 +190,7 @@ namespace TesApi.Web.Management.Models.Terra
         public string[] IpAddressIds { get; set; }
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<ApiIpProvisionType>))]
     public enum ApiIpProvisionType
     {
         [EnumMember(Value = "BatchManaged")]
@@ -403,28 +402,28 @@ namespace TesApi.Web.Management.Models.Terra
         public string Value { get; set; }
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<ApiAzureBatchPoolAutoUserScope>))]
     public enum ApiAzureBatchPoolAutoUserScope
     {
         [EnumMember(Value = "Task")] Task,
         [EnumMember(Value = "Pool")] Pool
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<ApiAzureBatchPoolElevationLevel>))]
     public enum ApiAzureBatchPoolElevationLevel
     {
         [EnumMember(Value = "NonAdmin")] NonAdmin,
         [EnumMember(Value = "Admin")] Admin
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<ApiAzureBatchPoolContainerWorkingDirectory>))]
     public enum ApiAzureBatchPoolContainerWorkingDirectory
     {
         [EnumMember(Value = "TaskWorkingDirectory")] TaskWorkingDirectory,
         [EnumMember(Value = "ContainerImageDefault")] ContainerImageDefault
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<ApiAzureBatchPoolComputeNodeDeallocationOption>))]
     public enum ApiAzureBatchPoolComputeNodeDeallocationOption
     {
         [EnumMember(Value = "Requeue")] Requeue,
@@ -433,12 +432,17 @@ namespace TesApi.Web.Management.Models.Terra
         [EnumMember(Value = "RetainedData")] RetainedData
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<ApiInboundEndpointProtocol>))]
     public enum ApiInboundEndpointProtocol
     {
         [EnumMember(Value = "TCP")] TCP,
         [EnumMember(Value = "UDP")] UDP
     }
+
+    [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonSerializable(typeof(ApiCreateBatchPoolRequest))]
+    public partial class ApiCreateBatchPoolRequestContext : JsonSerializerContext
+    { }
 
 #pragma warning restore CS1591
 }

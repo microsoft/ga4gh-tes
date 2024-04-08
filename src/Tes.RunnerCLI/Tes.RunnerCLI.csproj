@@ -28,6 +28,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>tes-runner</AssemblyName>
     <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+    <PublishTrimmed>true</PublishTrimmed>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>

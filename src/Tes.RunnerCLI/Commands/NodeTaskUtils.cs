@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
@@ -18,7 +19,7 @@ public static class NodeTaskUtils
         {
             var nodeTaskText = await File.ReadAllTextAsync(tesNodeTaskFilePath);
 
-            var nodeTask = JsonSerializer.Deserialize<NodeTask>(nodeTaskText, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true }) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
+            var nodeTask = JsonSerializer.Deserialize(nodeTaskText, NodeTaskContext.Default.NodeTask) ?? throw new InvalidOperationException("The JSON data provided is invalid.");
 
             AddDefaultValuesIfMissing(nodeTask);
 
@@ -36,3 +37,8 @@ public static class NodeTaskUtils
         nodeTask.RuntimeOptions ??= new RuntimeOptions();
     }
 }
+
+[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(NodeTask))]
+public partial class NodeTaskContext : JsonSerializerContext
+{ }

@@ -122,7 +122,7 @@ namespace CommonUtilities.AzureCloud
                 var httpResponse = await httpClient.GetAsync(azureCloudMetadataUrl);
                 httpResponse.EnsureSuccessStatusCode();
                 var jsonString = await httpResponse.Content.ReadAsStringAsync();
-                var config = JsonSerializer.Deserialize<AzureCloudConfig>(jsonString)!;
+                var config = JsonSerializer.Deserialize(jsonString, AzureCloudConfigContext.Default.AzureCloudConfig)!;
                 config.DefaultTokenScope = defaultTokenScope;
                 config.AzureEnvironment = azureEnvironment;
                 config.ArmEnvironment = armEnvironment;
@@ -139,6 +139,10 @@ namespace CommonUtilities.AzureCloud
             });
         }
     }
+
+    [JsonSerializable(typeof(AzureCloudConfig))]
+    public partial class AzureCloudConfigContext : JsonSerializerContext
+    { }
 
     public class AuthenticationDetails
     {

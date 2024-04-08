@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Text.Json.Serialization;
 
 namespace TesApi.Web.Management.Models.Terra;
@@ -23,3 +22,7 @@ public class LandingZoneResourcesApiResponse
     [JsonPropertyName("resources")]
     public ResourceApiResponse[] Resources { get; set; }
 }
+
+[JsonSerializable(typeof(LandingZoneResourcesApiResponse))]
+public partial class LandingZoneResourcesApiResponseContext : JsonSerializerContext
+{ }

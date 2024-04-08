@@ -5,7 +5,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Azure.Core;
 using CommonUtilities;
 using Microsoft.Extensions.Logging;
@@ -123,30 +123,32 @@ namespace Tes.ApiClients
         /// <param name="requestUrl"></param>
         /// <param name="setAuthorizationHeader"></param>
         /// <param name="cacheResults"></param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="typeInfo">JSON serialization-related metadata</param>
         /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         protected async Task<TResponse> HttpGetRequestAsync<TResponse>(Uri requestUrl, bool setAuthorizationHeader,
-            bool cacheResults, CancellationToken cancellationToken)
+            bool cacheResults, JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken)
         {
             if (cacheResults)
             {
-                return await HttpGetRequestWithCachingAndRetryPolicyAsync<TResponse>(requestUrl, cancellationToken, setAuthorizationHeader);
+                return await HttpGetRequestWithCachingAndRetryPolicyAsync(requestUrl, typeInfo, cancellationToken, setAuthorizationHeader);
             }
 
-            return await HttpGetRequestWithRetryPolicyAsync<TResponse>(requestUrl, cancellationToken, setAuthorizationHeader);
+            return await HttpGetRequestWithRetryPolicyAsync(requestUrl, typeInfo, cancellationToken, setAuthorizationHeader);
         }
 
         /// <summary>
         /// Checks the cache and if the request was not found, sends the GET request with a retry policy
         /// </summary>
         /// <param name="requestUrl"></param>
+        /// <param name="typeInfo">JSON serialization-related metadata</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="setAuthorizationHeader"></param>
         /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
+        /// <param name="setAuthorizationHeader"></param>
         protected async Task<TResponse> HttpGetRequestWithCachingAndRetryPolicyAsync<TResponse>(Uri requestUrl,
-            CancellationToken cancellationToken, bool setAuthorizationHeader = false)
+            JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
             var cacheKey = await ToCacheKeyAsync(requestUrl, setAuthorizationHeader, cancellationToken);
 
@@ -157,19 +159,20 @@ namespace Tes.ApiClients
 
                 return await HttpClient.SendAsync(httpRequest, ct);
             },
-            GetApiResponseContentAsync<TResponse>, cancellationToken))!;
+            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct), cancellationToken))!;
         }
 
         /// <summary>
         /// Get request with retry policy
         /// </summary>
         /// <param name="requestUrl"></param>
+        /// <param name="typeInfo">JSON serialization-related metadata</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="setAuthorizationHeader"></param>
         /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
+        /// <param name="setAuthorizationHeader"></param>
         protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(Uri requestUrl,
-            CancellationToken cancellationToken, bool setAuthorizationHeader = false)
+            JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
             => await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
             {
                 //request must be recreated in every retry.
@@ -177,7 +180,7 @@ namespace Tes.ApiClients
 
                 return await HttpClient.SendAsync(httpRequest, ct);
             },
-            GetApiResponseContentAsync<TResponse>, cancellationToken);
+            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct), cancellationToken);
 
         /// <summary>
         /// Returns an query string key-value, with the value escaped. If the value is null or empty returns an empty string
@@ -241,12 +244,13 @@ namespace Tes.ApiClients
         /// </summary>
         /// <param name="httpRequestFactory">Factory that creates new http requests, in the event of retry the factory is called again
         /// and must be idempotent</param>
+        /// <param name="typeInfo">JSON serialization-related metadata</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
-        /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
         /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
+        /// <param name="setAuthorizationHeader">If true, the authentication header is set with an authentication token </param>
         protected async Task<TResponse> HttpGetRequestWithRetryPolicyAsync<TResponse>(
-            Func<HttpRequestMessage> httpRequestFactory, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
+            Func<HttpRequestMessage> httpRequestFactory, JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken, bool setAuthorizationHeader = false)
         {
             return await cachingRetryHandler.ExecuteWithRetryAndConversionAsync(async ct =>
             {
@@ -259,7 +263,7 @@ namespace Tes.ApiClients
 
                 return await HttpClient.SendAsync(request, ct);
             },
-            GetApiResponseContentAsync<TResponse>, cancellationToken);
+            (m, ct) => GetApiResponseContentAsync(m, typeInfo, ct), cancellationToken);
         }
 
         private async Task AddAuthorizationHeaderToRequestAsync(HttpRequestMessage requestMessage, CancellationToken cancellationToken)
@@ -345,14 +349,15 @@ namespace Tes.ApiClients
         /// Returns the response content, the response is successful
         /// </summary>
         /// <param name="response">Response</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        /// <param name="typeInfo">JSON serialization-related metadata</param>
         /// <typeparam name="TResponse">Response's content deserialization type</typeparam>
         /// <returns></returns>
-        protected static async Task<TResponse> GetApiResponseContentAsync<TResponse>(HttpResponseMessage response, CancellationToken cancellationToken)
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
+        protected static async Task<TResponse> GetApiResponseContentAsync<TResponse>(HttpResponseMessage response, JsonTypeInfo<TResponse> typeInfo, CancellationToken cancellationToken)
         {
             response.EnsureSuccessStatusCode();
 
-            return JsonSerializer.Deserialize<TResponse>(await ReadResponseBodyAsync(response, cancellationToken))!;
+            return JsonSerializer.Deserialize(await ReadResponseBodyAsync(response, cancellationToken), typeInfo)!;
         }
 
         /// <summary>
@@ -370,10 +375,10 @@ namespace Tes.ApiClients
         /// <summary>
         /// Creates a string content from an object
         /// </summary>
-        protected static HttpContent CreateJsonStringContent<T>(T contentObject)
+        protected static HttpContent CreateJsonStringContent<T>(T contentObject, JsonTypeInfo<T> typeInfo)
         {
             var stringContent = new StringContent(JsonSerializer.Serialize(contentObject,
-                new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }), Encoding.UTF8, "application/json");
+                typeInfo), Encoding.UTF8, System.Net.Mime.MediaTypeNames.Application.Json);
 
             return stringContent;
         }
