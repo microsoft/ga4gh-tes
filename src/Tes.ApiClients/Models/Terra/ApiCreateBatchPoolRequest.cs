@@ -130,7 +130,7 @@ namespace TesApi.Web.Management.Models.Terra
         public ApiPublicIpAddressConfiguration PublicIpAddressConfiguration { get; set; }
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<ApiDynamicVNetAssignmentScope>))]
     public enum ApiDynamicVNetAssignmentScope
     {
         [EnumMember(Value = "none")] none,
