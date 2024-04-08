@@ -213,7 +213,7 @@ namespace TesApi.Tests.Runner
         [TestMethod]
         public void WithDrsHubUrl_CalledThenSetUpTerraRuntimeEnv_DrsApiHostIsKept()
         {
-            var drsHubUrl = "https://drs.hub";
+            var drsHubUrl = "https://drshub.foo";
             nodeTaskBuilder
                 .WithDrsHubUrl(drsHubUrl)
                 .WithTerraAsRuntimeEnvironment("http://wsm.terra.foo", "http://lz.terra.foo", sasAllowedIpRange: null);
