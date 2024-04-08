@@ -87,8 +87,17 @@ echo -e "\n${ARCHIVE_NAME}.tar.gz created"
 
 # If a storage account URL was provided, upload the archive to the storage account:
 if [ -n "$STORAGE_ACCOUNT_URL" ]; then
+    # Remove trailing '/' if present:
+    STORAGE_ACCOUNT_URL="${STORAGE_ACCOUNT_URL%/}"
     echo "Uploading archive to $STORAGE_ACCOUNT_URL/${ARCHIVE_NAME}.tar.gz"
-    azcopy cp "${ARCHIVE_NAME}.tar.gz" "$STORAGE_ACCOUNT_URL/${ARCHIVE_NAME}.tar.gz"
+
+    # # Use azcopy to upload the archive to the storage account:
+    # azcopy cp "${ARCHIVE_NAME}.tar.gz" "$STORAGE_ACCOUNT_URL/${ARCHIVE_NAME}.tar.gz"
+
+    # Parse the storage account name and container name from the URL, upload with az cli
+    STORAGE_ACCOUNT_NAME=$(echo "$STORAGE_ACCOUNT_URL" | awk -F/ '{print $3}' | awk -F. '{print $1}')
+    CONTAINER_NAME=$(echo "$STORAGE_ACCOUNT_URL" | awk -F/ '{print $4}')
+    az storage blob upload --overwrite --account-name "$STORAGE_ACCOUNT_NAME" --container-name "$CONTAINER_NAME" --name "${ARCHIVE_NAME}.tar.gz" --type block --file "${ARCHIVE_NAME}.tar.gz" --auth-mode login
 fi
 
 # bzip2 saves ~0.5MB, but takes 4s to decompress

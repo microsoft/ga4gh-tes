@@ -1,0 +1,122 @@
+diff --git a/plugins/inputs/filestat/README.md b/plugins/inputs/filestat/README.md
+index 271d7bfc8..49c7ee804 100644
+--- a/plugins/inputs/filestat/README.md
++++ b/plugins/inputs/filestat/README.md
+@@ -23,6 +23,15 @@ See the [CONFIGURATION.md][CONFIGURATION.md] for more details.
+ 
+   ## If true, read the entire file and calculate an md5 checksum.
+   md5 = false
++
++  ## Only count files that have not been touched for at least this
++  ## duration. If mtime is negative, only count files that have been
++  ## touched in this duration. Defaults to "0s".
++  mtime = "0s"
++
++  ## If true, ignore mtime setting for the first data collection
++  ## this allows for capturing the initial state of the files
++  capture_all_on_first_run = true
+ ```
+ 
+ ## Metrics
+diff --git a/plugins/inputs/filestat/filestat.go b/plugins/inputs/filestat/filestat.go
+index 113084e4c..3022804e6 100644
+--- a/plugins/inputs/filestat/filestat.go
++++ b/plugins/inputs/filestat/filestat.go
+@@ -7,8 +7,10 @@ import (
+ 	"encoding/hex"
+ 	"io"
+ 	"os"
++	"time"
+ 
+ 	"github.com/influxdata/telegraf"
++	"github.com/influxdata/telegraf/config"
+ 	"github.com/influxdata/telegraf/internal/globpath"
+ 	"github.com/influxdata/telegraf/plugins/inputs"
+ )
+@@ -17,11 +19,14 @@ import (
+ var sampleConfig string
+ 
+ type FileStat struct {
+-	Md5   bool
+-	Files []string
++	Md5                  bool
++	Files                []string
++	MTime                config.Duration `toml:"mtime"`
++	CaptureAllOnFirstRun bool            `toml:"capture_all_on_first_run"`
+ 
+ 	Log telegraf.Logger
+ 
++	firstRun bool
+ 	// maps full file paths to globmatch obj
+ 	globs map[string]*globpath.GlobPath
+ 
+@@ -33,6 +38,7 @@ type FileStat struct {
+ 
+ func NewFileStat() *FileStat {
+ 	return &FileStat{
++		firstRun:        true,
+ 		globs:           make(map[string]*globpath.GlobPath),
+ 		missingFiles:    make(map[string]bool),
+ 		filesWithErrors: make(map[string]bool),
+@@ -43,8 +49,34 @@ func (*FileStat) SampleConfig() string {
+ 	return sampleConfig
+ }
+ 
++func absDuration(x time.Duration) time.Duration {
++	if x < 0 {
++		return -x
++	}
++	return x
++}
++
++func (f *FileStat) mtimeFilter(now time.Time, fileInfo os.FileInfo) bool {
++	age := absDuration(time.Duration(f.MTime))
++	mtime := now.Add(-age)
++	if time.Duration(f.MTime) < 0 {
++		return fileInfo.ModTime().After(mtime)
++	}
++	return fileInfo.ModTime().Before(mtime)
++}
++
+ func (f *FileStat) Gather(acc telegraf.Accumulator) error {
+ 	var err error
++	var now time.Time
++	MTimeFilterActive := false
++	if time.Duration(f.MTime) != 0 {
++		MTimeFilterActive = true
++		now = time.Now()
++	}
++	if f.firstRun && f.CaptureAllOnFirstRun {
++		MTimeFilterActive = false
++	}
++	f.firstRun = false
+ 
+ 	for _, filepath := range f.Files {
+ 		// Get the compiled glob object for this filepath
+@@ -95,6 +127,9 @@ func (f *FileStat) Gather(acc telegraf.Accumulator) error {
+ 						fileName, err)
+ 				}
+ 			} else {
++				if MTimeFilterActive && f.mtimeFilter(now, fileInfo) {
++					continue
++				}
+ 				f.filesWithErrors[fileName] = false
+ 				fields["size_bytes"] = fileInfo.Size()
+ 				fields["modification_time"] = fileInfo.ModTime().UnixNano()
+diff --git a/plugins/inputs/filestat/sample.conf b/plugins/inputs/filestat/sample.conf
+index 93d7a9917..88166ddec 100644
+--- a/plugins/inputs/filestat/sample.conf
++++ b/plugins/inputs/filestat/sample.conf
+@@ -7,3 +7,12 @@
+ 
+   ## If true, read the entire file and calculate an md5 checksum.
+   md5 = false
++
++  ## Only count files that have not been touched for at least this
++  ## duration. If mtime is negative, only count files that have been
++  ## touched in this duration. Defaults to "0s".
++  mtime = "0s"
++
++  ## If true, ignore mtime setting for the first data collection
++  ## this allows for capturing the initial state of the files
++  capture_all_on_first_run = true
