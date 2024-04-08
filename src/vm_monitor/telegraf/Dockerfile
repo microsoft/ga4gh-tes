@@ -22,13 +22,11 @@ COPY ./telegraf.dummy.conf /app/telegraf/telegraf.dummy.conf
 COPY ./tes_vm_monitor.once.conf /app/telegraf/tes_vm_monitor.once.conf
 COPY ./tes_vm_monitor.continuous.conf /app/telegraf/tes_vm_monitor.continuous.conf
 # Copy and apply the filestat patch:
-FROM fetcher
 WORKDIR /app/telegraf
+RUN apt-get update && apt-get install -y patch
 COPY ./filestat.diff /app/telegraf/filestat.diff
 RUN patch -p1 < ./filestat.diff
 
-FROM builder 
-WORKDIR /app/telegraf/
 # NOTE: We explicitly are not building the entire telegraf code base as we only
 # need custom_builder + the plugins it finds we need from telegraf.dummy.conf
 # RUN make
