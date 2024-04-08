@@ -248,7 +248,7 @@ namespace Tes.ApiClients
         private static string ToQueryString(SasTokenApiParameters sasTokenApiParameters)
             => AppendQueryStringParams(
                 ParseQueryStringParameter("sasIpRange", sasTokenApiParameters.SasIpRange),
-                ParseQueryStringParameter("sasExpirationDuration", sasTokenApiParameters.SasExpirationInSeconds.ToString()),
+                ParseQueryStringParameter("sasExpirationDuration", sasTokenApiParameters.SasExpirationInSeconds.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)),
                 ParseQueryStringParameter("sasPermissions", sasTokenApiParameters.SasPermission),
                 ParseQueryStringParameter("sasBlobName", sasTokenApiParameters.SasBlobName));
 
