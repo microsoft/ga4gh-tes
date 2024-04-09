@@ -50,6 +50,7 @@ namespace TesApi.Tests.TestServices
             var azureCloudConfig = ExpensiveObjectTestUtility.AzureCloudConfig;
             provider = new ServiceCollection()
                 .AddSingleton(_ => new TesServiceInfo { CreatedAt = DateTimeOffset.UtcNow, Environment = "unittest", Id = "unit-test-id", Organization = new() { Name = "unit-test-org", Url = "http://localhost/" }, Storage = [], UpdatedAt = DateTimeOffset.UtcNow })
+                .AddSingleton(new ApplicationInsightsMetadata(Guid.NewGuid().ToString("D"), Guid.NewGuid().ToString("D")))
                 .AddSingleton(azureCloudConfig)
                 .AddSingleton(azureCloudConfig.AzureEnvironmentConfig)
                 .AddSingleton<ConfigurationUtils>()

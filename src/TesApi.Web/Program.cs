@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Immutable;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using CommonUtilities.AzureCloud;
@@ -13,7 +15,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.ApplicationInsights;
 using TesApi.Web.Management;
-using TesApi.Web.Options;
 using TesApi.Web.Runner;
 
 namespace TesApi.Web
@@ -70,7 +71,7 @@ namespace TesApi.Web
                     configBuilder.AddApplicationInsightsSettings(applicationInsightsOptions.ConnectionString, developerMode: context.HostingEnvironment.IsDevelopment() ? true : null);
                 }
 
-                static ApplicationInsightsOptions GetApplicationInsightsConnectionString(IConfiguration configuration)
+                static Options.ApplicationInsightsOptions GetApplicationInsightsConnectionString(IConfiguration configuration)
                 {
                     var applicationInsightsOptions = configuration.GetSection(Options.ApplicationInsightsOptions.SectionName).Get<Options.ApplicationInsightsOptions>();
                     var applicationInsightsAccountName = applicationInsightsOptions?.AccountName;
@@ -139,15 +140,36 @@ namespace TesApi.Web
                 }
             });
 
+            builder.ConfigureServices(services => services.AddSingleton(string.IsNullOrWhiteSpace(applicationInsightsOptions?.ConnectionString)
+                ? null
+                : ApplicationInsightsMetadata.ParseConnectionString(applicationInsightsOptions.ConnectionString)));
+
             return builder;
 
             static AzureCloudConfig GetAzureCloudConfig(IConfiguration configuration)
             {
-                var tesOptions = new GeneralOptions();
-                configuration.Bind(GeneralOptions.SectionName, tesOptions);
+                var tesOptions = new Options.GeneralOptions();
+                configuration.Bind(Options.GeneralOptions.SectionName, tesOptions);
                 Console.WriteLine($"tesOptions.AzureCloudName: {tesOptions.AzureCloudName}");
                 return AzureCloudConfig.CreateAsync(tesOptions.AzureCloudName, tesOptions.AzureCloudMetadataUrlApiVersion).Result;
             }
+        }
+    }
+
+
+    /// <summary>
+    /// Application Insights environment var values to enable Application insights on Azure Batch compute nodes
+    /// </summary>
+    /// <param name="ApplicationId">API Access / Application ID</param>
+    /// <param name="InstrumentationKey">Instrumentation Key</param>
+    public record class ApplicationInsightsMetadata(string ApplicationId, string InstrumentationKey)
+    {
+        internal static ApplicationInsightsMetadata ParseConnectionString(string connectionString)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+
+            var entries = connectionString.Split(';').ToImmutableDictionary(entry => entry.Split('=').First(), entry => string.Join('=', entry.Split('=').Skip(1)), StringComparer.OrdinalIgnoreCase);
+            return new(entries["ApplicationId"], entries["InstrumentationKey"]);
         }
     }
 }
