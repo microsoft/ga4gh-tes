@@ -1111,6 +1111,7 @@ namespace TesApi.Web
                 [
                     new("APP_INSIGHTS_INSTRUMENTATION_KEY", applicationInsightsMetadata.InstrumentationKey),
                     new("APP_INSIGHTS_APP_ID", applicationInsightsMetadata.ApplicationId),
+                    new("AZ_BATCH_INSIGHTS_ARGS", "--disable gpu"),
                     new("BATCH_INSIGHTS_DOWNLOAD_URL", "https://github.com/Azure/batch-insights/releases/download/v1.3.0/batch-insights")
                 ],
                 MaxTaskRetryCount = 1,
