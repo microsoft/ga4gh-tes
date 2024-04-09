@@ -66,7 +66,7 @@ namespace Tes.Runner.Models
         public string? DrsHubApiHost { get; set; }
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<TransformationStrategy>))]
     public enum TransformationStrategy
     {
         None,
@@ -77,7 +77,7 @@ namespace Tes.Runner.Models
         CombinedAzureResourceManager,
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<FileType>))]
     public enum FileType
     {
         File,
