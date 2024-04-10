@@ -75,7 +75,7 @@ namespace Tes.ApiClients
         {
             var builder = new UriBuilder(ApiEndpoint) { Query = BuildRequestQueryString(skip, region) };
 
-            var result = await HttpGetRequestAsync<RetailPricingData>(builder.Uri, setAuthorizationHeader: false, cacheResults: cacheResults, cancellationToken: cancellationToken);
+            var result = await HttpGetRequestAsync(builder.Uri, setAuthorizationHeader: false, cacheResults: cacheResults, typeInfo: RetailPricingDataContext.Default.RetailPricingData, cancellationToken: cancellationToken);
 
             result.RequestLink = builder.ToString();
 

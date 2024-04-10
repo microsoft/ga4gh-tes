@@ -22,3 +22,7 @@ public class WsmSasTokenApiResponse
     [JsonPropertyName("url")]
     public string Url { get; set; }
 }
+
+[JsonSerializable(typeof(WsmSasTokenApiResponse))]
+public partial class WsmSasTokenApiResponseContext : JsonSerializerContext
+{ }

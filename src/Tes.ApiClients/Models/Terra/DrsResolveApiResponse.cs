@@ -63,4 +63,8 @@ namespace Tes.ApiClients.Models.Terra
         public Dictionary<string, string> Headers { get; set; }
     }
 
+    [JsonSerializable(typeof(DrsResolveApiResponse))]
+    public partial class DrsResolveApiResponseContext : JsonSerializerContext
+    { }
+
 }
