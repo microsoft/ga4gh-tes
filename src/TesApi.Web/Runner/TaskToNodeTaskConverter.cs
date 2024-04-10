@@ -207,7 +207,7 @@ namespace TesApi.Web.Runner
                     }
                 }
 
-                MapInputs(inputs, pathParentDirectory, containerMountParentDirectory, builder);
+                await MapInputsAsync(inputs, pathParentDirectory, containerMountParentDirectory, builder);
             }
         }
 
@@ -424,15 +424,43 @@ namespace TesApi.Web.Runner
             });
         }
 
-        private static void MapInputs(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
+        private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
             NodeTaskBuilder builder)
         {
-            inputs?.ForEach(input =>
+            if (inputs == null || inputs.Count == 0)
             {
-                builder.WithInputUsingCombinedTransformationStrategy(
-                    AppendParentDirectoryIfSet(input.Path, pathParentDirectory), input.Url,
-                    containerMountParentDirectory);
-            });
+                return;
+            }
+
+            foreach (var input in inputs)
+            {
+                if (input?.Type == TesFileType.DIRECTORYEnum)
+                {
+                    // Nextflow directory example
+                    // input.Url = /nftes3dd92310def6b/work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
+                    // input.Path = /work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
+                    var blobDirectoryUrlWithSasToken = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true);
+                    var blobDirectoryUrlWithoutSasToken = blobDirectoryUrlWithSasToken.GetLeftPart(UriPartial.Path);
+                    var blobAbsoluteUrls = await storageAccessProvider.GetBlobUrlsAsync(blobDirectoryUrlWithSasToken, default);
+                    
+                    foreach (var blobAbsoluteUrl in blobAbsoluteUrls)
+                    {
+                        var blobSuffix = blobAbsoluteUrl.AbsoluteUri[blobDirectoryUrlWithoutSasToken.TrimEnd('/').Length..].TrimStart('/');
+                        var localPath = $"{input.Path.TrimEnd('/')}/{blobSuffix}";
+
+                        builder.WithInputUsingCombinedTransformationStrategy(
+                            AppendParentDirectoryIfSet(localPath, pathParentDirectory), blobAbsoluteUrl.AbsoluteUri,
+                            containerMountParentDirectory);
+                    }
+                }
+                else
+                {
+                    // TesFileType was not specified, OR, TesFileType.FILEEnum
+                    builder.WithInputUsingCombinedTransformationStrategy(
+                        AppendParentDirectoryIfSet(input.Path, pathParentDirectory), input.Url,
+                        containerMountParentDirectory);
+                }
+            }
         }
 
         private static FileType? ToNodeTaskFileType(TesFileType outputType)
