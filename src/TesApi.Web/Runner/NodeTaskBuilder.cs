@@ -381,21 +381,30 @@ namespace TesApi.Web.Runner
         /// <summary>
         /// Adds DRS Hub URL to the node task, if the DRS Hub URL is not set, the property won't be set.
         /// </summary>
-        /// <param name="drsHubApiHost"></param>
+        /// <param name="drsHubUrl"></param>
         /// <returns></returns>
         /// <exception cref="NotImplementedException"></exception>
-        public NodeTaskBuilder WithDrsHubUrl(string drsHubApiHost)
+        public NodeTaskBuilder WithDrsHubUrl(string drsHubUrl)
         {
-            if (String.IsNullOrWhiteSpace(drsHubApiHost))
+            if (String.IsNullOrWhiteSpace(drsHubUrl))
             {
                 return this;
             }
 
+            var apiHost = GetApiHostFromUrl(drsHubUrl);
+
             nodeTask.RuntimeOptions ??= new RuntimeOptions();
             nodeTask.RuntimeOptions.Terra ??= new TerraRuntimeOptions();
-            nodeTask.RuntimeOptions.Terra.DrsHubApiHost = drsHubApiHost;
+            nodeTask.RuntimeOptions.Terra.DrsHubApiHost = apiHost;
 
             return this;
+        }
+
+        private string GetApiHostFromUrl(string drsHubUrl)
+        {
+            var uri = new Uri(drsHubUrl);
+
+            return $"{uri.Scheme}://{uri.Host}";
         }
     }
 }
