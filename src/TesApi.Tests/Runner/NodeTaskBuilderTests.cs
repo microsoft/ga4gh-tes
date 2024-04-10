@@ -222,5 +222,17 @@ namespace TesApi.Tests.Runner
 
             Assert.AreEqual(drsHubUrl, nodeTask.RuntimeOptions.Terra!.DrsHubApiHost);
         }
+
+        [DataTestMethod]
+        [DataRow("https://drshub.foo", "https://drshub.foo")]
+        [DataRow("https://drshub.foo/", "https://drshub.foo")]
+        [DataRow("https://drshub.foo/api/v4/drs/resolve", "https://drshub.foo")]
+        public void WithDrsHubUrl_DrsHubUrlIsProvided_DrsHubApiHostIsSet(string drsHubUrl, string drsExpectedDrsApiHost)
+        {
+            var nodeTask = nodeTaskBuilder
+                .WithDrsHubUrl(drsHubUrl)
+                .Build();
+            Assert.AreEqual(drsExpectedDrsApiHost, nodeTask.RuntimeOptions.Terra!.DrsHubApiHost);
+        }
     }
 }
