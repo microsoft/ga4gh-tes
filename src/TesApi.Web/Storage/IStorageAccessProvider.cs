@@ -98,7 +98,7 @@ namespace TesApi.Web.Storage
         /// Gets all of the blob URLs for a given blob prefix (virtual directory)
         /// </summary>
         /// <param name="blobVirtualDirectory">The URI for the blob prefix (virtual directory)</param>
-        /// <param name="cancellationToken"></param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns>A list of all blob URLs</returns>
         public Task<IList<Uri>> GetBlobUrlsAsync(Uri blobVirtualDirectory, CancellationToken cancellationToken);
     }
