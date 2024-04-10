@@ -427,7 +427,7 @@ namespace TesApi.Web.Runner
         private async Task MapInputsAsync(List<TesInput> inputs, string pathParentDirectory, string containerMountParentDirectory,
             NodeTaskBuilder builder)
         {
-            if (inputs == null || inputs.Count == 0)
+            if (inputs is null || inputs.Count == 0)
             {
                 return;
             }
@@ -437,7 +437,7 @@ namespace TesApi.Web.Runner
                 if (input?.Type == TesFileType.DIRECTORYEnum)
                 {
                     // Nextflow directory example
-                    // input.Url = /nftes3dd92310def6b/work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
+                    // input.Url = /storageaccount/work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
                     // input.Path = /work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
                     var blobDirectoryUrlWithSasToken = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true);
                     var blobDirectoryUrlWithoutSasToken = blobDirectoryUrlWithSasToken.GetLeftPart(UriPartial.Path);
