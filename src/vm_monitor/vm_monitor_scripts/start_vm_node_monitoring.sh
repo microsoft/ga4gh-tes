@@ -21,7 +21,7 @@
 ## TODO: Optional logging of start_vm_node_monitoring to a file for telegraf to log
 ## When run as normal task:
 ##      AZ_BATCH_TASK_DIR=/mnt/batch/tasks/workitems/TES_DEBUG_JOB/job-1/debug_task
-##      AZ_BATCH_TASK_DIR=/mnt/batch/tasks/workitems/TES_DEBUG_JOB/job-1/debug_task/wd
+##      AZ_BATCH_TASK_WORKING_DIR=/mnt/batch/tasks/workitems/TES_DEBUG_JOB/job-1/debug_task/wd
 ##      AZ_BATCH_NODE_SHARED_DIR=/mnt/batch/tasks/shared
 ## When run as start task:
 ##      AZ_BATCH_TASK_DIR=/mnt/batch/tasks/startup

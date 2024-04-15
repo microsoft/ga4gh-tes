@@ -8,6 +8,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -175,6 +176,11 @@ func (f *AzureAppendBlob) sanitizeAppendBlobFilename() string {
 	return appendBlobFilename
 }
 
+func isValidURL(toTest string) error {
+	_, err := url.ParseRequestURI(toTest)
+	return err
+}
+
 func (f *AzureAppendBlob) buildBlobURL(outputNumber ...int) error {
 	appendBlobFilename := f.sanitizeAppendBlobFilename()
 
@@ -192,11 +198,15 @@ func (f *AzureAppendBlob) buildBlobURL(outputNumber ...int) error {
 	f.baseAppendBlobURL = fmt.Sprintf("%s%s%s", f.containerURL, appendBlobFilename, appendBlobBaseName)
 	// https://<storageAccountName>.blob.core.windows.net/<containerName>/<appendBlobFilename>"vm_perf_metrics.%d.json"
 	f.appendBlobURL = fmt.Sprintf("%s%s", f.baseAppendBlobURL, fmt.Sprintf(f.appendBlobNameTemplate, blobNumber))
+
+	// Validate the URL even though we were provided the components to build a blobURL
+	if err := isValidURL(f.appendBlobURL); err != nil {
+		return fmt.Errorf("Invalid URL: %s, error: %v", f.appendBlobURL, err)
+	}
 	return nil
 }
 
 func (f *AzureAppendBlob) appendBlobAvailable(blobURL string) (bool, bool, error) {
-	var err error
 	blobClient, err := appendblob.NewClient(blobURL, f.cred, nil)
 	if err != nil {
 		return false, false, err

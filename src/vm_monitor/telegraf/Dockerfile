@@ -18,19 +18,24 @@ RUN git checkout tags/$(cat /app/latest_release)
 # Add the Azure Append Blob patches:
 COPY ./azure_append_blob/ /app/telegraf/plugins/outputs/azure_append_blob/
 COPY ./all/azure_append_blob.go /app/telegraf/plugins/outputs/all
-COPY ./telegraf.dummy.conf /app/telegraf/telegraf.dummy.conf
-COPY ./tes_vm_monitor.once.conf /app/telegraf/tes_vm_monitor.once.conf
-COPY ./tes_vm_monitor.continuous.conf /app/telegraf/tes_vm_monitor.continuous.conf
-# Copy and apply the filestat patch:
-WORKDIR /app/telegraf
-RUN apt-get update && apt-get install -y patch
-COPY ./filestat.diff /app/telegraf/filestat.diff
-RUN patch -p1 < ./filestat.diff
+# Copy and apply the filestat patch (skipping in favor of dedup for now):
+# WORKDIR /app/telegraf
+# RUN apt-get update && apt-get install -y patch
+# COPY ./filestat.diff /app/telegraf/filestat.diff
+# RUN patch -p1 < ./filestat.diff
 
 # NOTE: We explicitly are not building the entire telegraf code base as we only
 # need custom_builder + the plugins it finds we need from telegraf.dummy.conf
 # RUN make
+
+# Fix diskio
+RUN sed -i 's|sysBlockPath = "/sys/block/" + devName|sysBlockPath = "/sys/class/block/" + devName|g' /app/telegraf/plugins/inputs/diskio/diskio_linux.go
 RUN make build_tools
+
+# Build the custom telegraf binary (copy of configs is here for better docker caching)
+COPY ./telegraf.dummy.conf /app/telegraf/telegraf.dummy.conf
+COPY ./tes_vm_monitor.once.conf /app/telegraf/tes_vm_monitor.once.conf
+COPY ./tes_vm_monitor.continuous.conf /app/telegraf/tes_vm_monitor.continuous.conf
 RUN export LDFLAGS="-s -w"; ./tools/custom_builder/custom_builder --config ./tes_vm_monitor.once.conf --config ./tes_vm_monitor.continuous.conf --config ./telegraf.dummy.conf
 
 # Further shrink the size of telegraf:
