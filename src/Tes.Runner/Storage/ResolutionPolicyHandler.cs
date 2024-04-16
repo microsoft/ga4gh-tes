@@ -98,7 +98,7 @@ public class ResolutionPolicyHandler
         return new UploadInfo(output.Path!, uri);
     }
 
-    private static async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, TransformationStrategy? strategy,
+    protected virtual async Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, TransformationStrategy? strategy,
         BlobSasPermissions blobSasPermissions, RuntimeOptions runtimeOptions)
     {
         ArgumentNullException.ThrowIfNull(strategy);

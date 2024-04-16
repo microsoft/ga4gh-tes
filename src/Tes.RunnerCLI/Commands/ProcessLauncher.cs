@@ -90,11 +90,9 @@ namespace Tes.RunnerCLI.Commands
             return string.Join(" ", [.. argList]);
         }
 
-        public static async Task<ProcessLauncher> CreateLauncherAsync(FileInfo file, string logNamePrefix)
+        public static async Task<ProcessLauncher> CreateLauncherAsync(Runner.Models.NodeTask nodeTask, string logNamePrefix)
         {
-            ArgumentNullException.ThrowIfNull(file);
-
-            var nodeTask = await NodeTaskUtils.Instance.DeserializeNodeTaskAsync(file.FullName);
+            ArgumentNullException.ThrowIfNull(nodeTask);
 
             var logPublisher = await LogPublisher.CreateStreamReaderLogPublisherAsync(nodeTask, logNamePrefix);
 

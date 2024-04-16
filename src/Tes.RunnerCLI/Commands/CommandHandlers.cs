@@ -10,26 +10,24 @@ using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
 {
-    internal class CommandHandlers(NodeTaskUtils? nodeTaskUtils = default)
+    internal class CommandHandlers
     {
-        internal static CommandHandlers Instance => SingletonFactory.Value;
-        private static readonly Lazy<CommandHandlers> SingletonFactory = new(() => new());
-
-        private readonly NodeTaskUtils nodeTaskUtils = nodeTaskUtils ?? new NodeTaskUtils();
-        private readonly ILogger Logger = PipelineLoggerFactory.Create<CommandHandlers>();
+        private static readonly NodeTaskResolver nodeTaskUtils = new();
+        private static readonly ILogger Logger = PipelineLoggerFactory.Create<CommandHandlers>();
 
         /// <summary>
         /// Root command of the CLI. Executes all operations (download, executor, upload) as sub-processes.
         /// </summary>
-        /// <param name="file"></param>
-        /// <param name="blockSize"></param>
-        /// <param name="writers"></param>
-        /// <param name="readers"></param>
-        /// <param name="bufferCapacity"></param>
-        /// <param name="apiVersion"></param>
-        /// <param name="dockerUri"></param>
+        /// <param name="fileUri">Node task definition uri</param>
+        /// <param name="file">Node task definition file</param>
+        /// <param name="blockSize">Blob block size in bytes</param>
+        /// <param name="writers">Number of concurrent writers</param>
+        /// <param name="readers">Number of concurrent readers</param>
+        /// <param name="bufferCapacity">Pipeline buffer capacity</param>
+        /// <param name="apiVersion">Azure Storage API version</param>
+        /// <param name="dockerUri">Local docker engine endpoint</param>
         /// <returns></returns>
-        internal async Task<int> ExecuteRootCommandAsync(
+        internal static async Task<int> ExecuteRootCommandAsync(
             Uri? fileUri,
             FileInfo? file,
             int blockSize,
@@ -43,7 +41,8 @@ namespace Tes.RunnerCLI.Commands
             {
                 var duration = Stopwatch.StartNew();
 
-                var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri);
+                var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
+                file ??= new(CommandFactory.DefaultTaskDefinitionFile);
 
                 await using var eventsPublisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask);
 
@@ -51,7 +50,7 @@ namespace Tes.RunnerCLI.Commands
                 {
                     await eventsPublisher.PublishTaskCommencementEventAsync(nodeTask);
 
-                    await ExecuteAllOperationsAsSubProcessesAsync(file ?? new(CommandFactory.DefaultTaskDefinitionFile), blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
+                    await ExecuteAllOperationsAsSubProcessesAsync(nodeTask, file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
 
                     await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
                         EventsPublisher.SuccessStatus, errorMessage: string.Empty);
@@ -86,15 +85,17 @@ namespace Tes.RunnerCLI.Commands
         /// <summary>
         /// Executor (exec) command. Executes the executor operation as defined in the node task definition file.
         /// </summary>
-        /// <param name="file"></param>
-        /// <param name="dockerUri"></param>
+        /// <param name="fileUri">Node task definition uri</param>
+        /// <param name="file">Node task definition file</param>
+        /// <param name="apiVersion">Azure Storage API version</param>
+        /// <param name="dockerUri">Local docker engine endpoint</param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        internal async Task ExecuteExecCommandAsync(FileInfo file, Uri dockerUri)
+        internal static async Task ExecuteExecCommandAsync(Uri? fileUri, FileInfo? file, string apiVersion, Uri dockerUri)
         {
             try
             {
-                var nodeTask = await nodeTaskUtils.DeserializeNodeTaskAsync(file.FullName);
+                var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion);
 
                 Logger.LogDebug("Executing commands in container for Task ID: {NodeTaskId}", nodeTask.Id);
 
@@ -124,14 +125,17 @@ namespace Tes.RunnerCLI.Commands
         /// <summary>
         /// Upload (upload) command. Executes the upload of outputs as defined in the node task definition file.
         /// </summary>
-        /// <param name="file"></param>
-        /// <param name="blockSize"></param>
-        /// <param name="writers"></param>
-        /// <param name="readers"></param>
-        /// <param name="bufferCapacity"></param>
-        /// <param name="apiVersion"></param>
+        /// <param name="fileUri">Node task definition uri</param>
+        /// <param name="file">Node task definition file</param>
+        /// <param name="blockSize">Blob block size in bytes</param>
+        /// <param name="writers">Number of concurrent writers</param>
+        /// <param name="readers">Number of concurrent readers</param>
+        /// <param name="bufferCapacity">Pipeline buffer capacity</param>
+        /// <param name="apiVersion">Azure Storage API version</param>
         /// <returns></returns>
-        internal async Task<int> ExecuteUploadCommandAsync(FileInfo file,
+        internal static async Task<int> ExecuteUploadCommandAsync(
+            Uri? fileUri,
+            FileInfo file,
             int blockSize,
             int writers,
             int readers,
@@ -142,20 +146,25 @@ namespace Tes.RunnerCLI.Commands
 
             Logger.LogDebug("Starting upload operation.");
 
-            return await ExecuteTransferTaskAsync(file, exec => exec.UploadOutputsAsync(options));
+            var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion);
+
+            return await ExecuteTransferTaskAsync(nodeTask, exec => exec.UploadOutputsAsync(options));
         }
 
         /// <summary>
         /// Download (download) command. Executes the download of inputs as defined in the node task definition file.
         /// </summary>
-        /// <param name="file"></param>
-        /// <param name="blockSize"></param>
-        /// <param name="writers"></param>
-        /// <param name="readers"></param>
-        /// <param name="bufferCapacity"></param>
-        /// <param name="apiVersion"></param>
+        /// <param name="fileUri">Node task definition uri</param>
+        /// <param name="file">Node task definition file</param>
+        /// <param name="blockSize">Blob block size in bytes</param>
+        /// <param name="writers">Number of concurrent writers</param>
+        /// <param name="readers">Number of concurrent readers</param>
+        /// <param name="bufferCapacity">Pipeline buffer capacity</param>
+        /// <param name="apiVersion">Azure Storage API version</param>
         /// <returns></returns>
-        internal async Task<int> ExecuteDownloadCommandAsync(FileInfo file,
+        internal static async Task<int> ExecuteDownloadCommandAsync(
+            Uri? fileUri,
+            FileInfo file,
             int blockSize,
             int writers,
             int readers,
@@ -166,29 +175,37 @@ namespace Tes.RunnerCLI.Commands
 
             Logger.LogDebug("Starting download operation.");
 
-            return await ExecuteTransferTaskAsync(file, exec => exec.DownloadInputsAsync(options));
+            var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion);
+
+            return await ExecuteTransferTaskAsync(nodeTask, exec => exec.DownloadInputsAsync(options));
         }
 
-        protected virtual async Task ExecuteAllOperationsAsSubProcessesAsync(FileInfo file, int blockSize, int writers, int readers, int bufferCapacity,
+        private static async Task ExecuteAllOperationsAsSubProcessesAsync(Runner.Models.NodeTask nodeTask, FileInfo file, int blockSize, int writers, int readers, int bufferCapacity,
             string apiVersion, Uri dockerUri)
         {
+            ArgumentNullException.ThrowIfNull(nodeTask);
+            ArgumentNullException.ThrowIfNull(file);
+
+            if (!file.Exists)
+            {
+                throw new ArgumentException($"Node task definition file '{file.FullName}' not found.", nameof(file));
+            }
+
             var options =
                 BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity,
                     apiVersion);
 
-            await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.DownloadCommandName, file, options);
+            await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.DownloadCommandName, nodeTask, file, options);
 
-            await CommandLauncher.LaunchesExecutorCommandAsSubProcessAsync(file, dockerUri);
+            await CommandLauncher.LaunchesExecutorCommandAsSubProcessAsync(nodeTask, file, apiVersion, dockerUri);
 
-            await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.UploadCommandName, file, options);
+            await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.UploadCommandName, nodeTask, file, options);
         }
 
-        private async Task<int> ExecuteTransferTaskAsync(FileInfo taskDefinitionFile, Func<Executor, Task<long>> transferOperation)
+        private static async Task<int> ExecuteTransferTaskAsync(Runner.Models.NodeTask nodeTask, Func<Executor, Task<long>> transferOperation)
         {
             try
             {
-                var nodeTask = await nodeTaskUtils.DeserializeNodeTaskAsync(taskDefinitionFile.FullName);
-
                 await using var executor = await Executor.CreateExecutorAsync(nodeTask);
 
                 await transferOperation(executor);

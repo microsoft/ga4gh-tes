@@ -138,7 +138,7 @@ public class BlobApiHttpUtils
         request.Headers.Add($"x-ms-meta-{name}", value);
     }
 
-    private static void AddBlobServiceHeaders(HttpRequestMessage request, string apiVersion)
+    public static void AddBlobServiceHeaders(HttpRequestMessage request, string apiVersion)
     {
         request.Headers.Add("x-ms-version", apiVersion);
         request.Headers.Add("x-ms-date", DateTime.UtcNow.ToString("R"));
