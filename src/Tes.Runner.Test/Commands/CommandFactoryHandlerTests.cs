@@ -27,7 +27,8 @@ namespace Tes.Runner.Test.Commands
         private const int MaxRetryCount = 3;
 
         // CommandHandlers is not mockable because we don't do strong-name signing
-        private class TestableCommandHandlers(Action<FileInfo> action, Func<BlobApiHttpUtils> blobApiUtilsFactory) : CommandHandlers(() => new NodeTaskUtils(blobApiUtilsFactory))
+        private class TestableCommandHandlers(Action<FileInfo> action, Func<BlobApiHttpUtils> blobApiUtilsFactory)
+            : CommandHandlers(new(blobApiUtilsFactory))
         {
             private readonly Action<FileInfo>? action = action;
 

@@ -39,7 +39,7 @@ namespace Tes.Repository.Tests
     [TestCategory("Integration")]
     public class TesTaskPostgreSqlRepositoryIntegrationTests
     {
-        private static TesTaskPostgreSqlRepository repository;
+        private static IRepository<TesTask> repository;
         private static readonly string subscriptionId = "";
         private static readonly string regionName = "southcentralus";
         private static readonly string resourceGroupName = $"tes-test-{Guid.NewGuid().ToString()[..8]}";
@@ -55,8 +55,8 @@ namespace Tes.Repository.Tests
             await PostgreSqlTestUtility.CreateTestDbAsync(
                 subscriptionId, regionName, resourceGroupName, postgreSqlServerName, postgreSqlDatabaseName, adminLogin, adminPw);
 
-            var connectionString = ConnectionStringUtility
-                .GetPostgresConnectionString(Options.Create(new PostgreSqlOptions
+            var connectionString = ConnectionStringUtility.GetPostgresConnectionString(
+                Options.Create(new PostgreSqlOptions
                 {
                     ServerName = postgreSqlServerName,
                     DatabaseName = postgreSqlDatabaseName,
@@ -74,6 +74,7 @@ namespace Tes.Repository.Tests
         {
             Console.WriteLine("Deleting Azure Resource Group...");
             await PostgreSqlTestUtility.DeleteResourceGroupAsync(subscriptionId, resourceGroupName);
+            repository?.Dispose();
             Console.WriteLine("Done");
         }
 
@@ -90,7 +91,7 @@ namespace Tes.Repository.Tests
             }, CancellationToken.None);
             Assert.IsNotNull(createdItem);
 
-            Models.TesTask updatedAndRetrievedItem = null;
+            TesTask updatedAndRetrievedItem = null;
 
             var isFound = await repository.TryGetItemAsync(id, CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
 
@@ -102,12 +103,9 @@ namespace Tes.Repository.Tests
         public async Task GetItemsAsyncTest()
         {
             var items = (await repository.GetItemsAsync(c => c.Id != null, CancellationToken.None)).ToList();
+            var tesTaskIds = new HashSet<string>();
 
-            foreach (var item in items)
-            {
-                Assert.IsTrue(!string.IsNullOrWhiteSpace(item.Id));
-            }
-
+            CheckAndAddItems(items, tesTaskIds);
             Assert.IsTrue(items.Any());
             Console.WriteLine(items.Count);
             Assert.AreEqual(items.Count, items.Select(t => t.Id).Distinct().Count());
@@ -124,9 +122,9 @@ namespace Tes.Repository.Tests
                 if (createItems)
                 {
                     var rng = new Random(Guid.NewGuid().GetHashCode());
-                    var states = Enum.GetValues(typeof(Models.TesState)).Cast<Models.TesState>().ToArray();
+                    var states = Enum.GetValues(typeof(TesState)).Cast<TesState>().ToArray();
 
-                    var items = new List<Models.TesTask>();
+                    var items = new List<TesTask>();
 
                     for (var i = 0; i < itemCount; i++)
                     {
@@ -141,39 +139,24 @@ namespace Tes.Repository.Tests
 
                     Assert.IsTrue(items.Select(i => i.Id).Distinct().Count() == itemCount);
 
-                    await repository.CreateItemsAsync(items, System.Threading.CancellationToken.None);
+                    await Parallel.ForEachAsync(items, CancellationToken.None, async (item, token) => await repository.CreateItemAsync(item, token));
                 }
 
-                var controller = new TaskServiceApiController(repository, null, null, null);
+                var controller = new TaskServiceApiController(repository, null, null);
                 string pageToken = null;
                 var tesTaskIds = new HashSet<string>();
 
-                while (true)
+                do
                 {
-                    var result = await controller.ListTasks(null, 2047, pageToken, "FULL", default);
+                    var result = await controller.ListTasksAsync(null, null, null, null, 2047, pageToken, "FULL", default);
                     var jr = (JsonResult)result;
                     var content = (TesListTasksResponse)jr.Value;
                     pageToken = content.NextPageToken;
 
-                    foreach (var tesTask in content.Tasks)
-                    {
-                        if (tesTaskIds.Contains(tesTask.Id))
-                        {
-                            var count = tesTaskIds.Count;
-                            Debugger.Break();
-                            Assert.Fail("Duplicate task id");
-                        }
-
-                        tesTaskIds.Add(tesTask.Id);
-                    }
-
+                    CheckAndAddItems(content.Tasks, tesTaskIds);
                     Console.WriteLine($"Found {tesTaskIds.Count}");
-
-                    if (string.IsNullOrWhiteSpace(pageToken))
-                    {
-                        break;
-                    }
                 }
+                while (!string.IsNullOrWhiteSpace(pageToken));
 
                 Assert.IsTrue(tesTaskIds.Count == itemCount);
                 Console.WriteLine("Done");
@@ -196,9 +179,9 @@ namespace Tes.Repository.Tests
             if (createItems)
             {
                 var rng = new Random(Guid.NewGuid().GetHashCode());
-                var states = Enum.GetValues(typeof(Models.TesState)).Cast<Models.TesState>().ToArray();
+                var states = Enum.GetValues(typeof(TesState)).Cast<TesState>().ToArray();
 
-                var items = new List<Models.TesTask>();
+                var items = new List<TesTask>();
 
                 for (var i = 0; i < itemCount; i++)
                 {
@@ -213,19 +196,19 @@ namespace Tes.Repository.Tests
 
                 Assert.IsTrue(items.Select(i => i.Id).Distinct().Count() == itemCount);
 
-                await repository.CreateItemsAsync(items, CancellationToken.None);
+                await (repository as TesTaskPostgreSqlRepository).CreateItemsAsync(items, CancellationToken.None);
                 Console.WriteLine($"Total seconds to insert {items.Count} items: {sw.Elapsed.TotalSeconds:n2}s");
                 sw.Restart();
             }
 
             sw.Restart();
-            var runningTasks = (await repository.GetItemsAsync(c => c.State == Models.TesState.RUNNINGEnum, CancellationToken.None)).ToList();
+            var runningTasks = (await repository.GetItemsAsync(c => c.State == TesState.RUNNINGEnum, CancellationToken.None)).ToList();
 
             // Ensure performance is decent
             Assert.IsTrue(sw.Elapsed.TotalSeconds < 20);
             Console.WriteLine($"Retrieved {runningTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
             sw.Restart();
-            var allOtherTasks = (await repository.GetItemsAsync(c => c.State != Models.TesState.RUNNINGEnum, CancellationToken.None)).ToList();
+            var allOtherTasks = (await repository.GetItemsAsync(c => c.State != TesState.RUNNINGEnum, CancellationToken.None)).ToList();
             Console.WriteLine($"Retrieved {allOtherTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
             Console.WriteLine($"Total running tasks: {runningTasks.Count}");
             Console.WriteLine($"Total other tasks: {allOtherTasks.Count}");
@@ -239,23 +222,101 @@ namespace Tes.Repository.Tests
             Assert.IsTrue(runningTasks.Count > 0);
             Assert.IsTrue(allOtherTasks.Count > 0);
             Assert.IsTrue(runningTasks.Count != allOtherTasks.Count);
-            Assert.IsTrue(runningTasks.All(c => c.State == Models.TesState.RUNNINGEnum));
-            Assert.IsTrue(allOtherTasks.All(c => c.State != Models.TesState.RUNNINGEnum));
+            Assert.IsTrue(runningTasks.All(c => c.State == TesState.RUNNINGEnum));
+            Assert.IsTrue(allOtherTasks.All(c => c.State != TesState.RUNNINGEnum));
+        }
+
+        [TestMethod]
+        public async Task GetItemsTagsAsyncTest()
+        {
+            foreach (var (filter, tags, match) in GetTestData())
+            {
+                var createdItem = await repository.CreateItemAsync(new()
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Description = Guid.NewGuid().ToString(),
+                    CreationTime = DateTime.UtcNow,
+                    State = TesState.UNKNOWNEnum,
+                    Tags = tags
+                }, CancellationToken.None);
+
+                var (raw, ef) = TaskServiceApiController.GenerateSearchPredicates(repository, null, null, filter);
+                var items = (await repository.GetItemsAsync(null, 2048, CancellationToken.None, raw, ef)).Items.ToList();
+
+                if (match)
+                {
+                    Assert.AreEqual(1, items.Count);
+                    Assert.IsTrue(items.Select(t => t.Id).Contains(createdItem.Id));
+                }
+                else
+                {
+                    Assert.IsFalse(items.Select(t => t.Id).Contains(createdItem.Id));
+                    Assert.AreEqual(0, items.Count);
+                }
+
+                await repository.DeleteItemAsync(createdItem.Id, CancellationToken.None);
+            }
+
+            static List<(Dictionary<string, string> Filter, Dictionary<string, string> Tags, bool Match)> GetTestData() =>
+            [
+                (
+                    new(StringComparer.Ordinal) { { "foo", "bar" } },
+                    new(StringComparer.Ordinal) { { "foo", "bar" } },
+                    true
+                ),
+                (
+                    new(StringComparer.Ordinal) { { "foo", "bar" } },
+                    new(StringComparer.Ordinal) { { "foo", "bat" } },
+                    false
+                ),
+                (
+                    new(StringComparer.Ordinal) { { "foo", string.Empty } },
+                    new(StringComparer.Ordinal) { { "foo", string.Empty } },
+                    true
+                ),
+                (
+                    new(StringComparer.Ordinal) { { "foo", "bar" }, { "baz", "bat" } },
+                    new(StringComparer.Ordinal) { { "foo", "bar" }, { "baz", "bat" } },
+                    true
+                ),
+                (
+                    new(StringComparer.Ordinal) { { "foo", "bar" } },
+                    new(StringComparer.Ordinal) { { "foo", "bar" }, { "baz", "bat" } },
+                    true
+                ),
+                (
+                    new(StringComparer.Ordinal) { { "foo", "bar" }, { "baz", "bat" } },
+                    new(StringComparer.Ordinal) { { "foo", "bar" } },
+                    false
+                ),
+                (
+                    new(StringComparer.Ordinal) { { "foo", string.Empty } },
+                    new(StringComparer.Ordinal) { { "foo", "bar" } },
+                    true
+                ),
+                (
+                    new(StringComparer.Ordinal) { { "foo", string.Empty } },
+                    new(StringComparer.Ordinal) { },
+                    false
+                ),
+            ];
         }
 
         [TestMethod]
         public async Task GetItemsContinuationAsyncTest()
         {
             const int pageSize = 256;
+            List<TesTask> itemsList = [];
+            HashSet<string> tesTaskIds = [];
 
-            var (continuation, items) = await repository.GetItemsAsync(c => c.Id != null, pageSize, null, CancellationToken.None);
-            var itemsList = items.ToList();
+            var (continuation, items) = await repository.GetItemsAsync(null, pageSize, CancellationToken.None);
+            CheckAndAddItems(items, tesTaskIds, itemsList);
             Assert.IsTrue(itemsList.Count <= pageSize);
 
             while (!string.IsNullOrWhiteSpace(continuation))
             {
-                (continuation, items) = await repository.GetItemsAsync(c => c.Id != null, pageSize, continuation, CancellationToken.None);
-                itemsList.AddRange(items);
+                (continuation, items) = await repository.GetItemsAsync(continuation, pageSize, CancellationToken.None);
+                CheckAndAddItems(items, tesTaskIds, itemsList);
             }
 
             foreach (var item in itemsList)
@@ -298,14 +359,14 @@ namespace Tes.Repository.Tests
                 Inputs = [new TesInput { Url = "https://test" }]
             }, CancellationToken.None);
 
-            Assert.IsTrue(createdItem.State != Models.TesState.COMPLETEEnum);
+            Assert.IsTrue(createdItem.State != TesState.COMPLETEEnum);
 
             createdItem.Description = description;
-            createdItem.State = Models.TesState.COMPLETEEnum;
+            createdItem.State = TesState.COMPLETEEnum;
 
             await repository.UpdateItemAsync(createdItem, CancellationToken.None);
 
-            Models.TesTask updatedAndRetrievedItem = null;
+            TesTask updatedAndRetrievedItem = null;
 
             var isFound = await repository.TryGetItemAsync(id, CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
 
@@ -329,11 +390,32 @@ namespace Tes.Repository.Tests
             Assert.IsNotNull(createdItem);
             await repository.DeleteItemAsync(id, CancellationToken.None);
 
-            Models.TesTask updatedAndRetrievedItem = null;
+            TesTask updatedAndRetrievedItem = null;
 
             var isFound = await repository.TryGetItemAsync(id, CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
             Assert.IsNull(updatedAndRetrievedItem);
             Assert.IsFalse(isFound);
+        }
+
+
+        private static void CheckAndAddItems(IEnumerable<TesTask> items, HashSet<string> tesTaskIds, List<TesTask> itemsList = default)
+        {
+            var countExisting = tesTaskIds.Count;
+
+            foreach (var item in items)
+            {
+                if (tesTaskIds.Contains(item.Id))
+                {
+                    var count = tesTaskIds.Count;
+                    Console.WriteLine($"Duplicate @{count} (in current page @{count - countExisting}): {item.Id}");
+                    Debugger.Break();
+                    Assert.Fail("Duplicate task id");
+                    continue;
+                }
+
+                tesTaskIds.Add(item.Id);
+                itemsList?.Add(item);
+            }
         }
     }
 
@@ -374,29 +456,29 @@ namespace Tes.Repository.Tests
             await postgresManagementClient.Servers.CreateAsync(
                 resourceGroupName,
                 postgreSqlServerName,
-                        new(
-                           location: regionName,
-                           version: postgreSqlVersion,
-                           sku: new("Standard_B2s", "Burstable"),
-                           storage: new(128),
-                           administratorLogin: adminLogin,
-                           administratorLoginPassword: adminPw,
-                           //network: new(publicNetworkAccess: "Enabled"),
-                           highAvailability: new("Disabled")
-                        ));
+                new(
+                    location: regionName,
+                    version: postgreSqlVersion,
+                    sku: new("Standard_B2s", "Burstable"),
+                    storage: new(128),
+                    administratorLogin: adminLogin,
+                    administratorLoginPassword: adminPw,
+                    network: new(publicNetworkAccess: "Enabled"),
+                    highAvailability: new("Disabled")
+                ));
 
             await postgresManagementClient.Databases.CreateAsync(resourceGroupName, postgreSqlServerName, postgreSqlDatabaseName, new());
 
             var startIp = "0.0.0.0";
             var endIp = "255.255.255.255";
 
-            // Many networks have non-deterministic client IP addresses
-            //{
-            //    using var client = new System.Net.Http.HttpClient();
-            //    var ip = (await client.GetStringAsync("https://checkip.amazonaws.com")).Trim();
-            //    startIp = ip;
-            //    endIp = ip;
-            //}
+            //Many networks have non-deterministic client IP addresses
+            {
+                using var client = new System.Net.Http.HttpClient();
+                var ip = (await client.GetStringAsync("https://checkip.amazonaws.com")).Trim();
+                startIp = ip;
+                endIp = ip;
+            }
 
             await postgresManagementClient.FirewallRules.CreateOrUpdateAsync(
                 resourceGroupName,

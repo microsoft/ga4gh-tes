@@ -30,7 +30,7 @@ namespace Tes.Runner.Events
         {
             try
             {
-                var content = JsonSerializer.Serialize(eventMessage);
+                var content = JsonSerializer.Serialize(eventMessage, EventMessageContext.Default.EventMessage);
 
                 await blobApiHttpUtils.ExecuteHttpRequestAsync(() =>
                     BlobApiHttpUtils.CreatePutBlobRequestAsync(ToEventUrl(storageUrl, eventMessage), content, ApiVersion, ToTags(eventMessage)));

@@ -209,5 +209,30 @@ namespace TesApi.Tests.Runner
 
             Assert.AreEqual(TransformationStrategy.CombinedTerra, nodeTask.RuntimeOptions.StreamingLogPublisher!.TransformationStrategy);
         }
+
+        [TestMethod]
+        public void WithDrsHubUrl_CalledThenSetUpTerraRuntimeEnv_DrsApiHostIsKept()
+        {
+            var drsHubUrl = "https://drshub.foo";
+            nodeTaskBuilder
+                .WithDrsHubUrl(drsHubUrl)
+                .WithTerraAsRuntimeEnvironment("http://wsm.terra.foo", "http://lz.terra.foo", sasAllowedIpRange: null);
+
+            var nodeTask = nodeTaskBuilder.Build();
+
+            Assert.AreEqual(drsHubUrl, nodeTask.RuntimeOptions.Terra!.DrsHubApiHost);
+        }
+
+        [DataTestMethod]
+        [DataRow("https://drshub.foo", "https://drshub.foo")]
+        [DataRow("https://drshub.foo/", "https://drshub.foo")]
+        [DataRow("https://drshub.foo/api/v4/drs/resolve", "https://drshub.foo")]
+        public void WithDrsHubUrl_DrsHubUrlIsProvided_DrsHubApiHostIsSet(string drsHubUrl, string drsExpectedDrsApiHost)
+        {
+            var nodeTask = nodeTaskBuilder
+                .WithDrsHubUrl(drsHubUrl)
+                .Build();
+            Assert.AreEqual(drsExpectedDrsApiHost, nodeTask.RuntimeOptions.Terra!.DrsHubApiHost);
+        }
     }
 }

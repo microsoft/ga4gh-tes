@@ -10,12 +10,12 @@ using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
 {
-    internal class CommandHandlers(Func<NodeTaskUtils>? nodeTaskUtils = default)
+    internal class CommandHandlers(NodeTaskUtils? nodeTaskUtils = default)
     {
         internal static CommandHandlers Instance => SingletonFactory.Value;
         private static readonly Lazy<CommandHandlers> SingletonFactory = new(() => new());
 
-        private readonly Lazy<NodeTaskUtils> nodeTaskUtils = new(nodeTaskUtils ?? (() => NodeTaskUtils.Instance));
+        private readonly NodeTaskUtils nodeTaskUtils = nodeTaskUtils ?? new NodeTaskUtils();
         private readonly ILogger Logger = PipelineLoggerFactory.Create<CommandHandlers>();
 
         /// <summary>
@@ -43,22 +43,15 @@ namespace Tes.RunnerCLI.Commands
             {
                 var duration = Stopwatch.StartNew();
 
-                var nodeTask = await ResolveNodeTaskAsync(file, fileUri);
+                var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri);
 
                 await using var eventsPublisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask);
 
                 try
                 {
-                    if (!(file?.Exists ?? false))
-                    {
-                        file ??= new(CommandFactory.DefaultTaskDefinitionFile);
-                        await nodeTaskUtils.Value.SerializeNodeTaskAsync(nodeTask, file.FullName);
-                        file.Refresh();
-                    }
-
                     await eventsPublisher.PublishTaskCommencementEventAsync(nodeTask);
 
-                    await ExecuteAllOperationsAsSubProcessesAsync(file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
+                    await ExecuteAllOperationsAsSubProcessesAsync(file ?? new(CommandFactory.DefaultTaskDefinitionFile), blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
 
                     await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
                         EventsPublisher.SuccessStatus, errorMessage: string.Empty);
@@ -101,7 +94,7 @@ namespace Tes.RunnerCLI.Commands
         {
             try
             {
-                var nodeTask = await nodeTaskUtils.Value.DeserializeNodeTaskAsync(file.FullName);
+                var nodeTask = await nodeTaskUtils.DeserializeNodeTaskAsync(file.FullName);
 
                 Logger.LogDebug("Executing commands in container for Task ID: {NodeTaskId}", nodeTask.Id);
 
@@ -194,7 +187,7 @@ namespace Tes.RunnerCLI.Commands
         {
             try
             {
-                var nodeTask = await nodeTaskUtils.Value.DeserializeNodeTaskAsync(taskDefinitionFile.FullName);
+                var nodeTask = await nodeTaskUtils.DeserializeNodeTaskAsync(taskDefinitionFile.FullName);
 
                 await using var executor = await Executor.CreateExecutorAsync(nodeTask);
 
@@ -208,20 +201,6 @@ namespace Tes.RunnerCLI.Commands
                 Logger.LogError(e, "Failed to perform transfer. Operation: {TransferOperation}", transferOperation.Method.Name);
                 return (int)ProcessExitCode.UncategorizedError;
             }
-        }
-
-        private async ValueTask<Runner.Models.NodeTask> ResolveNodeTaskAsync(FileInfo? file, Uri? uri)
-        {
-            return await nodeTaskUtils.Value.ResolveNodeTaskAsync(file, uri, GetNodeTaskResolverOptions());
-        }
-
-        private Lazy<Runner.Models.NodeTaskResolverOptions> GetNodeTaskResolverOptions()
-        {
-            var optionsValue = Environment.GetEnvironmentVariable(nameof(Runner.Models.NodeTaskResolverOptions));
-
-            return new(() => string.IsNullOrWhiteSpace(optionsValue)
-                ? throw new InvalidOperationException($"Environment variable '{nameof(Runner.Models.NodeTaskResolverOptions)}' is required.")
-                : NodeTaskUtils.DeserializeJson<Runner.Models.NodeTaskResolverOptions>(optionsValue));
         }
     }
 }

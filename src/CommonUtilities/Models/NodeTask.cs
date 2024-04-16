@@ -72,7 +72,7 @@ namespace Tes.Runner.Models
         public TransformationStrategy TransformationStrategy { get; set; }
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<TransformationStrategy>))]
     public enum TransformationStrategy
     {
         None,
@@ -83,7 +83,7 @@ namespace Tes.Runner.Models
         CombinedAzureResourceManager,
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<FileType>))]
     public enum FileType
     {
         File,
