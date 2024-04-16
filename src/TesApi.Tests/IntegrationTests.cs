@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -23,9 +24,20 @@ namespace TesApi.Tests
 
         [TestCategory("Integration")]
         [TestMethod]
-        public async Task RunScaleTestAsync()
+        public async Task RunFullScaleTestAsync()
         {
+            // 500 to 503 when throttled
+            // max egress: 120 Gbps (15 GB/s)
+            // max request rate: 20K rps
+            // max per blob: 500 rps
+            // TCP keep alive vs. request rate
+            // target for single block blob (up to ingress/egress limits.  so 120 Gbps)
+            // 1.  Create 100 x 10 GiB files (1 TiB)
+            // 
+
+
             var count = 1000;
+            var testTask = CreateFullTestTask();
             using var tesClient = GetTesClientFromAzureDevopsPipelineFileSystem();
 
             if (tesClient is null)
@@ -33,8 +45,30 @@ namespace TesApi.Tests
                 return;
             }
 
+
+            await InternalRunScaleTestAsync(count, testTask, tesClient);
+        }
+
+        [TestCategory("Integration")]
+        [TestMethod]
+        public async Task RunBasicScaleTestAsync()
+        {
+            var count = 1000;
+            var testTask = CreateBasicTestTask();
+            using var tesClient = GetTesClientFromAzureDevopsPipelineFileSystem();
+
+            if (tesClient is null)
+            {
+                return;
+            }
+
+            await InternalRunScaleTestAsync(count, testTask, tesClient);
+        }
+
+        private static async Task InternalRunScaleTestAsync(int count, TesTask testTask, ITesClient tesClient)
+        {
             var testTaskIds = new System.Collections.Concurrent.ConcurrentBag<string>();
-            var testTask = CreateTestTask();
+
             var sw = Stopwatch.StartNew();
 
             await Parallel.ForEachAsync(
@@ -42,12 +76,17 @@ namespace TesApi.Tests
                 new ParallelOptions() { MaxDegreeOfParallelism = 16384 },
                 async (idAsTask, _) => testTaskIds.Add(await idAsTask));
 
+
             Console.WriteLine($"Posted {testTaskIds.Count} TES tasks in {sw.Elapsed.TotalSeconds:n3}s");
             Assert.AreEqual(count, testTaskIds.Count);
             Assert.AreEqual(count, await tesClient.ListTasksAsync().CountAsync(t => testTaskIds.Contains(t.Id)));
             sw.Restart();
 
-            while (await tesClient.ListTasksAsync().Where(t => testTaskIds.Contains(t.Id)).AnyAsync(t => t.IsActiveState()))
+            var taskIdsHashset = new HashSet<string>(testTaskIds);
+
+            while (await tesClient.ListTasksAsync()
+                .Where(t => taskIdsHashset.Contains(t.Id))
+                .AnyAsync(t => t.IsActiveState()))
             {
                 // Tasks are still running
                 await Task.Delay(TimeSpan.FromSeconds(20));
@@ -86,7 +125,20 @@ namespace TesApi.Tests
             static string IndentStep(int step) => new(Enumerable.Repeat(' ', step * 4).ToArray());
         }
 
-        private static TesTask CreateTestTask()
+        private static TesTask CreateBasicTestTask()
+        {
+            var task = new TesTask();
+            task.Resources.Preemptible = true;
+            task.Executors.Add(new TesExecutor
+            {
+                Image = "ubuntu",
+                Command = ["/bin/sh", "-c", "cat /proc/sys/kernel/random/uuid"],
+            });
+
+            return task;
+        }
+
+        private static TesTask CreateFullTestTask()
         {
             var task = new TesTask();
             task.Resources.Preemptible = true;
