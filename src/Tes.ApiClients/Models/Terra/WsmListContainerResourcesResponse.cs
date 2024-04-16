@@ -1,8 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace TesApi.Web.Management.Models.Terra
@@ -209,4 +207,8 @@ namespace TesApi.Web.Management.Models.Terra
         [JsonPropertyName("resources")]
         public List<Resource> Resources { get; set; }
     }
+
+    [JsonSerializable(typeof(WsmListContainerResourcesResponse))]
+    public partial class WsmListContainerResourcesResponseContext : JsonSerializerContext
+    { }
 }
