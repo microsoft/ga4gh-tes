@@ -25,39 +25,6 @@ namespace Tes.Runner.Test.Commands
         private const int MaxRetryCount = 3;
         private NodeTaskResolver nodeTaskResolver = default!;
 
-        private class MockableHttpMessageHandler : HttpMessageHandler
-        {
-            private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> sendAsyncImpl;
-
-            public MockableHttpMessageHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> sendAsyncImpl)
-            {
-                ArgumentNullException.ThrowIfNull(sendAsyncImpl);
-                this.sendAsyncImpl = sendAsyncImpl;
-            }
-
-            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-            {
-                return sendAsyncImpl(request, cancellationToken);
-            }
-        }
-
-        private class MockableResolutionPolicyHandler : ResolutionPolicyHandler
-        {
-            private readonly Func<string?, TransformationStrategy?, BlobSasPermissions, RuntimeOptions, Uri> applySasResolutionToUrl;
-
-            public MockableResolutionPolicyHandler(Func<string?, TransformationStrategy?, BlobSasPermissions, RuntimeOptions, Uri> applySasResolutionToUrl, RuntimeOptions runtimeOptions)
-                : base(runtimeOptions)
-            {
-                ArgumentNullException.ThrowIfNull(applySasResolutionToUrl);
-                this.applySasResolutionToUrl = applySasResolutionToUrl;
-            }
-
-            protected override Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, TransformationStrategy? strategy, BlobSasPermissions blobSasPermissions, RuntimeOptions runtimeOptions)
-            {
-                return Task.FromResult(applySasResolutionToUrl(sourceUrl, strategy, blobSasPermissions, runtimeOptions));
-            }
-        }
-
         [TestInitialize]
         public void SetUp()
         {
@@ -102,10 +69,29 @@ namespace Tes.Runner.Test.Commands
                 ResolutionPolicyFactory);
         }
 
+        private static void AssertFail(ref ExceptionDispatchInfo? exceptionDispatchInfo, string? message, params object?[]? parameters)
+        {
+            exceptionDispatchInfo ??= ExceptionDispatchInfo.Capture(AssertFail(message, parameters).InnerException!);
+        }
+
+        private static Exception AssertFail(string? message, params object?[]? parameters)
+        {
+            try
+            {
+                Assert.Fail(message, parameters);
+            }
+            catch (AssertFailedException ex)
+            {
+                return new AggregateException(ex);
+            }
+
+            return new System.Diagnostics.UnreachableException();
+        }
+
         [TestMethod]
         public async Task ResolveNodeTaskAsyncWithNoUriWhenFileExistsReturnsContent()
         {
-            ConfigureBlobApiHttpUtils((_, _) => throw new NotImplementedException());
+            ConfigureBlobApiHttpUtils((_, _) => Task.FromException<HttpResponseMessage>(AssertFail("Unexpected attempt to send an HTTP request.")));
             SetEnvironment(null);
             taskFile = new(Path.Combine(Environment.CurrentDirectory, CommandFactory.DefaultTaskDefinitionFile));
             File.WriteAllText(taskFile.FullName, @"{}");
@@ -119,7 +105,7 @@ namespace Tes.Runner.Test.Commands
         [TestMethod]
         public async Task ResolveNodeTaskAsyncWithNoUriWhenFileNotExistsReturnsError()
         {
-            ConfigureBlobApiHttpUtils((_, _) => throw new NotImplementedException());
+            ConfigureBlobApiHttpUtils((_, _) => Task.FromException<HttpResponseMessage>(AssertFail("Unexpected attempt to send an HTTP request.")));
             SetEnvironment(null);
             taskFile = new(Path.Combine(Environment.CurrentDirectory, CommandFactory.DefaultTaskDefinitionFile));
             Assert.IsFalse(taskFile.Exists);
@@ -132,7 +118,7 @@ namespace Tes.Runner.Test.Commands
         [TestMethod]
         public async Task ResolveNodeTaskAsyncWithUriWhenFileExistsDoesNotDownload()
         {
-            ConfigureBlobApiHttpUtils((_, _) => throw new NotImplementedException());
+            ConfigureBlobApiHttpUtils((_, _) => Task.FromException<HttpResponseMessage>(AssertFail("Unexpected attempt to send an HTTP request.")));
             SetEnvironment(null);
             taskFile = new(Path.Combine(Environment.CurrentDirectory, CommandFactory.DefaultTaskDefinitionFile));
             File.WriteAllText(taskFile.FullName, @"{}");
@@ -219,12 +205,12 @@ namespace Tes.Runner.Test.Commands
 
                 return request.Method.Method switch
                 {
-                    "GET" => SendGetCalled(),
-                    "HEAD" => SendHeadCalled(),
+                    "GET" => GetResponseMessage(),
+                    "HEAD" => HeadResponseMessage(),
                     _ => InvalidRequest(),
                 };
 
-                HttpResponseMessage SendHeadCalled()
+                HttpResponseMessage HeadResponseMessage()
                 {
                     sendHeadCalled = true;
                     var response = MakeResponse();
@@ -236,7 +222,7 @@ namespace Tes.Runner.Test.Commands
                     return response;
                 }
 
-                HttpResponseMessage SendGetCalled()
+                HttpResponseMessage GetResponseMessage()
                 {
                     sendGetCalled = true;
                     return MakeResponse();
@@ -247,17 +233,42 @@ namespace Tes.Runner.Test.Commands
 
                 HttpResponseMessage InvalidRequest()
                 {
-                    try
-                    {
-                        Assert.Fail("Invalid HTTP Method.");
-                    }
-                    catch (AssertFailedException ex)
-                    {
-                        assertException ??= ExceptionDispatchInfo.Capture(ex);
-                    }
-
+                    AssertFail(ref assertException, "Invalid HTTP Method.");
                     return new HttpResponseMessage(HttpStatusCode.MethodNotAllowed);
                 }
+            }
+        }
+
+        private class MockableHttpMessageHandler : HttpMessageHandler
+        {
+            private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> sendAsyncImpl;
+
+            public MockableHttpMessageHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> sendAsyncImpl)
+            {
+                ArgumentNullException.ThrowIfNull(sendAsyncImpl);
+                this.sendAsyncImpl = sendAsyncImpl;
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                return sendAsyncImpl(request, cancellationToken);
+            }
+        }
+
+        private class MockableResolutionPolicyHandler : ResolutionPolicyHandler
+        {
+            private readonly Func<string?, TransformationStrategy?, BlobSasPermissions, RuntimeOptions, Uri> applySasResolutionToUrl;
+
+            public MockableResolutionPolicyHandler(Func<string?, TransformationStrategy?, BlobSasPermissions, RuntimeOptions, Uri> applySasResolutionToUrl, RuntimeOptions runtimeOptions)
+                : base(runtimeOptions)
+            {
+                ArgumentNullException.ThrowIfNull(applySasResolutionToUrl);
+                this.applySasResolutionToUrl = applySasResolutionToUrl;
+            }
+
+            protected override Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, TransformationStrategy? strategy, BlobSasPermissions blobSasPermissions, RuntimeOptions runtimeOptions)
+            {
+                return Task.FromResult(applySasResolutionToUrl(sourceUrl, strategy, blobSasPermissions, runtimeOptions));
             }
         }
     }
