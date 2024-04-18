@@ -17,16 +17,14 @@ namespace Tes.Runner.Test.Storage
         [TestInitialize]
         public void SetUp()
         {
-            mockStrategy1 = new Mock<IUrlTransformationStrategy>();
-            mockStrategy2 = new Mock<IUrlTransformationStrategy>();
+            mockStrategy1 = new();
+            mockStrategy2 = new();
 
-            strategy = new CombinedTransformationStrategy(
-                new List<IUrlTransformationStrategy>()
-                {
+            strategy = new(
+                [
                     mockStrategy1.Object,
                     mockStrategy2.Object
-                }
-                );
+                ]);
         }
 
         [TestMethod]

@@ -62,7 +62,7 @@ namespace Tes.Runner.Test.Commands
 
         private void ConfigureBlobApiHttpUtils(
             Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> sendAsync,
-            Func<RuntimeOptions, ResolutionPolicyHandler>? ResolutionPolicyFactory = default)
+            Func<RuntimeOptions, string, ResolutionPolicyHandler>? ResolutionPolicyFactory = default)
         {
             nodeTaskResolver = new(
                 () => new BlobApiHttpUtils(new(new MockableHttpMessageHandler(sendAsync)), HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(MaxRetryCount)),
@@ -164,7 +164,7 @@ namespace Tes.Runner.Test.Commands
             var sendHeadCalled = false;
             var sendGetCalled = false;
 
-            ConfigureBlobApiHttpUtils((request, _) => Task.FromResult(Send(request)), options => new MockableResolutionPolicyHandler(ApplySasResolutionToUrl, options));
+            ConfigureBlobApiHttpUtils((request, _) => Task.FromResult(Send(request)), (options, apiVersion) => new MockableResolutionPolicyHandler(ApplySasResolutionToUrl, options, apiVersion));
             SetEnvironment(new() { RuntimeOptions = new() { Terra = new() }, TransformationStrategy = TransformationStrategy.CombinedTerra });
             taskFile = new(Path.Combine(Environment.CurrentDirectory, CommandFactory.DefaultTaskDefinitionFile));
 
@@ -259,14 +259,14 @@ namespace Tes.Runner.Test.Commands
         {
             private readonly Func<string?, TransformationStrategy?, BlobSasPermissions, RuntimeOptions, Uri> applySasResolutionToUrl;
 
-            public MockableResolutionPolicyHandler(Func<string?, TransformationStrategy?, BlobSasPermissions, RuntimeOptions, Uri> applySasResolutionToUrl, RuntimeOptions runtimeOptions)
-                : base(runtimeOptions)
+            public MockableResolutionPolicyHandler(Func<string?, TransformationStrategy?, BlobSasPermissions, RuntimeOptions, Uri> applySasResolutionToUrl, RuntimeOptions runtimeOptions, string apiVersion)
+                : base(runtimeOptions, apiVersion)
             {
                 ArgumentNullException.ThrowIfNull(applySasResolutionToUrl);
                 this.applySasResolutionToUrl = applySasResolutionToUrl;
             }
 
-            protected override Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, TransformationStrategy? strategy, BlobSasPermissions blobSasPermissions, RuntimeOptions runtimeOptions)
+            protected override Task<Uri> ApplySasResolutionToUrlAsync(string? sourceUrl, TransformationStrategy? strategy, BlobSasPermissions blobSasPermissions, RuntimeOptions runtimeOptions, string apiVersion)
             {
                 return Task.FromResult(applySasResolutionToUrl(sourceUrl, strategy, blobSasPermissions, runtimeOptions));
             }

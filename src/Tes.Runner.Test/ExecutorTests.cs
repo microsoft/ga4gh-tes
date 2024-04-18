@@ -26,13 +26,13 @@ namespace Tes.Runner.Test
         [TestInitialize]
         public void SetUp()
         {
-            dockerExecutorMock = new Mock<DockerExecutor>();
-            fileOperationResolverMock = new Mock<FileOperationResolver>();
-            eventsPublisherMock = new Mock<EventsPublisher>();
-            blobPipelineOptions = new BlobPipelineOptions();
-            transferOperationFactoryMock = new Mock<ITransferOperationFactory>();
-            blobDownloaderMock = new Mock<BlobDownloader>();
-            blobUploaderMock = new Mock<BlobUploader>();
+            dockerExecutorMock = new();
+            fileOperationResolverMock = new();
+            eventsPublisherMock = new();
+            blobPipelineOptions = new();
+            transferOperationFactoryMock = new();
+            blobDownloaderMock = new();
+            blobUploaderMock = new();
 
             transferOperationFactoryMock.Setup(f => f.CreateBlobUploaderAsync(It.IsAny<BlobPipelineOptions>()))
                 .ReturnsAsync(blobUploaderMock.Object);
@@ -40,21 +40,21 @@ namespace Tes.Runner.Test
             transferOperationFactoryMock.Setup(f => f.CreateBlobDownloaderAsync(It.IsAny<BlobPipelineOptions>()))
                 .ReturnsAsync(blobDownloaderMock.Object);
 
-            nodeTask = new NodeTask()
+            nodeTask = new()
             {
-                Outputs = new List<FileOutput>
-                {
-                    new FileOutput()
+                Outputs =
+                [
+                    new()
                     {
                         Path = "/mnt/data/output1.txt",
                         TargetUrl = "https://test.blob.core.windows.net/test/output1.txt"
                     },
-                    new FileOutput()
+                    new()
                     {
                         Path = "/*.txt",
                         TargetUrl = "https://test.blob.core.windows.net/test/output2.txt",
                     }
-                }
+                ]
             };
             executor = new Executor(nodeTask, fileOperationResolverMock.Object, eventsPublisherMock.Object, transferOperationFactoryMock.Object);
         }
@@ -62,7 +62,7 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task UploadOutputsAsync_ResolverReturnsEmptyList_SucceedsAndReturnsZeroBytes()
         {
-            fileOperationResolverMock.Setup(r => r.ResolveOutputsAsync()).ReturnsAsync(new List<UploadInfo>());
+            fileOperationResolverMock.Setup(r => r.ResolveOutputsAsync()).ReturnsAsync([]);
 
             var result = await executor.UploadOutputsAsync(blobPipelineOptions);
 
@@ -80,10 +80,10 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task DownloadInputsAsync_InputProvided_StartSuccessEventsAreCreated()
         {
-            var inputs = new List<DownloadInfo>
-            {
-                new DownloadInfo( FullFilePath: "/mnt/data/input1.txt", SourceUrl: new Uri("https://test.blob.core.windows.net/test/input1.txt"))
-            };
+            List<DownloadInfo> inputs =
+            [
+                new( FullFilePath: "/mnt/data/input1.txt", SourceUrl: new Uri("https://test.blob.core.windows.net/test/input1.txt"))
+            ];
 
             fileOperationResolverMock.Setup(r => r.ResolveInputsAsync()).ReturnsAsync(inputs);
             var result = await executor.DownloadInputsAsync(blobPipelineOptions);
@@ -95,19 +95,19 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task DownloadInputsAsync_InputsProvided_NumberOfFilesInEndEventMatchesTheInputCount()
         {
-            var inputs = new List<DownloadInfo>
-            {
-                new DownloadInfo( FullFilePath: "/mnt/data/input1.txt", SourceUrl: new Uri("https://test.blob.core.windows.net/test/input1.txt"))
-            };
+            List<DownloadInfo> inputs =
+            [
+                new( FullFilePath: "/mnt/data/input1.txt", SourceUrl: new Uri("https://test.blob.core.windows.net/test/input1.txt"))
+            ];
 
-            nodeTask.Inputs = new List<FileInput>
-            {
-                new FileInput()
+            nodeTask.Inputs =
+            [
+                new()
                 {
                     Path = "mnt/data/input",
                     SourceUrl = "https://test.blob.core.windows.net/test/input1.txt"
                 }
-            };
+            ];
 
             blobDownloaderMock.Setup(r => r.DownloadAsync(It.IsAny<List<DownloadInfo>>()))
                 .ReturnsAsync(0);
@@ -130,7 +130,7 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task UploadOutputsAsync_NoOutputProvided_StartSuccessEventsAreCreated()
         {
-            var outputs = new List<UploadInfo>();
+            List<UploadInfo> outputs = [];
             fileOperationResolverMock.Setup(r => r.ResolveOutputsAsync()).ReturnsAsync(outputs);
             var result = await executor.UploadOutputsAsync(blobPipelineOptions);
             Assert.AreEqual(Executor.ZeroBytesTransferred, result);

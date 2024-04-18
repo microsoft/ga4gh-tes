@@ -16,14 +16,11 @@ namespace Tes.RunnerCLI.Commands;
 public partial class NodeTaskContext : JsonSerializerContext
 { }
 
-public class NodeTaskResolver(Func<BlobApiHttpUtils>? blobApiHttpUtilsFactory = default, Func<RuntimeOptions, ResolutionPolicyHandler>? resolutionPolicyHandlerFactory = default)
+public class NodeTaskResolver(Func<BlobApiHttpUtils>? blobApiHttpUtilsFactory = default, Func<RuntimeOptions, string, ResolutionPolicyHandler>? resolutionPolicyHandlerFactory = default)
 {
-    internal static NodeTaskResolver Instance => SingletonFactory.Value;
-    private static readonly Lazy<NodeTaskResolver> SingletonFactory = new(() => new());
-
     private readonly ILogger Logger = PipelineLoggerFactory.Create(nameof(NodeTaskResolver));
     private readonly Lazy<BlobApiHttpUtils> blobApiHttpUtils = new(blobApiHttpUtilsFactory ?? (() => new()));
-    private readonly Func<RuntimeOptions, ResolutionPolicyHandler> resolutionPolicyHandlerFactory = resolutionPolicyHandlerFactory ?? new(options => new(options));
+    private readonly Func<RuntimeOptions, string, ResolutionPolicyHandler> resolutionPolicyHandlerFactory = resolutionPolicyHandlerFactory ?? new((options, apiVersion) => new(options, apiVersion));
 
     private static T DeserializeJson<T>(ReadOnlySpan<byte> json, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo)
     {
@@ -86,10 +83,11 @@ public class NodeTaskResolver(Func<BlobApiHttpUtils>? blobApiHttpUtilsFactory = 
 
         ArgumentNullException.ThrowIfNull(uri);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentException.ThrowIfNullOrWhiteSpace(apiVersion);
 
         try
         {
-            var resolutionPolicy = resolutionPolicyHandlerFactory(options.Value.RuntimeOptions ?? throw new InvalidOperationException($"Environment variable '{nameof(NodeTaskResolverOptions)}' is missing the '{nameof(NodeTaskResolverOptions.RuntimeOptions)}' property."));
+            var resolutionPolicy = resolutionPolicyHandlerFactory(options.Value.RuntimeOptions ?? throw new InvalidOperationException($"Environment variable '{nameof(NodeTaskResolverOptions)}' is missing the '{nameof(NodeTaskResolverOptions.RuntimeOptions)}' property."), apiVersion);
 
             List<FileInput> sources = [new() { TransformationStrategy = options.Value.TransformationStrategy, SourceUrl = uri.AbsoluteUri, Path = (file ?? new(CommandFactory.DefaultTaskDefinitionFile)).FullName }];
             var blobUri = (await resolutionPolicy.ApplyResolutionPolicyAsync(sources) ?? []).FirstOrDefault()?.SourceUrl ?? throw new InvalidOperationException("The JSON data blob URL could not be resolved.");

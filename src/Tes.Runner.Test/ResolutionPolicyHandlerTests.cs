@@ -17,7 +17,7 @@ namespace Tes.Runner.Test
         public void SetUp()
         {
             runtimeOptions = new RuntimeOptions();
-            resolutionPolicyHandler = new ResolutionPolicyHandler(runtimeOptions);
+            resolutionPolicyHandler = new ResolutionPolicyHandler(runtimeOptions, Runner.Transfer.BlobPipelineOptions.DefaultApiVersion);
         }
 
         [TestMethod]
@@ -40,12 +40,12 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task ApplyResolutionPolicyAsync_WhenTestTaskOutputsIsNotEmpty_ReturnsListWithSameCount()
         {
-            var testTaskOutputs = new List<FileOutput>
-            {
-                new FileOutput(){Path = "file", TargetUrl = "http://foo.bar", TransformationStrategy = TransformationStrategy.None},
-                new FileOutput(){Path = "file1", TargetUrl = "http://foo1.bar", TransformationStrategy = TransformationStrategy.None},
-                new FileOutput(){Path = "file2", TargetUrl = "http://foo2.bar", TransformationStrategy = TransformationStrategy.None}
-            };
+            List<FileOutput>? testTaskOutputs =
+            [
+                new(){Path = "file", TargetUrl = "http://foo.bar", TransformationStrategy = TransformationStrategy.None},
+                new(){Path = "file1", TargetUrl = "http://foo1.bar", TransformationStrategy = TransformationStrategy.None},
+                new(){Path = "file2", TargetUrl = "http://foo2.bar", TransformationStrategy = TransformationStrategy.None}
+            ];
             var result = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(testTaskOutputs);
             Assert.IsNotNull(result);
             Assert.AreEqual(testTaskOutputs.Count, result.Count);
@@ -61,7 +61,7 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task ApplyResolutionPolicyAsync_WhenTestTaskInputsIsEmpty_ReturnsEmptyList()
         {
-            var testTaskInputs = new List<FileInput>();
+            List<FileInput>? testTaskInputs = [];
             var result = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(testTaskInputs);
             Assert.IsNotNull(result);
             Assert.AreEqual(0, result.Count);
@@ -70,16 +70,15 @@ namespace Tes.Runner.Test
         [TestMethod]
         public async Task ApplyResolutionPolicyAsync_WhenTestTaskInputsIsNotEmpty_ReturnsListWithSameCount()
         {
-            var testTaskInputs = new List<FileInput>
-            {
+            List<FileInput>? testTaskInputs =
+            [
                 new FileInput(){Path = "file", SourceUrl = "http://foo.bar", TransformationStrategy = TransformationStrategy.None},
                 new FileInput(){Path = "file1", SourceUrl = "http://foo1.bar", TransformationStrategy = TransformationStrategy.None},
                 new FileInput(){Path = "file2", SourceUrl = "http://foo2.bar", TransformationStrategy = TransformationStrategy.None}
-            };
+            ];
             var result = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(testTaskInputs);
             Assert.IsNotNull(result);
             Assert.AreEqual(testTaskInputs.Count, result.Count);
         }
-
     }
 }

@@ -44,7 +44,7 @@ namespace Tes.RunnerCLI.Commands
                 var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
                 file ??= new(CommandFactory.DefaultTaskDefinitionFile);
 
-                await using var eventsPublisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask);
+                await using var eventsPublisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask, apiVersion);
 
                 try
                 {
@@ -99,14 +99,9 @@ namespace Tes.RunnerCLI.Commands
 
                 Logger.LogDebug("Executing commands in container for Task ID: {NodeTaskId}", nodeTask.Id);
 
-                await using var executor = await Executor.CreateExecutorAsync(nodeTask);
+                await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
 
-                var result = await executor.ExecuteNodeContainerTaskAsync(new DockerExecutor(dockerUri));
-
-                if (result is null)
-                {
-                    throw new InvalidOperationException("The container task failed to return results");
-                }
+                var result = await executor.ExecuteNodeContainerTaskAsync(new DockerExecutor(dockerUri)) ?? throw new InvalidOperationException("The container task failed to return results");
 
                 Logger.LogInformation("Docker container execution status code: {ContainerResultExitCode}", result.ContainerResult.ExitCode);
 
@@ -148,7 +143,7 @@ namespace Tes.RunnerCLI.Commands
 
             var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion);
 
-            return await ExecuteTransferTaskAsync(nodeTask, exec => exec.UploadOutputsAsync(options));
+            return await ExecuteTransferTaskAsync(nodeTask, exec => exec.UploadOutputsAsync(options), apiVersion);
         }
 
         /// <summary>
@@ -177,7 +172,7 @@ namespace Tes.RunnerCLI.Commands
 
             var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion);
 
-            return await ExecuteTransferTaskAsync(nodeTask, exec => exec.DownloadInputsAsync(options));
+            return await ExecuteTransferTaskAsync(nodeTask, exec => exec.DownloadInputsAsync(options), apiVersion);
         }
 
         private static async Task ExecuteAllOperationsAsSubProcessesAsync(Runner.Models.NodeTask nodeTask, FileInfo file, int blockSize, int writers, int readers, int bufferCapacity,
@@ -202,11 +197,11 @@ namespace Tes.RunnerCLI.Commands
             await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.UploadCommandName, nodeTask, file, options);
         }
 
-        private static async Task<int> ExecuteTransferTaskAsync(Runner.Models.NodeTask nodeTask, Func<Executor, Task<long>> transferOperation)
+        private static async Task<int> ExecuteTransferTaskAsync(Runner.Models.NodeTask nodeTask, Func<Executor, Task<long>> transferOperation, string apiVersion)
         {
             try
             {
-                await using var executor = await Executor.CreateExecutorAsync(nodeTask);
+                await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
 
                 await transferOperation(executor);
 

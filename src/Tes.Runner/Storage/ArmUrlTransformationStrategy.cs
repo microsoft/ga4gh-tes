@@ -12,13 +12,13 @@ namespace Tes.Runner.Storage
 {
     public class ArmUrlTransformationStrategy : IUrlTransformationStrategy
     {
-        const string blobUrlPrefix = ".blob."; // "core.windows.net";
+        const string BlobUrlPrefix = ".blob."; // "core.windows.net";
         private const int BlobSasTokenExpirationInHours = 24 * 7; //7 days which is the Azure Batch node runtime;
         const int UserDelegationKeyExpirationInHours = 1;
 
         private readonly ILogger logger = PipelineLoggerFactory.Create<ArmUrlTransformationStrategy>();
-        private readonly Dictionary<string, UserDelegationKey> userDelegationKeyDictionary;
-        private readonly SemaphoreSlim semaphoreSlim = new SemaphoreSlim(1, 1);
+        private readonly Dictionary<string, UserDelegationKey> userDelegationKeyDictionary = [];
+        private readonly SemaphoreSlim semaphoreSlim = new(1, 1);
         private readonly Func<Uri, BlobServiceClient> blobServiceClientFactory;
         private readonly RuntimeOptions runtimeOptions;
         private readonly string storageHostSuffix;
@@ -30,8 +30,7 @@ namespace Tes.Runner.Storage
 
             this.blobServiceClientFactory = blobServiceClientFactory;
             this.runtimeOptions = runtimeOptions;
-            storageHostSuffix = blobUrlPrefix + this.runtimeOptions!.AzureEnvironmentConfig!.StorageUrlSuffix;
-            userDelegationKeyDictionary = new Dictionary<string, UserDelegationKey>();
+            storageHostSuffix = BlobUrlPrefix + this.runtimeOptions!.AzureEnvironmentConfig!.StorageUrlSuffix;
         }
 
         public async Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)
@@ -41,7 +40,7 @@ namespace Tes.Runner.Storage
             if (!IsValidAzureStorageAccountUri(sourceUrl))
             {
                 var uri = new Uri(sourceUrl);
-                logger.LogWarning($"The URL provided is not a valid storage account. The resolution strategy won't be applied. Host: {uri.Host}");
+                logger.LogWarning("The URL provided is not a valid storage account. The resolution strategy won't be applied. Host: {Host}", uri.Host);
 
                 return uri;
             }
@@ -49,7 +48,7 @@ namespace Tes.Runner.Storage
             if (BlobApiHttpUtils.UrlContainsSasToken(sourceUrl))
             {
                 var uri = new Uri(sourceUrl);
-                logger.LogWarning($"The URL provided has SAS token. The resolution strategy won't be applied. Host: {uri.Host}");
+                logger.LogWarning("The URL provided has SAS token. The resolution strategy won't be applied. Host: {Host}", uri.Host);
 
                 return uri;
             }

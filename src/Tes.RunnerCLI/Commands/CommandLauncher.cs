@@ -45,7 +45,7 @@ namespace Tes.RunnerCLI.Commands
             ProcessExecutionResult results = null!;
             try
             {
-                var processLauncher = await ProcessLauncher.CreateLauncherAsync(nodeTask, logNamePrefix: command);
+                var processLauncher = await ProcessLauncher.CreateLauncherAsync(nodeTask, logNamePrefix: command, apiVersion: options.ApiVersion);
                 results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
             }
             catch (Exception ex)
@@ -81,7 +81,7 @@ namespace Tes.RunnerCLI.Commands
             ProcessExecutionResult results = null!;
             try
             {
-                var processLauncher = await ProcessLauncher.CreateLauncherAsync(nodeTask, logNamePrefix: CommandFactory.ExecutorCommandName);
+                var processLauncher = await ProcessLauncher.CreateLauncherAsync(nodeTask, logNamePrefix: CommandFactory.ExecutorCommandName, apiVersion: apiVersion);
 
                 var args = new List<string>() {
                     CommandFactory.ExecutorCommandName,
