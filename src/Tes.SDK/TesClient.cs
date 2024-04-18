@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System.Net.Http.Headers;
-using System.Resources;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Newtonsoft.Json;
