@@ -50,15 +50,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="scripts\clean-executor.sh">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="scripts\task-run.sh">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\CommonUtilities\CommonUtilities.csproj" />
     <ProjectReference Include="..\Tes.ApiClients\Tes.ApiClients.csproj" />
     <ProjectReference Include="..\Tes.SDK\Tes.SDK.csproj" />
@@ -67,6 +58,12 @@
 
   <ItemGroup>
     <None Update="tes-compliance-test\entrypoint.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="scripts\config-docker.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="scripts\config-nvme.sh">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
