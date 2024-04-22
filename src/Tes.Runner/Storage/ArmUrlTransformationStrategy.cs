@@ -90,16 +90,19 @@ namespace Tes.Runner.Storage
 
         private async Task<UserDelegationKey> GetUserDelegationKeyAsync(BlobServiceClient blobServiceClient, string storageAccountName)
         {
-
             try
             {
                 await semaphoreSlim.WaitAsync();
 
                 var userDelegationKey = userDelegationKeyDictionary.GetValueOrDefault(storageAccountName);
 
-                if (userDelegationKey is null || userDelegationKey.SignedExpiresOn < DateTimeOffset.UtcNow)
+                // https://www.allenconway.net/2023/11/dealing-with-time-skew-and-sas-azure.html
+                // https://learn.microsoft.com/en-us/azure/storage/common/storage-sas-overview?toc=%2Fazure%2Fstorage%2Fblobs%2Ftoc.json&bc=%2Fazure%2Fstorage%2Fblobs%2Fbreadcrumb%2Ftoc.json#best-practices-when-using-sas paragraph referencing "clock skew"
+                var now = DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(15));
+
+                if (userDelegationKey is null || userDelegationKey.SignedExpiresOn < now)
                 {
-                    userDelegationKey = await blobServiceClient.GetUserDelegationKeyAsync(startsOn: default, expiresOn: DateTimeOffset.UtcNow.AddHours(UserDelegationKeyExpirationInHours));
+                    userDelegationKey = await blobServiceClient.GetUserDelegationKeyAsync(startsOn: now, expiresOn: DateTimeOffset.UtcNow.AddHours(UserDelegationKeyExpirationInHours));
 
                     userDelegationKeyDictionary[storageAccountName] = userDelegationKey;
                 }

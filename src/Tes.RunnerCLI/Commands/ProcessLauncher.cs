@@ -75,7 +75,7 @@ namespace Tes.RunnerCLI.Commands
             return Process.GetCurrentProcess().MainModule?.FileName;
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("SingleFile", "IL3000:Avoid accessing Assembly file path when publishing as a single file", Justification = "Needed to include process binary in result when not assembly is not published.")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("SingleFile", "IL3000:Avoid accessing Assembly file path when publishing as a single file", Justification = "Needed to include process binary in result when assembly is not published.")]
         private static string ParseArguments(string[] options)
         {
             var argList = new List<string>(options);
