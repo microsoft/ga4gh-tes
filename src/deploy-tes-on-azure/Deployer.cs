@@ -1116,7 +1116,7 @@ namespace TesDeployer
 
             try
             {
-                // Is this our official prepository/image?
+                // Is this our official repository/image?
                 result = installed.StartsWith(defaultPath + ":")
                         // Is the tag a version (without decorations)?
                         && Version.TryParse(installedTag, out var version)
@@ -1141,7 +1141,7 @@ namespace TesDeployer
         }
 
         /// <summary>
-        /// Pupulates <paramref name="settings"/> with missing values.
+        /// Populates <paramref name="settings"/> with missing values.
         /// </summary>
         /// <param name="settings">Property bag being updated.</param>
         /// <param name="defaults">Property bag containing default values.</param>
@@ -1249,7 +1249,7 @@ namespace TesDeployer
             catch (Microsoft.Rest.Azure.CloudException ex) when (ex.ToCloudErrorType() == CloudErrorType.AuthorizationFailed)
             {
                 ConsoleEx.WriteLine();
-                ConsoleEx.WriteLine("Unable to programatically register the required resource providers.", ConsoleColor.Red);
+                ConsoleEx.WriteLine("Unable to programmatically register the required resource providers.", ConsoleColor.Red);
                 ConsoleEx.WriteLine("This can happen if you don't have the Owner or Contributor role assignment for the subscription.", ConsoleColor.Red);
                 ConsoleEx.WriteLine();
                 ConsoleEx.WriteLine("Please contact the Owner or Contributor of your Azure subscription, and have them:", ConsoleColor.Yellow);
@@ -1332,7 +1332,7 @@ namespace TesDeployer
             catch (Microsoft.Rest.Azure.CloudException ex) when (ex.ToCloudErrorType() == CloudErrorType.AuthorizationFailed)
             {
                 ConsoleEx.WriteLine();
-                ConsoleEx.WriteLine("Unable to programatically register the required features.", ConsoleColor.Red);
+                ConsoleEx.WriteLine("Unable to programmatically register the required features.", ConsoleColor.Red);
                 ConsoleEx.WriteLine("This can happen if you don't have the Owner or Contributor role assignment for the subscription.", ConsoleColor.Red);
                 ConsoleEx.WriteLine();
                 ConsoleEx.WriteLine("Please contact the Owner or Contributor of your Azure subscription, and have them:", ConsoleColor.Yellow);
