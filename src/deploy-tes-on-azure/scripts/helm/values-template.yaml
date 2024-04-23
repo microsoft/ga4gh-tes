@@ -1,4 +1,4 @@
-﻿service:
+service:
   tesPort: 80
   tesHostname: RUNTIME_PARAMETER
   enableIngress: false
