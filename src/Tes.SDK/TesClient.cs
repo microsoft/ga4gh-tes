@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Newtonsoft.Json;
 using Polly;
@@ -129,7 +130,7 @@ namespace Tes.SDK
         }
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<TesTask> ListTasksAsync(TaskQueryOptions? options = null, CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<TesTask> ListTasksAsync(TaskQueryOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             string? pageToken = null;
 
