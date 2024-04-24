@@ -19,7 +19,6 @@ namespace Tes.Models
 {
     public static class TesEnumUtility
     {
-        // Static method to get the EnumMember Value using a switch statement
         public static string GetEnumMemberValue(TesState state)
         {
             return state switch
