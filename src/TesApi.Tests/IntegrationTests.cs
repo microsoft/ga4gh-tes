@@ -44,10 +44,10 @@ namespace TesApi.Tests
 
             Console.WriteLine($"Posted {testTaskIds.Count} TES tasks in {sw.Elapsed.TotalSeconds:n3}s");
             Assert.AreEqual(count, testTaskIds.Count);
-            Assert.AreEqual(count, await tesClient.ListTasksAsync().CountAsync(t => testTaskIds.Contains(t.Id)));
+            Assert.AreEqual(count, await tesClient.ListTasksAsync(new TaskQueryOptions()).CountAsync(t => testTaskIds.Contains(t.Id)));
             sw.Restart();
 
-            while (await tesClient.ListTasksAsync().Where(t => testTaskIds.Contains(t.Id)).AnyAsync(t => t.IsActiveState()))
+            while (await tesClient.ListTasksAsync(new TaskQueryOptions()).Where(t => testTaskIds.Contains(t.Id)).AnyAsync(t => t.IsActiveState()))
             {
                 // Tasks are still running
                 await Task.Delay(TimeSpan.FromSeconds(20));
@@ -56,7 +56,7 @@ namespace TesApi.Tests
             // All tasks are complete
             Console.WriteLine($"{testTaskIds.Count} TES tasks completed in {sw.Elapsed.TotalSeconds:n3}s");
 
-            var completedTasks = await tesClient.ListTasksAsync().Where(t => testTaskIds.Contains(t.Id)).GroupBy(t => t.State).ToDictionaryAwaitAsync(g => ValueTask.FromResult(g.Key), g => g.ToListAsync());
+            var completedTasks = await tesClient.ListTasksAsync(new TaskQueryOptions()).Where(t => testTaskIds.Contains(t.Id)).GroupBy(t => t.State).ToDictionaryAwaitAsync(g => ValueTask.FromResult(g.Key), g => g.ToListAsync());
 
             foreach (var tasksWithState in completedTasks)
             {

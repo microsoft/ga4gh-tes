@@ -40,7 +40,7 @@ namespace Tes.SDK
         }
 
         /// <inheritdoc/>
-        public string SdkVersion { get; } = "0.1.0";
+        public string SdkVersion { get; } = "0.1.1";
 
         private TesClient(bool clientAllocated, HttpClient httpClient, Uri baseUrl, string? username = null, string? password = null)
         {
@@ -130,13 +130,13 @@ namespace Tes.SDK
         }
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<TesTask> ListTasksAsync(TesView view, [EnumeratorCancellation] CancellationToken cancellationToken, Dictionary<string, string>? tags = null, TesState? state = null, string? namePrefix = null)
+        public async IAsyncEnumerable<TesTask> ListTasksAsync(TaskQueryOptions options, CancellationToken cancellationToken = default)
         {
             string? pageToken = null;
 
             do
             {
-                var query = GetQuery(view, tags, state, namePrefix, pageToken);
+                var query = GetQuery(options, pageToken);
                 var response = await SendRequestAsync(GetRequest(HttpMethod.Get, "/v1/tasks", query), cancellationToken: cancellationToken);
                 var tesListTasksResponse = await DeserializeAsync<TesListTasksResponse>(response.Content, cancellationToken);
 
@@ -177,37 +177,37 @@ namespace Tes.SDK
             }
         }
 
-        private static string GetQuery(TesView view, Dictionary<string, string>? tags, TesState? state, string? namePrefix, string? pageToken)
+        private static string GetQuery(TaskQueryOptions options, string? pageToken)
         {
             var queryBuilder = new StringBuilder();
-            queryBuilder.Append($"view={view}");
+            queryBuilder.Append($"view={options.View}");
 
             if (!string.IsNullOrWhiteSpace(pageToken))
             {
                 queryBuilder.Append($"&pageToken={pageToken}");
             }
 
-            if (tags?.Count > 0)
+            if (options.Tags?.Count > 0)
             {
-                foreach (var key in tags.Keys)
+                foreach (var key in options.Tags.Keys)
                 {
                     queryBuilder.Append($"&tag_key={key}");
 
-                    if (tags.TryGetValue(key, out var val) && !string.IsNullOrWhiteSpace(val))
+                    if (options.Tags.TryGetValue(key, out var val) && !string.IsNullOrWhiteSpace(val))
                     {
                         queryBuilder.Append($"&tag_value={val}");
                     }
                 }
             }
 
-            if (state.HasValue)
+            if (options.State.HasValue)
             {
-                queryBuilder.Append($"&state={TesEnumUtility.GetEnumMemberValue(state.Value)}");
+                queryBuilder.Append($"&state={TesEnumUtility.GetEnumMemberValue(options.State.Value)}");
             }
 
-            if (!string.IsNullOrWhiteSpace(namePrefix))
+            if (!string.IsNullOrWhiteSpace(options.NamePrefix))
             {
-                queryBuilder.Append($"&name_prefix={namePrefix}");
+                queryBuilder.Append($"&name_prefix={options.NamePrefix}");
             }
 
             var query = queryBuilder.ToString();
