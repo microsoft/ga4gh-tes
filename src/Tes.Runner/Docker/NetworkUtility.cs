@@ -9,8 +9,8 @@ namespace Tes.Runner.Docker
 {
     public class NetworkUtility
     {
-        private const int DefaultLockWaitSeconds = 30;
-        private const string DefaultRuleChain = "DOCKER-USER";
+        private const string defaultRuleChain = "DOCKER-USER";
+        private const int defaultLockWaitSeconds = 30;
         private readonly ILogger logger = PipelineLoggerFactory.Create<NetworkUtility>();
 
         /// <summary>
@@ -19,7 +19,7 @@ namespace Tes.Runner.Docker
         /// <param name="ipAddress">The IP address to block</param>
         /// <param name="callerMemberName">The caller of the function</param>
         /// <returns></returns>
-        public async Task BlockIpAddressAsync(string ipAddress, string ruleChain = DefaultRuleChain)
+        public async Task BlockIpAddressAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
             if (!OperatingSystem.IsLinux())
             {
@@ -35,7 +35,7 @@ namespace Tes.Runner.Docker
             }
         }
 
-        public async Task UnblockIpAddressAsync(string ipAddress, string ruleChain = DefaultRuleChain)
+        public async Task UnblockIpAddressAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
             if (!OperatingSystem.IsLinux())
             {
@@ -51,22 +51,22 @@ namespace Tes.Runner.Docker
             }
         }
 
-        private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress, string ruleChain = DefaultRuleChain)
+        private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
-            var listRulesCommand = $"-S {ruleChain} --wait {DefaultLockWaitSeconds}";
+            string listRulesCommand = $"-S {ruleChain} --wait {defaultLockWaitSeconds}";
             var outputAndError = await RunIptablesCommandAsync(listRulesCommand);
             return outputAndError.Output.Contains(ipAddress, StringComparison.OrdinalIgnoreCase);
         }
 
-        private async Task AddBlockRuleAsync(string ipAddress, string ruleChain = DefaultRuleChain)
+        private async Task AddBlockRuleAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
-            var addRuleCommand = $"-A {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP --wait {DefaultLockWaitSeconds}";
+            string addRuleCommand = $"-A {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP --wait {defaultLockWaitSeconds}";
             _ = await RunIptablesCommandAsync(addRuleCommand);
         }
 
-        private async Task RemoveBlockRuleAsync(string ipAddress, string ruleChain = DefaultRuleChain)
+        private async Task RemoveBlockRuleAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
-            var removeRuleCommand = $"-D {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP --wait {DefaultLockWaitSeconds}";
+            string removeRuleCommand = $"-D {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP --wait {defaultLockWaitSeconds}";
             _ = await RunIptablesCommandAsync(removeRuleCommand);
         }
 
