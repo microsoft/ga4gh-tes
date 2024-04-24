@@ -60,7 +60,7 @@ namespace Tes.Runner.Storage
             }
         }
 
-        private bool ContainsDrsScheme(string scheme)
+        private static bool ContainsDrsScheme(string scheme)
         {
             return scheme.Equals(DrsScheme, StringComparison.OrdinalIgnoreCase);
         }
