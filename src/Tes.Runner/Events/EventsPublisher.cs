@@ -43,9 +43,9 @@ public class EventsPublisher : IAsyncDisposable
         this.sinks = [];
     }
 
-    public static async Task<EventsPublisher> CreateEventsPublisherAsync(NodeTask nodeTask)
+    public static async Task<EventsPublisher> CreateEventsPublisherAsync(NodeTask nodeTask, string apiVersion)
     {
-        var storageSink = await CreateAndStartStorageEventSinkFromTaskIfRequestedAsync(nodeTask);
+        var storageSink = await CreateAndStartStorageEventSinkFromTaskIfRequestedAsync(nodeTask, apiVersion);
 
         List<IEventSink> sinkList = [];
         if (storageSink != null)
@@ -56,7 +56,7 @@ public class EventsPublisher : IAsyncDisposable
         return new EventsPublisher(sinkList);
     }
 
-    private static async Task<IEventSink?> CreateAndStartStorageEventSinkFromTaskIfRequestedAsync(NodeTask nodeTask)
+    private static async Task<IEventSink?> CreateAndStartStorageEventSinkFromTaskIfRequestedAsync(NodeTask nodeTask, string apiVersion)
     {
         ArgumentNullException.ThrowIfNull(nodeTask);
 
@@ -72,7 +72,8 @@ public class EventsPublisher : IAsyncDisposable
 
         var transformationStrategy = UrlTransformationStrategyFactory.CreateStrategy(
             nodeTask.RuntimeOptions.StorageEventSink.TransformationStrategy,
-            nodeTask.RuntimeOptions);
+            nodeTask.RuntimeOptions,
+            apiVersion);
 
 
         var transformedUrl = await transformationStrategy.TransformUrlWithStrategyAsync(

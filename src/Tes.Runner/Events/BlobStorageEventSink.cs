@@ -16,7 +16,7 @@ namespace Tes.Runner.Events
         private const string ApiVersion = "2023-05-03";
         private readonly Uri storageUrl;
         private readonly ILogger logger = PipelineLoggerFactory.Create<BlobStorageEventSink>();
-        private readonly BlobApiHttpUtils blobApiHttpUtils = new BlobApiHttpUtils();
+        private readonly BlobApiHttpUtils blobApiHttpUtils = new();
 
 
         public BlobStorageEventSink(Uri storageUrl)
@@ -38,11 +38,11 @@ namespace Tes.Runner.Events
             catch (Exception e)
             {
                 //failure to publish event to blob storage should not fail the execution of the node task
-                logger.LogError(e, $"Failed to publish event {eventMessage.Id} to blob storage");
+                logger.LogError(e, "Failed to publish event {EventMessageId} to blob storage", eventMessage.Id);
             }
         }
 
-        private Uri ToEventUrl(Uri uri, EventMessage message)
+        private static Uri ToEventUrl(Uri uri, EventMessage message)
         {
             var blobBuilder = new BlobUriBuilder(uri);
 

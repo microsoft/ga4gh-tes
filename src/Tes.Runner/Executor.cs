@@ -22,15 +22,15 @@ namespace Tes.Runner
         private readonly EventsPublisher eventsPublisher;
         private readonly ITransferOperationFactory transferOperationFactory;
 
-        public Executor(NodeTask tesNodeTask, EventsPublisher eventsPublisher) : this(tesNodeTask, new FileOperationResolver(tesNodeTask), eventsPublisher, new TransferOperationFactory())
-        {
-        }
+        public Executor(NodeTask tesNodeTask, EventsPublisher eventsPublisher, string apiVersion)
+            : this(tesNodeTask, new(tesNodeTask, apiVersion), eventsPublisher, new TransferOperationFactory())
+        { }
 
-        public static async Task<Executor> CreateExecutorAsync(NodeTask nodeTask)
+        public static async Task<Executor> CreateExecutorAsync(NodeTask nodeTask, string apiVersion)
         {
-            var publisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask);
+            var publisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask, apiVersion);
 
-            return new Executor(nodeTask, publisher);
+            return new Executor(nodeTask, publisher, apiVersion);
         }
 
         public Executor(NodeTask tesNodeTask, FileOperationResolver operationResolver, EventsPublisher eventsPublisher, ITransferOperationFactory transferOperationFactory)
@@ -75,7 +75,7 @@ namespace Tes.Runner
 
         private ExecutionOptions CreateExecutionOptions(List<string> bindings)
         {
-            return new ExecutionOptions(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings, tesNodeTask.ContainerWorkDir, tesNodeTask.RuntimeOptions);
+            return new(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings, tesNodeTask.ContainerWorkDir, tesNodeTask.RuntimeOptions);
         }
 
         private static string ToStatusMessage(ContainerExecutionResult result)
@@ -154,14 +154,14 @@ namespace Tes.Runner
 
             var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs));
 
-            logger.LogInformation(@"Executed Upload. Time elapsed: {ElapsedTime} Bandwidth: {BandwidthMiBpS} MiB/s", executionResult.Elapsed, BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds));
+            logger.LogInformation("Executed Upload. Time elapsed: {ElapsedTime} Bandwidth: {BandwidthMiBpS} MiB/s", executionResult.Elapsed, BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds));
 
             return new(executionResult.Result, uploader.CompletedFiles);
         }
 
         private async Task<List<UploadInfo>?> CreateUploadOutputsAsync()
         {
-            if (tesNodeTask.Outputs is null || tesNodeTask.Outputs.Count == 0)
+            if ((tesNodeTask.Outputs ?? []).Count == 0)
             {
                 logger.LogInformation("No outputs provided");
                 {
@@ -181,7 +181,7 @@ namespace Tes.Runner
 
             LogStartConfig(optimizedOptions);
 
-            logger.LogInformation("{OutputsCount} outputs to upload.", outputs.Count);
+            logger.LogInformation("{CountOfUploads} outputs to upload.", outputs.Count);
             return optimizedOptions;
         }
 
@@ -192,7 +192,7 @@ namespace Tes.Runner
 
             LogStartConfig(optimizedOptions);
 
-            logger.LogInformation("{InputsCount} inputs to download.", tesNodeTask.Inputs?.Count);
+            logger.LogInformation("{CountOfDownloads} inputs to download.", tesNodeTask.Inputs?.Count);
             return optimizedOptions;
         }
 
@@ -285,7 +285,7 @@ namespace Tes.Runner
             var result = await execution();
             sw.Stop();
 
-            return new TimedExecutionResult<T>(sw.Elapsed, result);
+            return new(sw.Elapsed, result);
         }
 
         private record struct UploadResults(long BytesTransferred, IEnumerable<CompletedUploadFile> CompletedFiles);
@@ -294,6 +294,7 @@ namespace Tes.Runner
         async ValueTask IAsyncDisposable.DisposeAsync()
         {
             await eventsPublisher.FlushPublishersAsync();
+            GC.SuppressFinalize(this);
         }
     }
 }
