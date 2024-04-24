@@ -941,8 +941,7 @@ namespace TesDeployer
                     DnsServiceIP = configuration.KubernetesDnsServiceIP,
                     DockerBridgeCidr = configuration.KubernetesDockerBridgeCidr,
                     NetworkPolicy = ContainerServiceNetworkPolicy.Azure
-                },
-                Identity = new(Azure.ResourceManager.Models.ManagedServiceIdentityType.UserAssigned)
+                }
             };
             ManagedClusterAddonProfile clusterAddonProfile = new(isEnabled: true);
             clusterAddonProfile.Config.Add("logAnalyticsWorkspaceResourceID", logAnalyticsWorkspace.Id);
@@ -960,7 +959,9 @@ namespace TesDeployer
                 configuration.AadGroupIds.Split(",", StringSplitOptions.RemoveEmptyEntries).Select(Guid.Parse).ForEach(cluster.AadProfile.AdminGroupObjectIds.Add);
             }
 
-            cluster.Identity.UserAssignedIdentities.Add(uami.Id, new());
+            Azure.ResourceManager.Models.ManagedServiceIdentity identity = new(Azure.ResourceManager.Models.ManagedServiceIdentityType.UserAssigned);
+            identity.UserAssignedIdentities.Add(uami.Id, new());
+            cluster.Identity = identity;
             cluster.IdentityProfile.Add("kubeletidentity", new() { ResourceId = uami.Id, ClientId = uami.Data.ClientId, ObjectId = uami.Data.PrincipalId });
 
             cluster.AgentPoolProfiles.Add(new(nodePoolName)
