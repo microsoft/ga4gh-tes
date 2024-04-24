@@ -17,6 +17,7 @@ using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.ContainerService;
+using Azure.ResourceManager.ContainerService.Models;
 using Azure.ResourceManager.ManagedServiceIdentities;
 using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Network.Models;
@@ -31,9 +32,6 @@ using Microsoft.Azure.Management.Batch;
 using Microsoft.Azure.Management.Batch.Models;
 using Microsoft.Azure.Management.Compute.Fluent;
 using Microsoft.Azure.Management.ContainerRegistry.Fluent;
-using Microsoft.Azure.Management.ContainerService;
-using Microsoft.Azure.Management.ContainerService.Fluent;
-using Microsoft.Azure.Management.ContainerService.Models;
 using Microsoft.Azure.Management.Fluent;
 using Microsoft.Azure.Management.Graph.RBAC.Fluent;
 using Microsoft.Azure.Management.KeyVault;
@@ -53,6 +51,7 @@ using Microsoft.Rest;
 using Newtonsoft.Json;
 using Polly;
 using Polly.Retry;
+using Tes.Extensions;
 using Tes.Models;
 using Tes.SDK;
 using static Microsoft.Azure.Management.PostgreSQL.FlexibleServers.DatabasesOperationsExtensions;
@@ -159,7 +158,7 @@ namespace TesDeployer
                 await ValidateSubscriptionAndResourceGroupAsync(configuration);
                 kubernetesManager = new(configuration, azureCredentials, azureCloudConfig, cts.Token);
                 IResourceGroup resourceGroup = null;
-                ManagedCluster aksCluster = null;
+                ContainerServiceManagedClusterResource aksCluster = null;
                 BatchAccount batchAccount = null;
                 IGenericResource logAnalyticsWorkspace = null;
                 IGenericResource appInsights = null;
@@ -196,26 +195,23 @@ namespace TesDeployer
                             ?? throw new ValidationException($"Storage account {configuration.StorageAccountName} does not exist in region {configuration.RegionName} or is not accessible to the current user.", displayExample: false);
                     }
 
-                    ManagedCluster existingAksCluster = default;
-
                     if (string.IsNullOrWhiteSpace(configuration.AksClusterName))
                     {
-                        using var client = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId };
-                        var aksClusters = await (await client.ManagedClusters.ListByResourceGroupAsync(configuration.ResourceGroupName, cts.Token))
-                            .ToAsyncEnumerable(client.ManagedClusters.ListByResourceGroupNextAsync).ToListAsync(cts.Token);
+                        var client = armClient.GetResourceGroupResource(new(resourceGroup.Id));
+                        var aksClusters = await client.GetContainerServiceManagedClusters().GetAllAsync(cts.Token).ToListAsync(cts.Token);
 
-                        existingAksCluster = aksClusters.Count switch
+                        aksCluster = aksClusters.Count switch
                         {
                             0 => throw new ValidationException($"Update was requested but resource group {configuration.ResourceGroupName} does not contain any AKS clusters.", displayExample: false),
-                            1 => aksClusters.Single(),
+                            1 => (await aksClusters.Single().GetAsync(cts.Token)).Value,
                             _ => throw new ValidationException($"Resource group {configuration.ResourceGroupName} contains multiple AKS clusters. {nameof(configuration.AksClusterName)} must be provided.", displayExample: false),
                         };
 
-                        configuration.AksClusterName = existingAksCluster.Name;
+                        configuration.AksClusterName = aksCluster.Data.Name;
                     }
                     else
                     {
-                        existingAksCluster = (await GetExistingAKSClusterAsync(configuration.AksClusterName))
+                        aksCluster = (await GetExistingAKSClusterAsync(configuration.AksClusterName))
                             ?? throw new ValidationException($"AKS cluster {configuration.AksClusterName} does not exist in region {configuration.RegionName} or is not accessible to the current user.", displayExample: false);
                     }
 
@@ -347,7 +343,7 @@ namespace TesDeployer
 
                     if (installedVersion is null || installedVersion < new Version(5, 2, 2))
                     {
-                        await EnableWorkloadIdentity(existingAksCluster, managedIdentity, resourceGroup);
+                        await EnableWorkloadIdentity(aksCluster, managedIdentity, resourceGroup);
                         await kubernetesManager.RemovePodAadChart();
                     }
 
@@ -865,7 +861,7 @@ namespace TesDeployer
                 ?? throw new ValidationException($"If Postgresql server name is provided, the server must already exist in region {configuration.RegionName}, and be accessible to the current user.", displayExample: false);
         }
 
-        private async Task<ManagedCluster> ValidateAndGetExistingAKSClusterAsync()
+        private async Task<ContainerServiceManagedClusterResource> ValidateAndGetExistingAKSClusterAsync()
         {
             if (string.IsNullOrWhiteSpace(configuration.AksClusterName))
             {
@@ -900,111 +896,109 @@ namespace TesDeployer
                 cts.Token);
         }
 
-        private async Task<ManagedCluster> GetExistingAKSClusterAsync(string aksClusterName)
+        private async Task<ContainerServiceManagedClusterResource> GetExistingAKSClusterAsync(string aksClusterName)
         {
-            return await subscriptionIds.ToAsyncEnumerable().SelectAwait(async s =>
+            return await subscriptionIds.ToAsyncEnumerable()
+                .SelectAwaitWithCancellation((sub, token) => ValueTask.FromResult<IAsyncEnumerable<ContainerServiceManagedClusterResource>>(
+                    armClient.GetSubscriptionResource(SubscriptionResource.CreateResourceIdentifier(sub))
+                        .GetContainerServiceManagedClustersAsync(token)))
+                .Where(a => a is not null)
+                .SelectMany(a => a)
+                .SelectAwaitWithCancellation((resource, token) =>
+                    SafeSelectAsync(async () => (await resource.GetAsync(token)).Value))
+                .Where(a => a is not null)
+                .SingleOrDefaultAsync(a =>
+                        a.Data.Name.Equals(aksClusterName, StringComparison.OrdinalIgnoreCase) &&
+                        a.Data.Location.Name.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase),
+                    cts.Token);
+
+            static async ValueTask<TOut> SafeSelectAsync<TOut>(Func<ValueTask<TOut>> selector) where TOut : class
             {
                 try
                 {
-                    var client = new ContainerServiceClient(tokenCredentials) { SubscriptionId = s };
-                    return (await client.ManagedClusters.ListAsync(cts.Token)).ToAsyncEnumerable(client.ManagedClusters.ListNextAsync);
+                    return await selector();
                 }
                 catch (Exception e)
                 {
                     ConsoleEx.WriteLine(e.Message);
                     return null;
                 }
-            })
-            .Where(a => a is not null)
-            .SelectMany(a => a)
-            .SingleOrDefaultAsync(a =>
-                    a.Name.Equals(aksClusterName, StringComparison.OrdinalIgnoreCase) &&
-                    a.Location.Equals(configuration.RegionName, StringComparison.OrdinalIgnoreCase),
-                cts.Token);
+            }
         }
 
-        private async Task<ManagedCluster> ProvisionManagedClusterAsync(IResource resourceGroupObject, IIdentity managedIdentity, IGenericResource logAnalyticsWorkspace, INetwork virtualNetwork, string subnetName, bool privateNetworking)
+        private async Task<ContainerServiceManagedClusterResource> ProvisionManagedClusterAsync(IResource resourceGroupObject, IIdentity managedIdentity, IGenericResource logAnalyticsWorkspace, INetwork virtualNetwork, string subnetName, bool privateNetworking)
         {
-            var resourceGroup = resourceGroupObject.Name;
+            var uami = (await armClient.GetUserAssignedIdentityResource(new(managedIdentity.Id)).GetAsync(cts.Token)).Value;
+            var resourceGroup = armClient.GetResourceGroupResource(new(resourceGroupObject.Id));
             var nodePoolName = "nodepool1";
-            var containerServiceClient = new ContainerServiceClient(azureCredentials) { SubscriptionId = configuration.SubscriptionId, BaseUri = new Uri(azureCloudConfig.ResourceManagerUrl) };
-            var cluster = new ManagedCluster
+            ContainerServiceManagedClusterData cluster = new(new(configuration.RegionName))
             {
-                AddonProfiles = new Dictionary<string, ManagedClusterAddonProfile>
-                {
-                    { "omsagent", new(true, new Dictionary<string, string>() { { "logAnalyticsWorkspaceResourceID", logAnalyticsWorkspace.Id } }) }
-                },
-                Location = configuration.RegionName,
                 DnsPrefix = configuration.AksClusterName,
                 NetworkProfile = new()
                 {
-                    NetworkPlugin = NetworkPlugin.Azure,
+                    NetworkPlugin = ContainerServiceNetworkPlugin.Azure,
                     ServiceCidr = configuration.KubernetesServiceCidr,
                     DnsServiceIP = configuration.KubernetesDnsServiceIP,
                     DockerBridgeCidr = configuration.KubernetesDockerBridgeCidr,
-                    NetworkPolicy = NetworkPolicy.Azure
+                    NetworkPolicy = ContainerServiceNetworkPolicy.Azure
                 },
-                Identity = new(managedIdentity.PrincipalId, managedIdentity.TenantId, Microsoft.Azure.Management.ContainerService.Models.ResourceIdentityType.UserAssigned)
-                {
-                    UserAssignedIdentities = new Dictionary<string, ManagedClusterIdentityUserAssignedIdentitiesValue>()
-                }
+                Identity = new(Azure.ResourceManager.Models.ManagedServiceIdentityType.UserAssigned)
             };
+            ManagedClusterAddonProfile clusterAddonProfile = new(isEnabled: true);
+            clusterAddonProfile.Config.Add("logAnalyticsWorkspaceResourceID", logAnalyticsWorkspace.Id);
+            cluster.AddonProfiles.Add("omsagent", clusterAddonProfile);
 
             if (!string.IsNullOrWhiteSpace(configuration.AadGroupIds))
             {
-                cluster.EnableRBAC = true;
+                cluster.EnableRbac = true;
                 cluster.AadProfile = new()
                 {
-                    AdminGroupObjectIDs = configuration.AadGroupIds.Split(",", StringSplitOptions.RemoveEmptyEntries),
-                    EnableAzureRBAC = false,
-                    Managed = true
+                    IsAzureRbacEnabled = false,
+                    IsManagedAadEnabled = true
                 };
+
+                configuration.AadGroupIds.Split(",", StringSplitOptions.RemoveEmptyEntries).Select(Guid.Parse).ForEach(cluster.AadProfile.AdminGroupObjectIds.Add);
             }
 
-            cluster.Identity.UserAssignedIdentities.Add(managedIdentity.Id, new(managedIdentity.PrincipalId, managedIdentity.ClientId));
-            cluster.IdentityProfile = new Dictionary<string, ManagedClusterPropertiesIdentityProfileValue>
-            {
-                { "kubeletidentity", new(managedIdentity.Id, managedIdentity.ClientId, managedIdentity.PrincipalId) }
-            };
+            cluster.Identity.UserAssignedIdentities.Add(uami.Id, new());
+            cluster.IdentityProfile.Add("kubeletidentity", new() { ResourceId = uami.Id, ClientId = uami.Data.ClientId, ObjectId = uami.Data.PrincipalId });
 
-            cluster.AgentPoolProfiles =
-            [
-                new()
-                {
-                    Name = nodePoolName,
-                    Count = configuration.AksPoolSize,
-                    VmSize = configuration.VmSize,
-                    OsDiskSizeGB = 128,
-                    OsDiskType = OSDiskType.Managed,
-                    EnableEncryptionAtHost = true,
-                    Type = "VirtualMachineScaleSets",
-                    EnableAutoScaling = false,
-                    EnableNodePublicIP = false,
-                    OsType = "Linux",
-                    OsSKU = "AzureLinux",
-                    Mode = "System",
-                    VnetSubnetID = virtualNetwork.Subnets[subnetName].Inner.Id,
-                }
-            ];
+            cluster.AgentPoolProfiles.Add(new(nodePoolName)
+            {
+                Count = configuration.AksPoolSize,
+                VmSize = configuration.VmSize,
+                OSDiskSizeInGB = 128,
+                OSDiskType = ContainerServiceOSDiskType.Managed,
+                EnableEncryptionAtHost = true,
+                AgentPoolType = AgentPoolType.VirtualMachineScaleSets,
+                EnableAutoScaling = false,
+                EnableNodePublicIP = false,
+                OSType = ContainerServiceOSType.Linux,
+                OSSku = ContainerServiceOSSku.AzureLinux,
+                Mode = AgentPoolMode.System,
+                VnetSubnetId = new(virtualNetwork.Subnets[subnetName].Inner.Id),
+            });
 
             if (privateNetworking)
             {
                 cluster.ApiServerAccessProfile = new()
                 {
                     EnablePrivateCluster = true,
-                    EnablePrivateClusterPublicFQDN = true
+                    EnablePrivateClusterPublicFqdn = false
                 };
+
+                cluster.PublicNetworkAccess = ContainerServicePublicNetworkAccess.Disabled;
             }
 
             return await Execute(
                 $"Creating AKS Cluster: {configuration.AksClusterName}...",
-                () => containerServiceClient.ManagedClusters.CreateOrUpdateAsync(resourceGroup, configuration.AksClusterName, cluster, cts.Token));
+                async () => (await resourceGroup.GetContainerServiceManagedClusters().CreateOrUpdateAsync(Azure.WaitUntil.Completed, configuration.AksClusterName, cluster, cts.Token)).Value);
         }
 
-        private async Task EnableWorkloadIdentity(ManagedCluster aksCluster, IIdentity managedIdentity, IResourceGroup resourceGroup)
+        private async Task EnableWorkloadIdentity(ContainerServiceManagedClusterResource aksCluster, IIdentity managedIdentity, IResourceGroup resourceGroup)
         {
             // Use the new ResourceManager sdk enable workload identity.
-            var armCluster = (await armClient.GetContainerServiceManagedClusterResource(new ResourceIdentifier(aksCluster.Id)).GetAsync(cancellationToken: cts.Token)).Value;
+            var armCluster = aksCluster.HasData ? aksCluster : (await aksCluster.GetAsync(cts.Token)).Value;
             armCluster.Data.SecurityProfile.IsWorkloadIdentityEnabled = true;
             armCluster.Data.OidcIssuerProfile.IsEnabled = true;
             var coaRg = armClient.GetResourceGroupResource(new ResourceIdentifier(resourceGroup.Id));
@@ -1116,15 +1110,15 @@ namespace TesDeployer
 
             try
             {
-                // Is this our official repository/image?
+                // Determine if the installed image is from our official repository
                 result = installed.StartsWith(defaultPath + ":")
-                        // Is the tag a version (without decorations)?
+                        // Attempt to parse the tag as a version (ignoring any decorations)
                         && Version.TryParse(installedTag, out var version)
-                        // Is the image version the same as the installed version?
+                        // Check if the parsed version matches the installed version
                         && version.Equals(installedVersion)
-                    // Upgrade image
+                    // If not customized, consider it as not requiring an upgrade
                     ? false
-                    // Preserve configured image
+                    // If customized, preserve the configured image without upgrading
                     : null;
             }
             catch (ArgumentException)
