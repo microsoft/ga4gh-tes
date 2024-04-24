@@ -136,38 +136,8 @@ namespace Tes.SDK
 
             do
             {
-                var queryBuilder = new StringBuilder();
-                queryBuilder.Append($"view={view}");
-
-                if (string.IsNullOrWhiteSpace(pageToken))
-                {
-                    queryBuilder.Append($"&pageToken={pageToken}");
-                }
-
-                if (tags?.Count > 0)
-                {
-                    foreach (var key in tags.Keys)
-                    {
-                        queryBuilder.Append($"&tag_key={key}");
-
-                        if (tags.TryGetValue(key, out var val) && !string.IsNullOrWhiteSpace(val))
-                        {
-                            queryBuilder.Append($"&tag_value={val}");
-                        }
-                    }
-                }
-
-                if (state.HasValue)
-                {
-                    queryBuilder.Append($"&state={TesEnumUtility.GetEnumMemberValue(state.Value)}");
-                }
-
-                if (!string.IsNullOrWhiteSpace(namePrefix))
-                {
-                    queryBuilder.Append($"&name_prefix={namePrefix}");
-                }
-
-                var response = await SendRequestAsync(GetRequest(HttpMethod.Get, "/v1/tasks", queryBuilder.ToString()), cancellationToken: cancellationToken);
+                var query = GetQuery(view, tags, state, namePrefix, pageToken);
+                var response = await SendRequestAsync(GetRequest(HttpMethod.Get, "/v1/tasks", query), cancellationToken: cancellationToken);
                 var tesListTasksResponse = await DeserializeAsync<TesListTasksResponse>(response.Content, cancellationToken);
 
                 if (tesListTasksResponse?.Tasks?.Count > 0)
@@ -205,6 +175,43 @@ namespace Tes.SDK
 
                 await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             }
+        }
+
+        private static string GetQuery(TesView view, Dictionary<string, string>? tags, TesState? state, string? namePrefix, string? pageToken)
+        {
+            var queryBuilder = new StringBuilder();
+            queryBuilder.Append($"view={view}");
+
+            if (!string.IsNullOrWhiteSpace(pageToken))
+            {
+                queryBuilder.Append($"&pageToken={pageToken}");
+            }
+
+            if (tags?.Count > 0)
+            {
+                foreach (var key in tags.Keys)
+                {
+                    queryBuilder.Append($"&tag_key={key}");
+
+                    if (tags.TryGetValue(key, out var val) && !string.IsNullOrWhiteSpace(val))
+                    {
+                        queryBuilder.Append($"&tag_value={val}");
+                    }
+                }
+            }
+
+            if (state.HasValue)
+            {
+                queryBuilder.Append($"&state={TesEnumUtility.GetEnumMemberValue(state.Value)}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(namePrefix))
+            {
+                queryBuilder.Append($"&name_prefix={namePrefix}");
+            }
+
+            var query = queryBuilder.ToString();
+            return query;
         }
 
         protected virtual void Dispose(bool disposing)
