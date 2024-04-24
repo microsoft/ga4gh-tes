@@ -2,9 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Net.Http.Headers;
-using System.Runtime.CompilerServices;
 using System.Text;
-using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Polly;
 using Tes.Models;
