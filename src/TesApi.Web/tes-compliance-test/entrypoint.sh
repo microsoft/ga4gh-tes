@@ -1,4 +1,4 @@
-﻿#!/bin/sh
+#!/bin/sh
 teshostname=$(jq -r '.TesHostname' TesCredentials.json)
 tesuser=$(jq -r '.TesUsername' TesCredentials.json)
 tespassword=$(jq -r '.TesPassword' TesCredentials.json)
