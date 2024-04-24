@@ -22,29 +22,19 @@ namespace Tes.Models
         // Static method to get the EnumMember Value using a switch statement
         public static string GetEnumMemberValue(TesState state)
         {
-            switch (state)
+            return state switch
             {
-                case TesState.UNKNOWNEnum:
-                    return "UNKNOWN";
-                case TesState.QUEUEDEnum:
-                    return "QUEUED";
-                case TesState.INITIALIZINGEnum:
-                    return "INITIALIZING";
-                case TesState.RUNNINGEnum:
-                    return "RUNNING";
-                case TesState.PAUSEDEnum:
-                    return "PAUSED";
-                case TesState.COMPLETEEnum:
-                    return "COMPLETE";
-                case TesState.EXECUTORERROREnum:
-                    return "EXECUTOR_ERROR";
-                case TesState.SYSTEMERROREnum:
-                    return "SYSTEM_ERROR";
-                case TesState.CANCELEDEnum:
-                    return "CANCELED";
-                default:
-                    throw new ArgumentException("Invalid or unsupported enum value.");
-            }
+                TesState.UNKNOWNEnum => "UNKNOWN",
+                TesState.QUEUEDEnum => "QUEUED",
+                TesState.INITIALIZINGEnum => "INITIALIZING",
+                TesState.RUNNINGEnum => "RUNNING",
+                TesState.PAUSEDEnum => "PAUSED",
+                TesState.COMPLETEEnum => "COMPLETE",
+                TesState.EXECUTORERROREnum => "EXECUTOR_ERROR",
+                TesState.SYSTEMERROREnum => "SYSTEM_ERROR",
+                TesState.CANCELEDEnum => "CANCELED",
+                _ => throw new ArgumentException("Invalid or unsupported enum value."),
+            };
         }
     }
 
