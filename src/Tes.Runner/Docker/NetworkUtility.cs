@@ -10,6 +10,7 @@ namespace Tes.Runner.Docker
     public class NetworkUtility
     {
         private const string defaultRuleChain = "DOCKER-USER";
+        private const int defaultLockWaitSeconds = 30;
         private readonly ILogger logger = PipelineLoggerFactory.Create<NetworkUtility>();
 
         /// <summary>
@@ -52,20 +53,20 @@ namespace Tes.Runner.Docker
 
         private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
-            string listRulesCommand = $"-S {ruleChain}";
+            string listRulesCommand = $"-S {ruleChain} --wait {defaultLockWaitSeconds}";
             var outputAndError = await RunIptablesCommandAsync(listRulesCommand);
             return outputAndError.Output.Contains(ipAddress, StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task AddBlockRuleAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
-            string addRuleCommand = $"-A {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
+            string addRuleCommand = $"-A {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP --wait {defaultLockWaitSeconds}";
             _ = await RunIptablesCommandAsync(addRuleCommand);
         }
 
         private async Task RemoveBlockRuleAsync(string ipAddress, string ruleChain = defaultRuleChain)
         {
-            string removeRuleCommand = $"-D {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
+            string removeRuleCommand = $"-D {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP --wait {defaultLockWaitSeconds}";
             _ = await RunIptablesCommandAsync(removeRuleCommand);
         }
 
@@ -101,6 +102,14 @@ namespace Tes.Runner.Docker
                 case 0:
                     return (output, error);
                 case 4:
+                    if (error?.Contains("Another app is currently holding the xtables lock", StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        // "Another app is currently holding the xtables lock. Perhaps you want to use the -w option?"
+                        var invalidOperationException = new InvalidOperationException($"xtables is locked by another app. Error: {error}");
+                        logger.LogError(invalidOperationException, invalidOperationException.Message);
+                        throw invalidOperationException;
+                    }
+
                     // iptables v1.8.7 (nf_tables): Could not fetch rule set generation id: Permission denied (you must be root)
                     var unauthorizedException = new UnauthorizedAccessException($"TES Runner and Tests must be run with 'sudo' or as a user with root privileges in order to execute 'iptables' to manage network access.\nError: {error}");
                     logger.LogError(unauthorizedException, unauthorizedException.Message);
