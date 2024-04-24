@@ -1,4 +1,4 @@
-﻿{
+{
     "imageTag": "latest",
     "imageName": "busybox",
     "commandsToExecute": [
