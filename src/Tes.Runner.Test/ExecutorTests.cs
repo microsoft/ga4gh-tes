@@ -82,7 +82,7 @@ namespace Tes.Runner.Test
         {
             List<DownloadInfo> inputs =
             [
-                new( FullFilePath: "/mnt/data/input1.txt", SourceUrl: new Uri("https://test.blob.core.windows.net/test/input1.txt"))
+                new(FullFilePath: "/mnt/data/input1.txt", SourceUrl: new Uri("https://test.blob.core.windows.net/test/input1.txt"))
             ];
 
             fileOperationResolverMock.Setup(r => r.ResolveInputsAsync()).ReturnsAsync(inputs);
@@ -97,7 +97,7 @@ namespace Tes.Runner.Test
         {
             List<DownloadInfo> inputs =
             [
-                new( FullFilePath: "/mnt/data/input1.txt", SourceUrl: new Uri("https://test.blob.core.windows.net/test/input1.txt"))
+                new(FullFilePath: "/mnt/data/input1.txt", SourceUrl: new Uri("https://test.blob.core.windows.net/test/input1.txt"))
             ];
 
             nodeTask.Inputs =

@@ -42,9 +42,9 @@ namespace Tes.Runner.Test
         {
             List<FileOutput>? testTaskOutputs =
             [
-                new(){Path = "file", TargetUrl = "http://foo.bar", TransformationStrategy = TransformationStrategy.None},
-                new(){Path = "file1", TargetUrl = "http://foo1.bar", TransformationStrategy = TransformationStrategy.None},
-                new(){Path = "file2", TargetUrl = "http://foo2.bar", TransformationStrategy = TransformationStrategy.None}
+                new() { Path = "file", TargetUrl = "http://foo.bar", TransformationStrategy = TransformationStrategy.None },
+                new() { Path = "file1", TargetUrl = "http://foo1.bar", TransformationStrategy = TransformationStrategy.None },
+                new() { Path = "file2", TargetUrl = "http://foo2.bar", TransformationStrategy = TransformationStrategy.None }
             ];
             var result = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(testTaskOutputs);
             Assert.IsNotNull(result);
@@ -72,9 +72,9 @@ namespace Tes.Runner.Test
         {
             List<FileInput>? testTaskInputs =
             [
-                new FileInput(){Path = "file", SourceUrl = "http://foo.bar", TransformationStrategy = TransformationStrategy.None},
-                new FileInput(){Path = "file1", SourceUrl = "http://foo1.bar", TransformationStrategy = TransformationStrategy.None},
-                new FileInput(){Path = "file2", SourceUrl = "http://foo2.bar", TransformationStrategy = TransformationStrategy.None}
+                new FileInput() { Path = "file", SourceUrl = "http://foo.bar", TransformationStrategy = TransformationStrategy.None },
+                new FileInput() { Path = "file1", SourceUrl = "http://foo1.bar", TransformationStrategy = TransformationStrategy.None },
+                new FileInput() { Path = "file2", SourceUrl = "http://foo2.bar", TransformationStrategy = TransformationStrategy.None }
             ];
             var result = await resolutionPolicyHandler.ApplyResolutionPolicyAsync(testTaskInputs);
             Assert.IsNotNull(result);
