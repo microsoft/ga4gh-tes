@@ -90,7 +90,7 @@ namespace Tes.SDK.Tests
                     Content = new StringContent(Newtonsoft.Json.JsonConvert.SerializeObject(response))
                 });
 
-            var result = await _client.ListTasksAsync(new TaskQueryOptions()).ToListAsync();
+            var result = await _client.ListTasksAsync().ToListAsync();
             Assert.IsNotNull(result);
             Assert.IsTrue(result.Count == tasks.Count);
         }

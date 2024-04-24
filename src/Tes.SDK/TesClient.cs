@@ -4,6 +4,7 @@
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Polly;
 using Tes.Models;
@@ -130,9 +131,14 @@ namespace Tes.SDK
         }
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<TesTask> ListTasksAsync(TaskQueryOptions options, CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<TesTask> ListTasksAsync(TaskQueryOptions? options = null, CancellationToken cancellationToken = default)
         {
             string? pageToken = null;
+
+            if (options == null)
+            {
+                options = new TaskQueryOptions();
+            }
 
             do
             {
