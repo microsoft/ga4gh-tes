@@ -9,8 +9,8 @@ namespace Tes.Runner.Docker
 {
     public class NetworkUtility
     {
-        private const string defaultRuleChain = "DOCKER-USER";
         private const int defaultLockWaitSeconds = 30;
+        private const string defaultRuleChain = "DOCKER-USER";
         private readonly ILogger logger = PipelineLoggerFactory.Create<NetworkUtility>();
 
         /// <summary>
