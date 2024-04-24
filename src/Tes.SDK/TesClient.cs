@@ -40,7 +40,7 @@ namespace Tes.SDK
         }
 
         /// <inheritdoc/>
-        public string SdkVersion { get; } = "0.1.1";
+        public string SdkVersion { get; } = "1.1.0-preview";
 
         private TesClient(bool clientAllocated, HttpClient httpClient, Uri baseUrl, string? username = null, string? password = null)
         {
