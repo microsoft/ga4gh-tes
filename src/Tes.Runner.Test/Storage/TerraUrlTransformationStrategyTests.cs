@@ -39,7 +39,7 @@ namespace Tes.Runner.Test.Storage
             SetupWsmClientWithAssumingSuccess();
             transformationStrategy = new TerraUrlTransformationStrategy(runtimeOptions.Terra, mockTerraWsmApiClient.Object, SasExpirationInSeconds);
             secondTransformationStrategy = new TerraUrlTransformationStrategy(runtimeOptions.Terra, mockTerraWsmApiClient.Object, SasExpirationInSeconds);
-            transformationStrategy.ClearCache(); // Clear cache to avoid test interference, since cache is static in the class level scope.
+            TerraUrlTransformationStrategy.ClearCache(); // Clear cache to avoid test interference, since cache is static in the class level scope.
 
         }
 
@@ -63,25 +63,25 @@ namespace Tes.Runner.Test.Storage
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(() => new WsmListContainerResourcesResponse()
                 {
-                    Resources = new List<Resource>()
-                    {
-                        new Resource()
+                    Resources =
+                    [
+                        new()
                         {
-                            Metadata = new Metadata()
+                            Metadata = new()
                             {
                                 ResourceId = containerResourceId.ToString(),
                                 WorkspaceId = workspaceId.ToString()
                             },
-                            ResourceAttributes = new ResourceAttributes()
+                            ResourceAttributes = new()
                             {
-                                AzureStorageContainer = new AzureStorageContainer()
+                                AzureStorageContainer = new()
                                 {
                                     // the storage container follows the naming convention of sc-{workspaceId}
                                     StorageContainerName = $"sc-{workspaceId}",
                                 }
                             }
                         }
-                    }
+                    ]
                 });
         }
 

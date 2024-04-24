@@ -66,6 +66,12 @@ namespace Tes.Runner.Models
         public string? DrsHubApiHost { get; set; }
     }
 
+    public class NodeTaskResolverOptions
+    {
+        public RuntimeOptions? RuntimeOptions { get; set; }
+        public TransformationStrategy TransformationStrategy { get; set; }
+    }
+
     [JsonConverter(typeof(JsonStringEnumConverter<TransformationStrategy>))]
     public enum TransformationStrategy
     {

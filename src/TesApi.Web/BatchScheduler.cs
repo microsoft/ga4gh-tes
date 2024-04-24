@@ -138,7 +138,6 @@ namespace TesApi.Web
             _batchPoolFactory = poolFactory;
             batchPrefix = batchSchedulingOptions.Value.Prefix;
             logger.LogInformation("BatchPrefix: {BatchPrefix}", batchPrefix);
-            File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "scripts/task-run.sh"));
             this.runnerMD5 = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, $"scripts/{NodeTaskRunnerMD5HashFilename}")).Trim();
 
             this.gen2BatchNodeInfo = new BatchNodeInfo
