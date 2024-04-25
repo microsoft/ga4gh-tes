@@ -73,6 +73,7 @@ namespace Tes.SDK.Tests
         public async Task ListTasksAsync_Success()
         {
             var tasks = new List<TesTask>();
+
             for (int i = 0; i < 100; i++)
             {
                 tasks.Add(CreateTestTask());
