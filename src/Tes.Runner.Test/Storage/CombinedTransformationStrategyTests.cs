@@ -17,16 +17,14 @@ namespace Tes.Runner.Test.Storage
         [TestInitialize]
         public void SetUp()
         {
-            mockStrategy1 = new Mock<IUrlTransformationStrategy>();
-            mockStrategy2 = new Mock<IUrlTransformationStrategy>();
+            mockStrategy1 = new();
+            mockStrategy2 = new();
 
-            strategy = new CombinedTransformationStrategy(
-                new List<IUrlTransformationStrategy>()
-                {
+            strategy = new(
+                [
                     mockStrategy1.Object,
                     mockStrategy2.Object
-                }
-                );
+                ]);
         }
 
         [TestMethod]
@@ -47,6 +45,34 @@ namespace Tes.Runner.Test.Storage
             mockStrategy2.Verify(s => s.TransformUrlWithStrategyAsync(firstTransformation, It.IsAny<BlobSasPermissions>()), Times.Once);
 
             Assert.AreEqual(secondTransformation, result.ToString());
+        }
+
+        [TestMethod]
+        public async Task CombinedTransformationStrategy_InsertsStrategyFirst_InsertedStrategyIsApplied()
+        {
+            var sourceUrl = "https://source.foo/";
+            var firstTransformation = "https://first.foo/";
+            var secondTransformation = "https://second.foo/";
+            var thirdTransformation = "https://third.foo/";
+
+            mockStrategy1.Setup(s => s.TransformUrlWithStrategyAsync(firstTransformation, It.IsAny<BlobSasPermissions>()))
+                .ReturnsAsync(() => new Uri(secondTransformation));
+            mockStrategy2.Setup(s => s.TransformUrlWithStrategyAsync(secondTransformation, It.IsAny<BlobSasPermissions>()))
+                .ReturnsAsync(() => new Uri(thirdTransformation));
+
+            var mockStrategy3 = new Mock<IUrlTransformationStrategy>();
+            mockStrategy3.Setup(s => s.TransformUrlWithStrategyAsync(sourceUrl, It.IsAny<BlobSasPermissions>()))
+                .ReturnsAsync(() => new Uri(firstTransformation));
+
+            strategy.InsertStrategy(0, mockStrategy3.Object);
+
+            var result = await strategy.TransformUrlWithStrategyAsync(sourceUrl, new BlobSasPermissions());
+
+            mockStrategy3.Verify(s => s.TransformUrlWithStrategyAsync(sourceUrl, It.IsAny<BlobSasPermissions>()), Times.Once);
+            mockStrategy1.Verify(s => s.TransformUrlWithStrategyAsync(firstTransformation, It.IsAny<BlobSasPermissions>()), Times.Once);
+            mockStrategy2.Verify(s => s.TransformUrlWithStrategyAsync(secondTransformation, It.IsAny<BlobSasPermissions>()), Times.Once);
+
+            Assert.AreEqual(thirdTransformation, result.ToString());
         }
     }
 }

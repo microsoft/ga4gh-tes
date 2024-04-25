@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Storage.Blobs;
+using CommonUtilities.AzureCloud;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -40,11 +41,12 @@ namespace TesApi.Tests.Runner
         static readonly Uri InternalBlobUrl = new("http://foo.bar/tes-internal");
         static readonly Uri InternalBlobUrlWithSas = new($"{InternalBlobUrl}?{SasToken}");
         const string GlobalManagedIdentity = $@"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/globalId";
+        private const string DrsHubApiHost = "https://drshub.foo.bar";
 
 
         const string ExternalStorageAccountName = "external";
         const string ExternalStorageContainer =
-            $"https://{ExternalStorageAccountName}{StorageUrlUtils.BlobEndpointHostNameSuffix}/cont";
+            $"https://{ExternalStorageAccountName}{StorageUrlUtils.DefaultBlobEndpointHostNameSuffix}/cont";
         const string ExternalStorageContainerWithSas =
             $"{ExternalStorageContainer}?{SasToken}";
         const string ResourceGroup = "myResourceGroup";
@@ -67,9 +69,9 @@ namespace TesApi.Tests.Runner
                     x.GetInternalTesTaskBlobUrlWithoutSasToken(It.IsAny<TesTask>(), It.IsAny<string>()))
                 .Returns(InternalBlobUrl);
 
-
+            var azureCloudIdentityConfig = AzureCloudConfig.CreateAsync().Result.AzureEnvironmentConfig;
             taskToNodeTaskConverter = new TaskToNodeTaskConverter(Options.Create(terraOptions), storageAccessProviderMock.Object,
-                Options.Create(storageOptions), Options.Create(batchAccountOptions), new NullLogger<TaskToNodeTaskConverter>());
+                Options.Create(storageOptions), Options.Create(batchAccountOptions), azureCloudIdentityConfig, new NullLogger<TaskToNodeTaskConverter>());
         }
 
 
@@ -141,7 +143,7 @@ namespace TesApi.Tests.Runner
 
             Assert.IsNotNull(nodeTask);
 
-            Assert.IsTrue(nodeTask.Inputs.Count == tesTask.Inputs.Count - 1);
+            Assert.IsTrue(nodeTask.Inputs!.Count == tesTask.Inputs.Count - 1);
         }
 
 
@@ -331,6 +333,17 @@ namespace TesApi.Tests.Runner
             Assert.AreEqual("file", url.BlobName);
         }
 
+        [TestMethod]
+        public async Task ToNodeTaskAsync_DrsHubApiHostIsProvided_DrsHubApiHostIsSetInNodeTask()
+        {
+            var options = OptionsWithoutAdditionalInputs();
+
+            var nodeTask = await taskToNodeTaskConverter.ToNodeTaskAsync(tesTask, options, CancellationToken.None);
+
+            Assert.IsNotNull(nodeTask);
+            Assert.AreEqual(DrsHubApiHost, nodeTask.RuntimeOptions.Terra!.DrsHubApiHost);
+        }
+
         private static NodeTaskConversionOptions OptionsWithAdditionalInputs()
         {
             var inputs = new[]
@@ -359,7 +372,8 @@ namespace TesApi.Tests.Runner
         {
             return new NodeTaskConversionOptions(AdditionalInputs: null,
                 DefaultStorageAccountName: DefaultStorageAccountName,
-                GlobalManagedIdentity: GlobalManagedIdentity);
+                GlobalManagedIdentity: GlobalManagedIdentity,
+                DrsHubApiHost: DrsHubApiHost);
         }
 
         private static TesTask GetTestTesTask()

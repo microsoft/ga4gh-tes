@@ -29,7 +29,7 @@ namespace Tes.Runner.Test
 
             memoryBuffer = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(5, blockSize);
 
-            options = new BlobPipelineOptions(blockSize, 10, 10, 10);
+            options = new BlobPipelineOptions(blockSize, 10, 10, 10, FileHandlerPoolCapacity: 1);
             operationPipeline = new BlobOperationPipelineTestImpl(options, memoryBuffer, sourceSize);
         }
 
@@ -40,13 +40,12 @@ namespace Tes.Runner.Test
             RunnerTestUtils.DeleteFileIfExists(tempFile2);
         }
 
-
         [TestMethod]
         public async Task ExecuteAsync_SingleOperation_CallsReaderWriterAndCompleteMethods_CorrectNumberOfTimes()
         {
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), tempFile1, tempFile1, true);
 
-            await operationPipeline.ExecuteAsync(new List<BlobOperationInfo>() { blobOp });
+            await operationPipeline.ExecuteAsync([blobOp]);
 
             //the number of calls should be size of the file divided by the number blocks
             var expectedNumberOfCalls = (sourceSize / blockSize);
@@ -61,8 +60,8 @@ namespace Tes.Runner.Test
 
             var blobOps = new List<BlobOperationInfo>()
             {
-                new BlobOperationInfo(new Uri("https://foo.bar/con/blob1"), tempFile1, tempFile1, true),
-                new BlobOperationInfo(new Uri("https://foo.bar/con/blob2"), tempFile2, tempFile2, true)
+                new(new Uri("https://foo.bar/con/blob1"), tempFile1, tempFile1, true),
+                new(new Uri("https://foo.bar/con/blob2"), tempFile2, tempFile2, true)
             };
             await pipeline.ExecuteAsync(blobOps);
 
@@ -73,10 +72,9 @@ namespace Tes.Runner.Test
         }
 
         [TestMethod]
-        [ExpectedException(typeof(InvalidOperationException))]
+        [ExpectedException(typeof(TaskCanceledException))]
         public async Task ExecuteAsync_ThrowsOnRead_ExecutesThrows()
         {
-
             var pipeline = new BlobOperationPipelineTestImpl(options, memoryBuffer, sourceSize);
 
             //throw on when processing the 5th block
@@ -84,8 +82,8 @@ namespace Tes.Runner.Test
 
             var blobOps = new List<BlobOperationInfo>()
             {
-                new BlobOperationInfo(new Uri("https://foo.bar/con/blob1"), tempFile1, tempFile1, true),
-                new BlobOperationInfo(new Uri("https://foo.bar/con/blob2"), tempFile2, tempFile2, true)
+                new(new Uri("https://foo.bar/con/blob1"), tempFile1, tempFile1, true),
+                new(new Uri("https://foo.bar/con/blob2"), tempFile2, tempFile2, true)
             };
 
             await pipeline.ExecuteAsync(blobOps);
@@ -112,11 +110,11 @@ namespace Tes.Runner.Test
     /// This is a test implementation of BlobPipeline.
     /// Since there is no way to mock the base class, we have to create a test implementation and capture the execution of methods directly.
     /// </summary>
-    class BlobOperationPipelineTestImpl : BlobOperationPipeline
+    class BlobOperationPipelineTestImpl(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer, long sourceLength) : BlobOperationPipeline(pipelineOptions, memoryBuffer)
     {
         private readonly ConcurrentDictionary<string, List<MethodCall>> methodCalls = new();
 
-        private readonly long sourceLength;
+        private readonly long sourceLength = sourceLength;
 
         private readonly SemaphoreSlim semaphore = new(1);
         private Func<PipelineBuffer, CancellationToken, bool>? throwOnExecuteWrite = null!;
@@ -124,11 +122,6 @@ namespace Tes.Runner.Test
         private Func<PipelineBuffer, CancellationToken, bool>? throwOnExecuteRead = null!;
         private Exception? exceptionOnExecuteRead = null!;
         public ConcurrentDictionary<string, List<MethodCall>> MethodCalls => methodCalls;
-
-        public BlobOperationPipelineTestImpl(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer, long sourceLength) : base(pipelineOptions, memoryBuffer)
-        {
-            this.sourceLength = sourceLength;
-        }
 
         public void ThrowOnExecuteWrite<T>(Func<PipelineBuffer, CancellationToken, bool> predicate)
             where T : Exception, new()
@@ -199,23 +192,20 @@ namespace Tes.Runner.Test
 
             try
             {
-                Logger.LogInformation($"Adding method call {methodName} with args {args}");
+                Logger.LogInformation("Adding method call {MethodName} with args {Args}", methodName, args);
                 methodCalls.AddOrUpdate(methodName,
-                    (key) => new List<MethodCall>() { new MethodCall(key, 1, args.ToList()) },
+                    (key) => [new(key, 1, [.. args])],
                     (key, value) =>
                     {
-                        value.Add(new MethodCall(methodName, value.Count + 1,
-                            args.ToList()));
+                        value.Add(new(methodName, value.Count + 1, [.. args]));
                         return value;
                     });
-
             }
             finally
             {
                 semaphore.Release();
             }
         }
-
     }
 
     record MethodCall(string MethodName, int InvocationTime, List<object> Parameters);

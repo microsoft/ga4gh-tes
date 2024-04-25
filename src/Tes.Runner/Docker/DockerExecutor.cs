@@ -1,35 +1,55 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Net;
+using CommonUtilities;
+using CommonUtilities.Options;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Tes.ApiClients;
-using Tes.ApiClients.Options;
 using Tes.Runner.Authentication;
 using Tes.Runner.Logs;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
+using static CommonUtilities.RetryHandler;
 
 namespace Tes.Runner.Docker
 {
     public class DockerExecutor
     {
-
         private readonly IDockerClient dockerClient = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
-        private readonly NetworkUtility networkUtility = new NetworkUtility();
-        private readonly RetryHandler retryHandler = new RetryHandler(Options.Create(new RetryPolicyOptions()));
+        private readonly NetworkUtility networkUtility = new();
+        private readonly AsyncRetryHandlerPolicy dockerPullRetryPolicy = null!;
         private readonly IStreamLogReader streamLogReader = null!;
         private readonly ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager = null!;
+        private readonly Predicate<DockerApiException> IsAuthFailure = e => !IsNotAuthFailure(e);
+        // Exception filter to exclude non-retriable errors from the docker daemon when attempting to pull images.
+        private static readonly Func<DockerApiException, bool> IsNotAuthFailure = e =>
+            // Immediately fail calls with either 'Unauthorized' or 'Forbidden' status codes
+            !(e.StatusCode == HttpStatusCode.Unauthorized || e.StatusCode == HttpStatusCode.Forbidden ||
+                // Immediately fail calls with a status code of 'InternalServerError' and
+                // an HTTP body consisting of a JSON object with a single string property named "message" where the content is a colon-delimited string of three parts:
+                // a user-readable rendition/description of the failure, the status code from the remote registry server, and the textual description of that status code
+                // (often with a web link). Note that complete validation of the structure of the error report object is not performed.
+                (e.StatusCode == HttpStatusCode.InternalServerError && (
+                    (e.ResponseBody?.Contains(": unauthorized:", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (e.ResponseBody?.Contains(": forbidden:", StringComparison.OrdinalIgnoreCase) ?? false)
+        )));
 
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
         public DockerExecutor(Uri dockerHost) : this(new DockerClientConfiguration(dockerHost)
             .CreateClient(), new ConsoleStreamLogPublisher(), new ContainerRegistryAuthorizationManager(new CredentialsManager()))
+        { }
+
+        // Retry for ~91s for ACR 1-minute throttle window
+        internal static RetryPolicyOptions dockerPullRetryPolicyOptions = new()
         {
-        }
+            MaxRetryCount = 6,
+            ExponentialBackOffExponent = 2
+        };
 
         public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager)
         {
@@ -40,15 +60,22 @@ namespace Tes.Runner.Docker
             this.dockerClient = dockerClient;
             this.streamLogReader = streamLogReader;
             this.containerRegistryAuthorizationManager = containerRegistryAuthorizationManager;
+
+            dockerPullRetryPolicy = new RetryPolicyBuilder(Options.Create(dockerPullRetryPolicyOptions))
+                .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy
+                    .Handle(IsNotAuthFailure)
+                    .Or<IOException>()
+                    .Or<HttpRequestException>(e => e.InnerException is IOException || e.StatusCode >= HttpStatusCode.InternalServerError || e.StatusCode == HttpStatusCode.RequestTimeout))
+                .WithRetryPolicyOptionsWait()
+                .SetOnRetryBehavior(logger)
+                .AsyncBuild();
         }
 
         /// <summary>
         /// Parameter-less constructor for mocking
         /// </summary>
         protected DockerExecutor()
-        {
-
-        }
+        { }
 
         public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(ExecutionOptions executionOptions)
         {
@@ -56,9 +83,23 @@ namespace Tes.Runner.Docker
             ArgumentException.ThrowIfNullOrEmpty(executionOptions.ImageName);
             ArgumentNullException.ThrowIfNull(executionOptions.CommandsToExecute);
 
-            var authConfig = await containerRegistryAuthorizationManager.TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.RuntimeOptions);
+            try
+            {
+                await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag);
+            }
+            catch (DockerApiException e) when (IsAuthFailure(e))
+            {
+                var authConfig = await containerRegistryAuthorizationManager.TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.RuntimeOptions);
 
-            await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag, authConfig);
+                if (authConfig is not null)
+                {
+                    await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag, authConfig);
+                }
+                else
+                {
+                    throw;
+                }
+            }
 
             await ConfigureNetworkAsync();
 
@@ -103,7 +144,7 @@ namespace Tes.Runner.Docker
             List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir)
         {
             var imageWithTag = ToImageNameWithTag(imageName, imageTag);
-            logger.LogInformation($"Creating container with image name: {imageWithTag}");
+            logger.LogInformation(@"Creating container with image name: {ImageWithTag}", imageWithTag);
 
             var createResponse = await dockerClient.Containers.CreateContainerAsync(
                 new CreateContainerParameters
@@ -136,15 +177,13 @@ namespace Tes.Runner.Docker
 
         private async Task PullImageWithRetriesAsync(string imageName, string? tag, AuthConfig? authConfig = null)
         {
-            logger.LogInformation($"Pulling image name: {imageName} image tag: {tag}");
+            logger.LogInformation(@"Pulling image name: {ImageName} image tag: {ImageTag}", imageName, tag);
 
-            await retryHandler.AsyncRetryPolicy.ExecuteAsync(async () =>
-            {
-                await dockerClient.Images.CreateImageAsync(
+            await dockerPullRetryPolicy.ExecuteWithRetryAsync(
+                () => dockerClient.Images.CreateImageAsync(
                     new ImagesCreateParameters() { FromImage = imageName, Tag = tag },
                     authConfig,
-                    new Progress<JSONMessage>(message => logger.LogDebug(message.Status)));
-            });
+                    new Progress<JSONMessage>(message => logger.LogDebug(message.Status))));
         }
 
         private async Task DeleteAllImagesAsync()
@@ -163,18 +202,18 @@ namespace Tes.Runner.Docker
                     try
                     {
                         await dockerClient.Images.DeleteImageAsync(image.ID, new ImageDeleteParameters { Force = true });
-                        logger.LogInformation($"Deleted Docker image with ID: {image.ID}");
+                        logger.LogInformation(@"Deleted Docker image with ID: {ImageID}", image.ID);
                     }
                     catch (Exception e)
                     {
-                        logger.LogInformation($"Failed to delete image with ID: {image.ID}. Error: {e.Message}");
+                        logger.LogInformation(@"Failed to delete image with ID: {ImageID}. Error: {ErrorMessage}", image.ID, e.Message);
                         throw;
                     }
                 }
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Exception in DeleteAllImagesAsync");
+                logger.LogError(e, "Exception in DeleteAllImagesAsync");
                 throw;
             }
         }

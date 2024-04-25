@@ -15,25 +15,25 @@ public class DefaultFileInfoProvider : IFileInfoProvider
 
     public long GetFileSize(string fileName)
     {
-        logger.LogDebug($"Getting file size for file: {fileName}");
+        logger.LogDebug("Getting file size for file: {Path}", fileName);
 
         return GetFileInfoOrThrowIfFileDoesNotExist(fileName).Length;
     }
 
     public string GetExpandedFileName(string fileName)
     {
-        logger.LogDebug($"Expanding file name: {fileName}");
+        logger.LogDebug("Expanding file name: {Path}", fileName);
 
         var expandedValue = Environment.ExpandEnvironmentVariables(fileName);
 
-        logger.LogDebug($"Expanded file name: {expandedValue}");
+        logger.LogDebug("Expanded file name: {ExpandedPath}", expandedValue);
 
         return expandedValue;
     }
 
     public bool FileExists(string fileName)
     {
-        logger.LogDebug($"Checking if file exists: {fileName}");
+        logger.LogDebug("Checking if file exists: {Path}", fileName);
 
         var fileInfo = new FileInfo(Environment.ExpandEnvironmentVariables(fileName));
 
@@ -43,7 +43,7 @@ public class DefaultFileInfoProvider : IFileInfoProvider
 
     public List<FileResult> GetFilesBySearchPattern(string searchPath, string searchPattern)
     {
-        logger.LogInformation($"Searching for files in the search path: {searchPath} with search pattern: {searchPattern}");
+        logger.LogInformation("Searching for files in the search path: {Path} with search pattern: {SearchPattern}", searchPath, searchPattern);
 
         return Directory.GetFiles(Environment.ExpandEnvironmentVariables(searchPath), Environment.ExpandEnvironmentVariables(searchPattern), SearchOption.AllDirectories)
             .Select(f => new FileResult(f, ToRelativePathToSearchPath(searchPath, searchPattern, f), searchPath))
@@ -62,9 +62,9 @@ public class DefaultFileInfoProvider : IFileInfoProvider
 
         if (!string.IsNullOrWhiteSpace(prefixToRemove) && absolutePath.StartsWith(prefixToRemove))
         {
-            logger.LogInformation($"Removing prefix: {prefixToRemove} from absolute path: {absolutePath}");
+            logger.LogInformation("Removing prefix: {Prefix} from absolute path: {Path}", prefixToRemove, absolutePath);
 
-            return absolutePath.Substring(prefixToRemove.Length + 1);
+            return absolutePath[(prefixToRemove.Length + 1)..];
         }
 
         return absolutePath;
@@ -74,17 +74,17 @@ public class DefaultFileInfoProvider : IFileInfoProvider
     {
         var expandedPath = Environment.ExpandEnvironmentVariables(path);
 
-        logger.LogInformation($"Getting all files in directory: {expandedPath}");
+        logger.LogInformation("Getting all files in directory: {Path}", expandedPath);
 
         if (!Directory.Exists(expandedPath))
         {
-            logger.LogWarning($"The directory provided does not exist: {expandedPath}. The output will be ignored.");
+            logger.LogWarning("The directory provided does not exist: {Path}. The output will be ignored.", expandedPath);
 
-            return new List<FileResult>();
+            return [];
         }
 
         return Directory.GetFiles(expandedPath, "*", SearchOption.AllDirectories)
-            .Select(f => new FileResult(f, ToRelativePathToSearchPath(expandedPath, searchPattern: String.Empty, f), expandedPath))
+            .Select(f => new FileResult(f, ToRelativePathToSearchPath(expandedPath, searchPattern: string.Empty, f), expandedPath))
             .ToList();
     }
 
@@ -99,20 +99,22 @@ public class DefaultFileInfoProvider : IFileInfoProvider
             throw new ArgumentException($"Path {path} does not have a root");
         }
 
-        var relativePath = path.Substring(root.Length);
+        var relativePath = path[root.Length..];
 
         return new RootPathPair(root, relativePath);
     }
 
-    private FileInfo GetFileInfoOrThrowIfFileDoesNotExist(string fileName)
+    private static FileInfo GetFileInfoOrThrowIfFileDoesNotExist(string fileName)
     {
         var expandedFilename = Environment.ExpandEnvironmentVariables(fileName);
 
         var fileInfo = new FileInfo(expandedFilename);
+
         if (!fileInfo.Exists)
         {
             throw new FileNotFoundException($"File {fileName} does not exist. Expanded value: {expandedFilename}");
         }
+
         return fileInfo;
     }
 }

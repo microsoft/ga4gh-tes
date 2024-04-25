@@ -74,6 +74,27 @@ namespace TesApi.Tests.Runner
         }
 
         [TestMethod]
+        public void WhenInputContainsUriQuery_ValidInput_AllPropertiesSet()
+        {
+            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input", "http://foo.bar/input?test", "/root");
+            var input = nodeTaskBuilder.Build().Inputs![0];
+            Assert.AreEqual("/root/input", input.Path);
+            Assert.AreEqual("http://foo.bar/input?test", input.SourceUrl);
+            Assert.AreEqual("/root", input.MountParentDirectory);
+            Assert.AreEqual(TransformationStrategy.None, input.TransformationStrategy);
+        }
+
+        [TestMethod]
+        public void WhenInputPathContainsUriQuery_ValidInput_AllPropertiesSet()
+        {
+            nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input?test", "http://foo.bar/input", "/root");
+            var input = nodeTaskBuilder.Build().Inputs![0];
+            Assert.AreEqual("/root/input", input.Path);
+            Assert.AreEqual("http://foo.bar/input", input.SourceUrl);
+            Assert.AreEqual("/root", input.MountParentDirectory);
+        }
+
+        [TestMethod]
         public void WithOutputUsingCombinedTransformationStrategy_WithTerraRuntimeSet_OutputUsesCombinedTerraTransformationStrategy()
         {
             nodeTaskBuilder.WithTerraAsRuntimeEnvironment("https://wsm.foo", "https://lz.foo", sasAllowedIpRange: String.Empty);
@@ -187,6 +208,31 @@ namespace TesApi.Tests.Runner
             var nodeTask = nodeTaskBuilder.Build();
 
             Assert.AreEqual(TransformationStrategy.CombinedTerra, nodeTask.RuntimeOptions.StreamingLogPublisher!.TransformationStrategy);
+        }
+
+        [TestMethod]
+        public void WithDrsHubUrl_CalledThenSetUpTerraRuntimeEnv_DrsApiHostIsKept()
+        {
+            var drsHubUrl = "https://drshub.foo";
+            nodeTaskBuilder
+                .WithDrsHubUrl(drsHubUrl)
+                .WithTerraAsRuntimeEnvironment("http://wsm.terra.foo", "http://lz.terra.foo", sasAllowedIpRange: null);
+
+            var nodeTask = nodeTaskBuilder.Build();
+
+            Assert.AreEqual(drsHubUrl, nodeTask.RuntimeOptions.Terra!.DrsHubApiHost);
+        }
+
+        [DataTestMethod]
+        [DataRow("https://drshub.foo", "https://drshub.foo")]
+        [DataRow("https://drshub.foo/", "https://drshub.foo")]
+        [DataRow("https://drshub.foo/api/v4/drs/resolve", "https://drshub.foo")]
+        public void WithDrsHubUrl_DrsHubUrlIsProvided_DrsHubApiHostIsSet(string drsHubUrl, string drsExpectedDrsApiHost)
+        {
+            var nodeTask = nodeTaskBuilder
+                .WithDrsHubUrl(drsHubUrl)
+                .Build();
+            Assert.AreEqual(drsExpectedDrsApiHost, nodeTask.RuntimeOptions.Terra!.DrsHubApiHost);
         }
     }
 }

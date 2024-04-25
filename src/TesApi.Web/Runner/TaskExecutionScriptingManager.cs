@@ -81,7 +81,8 @@ namespace TesApi.Web.Runner
                     new JsonSerializerSettings
                     {
                         NullValueHandling = NullValueHandling.Ignore,
-                        DefaultValueHandling = DefaultValueHandling.Ignore
+                        DefaultValueHandling = DefaultValueHandling.Ignore,
+                        Formatting = Formatting.Indented,
                     });
 
                 await UploadContentAsBlobToInternalTesLocationAsync(tesTask, severTesTaskContent, "server-tes-task.json",
@@ -103,7 +104,7 @@ namespace TesApi.Web.Runner
         /// <returns></returns>
         public string ParseBatchRunCommand(BatchScriptAssetsInfo batchScriptAssets)
         {
-            var batchRunCommand = $"/bin/bash -c \"{BatchNodeScriptBuilder.CreateWgetDownloadCommand(batchScriptAssets.BatchScriptUrl, $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{batchScriptAssets.BatchScriptFileName}", setExecutable: true)} && ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{batchScriptAssets.BatchScriptFileName}\"";
+            var batchRunCommand = $"/bin/bash -c \"{BatchScheduler.CreateWgetDownloadCommand(batchScriptAssets.BatchScriptUrl, $"${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{batchScriptAssets.BatchScriptFileName}", setExecutable: true)} && ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{batchScriptAssets.BatchScriptFileName}\"";
 
             // Replace any URL query strings with the word REMOVED
             var sanitizedLogEntry = RemoveQueryStringsFromText(batchRunCommand);
@@ -125,12 +126,10 @@ namespace TesApi.Web.Runner
         {
             logger.LogInformation($"Creating and uploading Batch script for Task ID: {tesTask.Id}");
 
-            var nodeTaskRunnerUrl = await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken);
-
             var batchNodeScript = batchNodeScriptBuilder
                 .WithAlpineWgetInstallation()
                 .WithMetrics()
-                .WithRunnerFilesDownloadUsingWget(nodeTaskRunnerUrl, nodeTaskUrl)
+                .WithRunnerTaskDownloadUsingWget(nodeTaskUrl)
                 .WithExecuteRunner()
                 .WithLocalRuntimeSystemInformation()
                 .Build();

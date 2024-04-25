@@ -56,7 +56,14 @@ public class RunnerTestUtils
     {
         if (File.Exists(file))
         {
-            File.Delete(file);
+            try
+            {
+                File.Delete(file);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
         }
     }
 
@@ -79,16 +86,14 @@ public class RunnerTestUtils
 
     public static string CalculateMd5Hash(byte[] data)
     {
-        using var md5 = MD5.Create();
-        var hash = md5.ComputeHash(data);
+        var hash = MD5.HashData(data);
         return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
     }
 
     public static string GetRootHashFromSortedHashList(List<string> hashList)
     {
         var hashListContent = string.Join("", hashList);
-        using var md5 = MD5.Create();
-        var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(hashListContent));
+        var hash = MD5.HashData(Encoding.UTF8.GetBytes(hashListContent));
 
         return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
     }
@@ -103,14 +108,14 @@ public class RunnerTestUtils
 
         for (var blocks = 0; blocks < numberOfMiB; blocks++)
         {
-            await fs.WriteAsync(data, 0, BlobSizeUtils.MiB);
+            await fs.WriteAsync(data.AsMemory(0, BlobSizeUtils.MiB));
         }
 
         if (extraBytes > 0)
         {
             var extraData = new byte[extraBytes];
             Random.NextBytes(extraData);
-            await fs.WriteAsync(extraData, 0, extraBytes);
+            await fs.WriteAsync(extraData.AsMemory(0, extraBytes));
         }
 
         fs.Close();
@@ -183,7 +188,7 @@ public class RunnerTestUtils
         var random = new Random();
         var result = new StringBuilder(length);
 
-        for (int i = 0; i < length; i++)
+        for (var i = 0; i < length; i++)
         {
             result.Append(chars[random.Next(chars.Length)]);
         }

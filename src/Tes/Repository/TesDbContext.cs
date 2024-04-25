@@ -3,6 +3,8 @@
 
 using System;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Tes.Models;
 
 namespace Tes.Repository
@@ -17,13 +19,16 @@ namespace Tes.Repository
             // "dotnet ef migrations add InitialCreate"
         }
 
-        public TesDbContext(string connectionString)
+        public TesDbContext(NpgsqlDataSource dataSource, Action<NpgsqlDbContextOptionsBuilder> contextOptionsBuilder = default)
         {
-            ArgumentException.ThrowIfNullOrEmpty(connectionString, nameof(connectionString));
-            ConnectionString = connectionString;
+            ArgumentNullException.ThrowIfNull(dataSource);
+            DataSource = dataSource;
+            ContextOptionsBuilder = contextOptionsBuilder;
         }
 
-        public string ConnectionString { get; set; }
+        public NpgsqlDataSource DataSource { get; set; }
+        public Action<NpgsqlDbContextOptionsBuilder> ContextOptionsBuilder { get; set; }
+
         public DbSet<TesTaskDatabaseItem> TesTasks { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -32,7 +37,7 @@ namespace Tes.Repository
             {
                 // use PostgreSQL
                 optionsBuilder
-                    .UseNpgsql(ConnectionString, options => options.MaxBatchSize(1000))
+                    .UseNpgsql(DataSource, ContextOptionsBuilder)
                     .UseLowerCaseNamingConvention();
             }
         }

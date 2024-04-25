@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Text.Json.Serialization;
+using CommonUtilities;
 
 namespace Tes.Runner.Models
 {
@@ -47,6 +48,8 @@ namespace Tes.Runner.Models
         public StorageTargetLocation? StorageEventSink { get; set; }
 
         public StorageTargetLocation? StreamingLogPublisher { get; set; }
+
+        public AzureEnvironmentConfig? AzureEnvironmentConfig { get; set; }
     }
 
     public class StorageTargetLocation
@@ -60,9 +63,16 @@ namespace Tes.Runner.Models
         public string? WsmApiHost { get; set; }
         public string? LandingZoneApiHost { get; set; }
         public string? SasAllowedIpRange { get; set; }
+        public string? DrsHubApiHost { get; set; }
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public class NodeTaskResolverOptions
+    {
+        public RuntimeOptions? RuntimeOptions { get; set; }
+        public TransformationStrategy TransformationStrategy { get; set; }
+    }
+
+    [JsonConverter(typeof(JsonStringEnumConverter<TransformationStrategy>))]
     public enum TransformationStrategy
     {
         None,
@@ -73,7 +83,7 @@ namespace Tes.Runner.Models
         CombinedAzureResourceManager,
     }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<FileType>))]
     public enum FileType
     {
         File,

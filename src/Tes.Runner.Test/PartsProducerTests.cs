@@ -11,17 +11,17 @@ namespace Tes.Runner.Test
     [TestCategory("Unit")]
     public class PartsProducerTests
     {
-#pragma warning disable CS8618
-        private Mock<IBlobPipeline> pipeline;
-        private PartsProducer partsProducer;
-        private Channel<PipelineBuffer> readBuffer;
-#pragma warning restore CS8618
+        private Mock<IBlobPipeline> pipeline = null!;
+        private PartsProducer partsProducer = null!;
+        private Channel<PipelineBuffer> readBuffer = null!;
+        private CancellationTokenSource cancellationSource = null!;
 
         [TestInitialize]
         public void SetUp()
         {
             pipeline = new Mock<IBlobPipeline>();
             readBuffer = Channel.CreateUnbounded<PipelineBuffer>();
+            cancellationSource = new CancellationTokenSource();
         }
 
         [DataTestMethod]
@@ -40,7 +40,7 @@ namespace Tes.Runner.Test
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
             var opsList = new List<BlobOperationInfo>() { blobOp };
 
-            await partsProducer.StartPartsProducersAsync(opsList, readBuffer);
+            await partsProducer.StartPartsProducersAsync(opsList, readBuffer, cancellationSource);
 
             readBuffer.Writer.Complete();
 
@@ -65,7 +65,7 @@ namespace Tes.Runner.Test
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
             var opsList = new List<BlobOperationInfo>() { blobOp };
 
-            await partsProducer.StartPartsProducersAsync(opsList, readBuffer);
+            await partsProducer.StartPartsProducersAsync(opsList, readBuffer, cancellationSource);
 
             readBuffer.Writer.Complete();
 
@@ -90,7 +90,7 @@ namespace Tes.Runner.Test
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
             var opsList = new List<BlobOperationInfo>() { blobOp };
 
-            await partsProducer.StartPartsProducersAsync(opsList, readBuffer);
+            await partsProducer.StartPartsProducersAsync(opsList, readBuffer, cancellationSource);
 
             readBuffer.Writer.Complete();
 
@@ -122,7 +122,7 @@ namespace Tes.Runner.Test
             var blobOp = new BlobOperationInfo(new Uri("https://foo.bar/con/blob"), "blob", "blob", false);
             var opsList = new List<BlobOperationInfo>() { blobOp };
 
-            Assert.ThrowsExceptionAsync<InvalidOperationException>(() => partsProducer.StartPartsProducersAsync(opsList, readBuffer));
+            Assert.ThrowsExceptionAsync<InvalidOperationException>(() => partsProducer.StartPartsProducersAsync(opsList, readBuffer, cancellationSource));
         }
     }
 }

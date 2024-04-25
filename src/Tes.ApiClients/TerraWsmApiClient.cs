@@ -3,12 +3,12 @@
 
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Azure.Core;
+using CommonUtilities;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Tes.ApiClients.Models.Terra;
-using Tes.ApiClients.Options;
 using TesApi.Web.Management.Models.Terra;
 
 namespace Tes.ApiClients
@@ -19,7 +19,7 @@ namespace Tes.ApiClients
     public class TerraWsmApiClient : TerraApiClient
     {
         private const string WsmApiSegments = @"/api/workspaces/v1";
-        private static readonly IMemoryCache sharedMemoryCache = new MemoryCache(new MemoryCacheOptions());
+        private static readonly IMemoryCache SharedMemoryCache = new MemoryCache(new MemoryCacheOptions());
 
         /// <summary>
         /// Constructor of TerraWsmApiClient
@@ -27,20 +27,17 @@ namespace Tes.ApiClients
         /// <param name="apiUrl">WSM API host</param>
         /// <param name="tokenCredential"></param>
         /// <param name="cachingRetryHandler"></param>
+        /// <param name="azureCloudIdentityConfig"></param>
         /// <param name="logger"></param>
-        public TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryHandler cachingRetryHandler,
-            ILogger<TerraWsmApiClient> logger) : base(apiUrl, tokenCredential, cachingRetryHandler, logger)
+        public TerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, CachingRetryPolicyBuilder cachingRetryHandler,
+            AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<TerraWsmApiClient> logger) : base(apiUrl, tokenCredential, cachingRetryHandler, azureCloudIdentityConfig, logger)
         {
 
         }
 
-        public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl, TokenCredential tokenCredential)
+        public static TerraWsmApiClient CreateTerraWsmApiClient(string apiUrl, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig)
         {
-            var retryPolicyOptions = new RetryPolicyOptions();
-            var cacheRetryHandler = new CachingRetryHandler(sharedMemoryCache,
-                 Microsoft.Extensions.Options.Options.Create(retryPolicyOptions));
-
-            return new TerraWsmApiClient(apiUrl, tokenCredential, cacheRetryHandler, ApiClientsLoggerFactory.Create<TerraWsmApiClient>());
+            return CreateTerraApiClient<TerraWsmApiClient>(apiUrl, SharedMemoryCache, tokenCredential, azureCloudIdentityConfig);
         }
 
         /// <summary>
@@ -60,10 +57,8 @@ namespace Tes.ApiClients
         {
             var url = GetContainerResourcesApiUrl(workspaceId, offset, limit);
 
-            var response = await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Get, url),
-                cancellationToken, setAuthorizationHeader: true);
-
-            return await GetApiResponseContentAsync<WsmListContainerResourcesResponse>(response, cancellationToken);
+            return await HttpGetRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Get, url),
+                WsmListContainerResourcesResponseContext.Default.WsmListContainerResourcesResponse, cancellationToken, setAuthorizationHeader: true);
         }
 
         private Uri GetContainerResourcesApiUrl(Guid workspaceId, int offset, int limit)
@@ -90,10 +85,8 @@ namespace Tes.ApiClients
         {
             var url = GetSasTokenApiUrl(workspaceId, resourceId, sasTokenApiParameters);
 
-            var response = await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, url),
-                cancellationToken, setAuthorizationHeader: true);
-
-            return await GetApiResponseContentAsync<WsmSasTokenApiResponse>(response, cancellationToken);
+            return await HttpGetRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, url),
+                WsmSasTokenApiResponseContext.Default.WsmSasTokenApiResponse, cancellationToken, setAuthorizationHeader: true);
         }
 
         /// <summary>
@@ -112,15 +105,15 @@ namespace Tes.ApiClients
             {
                 var uri = GetCreateBatchPoolUrl(workspaceId);
 
-                Logger.LogInformation($"Creating a batch pool using WSM for workspace: {workspaceId}");
+                Logger.LogInformation(@"Creating a batch pool using WSM for workspace: {WorkspaceId}", workspaceId);
 
                 response =
-                    await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, uri) { Content = GetBatchPoolRequestContent(apiCreateBatchPool) },
+                    await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Post, uri) { Content = GetBatchPoolRequestContent(apiCreateBatchPool, ApiCreateBatchPoolRequestContext.Default.ApiCreateBatchPoolRequest) },
                         cancellationToken, setAuthorizationHeader: true);
 
-                var apiResponse = await GetApiResponseContentAsync<ApiCreateBatchPoolResponse>(response, cancellationToken);
+                var apiResponse = await GetApiResponseContentAsync(response, ApiCreateBatchPoolResponseContext.Default.ApiCreateBatchPoolResponse, cancellationToken);
 
-                Logger.LogInformation($"Successfully created a batch pool using WSM for workspace: {workspaceId}");
+                Logger.LogInformation(@"Successfully created a batch pool using WSM for workspace: {WorkspaceId}", workspaceId);
 
                 return apiResponse;
             }
@@ -147,7 +140,7 @@ namespace Tes.ApiClients
             {
                 var uri = GetDeleteBatchPoolUrl(workspaceId, wsmBatchPoolResourceId);
 
-                Logger.LogInformation($"Deleting the Batch pool using WSM for workspace: {workspaceId} WSM resource ID: {wsmBatchPoolResourceId}");
+                Logger.LogInformation(@"Deleting the Batch pool using WSM for workspace: {WorkspaceId} WSM resource ID: {WsmBatchPoolResourceId}", workspaceId, wsmBatchPoolResourceId);
 
                 response =
                     await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Delete, uri),
@@ -155,7 +148,7 @@ namespace Tes.ApiClients
 
                 response.EnsureSuccessStatusCode();
 
-                Logger.LogInformation($"Successfully deleted Batch pool, WSM resource ID: {wsmBatchPoolResourceId} using WSM for workspace: {workspaceId}");
+                Logger.LogInformation(@"Successfully deleted Batch pool, WSM resource ID: {WsmBatchPoolResourceId} using WSM for workspace: {WorkspaceId}", wsmBatchPoolResourceId, workspaceId);
             }
             catch (Exception ex)
             {
@@ -208,7 +201,7 @@ namespace Tes.ApiClients
 
             var url = GetQuotaApiUrl(workspaceId, resourceId);
 
-            return await HttpGetRequestAsync<QuotaApiResponse>(url, setAuthorizationHeader: true, cacheResults: cacheResults, cancellationToken: cancellationToken);
+            return await HttpGetRequestAsync(url, setAuthorizationHeader: true, cacheResults: cacheResults, typeInfo: QuotaApiResponseContext.Default.QuotaApiResponse, cancellationToken: cancellationToken);
         }
 
         /// <summary>
@@ -235,20 +228,9 @@ namespace Tes.ApiClients
 
             var url = GetLandingZoneResourcesApiUrl(workspaceId);
 
-            return await HttpGetRequestAsync<LandingZoneResourcesApiResponse>(url, setAuthorizationHeader: true, cacheResults: cacheResults, cancellationToken: cancellationToken);
+            return await HttpGetRequestAsync(url, setAuthorizationHeader: true, cacheResults: cacheResults, typeInfo: LandingZoneResourcesApiResponseContext.Default.LandingZoneResourcesApiResponse, cancellationToken: cancellationToken);
         }
 
-
-        private async Task LogResponseContentAsync(HttpResponseMessage response, string errMessage, Exception ex, CancellationToken cancellationToken)
-        {
-            var responseContent = "";
-            if (response is not null)
-            {
-                responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            }
-
-            Logger.LogError(ex, $"{errMessage}. Response content:{responseContent}");
-        }
 
         private string GetCreateBatchPoolUrl(Guid workspaceId)
         {
@@ -259,14 +241,14 @@ namespace Tes.ApiClients
             return builder.Uri.AbsoluteUri;
         }
 
-        private static HttpContent GetBatchPoolRequestContent(ApiCreateBatchPoolRequest apiCreateBatchPool)
+        private static HttpContent GetBatchPoolRequestContent(ApiCreateBatchPoolRequest apiCreateBatchPool, JsonTypeInfo<ApiCreateBatchPoolRequest> typeInfo)
             => new StringContent(JsonSerializer.Serialize(apiCreateBatchPool,
-                new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }), Encoding.UTF8, "application/json");
+                typeInfo), Encoding.UTF8, System.Net.Mime.MediaTypeNames.Application.Json);
 
-        private string ToQueryString(SasTokenApiParameters sasTokenApiParameters)
+        private static string ToQueryString(SasTokenApiParameters sasTokenApiParameters)
             => AppendQueryStringParams(
                 ParseQueryStringParameter("sasIpRange", sasTokenApiParameters.SasIpRange),
-                ParseQueryStringParameter("sasExpirationDuration", sasTokenApiParameters.SasExpirationInSeconds.ToString()),
+                ParseQueryStringParameter("sasExpirationDuration", sasTokenApiParameters.SasExpirationInSeconds.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)),
                 ParseQueryStringParameter("sasPermissions", sasTokenApiParameters.SasPermission),
                 ParseQueryStringParameter("sasBlobName", sasTokenApiParameters.SasBlobName));
 

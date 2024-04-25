@@ -57,7 +57,7 @@ namespace Tes.Runner.Test
             // Create a SAS token that's valid for one hour.
             var url = CreateSasUrl(blobClient, file);
 
-            await blobUploader.UploadAsync(new List<UploadInfo>() { new UploadInfo(file, url) });
+            await blobUploader.UploadAsync([new(file, url)]);
 
             var blobProperties = await blobClient.GetPropertiesAsync();
             var fileSize = (numberOfMiB * BlobSizeUtils.MiB) + extraBytes;

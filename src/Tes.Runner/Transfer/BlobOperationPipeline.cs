@@ -24,6 +24,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
     private readonly ProcessedPartsProcessor processedPartsProcessor;
 
+
     protected BlobOperationPipeline(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBuffer)
     {
         ArgumentNullException.ThrowIfNull(pipelineOptions);
@@ -35,9 +36,11 @@ public abstract class BlobOperationPipeline : IBlobPipeline
         ProcessedBufferChannel = Channel.CreateUnbounded<ProcessedBuffer>();
 
         MemoryBufferChannel = memoryBuffer;
+        //TODO: Right now we are using MaxProcessingTimeScalingStrategy with defaults, but we should be able to use different strategies.        
+        var scalingStrategy = new MaxProcessingTimeScalingStrategy();
         partsProducer = new PartsProducer(this, pipelineOptions);
-        partsWriter = new PartsWriter(this, pipelineOptions, memoryBuffer);
-        partsReader = new PartsReader(this, pipelineOptions, memoryBuffer);
+        partsWriter = new PartsWriter(this, pipelineOptions, memoryBuffer, scalingStrategy);
+        partsReader = new PartsReader(this, pipelineOptions, memoryBuffer, scalingStrategy);
         processedPartsProcessor = new ProcessedPartsProcessor(this);
     }
 
@@ -53,11 +56,12 @@ public abstract class BlobOperationPipeline : IBlobPipeline
 
     protected async Task<long> ExecutePipelineAsync(List<BlobOperationInfo> operations)
     {
+        var cancellationSource = new CancellationTokenSource();
         var pipelineTasks = new List<Task>
         {
-            partsProducer.StartPartsProducersAsync(operations, ReadBufferChannel),
-            partsReader.StartPartsReaderAsync(ReadBufferChannel,WriteBufferChannel),
-            partsWriter.StartPartsWritersAsync(WriteBufferChannel,ProcessedBufferChannel)
+            partsProducer.StartPartsProducersAsync(operations, ReadBufferChannel, cancellationSource),
+            partsReader.StartPartsReaderAsync(ReadBufferChannel,WriteBufferChannel, cancellationSource),
+            partsWriter.StartPartsWritersAsync(WriteBufferChannel,ProcessedBufferChannel, cancellationSource)
         };
 
         var processedPartsProcessorTask = processedPartsProcessor.StartProcessedPartsProcessorAsync(expectedNumberOfFiles: operations.Count, ProcessedBufferChannel, ReadBufferChannel);
@@ -65,6 +69,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
         try
         {
             await WhenAllFailFast(pipelineTasks);
+
             Logger.LogInformation("Pipeline processing completed.");
         }
         catch (Exception e)
@@ -80,7 +85,7 @@ public abstract class BlobOperationPipeline : IBlobPipeline
         return bytesProcessed;
     }
 
-    protected static async Task WhenAllFailFast(IEnumerable<Task> tasks)
+    private static async Task WhenAllFailFast(IEnumerable<Task> tasks)
     {
         var taskList = tasks.ToList();
         while (taskList.Count > 0)

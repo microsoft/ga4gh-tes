@@ -26,7 +26,7 @@ namespace Tes.Runner.Test.Transfer
         {
             mockHttpMessageHandler = new Mock<HttpMessageHandler>();
             blobApiHttpUtils = new BlobApiHttpUtils(new HttpClient(mockHttpMessageHandler.Object),
-                BlobApiHttpUtils.DefaultAsyncRetryPolicy(MaxRetryCount));
+                HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(MaxRetryCount));
         }
 
         [DataTestMethod]

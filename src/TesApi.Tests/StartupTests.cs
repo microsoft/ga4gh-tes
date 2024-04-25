@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using CommonUtilities.AzureCloud;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -61,6 +62,7 @@ namespace TesApi.Tests
             services.AddSingleton(hostEnv.Object);
 #pragma warning restore CS0618
 
+            Startup.AzureCloudConfig = AzureCloudConfig.CreateAsync().Result;
             startup = new Startup(configurationMock.Object, NullLogger<Startup>.Instance, hostingEnvMock.Object);
         }
 
@@ -79,7 +81,7 @@ namespace TesApi.Tests
         }
 
         [TestMethod]
-        public void ConfigureServices_TerraOptionsAreConfigured_TerraStorageProvidedIsResolved()
+        public void ConfigureServices_TerraOptionsAreConfigured_TerraStorageProviderIsResolved()
         {
             ConfigureTerraOptions();
 

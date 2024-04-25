@@ -3,13 +3,16 @@
 
 using System.Linq;
 using System.Threading.Tasks;
+using CommonUtilities;
+using CommonUtilities.Options;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Tes.ApiClients;
-using Tes.ApiClients.Options;
+using TesApi.Tests.TestServices;
 using TesApi.Web.Management;
 
 namespace TesApi.Tests
@@ -20,7 +23,7 @@ namespace TesApi.Tests
         private PriceApiClient pricingApiClient;
         private PriceApiBatchSkuInformationProvider provider;
         private IMemoryCache appCache;
-        private CachingRetryHandler cachingRetryHandler;
+        private CachingRetryPolicyBuilder cachingRetryHandler;
         private Mock<IOptions<RetryPolicyOptions>> mockRetryOptions;
 
         [TestInitialize]
@@ -30,9 +33,10 @@ namespace TesApi.Tests
             mockRetryOptions = new Mock<IOptions<RetryPolicyOptions>>();
             mockRetryOptions.Setup(m => m.Value).Returns(new RetryPolicyOptions());
 
-            cachingRetryHandler = new CachingRetryHandler(appCache, mockRetryOptions.Object);
+            cachingRetryHandler = new CachingRetryPolicyBuilder(appCache, mockRetryOptions.Object);
             pricingApiClient = new PriceApiClient(cachingRetryHandler, new NullLogger<PriceApiClient>());
-            provider = new PriceApiBatchSkuInformationProvider(pricingApiClient, new NullLogger<PriceApiBatchSkuInformationProvider>());
+            var config = ExpensiveObjectTestUtility.AzureCloudConfig;
+            provider = new PriceApiBatchSkuInformationProvider(pricingApiClient, config, new NullLogger<PriceApiBatchSkuInformationProvider>());
         }
 
         [TestCleanup]
