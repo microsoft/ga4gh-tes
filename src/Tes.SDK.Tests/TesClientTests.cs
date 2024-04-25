@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Text.Json;
 using Moq;
 using Tes.Models;
 
@@ -12,6 +11,7 @@ namespace Tes.SDK.Tests
     {
         private ITesClient _client = null!;
         private Mock<HttpClient> _httpClientMock = null!;
+        private static Array tesStateEnumValues = Enum.GetValues(typeof(TesState));
 
         [TestInitialize]
         public void Initialize()
@@ -37,7 +37,7 @@ namespace Tes.SDK.Tests
                 .Setup(client => client.SendAsync(It.IsAny<HttpRequestMessage>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new HttpResponseMessage
                 {
-                    Content = new StringContent(JsonSerializer.Serialize(expectedResponse))
+                    Content = new StringContent(Newtonsoft.Json.JsonConvert.SerializeObject(expectedResponse))
                 });
 
             // Act
@@ -57,7 +57,7 @@ namespace Tes.SDK.Tests
                 .Setup(client => client.SendAsync(It.IsAny<HttpRequestMessage>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new HttpResponseMessage
                 {
-                    Content = new StringContent(JsonSerializer.Serialize(tesTask))
+                    Content = new StringContent(Newtonsoft.Json.JsonConvert.SerializeObject(tesTask))
                 });
 
             // Act
@@ -66,6 +66,32 @@ namespace Tes.SDK.Tests
             // Assert
             Assert.IsNotNull(result);
             Assert.AreEqual(tesTask.Id, result.Id);
+        }
+
+        [TestMethod]
+        public async Task ListTasksAsync_Success()
+        {
+            var tasks = new List<TesTask>();
+
+            for (int i = 0; i < 100; i++)
+            {
+                tasks.Add(CreateTestTask());
+            }
+
+            var runningTasksCount = tasks.Count(t => t.State == TesState.RUNNINGEnum);
+
+            var response = new TesListTasksResponse { Tasks = tasks };
+
+            _httpClientMock
+                .Setup(client => client.SendAsync(It.IsAny<HttpRequestMessage>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new HttpResponseMessage
+                {
+                    Content = new StringContent(Newtonsoft.Json.JsonConvert.SerializeObject(response))
+                });
+
+            var result = await _client.ListTasksAsync().ToListAsync();
+            Assert.IsNotNull(result);
+            Assert.IsTrue(result.Count == tasks.Count);
         }
 
         private static TesTask CreateTestTask()
@@ -79,6 +105,7 @@ namespace Tes.SDK.Tests
                 Command = ["/bin/sh", "-c", "cat /proc/sys/kernel/random/uuid"],
             });
 
+            task.State = (TesState)tesStateEnumValues.GetValue(Random.Shared.Next(tesStateEnumValues.Length));
             return task;
         }
     }

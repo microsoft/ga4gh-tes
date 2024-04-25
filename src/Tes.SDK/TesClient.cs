@@ -40,7 +40,7 @@ namespace Tes.SDK
         }
 
         /// <inheritdoc/>
-        public string SdkVersion { get; } = "0.1.0";
+        public string SdkVersion { get; } = "1.1.0-preview";
 
         private TesClient(bool clientAllocated, HttpClient httpClient, Uri baseUrl, string? username = null, string? password = null)
         {
@@ -130,13 +130,18 @@ namespace Tes.SDK
         }
 
         /// <inheritdoc/>
-        public async IAsyncEnumerable<TesTask> ListTasksAsync(TesView view, [EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<TesTask> ListTasksAsync(TaskQueryOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             string? pageToken = null;
 
+            if (options == null)
+            {
+                options = new TaskQueryOptions();
+            }
+
             do
             {
-                var query = $"view={view}{(string.IsNullOrWhiteSpace(pageToken) ? string.Empty : $"&pageToken={pageToken}")}";
+                var query = GetQuery(options, pageToken);
                 var response = await SendRequestAsync(GetRequest(HttpMethod.Get, "/v1/tasks", query), cancellationToken: cancellationToken);
                 var tesListTasksResponse = await DeserializeAsync<TesListTasksResponse>(response.Content, cancellationToken);
 
@@ -175,6 +180,43 @@ namespace Tes.SDK
 
                 await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             }
+        }
+
+        private static string GetQuery(TaskQueryOptions options, string? pageToken)
+        {
+            var queryBuilder = new StringBuilder();
+            queryBuilder.Append($"view={options.View}");
+
+            if (!string.IsNullOrWhiteSpace(pageToken))
+            {
+                queryBuilder.Append($"&pageToken={pageToken}");
+            }
+
+            if (options.Tags?.Count > 0)
+            {
+                foreach (var key in options.Tags.Keys)
+                {
+                    queryBuilder.Append($"&tag_key={key}");
+
+                    if (options.Tags.TryGetValue(key, out var val) && !string.IsNullOrWhiteSpace(val))
+                    {
+                        queryBuilder.Append($"&tag_value={val}");
+                    }
+                }
+            }
+
+            if (options.State.HasValue)
+            {
+                queryBuilder.Append($"&state={TesEnumUtility.GetEnumMemberValue(options.State.Value)}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(options.NamePrefix))
+            {
+                queryBuilder.Append($"&name_prefix={options.NamePrefix}");
+            }
+
+            var query = queryBuilder.ToString();
+            return query;
         }
 
         protected virtual void Dispose(bool disposing)
