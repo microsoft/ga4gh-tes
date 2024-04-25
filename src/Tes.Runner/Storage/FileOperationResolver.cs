@@ -166,24 +166,26 @@ namespace Tes.Runner.Storage
 
                 yield break;
             }
-            else if (output.FileType == FileType.File 
-                && !expandedPath.EndsWith('/') 
-                && !expandedPath.Contains('*') 
+            else if (output.FileType == FileType.File
+                && !expandedPath.EndsWith('/')
+                && !expandedPath.Contains('*')
                 && !expandedPath.Contains('?'))
             {
                 logger.LogWarning("The file does not exist and is NOT a search pattern: {ExpandedPath}. The output will be ignored.", expandedPath);
                 yield return null;
             }
-
-            //at this point, the output is not a single file, so it must be a search pattern
-            //break the given path into root and relative path, where the relative path is the search pattern
-            var rootPathPair = fileInfoProvider.GetRootPathPair(expandedPath);
-
-            foreach (var file in fileInfoProvider.GetFilesBySearchPattern(rootPathPair.Root, rootPathPair.RelativePath))
+            else
             {
-                logger.LogInformation("Adding file: {RelativePathToSearchPath} with absolute path: {AbsolutePath} to the output list with a combined target URL", file.RelativePathToSearchPath, file.AbsolutePath);
+                //at this point, the output is not a single file, so it must be a search pattern
+                //break the given path into root and relative path, where the relative path is the search pattern
+                var rootPathPair = fileInfoProvider.GetRootPathPair(expandedPath);
 
-                yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, absoluteFilePath: file.AbsolutePath, relativePathToSearchPath: file.RelativePathToSearchPath);
+                foreach (var file in fileInfoProvider.GetFilesBySearchPattern(rootPathPair.Root, rootPathPair.RelativePath))
+                {
+                    logger.LogInformation("Adding file: {RelativePathToSearchPath} with absolute path: {AbsolutePath} to the output list with a combined target URL", file.RelativePathToSearchPath, file.AbsolutePath);
+
+                    yield return CreateExpandedFileOutputWithCombinedTargetUrl(output, absoluteFilePath: file.AbsolutePath, relativePathToSearchPath: file.RelativePathToSearchPath);
+                }
             }
         }
 
