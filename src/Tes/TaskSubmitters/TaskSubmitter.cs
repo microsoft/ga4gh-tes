@@ -35,6 +35,12 @@ namespace Tes.TaskSubmitters
         public virtual string WorkflowId { get; set; }
 
         /// <summary>
+        /// Unsupported BackendParameters for better reporting and analysis
+        /// </summary>
+        [JsonInclude]
+        public Dictionary<string, string> UnsupportedBackendParameters { get; set; } = [];
+
+        /// <summary>
         /// <paramref name="task"/> parser to determine workflow engine.
         /// </summary>
         /// <param name="task"><see cref="TesTask"/> submitted by a workflow engine.</param>
