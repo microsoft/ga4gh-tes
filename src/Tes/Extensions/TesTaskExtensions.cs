@@ -40,7 +40,7 @@ namespace Tes.Extensions
         /// <typeparam name="T">Type of enumerated items.</typeparam>
         /// <param name="values">Enumeration on which to visit each item.</param>
         /// <param name="action">Action to invoke with each item.</param>
-        public static void ForEach<T>(this IEnumerable<T> values, Action<T> action)
+        internal static void ForEach<T>(this IEnumerable<T> values, Action<T> action)
         {
             foreach (var value in values)
             {

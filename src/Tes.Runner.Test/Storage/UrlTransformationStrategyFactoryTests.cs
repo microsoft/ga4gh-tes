@@ -30,7 +30,7 @@ namespace Tes.Runner.Test.Storage
         {
             runtimeOptions.Terra = CreateTerraRuntimeOptions(DrsHubHost);
 
-            var combinedStrategy = UrlTransformationStrategyFactory.CreateCombinedArmTransformationStrategy(runtimeOptions, tokenCredentialMock.Object);
+            var combinedStrategy = UrlTransformationStrategyFactory.CreateCombinedArmTransformationStrategy(runtimeOptions, _ => tokenCredentialMock.Object, Runner.Transfer.BlobPipelineOptions.DefaultApiVersion);
 
             var internalStrategy = combinedStrategy.GetStrategies();
 
@@ -43,7 +43,7 @@ namespace Tes.Runner.Test.Storage
         [TestMethod]
         public void CreateCombinedArmTransformationStrategy_WithOutDrsHubSettings_ReturnsExpectedStrategies()
         {
-            var combinedStrategy = UrlTransformationStrategyFactory.CreateCombinedArmTransformationStrategy(runtimeOptions, tokenCredentialMock.Object);
+            var combinedStrategy = UrlTransformationStrategyFactory.CreateCombinedArmTransformationStrategy(runtimeOptions, _ => tokenCredentialMock.Object, Runner.Transfer.BlobPipelineOptions.DefaultApiVersion);
 
             var internalStrategy = combinedStrategy.GetStrategies();
 
@@ -57,7 +57,7 @@ namespace Tes.Runner.Test.Storage
         {
             runtimeOptions.Terra = CreateTerraRuntimeOptions();
 
-            var combinedStrategy = UrlTransformationStrategyFactory.CreateCombineTerraTransformationStrategy(runtimeOptions, tokenCredentialMock.Object);
+            var combinedStrategy = UrlTransformationStrategyFactory.CreateCombineTerraTransformationStrategy(runtimeOptions, _ => tokenCredentialMock.Object);
 
             var internalStrategy = combinedStrategy.GetStrategies();
 
@@ -71,7 +71,7 @@ namespace Tes.Runner.Test.Storage
         {
             runtimeOptions.Terra = CreateTerraRuntimeOptions(DrsHubHost);
 
-            var combinedStrategy = UrlTransformationStrategyFactory.CreateCombineTerraTransformationStrategy(runtimeOptions, tokenCredentialMock.Object);
+            var combinedStrategy = UrlTransformationStrategyFactory.CreateCombineTerraTransformationStrategy(runtimeOptions, _ => tokenCredentialMock.Object);
 
             var internalStrategy = combinedStrategy.GetStrategies();
 
