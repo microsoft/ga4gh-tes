@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Text.Json;
 using Moq;
 using Tes.Models;
 
@@ -78,7 +77,7 @@ namespace Tes.SDK.Tests
             {
                 tasks.Add(CreateTestTask());
             }
-            
+
             var runningTasksCount = tasks.Count(t => t.State == TesState.RUNNINGEnum);
 
             var response = new TesListTasksResponse { Tasks = tasks };
