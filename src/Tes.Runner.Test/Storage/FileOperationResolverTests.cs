@@ -211,7 +211,7 @@ namespace Tes.Runner.Test.Storage
                 [
                     new("/foo/bar", "bar", "/") // result of the single file output
                 ]);
-            fileInfoProvider.Setup(x => x.FileExists(singleFileOutput.Path!)).Returns(false);  // single file output exists
+            fileInfoProvider.Setup(x => x.FileExists(singleFileOutput.Path!)).Returns(false);  // single file output does NOT exist
 
             var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
             var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();
