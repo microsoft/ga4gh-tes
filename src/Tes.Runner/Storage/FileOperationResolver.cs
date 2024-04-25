@@ -172,7 +172,7 @@ namespace Tes.Runner.Storage
                 && !expandedPath.Contains('?'))
             {
                 logger.LogWarning("The file does not exist and is NOT a search pattern: {ExpandedPath}. The output will be ignored.", expandedPath);
-                yield return null;
+                yield return null!;
             }
             else
             {
