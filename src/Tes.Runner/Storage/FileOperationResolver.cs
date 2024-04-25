@@ -115,7 +115,7 @@ namespace Tes.Runner.Storage
                 _ => WarnOnMissingType(output, logger)
             };
 
-            foreach (var fileOutput in expandedOutputs)
+            foreach (var fileOutput in expandedOutputs.Where(f => f is not null))
             {
                 yield return fileOutput;
             }
@@ -165,6 +165,14 @@ namespace Tes.Runner.Storage
                     absoluteFilePath: expandedPath);
 
                 yield break;
+            }
+            else if (output.FileType == FileType.File 
+                && !expandedPath.EndsWith('/') 
+                && !expandedPath.Contains('*') 
+                && !expandedPath.Contains('?'))
+            {
+                logger.LogWarning("The file does not exist and is NOT a search pattern: {ExpandedPath}. The output will be ignored.", expandedPath);
+                yield return null;
             }
 
             //at this point, the output is not a single file, so it must be a search pattern
