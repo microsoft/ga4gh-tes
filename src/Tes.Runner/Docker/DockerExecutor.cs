@@ -196,7 +196,8 @@ namespace Tes.Runner.Docker
             }
             catch (Exception e)
             {
-                logger.LogWarning(@"Failed to delete image {ImageName}. Error: {ErrorMessage}", imageName, e.Message);
+                logger.LogError(@"Failed to delete image {ImageName}. Error: {ErrorMessage}", imageName, e.Message);
+                throw;
             }
         }
 
