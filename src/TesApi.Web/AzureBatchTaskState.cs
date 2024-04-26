@@ -23,7 +23,6 @@ namespace TesApi.Web
     /// <param name="BatchTaskEndTime"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.EndTime"/>.</param>
     /// <param name="BatchTaskExitCode"><see cref="Microsoft.Azure.Batch.TaskExecutionInformation.ExitCode"/>.</param>
     /// <param name="Warning">Warning. First item in enumeration is the Warning code, rest of items are additional system log entries.</param>
-    /// <param name="ReplaceBatchTaskStartTime">Replace previous logged value of the task start time with <paramref name="BatchTaskStartTime"/>.</param>
     public record class AzureBatchTaskState(
         TaskState State,
         IEnumerable<OutputFileLog> OutputFileLogs = default,
@@ -35,8 +34,7 @@ namespace TesApi.Web
         int? ExecutorExitCode = default,
         DateTimeOffset? BatchTaskEndTime = default,
         int? BatchTaskExitCode = default,
-        IEnumerable<string> Warning = default,
-        bool ReplaceBatchTaskStartTime = default)
+        IEnumerable<string> Warning = default)
     {
         /// <summary>
         /// Unknown error. Either an exception or a missing reason.
@@ -105,7 +103,7 @@ namespace TesApi.Web
             NodeAllocationFailed,
 
             /// <summary>
-            /// Azure Batch pre-empted the execution of this task while running on a low-priority node
+            /// Azure Batch preempted the execution of this task while running on a low-priority node
             /// </summary>
             NodePreempted,
 

@@ -17,7 +17,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 using Tes.Extensions;
-using Tes.Models;
 using TesApi.Web.Events;
 using TesApi.Web.Extensions;
 using TesApi.Web.Management;
@@ -208,6 +207,7 @@ namespace TesApi.Web
                     tesTaskLog.BatchNodeMetrics ??= batchNodeMetrics;
                     tesTaskLog.CromwellResultCode ??= cromwellRcCode;
                     tesTaskLog.EndTime ??= batchInfo.BatchTaskEndTime ?? taskEndTime;
+                    tesTaskLog.StartTime ??= batchInfo.BatchTaskStartTime ?? taskStartTime;
 
                     if (batchInfo.ExecutorEndTime is not null || batchInfo.ExecutorStartTime is not null || batchInfo.ExecutorExitCode is not null)
                     {
@@ -215,15 +215,6 @@ namespace TesApi.Web
                         tesTaskExecutorLog.StartTime ??= batchInfo.ExecutorStartTime;
                         tesTaskExecutorLog.EndTime ??= batchInfo.ExecutorEndTime;
                         tesTaskExecutorLog.ExitCode ??= batchInfo.ExecutorExitCode;
-                    }
-
-                    if (batchInfo.ReplaceBatchTaskStartTime)
-                    {
-                        tesTaskLog.StartTime = batchInfo.BatchTaskStartTime ?? taskStartTime;
-                    }
-                    else
-                    {
-                        tesTaskLog.StartTime ??= batchInfo.BatchTaskStartTime ?? taskStartTime;
                     }
 
                     if (batchInfo.OutputFileLogs is not null)

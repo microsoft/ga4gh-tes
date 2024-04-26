@@ -135,6 +135,12 @@ namespace TesApi.Web.Events
             // Event type specific content validations
             switch (content.Name)
             {
+                case Tes.Runner.Events.EventsPublisher.TaskCommencementEvent:
+                    Validate(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(content.StatusMessage, StringComparison.Ordinal),
+                        $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
+                    ValidateCreated();
+                    break;
+
                 case Tes.Runner.Events.EventsPublisher.DownloadStartEvent:
                     Validate(Tes.Runner.Events.EventsPublisher.StartedStatus.Equals(content.StatusMessage, StringComparison.Ordinal),
                         $"{nameof(content.StatusMessage)}('{content.StatusMessage}') does not match the expected value of '{Tes.Runner.Events.EventsPublisher.StartedStatus}'.");
@@ -209,12 +215,14 @@ namespace TesApi.Web.Events
 
         private static readonly IReadOnlyDictionary<string, int> EventsInOrder = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
-            { Tes.Runner.Events.EventsPublisher.DownloadStartEvent, int.MinValue },
-            { Tes.Runner.Events.EventsPublisher.DownloadEndEvent, int.MinValue + 1 },
+            { Tes.Runner.Events.EventsPublisher.TaskCommencementEvent, int.MinValue },
+            { Tes.Runner.Events.EventsPublisher.DownloadStartEvent, int.MinValue + 1 },
+            { Tes.Runner.Events.EventsPublisher.DownloadEndEvent, int.MinValue + 2 },
             { Tes.Runner.Events.EventsPublisher.ExecutorStartEvent, -1 },
             { Tes.Runner.Events.EventsPublisher.ExecutorEndEvent, +1 },
-            { Tes.Runner.Events.EventsPublisher.UploadStartEvent, int.MaxValue - 1 },
-            { Tes.Runner.Events.EventsPublisher.UploadEndEvent, int.MaxValue },
+            { Tes.Runner.Events.EventsPublisher.UploadStartEvent, int.MaxValue - 2 },
+            { Tes.Runner.Events.EventsPublisher.UploadEndEvent, int.MaxValue - 1 },
+            { Tes.Runner.Events.EventsPublisher.TaskCompletionEvent, int.MaxValue },
         }.AsReadOnly();
 
         /// <summary>
@@ -230,7 +238,13 @@ namespace TesApi.Web.Events
             ArgumentNullException.ThrowIfNull(source);
             ArgumentNullException.ThrowIfNull(messageGetter);
 
-            return source.OrderBy(t => OrderBy(messageGetter(t))).ThenBy(t => ThenBy(messageGetter(t)));
+            return source.OrderBy(OrderByT).ThenBy(ThenByT);
+
+            DateTime OrderByT(T item)
+                => OrderBy(messageGetter(item));
+
+            int ThenByT(T item)
+                => ThenBy(messageGetter(item));
 
             static DateTime OrderBy(RunnerEventsMessage message)
                 => (message.RunnerEventMessage?.Created ?? DateTime.Parse(message.Tags["created"])).ToUniversalTime();
@@ -261,8 +275,10 @@ namespace TesApi.Web.Events
 
             return (nodeMessage.Name ?? message.Event) switch
             {
-                Tes.Runner.Events.EventsPublisher.DownloadStartEvent => new AzureBatchTaskState(AzureBatchTaskState.TaskState.Initializing,
+                Tes.Runner.Events.EventsPublisher.TaskCommencementEvent => new AzureBatchTaskState(AzureBatchTaskState.TaskState.Initializing,
                     BatchTaskStartTime: nodeMessage.Created),
+
+                Tes.Runner.Events.EventsPublisher.DownloadStartEvent => new AzureBatchTaskState(AzureBatchTaskState.TaskState.NoChange),
 
                 Tes.Runner.Events.EventsPublisher.DownloadEndEvent => nodeMessage.StatusMessage switch
                 {
@@ -325,8 +341,6 @@ namespace TesApi.Web.Events
                 {
                     Tes.Runner.Events.EventsPublisher.SuccessStatus => new(
                         AzureBatchTaskState.TaskState.CompletedSuccessfully,
-                        ReplaceBatchTaskStartTime: true,
-                        BatchTaskStartTime: nodeMessage.Created - TimeSpan.Parse(nodeMessage.EventData["duration"]),
                         BatchTaskEndTime: nodeMessage.Created),
 
                     Tes.Runner.Events.EventsPublisher.FailedStatus => new(
@@ -335,8 +349,6 @@ namespace TesApi.Web.Events
                         Enumerable.Empty<string>()
                             .Append("Node script failed.")
                             .Append(nodeMessage.EventData["errorMessage"])),
-                        ReplaceBatchTaskStartTime: true,
-                        BatchTaskStartTime: nodeMessage.Created - TimeSpan.Parse(nodeMessage.EventData["duration"]),
                         BatchTaskEndTime: nodeMessage.Created),
 
                     _ => throw new System.Diagnostics.UnreachableException(),
