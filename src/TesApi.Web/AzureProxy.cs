@@ -15,9 +15,7 @@ using CommonUtilities.AzureCloud;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Auth;
 using Microsoft.Azure.Batch.Common;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
-using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Rest;
@@ -29,9 +27,7 @@ using TesApi.Web.Management.Configuration;
 using TesApi.Web.Storage;
 using static CommonUtilities.RetryHandler;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
-using CloudTask = Microsoft.Azure.Batch.CloudTask;
 using FluentAzure = Microsoft.Azure.Management.Fluent.Azure;
-using OnAllTasksComplete = Microsoft.Azure.Batch.Common.OnAllTasksComplete;
 
 namespace TesApi.Web
 {
@@ -182,7 +178,7 @@ namespace TesApi.Web
                 batchClient.JobOperations.GetJobAsync(jobId, cancellationToken: ct),
                 cancellationToken);
 
-            await job.AddTaskAsync(cloudTasks, new() { CancellationToken = cancellationToken, MaxDegreeOfParallelism = (int)Math.Ceiling((double)cloudTasks.Count() / Microsoft.Azure.Batch.Constants.MaxTasksInSingleAddTaskCollectionRequest) });
+            await job.AddTaskAsync(cloudTasks, new() { CancellationToken = cancellationToken, MaxDegreeOfParallelism = (int)Math.Ceiling((double)cloudTasks.Count() / Constants.MaxTasksInSingleAddTaskCollectionRequest) + 1 });
         }
 
         /// <inheritdoc/>
