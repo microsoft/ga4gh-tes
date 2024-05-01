@@ -77,17 +77,17 @@ namespace TesApi.Controllers
 
             if (await repository.TryGetItemAsync(id, cancellationToken, item => tesTask = item))
             {
-                if (tesTask.State == TesState.COMPLETEEnum ||
-                    tesTask.State == TesState.EXECUTORERROREnum ||
-                    tesTask.State == TesState.SYSTEMERROREnum)
+                if (tesTask.State == TesState.COMPLETE ||
+                    tesTask.State == TesState.EXECUTOR_ERROR ||
+                    tesTask.State == TesState.SYSTEM_ERROR)
                 {
                     logger.LogInformation("Task {TesTask} cannot be canceled because it is in {TesTaskState} state.", id, tesTask.State);
                 }
-                else if (tesTask.State != TesState.CANCELEDEnum)
+                else if (tesTask.State != TesState.CANCELED)
                 {
                     logger.LogInformation("Canceling task");
                     tesTask.IsCancelRequested = true;
-                    tesTask.State = TesState.CANCELEDEnum;
+                    tesTask.State = TesState.CANCELED;
 
                     try
                     {
@@ -153,7 +153,7 @@ namespace TesApi.Controllers
             }
 
             tesTask.Tags ??= new Dictionary<string, string>(StringComparer.Ordinal); // case-sensitive is the default for Dictionary<string, T> as well as the default for JSON.
-            tesTask.State = TesState.QUEUEDEnum;
+            tesTask.State = TesState.QUEUED;
             tesTask.CreationTime = DateTimeOffset.UtcNow;
             tesTask.TaskSubmitter = TaskSubmitter.Parse(tesTask);
             tesTask.Id = tesTask.CreateId();
@@ -477,9 +477,9 @@ namespace TesApi.Controllers
         {
             try
             {
-                if (tesTask.State == TesState.COMPLETEEnum
-                   || tesTask.State == TesState.CANCELEDEnum
-                   || ((tesTask.State == TesState.SYSTEMERROREnum || tesTask.State == TesState.EXECUTORERROREnum)
+                if (tesTask.State == TesState.COMPLETE
+                   || tesTask.State == TesState.CANCELED
+                   || ((tesTask.State == TesState.SYSTEM_ERROR || tesTask.State == TesState.EXECUTOR_ERROR)
                         && Enum.TryParse<TesView>(view, true, out var tesView)
                         && tesView == TesView.FULL))
                 {

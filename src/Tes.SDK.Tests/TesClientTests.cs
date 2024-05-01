@@ -78,7 +78,7 @@ namespace Tes.SDK.Tests
                 tasks.Add(CreateTestTask());
             }
 
-            var runningTasksCount = tasks.Count(t => t.State == TesState.RUNNINGEnum);
+            var runningTasksCount = tasks.Count(t => t.State == TesState.RUNNING);
 
             var response = new TesListTasksResponse { Tasks = tasks };
 
