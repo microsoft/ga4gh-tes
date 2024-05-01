@@ -189,6 +189,41 @@ namespace Tes.Runner.Test.Storage
         }
 
         [TestMethod]
+        public async Task ResolveOutputsAsync_PatternAndFileOutputProvided_FileDoesntExist_FileOperationsAreResolved()
+        {
+            NodeTask nodeTask = new()
+            {
+                Outputs =
+                [
+                    patternFileOutput,  // path: /data/*, target URL: https://foo.bar/cont/data?sig=sasToken
+                    singleFileOutput    // path: /foo/bar, target URL: https://foo.bar/cont/bar?sig=sasToken
+                ]
+            };
+
+            fileInfoProvider.Setup(x => x.GetFilesBySearchPattern("/", "data/*"))
+                .Returns(
+                [
+                    new("/data/foo.foo", "foo.foo", "/"),  //result of pattern file output
+                    new("/data/dir1/bar.foo", "dir1/bar.foo", "/")
+                ]);
+            fileInfoProvider.Setup(x => x.GetFilesBySearchPattern("/", "foo/bar"))
+                .Returns(
+                [
+                    new("/foo/bar", "bar", "/") // result of the single file output
+                ]);
+            fileInfoProvider.Setup(x => x.FileExists(singleFileOutput.Path!)).Returns(false);  // single file output does NOT exist
+
+            var fileOperationInfoResolver = new FileOperationResolver(nodeTask, resolutionPolicyHandler, fileInfoProvider.Object);
+            var resolvedOutputs = await fileOperationInfoResolver.ResolveOutputsAsync();
+
+            Assert.AreEqual(2, resolvedOutputs?.Count);
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.FullFilePath.Equals("/data/foo.foo", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.FullFilePath.Equals("/data/dir1/bar.foo", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/foo.foo?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(resolvedOutputs!.Any(r => r.TargetUri.ToString().Equals(@"https://foo.bar/cont/dir1/bar.foo?sig=sasToken", StringComparison.OrdinalIgnoreCase)));
+        }
+
+        [TestMethod]
         public async Task ResolveInputsAsync_FileInputProvided_FileOperationsAreResolved()
         {
             NodeTask nodeTask = new()
