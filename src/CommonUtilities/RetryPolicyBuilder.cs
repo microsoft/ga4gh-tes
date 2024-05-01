@@ -94,6 +94,13 @@ public class RetryPolicyBuilder
         IPolicyBuilderWait WithRetryPolicyOptionsWait();
 
         /// <summary>
+        /// Default wait policy.
+        /// </summary>
+        /// <param name="waitDurations">Wait durations.</param>
+        /// <returns>OnRetry hander</returns>
+        IPolicyBuilderWait WithEnumeratedBackoffWait(IEnumerable<TimeSpan> waitDurations);
+
+        /// <summary>
         /// Custom exponential wait policy.
         /// </summary>
         /// <param name="maxRetryCount">Maximum number of retries.</param>
@@ -138,6 +145,13 @@ public class RetryPolicyBuilder
         /// </summary>
         /// <returns>OnRetry hander</returns>
         IPolicyBuilderWait<TResult> WithRetryPolicyOptionsWait();
+
+        /// <summary>
+        /// Default wait policy.
+        /// </summary>
+        /// <param name="waitDurations">Wait durations.</param>
+        /// <returns>OnRetry hander</returns>
+        IPolicyBuilderWait<TResult> WithEnumeratedBackoffWait(IEnumerable<TimeSpan> waitDurations);
 
         /// <summary>
         /// Custom exponential wait policy.
@@ -369,6 +383,10 @@ public class RetryPolicyBuilder
                 => new PolicyBuilderWait(this, Defaults.PolicyOptions.MaxRetryCount, DefaultSleepDurationProvider(Defaults));
 
             /// <inheritdoc/>
+            IPolicyBuilderWait IPolicyBuilderBase.WithEnumeratedBackoffWait(IEnumerable<System.TimeSpan> waitDurations)
+                => new PolicyBuilderWait(this, waitDurations);
+
+            /// <inheritdoc/>
             IPolicyBuilderWait IPolicyBuilderBase.WithCustomizedRetryPolicyOptionsWait(int maxRetryCount, Func<int, Exception?, TimeSpan> sleepDurationProvider)
                 => new PolicyBuilderWait(this, maxRetryCount, (attempt, outcome, _1) => sleepDurationProvider(attempt, outcome));
 
@@ -403,6 +421,10 @@ public class RetryPolicyBuilder
                 => new PolicyBuilderWait<TResult>(this, Defaults.PolicyOptions.MaxRetryCount, default, PolicyBuilderBase.DefaultSleepDurationProvider(Defaults));
 
             /// <inheritdoc/>
+            IPolicyBuilderWait<TResult> IPolicyBuilderBase<TResult>.WithEnumeratedBackoffWait(IEnumerable<System.TimeSpan> waitDurations)
+                => new PolicyBuilderWait<TResult>(this, waitDurations);
+
+            /// <inheritdoc/>
             IPolicyBuilderWait<TResult> IPolicyBuilderBase<TResult>.WithCustomizedRetryPolicyOptionsWait(int maxRetryCount, Func<int, Exception, TimeSpan> waitDurationProvider)
                 => new PolicyBuilderWait<TResult>(this, maxRetryCount, default, (attempt, outcome, _1) => waitDurationProvider(attempt, outcome));
 
@@ -423,35 +445,98 @@ public class RetryPolicyBuilder
                 => new PolicyBuilderWait<TResult>(this, retryCount, default, PolicyBuilderBase.ExceptionBasedSleepDurationProviderWithExponentialBackoffBackup(sleepDurationProvider, exponentialBackOffExponent, backupSkipProvidedIncrements));
         }
 
+        private class SleepDurationProvider
+        {
+            public SleepDurationProvider(IEnumerable<TimeSpan> sleepDurations)
+            {
+                ArgumentNullException.ThrowIfNull(sleepDurations);
+                ProviderType = Type.List;
+                SleepDurations = sleepDurations;
+            }
+
+            public SleepDurationProvider(int maxRetryCount, Func<int, Exception, Context, TimeSpan>? sleepDurationProviderException)
+            {
+                ArgumentNullException.ThrowIfNull(sleepDurationProviderException);
+
+                ProviderType = Type.Provider;
+                Provider = (maxRetryCount, sleepDurationProviderException!);
+            }
+
+            protected SleepDurationProvider(Type providerType)
+            {
+                ProviderType = providerType;
+            }
+
+            internal Type ProviderType { get; }
+            internal IEnumerable<TimeSpan>? SleepDurations { get; }
+            internal (int MaxRetryCount, Func<int, Exception, Context, TimeSpan> SleepDurationProvider)? Provider { get; }
+
+            internal enum Type
+            {
+                List,
+                Provider,
+                GenericProvider,
+            }
+        }
+
+        private class SleepDurationProvider<TResult> : SleepDurationProvider
+        {
+            public SleepDurationProvider(IEnumerable<TimeSpan> sleepDurations)
+                : base(sleepDurations)
+            { }
+
+            public SleepDurationProvider(int maxRetryCount, Func<int, DelegateResult<TResult>, Context, TimeSpan>? sleepDurationProviderResult, Func<int, Exception, Context, TimeSpan>? sleepDurationProviderException)
+                : base(Type.GenericProvider)
+            {
+                if (sleepDurationProviderException is null && sleepDurationProviderResult is null)
+                {
+                    throw new ArgumentNullException(null, $"At least one of {nameof(sleepDurationProviderResult)} or {nameof(sleepDurationProviderException)} must be provided.");
+                }
+
+                GenericProvider = (maxRetryCount, PickSleepDurationProvider(sleepDurationProviderResult, sleepDurationProviderException));
+            }
+
+            private static Func<int, DelegateResult<TResult>, Context, TimeSpan> PickSleepDurationProvider(Func<int, DelegateResult<TResult>, Context, TimeSpan>? tResultProvider, Func<int, Exception, Context, TimeSpan>? exceptionProvider)
+                => tResultProvider is null ? (attempt, outcome, ctx) => exceptionProvider!(attempt, outcome.Exception, ctx) : tResultProvider;
+            internal (int MaxRetryCount, Func<int, DelegateResult<TResult>, Context, TimeSpan> SleepDurationProvider)? GenericProvider { get; }
+        }
+
         private readonly struct PolicyBuilderWait : IPolicyBuilderWait
         {
             public readonly PolicyBuilderBase builderBase;
-            public readonly Func<int, Exception?, Context, TimeSpan> sleepDurationProvider;
-            public readonly int maxRetryCount;
+            public readonly SleepDurationProvider sleepDurationProvider;
+
+            public PolicyBuilderWait(PolicyBuilderBase builderBase, IEnumerable<TimeSpan> sleepDurations)
+            {
+                ArgumentNullException.ThrowIfNull(sleepDurations);
+                this.builderBase = builderBase;
+                this.sleepDurationProvider = new(sleepDurations);
+            }
 
             public PolicyBuilderWait(PolicyBuilderBase builderBase, int maxRetryCount, Func<int, Exception?, Context, TimeSpan> sleepDurationProvider)
             {
                 ArgumentNullException.ThrowIfNull(sleepDurationProvider);
                 this.builderBase = builderBase;
-                this.maxRetryCount = maxRetryCount;
-                this.sleepDurationProvider = sleepDurationProvider;
+                this.sleepDurationProvider = new(maxRetryCount, sleepDurationProvider);
             }
 
             /// <inheritdoc/>
             IPolicyBuilderBuild IPolicyBuilderWait.SetOnRetryBehavior(ILogger? logger, RetryHandler.OnRetryHandler? onRetry, RetryHandler.OnRetryHandlerAsync? onRetryAsync)
-                => new PolicyBuilderBuild(this, sleepDurationProvider, logger, onRetry, onRetryAsync);
+                => new PolicyBuilderBuild(this, logger, onRetry, onRetryAsync);
         }
 
         private readonly struct PolicyBuilderWait<TResult> : IPolicyBuilderWait<TResult>
         {
             public readonly PolicyBuilderBase<TResult> builderBase;
-            public readonly Func<int, Exception, Context, TimeSpan>? sleepDurationProvider;
-            public readonly Func<int, DelegateResult<TResult>, Context, TimeSpan>? genericSleepDurationProvider;
-            public readonly int maxRetryCount;
+            public readonly SleepDurationProvider<TResult> sleepDurationProvider;
 
-            private static Func<int, DelegateResult<TResult>, Context, TimeSpan> PickSleepDurationProvider(Func<int, DelegateResult<TResult>, Context, TimeSpan>? tResultProvider, Func<int, Exception, Context, TimeSpan>? exceptionProvider)
-                => tResultProvider is null ? (attempt, outcome, ctx) => exceptionProvider!(attempt, outcome.Exception, ctx) : tResultProvider;
 
+            public PolicyBuilderWait(PolicyBuilderBase<TResult> builderBase, IEnumerable<TimeSpan> sleepDurations)
+            {
+                ArgumentNullException.ThrowIfNull(sleepDurations);
+                this.builderBase = builderBase;
+                this.sleepDurationProvider = new(sleepDurations);
+            }
             public PolicyBuilderWait(PolicyBuilderBase<TResult> builderBase, int maxRetryCount, Func<int, DelegateResult<TResult>, Context, TimeSpan>? sleepDurationProviderResult, Func<int, Exception, Context, TimeSpan>? sleepDurationProviderException)
             {
                 if (sleepDurationProviderException is null && sleepDurationProviderResult is null)
@@ -460,20 +545,17 @@ public class RetryPolicyBuilder
                 }
 
                 this.builderBase = builderBase;
-                this.maxRetryCount = maxRetryCount;
-                this.sleepDurationProvider = sleepDurationProviderException;
-                this.genericSleepDurationProvider = sleepDurationProviderResult;
+                this.sleepDurationProvider = new(maxRetryCount, sleepDurationProviderResult, sleepDurationProviderException);
             }
 
             /// <inheritdoc/>
             IPolicyBuilderBuild<TResult> IPolicyBuilderWait<TResult>.SetOnRetryBehavior(ILogger? logger, RetryHandler.OnRetryHandler<TResult>? onRetry, RetryHandler.OnRetryHandlerAsync<TResult>? onRetryAsync)
-                => new PolicyBuilderBuild<TResult>(this, PickSleepDurationProvider(genericSleepDurationProvider, sleepDurationProvider), logger, onRetry, onRetryAsync);
+                => new PolicyBuilderBuild<TResult>(this, logger, onRetry, onRetryAsync);
         }
 
         private readonly struct PolicyBuilderBuild : IPolicyBuilderBuild
         {
             private readonly PolicyBuilderWait builderWait;
-            private readonly Func<int, Exception?, Context, TimeSpan> sleepDurationProvider;
             private readonly ILogger? logger;
             private readonly RetryHandler.OnRetryHandler? onRetryHandler;
             private readonly RetryHandler.OnRetryHandlerAsync? onRetryHandlerAsync;
@@ -481,11 +563,9 @@ public class RetryPolicyBuilder
             /// <inheritdoc/>
             public RetryPolicyBuilder PolicyBuilderBase { get; }
 
-            public PolicyBuilderBuild(PolicyBuilderWait builderWait, Func<int, Exception?, Context, TimeSpan> sleepDurationProvider, ILogger? logger, RetryHandler.OnRetryHandler? onRetry, RetryHandler.OnRetryHandlerAsync? onRetryAsync)
+            public PolicyBuilderBuild(PolicyBuilderWait builderWait, ILogger? logger, RetryHandler.OnRetryHandler? onRetry, RetryHandler.OnRetryHandlerAsync? onRetryAsync)
             {
-                ArgumentNullException.ThrowIfNull(sleepDurationProvider);
                 this.builderWait = builderWait;
-                this.sleepDurationProvider = sleepDurationProvider;
                 this.logger = logger;
                 this.onRetryHandler = onRetry;
                 this.onRetryHandlerAsync = onRetryAsync;
@@ -528,19 +608,31 @@ public class RetryPolicyBuilder
             /// <inheritdoc/>
             ISyncPolicy IPolicyBuilderBuild.SyncBuildPolicy()
             {
-                var waitProvider = sleepDurationProvider;
+                var maxRetryCount = builderWait.sleepDurationProvider.Provider?.MaxRetryCount;
+                var waitProvider = builderWait.sleepDurationProvider.Provider?.SleepDurationProvider;
                 var onRetryProvider = OnRetryHandler(logger, onRetryHandler);
 
-                return builderWait.builderBase.policyBuilder.WaitAndRetry(builderWait.maxRetryCount, (attempt, ctx) => waitProvider(attempt, default, ctx), onRetryProvider);
+                return builderWait.sleepDurationProvider.ProviderType switch
+                {
+                    SleepDurationProvider.Type.List => builderWait.builderBase.policyBuilder.WaitAndRetry(builderWait.sleepDurationProvider.SleepDurations, onRetryProvider),
+                    SleepDurationProvider.Type.Provider => builderWait.builderBase.policyBuilder.WaitAndRetry(maxRetryCount!.Value, waitProvider!, onRetryProvider),
+                    _ => throw new NotSupportedException(),
+                };
             }
 
             /// <inheritdoc/>
             IAsyncPolicy IPolicyBuilderBuild.AsyncBuildPolicy()
             {
-                var waitProvider = sleepDurationProvider;
+                var maxRetryCount = builderWait.sleepDurationProvider.Provider?.MaxRetryCount;
+                var waitProvider = builderWait.sleepDurationProvider.Provider?.SleepDurationProvider;
                 var onRetryProvider = OnRetryHandlerAsync(logger, onRetryHandler, onRetryHandlerAsync);
 
-                return builderWait.builderBase.policyBuilder.WaitAndRetryAsync(builderWait.maxRetryCount, waitProvider, onRetryProvider);
+                return builderWait.sleepDurationProvider.ProviderType switch
+                {
+                    SleepDurationProvider.Type.List => builderWait.builderBase.policyBuilder.WaitAndRetryAsync(builderWait.sleepDurationProvider.SleepDurations, onRetryProvider),
+                    SleepDurationProvider.Type.Provider => builderWait.builderBase.policyBuilder.WaitAndRetryAsync(maxRetryCount!.Value, waitProvider!, onRetryProvider),
+                    _ => throw new NotSupportedException(),
+                };
             }
 
             /// <inheritdoc/>
@@ -555,7 +647,6 @@ public class RetryPolicyBuilder
         private readonly struct PolicyBuilderBuild<TResult> : IPolicyBuilderBuild<TResult>
         {
             private readonly PolicyBuilderWait<TResult> builderWait;
-            private readonly Func<int, DelegateResult<TResult>, Context, TimeSpan> sleepDurationProvider;
             private readonly ILogger? logger;
             private readonly RetryHandler.OnRetryHandler<TResult>? onRetryHandler;
             private readonly RetryHandler.OnRetryHandlerAsync<TResult>? onRetryHandlerAsync;
@@ -563,11 +654,9 @@ public class RetryPolicyBuilder
             /// <inheritdoc/>
             public RetryPolicyBuilder PolicyBuilderBase { get; }
 
-            public PolicyBuilderBuild(PolicyBuilderWait<TResult> builderWait, Func<int, DelegateResult<TResult>, Context, TimeSpan> sleepDurationProvider, ILogger? logger, RetryHandler.OnRetryHandler<TResult>? onRetry, RetryHandler.OnRetryHandlerAsync<TResult>? onRetryAsync)
+            public PolicyBuilderBuild(PolicyBuilderWait<TResult> builderWait, ILogger? logger, RetryHandler.OnRetryHandler<TResult>? onRetry, RetryHandler.OnRetryHandlerAsync<TResult>? onRetryAsync)
             {
-                ArgumentNullException.ThrowIfNull(sleepDurationProvider);
                 this.builderWait = builderWait;
-                this.sleepDurationProvider = sleepDurationProvider;
                 this.logger = logger;
                 this.onRetryHandler = onRetry;
                 this.onRetryHandlerAsync = onRetryAsync;
@@ -589,7 +678,7 @@ public class RetryPolicyBuilder
                 };
             }
 
-            //private static Action<DelegateResult<TResult>, TimeSpan, int, Context> OnRetryHandler(ILogger? logger, RetryHandler.OnRetryHandler<TResult>>? onRetryHandler)
+            //private static Action<DelegateResult<TResult>, TimeSpan, int, Context> OnRetryHandler(ILogger? logger, RetryHandler.OnRetryHandler<TResult>? onRetryHandler)
             //{
             //    var genericHandler = onRetryHandler ?? new((outcome, timeSpan, retryCount, correlationId, caller) => { });
 
@@ -619,19 +708,31 @@ public class RetryPolicyBuilder
             ///// <inheritdoc/>
             //ISyncPolicy<TResult> IPolicyBuilderBuild<TResult>.BuildPolicy()
             //{
-            //    var waitProvider = sleepDurationProvider;
+            //    var maxRetryCount = builderWait.sleepDurationProvider.GenericProvider?.MaxRetryCount;
+            //    var waitProvider = builderWait.sleepDurationProvider.GenericProvider?.SleepDurationProvider;
             //    var onRetryProvider = OnRetryHandler(logger, onRetryHandler);
 
-            //    return builderWait.builderBase.policyBuilder.WaitAndRetry(builderWait.retryCount, waitProvider, onRetryProvider);
+            //    return builderWait.sleepDurationProvider.ProviderType switch
+            //    {
+            //        SleepDurationProvider.Type.List => builderWait.builderBase.policyBuilder.WaitAndRetry(builderWait.sleepDurationProvider.SleepDurations, onRetryProvider),
+            //        SleepDurationProvider.Type.GenericProvider => builderWait.builderBase.policyBuilder.WaitAndRetry(maxRetryCount!.Value, waitProvider!, onRetryProvider),
+            //        _ => throw new NotSupportedException(),
+            //    };
             //}
 
             /// <inheritdoc/>
             IAsyncPolicy<TResult> IPolicyBuilderBuild<TResult>.AsyncBuildPolicy()
             {
-                var waitProvider = sleepDurationProvider;
+                var maxRetryCount = builderWait.sleepDurationProvider.GenericProvider?.MaxRetryCount;
+                var waitProvider = builderWait.sleepDurationProvider.GenericProvider?.SleepDurationProvider;
                 var onRetryProvider = OnRetryHandlerAsync(logger, onRetryHandler, onRetryHandlerAsync);
 
-                return builderWait.builderBase.policyBuilder.WaitAndRetryAsync(builderWait.maxRetryCount, waitProvider, onRetryProvider);
+                return builderWait.sleepDurationProvider.ProviderType switch
+                {
+                    SleepDurationProvider.Type.List => builderWait.builderBase.policyBuilder.WaitAndRetryAsync(builderWait.sleepDurationProvider.SleepDurations, onRetryProvider),
+                    SleepDurationProvider.Type.GenericProvider => builderWait.builderBase.policyBuilder.WaitAndRetryAsync(maxRetryCount!.Value, waitProvider!, onRetryProvider),
+                    _ => throw new NotSupportedException(),
+                };
             }
 
             ///// <inheritdoc/>

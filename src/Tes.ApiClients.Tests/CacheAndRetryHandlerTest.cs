@@ -21,11 +21,9 @@ public class CacheAndRetryHandlerTest
     [TestInitialize]
     public void SetUp()
     {
-        var mockOptions = new Mock<IOptions<RetryPolicyOptions>>();
         appCache = new MemoryCache(new MemoryCacheOptions());
         mockInstanceToRetry = new Mock<object>();
-        mockOptions.SetupGet(x => x.Value).Returns(new RetryPolicyOptions { ExponentialBackOffExponent = 1, MaxRetryCount = MaxRetryCount });
-        var cachingRetryHandler = new CachingRetryPolicyBuilder(appCache, mockOptions.Object);
+        var cachingRetryHandler = new CachingRetryPolicyBuilder(appCache, Options.Create(new RetryPolicyOptions { ExponentialBackOffExponent = 1, MaxRetryCount = MaxRetryCount }));
 
         cachingAsyncHttpResponseMessagePolicy = cachingRetryHandler
             .DefaultRetryHttpResponseMessagePolicyBuilder()

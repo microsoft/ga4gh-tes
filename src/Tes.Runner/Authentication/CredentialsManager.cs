@@ -5,6 +5,7 @@ using Azure.Core;
 using Azure.Identity;
 using Microsoft.Extensions.Logging;
 using Polly;
+using Polly.Contrib.WaitAndRetry;
 using Polly.Retry;
 using Tes.Runner.Exceptions;
 using Tes.Runner.Models;
@@ -17,23 +18,22 @@ namespace Tes.Runner.Authentication
         private readonly ILogger logger = PipelineLoggerFactory.Create<CredentialsManager>();
 
         private readonly RetryPolicy retryPolicy;
-        private const int MaxRetryCount = 7;
-        private const int ExponentialBackOffExponent = 2;
+        private const int MaxRetryCount = 14;
 
         public CredentialsManager()
         {
             retryPolicy = Policy
                     .Handle<Exception>()
-                    .WaitAndRetry(MaxRetryCount,
-                    SleepDurationHandler);
-        }
-
-        private TimeSpan SleepDurationHandler(int attempt)
-        {
-            logger.LogInformation("Attempt {Attempt} to get token credential", attempt);
-            var duration = TimeSpan.FromSeconds(Math.Pow(ExponentialBackOffExponent, attempt));
-            logger.LogInformation("Waiting {Duration} before retrying", duration);
-            return duration;
+                    .WaitAndRetry(
+                        sleepDurations: Backoff.DecorrelatedJitterBackoffV2(
+                                medianFirstRetryDelay: TimeSpan.FromSeconds(1),
+                                retryCount: MaxRetryCount)
+                            .Select(s => TimeSpan.FromTicks(Math.Min(s.Ticks, TimeSpan.FromMinutes(9).Ticks))),
+                        onRetry: (exception, duration, attempt, _) =>
+                        {
+                            logger.LogInformation("Attempt {Attempt} to get token credential", attempt);
+                            logger.LogInformation("Waiting {Duration} before retrying", duration);
+                        });
         }
 
         public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default)

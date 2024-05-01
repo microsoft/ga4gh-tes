@@ -8,6 +8,7 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Polly.Contrib.WaitAndRetry;
 using Tes.Runner.Authentication;
 using Tes.Runner.Logs;
 using Tes.Runner.Models;
@@ -47,7 +48,7 @@ namespace Tes.Runner.Docker
         // Retry for ~91s for ACR 1-minute throttle window
         internal static RetryPolicyOptions dockerPullRetryPolicyOptions = new()
         {
-            MaxRetryCount = 6,
+            MaxRetryCount = 14,
             ExponentialBackOffExponent = 2
         };
 
@@ -66,7 +67,10 @@ namespace Tes.Runner.Docker
                     .Handle(IsNotAuthFailure)
                     .Or<IOException>()
                     .Or<HttpRequestException>(e => e.InnerException is IOException || e.StatusCode >= HttpStatusCode.InternalServerError || e.StatusCode == HttpStatusCode.RequestTimeout))
-                .WithRetryPolicyOptionsWait()
+                .WithEnumeratedBackoffWait(Backoff.DecorrelatedJitterBackoffV2(
+                                medianFirstRetryDelay: TimeSpan.FromSeconds(1),
+                                retryCount: dockerPullRetryPolicyOptions.MaxRetryCount)
+                            .Select(s => TimeSpan.FromTicks(Math.Min(s.Ticks, TimeSpan.FromMinutes(9).Ticks))))
                 .SetOnRetryBehavior(logger)
                 .AsyncBuild();
         }
