@@ -246,23 +246,18 @@ namespace TesApi.Controllers
         [ValidateModelState]
         [SwaggerOperation("GetTask", "Get a single task, based on providing the exact task ID string.")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesTask), description: "")]
-        public virtual async Task<IActionResult> GetTaskAsync([FromRoute][Required] string id, [FromQuery] string view, CancellationToken cancellationToken)
+        public virtual async Task<IActionResult> GetTaskAsync([FromRoute][Required] string id, [FromQuery] TesView? view, CancellationToken cancellationToken)
         {
             if (!TesTask.IsValidId(id))
             {
                 return BadRequest("Invalid ID");
             }
 
-            TesView viewEnum;
+            var viewEnum = view ?? TesView.MINIMAL;
 
-            try
+            if (!Enum.GetValues<TesView>().Contains(viewEnum))
             {
-                viewEnum = ParseView(view);
-            }
-            catch (ArgumentOutOfRangeException exc)
-            {
-                logger.LogError(exc, "{ErrorMessage}", exc.Message);
-                return BadRequest(exc.Message);
+                return BadRequest($"Invalid view parameter value. If provided, it must be one of: {string.Join(", ", Enum.GetNames(typeof(TesView)))}");
             }
 
             TesTask tesTask = null;
@@ -294,15 +289,13 @@ namespace TesApi.Controllers
         [ValidateModelState]
         [SwaggerOperation("ListTasks", "List tasks tracked by the TES server. This includes queued, active and completed tasks. How long completed tasks are stored by the system may be dependent on the underlying implementation.")]
         [SwaggerResponse(statusCode: 200, type: typeof(TesListTasksResponse), description: "")]
-        public virtual async Task<IActionResult> ListTasksAsync([FromQuery(Name = "name_prefix")] string namePrefix, [FromQuery] string state, [FromQuery(Name = "tag_key")] string[] tagKeys, [FromQuery(Name = "tag_value")] string[] tagValues, [FromQuery(Name = "page_size")] int? pageSize, [FromQuery(Name = "page_token")] string pageToken, [FromQuery] string view, CancellationToken cancellationToken)
+        public virtual async Task<IActionResult> ListTasksAsync([FromQuery(Name = "name_prefix")] string namePrefix, [FromQuery] TesState? state, [FromQuery(Name = "tag_key")] string[] tagKeys, [FromQuery(Name = "tag_value")] string[] tagValues, [FromQuery(Name = "page_size")] int? pageSize, [FromQuery(Name = "page_token")] string pageToken, [FromQuery] TesView? view, CancellationToken cancellationToken)
         {
             TesState? stateEnum;
 
-            try
-            {
-                stateEnum = string.IsNullOrEmpty(state) ? null : Enum.Parse<TesState>(state, true);
-            }
-            catch
+            stateEnum = state;
+
+            if (state is not null && !Enum.GetValues<TesState>().Contains(state.Value))
             {
                 logger.LogError(@"Invalid state parameter value. If provided, it must be one of: {StateAllowedValues}", string.Join(", ", Enum.GetNames(typeof(TesState))));
                 return BadRequest($"Invalid state parameter value. If provided, it must be one of: {string.Join(", ", Enum.GetNames(typeof(TesState)))}");
@@ -348,16 +341,11 @@ namespace TesApi.Controllers
 
             var (rawPredicate, predicate) = GenerateSearchPredicates(repository, stateEnum, namePrefix, tags);
 
-            TesView viewEnum;
+            var viewEnum = view ?? TesView.MINIMAL;
 
-            try
+            if (!Enum.GetValues<TesView>().Contains(viewEnum))
             {
-                viewEnum = ParseView(view);
-            }
-            catch (ArgumentOutOfRangeException exc)
-            {
-                logger.LogError(exc, "{ErrorMessage}", exc.Message);
-                return BadRequest(exc.Message);
+                return BadRequest($"Invalid view parameter value. If provided, it must be one of: {string.Join(", ", Enum.GetNames(typeof(TesView)))}");
             }
 
             string nextPageToken = default;
@@ -473,15 +461,14 @@ namespace TesApi.Controllers
             }
         }
 
-        private async ValueTask<bool> TryRemoveItemFromCacheAsync(TesTask tesTask, string view, CancellationToken cancellationToken)
+        private async ValueTask<bool> TryRemoveItemFromCacheAsync(TesTask tesTask, TesView? view, CancellationToken cancellationToken)
         {
             try
             {
                 if (tesTask.State == TesState.COMPLETEEnum
                    || tesTask.State == TesState.CANCELEDEnum
                    || ((tesTask.State == TesState.SYSTEMERROREnum || tesTask.State == TesState.EXECUTORERROREnum)
-                        && Enum.TryParse<TesView>(view, true, out var tesView)
-                        && tesView == TesView.FULL))
+                        && view == TesView.FULL))
                 {
                     // Cache optimization:
                     // If a task completed/canceled with no errors, Cromwell will not call again
@@ -496,18 +483,6 @@ namespace TesApi.Controllers
             }
 
             return false;
-        }
-
-        private static TesView ParseView(string view)
-        {
-            try
-            {
-                return string.IsNullOrEmpty(view) ? TesView.MINIMAL : Enum.Parse<TesView>(view, true);
-            }
-            catch
-            {
-                throw new ArgumentOutOfRangeException(nameof(view), $"Invalid view parameter value. If provided, it must be one of: {string.Join(", ", Enum.GetNames(typeof(TesView)))}");
-            }
         }
 
         private static IActionResult TesJsonResult(object value, TesView viewEnum)

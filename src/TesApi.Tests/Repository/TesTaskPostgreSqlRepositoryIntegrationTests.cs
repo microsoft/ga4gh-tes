@@ -148,7 +148,7 @@ namespace Tes.Repository.Tests
 
                 do
                 {
-                    var result = await controller.ListTasksAsync(null, null, null, null, 2047, pageToken, "FULL", default);
+                    var result = await controller.ListTasksAsync(null, null, null, null, 2047, pageToken, TesView.FULL, default);
                     var jr = (JsonResult)result;
                     var content = (TesListTasksResponse)jr.Value;
                     pageToken = content.NextPageToken;

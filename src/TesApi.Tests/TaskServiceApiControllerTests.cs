@@ -323,7 +323,7 @@ namespace TesApi.Tests
                     .ReturnsAsync(false));
             var controller = services.GetT();
 
-            var result = await controller.GetTaskAsync(tesTaskId, "MINIMAL", CancellationToken.None) as NotFoundObjectResult;
+            var result = await controller.GetTaskAsync(tesTaskId, TesView.MINIMAL, CancellationToken.None) as NotFoundObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(404, result.StatusCode);
@@ -344,7 +344,7 @@ namespace TesApi.Tests
                 .ReturnsAsync(true));
             var controller = services.GetT();
 
-            var result = await controller.GetTaskAsync(tesTask.Id, "INVALID", CancellationToken.None) as BadRequestObjectResult;
+            var result = await controller.GetTaskAsync(tesTask.Id, (TesView)(-1), CancellationToken.None) as BadRequestObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(400, result.StatusCode);
@@ -368,7 +368,7 @@ namespace TesApi.Tests
                 .ReturnsAsync(true));
             var controller = services.GetT();
 
-            var result = await controller.GetTaskAsync(tesTask.Id, "MINIMAL", CancellationToken.None) as JsonResult;
+            var result = await controller.GetTaskAsync(tesTask.Id, TesView.MINIMAL, CancellationToken.None) as JsonResult;
 
             Assert.IsNotNull(result);
             services.TesTaskRepository.Verify(x => x.TryGetItemAsync(tesTask.Id, It.IsAny<CancellationToken>(), It.IsAny<Action<TesTask>>()));
@@ -382,7 +382,7 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>();
             var controller = services.GetT();
 
-            var result = await controller.ListTasksAsync(null, null, [], [], 0, null, "BASIC", CancellationToken.None) as BadRequestObjectResult;
+            var result = await controller.ListTasksAsync(null, null, [], [], 0, null, TesView.BASIC, CancellationToken.None) as BadRequestObjectResult;
 
             Assert.IsNotNull(result);
             Assert.AreEqual(400, result.StatusCode);
@@ -406,7 +406,7 @@ namespace TesApi.Tests
                     new("continuation-token=1", tesTasks.Where(i => predicate.Compile().Invoke(i)).Take(pageSize))));
             var controller = services.GetT();
 
-            var result = await controller.ListTasksAsync(namePrefix, null, [], [], 1, null, "BASIC", CancellationToken.None) as JsonResult;
+            var result = await controller.ListTasksAsync(namePrefix, null, [], [], 1, null, TesView.BASIC, CancellationToken.None) as JsonResult;
             var listOfTesTasks = (TesListTasksResponse)result.Value;
 
             Assert.IsNotNull(result);
