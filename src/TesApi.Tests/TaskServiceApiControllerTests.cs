@@ -401,9 +401,9 @@ namespace TesApi.Tests
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
                 r.Setup(repo => repo
                 // string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString predicate, Expression<Func<T, bool>> predicate
-                .GetItemsAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<FormattableString>(), It.IsAny<Expression<Func<TesTask, bool>>>()))
-                .ReturnsAsync((string _1, int pageSize, CancellationToken _2, FormattableString _3, Expression<Func<TesTask, bool>> predicate) =>
-                    new("continuation-token=1", tesTasks.Where(i => predicate.Compile().Invoke(i)).Take(pageSize))));
+                .GetItemsAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<FormattableString>(), It.IsAny<IEnumerable<Expression<Func<TesTask, bool>>>>()))
+                .ReturnsAsync((string _1, int pageSize, CancellationToken _2, FormattableString _3, IEnumerable<Expression <Func<TesTask, bool>>> predicates) =>
+                    new("continuation-token=1", tesTasks.Where(i => predicates.All(p => p.Compile().Invoke(i))).Take(pageSize))));
             var controller = services.GetT();
 
             var result = await controller.ListTasksAsync(namePrefix, null, [], [], 1, null, "BASIC", CancellationToken.None) as JsonResult;
