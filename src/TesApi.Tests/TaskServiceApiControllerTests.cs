@@ -402,7 +402,7 @@ namespace TesApi.Tests
                 r.Setup(repo => repo
                 // string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString predicate, Expression<Func<T, bool>> predicate
                 .GetItemsAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<FormattableString>(), It.IsAny<IEnumerable<Expression<Func<TesTask, bool>>>>()))
-                .ReturnsAsync((string _1, int pageSize, CancellationToken _2, FormattableString _3, IEnumerable<Expression <Func<TesTask, bool>>> predicates) =>
+                .ReturnsAsync((string _1, int pageSize, CancellationToken _2, FormattableString _3, IEnumerable<Expression<Func<TesTask, bool>>> predicates) =>
                     new("continuation-token=1", tesTasks.Where(i => predicates.All(p => p.Compile().Invoke(i))).Take(pageSize))));
             var controller = services.GetT();
 
