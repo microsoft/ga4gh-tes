@@ -774,26 +774,13 @@ namespace TesApi.Web
 
                         if (azureBatchJobAndTaskState.NodeErrorCode is not null)
                         {
-                            if (azureBatchJobAndTaskState.NodeErrorCode == TaskFailureInformationCodes.DiskFull)
+                            return new CombinedBatchTaskInfo
                             {
-                                return new CombinedBatchTaskInfo
-                                {
-                                    BatchTaskState = BatchTaskState.NodeFailedDuringStartupOrExecution,
-                                    FailureReason = azureBatchJobAndTaskState.NodeErrorCode,
-                                    SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
-                                    Pool = azureBatchJobAndTaskState.PoolId
-                                };
-                            }
-                            else
-                            {
-                                return new CombinedBatchTaskInfo
-                                {
-                                    BatchTaskState = BatchTaskState.NodeFailedDuringStartupOrExecution,
-                                    FailureReason = BatchTaskState.NodeFailedDuringStartupOrExecution.ToString(),
-                                    SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
-                                    Pool = azureBatchJobAndTaskState.PoolId
-                                };
-                            }
+                                BatchTaskState = BatchTaskState.NodeFailedDuringStartupOrExecution,
+                                FailureReason = azureBatchJobAndTaskState.NodeErrorCode,
+                                SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
+                                Pool = azureBatchJobAndTaskState.PoolId
+                            };
                         }
 
                         break;
