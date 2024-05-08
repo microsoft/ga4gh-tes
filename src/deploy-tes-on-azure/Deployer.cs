@@ -804,12 +804,12 @@ namespace TesDeployer
             var completedTask = await tesClient.CreateAndWaitTilDoneAsync(testTesTask, cts.Token);
             ConsoleEx.WriteLine($"TES Task State: {completedTask.State}");
 
-            if (completedTask.State != TesState.COMPLETEEnum)
+            if (completedTask.State != TesState.COMPLETE)
             {
                 ConsoleEx.WriteLine($"Failure reason: {completedTask.FailureReason}");
             }
 
-            return completedTask.State == TesState.COMPLETEEnum;
+            return completedTask.State == TesState.COMPLETE;
         }
 
         private async Task<bool> RunTestTaskAsync(string tesEndpoint, bool isPreemptible)

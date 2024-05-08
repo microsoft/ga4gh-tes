@@ -241,7 +241,7 @@ namespace TesApi.Tests.Runner
                     Streamable = true,
                     Path = "/cromwell-executions/file",
                     Url = "/cromwell-executions/file",
-                    Type = TesFileType.FILEEnum
+                    Type = TesFileType.FILE
                 }
             };
 
@@ -290,7 +290,7 @@ namespace TesApi.Tests.Runner
                     Name = "local input",
                     Path = "/cromwell-executions/file",
                     Url = "/cromwell-executions/file",
-                    Type = TesFileType.FILEEnum
+                    Type = TesFileType.FILE
                 }
             };
 
@@ -315,7 +315,7 @@ namespace TesApi.Tests.Runner
                     Name = "local input",
                     Path = $"/{ExternalStorageAccountName}/cont/file",
                     Url = $"/{ExternalStorageAccountName}/cont/file",
-                    Type = TesFileType.FILEEnum
+                    Type = TesFileType.FILE
                 }
             };
 
@@ -352,14 +352,14 @@ namespace TesApi.Tests.Runner
                 {
                     Name = "additionalInput1",
                     Path = "/additionalInput1",
-                    Type = TesFileType.FILEEnum,
+                    Type = TesFileType.FILE,
                     Url = "http://foo.bar/additionalInput1"
                 },
                 new TesInput
                 {
                     Name = "additionalInput2",
                     Path = "/additionalInput2",
-                    Type = TesFileType.FILEEnum,
+                    Type = TesFileType.FILE,
                     Url = "http://foo.bar/additionalInput2"
                 }
             };

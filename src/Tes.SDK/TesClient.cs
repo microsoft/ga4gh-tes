@@ -207,7 +207,7 @@ namespace Tes.SDK
 
             if (options.State.HasValue)
             {
-                queryBuilder.Append($"&state={TesEnumUtility.GetEnumMemberValue(options.State.Value)}");
+                queryBuilder.Append($"&state={options.State}");
             }
 
             if (!string.IsNullOrWhiteSpace(options.NamePrefix))

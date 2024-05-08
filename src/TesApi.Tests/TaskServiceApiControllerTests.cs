@@ -44,7 +44,7 @@ namespace TesApi.Tests
             Assert.IsNotNull(result);
             services.TesTaskRepository.Verify(x => x.CreateItemAsync(tesTask, It.IsAny<CancellationToken>()));
             Assert.AreEqual(32, tesTask.Id.Length);
-            Assert.AreEqual(TesState.QUEUEDEnum, tesTask.State);
+            Assert.AreEqual(TesState.QUEUED, tesTask.State);
             Assert.IsTrue(tesTask.Resources.BackendParameters.ContainsKey(backend_parameter_key));
             Assert.AreEqual(200, result.StatusCode);
         }
@@ -74,7 +74,7 @@ namespace TesApi.Tests
             Assert.IsNotNull(result);
             services.TesTaskRepository.Verify(x => x.CreateItemAsync(tesTask, It.IsAny<CancellationToken>()));
             Assert.AreEqual(32, tesTask.Id.Length);
-            Assert.AreEqual(TesState.QUEUEDEnum, tesTask.State);
+            Assert.AreEqual(TesState.QUEUED, tesTask.State);
             Assert.IsTrue(tesTask.Resources.BackendParameters.ContainsKey(backend_parameter_key));
             Assert.AreEqual(200, result.StatusCode);
         }
@@ -104,7 +104,7 @@ namespace TesApi.Tests
             Assert.IsNotNull(result);
             services.TesTaskRepository.Verify(x => x.CreateItemAsync(tesTask, It.IsAny<CancellationToken>()));
             Assert.AreEqual(32, tesTask.Id.Length);
-            Assert.AreEqual(TesState.QUEUEDEnum, tesTask.State);
+            Assert.AreEqual(TesState.QUEUED, tesTask.State);
 
             // Unsupported keys should not be persisted
             Assert.IsFalse(tesTask?.Resources?.BackendParameters?.ContainsKey(unsupportedKey));
@@ -209,7 +209,7 @@ namespace TesApi.Tests
             Assert.IsNotNull(result);
             services.TesTaskRepository.Verify(x => x.CreateItemAsync(tesTask, It.IsAny<CancellationToken>()));
             Assert.AreEqual(32, tesTask.Id.Length);
-            Assert.AreEqual(TesState.QUEUEDEnum, tesTask.State);
+            Assert.AreEqual(TesState.QUEUED, tesTask.State);
             Assert.AreEqual(200, result.StatusCode);
         }
 
@@ -219,7 +219,7 @@ namespace TesApi.Tests
         [DataRow("ca8e57a5746f4436b864808b0fbf0a64", 200, null)]
         public async Task CancelTaskAsync_ValidatesIdCorrectly(string testId, int expectedStatusCode, string expectedMessage)
         {
-            var mockTesTask = new TesTask { State = TesState.RUNNINGEnum };
+            var mockTesTask = new TesTask { State = TesState.RUNNING };
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
             {
@@ -256,7 +256,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CancelTaskAsync_ReturnsConflict_ForRepositoryCollision()
         {
-            var mockTesTask = new TesTask { State = TesState.RUNNINGEnum };
+            var mockTesTask = new TesTask { State = TesState.RUNNING };
             var tesTaskId = mockTesTask.CreateId();
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
@@ -284,7 +284,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task CancelTaskAsync_ReturnsEmptyObject()
         {
-            var tesTask = new TesTask() { State = TesState.QUEUEDEnum };
+            var tesTask = new TesTask() { State = TesState.QUEUED };
             tesTask.Id = tesTask.CreateId();
 
             using var services = new TestServices.TestServiceProvider<TaskServiceApiController>(tesTaskRepository: r =>
@@ -297,7 +297,7 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(result);
             Assert.AreEqual(200, result.StatusCode);
-            Assert.AreEqual(TesState.CANCELEDEnum, tesTask.State);
+            Assert.AreEqual(TesState.CANCELED, tesTask.State);
             services.TesTaskRepository.Verify(x => x.UpdateItemAsync(tesTask, It.IsAny<CancellationToken>()));
         }
 
@@ -355,7 +355,7 @@ namespace TesApi.Tests
         {
             var tesTask = new TesTask
             {
-                State = TesState.RUNNINGEnum
+                State = TesState.RUNNING
             };
             tesTask.Id = tesTask.CreateId();
 
@@ -372,7 +372,7 @@ namespace TesApi.Tests
 
             Assert.IsNotNull(result);
             services.TesTaskRepository.Verify(x => x.TryGetItemAsync(tesTask.Id, It.IsAny<CancellationToken>(), It.IsAny<Action<TesTask>>()));
-            Assert.AreEqual(TesState.RUNNINGEnum, tesTask.State);
+            Assert.AreEqual(TesState.RUNNING, tesTask.State);
             Assert.AreEqual(200, result.StatusCode);
         }
 
@@ -391,9 +391,9 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task ListTasks_ReturnsJsonResult()
         {
-            var firstTesTask = new TesTask { Id = "tesTaskId1", State = TesState.COMPLETEEnum, Name = "tesTask", ETag = Guid.NewGuid().ToString() };
-            var secondTesTask = new TesTask { Id = "tesTaskId2", State = TesState.EXECUTORERROREnum, Name = "tesTask2", ETag = Guid.NewGuid().ToString() };
-            var thirdTesTask = new TesTask { Id = "tesTaskId3", State = TesState.EXECUTORERROREnum, Name = "someOtherTask2", ETag = Guid.NewGuid().ToString() };
+            var firstTesTask = new TesTask { Id = "tesTaskId1", State = TesState.COMPLETE, Name = "tesTask", ETag = Guid.NewGuid().ToString() };
+            var secondTesTask = new TesTask { Id = "tesTaskId2", State = TesState.EXECUTOR_ERROR, Name = "tesTask2", ETag = Guid.NewGuid().ToString() };
+            var thirdTesTask = new TesTask { Id = "tesTaskId3", State = TesState.EXECUTOR_ERROR, Name = "someOtherTask2", ETag = Guid.NewGuid().ToString() };
             var namePrefix = "tesTask";
 
             var tesTasks = new[] { firstTesTask, secondTesTask, thirdTesTask };
@@ -479,7 +479,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = [new() { Image = "ubuntu" }],
-                Inputs = [new() { Type = TesFileType.FILEEnum, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" }],
+                Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" }],
                 Outputs =
                 [
                     new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" },
@@ -508,7 +508,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = [new() { Image = "ubuntu" }],
-                Inputs = [new() { Type = TesFileType.FILEEnum, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" }],
+                Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" }],
                 Outputs =
                 [
                     new() { Name = "commandScript", Path = $"/cromwell-executions/test/{cromwellWorkflowId}/call-hello/test-subworkflow/{cromwellSubWorkflowId}/call-subworkflow/shard-8/execution/script" },
@@ -537,7 +537,7 @@ namespace TesApi.Tests
             {
                 Description = taskDescription,
                 Executors = [new() { Image = "ubuntu" }],
-                Inputs = [new() { Type = TesFileType.FILEEnum, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"{path}/script" }],
+                Inputs = [new() { Type = TesFileType.FILE, Description = "BackendJobDescriptorKey_CommandCallNode_wf_hello.hello.commandScript", Name = "commandScript", Path = $"{path}/script" }],
                 Outputs =
                 [
                     new() { Name = "commandScript", Path = $"{path}/script" },

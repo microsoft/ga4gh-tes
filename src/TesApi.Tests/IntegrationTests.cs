@@ -61,7 +61,7 @@ namespace TesApi.Tests
             foreach (var tasksWithState in completedTasks)
             {
                 Console.WriteLine($"State: {tasksWithState.Key}: Count: {tasksWithState.Value.Count}");
-                if (!new[] { TesState.COMPLETEEnum, TesState.CANCELEDEnum }.Contains(tasksWithState.Key))
+                if (!new[] { TesState.COMPLETE, TesState.CANCELED }.Contains(tasksWithState.Key))
                 {
                     var tasksByCode = tasksWithState.Value.Select(ParseOutLogs).GroupBy(t => t.Code).ToDictionary(g => g.Key, g => g.Select(t => t.Logs));
                     foreach (var tasksWithCode in tasksByCode)
