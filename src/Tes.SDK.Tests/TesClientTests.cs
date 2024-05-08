@@ -105,7 +105,7 @@ namespace Tes.SDK.Tests
                 Command = ["/bin/sh", "-c", "cat /proc/sys/kernel/random/uuid"],
             });
 
-            task.State = (TesState)tesStateEnumValues.GetValue(Random.Shared.Next(tesStateEnumValues.Length));
+            task.State = (TesState)tesStateEnumValues.GetValue(Random.Shared.Next(tesStateEnumValues.Length))!;
             return task;
         }
     }
