@@ -237,6 +237,7 @@ namespace Tes.Repository
                     return this;
                 }
 
+                // Max needed byte buffer size for any given Base64 string is Math.Ceiling(base64String.Length / 4.0) * 3
                 var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent((int)Math.Ceiling(previous.Length / 4.0) * 3);
 
                 try
