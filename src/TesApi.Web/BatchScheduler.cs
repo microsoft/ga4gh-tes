@@ -960,7 +960,7 @@ namespace TesApi.Web
                             Url = (await storageAccessProvider.MapLocalPathToSasUrlAsync(b.Uri.AbsoluteUri,
                                 cancellationToken, getContainerSas: true)).AbsoluteUri,
                             Name = Path.GetFileName(b.Path),
-                            Type = TesFileType.FILEEnum
+                            Type = TesFileType.FILE
                         })
                         .ToListAsync(cancellationToken);
                 }
@@ -993,7 +993,7 @@ namespace TesApi.Web
                 throw new TesException("InvalidInputFilePath", "One of Input Url or Content must be set");
             }
 
-            if (inputFile.Type == TesFileType.DIRECTORYEnum)
+            if (inputFile.Type == TesFileType.DIRECTORY)
             {
                 throw new TesException("InvalidInputFilePath", "Directory input is not supported.");
             }

@@ -1040,7 +1040,7 @@ namespace TesApi.Tests
             tesTask.Inputs.Add(new()
             {
                 Url = "/storageaccount1/container1/directory",
-                Type = TesFileType.DIRECTORYEnum,
+                Type = TesFileType.DIRECTORY,
                 Path = "/directory"
             });
 
@@ -1068,7 +1068,7 @@ namespace TesApi.Tests
 
             tesTask.Inputs =
             [
-                new() { Url = script[0], Path = scriptPath, Type = TesFileType.FILEEnum, Name = "commandScript", Description = "test.commandScript", Content = script[1] },
+                new() { Url = script[0], Path = scriptPath, Type = TesFileType.FILE, Name = "commandScript", Description = "test.commandScript", Content = script[1] },
             ];
 
             // fixup output urls
@@ -1106,7 +1106,7 @@ namespace TesApi.Tests
                 var uri = new UriBuilder(executionDirectoryUri);
                 uri.Path = uri.Path.TrimEnd('/') + $"/{fileName}";
 
-                TesInput writeInput = new() { Url = uri.Uri.AbsoluteUri, Path = Path.Combine(Path.GetDirectoryName(scriptPath), fileName).Replace('\\', '/'), Type = TesFileType.FILEEnum, Name = "write_", Content = null };
+                TesInput writeInput = new() { Url = uri.Uri.AbsoluteUri, Path = Path.Combine(Path.GetDirectoryName(scriptPath), fileName).Replace('\\', '/'), Type = TesFileType.FILE, Name = "write_", Content = null };
                 executionDirectoryBlobs.Add(CloudBlobFromTesInput(writeInput));
 
                 if (fileIsInInputs)
