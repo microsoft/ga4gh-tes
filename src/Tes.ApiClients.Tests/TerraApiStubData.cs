@@ -10,6 +10,7 @@ public class TerraApiStubData
 {
     public const string LandingZoneApiHost = "https://landingzone.host";
     public const string WsmApiHost = "https://wsm.host";
+    public const string SamApiHost = "https://sam.host";
     public const string ResourceGroup = "mrg-terra-dev-previ-20191228";
     public const string WorkspaceAccountName = "lzaccount1";
     public const string SasToken = "SASTOKENSTUB=";
@@ -18,8 +19,12 @@ public class TerraApiStubData
     public const string WorkspaceStorageContainerName = $"sc-{WorkspaceIdValue}";
     public const string WsmGetSasResponseStorageUrl = $"https://{WorkspaceAccountName}.blob.core.windows.net/{WorkspaceStorageContainerName}";
 
+    public const string TerraPetName = "pet-2674060218359759651b0";
+
+    public Guid TenantId { get; } = Guid.NewGuid();
     public Guid LandingZoneId { get; } = Guid.NewGuid();
     public Guid SubscriptionId { get; } = Guid.NewGuid();
+    public Guid BillingProfileId { get; } = Guid.NewGuid();
     public Guid ContainerResourceId { get; } = Guid.NewGuid();
     public Guid WorkspaceId { get; } = Guid.Parse(WorkspaceIdValue);
 
@@ -28,6 +33,8 @@ public class TerraApiStubData
     public string BatchAccountId =>
         $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Batch/batchAccounts/{BatchAccountName}";
 
+    public string ManagedIdentityObjectId => 
+        $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{TerraPetName}";
     public string PoolId => "poolId";
 
     public Guid GetWorkspaceIdFromContainerName(string containerName)
@@ -276,6 +283,27 @@ public class TerraApiStubData
     ""dedicatedCoreQuota"": 350,
     ""lowPriorityCoreQuota"": 100
   }}
+}}";
+    }
+
+    public string GetSamActionManagedIdentityApiResponseInJson()
+    {
+      return $@"{{
+  ""id"": {{
+    ""resourceId"": {{
+      ""resourceTypeName"": ""azure_managed_identity"",
+      ""resourceId"": ""{BillingProfileId}""
+    }},
+    ""action"": ""identify"",
+    ""billingProfileId"": ""{BillingProfileId}""
+  }},
+  ""objectId"": ""{ManagedIdentityObjectId}"",
+  ""displayName"": ""my nice action identity"",
+  ""managedResourceGroupCoordinates"": {{
+    ""tenantId"": ""{TenantId}"",
+    ""subscriptionId"": ""{SubscriptionId}"",
+    ""managedResourceGroupName"": ""{ResourceGroup}""
+  }}       
 }}";
     }
 
