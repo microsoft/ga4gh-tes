@@ -395,7 +395,7 @@ namespace TesApi.Web.Runner
             {
                 Path = inputPath,
                 Url = inputUrl,
-                Type = TesFileType.FILEEnum,
+                Type = TesFileType.FILE,
             };
         }
 
@@ -439,8 +439,8 @@ namespace TesApi.Web.Runner
         {
             return outputType switch
             {
-                TesFileType.FILEEnum => FileType.File,
-                TesFileType.DIRECTORYEnum => FileType.Directory,
+                TesFileType.FILE => FileType.File,
+                TesFileType.DIRECTORY => FileType.Directory,
                 _ => FileType.File
             };
         }

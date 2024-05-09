@@ -17,15 +17,15 @@ namespace Tes.Models
     {
         public static readonly List<TesState> TerminalStates =
         [
-            TesState.COMPLETEEnum,
-            TesState.EXECUTORERROREnum,
-            TesState.SYSTEMERROREnum,
-            TesState.CANCELEDEnum,
+            TesState.COMPLETE,
+            TesState.EXECUTOR_ERROR,
+            TesState.SYSTEM_ERROR,
+            TesState.CANCELED,
         ];
 
         public static readonly List<TesState> TerminalStatesWithPreempted = new(TerminalStates)
         {
-            TesState.PREEMPTEDEnum,
+            TesState.PREEMPTED,
         };
 
         /// <summary>

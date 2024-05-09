@@ -167,7 +167,7 @@ namespace TesApi.Web
                     {
                         if (++tesTask.ErrorCount > 3) // TODO: Should we increment this for exceptions here (current behaviour) or the attempted executions on the batch?
                         {
-                            tesTask.State = TesState.SYSTEMERROREnum;
+                            tesTask.State = TesState.SYSTEM_ERROR;
                             tesTask.EndTime = DateTimeOffset.UtcNow;
                             tesTask.SetFailureReason(AzureBatchTaskState.UnknownError, exc.Message, exc.StackTrace);
                         }
@@ -208,13 +208,13 @@ namespace TesApi.Web
 
                         switch (tesTask.State)
                         {
-                            case TesState.CANCELEDEnum:
-                            case TesState.COMPLETEEnum:
+                            case TesState.CANCELED:
+                            case TesState.COMPLETE:
                                 hasEnded = true;
                                 break;
 
-                            case TesState.EXECUTORERROREnum:
-                            case TesState.SYSTEMERROREnum:
+                            case TesState.EXECUTOR_ERROR:
+                            case TesState.SYSTEM_ERROR:
                                 hasErrored = true;
                                 hasEnded = true;
                                 break;
@@ -270,7 +270,7 @@ namespace TesApi.Web
 
             if (BatchScheduler.NeedPoolFlush)
             {
-                var pools = (await Repository.GetItemsAsync(task => task.State == TesState.INITIALIZINGEnum || task.State == TesState.RUNNINGEnum, cancellationToken)).Select(task => task.PoolId).Distinct();
+                var pools = (await Repository.GetItemsAsync(task => task.State == TesState.INITIALIZING || task.State == TesState.RUNNING, cancellationToken)).Select(task => task.PoolId).Distinct();
                 await BatchScheduler.FlushPoolsAsync(pools, cancellationToken);
             }
 

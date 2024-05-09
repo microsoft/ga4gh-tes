@@ -63,7 +63,7 @@ namespace TesApi.Web
         {
             var query = new Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>>(
                 async token => (await Repository.GetItemsAsync(
-                    predicate: t => t.State == TesState.QUEUEDEnum,
+                    predicate: t => t.State == TesState.QUEUED,
                     cancellationToken: token))
                 .OrderBy(t => t.CreationTime)
                 .ToAsyncEnumerable());
@@ -82,7 +82,7 @@ namespace TesApi.Web
         {
             var query = new Func<CancellationToken, ValueTask<IAsyncEnumerable<TesTask>>>(
                 async token => (await Repository.GetItemsAsync(
-                    predicate: t => t.State == TesState.CANCELINGEnum,
+                    predicate: t => t.State == TesState.CANCELING,
                     cancellationToken: token))
                 .OrderByDescending(t => t.CreationTime)
                 .ToAsyncEnumerable());

@@ -181,22 +181,22 @@ namespace TesApi.Tests
             ];
 
             var state = await GetNewTesTaskStateAsync(new TesResources { Preemptible = true, BackendParameters = new() { { "vm_size", "VmSize1" } } }, azureProxyReturnValues);
-            Assert.AreEqual(TesState.INITIALIZINGEnum, state);
+            Assert.AreEqual(TesState.INITIALIZING, state);
 
             state = await GetNewTesTaskStateAsync(new TesResources { Preemptible = true, BackendParameters = new() { { "vm_size", "VMSIZE1" } } }, azureProxyReturnValues);
-            Assert.AreEqual(TesState.INITIALIZINGEnum, state);
+            Assert.AreEqual(TesState.INITIALIZING, state);
 
             state = await GetNewTesTaskStateAsync(new TesResources { Preemptible = true, BackendParameters = new() { { "vm_size", "VmSize1" } }, CpuCores = 1000, RamGb = 100000, DiskGb = 1000000 }, azureProxyReturnValues);
-            Assert.AreEqual(TesState.INITIALIZINGEnum, state);
+            Assert.AreEqual(TesState.INITIALIZING, state);
 
             state = await GetNewTesTaskStateAsync(new TesResources { Preemptible = true, BackendParameters = [], CpuCores = 1000, RamGb = 100000, DiskGb = 1000000 }, azureProxyReturnValues);
-            Assert.AreEqual(TesState.SYSTEMERROREnum, state);
+            Assert.AreEqual(TesState.SYSTEM_ERROR, state);
 
             state = await GetNewTesTaskStateAsync(new TesResources { Preemptible = false, BackendParameters = new() { { "vm_size", "VmSize1" } } }, azureProxyReturnValues);
-            Assert.AreEqual(TesState.SYSTEMERROREnum, state);
+            Assert.AreEqual(TesState.SYSTEM_ERROR, state);
 
             state = await GetNewTesTaskStateAsync(new TesResources { Preemptible = true, BackendParameters = new() { { "vm_size", "VmSize3" } } }, azureProxyReturnValues);
-            Assert.AreEqual(TesState.SYSTEMERROREnum, state);
+            Assert.AreEqual(TesState.SYSTEM_ERROR, state);
         }
 
         [TestCategory("TES 1.1")]
@@ -238,10 +238,10 @@ namespace TesApi.Tests
                 new() { VmSize = "VmSize2", LowPriority = true, VCpusAvailable = 2, MemoryInGiB = 8, ResourceDiskSizeInGiB = 40, PricePerHour = 2 }
             ];
 
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 1, RamGb = 1, DiskGb = 10, Preemptible = false }, azureProxyReturnValues));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 4, RamGb = 1, DiskGb = 10, Preemptible = true }, azureProxyReturnValues));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 1, RamGb = 10, DiskGb = 10, Preemptible = true }, azureProxyReturnValues));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 1, RamGb = 1, DiskGb = 50, Preemptible = true }, azureProxyReturnValues));
+            Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 1, RamGb = 1, DiskGb = 10, Preemptible = false }, azureProxyReturnValues));
+            Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 4, RamGb = 1, DiskGb = 10, Preemptible = true }, azureProxyReturnValues));
+            Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 1, RamGb = 10, DiskGb = 10, Preemptible = true }, azureProxyReturnValues));
+            Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 1, RamGb = 1, DiskGb = 50, Preemptible = true }, azureProxyReturnValues));
         }
 
         [TestMethod]
@@ -250,8 +250,8 @@ namespace TesApi.Tests
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
             azureProxyReturnValues.BatchQuotas = new() { ActiveJobAndJobScheduleQuota = 1, PoolQuota = 1, DedicatedCoreQuota = 1, LowPriorityCoreQuota = 10 };
 
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 2, RamGb = 1, Preemptible = false }, azureProxyReturnValues));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 11, RamGb = 1, Preemptible = true }, azureProxyReturnValues));
+            Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 2, RamGb = 1, Preemptible = false }, azureProxyReturnValues));
+            Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 11, RamGb = 1, Preemptible = true }, azureProxyReturnValues));
 
             var dedicatedCoreQuotaPerVMFamily = new List<VirtualMachineFamilyCoreQuota> { new("VmFamily2", 1) };
             azureProxyReturnValues.BatchQuotas = new()
@@ -264,20 +264,20 @@ namespace TesApi.Tests
                 DedicatedCoreQuotaPerVMFamily = dedicatedCoreQuotaPerVMFamily
             };
 
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 2, RamGb = 1, Preemptible = false }, azureProxyReturnValues));
+            Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 2, RamGb = 1, Preemptible = false }, azureProxyReturnValues));
         }
 
         [TestMethod]
         public async Task TesTaskFailsWhenBatchNodeDiskIsFull()
         {
             var tesTask = GetTesTask();
-            tesTask.State = TesState.INITIALIZINGEnum;
+            tesTask.State = TesState.INITIALIZING;
 
             (var failureReason, var systemLog) = await ProcessTesTaskAndGetFailureReasonAndSystemLogAsync(tesTask, BatchTaskStates.NodeDiskFull[0]);
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State); // TODO: Should be ExecutorError, but this currently falls into the bucket of NodeFailedDuringStartupOrExecution, which also covers StartTask failures, which are more correctly SystemError.
+                Assert.AreEqual(TesState.SYSTEM_ERROR, tesTask.State); // TODO: Should be ExecutorError, but this currently falls into the bucket of NodeFailedDuringStartupOrExecution, which also covers StartTask failures, which are more correctly SystemError.
                 Assert.AreEqual("DiskFull", failureReason);
                 Assert.AreEqual("DiskFull", systemLog[0]);
                 Assert.AreEqual("DiskFull", tesTask.FailureReason);
@@ -298,7 +298,7 @@ namespace TesApi.Tests
             var tasks = Enumerable.Repeat(0, numberOfTasks).Select((_, index) =>
             {
                 var task = GetTesTask();
-                task.State = TesState.QUEUEDEnum;
+                task.State = TesState.QUEUED;
 
                 if (numberOfTasks > 1)
                 {
@@ -338,7 +338,7 @@ namespace TesApi.Tests
         [TestMethod]
         public Task AddBatchTaskHandlesAzureBatchPoolCreationExceptionViaJobCreation()
         {
-            return AddBatchTasksHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
+            return AddBatchTasksHandlesExceptions(TesState.QUEUED, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchJobAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -361,7 +361,7 @@ namespace TesApi.Tests
         [TestMethod]
         public Task AddBatchTaskHandlesAzureBatchPoolCreationExceptionViaPoolCreation()
         {
-            return AddBatchTasksHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
+            return AddBatchTasksHandlesExceptions(TesState.QUEUED, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
@@ -384,7 +384,7 @@ namespace TesApi.Tests
         [TestMethod]
         public Task AddBatchTaskHandlesAzureBatchQuotaMaxedOutException()
         {
-            return AddBatchTasksHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
+            return AddBatchTasksHandlesExceptions(TesState.QUEUED, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (services => services.AddSingleton<IBatchQuotaVerifier, TestBatchQuotaVerifierQuotaMaxedOut>(), default);
@@ -420,7 +420,7 @@ namespace TesApi.Tests
                 {
                     switch (tesTask.State)
                     {
-                        case TesState.QUEUEDEnum:
+                        case TesState.QUEUED:
                             {
                                 var log = logs.LastOrDefault(l => l.message.Contains(tesTask.Id));
                                 Assert.IsNotNull(log);
@@ -431,7 +431,7 @@ namespace TesApi.Tests
                             ++quotaDelayedTasks;
                             break;
 
-                        case TesState.INITIALIZINGEnum:
+                        case TesState.INITIALIZING:
                             {
                                 var log = tesTask.Logs?.LastOrDefault();
                                 Assert.IsNotNull(log);
@@ -469,7 +469,7 @@ namespace TesApi.Tests
                 {
                     switch (tesTask.State)
                     {
-                        case TesState.QUEUEDEnum:
+                        case TesState.QUEUED:
                             {
                                 var log = logs.LastOrDefault(l => l.message.Contains(tesTask.Id));
                                 Assert.IsNotNull(log);
@@ -480,7 +480,7 @@ namespace TesApi.Tests
                             ++quotaDelayedTasks;
                             break;
 
-                        case TesState.INITIALIZINGEnum:
+                        case TesState.INITIALIZING:
                             {
                                 var log = tesTask.Logs?.LastOrDefault();
                                 Assert.IsNotNull(log);
@@ -501,7 +501,7 @@ namespace TesApi.Tests
         [TestMethod]
         public Task AddBatchTaskHandlesAzureBatchLowQuotaException()
         {
-            return AddBatchTasksHandlesExceptions(TesState.SYSTEMERROREnum, Arranger, Validator);
+            return AddBatchTasksHandlesExceptions(TesState.SYSTEM_ERROR, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (services => services.AddSingleton<IBatchQuotaVerifier, TestBatchQuotaVerifierLowQuota>(), default);
@@ -522,7 +522,7 @@ namespace TesApi.Tests
         [TestMethod]
         public Task AddBatchTaskHandlesAzureBatchVirtualMachineAvailabilityException()
         {
-            return AddBatchTasksHandlesExceptions(TesState.SYSTEMERROREnum, Arranger, Validator);
+            return AddBatchTasksHandlesExceptions(TesState.SYSTEM_ERROR, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues proxy)
             {
@@ -546,7 +546,7 @@ namespace TesApi.Tests
         [TestMethod]
         public Task AddBatchTaskHandlesTesException()
         {
-            return AddBatchTasksHandlesExceptions(TesState.SYSTEMERROREnum, Arranger, Validator);
+            return AddBatchTasksHandlesExceptions(TesState.SYSTEM_ERROR, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
@@ -569,7 +569,7 @@ namespace TesApi.Tests
         [TestMethod]
         public Task AddBatchTaskHandlesBatchClientException()
         {
-            return AddBatchTasksHandlesExceptions(TesState.SYSTEMERROREnum, Arranger, Validator);
+            return AddBatchTasksHandlesExceptions(TesState.SYSTEM_ERROR, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (default, azureProxy => azureProxy.Setup(b => b.AddBatchTasksAsync(It.IsAny<IEnumerable<CloudTask>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -595,7 +595,7 @@ namespace TesApi.Tests
         [TestMethod]
         public Task AddBatchTaskHandlesBatchExceptionForJobQuota()
         {
-            return AddBatchTasksHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
+            return AddBatchTasksHandlesExceptions(TesState.QUEUED, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchJobAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -620,7 +620,7 @@ namespace TesApi.Tests
         [TestMethod]
         public Task AddBatchTaskHandlesBatchExceptionForPoolQuota()
         {
-            return AddBatchTasksHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
+            return AddBatchTasksHandlesExceptions(TesState.QUEUED, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
@@ -645,7 +645,7 @@ namespace TesApi.Tests
         [TestMethod]
         public Task AddBatchTaskHandlesCloudExceptionForPoolQuota()
         {
-            return AddBatchTasksHandlesExceptions(TesState.QUEUEDEnum, Arranger, Validator);
+            return AddBatchTasksHandlesExceptions(TesState.QUEUED, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (default, azureProxy => azureProxy.Setup(b => b.CreateBatchPoolAsync(It.IsAny<Pool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
@@ -670,7 +670,7 @@ namespace TesApi.Tests
             var exceptionMsg = "Successful Test";
             var batchQuotaProvider = new Mock<IBatchQuotaProvider>();
             batchQuotaProvider.Setup(p => p.GetVmCoreQuotaAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>())).Callback<bool, CancellationToken>((lowPriority, _1) => throw new InvalidOperationException(exceptionMsg));
-            return AddBatchTasksHandlesExceptions(TesState.SYSTEMERROREnum, Arranger, Validator);
+            return AddBatchTasksHandlesExceptions(TesState.SYSTEM_ERROR, Arranger, Validator);
 
             (Action<IServiceCollection>, Action<Mock<IAzureProxy>>) Arranger(AzureProxyReturnValues _1)
                 => (services => services.AddTransient(p => batchQuotaProvider.Object), default);
@@ -745,7 +745,7 @@ namespace TesApi.Tests
 
             _ = await ProcessTesTaskAndGetBatchJobArgumentsAsync(tesTask, GetMockConfig()(), GetMockAzureProxy(AzureProxyReturnValues.Defaults), AzureProxyReturnValues.Defaults);
 
-            GuardAssertsWithTesTask(tesTask, () => Assert.AreEqual(TesState.INITIALIZINGEnum, tesTask.State));
+            GuardAssertsWithTesTask(tesTask, () => Assert.AreEqual(TesState.INITIALIZING, tesTask.State));
         }
 
         [TestMethod]
@@ -869,51 +869,51 @@ namespace TesApi.Tests
                 });
             }
 
-            await RunTest(null, TesState.INITIALIZINGEnum, "VmSizeLowPri1");
-            await RunTest(string.Empty, TesState.INITIALIZINGEnum, "VmSizeLowPri1");
-            await RunTest("VmSizeLowPri1", TesState.INITIALIZINGEnum, "VmSizeLowPri1");
-            await RunTest("VmSizeLowPri1,VmSizeLowPri2", TesState.INITIALIZINGEnum, "VmSizeLowPri1");
-            await RunTest("VmSizeLowPri2", TesState.INITIALIZINGEnum, "VmSizeLowPri2");
-            await RunTest("VmSizeLowPriNonExistent", TesState.SYSTEMERROREnum);
-            await RunTest("VmSizeLowPriNonExistent,VmSizeLowPri1", TesState.INITIALIZINGEnum, "VmSizeLowPri1");
-            await RunTest("VmFamily2", TesState.INITIALIZINGEnum, "VmSizeLowPri2");
+            await RunTest(null, TesState.INITIALIZING, "VmSizeLowPri1");
+            await RunTest(string.Empty, TesState.INITIALIZING, "VmSizeLowPri1");
+            await RunTest("VmSizeLowPri1", TesState.INITIALIZING, "VmSizeLowPri1");
+            await RunTest("VmSizeLowPri1,VmSizeLowPri2", TesState.INITIALIZING, "VmSizeLowPri1");
+            await RunTest("VmSizeLowPri2", TesState.INITIALIZING, "VmSizeLowPri2");
+            await RunTest("VmSizeLowPriNonExistent", TesState.SYSTEM_ERROR);
+            await RunTest("VmSizeLowPriNonExistent,VmSizeLowPri1", TesState.INITIALIZING, "VmSizeLowPri1");
+            await RunTest("VmFamily2", TesState.INITIALIZING, "VmSizeLowPri2");
         }
 
         [TestMethod]
         public async Task TaskStateTransitionsFromRunningState()
         {
-            Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.TaskActive));
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.TaskPreparing));
-            Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.TaskRunning));
-            Assert.AreEqual(TesState.COMPLETEEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.TaskCompletedSuccessfully));
-            Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.TaskFailed));
-            Assert.AreEqual(TesState.CANCELEDEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.CancellationRequested));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.NodeDiskFull));
-            Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.UploadOrDownloadFailed));
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.RUNNINGEnum, BatchTaskStates.NodePreempted));
+            Assert.AreEqual(TesState.RUNNING, await GetNewTesTaskStateAsync(TesState.RUNNING, BatchTaskStates.TaskActive));
+            Assert.AreEqual(TesState.INITIALIZING, await GetNewTesTaskStateAsync(TesState.RUNNING, BatchTaskStates.TaskPreparing));
+            Assert.AreEqual(TesState.RUNNING, await GetNewTesTaskStateAsync(TesState.RUNNING, BatchTaskStates.TaskRunning));
+            Assert.AreEqual(TesState.COMPLETE, await GetNewTesTaskStateAsync(TesState.RUNNING, BatchTaskStates.TaskCompletedSuccessfully));
+            Assert.AreEqual(TesState.EXECUTOR_ERROR, await GetNewTesTaskStateAsync(TesState.RUNNING, BatchTaskStates.TaskFailed));
+            Assert.AreEqual(TesState.CANCELED, await GetNewTesTaskStateAsync(TesState.RUNNING, BatchTaskStates.CancellationRequested));
+            Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(TesState.RUNNING, BatchTaskStates.NodeDiskFull));
+            Assert.AreEqual(TesState.RUNNING, await GetNewTesTaskStateAsync(TesState.RUNNING, BatchTaskStates.UploadOrDownloadFailed));
+            Assert.AreEqual(TesState.INITIALIZING, await GetNewTesTaskStateAsync(TesState.RUNNING, BatchTaskStates.NodePreempted));
         }
 
         [TestMethod]
         public async Task TaskStateTransitionsFromInitializingState()
         {
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.TaskActive));
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.TaskPreparing));
-            Assert.AreEqual(TesState.RUNNINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.TaskRunning));
-            Assert.AreEqual(TesState.COMPLETEEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.TaskCompletedSuccessfully));
-            Assert.AreEqual(TesState.EXECUTORERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.TaskFailed));
-            Assert.AreEqual(TesState.CANCELEDEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.CancellationRequested));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.NodeDiskFull));
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.UploadOrDownloadFailed));
-            Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.NodeStartTaskFailed));
-            Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.NodeAllocationFailed));
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.INITIALIZINGEnum, BatchTaskStates.NodePreempted));
+            Assert.AreEqual(TesState.INITIALIZING, await GetNewTesTaskStateAsync(TesState.INITIALIZING, BatchTaskStates.TaskActive));
+            Assert.AreEqual(TesState.INITIALIZING, await GetNewTesTaskStateAsync(TesState.INITIALIZING, BatchTaskStates.TaskPreparing));
+            Assert.AreEqual(TesState.RUNNING, await GetNewTesTaskStateAsync(TesState.INITIALIZING, BatchTaskStates.TaskRunning));
+            Assert.AreEqual(TesState.COMPLETE, await GetNewTesTaskStateAsync(TesState.INITIALIZING, BatchTaskStates.TaskCompletedSuccessfully));
+            Assert.AreEqual(TesState.EXECUTOR_ERROR, await GetNewTesTaskStateAsync(TesState.INITIALIZING, BatchTaskStates.TaskFailed));
+            Assert.AreEqual(TesState.CANCELED, await GetNewTesTaskStateAsync(TesState.INITIALIZING, BatchTaskStates.CancellationRequested));
+            Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(TesState.INITIALIZING, BatchTaskStates.NodeDiskFull));
+            Assert.AreEqual(TesState.INITIALIZING, await GetNewTesTaskStateAsync(TesState.INITIALIZING, BatchTaskStates.UploadOrDownloadFailed));
+            Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(TesState.INITIALIZING, BatchTaskStates.NodeStartTaskFailed));
+            Assert.AreEqual(TesState.QUEUED, await GetNewTesTaskStateAsync(TesState.INITIALIZING, BatchTaskStates.NodeAllocationFailed));
+            Assert.AreEqual(TesState.INITIALIZING, await GetNewTesTaskStateAsync(TesState.INITIALIZING, BatchTaskStates.NodePreempted));
         }
 
         [TestMethod]
         public async Task TaskStateTransitionsFromQueuedState()
         {
-            Assert.AreEqual(TesState.INITIALIZINGEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, [default]));
-            Assert.AreEqual(TesState.CANCELEDEnum, await GetNewTesTaskStateAsync(TesState.QUEUEDEnum, BatchTaskStates.CancellationRequested));
+            Assert.AreEqual(TesState.INITIALIZING, await GetNewTesTaskStateAsync(TesState.QUEUED, [default]));
+            Assert.AreEqual(TesState.CANCELED, await GetNewTesTaskStateAsync(TesState.QUEUED, BatchTaskStates.CancellationRequested));
         }
 
         [TestMethod]
@@ -933,13 +933,13 @@ namespace TesApi.Tests
             ];
 
             await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
-            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0])));
+            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUED, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0])));
             await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
-            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0])));
+            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUED, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0])));
             await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
-            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUEDEnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0])));
+            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.QUEUED, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0])));
             await GetNewTesTaskStateAsync(tesTask, azureProxyReturnValues);
-            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.SYSTEMERROREnum, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0])));
+            await GuardAssertsWithTesTask(tesTask, async () => Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(tesTask, BatchTaskStates.NodeAllocationFailed[0])));
         }
 
         [TestMethod]
@@ -962,7 +962,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
+                Assert.AreEqual(TesState.SYSTEM_ERROR, tesTask.State);
                 Assert.AreEqual("NoVmSizeAvailable", tesTask.FailureReason);
             });
         }
@@ -970,7 +970,7 @@ namespace TesApi.Tests
         [TestMethod]
         public async Task TaskGetsCancelled()
         {
-            var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELINGEnum, Logs = [new()] };
+            var tesTask = new TesTask { Id = "test", PoolId = "pool1", State = TesState.CANCELING, Logs = [new()] };
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
             azureProxyReturnValues.BatchTaskState = BatchTaskStates.CancellationRequested[0];
@@ -985,7 +985,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual(TesState.CANCELEDEnum, tesTask.State);
+                Assert.AreEqual(TesState.CANCELED, tesTask.State);
                 azureProxy.Verify(i => i.TerminateBatchTaskAsync(tesTask.Id, It.IsAny<string>(), It.IsAny<CancellationToken>()));
             });
         }
@@ -995,7 +995,7 @@ namespace TesApi.Tests
         //{
         //    var tesTask = new TesTask
         //    {
-        //        Id = "test", PoolId = "pool1", State = TesState.CANCELEDEnum, Logs = new()
+        //        Id = "test", PoolId = "pool1", State = TesState.CANCELED, Logs = new()
         //        {
         //            new()
         //            {
@@ -1030,7 +1030,7 @@ namespace TesApi.Tests
         public async Task SuccessfullyCompletedTaskContainsBatchNodeMetrics()
         {
             var tesTask = GetTesTask();
-            tesTask.State = TesState.INITIALIZINGEnum;
+            tesTask.State = TesState.INITIALIZING;
 
             var metricsFileContent = @"
                 BlobXferPullStart=2020-10-08T02:30:39+00:00
@@ -1057,7 +1057,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual(TesState.COMPLETEEnum, tesTask.State);
+                Assert.AreEqual(TesState.COMPLETE, tesTask.State);
 
                 var batchNodeMetrics = tesTask.GetOrAddTesTaskLog().BatchNodeMetrics;
                 Assert.IsNotNull(batchNodeMetrics);
@@ -1082,7 +1082,7 @@ namespace TesApi.Tests
         public async Task SuccessfullyCompletedTaskContainsCromwellResultCode()
         {
             var tesTask = GetTesTask();
-            tesTask.State = TesState.INITIALIZINGEnum;
+            tesTask.State = TesState.INITIALIZING;
 
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
             azureProxyReturnValues.BatchTaskState = BatchTaskStates.TaskCompletedSuccessfully[0];
@@ -1093,7 +1093,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual(TesState.COMPLETEEnum, tesTask.State);
+                Assert.AreEqual(TesState.COMPLETE, tesTask.State);
                 Assert.AreEqual(2, tesTask.GetOrAddTesTaskLog().CromwellResultCode);
                 Assert.AreEqual(2, tesTask.CromwellResultCode);
             });
@@ -1113,7 +1113,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
+                Assert.AreEqual(TesState.SYSTEM_ERROR, tesTask.State);
                 Assert.AreEqual($"InvalidInputFilePath", failureReason);
                 Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
                 Assert.AreEqual($"Unsupported input path 'xyz/path' for task Id {tesTask.Id}. Must start with '/'.", systemLog[1]);
@@ -1136,7 +1136,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
+                Assert.AreEqual(TesState.SYSTEM_ERROR, tesTask.State);
                 Assert.AreEqual($"InvalidInputFilePath", failureReason);
                 Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
                 Assert.AreEqual($"One of Input Url or Content must be set", systemLog[1]);
@@ -1159,7 +1159,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
+                Assert.AreEqual(TesState.SYSTEM_ERROR, tesTask.State);
                 Assert.AreEqual($"InvalidInputFilePath", failureReason);
                 Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
                 Assert.AreEqual($"Input Url and Content cannot be both set", systemLog[1]);
@@ -1175,7 +1175,7 @@ namespace TesApi.Tests
             tesTask.Inputs.Add(new()
             {
                 Url = "/storageaccount1/container1/directory",
-                Type = TesFileType.DIRECTORYEnum,
+                Type = TesFileType.DIRECTORY,
                 Path = "/directory"
             });
 
@@ -1183,7 +1183,7 @@ namespace TesApi.Tests
 
             GuardAssertsWithTesTask(tesTask, () =>
             {
-                Assert.AreEqual(TesState.SYSTEMERROREnum, tesTask.State);
+                Assert.AreEqual(TesState.SYSTEM_ERROR, tesTask.State);
                 Assert.AreEqual($"InvalidInputFilePath", failureReason);
                 Assert.AreEqual($"InvalidInputFilePath", systemLog[0]);
                 Assert.AreEqual($"Directory input is not supported.", systemLog[1]);
@@ -1203,7 +1203,7 @@ namespace TesApi.Tests
 
             tesTask.Inputs =
             [
-                new() { Url = script[0], Path = scriptPath, Type = TesFileType.FILEEnum, Name = "commandScript", Description = "test.commandScript", Content = script[1] },
+                new() { Url = script[0], Path = scriptPath, Type = TesFileType.FILE, Name = "commandScript", Description = "test.commandScript", Content = script[1] },
             ];
 
             // fixup output urls
@@ -1241,7 +1241,7 @@ namespace TesApi.Tests
                 var uri = new UriBuilder(executionDirectoryUri) { Query = null };
                 uri.Path = uri.Path.TrimEnd('/') + $"/{fileName}";
 
-                TesInput writeInput = new() { Url = uri.Uri.AbsoluteUri, Path = Path.Combine(Path.GetDirectoryName(scriptPath), fileName).Replace('\\', '/'), Type = TesFileType.FILEEnum, Name = "write_", Content = null };
+                TesInput writeInput = new() { Url = uri.Uri.AbsoluteUri, Path = Path.Combine(Path.GetDirectoryName(scriptPath), fileName).Replace('\\', '/'), Type = TesFileType.FILE, Name = "write_", Content = null };
                 executionDirectoryBlobs.Add(BlobNameUriFromTesInput(writeInput));
 
                 if (fileIsInInputs)

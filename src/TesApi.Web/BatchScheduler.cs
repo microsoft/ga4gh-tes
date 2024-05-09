@@ -168,8 +168,8 @@ namespace TesApi.Web
             drsHubApiHost = drsHubOptions.Value?.Url;
             logger.LogInformation("usePreemptibleVmsOnly: {UsePreemptibleVmsOnly}", usePreemptibleVmsOnly);
 
-            static bool tesTaskIsInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum || tesTask.State == TesState.RUNNINGEnum;
-            static bool tesTaskIsInitializing(TesTask tesTask) => tesTask.State == TesState.INITIALIZINGEnum;
+            static bool tesTaskIsInitializingOrRunning(TesTask tesTask) => tesTask.State == TesState.INITIALIZING || tesTask.State == TesState.RUNNING;
+            static bool tesTaskIsInitializing(TesTask tesTask) => tesTask.State == TesState.INITIALIZING;
 
             System.Text.Json.JsonSerializerOptions setTaskStateAndLogJsonSerializerOptions = new()
             {
@@ -193,7 +193,7 @@ namespace TesApi.Web
                     logger.LogDebug(@"Setting task {TesTask} with metadata {BatchTaskState} {Metadata}.", tesTask.Id, batchInfo.State, newDataText);
                 }
 
-                var (batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode) = newTaskState == TesState.COMPLETEEnum
+                var (batchNodeMetrics, taskStartTime, taskEndTime, cromwellRcCode) = newTaskState == TesState.COMPLETE
                     ? await GetBatchNodeMetricsAndCromwellResultCodeAsync(tesTask, cancellationToken)
                     : default;
 
@@ -248,7 +248,7 @@ namespace TesApi.Web
                                     : Enumerable.Empty<string>().Append(batchInfo.AlternateSystemLogItem))
                                 ).ToArray());
                     }
-                    else if (!(string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem) || tesTask.IsActiveState() || new[] { TesState.COMPLETEEnum, TesState.CANCELEDEnum }.Contains(tesTask.State)))
+                    else if (!(string.IsNullOrWhiteSpace(batchInfo.AlternateSystemLogItem) || tesTask.IsActiveState() || new[] { TesState.COMPLETE, TesState.CANCELED }.Contains(tesTask.State)))
                     {
                         tesTask.SetFailureReason(batchInfo.AlternateSystemLogItem);
                     }
@@ -274,8 +274,8 @@ namespace TesApi.Web
             {
                 var newTaskState = tesTask.FailureReason switch
                 {
-                    AzureBatchTaskState.ExecutorError => TesState.EXECUTORERROREnum,
-                    _ => TesState.SYSTEMERROREnum,
+                    AzureBatchTaskState.ExecutorError => TesState.EXECUTOR_ERROR,
+                    _ => TesState.SYSTEM_ERROR,
                 };
 
                 return await SetTaskStateAndLogAsync(tesTask, newTaskState, batchInfo, cancellationToken);
@@ -285,15 +285,15 @@ namespace TesApi.Web
                 await TerminateBatchTaskAsync(tesTask, newTaskState, batchInfo, cancellationToken);
 
             Task<bool> TerminateBatchTaskAndSetTaskSystemErrorAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken) =>
-                TerminateBatchTaskAndSetTaskStateAsync(tesTask, TesState.SYSTEMERROREnum, batchInfo, cancellationToken);
+                TerminateBatchTaskAndSetTaskStateAsync(tesTask, TesState.SYSTEM_ERROR, batchInfo, cancellationToken);
 
             Task<bool> RequeueTaskAfterFailureAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
                 => ++tesTask.ErrorCount > 3
                     ? TerminateBatchTaskAndSetTaskSystemErrorAsync(tesTask, new(batchInfo, "System Error: Retry count exceeded."), cancellationToken)
-                    : TerminateBatchTaskAndSetTaskStateAsync(tesTask, TesState.QUEUEDEnum, batchInfo, cancellationToken);
+                    : TerminateBatchTaskAndSetTaskStateAsync(tesTask, TesState.QUEUED, batchInfo, cancellationToken);
 
             async Task<bool> CancelTaskAsync(TesTask tesTask, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken) =>
-                await TerminateBatchTaskAsync(tesTask, TesState.CANCELEDEnum, batchInfo, cancellationToken);
+                await TerminateBatchTaskAsync(tesTask, TesState.CANCELED, batchInfo, cancellationToken);
 
             async Task<bool> TerminateBatchTaskAsync(TesTask tesTask, TesState newTaskState, CombinedBatchTaskInfo batchInfo, CancellationToken cancellationToken)
             {
@@ -348,7 +348,7 @@ namespace TesApi.Web
                 oldLog.Warning = "ComputeNode was preempted. The task was automatically rescheduled.";
                 newLog.VirtualMachineInfo = oldLog.VirtualMachineInfo;
                 newLog.StartTime = DateTimeOffset.UtcNow;
-                tesTask.State = TesState.INITIALIZINGEnum;
+                tesTask.State = TesState.INITIALIZING;
                 logger.LogInformation("The TesTask {TesTask}'s node was preempted. It was automatically rescheduled.", tesTask.Id);
                 return true;
             }
@@ -360,9 +360,9 @@ namespace TesApi.Web
                 new(condition: null, AzureBatchTaskState.TaskState.CancellationRequested, alternateSystemLogItem: null, CancelTaskAsync),
                 new(tesTaskIsInitializing, AzureBatchTaskState.TaskState.NodeAllocationFailed, alternateSystemLogItem: null, RequeueTaskAfterFailureAsync),
                 new(tesTaskIsInitializing, AzureBatchTaskState.TaskState.NodeStartTaskFailed, alternateSystemLogMissingFailure, TerminateBatchTaskAndSetTaskSystemErrorAsync),
-                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.Initializing, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLogAsync(tesTask, TesState.INITIALIZINGEnum, info, ct)),
-                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.Running, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLogAsync(tesTask, TesState.RUNNINGEnum, info, ct)),
-                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedSuccessfully, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLogAsync(tesTask, TesState.COMPLETEEnum, info, ct)),
+                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.Initializing, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLogAsync(tesTask, TesState.INITIALIZING, info, ct)),
+                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.Running, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLogAsync(tesTask, TesState.RUNNING, info, ct)),
+                new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedSuccessfully, alternateSystemLogItem: null, (tesTask, info, ct) => SetTaskStateAndLogAsync(tesTask, TesState.COMPLETE, info, ct)),
                 new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.CompletedWithErrors, alternateSystemLogMissingFailure, SetCompletedWithErrors),
                 new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodeFailedDuringStartupOrExecution, alternateSystemLogMissingFailure, TerminateBatchTaskAndSetTaskSystemErrorAsync),
                 new(tesTaskIsInitializingOrRunning, AzureBatchTaskState.TaskState.NodePreempted, alternateSystemLogItem: null, HandlePreemptedNode),
@@ -555,6 +555,10 @@ namespace TesApi.Web
                             _ => [new(tesTask, virtualMachineInfo, identities, displayName)],
                             (_, list) => list.Add(new(tesTask, virtualMachineInfo, identities, displayName)));
                     }
+                    catch (AggregateException aggregateException)
+                    {
+                        TaskCatchAggregateException(aggregateException.Flatten().InnerExceptions, tesTask, poolKey);
+                    }
                     catch (Exception exception)
                     {
                         TaskCatchException(exception, tesTask, poolKey);
@@ -637,7 +641,8 @@ namespace TesApi.Web
                                 nodeInfo: useGen2 ? gen2BatchNodeInfo : gen1BatchNodeInfo,
                                 encryptionAtHostSupported: virtualMachineInfo.EncryptionAtHostSupported,
                                 cancellationToken: ct),
-                            cancellationToken: token)).PoolId;
+                            cancellationToken: token)
+                            ).PoolId;
 
                         tasksJobMetadata.Add(new(pool.Key, poolId, virtualMachineInfo, pool.Value.Select(tuple => tuple.TesTask)));
                     }
@@ -755,7 +760,7 @@ namespace TesApi.Web
                 {
                     var tesTaskLog = tesTask.GetOrAddTesTaskLog();
                     tesTaskLog.StartTime = DateTimeOffset.UtcNow;
-                    tesTask.State = TesState.INITIALIZINGEnum;
+                    tesTask.State = TesState.INITIALIZING;
                     results.Add(new(Task.FromResult(true), tesTask));
                 }
                 catch (AggregateException aggregateException)
@@ -836,27 +841,27 @@ namespace TesApi.Web
                         break;
 
                     case AzureBatchLowQuotaException azureBatchLowQuotaException:
-                        tesTask.State = TesState.SYSTEMERROREnum;
+                        tesTask.State = TesState.SYSTEM_ERROR;
                         tesTask.AddTesTaskLog(); // Adding new log here because this exception is thrown from CheckBatchAccountQuotas() and AddTesTaskLog() above is called after that. This way each attempt will have its own log entry.
                         tesTask.SetFailureReason("InsufficientBatchQuota", azureBatchLowQuotaException.Message);
                         logger.LogError(azureBatchLowQuotaException, "TES task: {TesTask} AzureBatchLowQuotaException.Message: {ExceptionMessage}", tesTask.Id, azureBatchLowQuotaException.Message);
                         break;
 
                     case AzureBatchVirtualMachineAvailabilityException azureBatchVirtualMachineAvailabilityException:
-                        tesTask.State = TesState.SYSTEMERROREnum;
+                        tesTask.State = TesState.SYSTEM_ERROR;
                         tesTask.AddTesTaskLog(); // Adding new log here because this exception is thrown from GetVmSizeAsync() and AddTesTaskLog() above is called after that. This way each attempt will have its own log entry.
                         tesTask.SetFailureReason("NoVmSizeAvailable", azureBatchVirtualMachineAvailabilityException.Message);
                         logger.LogError(azureBatchVirtualMachineAvailabilityException, "TES task: {TesTask} AzureBatchVirtualMachineAvailabilityException.Message: {ExceptionMessage}", tesTask.Id, azureBatchVirtualMachineAvailabilityException.Message);
                         break;
 
                     case TesException tesException:
-                        tesTask.State = TesState.SYSTEMERROREnum;
+                        tesTask.State = TesState.SYSTEM_ERROR;
                         tesTask.SetFailureReason(tesException);
                         logger.LogError(tesException, "TES task: {TesTask} TesException.Message: {ExceptionMessage}", tesTask.Id, tesException.Message);
                         break;
 
                     case BatchClientException batchClientException:
-                        tesTask.State = TesState.SYSTEMERROREnum;
+                        tesTask.State = TesState.SYSTEM_ERROR;
                         tesTask.SetFailureReason("BatchClientException", string.Join(",", batchClientException.Data.Values), batchClientException.Message, batchClientException.StackTrace);
                         logger.LogError(batchClientException, "TES task: {TesTask} BatchClientException.Message: {ExceptionMessage} {ExceptionData}", tesTask.Id, batchClientException.Message, string.Join(",", batchClientException?.Data?.Values));
                         break;
@@ -879,7 +884,7 @@ namespace TesApi.Web
                         break;
 
                     default:
-                        tesTask.State = TesState.SYSTEMERROREnum;
+                        tesTask.State = TesState.SYSTEM_ERROR;
                         tesTask.SetFailureReason(AzureBatchTaskState.UnknownError, $"{exception?.GetType().FullName}: {exception?.Message}", exception?.StackTrace);
                         logger.LogError(exception, "TES task: {TesTask} Exception: {ExceptionType}: {ExceptionMessage}", tesTask.Id, exception?.GetType().FullName, exception?.Message);
                         break;
@@ -978,7 +983,7 @@ namespace TesApi.Web
                         Path = b.Path,
                         Url = b.BlobUri.AbsoluteUri,
                         Name = Path.GetFileName(b.Path),
-                        Type = TesFileType.FILEEnum
+                        Type = TesFileType.FILE
                     })
                     .ToList();
             }
@@ -1010,7 +1015,7 @@ namespace TesApi.Web
                 throw new TesException("InvalidInputFilePath", "One of Input Url or Content must be set");
             }
 
-            if (inputFile.Type == TesFileType.DIRECTORYEnum)
+            if (inputFile.Type == TesFileType.DIRECTORY)
             {
                 throw new TesException("InvalidInputFilePath", "Directory input is not supported.");
             }

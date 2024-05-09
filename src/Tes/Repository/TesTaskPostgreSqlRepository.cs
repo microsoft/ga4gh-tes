@@ -10,6 +10,7 @@ namespace Tes.Repository
     using System.Linq.Expressions;
     using System.Reflection;
     using System.Text.Json;
+    using System.Text.Json.Serialization;
     using System.Text.Json.Serialization.Metadata;
     using System.Threading;
     using System.Threading.Tasks;
@@ -147,7 +148,11 @@ namespace Tes.Repository
                     })
                 .ExecuteAsync(async ct =>
                 {
-                    var activeTasksCount = (await InternalGetItemsAsync(ct, orderBy: q => q.OrderBy(t => t.Json.CreationTime), efPredicate: task => !TesTask.TerminalStates.Contains(task.State))).Count();
+                    var activeTasksCount = (await InternalGetItemsAsync(
+                            ct,
+                            orderBy: q => q.OrderBy(t => t.Json.CreationTime),
+                            efPredicates: Enumerable.Empty<Expression<Func<TesTask, bool>>>().Append(task => !TesTask.TerminalStates.Contains(task.State))))
+                        .Count();
                     Logger?.LogInformation("Cache warmed successfully in {TotalSeconds:n3} seconds. Added {TasksAddedCount:n0} items to the cache.", sw.Elapsed.TotalSeconds, activeTasksCount);
                 }, cancellationToken);
         }
@@ -171,7 +176,7 @@ namespace Tes.Repository
         /// <inheritdoc/>
         public async Task<IEnumerable<TesTask>> GetItemsAsync(Expression<Func<TesTask, bool>> predicate, CancellationToken cancellationToken)
         {
-            return (await InternalGetItemsAsync(cancellationToken, efPredicate: predicate)).Select(t => t.TesTask);
+            return (await InternalGetItemsAsync(cancellationToken, efPredicates: [predicate])).Select(t => t.TesTask);
         }
 
         /// <inheritdoc/>
@@ -207,48 +212,83 @@ namespace Tes.Repository
             _ = Cache?.TryRemove(id);
         }
 
-        /// <inheritdoc/>
-        public async Task<IRepository<TesTask>.GetItemsResult> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate, Expression<Func<TesTask, bool>> efPredicate)
+        internal record struct ContinuationToken(long LastDbId, string Raw, string EF)
         {
-            var last = long.MinValue;
+            private const char EfSeparator = '&';
 
-            if (continuationToken is not null)
+            internal static ContinuationToken GetToken(FormattableString RawQuery, IEnumerable<Expression<Func<TesTask, bool>>> EfQuery, long? Id = null)
             {
+                return new(
+                    Id ?? long.MinValue,
+                    RawQuery?.Format,
+                    EfQuery is null ? null : string.Join(EfSeparator, EfQuery.Select(p => System.Web.HttpUtility.UrlEncode(p.ToString()))));
+            }
+
+            internal readonly string AsString(long? lastId)
+            {
+                return lastId is null
+                    ? null
+                    : Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new(lastId.Value, Raw, EF), SourceGenerationContext.Default.ContinuationToken)));
+            }
+
+            internal readonly ContinuationToken Parse(string previous)
+            {
+                if (string.IsNullOrWhiteSpace(previous))
+                {
+                    return this;
+                }
+
+                var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent((int)Math.Ceiling(previous.Length / 4.0) * 3);
+
                 try
                 {
-                    var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(256);
-                    if (Convert.TryFromBase64String(continuationToken, buffer, out var bytesWritten))
+                    if (Convert.TryFromBase64String(previous, buffer, out var bytesWritten))
                     {
-                        last = Newtonsoft.Json.JsonConvert.DeserializeAnonymousType(System.Text.Encoding.UTF8.GetString(buffer, 0, bytesWritten), last);
-                    }
+                        var token = JsonSerializer.Deserialize(buffer.AsSpan()[..bytesWritten], SourceGenerationContext.Default.ContinuationToken);
 
-                    if (last == default)
+                        if (!(Raw ?? string.Empty).Equals((token.Raw ?? string.Empty), StringComparison.Ordinal) || !(EF ?? string.Empty).Equals((token.EF ?? string.Empty), StringComparison.Ordinal))
+                        {
+                            throw new ArgumentException("Invalid query parameters for page_token.", nameof(previous));
+                        }
+
+                        return token;
+                    }
+                    else
                     {
-                        throw new ArgumentException("pageToken is corrupt or invalid.", nameof(continuationToken));
+                        throw new ArgumentException("page_token is corrupt or invalid.", nameof(previous));
                     }
                 }
-                catch (System.Text.DecoderFallbackException ex)
+                catch (NotSupportedException ex)
                 {
-                    throw new ArgumentException("pageToken is corrupt or invalid.", nameof(continuationToken), ex);
+                    throw new ArgumentException("page_token is corrupt or invalid.", nameof(previous), ex);
                 }
-                catch (Newtonsoft.Json.JsonException ex)
+                catch (JsonException ex)
                 {
-                    throw new ArgumentException("pageToken is corrupt or invalid.", nameof(continuationToken), ex);
+                    throw new ArgumentException("page_token is corrupt or invalid.", nameof(previous), ex);
+                }
+                finally
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
                 }
             }
+        }
+
+        /// <inheritdoc/>
+        public async Task<IRepository<TesTask>.GetItemsResult> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate, IEnumerable<Expression<Func<TesTask, bool>>> efPredicates)
+        {
+            var token = ContinuationToken.GetToken(rawPredicate, efPredicates).Parse(continuationToken);
 
             var results = (await InternalGetItemsAsync(
                     cancellationToken,
-                    pagination: q => q.Where(t => t.Id > last).Take(pageSize),
+                    pagination: q => q.Where(t => t.Id > token.LastDbId).Take(pageSize),
                     orderBy: q => q.OrderBy(t => t.Id),
-                    efPredicate: efPredicate,
+                    efPredicates: efPredicates,
                     rawPredicate: rawPredicate))
                 .ToList();
 
-            return new(GetContinuation(results.Count == pageSize ? results.LastOrDefault().DbId : null), results.Select(t => t.TesTask));
-
-            static string GetContinuation(long? dbId)
-                => dbId is null ? null : Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(Newtonsoft.Json.JsonConvert.SerializeObject(dbId)));
+            return new(
+                token.AsString(results.Count == pageSize ? results.LastOrDefault()?.DbId : null),
+                results.Select(t => t.TesTask));
         }
 
         /// <summary>
@@ -287,10 +327,10 @@ namespace Tes.Repository
         /// <param name="efPredicate">The WHERE clause <see cref="Expression"/> for <see cref="TesTask"/> selection in the query.</param>
         /// <param name="rawPredicate">The WHERE clause for raw SQL for <see cref="TesTaskDatabaseItem"/> selection in the query.</param>
         /// <returns></returns>
-        private async Task<IEnumerable<GetItemsResult>> InternalGetItemsAsync(CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default, Expression<Func<TesTask, bool>> efPredicate = default, FormattableString rawPredicate = default)
+        private async Task<IEnumerable<GetItemsResult>> InternalGetItemsAsync(CancellationToken cancellationToken, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> orderBy = default, Func<IQueryable<TesTaskDatabaseItem>, IQueryable<TesTaskDatabaseItem>> pagination = default, IEnumerable<Expression<Func<TesTask, bool>>> efPredicates = default, FormattableString rawPredicate = default)
         {
             using var dbContext = CreateDbContext();
-            return (await GetItemsAsync(dbContext.TesTasks, cancellationToken, orderBy, pagination, WhereTesTask(efPredicate), rawPredicate))
+            return (await GetItemsAsync(dbContext.TesTasks, cancellationToken, orderBy, pagination, efPredicates?.Select(WhereTesTask), rawPredicate))
                 .Select(item => EnsureActiveItemInCache(item, t => t.Json.Id, t => t.Json.IsActiveState(), CopyTesTask));
         }
 
@@ -328,4 +368,11 @@ namespace Tes.Repository
             return new PrependableFormattableString($"\"{column}\"->'{property}'", sql);
         }
     }
+
+    [JsonSourceGenerationOptions(WriteIndented = false, GenerationMode = JsonSourceGenerationMode.Default)]
+    [JsonSerializable(typeof(TesTaskPostgreSqlRepository.ContinuationToken))]
+    internal partial class SourceGenerationContext : JsonSerializerContext
+    {
+    }
+
 }

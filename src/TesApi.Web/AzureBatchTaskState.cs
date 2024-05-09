@@ -42,13 +42,13 @@ namespace TesApi.Web
         public const string UnknownError = @"UnknownError";
 
         /// <summary>
-        /// <see cref="TesState.EXECUTORERROREnum"/>.
+        /// <see cref="TesState.EXECUTOR_ERROR"/>.
         /// </summary>
         public const string ExecutorError = @"ExecutorError";
 
 
         /// <summary>
-        /// <see cref="TesState.SYSTEMERROREnum"/>.
+        /// <see cref="TesState.SYSTEM_ERROR"/>.
         /// </summary>
         public const string SystemError = @"SystemError";
 

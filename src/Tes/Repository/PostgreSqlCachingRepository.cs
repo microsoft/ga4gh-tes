@@ -109,13 +109,15 @@ namespace Tes.Repository
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="orderBy"><see cref="IQueryable{T}"/> order-by function.</param>
         /// <param name="pagination"><see cref="IQueryable{T}"/> pagination selection (within the order-by).</param>
-        /// <param name="eFpredicate">The WHERE clause <see cref="Expression"/> for <typeparamref name="T"/> selection in the query.</param>
+        /// <param name="efPredicates">The WHERE clause parts <see cref="Expression"/> for <typeparamref name="T"/> selection in the query.</param>
         /// <param name="rawPredicate">The WHERE clause for raw SQL for <typeparamref name="T"/> selection in the query.</param>
         /// <returns></returns>
         /// <remarks>Ensure that the <see cref="DbContext"/> from which <paramref name="dbSet"/> comes isn't disposed until the entire query completes.</remarks>
-        protected async Task<IEnumerable<TDbItem>> GetItemsAsync(DbSet<TDbItem> dbSet, CancellationToken cancellationToken, Func<IQueryable<TDbItem>, IQueryable<TDbItem>> orderBy = default, Func<IQueryable<TDbItem>, IQueryable<TDbItem>> pagination = default, Expression<Func<TDbItem, bool>> eFpredicate = default, FormattableString rawPredicate = default)
+        protected async Task<IEnumerable<TDbItem>> GetItemsAsync(DbSet<TDbItem> dbSet, CancellationToken cancellationToken, Func<IQueryable<TDbItem>, IQueryable<TDbItem>> orderBy = default, Func<IQueryable<TDbItem>, IQueryable<TDbItem>> pagination = default, IEnumerable<Expression<Func<TDbItem, bool>>> efPredicates = default, FormattableString rawPredicate = default)
         {
             ArgumentNullException.ThrowIfNull(dbSet);
+
+            efPredicates = (efPredicates ??= []).ToList();
 
             orderBy ??= q => q;
             pagination ??= q => q;
@@ -124,9 +126,9 @@ namespace Tes.Repository
                 ? dbSet.AsQueryable()
                 : dbSet.FromSql(new PrependableFormattableString($"SELECT *\r\nFROM {dbSet.EntityType.GetTableName()}\r\nWHERE ", rawPredicate));
 
-            tableQuery = eFpredicate is null
-                ? tableQuery
-                : tableQuery.Where(eFpredicate);
+            tableQuery = efPredicates.Any()
+                ? efPredicates.Aggregate(tableQuery, (query, efPredicate) => query.Where(efPredicate))
+                : tableQuery;
 
             // Search for items in the JSON
             var query = pagination(orderBy(tableQuery));
