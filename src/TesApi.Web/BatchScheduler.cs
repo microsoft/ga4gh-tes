@@ -708,16 +708,17 @@ namespace TesApi.Web
                     }
                 }
 
-                bool ProcessStartTaskFailure(TaskFailureInformation failureInformation)
+                bool ProcessStartTaskFailure(IBatchPool.StartTaskFailureInformation failureInformation)
                 {
-                    if (failureInformation is not null)
+                    if (failureInformation.TaskFailureInformation is not null)
                     {
                         azureBatchJobAndTaskState.NodeState = ComputeNodeState.StartTaskFailed;
-                        azureBatchJobAndTaskState.NodeErrorCode = failureInformation.Code;
-                        azureBatchJobAndTaskState.NodeErrorDetails = failureInformation.Details?.Select(d => d.Value);
+                        azureBatchJobAndTaskState.NodeErrorCode = failureInformation.TaskFailureInformation.Code;
+                        azureBatchJobAndTaskState.NodeErrorDetails = (failureInformation.TaskFailureInformation.Details?.Select(d => d.Value) ?? [])
+                            .Append(failureInformation.NodeId);
                     }
 
-                    return failureInformation is not null;
+                    return failureInformation.TaskFailureInformation is not null;
                 }
             }
 

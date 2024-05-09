@@ -7,10 +7,12 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
+using CommonUtilities;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using TesApi.Web.Storage;
 
 namespace TesApi.Web
 {
@@ -33,6 +35,7 @@ namespace TesApi.Web
 
         private readonly ILogger _logger;
         private readonly IAzureProxy _azureProxy;
+        private readonly IStorageAccessProvider _storageAccessProvider;
 
         /// <summary>
         /// Constructor of <see cref="BatchPool"/>.
@@ -40,20 +43,22 @@ namespace TesApi.Web
         /// <param name="batchScheduler"></param>
         /// <param name="batchSchedulingOptions"></param>
         /// <param name="azureProxy"></param>
+        /// <param name="storageAccessProvider"></param>
         /// <param name="logger"></param>
         /// <exception cref="ArgumentException"></exception>
-        public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, ILogger<BatchPool> logger)
+        public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, IStorageAccessProvider storageAccessProvider, ILogger<BatchPool> logger)
         {
             var rotationDays = batchSchedulingOptions.Value.PoolRotationForcedDays;
             if (rotationDays == 0) { rotationDays = Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays; }
             _forcePoolRotationAge = TimeSpan.FromDays(rotationDays);
 
             this._azureProxy = azureProxy;
+            this._storageAccessProvider = storageAccessProvider;
             this._logger = logger;
             _batchPools = batchScheduler as BatchScheduler ?? throw new ArgumentException("batchScheduler must be of type BatchScheduler", nameof(batchScheduler));
         }
 
-        private Queue<TaskFailureInformation> StartTaskFailures { get; } = new();
+        private Queue<IBatchPool.StartTaskFailureInformation> StartTaskFailures { get; } = new();
         private Queue<ResizeError> ResizeErrors { get; } = new();
 
         internal IAsyncEnumerable<CloudTask> GetTasksAsync(bool includeCompleted)
@@ -309,7 +314,7 @@ namespace TesApi.Web
 
         private async ValueTask ServicePoolManagePoolScalingAsync(CancellationToken cancellationToken)
         {
-            // This method implememts a state machine to disable/enable autoscaling as needed to clear certain conditions that can be observed
+            // This method implements a state machine to disable/enable autoscaling as needed to clear certain conditions that can be observed
             // Inputs are _resetAutoScalingRequired, compute nodes in ejectable states, and the current _scalingMode, along with the pool's
             // allocation state and autoscale enablement.
             // This method must no-op when the allocation state is not Steady.
@@ -346,7 +351,7 @@ namespace TesApi.Web
 
                                     case ComputeNodeState.StartTaskFailed:
                                         _logger.LogDebug("Found starttaskfailed node {NodeId}", node.Id);
-                                        StartTaskFailures.Enqueue(node.StartTaskInformation.FailureInformation);
+                                        StartTaskFailures.Enqueue(new(node.Id, node.StartTaskInformation.FailureInformation));
                                         break;
 
                                     case ComputeNodeState.Preempted:
@@ -364,6 +369,10 @@ namespace TesApi.Web
 
                             if (nodesToRemove.Any())
                             {
+                                await nodesToRemove
+                                    .Where(node => ComputeNodeState.StartTaskFailed.Equals(node.State))
+                                    .SelectMany<ComputeNode, (ComputeNode Node, string Log)>(node => [(node, "stdout.txt"), (node, "stderr.txt")])
+                                    .ForEachAsync((logInfo, token) => TransferStartTaskLogAsync(logInfo.Node, logInfo.Log, token), cancellationToken);
                                 await RemoveNodesAsync((IList<ComputeNode>)nodesToRemove, cancellationToken);
                                 _resetAutoScalingRequired = false;
                                 _scalingMode = ScalingMode.RemovingFailedNodes;
@@ -395,6 +404,14 @@ namespace TesApi.Web
                         _scalingMode = ScalingMode.AutoScaleEnabled;
                         _logger.LogInformation(@"Pool {PoolId} is back to normal resize and monitoring status.", PoolId);
                         break;
+                }
+
+                async ValueTask TransferStartTaskLogAsync(ComputeNode node, string log, CancellationToken cancellationToken)
+                {
+                    var file = await node.GetNodeFileAsync($"startup/{log}", cancellationToken: cancellationToken);
+                    var content = await file.ReadAsStringAsync(cancellationToken: cancellationToken);
+                    var blobUri = await _storageAccessProvider.GetInternalTesBlobUrlAsync($"/pools/{PoolId}/nodes/{node.Id}/{log}", cancellationToken);
+                    await _azureProxy.UploadBlobAsync(blobUri, content, cancellationToken);
                 }
 
                 int GetTaskCount(int @default) // Used to make reenabling auto-scale more performant by attempting to gather the current number of "pending" tasks, falling back on the current target.
@@ -512,7 +529,7 @@ namespace TesApi.Web
             => ResizeErrors.TryDequeue(out var resizeError) ? resizeError : default;
 
         /// <inheritdoc/>
-        public TaskFailureInformation PopNextStartTaskFailure()
+        public IBatchPool.StartTaskFailureInformation PopNextStartTaskFailure()
             => StartTaskFailures.TryDequeue(out var failure) ? failure : default;
 
         /// <summary>
