@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Dynamic;
 using System.Text.Json.Serialization;
 
 namespace Tes.ApiClients.Models.Terra

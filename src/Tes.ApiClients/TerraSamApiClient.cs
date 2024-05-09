@@ -46,29 +46,14 @@ namespace Tes.ApiClients
         {
             ArgumentNullException.ThrowIfNull(billingProfileId);
 
-            HttpResponseMessage response = null!;
-            try
-            {
-                var url = GetSamActionManagedIdentityUrl("azure_managed_identity", billingProfileId, "identify");
+            var url = GetSamActionManagedIdentityUrl("azure_managed_identity", billingProfileId, "identify");
 
-                Logger.LogInformation(@"Fetching action managed identity from Sam for {BillingProfileId}", billingProfileId);
+            Logger.LogInformation(@"Fetching action managed identity from Sam for {BillingProfileId}", billingProfileId);
 
-                response =
-                    await HttpSendRequestWithRetryPolicyAsync(() => new HttpRequestMessage(HttpMethod.Get, url),
-                        cancellationToken, setAuthorizationHeader: true);
-
-                var apiResponse = await GetApiResponseContentAsync(response, SamActionManagedIdentityApiResponseContext.Default.SamActionManagedIdentityApiResponse, cancellationToken);
-
-                Logger.LogInformation(@"Successfully obtained action managed identity from Sam for {BillingProfileId}", billingProfileId);
-
-                return apiResponse;
-
-            }
-            catch (Exception ex)
-            {
-                await LogResponseContentAsync(response, "Failed to get action managed identity name from Sam", ex, cancellationToken);
-                throw;
-            }
+            // TODO What happens if this request errors out?
+            return 
+                await HttpGetRequestAsync(url, setAuthorizationHeader: true, cacheResults: true, 
+                    SamActionManagedIdentityApiResponseContext.Default.SamActionManagedIdentityApiResponse, cancellationToken);
         }
 
 
