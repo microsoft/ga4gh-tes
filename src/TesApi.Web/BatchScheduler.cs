@@ -772,7 +772,7 @@ namespace TesApi.Web
                             };
                         }
 
-                        if (azureBatchJobAndTaskState.NodeErrorCode is not null)
+                        if (azureBatchJobAndTaskState.NodeErrorCode is not null && !TaskState.Completed.Equals(azureBatchJobAndTaskState.TaskState))
                         {
                             return new CombinedBatchTaskInfo
                             {
