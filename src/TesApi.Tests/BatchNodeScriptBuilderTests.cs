@@ -23,7 +23,7 @@ namespace TesApi.Tests
         {
             Uri url = new("https://foo.bar");
             var local = "/local";
-            var expectedCommand = $"wget --no-verbose --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {local} '{url}'";
+            var expectedCommand = $"wget --no-verbose --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {local} '{url}' && sleep 5s";
 
             var result = BatchScheduler.CreateWgetDownloadCommand(url, "/local");
 
