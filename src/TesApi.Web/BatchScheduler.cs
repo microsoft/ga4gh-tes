@@ -361,7 +361,7 @@ namespace TesApi.Web
             ArgumentNullException.ThrowIfNull(urlToDownload);
             ArgumentException.ThrowIfNullOrWhiteSpace(localFilePathDownloadLocation);
 
-            var command = $"wget --no-verbose --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload.AbsoluteUri}' && sleep 5s";
+            var command = $"wget --no-verbose --https-only --timeout=20 --waitretry=1 --tries=9 --retry-connrefused --continue -O {localFilePathDownloadLocation} '{urlToDownload.AbsoluteUri}'";
 
             if (setExecutable)
             {

@@ -65,7 +65,7 @@ namespace TesApi.Tests.Runner
             var nodeTaskUrl = $"https://foo.bar/{scriptName}";
             var scriptAssets = new BatchScriptAssetsInfo(new(scriptUrl), new(nodeTaskUrl), scriptName);
 
-            var expectedCommand = $"/bin/bash -c \"wget {WgetOptions} -O ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} '{scriptUrl}' && sleep 5s && chmod +x ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} && ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName}\"";
+            var expectedCommand = $"/bin/bash -c \"wget {WgetOptions} -O ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} '{scriptUrl}' && chmod +x ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName} && ${BatchNodeScriptBuilder.BatchTaskDirEnvVarName}/{scriptName}\"";
 
             var runCommand = taskExecutionScriptingManager.ParseBatchRunCommand(scriptAssets);
 
