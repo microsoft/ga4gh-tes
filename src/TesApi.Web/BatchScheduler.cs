@@ -42,9 +42,14 @@ namespace TesApi.Web
         internal const string PoolMetadata = "CoA-TES-Metadata";
 
         /// <summary>
-        /// Name of environment variable to place resources shared by all tasks on each compute node in a pool.
+        /// Name of <c>$</c> prefixed environment variable to place resources shared by all tasks on each compute node in a pool.
         /// </summary>
         public const string BatchNodeSharedEnvVar = "$AZ_BATCH_NODE_SHARED_DIR";
+
+        /// <summary>
+        /// Name of <c>$</c> prefixed environment variable of the working directory of the running task.
+        /// </summary>
+        public const string BatchNodeTaskWorkingDirEnvVar = "$AZ_BATCH_TASK_WORKING_DIR";
 
         private const string AzureSupportUrl = "https://portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/newsupportrequest";
         private const int PoolKeyLength = 55; // 64 max pool name length - 9 chars generating unique pool names
@@ -1059,7 +1064,7 @@ namespace TesApi.Web
                 };
 
                 var script = "config-docker.sh";
-                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new((await ReadScript("config-docker.sh")).Replace("{PackageInstalls}", packageInstallScript))), script, setExecutable: true)} && ./{script}");
+                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new((await ReadScript("config-docker.sh")).Replace("{PackageInstalls}", packageInstallScript))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}", setExecutable: true)} && {BatchNodeTaskWorkingDirEnvVar}/{script}");
             }
 
             var vmFamilyStartupScript = (Enum.TryParse(typeof(StartScriptVmFamilies), vmFamily, out var family) ? family : default) switch
@@ -1075,17 +1080,17 @@ namespace TesApi.Web
             {
                 var script = "config-vmfamily.sh";
                 // TODO: optimize this by uploading all vmfamily scripts when uploading runner binary rather then for each individual pool
-                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new(await ReadScript(vmFamilyStartupScript))), script, setExecutable: true)} && ./{script}");
+                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new(await ReadScript(vmFamilyStartupScript))), $"{BatchNodeTaskWorkingDirEnvVar}/{script}", setExecutable: true)} && {BatchNodeTaskWorkingDirEnvVar}/{script}");
             }
 
             if (globalStartTaskConfigured)
             {
-                cmd.Append($" && {CreateWgetDownloadCommand(globalStartTaskSasUrl, "global-" + StartTaskScriptFilename, setExecutable: true)} && ./global-{StartTaskScriptFilename}");
+                cmd.Append($" && {CreateWgetDownloadCommand(globalStartTaskSasUrl, $"{BatchNodeTaskWorkingDirEnvVar}/global-{StartTaskScriptFilename}", setExecutable: true)} && {BatchNodeTaskWorkingDirEnvVar}/global-{StartTaskScriptFilename}");
             }
 
             return new()
             {
-                CommandLine = $"/bin/sh -c \"{CreateWgetDownloadCommand(await UploadScriptAsync(StartTaskScriptFilename, cmd), StartTaskScriptFilename, true)} && ./{StartTaskScriptFilename}\"",
+                CommandLine = $"/bin/sh -c \"{CreateWgetDownloadCommand(await UploadScriptAsync(StartTaskScriptFilename, cmd), $"{BatchNodeTaskWorkingDirEnvVar}/{StartTaskScriptFilename}", true)} && {BatchNodeTaskWorkingDirEnvVar}/{StartTaskScriptFilename}\"",
                 UserIdentity = new BatchModels.UserIdentity(autoUser: new(elevationLevel: BatchModels.ElevationLevel.Admin, scope: BatchModels.AutoUserScope.Pool)),
                 MaxTaskRetryCount = 1,
                 WaitForSuccess = true
