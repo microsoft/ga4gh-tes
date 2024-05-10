@@ -19,7 +19,6 @@ using Tes.Models;
 using TesApi.Web.Extensions;
 using TesApi.Web.Management;
 using TesApi.Web.Management.Models.Quotas;
-using TesApi.Web.Options;
 using TesApi.Web.Runner;
 using TesApi.Web.Storage;
 using BatchModels = Microsoft.Azure.Management.Batch.Models;
@@ -76,6 +75,7 @@ namespace TesApi.Web
         private readonly TaskExecutionScriptingManager taskExecutionScriptingManager;
         private readonly string runnerMD5;
         private readonly string drsHubApiHost;
+        private readonly ApplicationInsightsMetadata applicationInsightsMetadata;
 
         private HashSet<string> onlyLogBatchTaskStateOnce = [];
 
@@ -83,12 +83,13 @@ namespace TesApi.Web
         /// Orchestrates <see cref="Tes.Models.TesTask"/>s on Azure Batch
         /// </summary>
         /// <param name="logger">Logger <see cref="ILogger"/></param>
-        /// <param name="batchGen1Options">Configuration of <see cref="BatchImageGeneration1Options"/></param>
-        /// <param name="batchGen2Options">Configuration of <see cref="BatchImageGeneration2Options"/></param>
-        /// <param name="drsHubOptions">Configuration of <see cref="DrsHubOptions"/></param>
-        /// <param name="storageOptions">Configuration of <see cref="StorageOptions"/></param>
-        /// <param name="batchNodesOptions">Configuration of <see cref="BatchNodesOptions"/></param>
-        /// <param name="batchSchedulingOptions">Configuration of <see cref="BatchSchedulingOptions"/></param>
+        /// <param name="batchGen1Options">Configuration of <see cref="Options.BatchImageGeneration1Options"/></param>
+        /// <param name="batchGen2Options">Configuration of <see cref="Options.BatchImageGeneration2Options"/></param>
+        /// <param name="drsHubOptions">Configuration of <see cref="Options.DrsHubOptions"/></param>
+        /// <param name="storageOptions">Configuration of <see cref="Options.StorageOptions"/></param>
+        /// <param name="batchNodesOptions">Configuration of <see cref="Options.BatchNodesOptions"/></param>
+        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/></param>
+        /// <param name="applicationInsightsMetadata"><see cref="ApplicationInsightsMetadata"/></param>
         /// <param name="azureProxy">Azure proxy <see cref="IAzureProxy"/></param>
         /// <param name="storageAccessProvider">Storage access provider <see cref="IStorageAccessProvider"/></param>
         /// <param name="quotaVerifier">Quota verifier <see cref="IBatchQuotaVerifier"/>></param>
@@ -104,6 +105,7 @@ namespace TesApi.Web
             IOptions<Options.StorageOptions> storageOptions,
             IOptions<Options.BatchNodesOptions> batchNodesOptions,
             IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions,
+            ApplicationInsightsMetadata applicationInsightsMetadata,
             IAzureProxy azureProxy,
             IStorageAccessProvider storageAccessProvider,
             IBatchQuotaVerifier quotaVerifier,
@@ -125,6 +127,7 @@ namespace TesApi.Web
             this.storageAccessProvider = storageAccessProvider;
             this.quotaVerifier = quotaVerifier;
             this.skuInformationProvider = skuInformationProvider;
+            this.applicationInsightsMetadata = applicationInsightsMetadata;
 
             this.usePreemptibleVmsOnly = batchSchedulingOptions.Value.UsePreemptibleVmsOnly;
             this.batchNodesSubnetId = batchNodesOptions.Value.SubnetId;
@@ -1045,8 +1048,8 @@ namespace TesApi.Web
             var dockerConfigured = machineConfiguration.ImageReference.Publisher.Equals("microsoft-azure-batch", StringComparison.OrdinalIgnoreCase)
                 && (machineConfiguration.ImageReference.Offer.StartsWith("ubuntu-server-container", StringComparison.OrdinalIgnoreCase) || machineConfiguration.ImageReference.Offer.StartsWith("centos-container", StringComparison.OrdinalIgnoreCase));
 
-            StringBuilder cmd = new("#!/bin/sh\n");
-            cmd.Append($"mkdir -p {BatchNodeSharedEnvVar} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
+            StringBuilder cmd = new("#!/bin/sh\nset -e\n");
+            cmd.AppendLinuxLine($"mkdir -p {BatchNodeSharedEnvVar} && {CreateWgetDownloadCommand(await storageAccessProvider.GetInternalTesBlobUrlAsync(NodeTaskRunnerFilename, cancellationToken), $"{BatchNodeSharedEnvVar}/{NodeTaskRunnerFilename}", setExecutable: true)}");
 
             if (!dockerConfigured)
             {
@@ -1058,7 +1061,7 @@ namespace TesApi.Web
                 };
 
                 var script = "config-docker.sh";
-                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new((await ReadScript("config-docker.sh")).Replace("{PackageInstalls}", packageInstallScript))), script, setExecutable: true)} && ./{script}");
+                cmd.AppendLinuxLine($"{CreateWgetDownloadCommand(await UploadScriptAsync(script, (await ReadScript("config-docker.sh")).Replace("{PackageInstalls}", packageInstallScript)), script, setExecutable: true)} && ./{script}");
             }
 
             var vmFamilyStartupScript = (Enum.TryParse(typeof(StartScriptVmFamilies), vmFamily, out var family) ? family : default) switch
@@ -1074,18 +1077,29 @@ namespace TesApi.Web
             {
                 var script = "config-vmfamily.sh";
                 // TODO: optimize this by uploading all vmfamily scripts when uploading runner binary rather then for each individual pool
-                cmd.Append($" && {CreateWgetDownloadCommand(await UploadScriptAsync(script, new(await ReadScript(vmFamilyStartupScript))), script, setExecutable: true)} && ./{script}");
+                cmd.AppendLinuxLine($"{CreateWgetDownloadCommand(await UploadScriptAsync(script, await ReadScript(vmFamilyStartupScript)), script, setExecutable: true)} && ./{script}");
             }
 
             if (globalStartTaskConfigured)
             {
-                cmd.Append($" && {CreateWgetDownloadCommand(globalStartTaskSasUrl, "global-" + StartTaskScriptFilename, setExecutable: true)} && ./global-{StartTaskScriptFilename}");
+                cmd.AppendLinuxLine($"{CreateWgetDownloadCommand(globalStartTaskSasUrl, "global-" + StartTaskScriptFilename, setExecutable: true)} && ./global-{StartTaskScriptFilename}");
             }
 
             return new()
             {
-                CommandLine = $"/bin/sh -c \"{CreateWgetDownloadCommand(await UploadScriptAsync(StartTaskScriptFilename, cmd), StartTaskScriptFilename, true)} && ./{StartTaskScriptFilename}\"",
+                CommandLine = $"/bin/sh -c \"{CreateWgetDownloadCommand(
+                    await UploadScriptAsync(
+                        StartTaskScriptFilename,
+                        cmd.AppendLinuxLine("wget  -O - https://raw.githubusercontent.com/Azure/batch-insights/master/scripts/1.x/run-linux.sh | bash")),
+                    StartTaskScriptFilename, true)} && ./{StartTaskScriptFilename}\"",
                 UserIdentity = new BatchModels.UserIdentity(autoUser: new(elevationLevel: BatchModels.ElevationLevel.Admin, scope: BatchModels.AutoUserScope.Pool)),
+                EnvironmentSettings =
+                [
+                    new("APP_INSIGHTS_INSTRUMENTATION_KEY", applicationInsightsMetadata.InstrumentationKey),
+                    new("APP_INSIGHTS_APP_ID", applicationInsightsMetadata.ApplicationId),
+                    new("AZ_BATCH_INSIGHTS_ARGS", "--disable gpu"),
+                    new("BATCH_INSIGHTS_DOWNLOAD_URL", "https://github.com/Azure/batch-insights/releases/download/v1.3.0/batch-insights")
+                ],
                 MaxTaskRetryCount = 1,
                 WaitForSuccess = true
             };
@@ -1100,10 +1114,11 @@ namespace TesApi.Web
                 return url;
             }
 
-            async ValueTask<string> ReadScript(string name)
+            async ValueTask<StringBuilder> ReadScript(string name)
             {
                 var path = Path.Combine(AppContext.BaseDirectory, "scripts", name);
-                return await File.ReadAllTextAsync(path, cancellationToken);
+                return new((await File.ReadAllTextAsync(path, cancellationToken))
+                    .ReplaceLineEndings("\n"));
             }
         }
 
