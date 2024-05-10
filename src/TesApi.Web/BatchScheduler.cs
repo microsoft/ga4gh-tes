@@ -773,6 +773,17 @@ namespace TesApi.Web
                             };
                         }
 
+                        if (azureBatchJobAndTaskState.NodeState == ComputeNodeState.StartTaskFailed)
+                        {
+                            return new CombinedBatchTaskInfo
+                            {
+                                BatchTaskState = BatchTaskState.NodeFailedDuringStartupOrExecution,
+                                FailureReason = azureBatchJobAndTaskState.NodeState.ToString(),
+                                SystemLogItems = ConvertNodeErrorsToSystemLogItems(azureBatchJobAndTaskState),
+                                Pool = azureBatchJobAndTaskState.PoolId
+                            };
+                        }
+
                         if (azureBatchJobAndTaskState.NodeErrorCode is not null && !TaskState.Completed.Equals(azureBatchJobAndTaskState.TaskState))
                         {
                             return new CombinedBatchTaskInfo
