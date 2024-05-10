@@ -1109,7 +1109,8 @@ namespace TesApi.Web
             async ValueTask<string> ReadScript(string name)
             {
                 var path = Path.Combine(AppContext.BaseDirectory, "scripts", name);
-                return await File.ReadAllTextAsync(path, cancellationToken);
+                return (await File.ReadAllTextAsync(path, cancellationToken))
+                    .ReplaceLineEndings("\n");
             }
         }
 
