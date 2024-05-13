@@ -20,6 +20,11 @@ public class TerraOptions
     public string LandingZoneId { get; set; }
 
     /// <summary>
+    /// Billing project id containing the Tes back-end resources
+    /// </summary>
+    public string BillingProjectId { get; set; }
+
+    /// <summary>
     /// Landing zone api host. 
     /// </summary>
     public string LandingZoneApiHost { get; set; }
@@ -28,6 +33,11 @@ public class TerraOptions
     /// Wsm api host.
     /// </summary>
     public string WsmApiHost { get; set; }
+
+    /// <summary>
+    /// Sam api host.
+    /// </summary>
+    public string SamApiHost { get; set; }
 
     /// <summary>
     /// Workspace storage container resource id

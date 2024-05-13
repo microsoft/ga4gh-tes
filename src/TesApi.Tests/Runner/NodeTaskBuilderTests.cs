@@ -47,7 +47,7 @@ namespace TesApi.Tests.Runner
         [TestMethod]
         public void WithInputUsingCombinedTransformationStrategy_WithTerraRuntimeSet_InputUsesTerraCombinedTransformationStrategy()
         {
-            nodeTaskBuilder.WithTerraAsRuntimeEnvironment("https://wsm.foo", "https://lz.foo", sasAllowedIpRange: String.Empty);
+            nodeTaskBuilder.WithTerraAsRuntimeEnvironment("https://wsm.foo", "https://lz.foo", "http://sam.foo", "123", sasAllowedIpRange: String.Empty);
             nodeTaskBuilder.WithInputUsingCombinedTransformationStrategy("/root/input", "http://foo.bar/input", "/root");
 
             var input = nodeTaskBuilder.Build().Inputs![0];
@@ -97,7 +97,7 @@ namespace TesApi.Tests.Runner
         [TestMethod]
         public void WithOutputUsingCombinedTransformationStrategy_WithTerraRuntimeSet_OutputUsesCombinedTerraTransformationStrategy()
         {
-            nodeTaskBuilder.WithTerraAsRuntimeEnvironment("https://wsm.foo", "https://lz.foo", sasAllowedIpRange: String.Empty);
+            nodeTaskBuilder.WithTerraAsRuntimeEnvironment("https://wsm.foo", "https://lz.foo", "http://sam.foo", "123", sasAllowedIpRange: String.Empty);
             nodeTaskBuilder.WithOutputUsingCombinedTransformationStrategy("/root/output", "http://foo.bar/output", FileType.File, "/root");
             var output = nodeTaskBuilder.Build().Outputs![0];
             Assert.AreEqual(TransformationStrategy.CombinedTerra, output.TransformationStrategy);
@@ -204,7 +204,7 @@ namespace TesApi.Tests.Runner
         {
             var url = "https://foo.blob.core.windows.net/cont/log";
             nodeTaskBuilder.WithLogPublisher(new(url))
-                .WithTerraAsRuntimeEnvironment("http://wsm.terra.foo", "http://lz.terra.foo", sasAllowedIpRange: null);
+                .WithTerraAsRuntimeEnvironment("http://wsm.terra.foo", "http://lz.terra.foo", "http://sam.foo", "123", sasAllowedIpRange: null);
             var nodeTask = nodeTaskBuilder.Build();
 
             Assert.AreEqual(TransformationStrategy.CombinedTerra, nodeTask.RuntimeOptions.StreamingLogPublisher!.TransformationStrategy);
@@ -216,7 +216,7 @@ namespace TesApi.Tests.Runner
             var drsHubUrl = "https://drshub.foo";
             nodeTaskBuilder
                 .WithDrsHubUrl(drsHubUrl)
-                .WithTerraAsRuntimeEnvironment("http://wsm.terra.foo", "http://lz.terra.foo", sasAllowedIpRange: null);
+                .WithTerraAsRuntimeEnvironment("http://wsm.terra.foo", "http://lz.terra.foo", "http://sam.foo", "123", sasAllowedIpRange: null);
 
             var nodeTask = nodeTaskBuilder.Build();
 
