@@ -82,7 +82,7 @@ namespace Tes.ApiClients
             {
                 Url = drsUri.AbsoluteUri,
                 CloudPlatform = CloudPlatform.Azure,
-                Fields = new List<string> { "accessUrl" }
+                Fields = ["accessUrl"]
             };
 
             return CreateJsonStringContent(drsResolveApiRequestBody, DrsResolveRequestContentContext.Default.DrsResolveRequestContent);
