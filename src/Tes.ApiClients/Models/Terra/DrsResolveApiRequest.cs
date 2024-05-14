@@ -21,9 +21,10 @@ namespace Tes.ApiClients.Models.Terra
 
     public enum CloudPlatform
     {
-        // Lowercase to support required JSON serialization
-        azure,
-        gs // google storage
+        [JsonPropertyName("azure")]
+        Azure,
+        [JsonPropertyName("google")]
+        Google
     }
 
     [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]

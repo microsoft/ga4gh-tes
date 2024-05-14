@@ -81,7 +81,7 @@ namespace Tes.ApiClients
             var drsResolveApiRequestBody = new DrsResolveRequestContent
             {
                 Url = drsUri.AbsoluteUri,
-                CloudPlatform = CloudPlatform.azure,
+                CloudPlatform = CloudPlatform.Azure,
                 Fields = new List<string> { "accessUrl" }
             };
 
