@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace TesApi.Web
 {
@@ -29,11 +28,10 @@ namespace TesApi.Web
         /// <summary>
         /// Default constructor
         /// </summary>
-        /// <param name="batchSchedulingOptions">Configuration of <see cref="Options.BatchSchedulingOptions"/></param>
         /// <param name="batchScheduler"></param>
         /// <param name="logger"></param>
         /// <exception cref="ArgumentNullException"></exception>
-        public BatchPoolService(IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IBatchScheduler batchScheduler, ILogger<BatchPoolService> logger)
+        public BatchPoolService(IBatchScheduler batchScheduler, ILogger<BatchPoolService> logger)
         {
             _batchScheduler = batchScheduler ?? throw new ArgumentNullException(nameof(batchScheduler));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));

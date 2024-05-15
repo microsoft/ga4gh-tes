@@ -90,8 +90,8 @@ namespace TesApi.Web
             }
         }
 
-        private readonly BatchPools batchPools = new();
-        private readonly HashSet<string> neededPools = new();
+        private readonly BatchPools batchPools = [];
+        private readonly HashSet<string> neededPools = [];
 
         /// <inheritdoc/>
         public bool NeedPoolFlush

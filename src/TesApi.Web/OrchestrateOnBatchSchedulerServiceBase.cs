@@ -188,7 +188,7 @@ namespace TesApi.Web
                                 logs.Add($"BatchErrorCode: {requestInfo.BatchError.Code}");
                                 logs.Add($"BatchErrorMessage ({requestInfo.BatchError.Message.Language}): {requestInfo.BatchError.Message.Value}");
 
-                                foreach (var detail in requestInfo.BatchError.Values?.Select(d => $"BatchErrorDetail: '{d.Key}': '{d.Value}'") ?? Enumerable.Empty<string>())
+                                foreach (var detail in requestInfo.BatchError.Values?.Select(d => $"BatchErrorDetail: '{d.Key}': '{d.Value}'") ?? [])
                                 {
                                     logs.Add(detail);
                                 }
