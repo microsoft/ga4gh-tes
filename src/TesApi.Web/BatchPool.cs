@@ -7,10 +7,12 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
+using CommonUtilities;
 using Microsoft.Azure.Batch;
 using Microsoft.Azure.Batch.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using TesApi.Web.Storage;
 using static TesApi.Web.IBatchPool;
 
 namespace TesApi.Web
@@ -34,6 +36,7 @@ namespace TesApi.Web
 
         private readonly ILogger _logger;
         private readonly IAzureProxy _azureProxy;
+        private readonly IStorageAccessProvider _storageAccessProvider;
 
         /// <summary>
         /// Constructor of <see cref="BatchPool"/>.
@@ -41,21 +44,26 @@ namespace TesApi.Web
         /// <param name="batchScheduler"></param>
         /// <param name="batchSchedulingOptions"></param>
         /// <param name="azureProxy"></param>
+        /// <param name="storageAccessProvider"></param>
         /// <param name="logger"></param>
         /// <exception cref="ArgumentException"></exception>
-        public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, ILogger<BatchPool> logger)
+        public BatchPool(IBatchScheduler batchScheduler, IOptions<Options.BatchSchedulingOptions> batchSchedulingOptions, IAzureProxy azureProxy, IStorageAccessProvider storageAccessProvider, ILogger<BatchPool> logger)
         {
             var rotationDays = batchSchedulingOptions.Value.PoolRotationForcedDays;
             if (rotationDays == 0) { rotationDays = Options.BatchSchedulingOptions.DefaultPoolRotationForcedDays; }
             _forcePoolRotationAge = TimeSpan.FromDays(rotationDays);
 
             this._azureProxy = azureProxy;
+            this._storageAccessProvider = storageAccessProvider;
             this._logger = logger;
             _batchPools = batchScheduler as BatchScheduler ?? throw new ArgumentException("batchScheduler must be of type BatchScheduler", nameof(batchScheduler));
         }
 
         private IAsyncEnumerable<CloudTask> GetTasksAsync(string select, string filter)
             => _removedFromService ? AsyncEnumerable.Empty<CloudTask>() : _azureProxy.ListTasksAsync(PoolId, new ODATADetailLevel { SelectClause = select, FilterClause = filter });
+
+        internal IAsyncEnumerable<CloudTask> GetTasksAsync(bool includeCompleted)
+            => _azureProxy.ListTasksAsync(PoolId, new ODATADetailLevel { SelectClause = "id,stateTransitionTime", FilterClause = includeCompleted ? default : "state ne 'completed'" });
 
         private async ValueTask RemoveNodesAsync(IList<ComputeNode> nodesToRemove, CancellationToken cancellationToken)
         {
@@ -301,7 +309,7 @@ namespace TesApi.Web
 
         private async ValueTask ServicePoolManagePoolScalingAsync(CancellationToken cancellationToken)
         {
-            // This method implememts a state machine to disable/enable autoscaling as needed to clear certain conditions that can be observed
+            // This method implements a state machine to disable/enable autoscaling as needed to clear certain conditions that can be observed
             // Inputs are _resetAutoScalingRequired, compute nodes in ejectable states, and the current _scalingMode, along with the pool's
             // allocation state and autoscale enablement.
             // This method must no-op when the allocation state is not Steady.
@@ -338,7 +346,7 @@ namespace TesApi.Web
 
                                     case ComputeNodeState.StartTaskFailed:
                                         _logger.LogDebug("Found starttaskfailed node {NodeId}", node.Id);
-                                        StartTaskFailures.Enqueue(node.StartTaskInformation.FailureInformation);
+                                        StartTaskFailures.Enqueue(new(node.Id, node.StartTaskInformation.FailureInformation));
                                         break;
 
                                     case ComputeNodeState.Preempted:
@@ -356,6 +364,10 @@ namespace TesApi.Web
 
                             if (nodesToRemove.Any())
                             {
+                                await nodesToRemove
+                                    .Where(node => ComputeNodeState.StartTaskFailed.Equals(node.State))
+                                    .SelectMany<ComputeNode, (ComputeNode Node, string Log)>(node => [(node, "stdout.txt"), (node, "stderr.txt")])
+                                    .ForEachAsync((logInfo, token) => TransferStartTaskLogAsync(logInfo.Node, logInfo.Log, token), cancellationToken);
                                 await RemoveNodesAsync((IList<ComputeNode>)nodesToRemove, cancellationToken);
                                 _resetAutoScalingRequired = false;
                                 _scalingMode = ScalingMode.RemovingFailedNodes;
@@ -387,6 +399,14 @@ namespace TesApi.Web
                         _scalingMode = ScalingMode.AutoScaleEnabled;
                         _logger.LogInformation(@"Pool {PoolId} is back to normal resize and monitoring status.", PoolId);
                         break;
+                }
+
+                async ValueTask TransferStartTaskLogAsync(ComputeNode node, string log, CancellationToken cancellationToken)
+                {
+                    var file = await node.GetNodeFileAsync($"startup/{log}", cancellationToken: cancellationToken);
+                    var content = await file.ReadAsStringAsync(cancellationToken: cancellationToken);
+                    var blobUri = await _storageAccessProvider.GetInternalTesBlobUrlAsync($"/pools/{PoolId}/nodes/{node.Id}/{log}", Azure.Storage.Sas.BlobSasPermissions.Create, cancellationToken);
+                    await _azureProxy.UploadBlobAsync(blobUri, content, cancellationToken);
                 }
             }
         }
@@ -461,7 +481,7 @@ namespace TesApi.Web
         public string PoolId { get; private set; }
 
         /// <inheritdoc/>
-        public Queue<TaskFailureInformation> StartTaskFailures { get; } = new();
+        public Queue<StartTaskFailureInformation> StartTaskFailures { get; } = new();
 
         /// <inheritdoc/>
         public Queue<ResizeError> ResizeErrors { get; } = new();

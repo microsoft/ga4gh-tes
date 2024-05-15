@@ -27,7 +27,7 @@ namespace TesApi.Web
         /// <summary>
         /// Failures from nodes in <see cref="Microsoft.Azure.Batch.Common.ComputeNodeState.StartTaskFailed"/>.
         /// </summary>
-        Queue<TaskFailureInformation> StartTaskFailures { get; }
+        Queue<StartTaskFailureInformation> StartTaskFailures { get; }
 
         /// <summary>
         /// Pool allocation failures that impact task execution ability to be successful.
@@ -92,6 +92,13 @@ namespace TesApi.Web
         /// </summary>
         /// <param name="CloudTask">A <see cref="CloudTask"/>.</param>
         /// <param name="PreviousComputeNodeId">A compute node id or null.</param>
-        public record CloudTaskWithPreviousComputeNodeId(CloudTask CloudTask, string PreviousComputeNodeId);
+        public record struct CloudTaskWithPreviousComputeNodeId(CloudTask CloudTask, string PreviousComputeNodeId);
+
+        /// <summary>
+        /// <see cref="TaskFailureInformation"/> paired with compute node Id.
+        /// </summary>
+        /// <param name="NodeId">Compute node Id</param>
+        /// <param name="TaskFailureInformation"><see cref="TaskFailureInformation"/></param>
+        public record class StartTaskFailureInformation(string NodeId, TaskFailureInformation TaskFailureInformation);
     }
 }

@@ -310,15 +310,16 @@ namespace TesApi.Web
                     .Append(failure.Message)
                     .Concat(failure.Values.Select(FormatNameValuePair))));
 
-            AzureBatchTaskState ConvertFromStartTask(TaskFailureInformation failure)
-                => new(AzureBatchTaskState.TaskState.NodeStartTaskFailed, Failure: new(failure.Code, Enumerable.Empty<string>()
-                    .Append($"Start task failed ({failure.Category}): {failure.Message}")
-                    .Concat(failure.Details.Select(FormatNameValuePair))));
+            AzureBatchTaskState ConvertFromStartTask(IBatchPool.StartTaskFailureInformation failure)
+                => new(AzureBatchTaskState.TaskState.NodeStartTaskFailed, Failure: new(failure.TaskFailureInformation.Code, Enumerable.Empty<string>()
+                    .Append($"Start task failed ({failure.TaskFailureInformation.Category}): {failure.TaskFailureInformation.Message}")
+                    .Concat(failure.TaskFailureInformation.Details?.Select(FormatNameValuePair) ?? [])
+                    .Append(failure.NodeId)));
 
             ResizeError PopNextResizeError()
                 => pool.ResizeErrors.TryDequeue(out var resizeError) ? resizeError : default;
 
-            TaskFailureInformation PopNextStartTaskFailure()
+            IBatchPool.StartTaskFailureInformation PopNextStartTaskFailure()
                 => pool.StartTaskFailures.TryDequeue(out var failure) ? failure : default;
 
             AzureBatchTaskState GetCompletedBatchState(CloudTask task)
@@ -338,7 +339,7 @@ namespace TesApi.Web
                         Enumerable.Empty<string>()
                             .Append(task.ExecutionInformation.FailureInformation.Message)
                             .Append($"Batch task ExitCode: {task.ExecutionInformation?.ExitCode}, Failure message: {task.ExecutionInformation?.FailureInformation?.Message}")
-                            .Concat(task.ExecutionInformation.FailureInformation.Details.Select(FormatNameValuePair))),
+                            .Concat(task.ExecutionInformation.FailureInformation.Details?.Select(FormatNameValuePair) ?? [])),
                         BatchTaskStartTime: task.ExecutionInformation.StartTime,
                         BatchTaskEndTime: task.ExecutionInformation.EndTime,
                         BatchTaskExitCode: task.ExecutionInformation.ExitCode),
