@@ -27,8 +27,8 @@ namespace TesApi.Web
     internal class TaskScheduler(RunnerEventsProcessor nodeEventProcessor, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, IRepository<TesTask> repository, IBatchScheduler batchScheduler, ILogger<TaskScheduler> taskSchedulerLogger)
         : OrchestrateOnBatchSchedulerServiceBase(hostApplicationLifetime, repository, batchScheduler, taskSchedulerLogger)
     {
-        private readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(5);
-        private readonly TimeSpan batchRunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs uses a 30 second polling interval
+        private readonly TimeSpan blobRunInterval = TimeSpan.FromSeconds(15);
+        private readonly TimeSpan batchRunInterval = TimeSpan.FromSeconds(30); // The very fastest process inside of Azure Batch accessing anything within pools or jobs appears to use a 30 second polling interval
         private readonly RunnerEventsProcessor nodeEventProcessor = nodeEventProcessor;
 
         /// <inheritdoc />
