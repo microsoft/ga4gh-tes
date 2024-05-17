@@ -70,7 +70,7 @@ namespace Tes.ApiClients
 
         public static async Task<DrsResolveApiResponse> GetDrsResolveApiResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
         {
-            var apiResponse = await GetApiResponseContentAsync<DrsResolveApiResponse>(response, cancellationToken);
+            var apiResponse = await GetApiResponseContentAsync(response, DrsResolveApiResponseContext.Default.DrsResolveApiResponse, cancellationToken);
             return apiResponse;
         }
 
@@ -82,10 +82,10 @@ namespace Tes.ApiClients
             {
                 Url = drsUri.AbsoluteUri,
                 CloudPlatform = CloudPlatform.Azure,
-                Fields = new List<string> { "accessUrl" }
+                Fields = ["accessUrl"]
             };
 
-            return CreateJsonStringContent(drsResolveApiRequestBody);
+            return CreateJsonStringContent(drsResolveApiRequestBody, DrsResolveRequestContentContext.Default.DrsResolveRequestContent);
         }
 
         private string GetResolveDrsApiUrl()

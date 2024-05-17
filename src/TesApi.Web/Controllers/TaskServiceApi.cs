@@ -77,17 +77,17 @@ namespace TesApi.Controllers
 
             if (await repository.TryGetItemAsync(id, cancellationToken, item => tesTask = item))
             {
-                if (tesTask.State == TesState.COMPLETEEnum ||
-                    tesTask.State == TesState.EXECUTORERROREnum ||
-                    tesTask.State == TesState.SYSTEMERROREnum)
+                if (tesTask.State == TesState.COMPLETE ||
+                    tesTask.State == TesState.EXECUTOR_ERROR ||
+                    tesTask.State == TesState.SYSTEM_ERROR)
                 {
                     logger.LogInformation("Task {TesTask} cannot be canceled because it is in {TesTaskState} state.", id, tesTask.State);
                 }
-                else if (tesTask.State != TesState.CANCELEDEnum)
+                else if (tesTask.State != TesState.CANCELED)
                 {
                     logger.LogInformation("Canceling task");
                     tesTask.IsCancelRequested = true;
-                    tesTask.State = TesState.CANCELEDEnum;
+                    tesTask.State = TesState.CANCELED;
 
                     try
                     {
@@ -153,7 +153,7 @@ namespace TesApi.Controllers
             }
 
             tesTask.Tags ??= new Dictionary<string, string>(StringComparer.Ordinal); // case-sensitive is the default for Dictionary<string, T> as well as the default for JSON.
-            tesTask.State = TesState.QUEUEDEnum;
+            tesTask.State = TesState.QUEUED;
             tesTask.CreationTime = DateTimeOffset.UtcNow;
             tesTask.TaskSubmitter = TaskSubmitter.Parse(tesTask);
             tesTask.Id = tesTask.CreateId();
@@ -346,7 +346,7 @@ namespace TesApi.Controllers
                 }
             }
 
-            var (rawPredicate, predicate) = GenerateSearchPredicates(repository, stateEnum, namePrefix, tags);
+            var (rawPredicate, predicates) = GenerateSearchPredicates(repository, stateEnum, namePrefix, tags);
 
             TesView viewEnum;
 
@@ -360,15 +360,23 @@ namespace TesApi.Controllers
                 return BadRequest(exc.Message);
             }
 
-            string nextPageToken = default;
-            IEnumerable<TesTask> tasks = default;
+            IRepository<TesTask>.GetItemsResult result;
 
-            (nextPageToken, tasks) = await repository.GetItemsAsync(
-                decodedPageToken,
-                pageSize.HasValue ? (int)pageSize : 256,
-                cancellationToken,
-                rawPredicate,
-                predicate);
+            try
+            {
+                result = await repository.GetItemsAsync(
+                    decodedPageToken,
+                    pageSize.HasValue ? (int)pageSize : 256,
+                    cancellationToken,
+                    rawPredicate,
+                    predicates);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+
+            var (nextPageToken, tasks) = result;
 
             var encodedNextPageToken = nextPageToken is null ? null : Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(nextPageToken));
             var response = new TesListTasksResponse { Tasks = tasks.ToList(), NextPageToken = encodedNextPageToken };
@@ -421,20 +429,20 @@ namespace TesApi.Controllers
             return (tags, null);
         }
 
-        internal static (FormattableString RawPredicate, System.Linq.Expressions.Expression<Func<TesTask, bool>> EFPredicate) GenerateSearchPredicates(IRepository<TesTask> repository, TesState? state, string namePrefix, IDictionary<string, string> tags)
+        internal static (FormattableString RawPredicate, IEnumerable<System.Linq.Expressions.Expression<Func<TesTask, bool>>> EFPredicates) GenerateSearchPredicates(IRepository<TesTask> repository, TesState? state, string namePrefix, IDictionary<string, string> tags)
         {
             tags ??= new Dictionary<string, string>();
-            Func<TesTask, bool> efPredicate = null;
+            List<System.Linq.Expressions.Expression<Func<TesTask, bool>>> efPredicates = null;
             AppendableFormattableString rawPredicate = null;
 
             if (!string.IsNullOrWhiteSpace(namePrefix))
             {
-                efPredicate = AndFunc(efPredicate, t => t.Name.StartsWith(namePrefix));
+                EnsureEfPredicates(ref efPredicates).Add(t => t.Name.StartsWith(namePrefix));
             }
 
             if (state is not null)
             {
-                efPredicate = AndFunc(efPredicate, t => t.State == state);
+                EnsureEfPredicates(ref efPredicates).Add(t => t.State == state);
             }
 
             foreach (var tag in tags)
@@ -449,14 +457,10 @@ namespace TesApi.Controllers
                 }
             }
 
-            return (rawPredicate, efPredicate is null ? null : t => efPredicate(t));
+            return (rawPredicate, efPredicates);
 
-            static Func<TesTask, bool> AndFunc(Func<TesTask, bool> source, Func<TesTask, bool> additional)
-            {
-                return source is null
-                    ? additional
-                    : t => source(t) && additional(t);
-            }
+            static List<System.Linq.Expressions.Expression<Func<TesTask, bool>>> EnsureEfPredicates(ref List<System.Linq.Expressions.Expression<Func<TesTask, bool>>> efPredicates)
+                => efPredicates ??= [];
 
             static AppendableFormattableString AndString(AppendableFormattableString source, AppendableFormattableString additional)
             {
@@ -477,9 +481,9 @@ namespace TesApi.Controllers
         {
             try
             {
-                if (tesTask.State == TesState.COMPLETEEnum
-                   || tesTask.State == TesState.CANCELEDEnum
-                   || ((tesTask.State == TesState.SYSTEMERROREnum || tesTask.State == TesState.EXECUTORERROREnum)
+                if (tesTask.State == TesState.COMPLETE
+                   || tesTask.State == TesState.CANCELED
+                   || ((tesTask.State == TesState.SYSTEM_ERROR || tesTask.State == TesState.EXECUTOR_ERROR)
                         && Enum.TryParse<TesView>(view, true, out var tesView)
                         && tesView == TesView.FULL))
                 {

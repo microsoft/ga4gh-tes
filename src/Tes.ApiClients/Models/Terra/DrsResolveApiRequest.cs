@@ -1,9 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
-using System.Text.Json;
+using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 
 namespace Tes.ApiClients.Models.Terra
@@ -15,20 +13,25 @@ namespace Tes.ApiClients.Models.Terra
         public string Url { get; set; }
 
         [JsonPropertyName("cloudPlatform")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
         public CloudPlatform CloudPlatform { get; set; }
 
         [JsonPropertyName("fields")]
         public List<string> Fields { get; set; }
     }
+
+    [JsonConverter(typeof(JsonStringEnumMemberConverter))]
     public enum CloudPlatform
     {
-        [JsonPropertyName("azure")]
+        [EnumMember(Value = "azure")]
         Azure,
-        [JsonPropertyName("google")]
+        [EnumMember(Value = "gs")]
         Google
     }
 
+    [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonSerializable(typeof(DrsResolveRequestContent))]
+    public partial class DrsResolveRequestContentContext : JsonSerializerContext
+    { }
 }
 
 

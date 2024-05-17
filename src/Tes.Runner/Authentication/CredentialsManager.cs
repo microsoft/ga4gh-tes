@@ -30,17 +30,17 @@ namespace Tes.Runner.Authentication
 
         private TimeSpan SleepDurationHandler(int attempt)
         {
-            logger.LogInformation($"Attempt {attempt} to get token credential");
+            logger.LogInformation("Attempt {Attempt} to get token credential", attempt);
             var duration = TimeSpan.FromSeconds(Math.Pow(ExponentialBackOffExponent, attempt));
-            logger.LogInformation($"Waiting {duration} before retrying");
+            logger.LogInformation("Waiting {Duration} before retrying", duration);
             return duration;
         }
 
-        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions)
+        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default)
         {
             try
             {
-                return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions));
+                return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions, tokenScope));
             }
             catch
             {
@@ -48,16 +48,19 @@ namespace Tes.Runner.Authentication
             }
         }
 
-        private TokenCredential GetTokenCredentialImpl(RuntimeOptions runtimeOptions)
+        private TokenCredential GetTokenCredentialImpl(RuntimeOptions runtimeOptions, string? tokenScope)
         {
+            tokenScope ??= runtimeOptions.AzureEnvironmentConfig!.TokenScope!;
+
             try
             {
                 TokenCredential tokenCredential;
+                Uri authorityHost = new(runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!);
 
                 if (!string.IsNullOrWhiteSpace(runtimeOptions.NodeManagedIdentityResourceId))
                 {
-                    logger.LogInformation($"Token credentials with Managed Identity and resource ID: {runtimeOptions.NodeManagedIdentityResourceId}");
-                    var tokenCredentialOptions = new TokenCredentialOptions { AuthorityHost = new Uri(runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!) };
+                    logger.LogInformation("Token credentials with Managed Identity and resource ID: {NodeManagedIdentityResourceId}", runtimeOptions.NodeManagedIdentityResourceId);
+                    var tokenCredentialOptions = new TokenCredentialOptions { AuthorityHost = authorityHost };
 
                     tokenCredential = new ManagedIdentityCredential(
                         new ResourceIdentifier(runtimeOptions.NodeManagedIdentityResourceId),
@@ -66,12 +69,12 @@ namespace Tes.Runner.Authentication
                 else
                 {
                     logger.LogInformation("Token credentials with DefaultAzureCredential");
-                    var defaultAzureCredentialOptions = new DefaultAzureCredentialOptions { AuthorityHost = new Uri(runtimeOptions.AzureEnvironmentConfig!.AzureAuthorityHostUrl!) };
+                    var defaultAzureCredentialOptions = new DefaultAzureCredentialOptions { AuthorityHost = authorityHost };
                     tokenCredential = new DefaultAzureCredential(defaultAzureCredentialOptions);
                 }
 
                 //Get token to verify that credentials are valid
-                tokenCredential.GetToken(new TokenRequestContext(new[] { runtimeOptions.AzureEnvironmentConfig.TokenScope! }), CancellationToken.None);
+                _ = tokenCredential.GetToken(new TokenRequestContext([tokenScope]), CancellationToken.None);
 
                 return tokenCredential;
             }
