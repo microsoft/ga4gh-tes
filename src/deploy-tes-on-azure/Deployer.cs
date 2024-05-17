@@ -651,7 +651,7 @@ namespace TesDeployer
                                 kubernetesManager.ExecKubectlProcessAsync($"port-forward -n {configuration.AksCoANamespace} svc/tes 8088:80", token, appendKubeconfig: true));
 
                             var portForwardTask = startPortForward(tokenSource.Token);
-                            await Task.Delay(longRetryWaitTime * 2, tokenSource.Token); // Give enough time for kubectl to standup the port forwarding.
+                            await Task.Delay(TimeSpan.FromMinutes(3.5), tokenSource.Token); // Give enough time for kubectl to standup the port forwarding, as well as enough time for TES to accept connections.
                             var runTestTask = RunTestTaskAsync("localhost:8088", batchAccount.LowPriorityCoreQuota > 0);
 
                             for (var task = await Task.WhenAny(portForwardTask, runTestTask);
