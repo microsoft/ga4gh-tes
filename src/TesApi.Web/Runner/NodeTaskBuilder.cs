@@ -199,11 +199,11 @@ namespace TesApi.Web.Runner
         /// <param name="wsmApiHost"></param>
         /// <param name="landingZoneApiHost"></param>
         /// <param name="samApiHost"></param>
-        /// <param name="billingProjectId"></param>
+        /// <param name="billingProfileId"></param>
         /// <param name="sasAllowedIpRange"></param>
         /// <returns></returns>
         public NodeTaskBuilder WithTerraAsRuntimeEnvironment(string wsmApiHost, string landingZoneApiHost,
-            string samApiHost, string billingProjectId, string sasAllowedIpRange)
+            string samApiHost, string billingProfileId, string sasAllowedIpRange)
         {
             ArgumentException.ThrowIfNullOrEmpty(wsmApiHost, nameof(wsmApiHost));
             ArgumentException.ThrowIfNullOrEmpty(landingZoneApiHost, nameof(landingZoneApiHost));
@@ -214,7 +214,7 @@ namespace TesApi.Web.Runner
             nodeTask.RuntimeOptions.Terra.WsmApiHost = wsmApiHost;
             nodeTask.RuntimeOptions.Terra.LandingZoneApiHost = landingZoneApiHost;
             nodeTask.RuntimeOptions.Terra.SamApiHost = samApiHost;
-            nodeTask.RuntimeOptions.Terra.BillingProjectId = billingProjectId;
+            nodeTask.RuntimeOptions.Terra.BillingProfileId = billingProfileId;
             nodeTask.RuntimeOptions.Terra.SasAllowedIpRange = sasAllowedIpRange;
 
             SetCombinedTerraTransformationStrategyForAllTransformations();

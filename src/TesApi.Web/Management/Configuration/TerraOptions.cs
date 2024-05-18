@@ -20,9 +20,9 @@ public class TerraOptions
     public string LandingZoneId { get; set; }
 
     /// <summary>
-    /// Billing project id containing the Tes back-end resources
+    /// Billing profile id containing the Tes back-end resources
     /// </summary>
-    public string BillingProjectId { get; set; }
+    public string BillingProfileId { get; set; }
 
     /// <summary>
     /// Landing zone api host. 

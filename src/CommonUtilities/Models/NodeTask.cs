@@ -65,7 +65,7 @@ namespace Tes.Runner.Models
         public string? SamApiHost { get; set; }
         public string? SasAllowedIpRange { get; set; }
         public string? DrsHubApiHost { get; set; }
-        public string? BillingProjectId { get; set; }
+        public string? BillingProfileId { get; set; }
     }
 
     public class NodeTaskResolverOptions
