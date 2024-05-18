@@ -3,8 +3,12 @@
 
 using Azure.Containers.ContainerRegistry;
 using Azure.Core;
+using CommonUtilities;
+using CommonUtilities.AzureCloud;
 using Docker.DotNet.Models;
+using Microsoft.Azure.Management.Monitor.Fluent.Models;
 using Microsoft.Extensions.Logging;
+using Tes.ApiClients;
 using Tes.Runner.Authentication;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
@@ -18,6 +22,7 @@ namespace Tes.Runner.Docker
 
         private readonly ILogger logger = PipelineLoggerFactory.Create<ContainerRegistryAuthorizationManager>();
         private readonly CredentialsManager tokenCredentialsManager;
+        private readonly TerraSamApiClient? terraSamApiClient;
 
         public ContainerRegistryAuthorizationManager(CredentialsManager tokenCredentialsManager)
         {
@@ -39,7 +44,7 @@ namespace Tes.Runner.Docker
             var acrAccessToken = string.Empty;
 
             // Get the manifest to the image to be pulled. If authentication is needed, this will derive it from the managed identity using the pull-image scope.
-            var client = CreateContainerRegistryContentClientWithAcquireAuthTokenPolicy(new Uri(registryAddress), repositoryName, runtimeOptions, token => acrAccessToken = token);
+            var client = await CreateContainerRegistryContentClientWithAcquireAuthTokenPolicyAsync(new Uri(registryAddress), repositoryName, runtimeOptions, token => acrAccessToken = token);
             _ = await client.GetManifestAsync(imageTag ?? string.Empty);
 
             if (string.IsNullOrWhiteSpace(acrAccessToken))
@@ -74,12 +79,27 @@ namespace Tes.Runner.Docker
         }
 
 
-        public ContainerRegistryContentClient CreateContainerRegistryContentClientWithAcquireAuthTokenPolicy(Uri endpoint, string repositoryName, RuntimeOptions runtimeOptions, Action<string> onCapture)
+        public async Task<ContainerRegistryContentClient> CreateContainerRegistryContentClientWithAcquireAuthTokenPolicyAsync(Uri endpoint, string repositoryName, RuntimeOptions runtimeOptions, Action<string> onCapture)
         {
+            // TODO we are replacing node identity ACR auth with action identity - should do both instead?
+
+            string? terraACRIdentity = await FetchTerraACRActionIdentityAsync(runtimeOptions);
+
+
             // Use a pipeline policy to get access to the ACR access token we will need to pass to Docker.
             var clientOptions = new ContainerRegistryClientOptions();
             clientOptions.AddPolicy(new AcquireDockerAuthTokenPipelinePolicy(onCapture), HttpPipelinePosition.PerCall);
-            return new ContainerRegistryContentClient(endpoint, repositoryName, tokenCredentialsManager.GetTokenCredential(runtimeOptions), clientOptions);
+            return new ContainerRegistryContentClient(endpoint, repositoryName, tokenCredentialsManager.GetTokenCredential(runtimeOptions, null, terraACRIdentity), clientOptions);
+        }
+
+        private async Task<string?> FetchTerraACRActionIdentityAsync(RuntimeOptions runtimeOptions)
+        {
+            // TODO handle if billing project and/or sam URL are missing
+            var billingProfileId = Guid.Parse(runtimeOptions.Terra.BillingProfileId);
+            var samClient = TerraSamApiClient.CreateTerraSamApiClient(runtimeOptions.Terra.SamApiHost, tokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureEnvironmentConfig);
+            var response = await samClient.GetActionManagedIdentityAsync(billingProfileId, CancellationToken.None);
+            logger.LogInformation(@"Successfully fetched ACR action identity from Sam. {ObjectId}", response.ObjectId);
+            return response.ObjectId;
         }
 
         private sealed class AcquireDockerAuthTokenPipelinePolicy : Azure.Core.Pipeline.HttpPipelinePolicy
