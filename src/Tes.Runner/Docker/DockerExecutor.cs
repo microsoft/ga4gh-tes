@@ -85,20 +85,28 @@ namespace Tes.Runner.Docker
 
             try
             {
-                await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag);
-            }
-            catch (DockerApiException e) when (IsAuthFailure(e))
-            {
-                var authConfig = await containerRegistryAuthorizationManager.TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.RuntimeOptions);
+                try
+                {
+                    await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag);
+                }
+                catch (DockerApiException e) when (IsAuthFailure(e))
+                {
+                    var authConfig = await containerRegistryAuthorizationManager.TryGetAuthConfigForAzureContainerRegistryAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.RuntimeOptions);
 
-                if (authConfig is not null)
-                {
-                    await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag, authConfig);
+                    if (authConfig is not null)
+                    {
+                        await PullImageWithRetriesAsync(executionOptions.ImageName, executionOptions.Tag, authConfig);
+                    }
+                    else
+                    {
+                        throw;
+                    }
                 }
-                else
-                {
-                    throw;
-                }
+            }
+            catch
+            {
+                await dockerClient.Images.PruneImagesAsync();
+                throw;
             }
 
             await ConfigureNetworkAsync();
