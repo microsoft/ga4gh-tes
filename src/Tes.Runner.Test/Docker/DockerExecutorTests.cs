@@ -56,7 +56,7 @@ namespace Tes.Runner.Test.Docker
                 Assert.Fail(ex.Message);
             }
 
-            Assert.AreEqual(1, dockerImageMock.Invocations.Count);
+            Assert.AreEqual(2, dockerImageMock.Invocations.Count);
         }
 
         [DataTestMethod]
@@ -85,7 +85,7 @@ namespace Tes.Runner.Test.Docker
                 Assert.AreSame(exception, ex);
             }
 
-            Assert.AreEqual(1 + DockerExecutor.dockerPullRetryPolicyOptions.MaxRetryCount, dockerImageMock.Invocations.Count);
+            Assert.AreEqual(2 + DockerExecutor.dockerPullRetryPolicyOptions.MaxRetryCount, dockerImageMock.Invocations.Count);
         }
 
         //[DataTestMethod]
