@@ -30,7 +30,7 @@ namespace Tes.Runner.Test.Docker
             dockerImageMock = new();
             dockerVolumeMock = new();
             runnerHost = new TestRunnerHost();
-            Mock <IDockerClient> dockerClientMock = new();
+            Mock<IDockerClient> dockerClientMock = new();
             dockerClientMock.Setup(d => d.Images).Returns(dockerImageMock.Object);
             dockerClientMock.Setup(d => d.Volumes).Returns(dockerVolumeMock.Object);
             dockerClient = dockerClientMock.Object;
