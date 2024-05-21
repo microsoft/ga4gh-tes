@@ -442,7 +442,7 @@ namespace TesApi.Web.Runner
                     var blobDirectoryUrlWithSasToken = await storageAccessProvider.MapLocalPathToSasUrlAsync(input.Url, default, default, getContainerSas: true);
                     var blobDirectoryUrlWithoutSasToken = blobDirectoryUrlWithSasToken.GetLeftPart(UriPartial.Path);
                     var blobAbsoluteUrls = await storageAccessProvider.GetBlobUrlsAsync(blobDirectoryUrlWithSasToken, default);
-                    
+
                     foreach (var blobAbsoluteUrl in blobAbsoluteUrls)
                     {
                         var blobSuffix = blobAbsoluteUrl.AbsoluteUri[blobDirectoryUrlWithoutSasToken.TrimEnd('/').Length..].TrimStart('/');
