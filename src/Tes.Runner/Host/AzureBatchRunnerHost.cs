@@ -22,7 +22,7 @@ namespace Tes.Runner.Host
             var sharedDir = Environment.GetEnvironmentVariable(NodeSharedDir) ?? throw new InvalidOperationException("Shared node directory is unknown.");
             var fullPath = Path.GetFullPath(Path.Combine(sharedDir, path));
 
-            if (!fullPath.StartsWith(sharedDir + Path.PathSeparator))
+            if (!fullPath.StartsWith(sharedDir + Path.DirectorySeparatorChar))
             {
                 throw new ArgumentException($"'{nameof(path)}' must not escape the shared node directory.", nameof(path));
             }
@@ -48,6 +48,7 @@ namespace Tes.Runner.Host
             _ = Parallel.ForEach(Directory.EnumerateDirectories(workitemsDir)
                     .Where(dir => !dir.StartsWith(jobRootDir))
                 .Concat(Directory.EnumerateDirectories(jobRootDir)
+                    .SelectMany(Directory.EnumerateDirectories)
                     .Where(dir => !dir.StartsWith(taskDir))),
                 dir => Directory.Delete(dir, true));
 
