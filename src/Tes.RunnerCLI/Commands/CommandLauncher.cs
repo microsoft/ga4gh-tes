@@ -88,7 +88,7 @@ namespace Tes.RunnerCLI.Commands
                     $"--{BlobPipelineOptionsConverter.ApiVersionOption} {apiVersion}",
                     $"--{CommandFactory.DockerUriOption} {dockerUri}" };
 
-                if (!string.IsNullOrEmpty(file.FullName))
+                if (!string.IsNullOrEmpty(file?.FullName))
                 {
                     args.Add($"--{BlobPipelineOptionsConverter.FileOption} {file.FullName}");
                 }
