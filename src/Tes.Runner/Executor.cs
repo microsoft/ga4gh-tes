@@ -26,6 +26,8 @@ namespace Tes.Runner
             : this(tesNodeTask, new(tesNodeTask, apiVersion), eventsPublisher, new TransferOperationFactory())
         { }
 
+        public static Host.IRunnerHost RunnerHost { get; internal set; } = new Host.AzureBatchRunnerHost();
+
         public static async Task<Executor> CreateExecutorAsync(NodeTask nodeTask, string apiVersion)
         {
             var publisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask, apiVersion);

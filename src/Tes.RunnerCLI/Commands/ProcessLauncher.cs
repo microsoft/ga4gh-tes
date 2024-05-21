@@ -29,6 +29,8 @@ namespace Tes.RunnerCLI.Commands
 
             SetupProcessStartInfo(options, process);
 
+            GC.Collect();
+
             process.Start();
 
             var processName = "NA";

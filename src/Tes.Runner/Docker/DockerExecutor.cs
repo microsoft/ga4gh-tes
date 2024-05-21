@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Net;
+using System.Text;
 using CommonUtilities;
 using CommonUtilities.Options;
 using Docker.DotNet;
@@ -18,7 +19,9 @@ namespace Tes.Runner.Docker
 {
     public class DockerExecutor
     {
+        internal const string LastImageFile = "last-docker-image";
         private readonly IDockerClient dockerClient = null!;
+        private readonly Host.IRunnerHost runnerHost = null!;
         private readonly ILogger logger = PipelineLoggerFactory.Create<DockerExecutor>();
         private readonly NetworkUtility networkUtility = new();
         private readonly AsyncRetryHandlerPolicy dockerPullRetryPolicy = null!;
@@ -41,7 +44,7 @@ namespace Tes.Runner.Docker
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
         public DockerExecutor(Uri dockerHost) : this(new DockerClientConfiguration(dockerHost)
-            .CreateClient(), new ConsoleStreamLogPublisher(), new ContainerRegistryAuthorizationManager(new CredentialsManager()))
+            .CreateClient(), new ConsoleStreamLogPublisher(), new ContainerRegistryAuthorizationManager(new CredentialsManager()), Executor.RunnerHost)
         { }
 
         // Retry for ~91s for ACR 1-minute throttle window
@@ -51,15 +54,17 @@ namespace Tes.Runner.Docker
             ExponentialBackOffExponent = 2
         };
 
-        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager)
+        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager, Host.IRunnerHost runnerHost)
         {
             ArgumentNullException.ThrowIfNull(dockerClient);
             ArgumentNullException.ThrowIfNull(streamLogReader);
             ArgumentNullException.ThrowIfNull(containerRegistryAuthorizationManager);
+            ArgumentNullException.ThrowIfNull(runnerHost);
 
             this.dockerClient = dockerClient;
             this.streamLogReader = streamLogReader;
             this.containerRegistryAuthorizationManager = containerRegistryAuthorizationManager;
+            this.runnerHost = runnerHost;
 
             dockerPullRetryPolicy = new RetryPolicyBuilder(Options.Create(dockerPullRetryPolicyOptions))
                 .PolicyBuilder.OpinionatedRetryPolicy(Polly.Policy
@@ -76,6 +81,43 @@ namespace Tes.Runner.Docker
         /// </summary>
         protected DockerExecutor()
         { }
+
+
+        private void SetLastImage(string imagePath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
+            runnerHost.WriteSharedFile(LastImageFile, Encoding.UTF8.GetBytes(imagePath));
+        }
+
+        private bool IsLastImageSame(string imagePath, out string? previousImage)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
+            using var buffer = runnerHost.ReadSharedFile(LastImageFile);
+
+            if (buffer is not null)
+            {
+                previousImage = Encoding.UTF8.GetString(buffer.Memory.Span);
+                return imagePath.Equals(previousImage, StringComparison.Ordinal);
+            }
+            else
+            {
+                previousImage = null;
+                return false;
+            }
+        }
+
+        public async Task NodeCleanupAsync(ExecutionOptions executionOptions)
+        {
+            _ = await dockerClient.Volumes.PruneAsync();
+
+            if (!string.IsNullOrEmpty(executionOptions.ImageName))
+            {
+                if (!IsLastImageSame(ToImageNameWithTag(executionOptions.ImageName, executionOptions.Tag), out var previousImage) && previousImage is not null)
+                {
+                    await DeleteImageAsync(previousImage);
+                }
+            }
+        }
 
         public virtual async Task<ContainerExecutionResult> RunOnContainerAsync(ExecutionOptions executionOptions)
         {
@@ -105,14 +147,17 @@ namespace Tes.Runner.Docker
             }
             catch
             {
-                await dockerClient.Images.PruneImagesAsync();
+                _ = await dockerClient.Images.PruneImagesAsync();
                 throw;
             }
 
+            var imageWithTag = ToImageNameWithTag(executionOptions.ImageName, executionOptions.Tag);
+            SetLastImage(imageWithTag);
+
             await ConfigureNetworkAsync();
 
-            var createResponse = await CreateContainerAsync(executionOptions.ImageName, executionOptions.Tag, executionOptions.CommandsToExecute, executionOptions.VolumeBindings, executionOptions.WorkingDir);
-            var container = await dockerClient.Containers.InspectContainerAsync(createResponse.ID);
+            var createResponse = await CreateContainerAsync(imageWithTag, executionOptions.CommandsToExecute, executionOptions.VolumeBindings, executionOptions.WorkingDir);
+            _ = await dockerClient.Containers.InspectContainerAsync(createResponse.ID);
 
             var logs = await StartContainerWithStreamingOutput(createResponse);
 
@@ -121,8 +166,6 @@ namespace Tes.Runner.Docker
             var runResponse = await dockerClient.Containers.WaitContainerAsync(createResponse.ID);
 
             await streamLogReader.WaitUntilAsync(TimeSpan.FromSeconds(LogStreamingMaxWaitTimeInSeconds));
-
-            await DeleteImageAsync(container.Image);
 
             return new ContainerExecutionResult(createResponse.ID, runResponse.Error?.Message, runResponse.StatusCode);
         }
@@ -149,10 +192,9 @@ namespace Tes.Runner.Docker
                 });
         }
 
-        private async Task<CreateContainerResponse> CreateContainerAsync(string imageName, string? imageTag,
+        private async Task<CreateContainerResponse> CreateContainerAsync(string imageWithTag,
             List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir)
         {
-            var imageWithTag = ToImageNameWithTag(imageName, imageTag);
             logger.LogInformation(@"Creating container with image name: {ImageWithTag}", imageWithTag);
 
             var createResponse = await dockerClient.Containers.CreateContainerAsync(
@@ -169,6 +211,7 @@ namespace Tes.Runner.Docker
                         Binds = volumeBindings
                     }
                 });
+
             return createResponse;
         }
 
