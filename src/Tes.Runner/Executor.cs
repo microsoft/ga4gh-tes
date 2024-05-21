@@ -18,19 +18,21 @@ namespace Tes.Runner
         private readonly ILogger logger = PipelineLoggerFactory.Create<Executor>();
         private readonly NodeTask tesNodeTask;
         private readonly FileOperationResolver operationResolver;
-        private readonly VolumeBindingsGenerator volumeBindingsGenerator = new VolumeBindingsGenerator();
+        private readonly VolumeBindingsGenerator volumeBindingsGenerator = new();
         private readonly EventsPublisher eventsPublisher;
         private readonly ITransferOperationFactory transferOperationFactory;
 
-        public Executor(NodeTask tesNodeTask, EventsPublisher eventsPublisher) : this(tesNodeTask, new FileOperationResolver(tesNodeTask), eventsPublisher, new TransferOperationFactory())
-        {
-        }
+        public Executor(NodeTask tesNodeTask, EventsPublisher eventsPublisher, string apiVersion)
+            : this(tesNodeTask, new(tesNodeTask, apiVersion), eventsPublisher, new TransferOperationFactory())
+        { }
 
-        public static async Task<Executor> CreateExecutorAsync(NodeTask nodeTask)
-        {
-            var publisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask);
+        public static Host.IRunnerHost RunnerHost { get; internal set; } = new Host.AzureBatchRunnerHost();
 
-            return new Executor(nodeTask, publisher);
+        public static async Task<Executor> CreateExecutorAsync(NodeTask nodeTask, string apiVersion)
+        {
+            var publisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask, apiVersion);
+
+            return new Executor(nodeTask, publisher, apiVersion);
         }
 
         public Executor(NodeTask tesNodeTask, FileOperationResolver operationResolver, EventsPublisher eventsPublisher, ITransferOperationFactory transferOperationFactory)
@@ -75,10 +77,10 @@ namespace Tes.Runner
 
         private ExecutionOptions CreateExecutionOptions(List<string> bindings)
         {
-            return new ExecutionOptions(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings, tesNodeTask.ContainerWorkDir, tesNodeTask.RuntimeOptions);
+            return new(tesNodeTask.ImageName, tesNodeTask.ImageTag, tesNodeTask.CommandsToExecute, bindings, tesNodeTask.ContainerWorkDir, tesNodeTask.RuntimeOptions);
         }
 
-        private string ToStatusMessage(ContainerExecutionResult result)
+        private static string ToStatusMessage(ContainerExecutionResult result)
         {
             if (result.ExitCode == 0 && string.IsNullOrWhiteSpace(result.Error))
             {
@@ -151,14 +153,14 @@ namespace Tes.Runner
 
             var executionResult = await TimedExecutionAsync(async () => await uploader.UploadAsync(outputs));
 
-            logger.LogInformation($"Executed Upload. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
+            logger.LogInformation("Executed Upload. Time elapsed: {ElapsedTime} Bandwidth: {Bandwidth} MiB/s", executionResult.Elapsed, BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds));
 
             return executionResult.Result;
         }
 
         private async Task<List<UploadInfo>?> CreateUploadOutputsAsync()
         {
-            if (tesNodeTask.Outputs is null || tesNodeTask.Outputs.Count == 0)
+            if ((tesNodeTask.Outputs ?? []).Count == 0)
             {
                 logger.LogInformation("No outputs provided");
                 {
@@ -178,7 +180,7 @@ namespace Tes.Runner
 
             LogStartConfig(optimizedOptions);
 
-            logger.LogInformation($"{outputs.Count} outputs to upload.");
+            logger.LogInformation("{CountOfUploads} outputs to upload.", outputs.Count);
             return optimizedOptions;
         }
 
@@ -189,7 +191,7 @@ namespace Tes.Runner
 
             LogStartConfig(optimizedOptions);
 
-            logger.LogInformation($"{tesNodeTask.Inputs?.Count} inputs to download.");
+            logger.LogInformation("{CountOfDownloads} inputs to download.", tesNodeTask.Inputs?.Count);
             return optimizedOptions;
         }
 
@@ -242,7 +244,7 @@ namespace Tes.Runner
 
             var executionResult = await TimedExecutionAsync(async () => await downloader.DownloadAsync(inputs));
 
-            logger.LogInformation($"Executed Download. Time elapsed: {executionResult.Elapsed} Bandwidth: {BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds)} MiB/s");
+            logger.LogInformation("Executed Download. Time elapsed: {ElapsedTime} Bandwidth: {Bandwidth} MiB/s", executionResult.Elapsed, BlobSizeUtils.ToBandwidth(executionResult.Result, executionResult.Elapsed.TotalSeconds));
 
             return executionResult.Result;
         }
@@ -270,10 +272,10 @@ namespace Tes.Runner
 
         private void LogStartConfig(BlobPipelineOptions blobPipelineOptions)
         {
-            logger.LogInformation($"Writers: {blobPipelineOptions.NumberOfWriters}");
-            logger.LogInformation($"Readers: {blobPipelineOptions.NumberOfReaders}");
-            logger.LogInformation($"Capacity: {blobPipelineOptions.ReadWriteBuffersCapacity}");
-            logger.LogInformation($"BlockSize: {blobPipelineOptions.BlockSizeBytes}");
+            logger.LogInformation("Writers: {NumberOfWriters}", blobPipelineOptions.NumberOfWriters);
+            logger.LogInformation("Readers: {NumberOfReaders}", blobPipelineOptions.NumberOfReaders);
+            logger.LogInformation("Capacity: {ReadWriteBuffersCapacity}", blobPipelineOptions.ReadWriteBuffersCapacity);
+            logger.LogInformation("BlockSize: {BlockSizeBytes}", blobPipelineOptions.BlockSizeBytes);
         }
 
         private static async Task<TimedExecutionResult<T>> TimedExecutionAsync<T>(Func<Task<T>> execution)
@@ -282,7 +284,7 @@ namespace Tes.Runner
             var result = await execution();
             sw.Stop();
 
-            return new TimedExecutionResult<T>(sw.Elapsed, result);
+            return new(sw.Elapsed, result);
         }
 
         private record TimedExecutionResult<T>(TimeSpan Elapsed, T Result);
@@ -290,6 +292,7 @@ namespace Tes.Runner
         public async ValueTask DisposeAsync()
         {
             await eventsPublisher.FlushPublishersAsync();
+            GC.SuppressFinalize(this);
         }
     }
 }

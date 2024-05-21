@@ -395,7 +395,7 @@ namespace TesApi.Web.Runner
             {
                 Path = inputPath,
                 Url = inputUrl,
-                Type = TesFileType.FILEEnum,
+                Type = TesFileType.FILE,
             };
         }
 
@@ -434,7 +434,7 @@ namespace TesApi.Web.Runner
 
             foreach (var input in inputs)
             {
-                if (input?.Type == TesFileType.DIRECTORYEnum)
+                if (input?.Type == TesFileType.DIRECTORY)
                 {
                     // Nextflow directory example
                     // input.Url = /storageaccount/work/tmp/cf/d1be3bf1f9622165d553fed8ddd226/bin
@@ -455,7 +455,7 @@ namespace TesApi.Web.Runner
                 }
                 else
                 {
-                    // TesFileType was not specified, OR, TesFileType.FILEEnum
+                    // TesFileType was not specified, OR, TesFileType.FILE
                     builder.WithInputUsingCombinedTransformationStrategy(
                         AppendParentDirectoryIfSet(input.Path, pathParentDirectory), input.Url,
                         containerMountParentDirectory);
@@ -467,8 +467,8 @@ namespace TesApi.Web.Runner
         {
             return outputType switch
             {
-                TesFileType.FILEEnum => FileType.File,
-                TesFileType.DIRECTORYEnum => FileType.Directory,
+                TesFileType.FILE => FileType.File,
+                TesFileType.DIRECTORY => FileType.Directory,
                 _ => FileType.File
             };
         }

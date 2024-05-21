@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Text;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Moq;
@@ -16,7 +17,9 @@ namespace Tes.Runner.Test.Docker
     public class DockerExecutorTests
     {
         private IDockerClient dockerClient = null!;
+        private Host.IRunnerHost runnerHost = null!;
         private Mock<IImageOperations> dockerImageMock = null!;
+        private Mock<IVolumeOperations> dockerVolumeMock = null!;
         private IStreamLogReader streamLogReader = null!;
         private ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager = null!;
 
@@ -25,11 +28,14 @@ namespace Tes.Runner.Test.Docker
         {
             streamLogReader = new Mock<IStreamLogReader>().Object;
             dockerImageMock = new();
+            dockerVolumeMock = new();
+            runnerHost = new TestRunnerHost();
             Mock<IDockerClient> dockerClientMock = new();
             dockerClientMock.Setup(d => d.Images).Returns(dockerImageMock.Object);
+            dockerClientMock.Setup(d => d.Volumes).Returns(dockerVolumeMock.Object);
             dockerClient = dockerClientMock.Object;
             var credentialsManager = new Mock<CredentialsManager>();
-            credentialsManager.Setup(m => m.GetTokenCredential(It.IsAny<RuntimeOptions>()))
+            credentialsManager.Setup(m => m.GetTokenCredential(It.IsAny<RuntimeOptions>(), It.IsAny<string>()))
                 .Throws(new IdentityUnavailableException());
             containerRegistryAuthorizationManager = new(credentialsManager.Object);
         }
@@ -44,7 +50,7 @@ namespace Tes.Runner.Test.Docker
             dockerImageMock.Setup(d => d.CreateImageAsync(It.IsAny<ImagesCreateParameters>(), It.IsAny<AuthConfig>(), It.IsAny<IProgress<JSONMessage>>(), It.IsAny<CancellationToken>()))
                 .Throws(exception);
 
-            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager);
+            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost);
             Models.RuntimeOptions runtimeOptions = new();
             try
             {
@@ -56,7 +62,7 @@ namespace Tes.Runner.Test.Docker
                 Assert.Fail(ex.Message);
             }
 
-            Assert.AreEqual(1, dockerImageMock.Invocations.Count);
+            Assert.AreEqual(2, dockerImageMock.Invocations.Count);
         }
 
         [DataTestMethod]
@@ -69,7 +75,7 @@ namespace Tes.Runner.Test.Docker
             dockerImageMock.Setup(d => d.CreateImageAsync(It.IsAny<ImagesCreateParameters>(), It.IsAny<AuthConfig>(), It.IsAny<IProgress<JSONMessage>>(), It.IsAny<CancellationToken>()))
                 .Throws(exception);
 
-            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager);
+            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost);
             Models.RuntimeOptions runtimeOptions = new();
             try
             {
@@ -85,7 +91,7 @@ namespace Tes.Runner.Test.Docker
                 Assert.AreSame(exception, ex);
             }
 
-            Assert.AreEqual(1 + DockerExecutor.dockerPullRetryPolicyOptions.MaxRetryCount, dockerImageMock.Invocations.Count);
+            Assert.AreEqual(2 + DockerExecutor.dockerPullRetryPolicyOptions.MaxRetryCount, dockerImageMock.Invocations.Count);
         }
 
         //[DataTestMethod]
@@ -113,5 +119,48 @@ namespace Tes.Runner.Test.Docker
 
         //    Assert.AreEqual(1, dockerImageMock.Invocations.Count);
         //}
+
+        [DataTestMethod]
+        [DataRow("")]
+        [DataRow("https://msftsc022830.azurecr.io/v2/broadinstitute/gatk/manifests/4.5.0.0-squash")]
+        public async Task CleanupVolumesAndImages_CallsDockerClient(string image)
+        {
+            if (!string.IsNullOrEmpty(image))
+            {
+                runnerHost.WriteSharedFile(DockerExecutor.LastImageFile, Encoding.UTF8.GetBytes(image));
+            }
+
+            dockerImageMock.Setup(d => d.DeleteImageAsync(It.IsAny<string>(), It.IsAny<ImageDeleteParameters>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult<IList<IDictionary<string, string>>>([]));
+            dockerVolumeMock.Setup(d => d.PruneAsync(It.IsAny<VolumesPruneParameters>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult(new VolumesPruneResponse()));
+
+            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost);
+            await executor.NodeCleanupAsync(new(image, default, default, default, default, new()));
+
+            Assert.AreEqual(1, dockerVolumeMock.Invocations.Count);
+            Assert.AreEqual(string.IsNullOrEmpty(image) ? 0 : 1, dockerImageMock.Invocations.Count);
+        }
+
+        private class TestRunnerHost : Host.RunnerHost
+        {
+            private readonly FileInfo file;
+
+            public TestRunnerHost()
+            {
+                file = new(Path.GetTempFileName());
+                file.Delete();
+            }
+
+            public override FileInfo GetSharedFile(string name)
+            {
+                return file;
+            }
+
+            public override Task NodeCleanupAsync()
+            {
+                throw new NotSupportedException();
+            }
+        }
     }
 }

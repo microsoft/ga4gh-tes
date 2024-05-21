@@ -51,6 +51,6 @@ namespace Tes.SDK
         /// <param name="view">The portion of each task's metadata to retrieve.</param>
         /// <param name="cancellationToken">The cancellationToken</param>
         /// <returns>The TES tasks</returns>
-        IAsyncEnumerable<TesTask> ListTasksAsync(TesView view = TesView.MINIMAL, CancellationToken cancellationToken = default);
+        IAsyncEnumerable<TesTask> ListTasksAsync(TaskQueryOptions? options = null, CancellationToken cancellationToken = default);
     }
 }

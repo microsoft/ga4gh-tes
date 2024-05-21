@@ -54,9 +54,9 @@ namespace Tes.Repository
         /// <param name="pageSize">The max number of tasks to retrieve.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <param name="rawPredicate">Raw 'where' clause for cases where EF does not have translations.</param>
-        /// <param name="efPredicate">The 'where' clause. It is appended if both <paramref name="rawPredicate"/> and this are provided.</param>
+        /// <param name="efPredicates">The 'where' clause parts. It is appended if both <paramref name="rawPredicate"/> and this are provided.</param>
         /// <returns>A continuation token string and the retrieved items</returns>
-        Task<GetItemsResult> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate = default, Expression<Func<T, bool>> efPredicate = default);
+        Task<GetItemsResult> GetItemsAsync(string continuationToken, int pageSize, CancellationToken cancellationToken, FormattableString rawPredicate = default, IEnumerable<Expression<Func<T, bool>>> efPredicates = default);
 
         /// <summary>
         /// Update the item in the repository

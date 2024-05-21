@@ -202,13 +202,13 @@ namespace Tes.Repository.Tests
             }
 
             sw.Restart();
-            var runningTasks = (await repository.GetItemsAsync(c => c.State == TesState.RUNNINGEnum, CancellationToken.None)).ToList();
+            var runningTasks = (await repository.GetItemsAsync(c => c.State == TesState.RUNNING, CancellationToken.None)).ToList();
 
             // Ensure performance is decent
             Assert.IsTrue(sw.Elapsed.TotalSeconds < 20);
             Console.WriteLine($"Retrieved {runningTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
             sw.Restart();
-            var allOtherTasks = (await repository.GetItemsAsync(c => c.State != TesState.RUNNINGEnum, CancellationToken.None)).ToList();
+            var allOtherTasks = (await repository.GetItemsAsync(c => c.State != TesState.RUNNING, CancellationToken.None)).ToList();
             Console.WriteLine($"Retrieved {allOtherTasks.Count} in {sw.Elapsed.TotalSeconds:n1}s");
             Console.WriteLine($"Total running tasks: {runningTasks.Count}");
             Console.WriteLine($"Total other tasks: {allOtherTasks.Count}");
@@ -222,8 +222,8 @@ namespace Tes.Repository.Tests
             Assert.IsTrue(runningTasks.Count > 0);
             Assert.IsTrue(allOtherTasks.Count > 0);
             Assert.IsTrue(runningTasks.Count != allOtherTasks.Count);
-            Assert.IsTrue(runningTasks.All(c => c.State == TesState.RUNNINGEnum));
-            Assert.IsTrue(allOtherTasks.All(c => c.State != TesState.RUNNINGEnum));
+            Assert.IsTrue(runningTasks.All(c => c.State == TesState.RUNNING));
+            Assert.IsTrue(allOtherTasks.All(c => c.State != TesState.RUNNING));
         }
 
         [TestMethod]
@@ -236,7 +236,7 @@ namespace Tes.Repository.Tests
                     Id = Guid.NewGuid().ToString(),
                     Description = Guid.NewGuid().ToString(),
                     CreationTime = DateTime.UtcNow,
-                    State = TesState.UNKNOWNEnum,
+                    State = TesState.UNKNOWN,
                     Tags = tags
                 }, CancellationToken.None);
 
@@ -359,10 +359,10 @@ namespace Tes.Repository.Tests
                 Inputs = [new TesInput { Url = "https://test" }]
             }, CancellationToken.None);
 
-            Assert.IsTrue(createdItem.State != TesState.COMPLETEEnum);
+            Assert.IsTrue(createdItem.State != TesState.COMPLETE);
 
             createdItem.Description = description;
-            createdItem.State = TesState.COMPLETEEnum;
+            createdItem.State = TesState.COMPLETE;
 
             await repository.UpdateItemAsync(createdItem, CancellationToken.None);
 
@@ -371,7 +371,7 @@ namespace Tes.Repository.Tests
             var isFound = await repository.TryGetItemAsync(id, CancellationToken.None, tesTask => updatedAndRetrievedItem = tesTask);
 
             Assert.IsTrue(isFound);
-            Assert.IsTrue(updatedAndRetrievedItem.State == Models.TesState.COMPLETEEnum);
+            Assert.IsTrue(updatedAndRetrievedItem.State == Models.TesState.COMPLETE);
             Assert.IsTrue(updatedAndRetrievedItem.Description == description);
         }
 

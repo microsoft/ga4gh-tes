@@ -1,4 +1,4 @@
-﻿DefaultStorageAccountName={DefaultStorageAccountName}
+DefaultStorageAccountName={DefaultStorageAccountName}
 BatchAccountName={BatchAccountName}
 ApplicationInsightsAccountName={ApplicationInsightsAccountName}
 ManagedIdentityClientId={ManagedIdentityClientId}

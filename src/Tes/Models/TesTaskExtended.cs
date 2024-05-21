@@ -17,10 +17,10 @@ namespace Tes.Models
     {
         public static readonly List<TesState> ActiveStates =
         [
-            TesState.QUEUEDEnum,
-            TesState.RUNNINGEnum,
-            TesState.PAUSEDEnum,
-            TesState.INITIALIZINGEnum
+            TesState.QUEUED,
+            TesState.RUNNING,
+            TesState.PAUSED,
+            TesState.INITIALIZING
         ];
 
         /// <summary>

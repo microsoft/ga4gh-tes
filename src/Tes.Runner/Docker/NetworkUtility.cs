@@ -9,7 +9,8 @@ namespace Tes.Runner.Docker
 {
     public class NetworkUtility
     {
-        private const string defaultRuleChain = "DOCKER-USER";
+        private const string DefaultRuleChain = "DOCKER-USER";
+        private const int DefaultLockWaitSeconds = 30;
         private readonly ILogger logger = PipelineLoggerFactory.Create<NetworkUtility>();
 
         /// <summary>
@@ -18,7 +19,7 @@ namespace Tes.Runner.Docker
         /// <param name="ipAddress">The IP address to block</param>
         /// <param name="callerMemberName">The caller of the function</param>
         /// <returns></returns>
-        public async Task BlockIpAddressAsync(string ipAddress, string ruleChain = defaultRuleChain)
+        public async Task BlockIpAddressAsync(string ipAddress, string ruleChain = DefaultRuleChain)
         {
             if (!OperatingSystem.IsLinux())
             {
@@ -26,7 +27,7 @@ namespace Tes.Runner.Docker
                 return;
             }
 
-            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress, ruleChain);
+            var isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress, ruleChain);
 
             if (!isBlocked)
             {
@@ -34,7 +35,7 @@ namespace Tes.Runner.Docker
             }
         }
 
-        public async Task UnblockIpAddressAsync(string ipAddress, string ruleChain = defaultRuleChain)
+        public async Task UnblockIpAddressAsync(string ipAddress, string ruleChain = DefaultRuleChain)
         {
             if (!OperatingSystem.IsLinux())
             {
@@ -42,7 +43,7 @@ namespace Tes.Runner.Docker
                 return;
             }
 
-            bool isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress, ruleChain);
+            var isBlocked = await CheckIfIpAddressIsBlockedAsync(ipAddress, ruleChain);
 
             if (isBlocked)
             {
@@ -50,22 +51,22 @@ namespace Tes.Runner.Docker
             }
         }
 
-        private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress, string ruleChain = defaultRuleChain)
+        private async Task<bool> CheckIfIpAddressIsBlockedAsync(string ipAddress, string ruleChain = DefaultRuleChain)
         {
-            string listRulesCommand = $"-S {ruleChain}";
+            var listRulesCommand = $"-S {ruleChain} --wait {DefaultLockWaitSeconds}";
             var outputAndError = await RunIptablesCommandAsync(listRulesCommand);
             return outputAndError.Output.Contains(ipAddress, StringComparison.OrdinalIgnoreCase);
         }
 
-        private async Task AddBlockRuleAsync(string ipAddress, string ruleChain = defaultRuleChain)
+        private async Task AddBlockRuleAsync(string ipAddress, string ruleChain = DefaultRuleChain)
         {
-            string addRuleCommand = $"-A {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
+            var addRuleCommand = $"-A {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP --wait {DefaultLockWaitSeconds}";
             _ = await RunIptablesCommandAsync(addRuleCommand);
         }
 
-        private async Task RemoveBlockRuleAsync(string ipAddress, string ruleChain = defaultRuleChain)
+        private async Task RemoveBlockRuleAsync(string ipAddress, string ruleChain = DefaultRuleChain)
         {
-            string removeRuleCommand = $"-D {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP";
+            var removeRuleCommand = $"-D {ruleChain} -o eth0 -m conntrack --ctorigdst {ipAddress} -j DROP --wait {DefaultLockWaitSeconds}";
             _ = await RunIptablesCommandAsync(removeRuleCommand);
         }
 
@@ -93,21 +94,29 @@ namespace Tes.Runner.Docker
             process.Start();
             await process.WaitForExitAsync();
 
-            string output = await process.StandardOutput.ReadToEndAsync();
-            string error = await process.StandardError.ReadToEndAsync();
+            var output = await process.StandardOutput.ReadToEndAsync();
+            var error = await process.StandardError.ReadToEndAsync();
 
             switch (process.ExitCode)
             {
                 case 0:
                     return (output, error);
                 case 4:
+                    if (error?.Contains("Another app is currently holding the xtables lock", StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        // "Another app is currently holding the xtables lock. Perhaps you want to use the -w option?"
+                        var invalidOperationException = new InvalidOperationException($"xtables is locked by another app. Error: {error}");
+                        logger.LogError(invalidOperationException, invalidOperationException.Message);
+                        throw invalidOperationException;
+                    }
+
                     // iptables v1.8.7 (nf_tables): Could not fetch rule set generation id: Permission denied (you must be root)
                     var unauthorizedException = new UnauthorizedAccessException($"TES Runner and Tests must be run with 'sudo' or as a user with root privileges in order to execute 'iptables' to manage network access.\nError: {error}");
-                    logger.LogError(unauthorizedException, unauthorizedException.Message);
+                    logger.LogError(unauthorizedException, "{ExceptionMessage}", unauthorizedException.Message);
                     throw unauthorizedException;
                 default:
                     var exc = new Exception($"'iptables {arguments}' failed. Exit code: {process.ExitCode}\nOutput: {output}\nError: {error}");
-                    logger.LogError(exc, exc.Message);
+                    logger.LogError(exc, "{ExceptionMessage}", exc.Message);
                     throw exc;
             }
         }
