@@ -94,11 +94,16 @@ namespace Tes.Runner.Docker
 
         private async Task<string?> FetchTerraACRActionIdentityAsync(RuntimeOptions runtimeOptions)
         {
-            // TODO handle if billing project and/or sam URL are missing
+            if (runtimeOptions.Terra is null || string.IsNullOrWhiteSpace(runtimeOptions.Terra.BillingProfileId) || string.IsNullOrWhiteSpace(runtimeOptions.Terra.SamApiHost))
+            {
+                return null;
+            }
+
+            // TODO test with invalid guid for billing profile id
             var billingProfileId = Guid.Parse(runtimeOptions.Terra.BillingProfileId);
             var samClient = TerraSamApiClient.CreateTerraSamApiClient(runtimeOptions.Terra.SamApiHost, tokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureEnvironmentConfig);
             var response = await samClient.GetActionManagedIdentityAsync(billingProfileId, CancellationToken.None);
-            logger.LogInformation(@"Successfully fetched ACR action identity from Sam. {ObjectId}", response.ObjectId);
+            logger.LogInformation(@"Successfully fetched ACR action identity from Sam: {ObjectId}", response.ObjectId);
             return response.ObjectId;
         }
 
