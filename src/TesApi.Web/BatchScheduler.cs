@@ -1033,7 +1033,7 @@ namespace TesApi.Web
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> for controlling the lifetime of the asynchronous operation.</param>
         /// <returns></returns>
         /// <remarks>This method also mitigates errors associated with docker daemons that are not configured to place their filesystem assets on the data drive.</remarks>
-        private async Task<BatchModels.StartTask> GetStartTaskAsync(string poolId, BatchModels.VirtualMachineConfiguration machineConfiguration, string vmFamily, CancellationToken cancellationToken)
+        private async Task<(BatchModels.StartTask StartTask, DateTimeOffset Expiry)> GetStartTaskAsync(string poolId, BatchModels.VirtualMachineConfiguration machineConfiguration, string vmFamily, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
             ArgumentNullException.ThrowIfNull(machineConfiguration);
@@ -1099,13 +1099,17 @@ namespace TesApi.Web
                 cmd.Append($" && {CreateWgetDownloadCommand(globalStartTaskSasUrl, $"{BatchNodeTaskWorkingDirEnvVar}/global-{StartTaskScriptFilename}", setExecutable: true)} && {BatchNodeTaskWorkingDirEnvVar}/global-{StartTaskScriptFilename}");
             }
 
-            return new()
+            var commandLinetUri = await UploadScriptAsync(StartTaskScriptFilename, cmd);
+
+            UriBuilder builder = new(commandLinetUri);
+            return new(new()
             {
-                CommandLine = $"/bin/sh -c \"{CreateWgetDownloadCommand(await UploadScriptAsync(StartTaskScriptFilename, cmd), $"{BatchNodeTaskWorkingDirEnvVar}/{StartTaskScriptFilename}", true)} && {BatchNodeTaskWorkingDirEnvVar}/{StartTaskScriptFilename}\"",
+                CommandLine = $"/bin/sh -c \"{CreateWgetDownloadCommand(commandLinetUri, $"{BatchNodeTaskWorkingDirEnvVar}/{StartTaskScriptFilename}", true)} && {BatchNodeTaskWorkingDirEnvVar}/{StartTaskScriptFilename}\"",
                 UserIdentity = new BatchModels.UserIdentity(autoUser: new(elevationLevel: BatchModels.ElevationLevel.Admin, scope: BatchModels.AutoUserScope.Pool)),
                 MaxTaskRetryCount = 1,
                 WaitForSuccess = true
-            };
+            },
+            SetPoolEndTime(builder.Query));
 
             async ValueTask<Uri> UploadScriptAsync(string name, StringBuilder content)
             {
@@ -1122,6 +1126,33 @@ namespace TesApi.Web
                 var path = Path.Combine(AppContext.BaseDirectory, "scripts", name);
                 return (await File.ReadAllTextAsync(path, cancellationToken))
                     .ReplaceLineEndings("\n");
+            }
+
+            DateTimeOffset SetPoolEndTime(string queryString)
+            {
+                var query = queryString.Split('&')
+                    .Select(entry => { var parts = entry.Split('=', 2); return new KeyValuePair<string, string>(parts[0], Uri.UnescapeDataString(parts.Skip(1).FirstOrDefault() ?? string.Empty)); })
+                    //.ToDictionary();
+                    .Where(entry => "se".Equals(entry.Key, StringComparison.OrdinalIgnoreCase))
+                    .FirstOrDefault();
+
+                if (string.IsNullOrWhiteSpace(query.Value))
+                {
+                    logger.LogInformation("Parsing SAS failed to find expiration.");
+                }
+                else
+                {
+                    try
+                    {
+                        return DateTimeOffset.Parse(query.Value);
+                    }
+                    catch (FormatException)
+                    {
+                        logger.LogInformation("Parsing SAS token for expiration failed.");
+                    }
+                }
+
+                return DateTimeOffset.UtcNow.AddMinutes(45);
             }
         }
 
@@ -1149,7 +1180,7 @@ namespace TesApi.Web
         /// <remarks>
         /// Devs: Any changes to any properties set in this method will require corresponding changes to all classes implementing <see cref="Management.Batch.IBatchPoolManager"/> along with possibly any systems they call, with the possible exception of <seealso cref="Management.Batch.ArmBatchPoolManager"/>.
         /// </remarks>
-        private async ValueTask<BatchModels.Pool> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, string vmFamily, bool preemptable, BatchNodeInfo nodeInfo, bool? encryptionAtHostSupported, CancellationToken cancellationToken)
+        private async ValueTask<(BatchModels.Pool PoolSpec, DateTimeOffset Expiry)> GetPoolSpecification(string name, string displayName, BatchModels.BatchPoolIdentity poolIdentity, string vmSize, string vmFamily, bool preemptable, BatchNodeInfo nodeInfo, bool? encryptionAtHostSupported, CancellationToken cancellationToken)
         {
             // TODO: (perpetually) add new properties we set in the future on <see cref="PoolSpecification"/> and/or its contained objects, if possible. When not, update CreateAutoPoolModePoolInformation().
 
@@ -1171,12 +1202,13 @@ namespace TesApi.Web
                 );
             }
 
+            var startTaskData = await GetStartTaskAsync(name, vmConfig, vmFamily, cancellationToken);
             var poolSpecification = new BatchModels.Pool(name: name, displayName: displayName, identity: poolIdentity, vmSize: vmSize)
             {
                 ScaleSettings = new(autoScale: new(BatchPool.AutoPoolFormula(preemptable, 1), BatchPool.AutoScaleEvaluationInterval)),
                 DeploymentConfiguration = new(virtualMachineConfiguration: vmConfig),
                 //ApplicationPackages = ,
-                StartTask = await GetStartTaskAsync(name, vmConfig, vmFamily, cancellationToken),
+                StartTask = startTaskData.StartTask,
                 TargetNodeCommunicationMode = BatchModels.NodeCommunicationMode.Simplified,
             };
 
@@ -1189,7 +1221,7 @@ namespace TesApi.Web
                 };
             }
 
-            return poolSpecification;
+            return (poolSpecification, startTaskData.Expiry);
 
             static void ValidateString(string value, string name, int length)
             {

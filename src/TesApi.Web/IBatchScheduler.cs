@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -97,7 +98,8 @@ namespace TesApi.Web
         /// <param name="HostName"></param>
         /// <param name="IsDedicated"></param>
         /// <param name="RunnerMD5"></param>
-        record struct PoolMetadata(string HostName, bool IsDedicated, string RunnerMD5)
+        /// <param name="Expiry"></param>
+        record struct PoolMetadata(string HostName, bool IsDedicated, string RunnerMD5, DateTimeOffset Expiry)
         {
             private static readonly System.Text.Json.JsonSerializerOptions Options = new(System.Text.Json.JsonSerializerDefaults.Web);
 

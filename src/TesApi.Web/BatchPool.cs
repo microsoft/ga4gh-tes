@@ -139,6 +139,7 @@ namespace TesApi.Web
         private bool _resetAutoScalingRequired;
 
         private DateTime? Creation { get; set; }
+        private DateTimeOffset? Expiration { get; set; }
         private DateTime? AllocationStateTransitionTime { get; set; }
         private bool IsDedicated { get; set; }
 
@@ -438,7 +439,7 @@ namespace TesApi.Web
         {
             if (IsAvailable)
             {
-                IsAvailable = DetermineIsAvailable(Creation);
+                IsAvailable = DetermineIsAvailable(Creation) && Expiration > DateTimeOffset.UtcNow;
             }
 
             return ValueTask.CompletedTask;
@@ -662,10 +663,15 @@ namespace TesApi.Web
             => (await _azureProxy.GetBatchPoolAsync(PoolId, cancellationToken, new ODATADetailLevel { SelectClause = "allocationStateTransitionTime" })).AllocationStateTransitionTime ?? DateTime.UtcNow;
 
         /// <inheritdoc/>
-        public async ValueTask CreatePoolAndJobAsync(Microsoft.Azure.Management.Batch.Models.Pool poolModel, bool isPreemptible, CancellationToken cancellationToken)
+        public async ValueTask CreatePoolAndJobAsync(Microsoft.Azure.Management.Batch.Models.Pool poolModel, bool isPreemptible, DateTimeOffset expiry, CancellationToken cancellationToken)
         {
             try
             {
+                if (expiry.AddMinutes(15) <= DateTimeOffset.UtcNow)
+                {
+                    throw new AzureBatchPoolCreationException("Start task SAS token has (or will soon) expire.");
+                }
+
                 CloudPool pool = default;
                 await Task.WhenAll(
                     _azureProxy.CreateBatchJobAsync(poolModel.Name, poolModel.Name, cancellationToken),
@@ -781,12 +787,19 @@ namespace TesApi.Web
             IsAvailable = DetermineIsAvailable(pool.CreationTime);
             //IReadOnlyDictionary<string, string> Identity = pool.Identity.UserAssignedIdentities.ToDictionary(identity => identity.ResourceId, identity => identity.ClientId, StringComparer.OrdinalIgnoreCase).AsReadOnly();
 
-            if (IsAvailable)
+            var metadata = IBatchScheduler.PoolMetadata.Create(pool.Metadata.First(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value);
+
+            if (IsAvailable && metadata.Expiry > DateTimeOffset.UtcNow)
             {
                 Creation = pool.CreationTime.Value;
+                Expiration = metadata.Expiry;
+            }
+            else
+            {
+                IsAvailable = false;
             }
 
-            IsDedicated = IBatchScheduler.PoolMetadata.Create(pool.Metadata.First(m => BatchScheduler.PoolMetadata.Equals(m.Name, StringComparison.Ordinal)).Value).IsDedicated;
+            IsDedicated = metadata.IsDedicated;
             _ = _batchPools.AddPool(this);
         }
     }
