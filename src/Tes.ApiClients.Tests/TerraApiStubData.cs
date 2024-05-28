@@ -291,10 +291,10 @@ public class TerraApiStubData
       return $@"{{
   ""id"": {{
     ""resourceId"": {{
-      ""resourceTypeName"": ""azure_managed_identity"",
+      ""resourceTypeName"": ""private_azure_container_registry"",
       ""resourceId"": ""{BillingProfileId}""
     }},
-    ""action"": ""identify"",
+    ""action"": ""pull_image"",
     ""billingProfileId"": ""{BillingProfileId}""
   }},
   ""objectId"": ""{ManagedIdentityObjectId}"",
