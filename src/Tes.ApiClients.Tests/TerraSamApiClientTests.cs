@@ -42,7 +42,7 @@ namespace Tes.ApiClients.Tests
                 It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<SamActionManagedIdentityApiResponse>>>(), 
                 It.IsAny<CancellationToken>(), It.IsAny<string>())).ReturnsAsync(System.Text.Json.JsonSerializer.Deserialize<SamActionManagedIdentityApiResponse>(terraApiStubData.GetSamActionManagedIdentityApiResponseInJson())!);
 
-            var apiResponse = await terraSamApiClient.GetActionManagedIdentityAsync(terraApiStubData.BillingProfileId, CancellationToken.None);
+            var apiResponse = await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(terraApiStubData.BillingProfileId, CancellationToken.None);
 
             Assert.IsNotNull(apiResponse);
             Assert.IsTrue(!string.IsNullOrEmpty(apiResponse.ObjectId));

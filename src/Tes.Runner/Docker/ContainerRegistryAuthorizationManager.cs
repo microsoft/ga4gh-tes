@@ -102,7 +102,7 @@ namespace Tes.Runner.Docker
             // TODO test with invalid guid for billing profile id
             var billingProfileId = Guid.Parse(runtimeOptions.Terra.BillingProfileId);
             var samClient = TerraSamApiClient.CreateTerraSamApiClient(runtimeOptions.Terra.SamApiHost, tokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureEnvironmentConfig);
-            var response = await samClient.GetActionManagedIdentityAsync(billingProfileId, CancellationToken.None);
+            var response = await samClient.GetActionManagedIdentityForACRPullAsync(billingProfileId, CancellationToken.None);
             logger.LogInformation(@"Successfully fetched ACR action identity from Sam: {ObjectId}", response.ObjectId);
             return response.ObjectId;
         }

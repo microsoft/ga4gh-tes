@@ -42,18 +42,23 @@ namespace Tes.ApiClients
         /// </summary>
         protected TerraSamApiClient() { }
 
-        public virtual async Task<SamActionManagedIdentityApiResponse> GetActionManagedIdentityAsync(Guid billingProfileId, CancellationToken cancellationToken)
+        public virtual async Task<SamActionManagedIdentityApiResponse> GetActionManagedIdentityForACRPullAsync(Guid billingProfileId, CancellationToken cancellationToken)
         {
-            ArgumentNullException.ThrowIfNull(billingProfileId);
+            return await GetActionManagedIdentityAsync("private_azure_container_registry", billingProfileId, "pull_image", cancellationToken);
+        }
 
-            var url = GetSamActionManagedIdentityUrl("azure_managed_identity", billingProfileId, "identify");
+        public virtual async Task<SamActionManagedIdentityApiResponse> GetActionManagedIdentityAsync(string resourceType, Guid resourceId, string action, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(resourceId);
 
-            Logger.LogInformation(@"Fetching action managed identity from Sam for {BillingProfileId}", billingProfileId);
+            var url = GetSamActionManagedIdentityUrl(resourceType, resourceId, action);
+
+            Logger.LogInformation(@"Fetching action managed identity from Sam for {resourceId}", resourceId);
 
             // TODO What happens if this request errors out?
             return 
                 await HttpGetRequestAsync(url, setAuthorizationHeader: true, cacheResults: true, 
-                    SamActionManagedIdentityApiResponseContext.Default.SamActionManagedIdentityApiResponse, cancellationToken);
+                    SamActionManagedIdentityApiResponseContext.Default.SamActionManagedIdentityApiResponse, cancellationToken); 
         }
 
 

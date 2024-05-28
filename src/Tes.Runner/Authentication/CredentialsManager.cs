@@ -36,19 +36,17 @@ namespace Tes.Runner.Authentication
             return duration;
         }
 
-        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default, string? ManagedIdentityResourceId = default)
+        public virtual TokenCredential GetTokenCredential(RuntimeOptions runtimeOptions, string? tokenScope = default, string? managedIdentityResourceId = default)
         {
             try
             {
-                return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions, tokenScope, ManagedIdentityResourceId));
+                return retryPolicy.Execute(() => GetTokenCredentialImpl(runtimeOptions, tokenScope, managedIdentityResourceId));
             }
             catch
             {
                 throw new IdentityUnavailableException();
             }
         }
-
-    //    public virtual TokenCredential GetTokenCredential(string ManagedIdentityResourceId, string? tokenScope = default)
 
         private TokenCredential GetTokenCredentialImpl(RuntimeOptions runtimeOptions, string? tokenScope, string? ManagedIdentityResourceId)
         {
