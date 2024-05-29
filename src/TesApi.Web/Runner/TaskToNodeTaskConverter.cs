@@ -115,7 +115,7 @@ namespace TesApi.Web.Runner
                 await BuildInputsAsync(task, builder, nodeTaskConversionOptions.AdditionalInputs, nodeTaskConversionOptions.DefaultStorageAccountName, cancellationToken);
 
                 BuildOutputs(task, nodeTaskConversionOptions.DefaultStorageAccountName, builder,
-                    [ GetBatchTaskOutput(MetricsFileName), GetBatchTaskOutput("stdout.txt"), GetBatchTaskOutput("stderr.txt") ]);
+                    [GetBatchTaskOutput(MetricsFileName), GetBatchTaskOutput("stdout.txt"), GetBatchTaskOutput("stderr.txt")]);
 
                 return builder.Build();
             }

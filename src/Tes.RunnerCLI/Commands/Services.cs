@@ -6,13 +6,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Tes.Runner;
 using Tes.Runner.Authentication;
 using Tes.Runner.Docker;
 using Tes.Runner.Events;
 using Tes.Runner.Logs;
 using Tes.Runner.Storage;
 using Tes.Runner.Transfer;
-using Tes.Runner;
 
 namespace Tes.RunnerCLI.Commands
 {
