@@ -94,17 +94,45 @@ namespace Tes.Runner.Docker
 
         private async Task<string?> FetchTerraACRActionIdentityAsync(RuntimeOptions runtimeOptions)
         {
+            // Return null if we don't have the config needed to get identity from Sam
             if (runtimeOptions.Terra is null || string.IsNullOrWhiteSpace(runtimeOptions.Terra.BillingProfileId) || string.IsNullOrWhiteSpace(runtimeOptions.Terra.SamApiHost))
             {
                 return null;
             }
 
-            // TODO test with invalid guid for billing profile id
-            var billingProfileId = Guid.Parse(runtimeOptions.Terra.BillingProfileId);
-            var samClient = TerraSamApiClient.CreateTerraSamApiClient(runtimeOptions.Terra.SamApiHost, tokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureEnvironmentConfig);
-            var response = await samClient.GetActionManagedIdentityForACRPullAsync(billingProfileId, CancellationToken.None);
-            logger.LogInformation(@"Successfully fetched ACR action identity from Sam: {ObjectId}", response.ObjectId);
-            return response.ObjectId;
+            // Return null if we don't have a valid billing project id
+            Guid billingProfileId;
+            try
+            {
+                billingProfileId = Guid.Parse(runtimeOptions.Terra.BillingProfileId);
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Billing profile id {id} is not a valid guid, can't get ACR Pull action identity from Sam", runtimeOptions.Terra.BillingProfileId);
+                return null;
+            }
+
+            
+            try
+            {
+                var samClient = TerraSamApiClient.CreateTerraSamApiClient(runtimeOptions.Terra.SamApiHost, tokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureEnvironmentConfig);
+                var response = await samClient.GetActionManagedIdentityForACRPullAsync(billingProfileId, CancellationToken.None);
+                if (response is null)
+                {
+                    logger.LogInformation("Found no ACR Pull action identity in Sam for {id}", billingProfileId);
+                    return null;
+                }
+                else 
+                {
+                    logger.LogInformation(@"Successfully fetched ACR action identity from Sam: {ObjectId}", response.ObjectId);
+                    return response.ObjectId;
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed when trying to obtain an ACR Pull action identity from Sam");
+                return null;
+            }
         }
 
         private sealed class AcquireDockerAuthTokenPipelinePolicy : Azure.Core.Pipeline.HttpPipelinePolicy

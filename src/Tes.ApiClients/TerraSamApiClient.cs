@@ -42,12 +42,12 @@ namespace Tes.ApiClients
         /// </summary>
         protected TerraSamApiClient() { }
 
-        public virtual async Task<SamActionManagedIdentityApiResponse> GetActionManagedIdentityForACRPullAsync(Guid billingProfileId, CancellationToken cancellationToken)
+        public virtual async Task<SamActionManagedIdentityApiResponse?> GetActionManagedIdentityForACRPullAsync(Guid billingProfileId, CancellationToken cancellationToken)
         {
             return await GetActionManagedIdentityAsync("private_azure_container_registry", billingProfileId, "pull_image", cancellationToken);
         }
 
-        public virtual async Task<SamActionManagedIdentityApiResponse> GetActionManagedIdentityAsync(string resourceType, Guid resourceId, string action, CancellationToken cancellationToken)
+        private async Task<SamActionManagedIdentityApiResponse?> GetActionManagedIdentityAsync(string resourceType, Guid resourceId, string action, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(resourceId);
 
@@ -55,10 +55,25 @@ namespace Tes.ApiClients
 
             Logger.LogInformation(@"Fetching action managed identity from Sam for {resourceId}", resourceId);
 
-            // TODO What happens if this request errors out?
-            return 
-                await HttpGetRequestAsync(url, setAuthorizationHeader: true, cacheResults: true, 
+            try
+            {
+                return await HttpGetRequestAsync(url, setAuthorizationHeader: true, cacheResults: true, 
                     SamActionManagedIdentityApiResponseContext.Default.SamActionManagedIdentityApiResponse, cancellationToken); 
+            }
+            catch (HttpRequestException e)
+            {
+                // Sam will return a 404 if there is no action identity that matches the query,
+                // or if we don't have access to it.
+                if (e.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    return null;
+                }
+                else 
+                {
+                    throw;
+                }
+
+            }
         }
 
 
