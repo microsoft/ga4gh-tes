@@ -14,7 +14,7 @@ namespace Tes.Runner.Test.Transfer
         [TestInitialize]
         public void Setup()
         {
-            hashListProvider = new Md5HashListProvider();
+            hashListProvider = new Md5HashListProvider(Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
         }
 
         [TestMethod]

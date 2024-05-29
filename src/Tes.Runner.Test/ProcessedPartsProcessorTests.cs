@@ -22,7 +22,7 @@ namespace Tes.Runner.Test
             pipeline = new Mock<IBlobPipeline>();
             processedBuffer = Channel.CreateUnbounded<ProcessedBuffer>();
             readBuffer = Channel.CreateUnbounded<PipelineBuffer>();
-            processedPartsProcessor = new ProcessedPartsProcessor(pipeline.Object);
+            processedPartsProcessor = new ProcessedPartsProcessor(pipeline.Object, Microsoft.Extensions.Logging.Abstractions.NullLogger<ProcessedPartsProcessor>.Instance);
         }
 
         [DataTestMethod]
@@ -31,7 +31,7 @@ namespace Tes.Runner.Test
         [DataRow(1, 0, 1)]
         public async Task StartProcessedPartsProcessorAsync_CallsOnCompleteOnceForEachFileAndProccessedBufferIsEmpty(int expectedNumberOfFiles, long fileSize, int numberOfPartsPerFile)
         {
-            processedPartsProcessor = new ProcessedPartsProcessor(pipeline!.Object);
+            //processedPartsProcessor = new ProcessedPartsProcessor(pipeline!.Object);
 
             for (var f = 0; f < expectedNumberOfFiles; f++)
             {

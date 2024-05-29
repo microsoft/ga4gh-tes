@@ -12,18 +12,20 @@ namespace Tes.Runner.Transfer;
 public class PartsProducer
 {
     private readonly IBlobPipeline blobPipeline;
-    private readonly ILogger logger = PipelineLoggerFactory.Create<PartsProducer>();
+    private readonly ILogger Logger;
     private readonly BlobPipelineOptions blobPipelineOptions;
-    private readonly List<Channel<FileStream>> fileHandlersPools = new List<Channel<FileStream>>();
+    private readonly List<Channel<FileStream>> fileHandlersPools = [];
 
 
-    public PartsProducer(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions)
+    public PartsProducer(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(blobPipelineOptions);
         ArgumentNullException.ThrowIfNull(blobPipeline);
+        ArgumentNullException.ThrowIfNull(logger);
 
         this.blobPipeline = blobPipeline;
         this.blobPipelineOptions = blobPipelineOptions;
+        this.Logger = logger;
     }
 
     /// <summary>
@@ -49,11 +51,11 @@ public class PartsProducer
         {
             await Task.WhenAll(partsProducerTasks);
 
-            logger.LogInformation("All parts from requested operations were created.");
+            Logger.LogInformation("All parts from requested operations were created.");
         }
         catch (Exception e)
         {
-            logger.LogError(e, "The parts producer failed.");
+            Logger.LogError(e, "The parts producer failed.");
 
             await TryCloseAllFileHandlerPools();
 
@@ -114,7 +116,7 @@ public class PartsProducer
         }
         catch (Exception e)
         {
-            logger.LogError(e, $"Failed to create parts for file {operation.FileName}");
+            Logger.LogError(e, $"Failed to create parts for file {operation.FileName}");
             if (!cancellationTokenSource.IsCancellationRequested)
             {
                 cancellationTokenSource.Cancel();
@@ -179,7 +181,7 @@ public class PartsProducer
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Failed to open the file or create directory. File name {fileName}");
+                Logger.LogError(e, $"Failed to open the file or create directory. File name {fileName}");
                 throw;
             }
         }

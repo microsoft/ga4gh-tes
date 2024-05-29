@@ -9,9 +9,9 @@ namespace Tes.Runner.Transfer;
 /// Default file info provider implementation that uses the standard .NET APIs.
 /// Glob support is limited to the standard .NET APIs.
 /// </summary>
-public class DefaultFileInfoProvider : IFileInfoProvider
+public class DefaultFileInfoProvider(ILogger<DefaultFileInfoProvider> logger) : IFileInfoProvider
 {
-    private readonly ILogger logger = PipelineLoggerFactory.Create<DefaultFileInfoProvider>();
+    private readonly ILogger logger = logger;
 
     public long GetFileSize(string fileName)
     {

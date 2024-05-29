@@ -29,7 +29,7 @@ namespace Tes.Runner.Test
             memoryBufferChannel = await MemoryBufferPoolFactory.CreateMemoryBufferPoolAsync(RunnerTestUtils.MemBuffersCapacity, blockSizeBytes);
             options = new BlobPipelineOptions();
             pipeline = new Mock<IBlobPipeline>();
-            partsReader = new PartsReader(pipeline.Object, options, memoryBufferChannel, new SimpleScalingStrategy());
+            partsReader = new PartsReader(pipeline.Object, options, memoryBufferChannel, new SimpleScalingStrategy(), Microsoft.Extensions.Logging.Abstractions.NullLogger<PartsReader>.Instance);
             readBufferChannel = Channel.CreateBounded<PipelineBuffer>(RunnerTestUtils.PipelineBufferCapacity);
             writeBufferChannel = Channel.CreateBounded<PipelineBuffer>(RunnerTestUtils.PipelineBufferCapacity);
             cancellationSource = new CancellationTokenSource();

@@ -44,7 +44,7 @@ namespace Tes.Runner.Test.Events
             var sink = new TestEventSink();
             sink.Start();
             sinks = [sink];
-            eventsPublisher = new EventsPublisher(sinks);
+            eventsPublisher = new(sinks, Microsoft.Extensions.Logging.Abstractions.NullLogger<EventsPublisher>.Instance);
         }
 
         [TestMethod]

@@ -7,29 +7,31 @@ using Tes.Runner.Storage;
 
 namespace Tes.Runner.Logs
 {
-    public class LogPublisher
+    public class LogPublisher(Func<ConsoleStreamLogPublisher> consoleStreamLogPublisherFactory, Func<Uri, string, AppendBlobLogPublisher> appendBlobLogPublisherFactory, UrlTransformationStrategyFactory transformationStrategyFactory)
     {
         const BlobSasPermissions LogLocationPermissions = BlobSasPermissions.Read | BlobSasPermissions.Create | BlobSasPermissions.Write | BlobSasPermissions.Add;
 
-        public static async Task<IStreamLogReader> CreateStreamReaderLogPublisherAsync(NodeTask nodeTask, string logNamePrefix, string apiVersion)
+        private readonly Func<ConsoleStreamLogPublisher> consoleStreamLogPublisherFactory = consoleStreamLogPublisherFactory ?? throw new ArgumentNullException(nameof(consoleStreamLogPublisherFactory));
+        private readonly Func<Uri, string, AppendBlobLogPublisher> appendBlobLogPublisherFactory = appendBlobLogPublisherFactory ?? throw new ArgumentNullException(nameof(appendBlobLogPublisherFactory));
+
+        public async Task<IStreamLogReader> CreateStreamReaderLogPublisherAsync(NodeTask nodeTask, string logNamePrefix, string apiVersion)
         {
             ArgumentNullException.ThrowIfNull(nodeTask);
             ArgumentException.ThrowIfNullOrEmpty(logNamePrefix);
 
             if (!string.IsNullOrWhiteSpace(nodeTask.RuntimeOptions?.StreamingLogPublisher?.TargetUrl))
             {
-                var transformedUrl = await UrlTransformationStrategyFactory.GetTransformedUrlAsync(
+                var transformedUrl = await transformationStrategyFactory.GetTransformedUrlAsync(
                     nodeTask.RuntimeOptions,
                     nodeTask.RuntimeOptions.StreamingLogPublisher,
-                    LogLocationPermissions,
-                    apiVersion);
+                    LogLocationPermissions);
 
-                return new AppendBlobLogPublisher(
-                    transformedUrl.ToString()!,
+                return appendBlobLogPublisherFactory(
+                    transformedUrl,
                     logNamePrefix);
             }
 
-            return new ConsoleStreamLogPublisher();
+            return consoleStreamLogPublisherFactory();
         }
     }
 }

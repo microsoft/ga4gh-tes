@@ -198,7 +198,7 @@ namespace TesApi.Tests
             state = await GetNewTesTaskStateAsync(new TesResources { Preemptible = true, BackendParameters = new() { { "vm_size", "VmSize1" } }, CpuCores = 1000, RamGb = 100000, DiskGb = 1000000 }, azureProxyReturnValues);
             Assert.AreEqual(TesState.INITIALIZING, state);
 
-            state = await GetNewTesTaskStateAsync(new TesResources { Preemptible = true, BackendParameters = new(), CpuCores = 1000, RamGb = 100000, DiskGb = 1000000 }, azureProxyReturnValues);
+            state = await GetNewTesTaskStateAsync(new TesResources { Preemptible = true, BackendParameters = [], CpuCores = 1000, RamGb = 100000, DiskGb = 1000000 }, azureProxyReturnValues);
             Assert.AreEqual(TesState.SYSTEM_ERROR, state);
 
             state = await GetNewTesTaskStateAsync(new TesResources { Preemptible = false, BackendParameters = new() { { "vm_size", "VmSize1" } } }, azureProxyReturnValues);
@@ -241,9 +241,11 @@ namespace TesApi.Tests
         {
             var azureProxyReturnValues = AzureProxyReturnValues.Defaults;
 
-            azureProxyReturnValues.VmSizesAndPrices = new() {
+            azureProxyReturnValues.VmSizesAndPrices =
+            [
                 new() { VmSize = "VmSize1", LowPriority = true, VCpusAvailable = 1, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 1 },
-                new() { VmSize = "VmSize2", LowPriority = true, VCpusAvailable = 2, MemoryInGiB = 8, ResourceDiskSizeInGiB = 40, PricePerHour = 2 }};
+                new() { VmSize = "VmSize2", LowPriority = true, VCpusAvailable = 2, MemoryInGiB = 8, ResourceDiskSizeInGiB = 40, PricePerHour = 2 }
+            ];
 
             Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 1, RamGb = 1, DiskGb = 10, Preemptible = false }, azureProxyReturnValues));
             Assert.AreEqual(TesState.SYSTEM_ERROR, await GetNewTesTaskStateAsync(new TesResources { CpuCores = 4, RamGb = 1, DiskGb = 10, Preemptible = true }, azureProxyReturnValues));
@@ -466,8 +468,8 @@ namespace TesApi.Tests
                     .Callback<string, CloudTask, string, System.Threading.CancellationToken>((_, _, _, _)
                         => throw typeof(BatchClientException)
                                 .GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
-                                    new[] { typeof(string), typeof(Exception) })
-                                .Invoke(new object[] { null, null }) as Exception));
+                                    [typeof(string), typeof(Exception)])
+                                .Invoke([null, null]) as Exception));
 
             void Validator(TesTask tesTask, IEnumerable<(LogLevel logLevel, Exception exception)> logs)
             {
@@ -1258,7 +1260,7 @@ namespace TesApi.Tests
                 var allowedVms = new List<string>();
                 if (!string.IsNullOrWhiteSpace(allowedVmsConfig))
                 {
-                    allowedVms = allowedVmsConfig.Split(",").ToList();
+                    allowedVms = [.. allowedVmsConfig.Split(",")];
                 }
                 proxy.Setup(p => p.GetAllowedVmSizes(It.IsAny<System.Threading.CancellationToken>()))
                     .ReturnsAsync(allowedVms);
@@ -1424,7 +1426,7 @@ namespace TesApi.Tests
 
             if (string.IsNullOrEmpty(downloadFilesScriptContent))
             {
-                return new List<FileToDownload>();
+                return [];
             }
 
             var fileInputs = JsonConvert.DeserializeObject<Tes.Runner.Models.NodeTask>(downloadFilesScriptContent)?.Inputs ?? Enumerable.Empty<Tes.Runner.Models.FileInput>().ToList();
@@ -1532,14 +1534,15 @@ namespace TesApi.Tests
                     { "defaultstorageaccount", new() { Name = "defaultstorageaccount", Id = "Id", BlobEndpoint = new("https://defaultstorageaccount.blob.core.windows.net/"), SubscriptionId = "SubId" } },
                     { "storageaccount1", new() { Name = "storageaccount1", Id = "Id", BlobEndpoint = new("https://storageaccount1.blob.core.windows.net/"), SubscriptionId = "SubId" } }
                 },
-                VmSizesAndPrices = new() {
+                VmSizesAndPrices =
+                [
                     new() { VmSize = "VmSizeLowPri1", VmFamily = "VmFamily1", LowPriority = true, VCpusAvailable = 1, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 1 },
                     new() { VmSize = "VmSizeLowPri2", VmFamily = "VmFamily2", LowPriority = true, VCpusAvailable = 2, MemoryInGiB = 8, ResourceDiskSizeInGiB = 40, PricePerHour = 2 },
                     new() { VmSize = "VmSizeDedicated1", VmFamily = "VmFamily1", LowPriority = false, VCpusAvailable = 1, MemoryInGiB = 4, ResourceDiskSizeInGiB = 20, PricePerHour = 11 },
                     new() { VmSize = "VmSizeDedicated2", VmFamily = "VmFamily2", LowPriority = false, VCpusAvailable = 2, MemoryInGiB = 8, ResourceDiskSizeInGiB = 40, PricePerHour = 22 }
-                },
-                BatchQuotas = new() { ActiveJobAndJobScheduleQuota = 1, PoolQuota = 1, DedicatedCoreQuota = 5, LowPriorityCoreQuota = 10, DedicatedCoreQuotaPerVMFamily = new List<VirtualMachineFamilyCoreQuota>() },
-                ActiveNodeCountByVmSize = new List<AzureBatchNodeCount>(),
+                ],
+                BatchQuotas = new() { ActiveJobAndJobScheduleQuota = 1, PoolQuota = 1, DedicatedCoreQuota = 5, LowPriorityCoreQuota = 10, DedicatedCoreQuotaPerVMFamily = [] },
+                ActiveNodeCountByVmSize = [],
                 ActiveJobCount = 0,
                 ActivePoolCount = 0,
                 BatchJobAndTaskState = BatchJobAndTaskStates.JobNotFound,
@@ -1556,7 +1559,7 @@ namespace TesApi.Tests
                 proxy.BatchQuotas = new()
                 {
                     DedicatedCoreQuotaPerVMFamilyEnforced = true,
-                    DedicatedCoreQuotaPerVMFamily = new VirtualMachineFamilyCoreQuota[] { new("VmFamily1", proxy.BatchQuotas.DedicatedCoreQuota), new("VmFamily2", 0), new("VmFamily3", 4) },
+                    DedicatedCoreQuotaPerVMFamily = [new("VmFamily1", proxy.BatchQuotas.DedicatedCoreQuota), new("VmFamily2", 0), new("VmFamily3", 4)],
                     DedicatedCoreQuota = proxy.BatchQuotas.DedicatedCoreQuota,
                     ActiveJobAndJobScheduleQuota = proxy.BatchQuotas.ActiveJobAndJobScheduleQuota,
                     LowPriorityCoreQuota = proxy.BatchQuotas.LowPriorityCoreQuota,
@@ -1595,28 +1598,21 @@ namespace TesApi.Tests
             }
         }
 
-        private class TestBatchQuotaVerifierQuotaMaxedOut : TestBatchQuotaVerifierBase
+        private class TestBatchQuotaVerifierQuotaMaxedOut(IBatchQuotaProvider batchQuotaProvider) : TestBatchQuotaVerifierBase(batchQuotaProvider)
         {
-            public TestBatchQuotaVerifierQuotaMaxedOut(IBatchQuotaProvider batchQuotaProvider) : base(batchQuotaProvider) { }
-
             public override Task CheckBatchAccountQuotasAsync(VirtualMachineInformation _1, bool _2, System.Threading.CancellationToken cancellationToken)
                 => throw new AzureBatchQuotaMaxedOutException("Test AzureBatchQuotaMaxedOutException");
         }
 
-        private class TestBatchQuotaVerifierLowQuota : TestBatchQuotaVerifierBase
+        private class TestBatchQuotaVerifierLowQuota(IBatchQuotaProvider batchQuotaProvider) : TestBatchQuotaVerifierBase(batchQuotaProvider)
         {
-            public TestBatchQuotaVerifierLowQuota(IBatchQuotaProvider batchQuotaProvider) : base(batchQuotaProvider) { }
-
             public override Task CheckBatchAccountQuotasAsync(VirtualMachineInformation _1, bool _2, System.Threading.CancellationToken cancellationToken)
                 => throw new AzureBatchLowQuotaException("Test AzureBatchLowQuotaException");
         }
 
-        private abstract class TestBatchQuotaVerifierBase : IBatchQuotaVerifier
+        private abstract class TestBatchQuotaVerifierBase(IBatchQuotaProvider batchQuotaProvider) : IBatchQuotaVerifier
         {
-            private readonly IBatchQuotaProvider batchQuotaProvider;
-
-            protected TestBatchQuotaVerifierBase(IBatchQuotaProvider batchQuotaProvider)
-                => this.batchQuotaProvider = batchQuotaProvider;
+            private readonly IBatchQuotaProvider batchQuotaProvider = batchQuotaProvider;
 
             public abstract Task CheckBatchAccountQuotasAsync(VirtualMachineInformation virtualMachineInformation, bool needPoolOrJobQuotaCheck, System.Threading.CancellationToken cancellationToken);
 

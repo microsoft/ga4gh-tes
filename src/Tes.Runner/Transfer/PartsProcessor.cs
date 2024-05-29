@@ -14,14 +14,14 @@ public abstract class PartsProcessor
     protected readonly IBlobPipeline BlobPipeline;
     protected readonly Channel<byte[]> MemoryBufferChannel;
     protected readonly BlobPipelineOptions BlobPipelineOptions;
-    private readonly ILogger logger = PipelineLoggerFactory.Create<PartsProcessor>();
+    protected readonly ILogger Logger;
     private readonly IScalingStrategy scalingStrategy;
 
     private TimeSpan currentMaxPartProcessingTime;
 
-    private readonly SemaphoreSlim semaphore = new SemaphoreSlim(1);
+    private readonly SemaphoreSlim semaphore = new(1);
 
-    protected PartsProcessor(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel, IScalingStrategy scalingStrategy)
+    protected PartsProcessor(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel, IScalingStrategy scalingStrategy, ILogger logger)
     {
         ValidateArguments(blobPipeline, blobPipelineOptions, memoryBufferChannel);
 
@@ -29,6 +29,7 @@ public abstract class PartsProcessor
         BlobPipelineOptions = blobPipelineOptions;
         MemoryBufferChannel = memoryBufferChannel;
         this.scalingStrategy = scalingStrategy;
+        this.Logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     private static void ValidateArguments(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions,
@@ -73,7 +74,7 @@ public abstract class PartsProcessor
 
                     if (!scalingStrategy.IsScalingAllowed(p, currentMaxPartProcessingTime))
                     {
-                        logger.LogInformation("The maximum number of tasks for the transfer operation has been set. Max part processing time is: {currentMaxPartProcessingTimeInMs} ms. Processing tasks count: {processorCount}.", currentMaxPartProcessingTime, p);
+                        Logger.LogInformation("The maximum number of tasks for the transfer operation has been set. Max part processing time is: {currentMaxPartProcessingTimeInMs} ms. Processing tasks count: {processorCount}.", currentMaxPartProcessingTime, p);
                         break;
                     }
                 }
@@ -84,13 +85,13 @@ public abstract class PartsProcessor
 
                 if (readFromChannel.Reader.Completion.IsCompleted)
                 {
-                    logger.LogInformation("The readFromChannel is completed, no need to add more processing tasks. Processing tasks count: {processorCount}.", p);
+                    Logger.LogInformation("The readFromChannel is completed, no need to add more processing tasks. Processing tasks count: {processorCount}.", p);
                     break;
                 }
 
                 var delay = scalingStrategy.GetScalingDelay(p);
 
-                logger.LogInformation("Increasing the number of processing tasks to {processorCount}", p + 1);
+                Logger.LogInformation("Increasing the number of processing tasks to {processorCount}", p + 1);
 
                 tasks.Add(StartProcessorTaskAsync(readFromChannel, processorAsync, cancellationSource));
 
@@ -106,10 +107,9 @@ public abstract class PartsProcessor
     {
         await Task.Run(async () =>
         {
-            PipelineBuffer? buffer;
             var stopwatch = new Stopwatch();
             while (await readFromChannel.Reader.WaitToReadAsync(cancellationTokenSource.Token))
-                while (readFromChannel.Reader.TryRead(out buffer))
+                while (readFromChannel.Reader.TryRead(out var buffer))
                 {
                     stopwatch.Restart();
                     try
@@ -118,7 +118,7 @@ public abstract class PartsProcessor
                     }
                     catch (Exception e)
                     {
-                        logger.LogError(e, "Failed to execute processorAsync");
+                        Logger.LogError(e, "Failed to execute processorAsync");
 
                         await TryCloseFileHandlerPoolAsync(buffer.FileHandlerPool);
 

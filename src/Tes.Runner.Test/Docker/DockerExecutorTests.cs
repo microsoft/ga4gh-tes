@@ -4,6 +4,7 @@
 using System.Text;
 using Docker.DotNet;
 using Docker.DotNet.Models;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tes.Runner.Authentication;
 using Tes.Runner.Docker;
@@ -37,7 +38,7 @@ namespace Tes.Runner.Test.Docker
             var credentialsManager = new Mock<CredentialsManager>();
             credentialsManager.Setup(m => m.GetTokenCredential(It.IsAny<RuntimeOptions>(), It.IsAny<string>()))
                 .Throws(new IdentityUnavailableException());
-            containerRegistryAuthorizationManager = new(credentialsManager.Object);
+            containerRegistryAuthorizationManager = new(credentialsManager.Object, NullLogger<ContainerRegistryAuthorizationManager>.Instance);
         }
 
         [DataTestMethod]
@@ -50,7 +51,7 @@ namespace Tes.Runner.Test.Docker
             dockerImageMock.Setup(d => d.CreateImageAsync(It.IsAny<ImagesCreateParameters>(), It.IsAny<AuthConfig>(), It.IsAny<IProgress<JSONMessage>>(), It.IsAny<CancellationToken>()))
                 .Throws(exception);
 
-            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost);
+            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost, new Mock<NetworkUtility>().Object, NullLogger.Instance);
             Models.RuntimeOptions runtimeOptions = new();
             try
             {
@@ -75,7 +76,7 @@ namespace Tes.Runner.Test.Docker
             dockerImageMock.Setup(d => d.CreateImageAsync(It.IsAny<ImagesCreateParameters>(), It.IsAny<AuthConfig>(), It.IsAny<IProgress<JSONMessage>>(), It.IsAny<CancellationToken>()))
                 .Throws(exception);
 
-            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost);
+            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost, new Mock<NetworkUtility>().Object, NullLogger.Instance);
             Models.RuntimeOptions runtimeOptions = new();
             try
             {
@@ -135,7 +136,7 @@ namespace Tes.Runner.Test.Docker
             dockerVolumeMock.Setup(d => d.PruneAsync(It.IsAny<VolumesPruneParameters>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(new VolumesPruneResponse()));
 
-            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost);
+            DockerExecutor executor = new(dockerClient, streamLogReader, containerRegistryAuthorizationManager, runnerHost, new Mock<NetworkUtility>().Object, NullLogger.Instance);
             await executor.NodeCleanupAsync(new(image, default, default, default, default, new()));
 
             Assert.AreEqual(1, dockerVolumeMock.Invocations.Count);

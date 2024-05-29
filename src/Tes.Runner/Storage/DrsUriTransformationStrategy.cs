@@ -5,6 +5,7 @@ using Azure.Core;
 using Azure.Storage.Sas;
 using CommonUtilities;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Tes.ApiClients;
 using Tes.Runner.Models;
 using Tes.Runner.Transfer;
@@ -17,7 +18,7 @@ namespace Tes.Runner.Storage
     /// </summary>
     public class DrsUriTransformationStrategy : IUrlTransformationStrategy
     {
-        private readonly ILogger<DrsUriTransformationStrategy> logger = PipelineLoggerFactory.Create<DrsUriTransformationStrategy>();
+        private readonly ILogger logger;
         private readonly DrsHubApiClient drsHubApiClient;
         private const string DrsScheme = "drs";
 
@@ -26,13 +27,18 @@ namespace Tes.Runner.Storage
             ArgumentNullException.ThrowIfNull(drsHubApiClient);
 
             this.drsHubApiClient = drsHubApiClient;
+            this.logger = NullLogger.Instance;
         }
-        public DrsUriTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig)
+
+        public DrsUriTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<DrsUriTransformationStrategy> logger)
         {
             ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
+            ArgumentNullException.ThrowIfNull(tokenCredential);
             ArgumentException.ThrowIfNullOrEmpty(terraRuntimeOptions.DrsHubApiHost, nameof(terraRuntimeOptions.DrsHubApiHost));
+            ArgumentNullException.ThrowIfNull(logger);
 
             drsHubApiClient = DrsHubApiClient.CreateDrsHubApiClient(terraRuntimeOptions.DrsHubApiHost, tokenCredential, azureCloudIdentityConfig);
+            this.logger = logger;
         }
 
         public async Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions = 0)

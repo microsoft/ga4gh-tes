@@ -276,7 +276,7 @@ namespace TesApi.Web.Runner
         {
             ArgumentException.ThrowIfNullOrEmpty(metricsFileName, nameof(metricsFileName));
 
-            nodeTask.MetricsFilename = metricsFileName;
+            nodeTask.MetricsFilename = $"../{metricsFileName}";
 
             nodeTask.OutputsMetricsFormat = NodeTaskOutputsMetricsFormat;
 

@@ -18,7 +18,7 @@ namespace Tes.Runner.Test.Commands
         public void SetUp()
         {
             streamLogReaderMock = new Mock<IStreamLogReader>();
-            processLauncher = new ProcessLauncher(streamLogReaderMock.Object);
+            processLauncher = new(streamLogReaderMock.Object, Microsoft.Extensions.Logging.Abstractions.NullLogger<ProcessLauncher>.Instance);
         }
 
         [TestMethod]

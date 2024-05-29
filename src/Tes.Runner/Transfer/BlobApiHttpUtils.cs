@@ -7,14 +7,13 @@ using System.Net.Sockets;
 using System.Text;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
-using Polly;
 using Polly.Retry;
 
 namespace Tes.Runner.Transfer;
 /// <summary>
 /// A class containing the logic to create and make the HTTP requests for the blob block API.
 /// </summary>
-public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolicy)
+public class BlobApiHttpUtils(HttpClient httpClient, Func<ILogger, AsyncRetryPolicy> retryPolicyFactory, ILogger logger)
 {
     //https://learn.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs
     public const string DefaultApiVersion = "2023-05-03";
@@ -22,14 +21,15 @@ public class BlobApiHttpUtils(HttpClient httpClient, AsyncRetryPolicy retryPolic
     public const string AppendBlobType = "AppendBlob";
 
     private readonly HttpClient httpClient = httpClient;
-    private static readonly ILogger Logger = PipelineLoggerFactory.Create<BlobApiHttpUtils>();
-    private readonly AsyncRetryPolicy retryPolicy = retryPolicy;
+    private readonly ILogger Logger = logger;
+    private readonly AsyncRetryPolicy retryPolicy = retryPolicyFactory(logger);
 
 
     public const string RootHashMetadataName = "md5_4mib_hashlist_root_hash";
 
-    public BlobApiHttpUtils()
-        : this(new HttpClient(), HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy())
+    [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor]
+    public BlobApiHttpUtils(ILogger logger)
+        : this(new HttpClient(), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), logger)
     { }
 
     public static HttpRequestMessage CreatePutBlockRequestAsync(PipelineBuffer buffer, string apiVersion)

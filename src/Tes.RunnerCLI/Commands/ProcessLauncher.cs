@@ -14,13 +14,14 @@ namespace Tes.RunnerCLI.Commands
         const int LogWaitTimeoutInSeconds = 30;
 
         private readonly IStreamLogReader logReader;
-        private readonly ILogger logger = PipelineLoggerFactory.Create<ProcessLauncher>();
+        private readonly ILogger logger;
 
-        public ProcessLauncher(IStreamLogReader logReader)
+        public ProcessLauncher(IStreamLogReader logReader, ILogger<ProcessLauncher> logger)
         {
             ArgumentNullException.ThrowIfNull(logReader);
 
             this.logReader = logReader;
+            this.logger = logger;
         }
 
         public async Task<ProcessExecutionResult> LaunchProcessAndWaitAsync(string[] options)
@@ -91,14 +92,20 @@ namespace Tes.RunnerCLI.Commands
 
             return string.Join(" ", [.. argList]);
         }
+    }
 
-        public static async Task<ProcessLauncher> CreateLauncherAsync(Runner.Models.NodeTask nodeTask, string logNamePrefix, string apiVersion)
+    public class ProcessLauncherFactory(LogPublisher logPublisher, Func<IStreamLogReader, ProcessLauncher> factory)
+    {
+        private readonly LogPublisher logPublisher = logPublisher ?? throw new ArgumentNullException(nameof(logPublisher));
+        private readonly Func<IStreamLogReader, ProcessLauncher> factory = factory ?? throw new ArgumentNullException(nameof(factory));
+
+        public async Task<ProcessLauncher> CreateLauncherAsync(Runner.Models.NodeTask nodeTask, string logNamePrefix, string apiVersion)
         {
             ArgumentNullException.ThrowIfNull(nodeTask);
 
-            var logPublisher = await LogPublisher.CreateStreamReaderLogPublisherAsync(nodeTask, logNamePrefix, apiVersion);
+            var logReader = await logPublisher.CreateStreamReaderLogPublisherAsync(nodeTask, logNamePrefix, apiVersion);
 
-            return new ProcessLauncher(logReader: logPublisher);
+            return factory(logReader);
         }
     }
 }

@@ -3,18 +3,17 @@
 
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
-using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Events
 {
-    public abstract class EventSink : IEventSink
+    public abstract class EventSink(ILogger logger) : IEventSink
     {
         public const string Iso8601DateFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
 
         const int StopWaitDurationInSeconds = 30;
 
         private readonly Channel<EventMessage> events = Channel.CreateUnbounded<EventMessage>();
-        private readonly ILogger logger = PipelineLoggerFactory.Create<EventSink>();
+        protected readonly ILogger Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         private Task? eventHandlerTask;
 
         public abstract Task HandleEventAsync(EventMessage eventMessage);
@@ -26,7 +25,7 @@ namespace Tes.Runner.Events
 
         public void Start()
         {
-            logger.LogDebug("Starting events processing handler");
+            Logger.LogDebug("Starting events processing handler");
 
             eventHandlerTask = Task.Run(async () => await EventHandlerAsync());
         }
@@ -41,7 +40,7 @@ namespace Tes.Runner.Events
 
             if (eventHandlerTask.IsCompleted)
             {
-                logger.LogDebug("Task already completed");
+                Logger.LogDebug("Task already completed");
                 return;
             }
 
@@ -72,16 +71,16 @@ namespace Tes.Runner.Events
                 {
                     try
                     {
-                        logger.LogDebug($"Handling event. Event Name: {eventMessage.Name} Event ID: {eventMessage.Id} ");
+                        Logger.LogDebug($"Handling event. Event Name: {eventMessage.Name} Event ID: {eventMessage.Id} ");
 
                         await HandleEventAsync(eventMessage);
 
-                        logger.LogDebug($"Event handled. Event Name: {eventMessage.Name} Event ID: {eventMessage.Id} ");
+                        Logger.LogDebug($"Event handled. Event Name: {eventMessage.Name} Event ID: {eventMessage.Id} ");
                     }
                     catch (Exception e)
                     {
                         //event error should be handled silently, as event failures should not affect overall processing....
-                        logger.LogError(e, $"Error handling event. Event ID: {eventMessage.Id}");
+                        Logger.LogError(e, $"Error handling event. Event ID: {eventMessage.Id}");
                     }
                 }
             }

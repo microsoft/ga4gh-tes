@@ -9,18 +9,15 @@ namespace Tes.Runner.Docker
 {
     public class VolumeBindingsGenerator
     {
-        private readonly ILogger<VolumeBindingsGenerator> logger = PipelineLoggerFactory.Create<VolumeBindingsGenerator>();
+        private readonly ILogger logger;
         private readonly IFileInfoProvider fileInfoProvider;
 
-        public VolumeBindingsGenerator() : this(new DefaultFileInfoProvider())
-        {
-        }
-
-        protected VolumeBindingsGenerator(IFileInfoProvider fileInfoProvider)
+        public VolumeBindingsGenerator(IFileInfoProvider fileInfoProvider, ILogger<VolumeBindingsGenerator> logger)
         {
             ArgumentNullException.ThrowIfNull(fileInfoProvider);
 
             this.fileInfoProvider = fileInfoProvider;
+            this.logger = logger;
         }
 
         public List<string> GenerateVolumeBindings(List<FileInput>? inputs, List<FileOutput>? outputs)
@@ -43,7 +40,7 @@ namespace Tes.Runner.Docker
                 }
             }
 
-            return volumeBindings.ToList();
+            return [.. volumeBindings];
         }
 
         private void AddVolumeBindingIfRequired(HashSet<string> volumeBindings, string? mountParentDirectory, string path)
@@ -61,7 +58,7 @@ namespace Tes.Runner.Docker
             if (string.IsNullOrEmpty(mountParentDirectory))
             {
                 logger.LogDebug(
-                    $"The file {path} does not have a mount parent directory defined in the task definition. No volume binding will be created for this file in the container.");
+                    "The file {FilePath} does not have a mount parent directory defined in the task definition. No volume binding will be created for this file in the container.", path);
                 return default;
             }
 
@@ -71,15 +68,15 @@ namespace Tes.Runner.Docker
             if (!expandedPath.StartsWith(expandedMountParentDirectory))
             {
                 logger.LogWarning(
-                    $"The expanded path value {expandedPath} does not contain the specified mount parent directory: {expandedMountParentDirectory}. No volume binding will be created for this file in the container.");
+                    "The expanded path value {FilePath} does not contain the specified mount parent directory: {MountParentDirectory}. No volume binding will be created for this file in the container.", expandedPath, expandedMountParentDirectory);
                 return default;
             }
 
-            var targetDir = $"{expandedPath.Substring(expandedMountParentDirectory.Length).Split('/', StringSplitOptions.RemoveEmptyEntries)[0].TrimStart('/')}";
+            var targetDir = $"{expandedPath[expandedMountParentDirectory.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries)[0].TrimStart('/')}";
 
             var volBinding = $"{expandedMountParentDirectory.TrimEnd('/')}/{targetDir}:/{targetDir}";
 
-            logger.LogDebug($"Volume binding for {expandedPath} is {volBinding}");
+            logger.LogDebug("Volume binding for {FilePath} is {Binding}", expandedPath, volBinding);
 
             return volBinding;
         }

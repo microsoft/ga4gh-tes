@@ -26,7 +26,8 @@ namespace Tes.Runner.Test.Transfer
         {
             mockHttpMessageHandler = new Mock<HttpMessageHandler>();
             blobApiHttpUtils = new BlobApiHttpUtils(new HttpClient(mockHttpMessageHandler.Object),
-                HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(MaxRetryCount));
+                logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger, MaxRetryCount),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
         }
 
         [DataTestMethod]
@@ -38,7 +39,7 @@ namespace Tes.Runner.Test.Transfer
             var expectedRetryCount = MaxRetryCount;
             var expectedException = new TaskCanceledException("task cancelled", (Exception)Activator.CreateInstance(innerExceptionType)!);
 
-            var buffer = new PipelineBuffer() { Data = Array.Empty<byte>() };
+            var buffer = new PipelineBuffer() { Data = [] };
             mockHttpMessageHandler
                 .Protected()
                 .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
@@ -67,7 +68,7 @@ namespace Tes.Runner.Test.Transfer
         {
             var expectedException = new TaskCanceledException("task cancelled", (Exception)Activator.CreateInstance(innerExceptionType)!);
 
-            var buffer = new PipelineBuffer() { Data = Array.Empty<byte>() };
+            var buffer = new PipelineBuffer() { Data = [] };
             mockHttpMessageHandler
                 .Protected()
                 .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())

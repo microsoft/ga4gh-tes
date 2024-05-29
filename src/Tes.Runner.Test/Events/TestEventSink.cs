@@ -7,7 +7,10 @@ namespace Tes.Runner.Test.Events;
 
 public class TestEventSink : EventSink
 {
-    public List<EventMessage> EventsHandled { get; } = new List<EventMessage>();
+    public TestEventSink() : base(Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance)
+    { }
+
+    public List<EventMessage> EventsHandled { get; } = [];
     public int Delay { get; set; } = 0;
 
     public override async Task HandleEventAsync(EventMessage eventMessage)

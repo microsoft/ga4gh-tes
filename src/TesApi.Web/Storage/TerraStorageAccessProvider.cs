@@ -24,7 +24,7 @@ namespace TesApi.Web.Storage
     /// <summary>
     /// Provides methods for blob storage access for Terra
     /// </summary>
-    public class TerraStorageAccessProvider : StorageAccessProvider
+    public partial class TerraStorageAccessProvider : StorageAccessProvider
     {
         private readonly TerraOptions terraOptions;
         private readonly BatchSchedulingOptions batchSchedulingOptions;
@@ -159,7 +159,7 @@ namespace TesApi.Web.Storage
             }
 
             //passing the resulting string through the builder to ensure that the path is properly encoded and valid
-            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.{azureEnvironmentConfig.StorageUrlSuffix}/{blobInfo.WsmContainerName.TrimStart('/')}/{blobInfo.BlobName.TrimStart('/')}"));
+            var builder = new BlobUriBuilder(new($"https://{terraOptions.WorkspaceStorageAccountName}.blob.{azureEnvironmentConfig.StorageUrlSuffix}/{blobInfo.WsmContainerName.TrimStart('/')}/{blobName.TrimStart('/')}"));
 
             return builder.ToUri();
         }
@@ -233,11 +233,11 @@ namespace TesApi.Web.Storage
 
             CheckIfAccountIsTerraStorageAccount(segments.AccountName);
 
-            Logger.LogInformation($"Getting Workspace ID from the Container Name: {segments.ContainerName}");
+            Logger.LogInformation("Getting Workspace ID from the Container Name: {ContainerName}", segments.ContainerName);
 
             var workspaceId = ToWorkspaceId(segments.ContainerName);
 
-            Logger.LogInformation($"Workspace ID to use: {segments.ContainerName}");
+            Logger.LogInformation("Workspace ID to use: {WorkspaceId}", segments.ContainerName);
 
             var wsmContainerResourceId = await GetWsmContainerResourceIdAsync(workspaceId, segments.ContainerName, cancellationToken);
 
@@ -246,7 +246,7 @@ namespace TesApi.Web.Storage
 
         private async Task<Guid> GetWsmContainerResourceIdAsync(Guid workspaceId, string containerName, CancellationToken cancellationToken)
         {
-            Logger.LogInformation($"Getting container resource information from WSM. Workspace ID: {workspaceId} Container Name: {containerName}");
+            Logger.LogInformation("Getting container resource information from WSM. Workspace ID: {WorkspaceId} Container Name: {ContainerName}", workspaceId, containerName);
 
             try
             {
@@ -258,7 +258,7 @@ namespace TesApi.Web.Storage
                     r.ResourceAttributes.AzureStorageContainer.StorageContainerName.Equals(containerName,
                         StringComparison.OrdinalIgnoreCase)).Metadata;
 
-                Logger.LogInformation($"Found the resource id for storage container resource. Resource ID: {metadata.ResourceId} Container Name: {containerName}");
+                Logger.LogInformation("Found the resource id for storage container resource. Resource ID: {ResourceId} Container Name: {ContainerName}", metadata.ResourceId, containerName);
 
                 return Guid.Parse(metadata.ResourceId);
             }
@@ -281,13 +281,13 @@ namespace TesApi.Web.Storage
             {
                 ArgumentException.ThrowIfNullOrEmpty(segmentsContainerName);
 
-                var guidString = segmentsContainerName.Substring(3); // remove the sc- prefix
+                var guidString = segmentsContainerName[3..]; // remove the sc- prefix
 
                 return Guid.Parse(guidString); // throws if not a guid
             }
             catch (Exception e)
             {
-                Logger.LogError(e, $"Failed to get the workspace ID from the container name. The name provided is not a valid GUID. Container Name: {segmentsContainerName}");
+                Logger.LogError(e, "Failed to get the workspace ID from the container name. The name provided is not a valid GUID. Container Name: {ContainerName}", segmentsContainerName);
                 throw;
             }
         }
@@ -316,7 +316,7 @@ namespace TesApi.Web.Storage
         {
             var tokenInfo = await GetWorkspaceBlobSasTokenFromWsmAsync(blobInfo, cancellationToken);
 
-            Logger.LogInformation($"Successfully obtained the Sas Url from Terra. Wsm resource id:{terraOptions.WorkspaceStorageContainerResourceId}");
+            Logger.LogInformation("Successfully obtained the Sas Url from Terra. Wsm resource id:{ResourceId}", terraOptions.WorkspaceStorageContainerResourceId);
 
             var uriBuilder = new UriBuilder(tokenInfo.Url);
 
@@ -343,7 +343,7 @@ namespace TesApi.Web.Storage
             var tokenParams = CreateTokenParamsFromOptions(blobInfo.BlobName, SasBlobPermissions);
 
             Logger.LogInformation(
-                $"Getting Sas Url from Terra. Wsm workspace id:{blobInfo.WorkspaceId}");
+                "Getting Sas Url from Terra. Wsm workspace id:{WorkspaceId}", blobInfo.WorkspaceId);
 
             return await terraWsmApiClient.GetSasTokenAsync(
                 blobInfo.WorkspaceId,
@@ -357,7 +357,7 @@ namespace TesApi.Web.Storage
             var tokenParams = CreateTokenParamsFromOptions(blobName: "", SasContainerPermissions);
 
             Logger.LogInformation(
-                $"Getting Sas container Url from Terra. Wsm workspace id:{blobInfo.WorkspaceId}");
+                "Getting Sas container Url from Terra. Wsm workspace id:{WorkspaceId}", blobInfo.WorkspaceId);
 
             return await terraWsmApiClient.GetSasTokenAsync(
                 blobInfo.WorkspaceId,
@@ -366,7 +366,7 @@ namespace TesApi.Web.Storage
         }
 
 
-        private void CheckIfAccountIsTerraStorageAccount(string accountName)
+        private static void CheckIfAccountIsTerraStorageAccount(string accountName)
         {
             if (!IsTerraWorkspaceStorageAccount(accountName))
             {
@@ -374,12 +374,15 @@ namespace TesApi.Web.Storage
             }
         }
 
-        private bool IsTerraWorkspaceStorageAccount(string value)
+        private static bool IsTerraWorkspaceStorageAccount(string value)
         {
-            var match = Regex.Match(value, LzStorageAccountNamePattern);
+            var match = LzStorageAccountNameRegex().Match(value);
 
             return match.Success;
         }
+
+        [GeneratedRegex(LzStorageAccountNamePattern)]
+        private static partial Regex LzStorageAccountNameRegex();
     }
 
     /// <summary>

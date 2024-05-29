@@ -4,6 +4,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
+using Tes.Runner;
+using Tes.Runner.Authentication;
+using Tes.Runner.Events;
 using Tes.Runner.Models;
 using Tes.Runner.Storage;
 using Tes.Runner.Transfer;
@@ -16,11 +19,11 @@ namespace Tes.RunnerCLI.Commands;
 public partial class NodeTaskContext : JsonSerializerContext
 { }
 
-public class NodeTaskResolver(Func<BlobApiHttpUtils>? blobApiHttpUtilsFactory = default, Func<RuntimeOptions, string, ResolutionPolicyHandler>? resolutionPolicyHandlerFactory = default)
+public class NodeTaskResolver(Func<RuntimeOptions, string, ResolutionPolicyHandler> resolutionPolicyHandlerFactory, ILogger<NodeTaskResolver> logger, Func<BlobApiHttpUtils>? blobApiHttpUtilsFactory = default)
 {
-    private readonly ILogger Logger = PipelineLoggerFactory.Create(nameof(NodeTaskResolver));
-    private readonly Lazy<BlobApiHttpUtils> blobApiHttpUtils = new(blobApiHttpUtilsFactory ?? (() => new()));
-    private readonly Func<RuntimeOptions, string, ResolutionPolicyHandler> resolutionPolicyHandlerFactory = resolutionPolicyHandlerFactory ?? new((options, apiVersion) => new(options, apiVersion));
+    private readonly ILogger Logger = logger;
+    private readonly Lazy<BlobApiHttpUtils> blobApiHttpUtils = new(blobApiHttpUtilsFactory ?? (() => new(logger)));
+    private readonly Func<RuntimeOptions, string, ResolutionPolicyHandler> resolutionPolicyHandlerFactory = resolutionPolicyHandlerFactory;
 
     private static T DeserializeJson<T>(ReadOnlySpan<byte> json, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo)
     {
@@ -135,4 +138,30 @@ public class NodeTaskResolver(Func<BlobApiHttpUtils>? blobApiHttpUtilsFactory = 
     {
         nodeTask.RuntimeOptions ??= new();
     }
+}
+
+internal static class NodeTaskResolverFactory
+{
+    internal static readonly Lazy<NodeTaskResolver> NodeTaskResolver = new(() =>
+    {
+        var loggerFactory = LoggerFactory.Create(Services.ConfigureConsoleLogger);
+        return new(ResolutionPolicyHandlerFactoryFactory(loggerFactory), LoggerFactory.Create(Services.ConfigureConsoleLogger).CreateLogger<NodeTaskResolver>());
+    });
+
+    private static Func<RuntimeOptions, string, ResolutionPolicyHandler> ResolutionPolicyHandlerFactoryFactory(ILoggerFactory loggerFactory)
+        => new((runtimeOptions, apiVersion) =>
+        {
+            var token = new CredentialsManager(loggerFactory.CreateLogger<CredentialsManager>()).GetTokenCredential(runtimeOptions);
+
+            return new(
+                        new(
+                            runtimeOptions,
+                            apiVersion,
+                            new(() => new PassThroughUrlTransformationStrategy()),
+                            new(() => new CloudProviderSchemeConverter()),
+                            new(() => new ArmUrlTransformationStrategy(token, runtimeOptions, apiVersion, loggerFactory.CreateLogger<ArmUrlTransformationStrategy>())),
+                            new(() => new TerraUrlTransformationStrategy(runtimeOptions.Terra!, token, runtimeOptions.AzureEnvironmentConfig!, loggerFactory.CreateLogger<TerraUrlTransformationStrategy>())),
+                            new(() => new DrsUriTransformationStrategy(runtimeOptions.Terra!, token, runtimeOptions.AzureEnvironmentConfig!, loggerFactory.CreateLogger<DrsUriTransformationStrategy>()))),
+                        sinks => new(sinks, loggerFactory.CreateLogger<EventsPublisher>()));
+        });
 }

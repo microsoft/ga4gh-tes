@@ -23,22 +23,24 @@ namespace Tes.Runner.Storage
 
         private readonly TerraWsmApiClient terraWsmApiClient;
         private readonly TerraRuntimeOptions terraRuntimeOptions;
-        private readonly ILogger<TerraUrlTransformationStrategy> logger = PipelineLoggerFactory.Create<TerraUrlTransformationStrategy>();
+        private readonly ILogger logger;
         private static IMemoryCache memoryCache = new MemoryCache(new MemoryCacheOptions());
         private readonly int cacheExpirationInSeconds;
 
-        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig, int cacheExpirationInSeconds = TerraConfigConstants.CacheExpirationInSeconds)
-            : this(terraRuntimeOptions, TerraWsmApiClient.CreateTerraWsmApiClient(terraRuntimeOptions.WsmApiHost, tokenCredential, azureCloudIdentityConfig), cacheExpirationInSeconds)
+        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<TerraUrlTransformationStrategy> logger, int cacheExpirationInSeconds = TerraConfigConstants.CacheExpirationInSeconds)
+            : this(terraRuntimeOptions, TerraWsmApiClient.CreateTerraWsmApiClient(terraRuntimeOptions.WsmApiHost, tokenCredential, azureCloudIdentityConfig), logger, cacheExpirationInSeconds)
         { }
 
-        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TerraWsmApiClient terraWsmApiClient, int cacheExpirationInSeconds = TerraConfigConstants.CacheExpirationInSeconds)
+        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TerraWsmApiClient terraWsmApiClient, ILogger logger, int cacheExpirationInSeconds = TerraConfigConstants.CacheExpirationInSeconds)
         {
             ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
             ArgumentNullException.ThrowIfNull(terraWsmApiClient);
+            ArgumentNullException.ThrowIfNull(logger);
 
             this.terraWsmApiClient = terraWsmApiClient;
             this.terraRuntimeOptions = terraRuntimeOptions;
             this.cacheExpirationInSeconds = cacheExpirationInSeconds;
+            this.logger = logger;
         }
 
         public async Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)

@@ -8,16 +8,11 @@ namespace Tes.Runner.Transfer;
 /// <summary>
 /// Handles the processed parts.
 /// </summary>
-public class ProcessedPartsProcessor
+public class ProcessedPartsProcessor(IBlobPipeline blobPipeline, ILogger<ProcessedPartsProcessor> logger)
 {
-    private readonly ILogger logger = PipelineLoggerFactory.Create<ProcessedPartsProcessor>();
+    private readonly ILogger logger = logger;
 
-    private readonly IBlobPipeline blobPipeline;
-
-    public ProcessedPartsProcessor(IBlobPipeline blobPipeline)
-    {
-        this.blobPipeline = blobPipeline;
-    }
+    private readonly IBlobPipeline blobPipeline = blobPipeline;
 
     /// <summary>
     /// Starts a single-threaded process that reads the processed buffers from the channel and keeps track of the number of parts processed.
@@ -32,7 +27,6 @@ public class ProcessedPartsProcessor
     {
         var tasks = new List<Task>();
 
-        ProcessedBuffer? buffer;
         var partsProcessed = new Dictionary<string, int>();
         var allFilesProcessed = false;
         var processedFiles = 0;
@@ -40,15 +34,11 @@ public class ProcessedPartsProcessor
         var cancellationTokenSource = new CancellationTokenSource();
 
         while (!allFilesProcessed && await processedBufferChannel.Reader.WaitToReadAsync(cancellationTokenSource.Token))
-            while (processedBufferChannel.Reader.TryRead(out buffer))
+            while (processedBufferChannel.Reader.TryRead(out var buffer))
             {
                 totalBytes += buffer.Length;
 
-                if (!partsProcessed.ContainsKey(buffer.FileName))
-                {
-                    partsProcessed.Add(buffer.FileName, 0);
-                }
-
+                partsProcessed.TryAdd(buffer.FileName, 0);
                 var total = ++partsProcessed[buffer.FileName];
 
                 if (total == buffer.NumberOfParts)
@@ -92,7 +82,7 @@ public class ProcessedPartsProcessor
         }
         catch (Exception e)
         {
-            logger.LogError(e, $"Failed to complete the file operation. File name: {buffer.FileName}");
+            logger.LogError(e, "Failed to complete the file operation. File name: {FileName}", buffer.FileName);
 
             if (!cancellationTokenSource.IsCancellationRequested)
             {
@@ -103,12 +93,12 @@ public class ProcessedPartsProcessor
         }
     }
 
-    private string GetRootHash(IHashListProvider hashListProvider)
+    private static string GetRootHash(IHashListProvider hashListProvider)
     {
         return hashListProvider.GetRootHash();
     }
 
-    private async ValueTask CloseFileHandlerPoolAsync(Channel<FileStream> bufferFileHandlerPool, CancellationToken cancellationToken)
+    private static async ValueTask CloseFileHandlerPoolAsync(Channel<FileStream> bufferFileHandlerPool, CancellationToken cancellationToken)
     {
         if (bufferFileHandlerPool.Writer.TryComplete())
         {
@@ -119,7 +109,7 @@ public class ProcessedPartsProcessor
         }
     }
 
-    private void CloseFileHandler(FileStream? fileStream)
+    private static void CloseFileHandler(FileStream? fileStream)
     {
         if (fileStream is not null && !fileStream.SafeFileHandle.IsClosed)
         {

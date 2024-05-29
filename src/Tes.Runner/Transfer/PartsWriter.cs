@@ -9,14 +9,9 @@ namespace Tes.Runner.Transfer;
 /// <summary>
 /// Handles the creation of tasks that perform write operation on the pipeline.
 /// </summary>
-public class PartsWriter : PartsProcessor
+public class PartsWriter(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel, IScalingStrategy scalingStrategy, ILogger<PartsWriter> logger)
+    : PartsProcessor(blobPipeline, blobPipelineOptions, memoryBufferChannel, scalingStrategy, logger)
 {
-    private readonly ILogger logger = PipelineLoggerFactory.Create<PartsWriter>();
-
-    public PartsWriter(IBlobPipeline blobPipeline, BlobPipelineOptions blobPipelineOptions, Channel<byte[]> memoryBufferChannel, IScalingStrategy scalingStrategy) : base(blobPipeline, blobPipelineOptions, memoryBufferChannel, scalingStrategy)
-    {
-    }
-
     /// <summary>
     /// Starts a number of parallel writer tasks that read from the write buffer channel and execute the write operation in the pipeline.
     /// The number of tasks is determined by the <see cref="BlobPipelineOptions.NumberOfWriters"/> option.
@@ -45,7 +40,7 @@ public class PartsWriter : PartsProcessor
         }
         catch (Exception e)
         {
-            logger.LogError(e, "Error writing parts to the pipeline.");
+            Logger.LogError(e, "Error writing parts to the pipeline.");
             throw;
         }
         finally
@@ -53,7 +48,7 @@ public class PartsWriter : PartsProcessor
             processedBufferChannel.Writer.Complete();
         }
 
-        logger.LogInformation("All part write operations completed successfully.");
+        Logger.LogInformation("All part write operations completed successfully.");
     }
 
     private ProcessedBuffer ToProcessedBuffer(PipelineBuffer buffer)

@@ -9,8 +9,10 @@ namespace Tes.RunnerCLI.Commands
     /// <summary>
     /// Launches CLI commands as a sub-processes.
     /// </summary>
-    public class CommandLauncher
+    public class CommandLauncher(ProcessLauncherFactory processLauncherFactory)
     {
+        private readonly ProcessLauncherFactory processLauncherFactory = processLauncherFactory ?? throw new ArgumentNullException(nameof(processLauncherFactory));
+
         public static BlobPipelineOptions CreateBlobPipelineOptions(int blockSize, int writers, int readers,
             int bufferCapacity, string apiVersion)
         {
@@ -40,12 +42,12 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="file">Node task definition file</param>
         /// <param name="options">Transfer options</param>
         ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
-        public static async Task LaunchTransferCommandAsSubProcessAsync(string command, Runner.Models.NodeTask nodeTask, FileInfo file, BlobPipelineOptions options)
+        public async Task LaunchTransferCommandAsSubProcessAsync(string command, Runner.Models.NodeTask nodeTask, FileInfo file, BlobPipelineOptions options)
         {
             ProcessExecutionResult results = null!;
             try
             {
-                var processLauncher = await ProcessLauncher.CreateLauncherAsync(nodeTask, logNamePrefix: command, apiVersion: options.ApiVersion);
+                var processLauncher = await processLauncherFactory.CreateLauncherAsync(nodeTask, logNamePrefix: command, apiVersion: options.ApiVersion);
                 results = await processLauncher.LaunchProcessAndWaitAsync(BlobPipelineOptionsConverter.ToCommandArgs(command, file.FullName, options));
             }
             catch (Exception ex)
@@ -76,12 +78,12 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="apiVersion"></param>
         ///<exception cref = "CommandExecutionException" > Thrown when the process launcher or launcher sub-process fail</exception>
         /// <param name="dockerUri">Docker API URI</param>
-        public static async Task LaunchesExecutorCommandAsSubProcessAsync(Runner.Models.NodeTask nodeTask, FileInfo file, string apiVersion, Uri dockerUri)
+        public async Task LaunchesExecutorCommandAsSubProcessAsync(Runner.Models.NodeTask nodeTask, FileInfo file, string apiVersion, Uri dockerUri)
         {
             ProcessExecutionResult results = null!;
             try
             {
-                var processLauncher = await ProcessLauncher.CreateLauncherAsync(nodeTask, logNamePrefix: CommandFactory.ExecutorCommandName, apiVersion: apiVersion);
+                var processLauncher = await processLauncherFactory.CreateLauncherAsync(nodeTask, logNamePrefix: CommandFactory.ExecutorCommandName, apiVersion: apiVersion);
 
                 var args = new List<string>() {
                     CommandFactory.ExecutorCommandName,

@@ -14,16 +14,30 @@ namespace Tes.Runner.Transfer
     {
         private readonly ConcurrentDictionary<string, Md5HashListProvider> hashListProviders = new();
 
-        public BlobUploader(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBufferPool) : base(pipelineOptions, memoryBufferPool)
-        {
-        }
+        public BlobUploader(
+            BlobPipelineOptions pipelineOptions,
+            Channel<byte[]> memoryBufferPool,
+            Func<IBlobPipeline, ProcessedPartsProcessor> processedPartsProcessorFactory,
+            Func<IBlobPipeline, BlobPipelineOptions, PartsProducer> partsProducerFactory,
+            Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsWriter> partsWriterFactory,
+            Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsReader> partsReaderFactory,
+            ILogger<BlobUploader> logger)
+            : base(pipelineOptions, memoryBufferPool, processedPartsProcessorFactory, partsProducerFactory, partsWriterFactory, partsReaderFactory, logger)
+        { }
 
         /// <summary>
         /// Parameter-less constructor for mocking
         /// </summary>
-        protected BlobUploader() : base(new BlobPipelineOptions(), Channel.CreateUnbounded<byte[]>())
-        {
-        }
+        protected BlobUploader()
+            : base(
+                new BlobPipelineOptions(),
+                Channel.CreateUnbounded<byte[]>(),
+                pipeLine => new ProcessedPartsProcessor(pipeLine, Microsoft.Extensions.Logging.Abstractions.NullLogger<ProcessedPartsProcessor>.Instance),
+                (pipeLine, pipelineOptions) => new PartsProducer(pipeLine, pipelineOptions, Microsoft.Extensions.Logging.Abstractions.NullLogger<PartsProducer>.Instance),
+                (pipeLine, pipelineOptions, memoryBuffer, scalingStrategy) => new PartsWriter(pipeLine, pipelineOptions, memoryBuffer, scalingStrategy, Microsoft.Extensions.Logging.Abstractions.NullLogger<PartsWriter>.Instance),
+                (pipeLine, pipelineOptions, memoryBuffer, scalingStrategy) => new PartsReader(pipeLine, pipelineOptions, memoryBuffer, scalingStrategy, Microsoft.Extensions.Logging.Abstractions.NullLogger<PartsReader>.Instance),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance)
+        { }
 
         /// <summary>
         /// Configures each part with the put block URL.
@@ -33,7 +47,7 @@ namespace Tes.Runner.Transfer
         {
             buffer.BlobPartUrl = BlobApiHttpUtils.ParsePutBlockUrl(buffer.BlobUrl, buffer.Ordinal);
 
-            buffer.HashListProvider = hashListProviders.GetOrAdd(buffer.FileName, new Md5HashListProvider());
+            buffer.HashListProvider = hashListProviders.GetOrAdd(buffer.FileName, new Md5HashListProvider(Logger));
         }
 
         /// <summary>
@@ -94,7 +108,7 @@ namespace Tes.Runner.Transfer
 
             fileHandler.Position = buffer.Offset;
 
-            var dataRead = await fileHandler.ReadAsync(buffer.Data, 0, buffer.Length, cancellationToken);
+            var dataRead = await fileHandler.ReadAsync(buffer.Data.AsMemory(0, buffer.Length), cancellationToken);
 
             buffer.HashListProvider?.CalculateAndAddBlockHash(buffer);
 

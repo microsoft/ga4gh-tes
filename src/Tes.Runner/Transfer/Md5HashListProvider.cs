@@ -8,9 +8,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Transfer
 {
-    public class Md5HashListProvider : IHashListProvider
+    public class Md5HashListProvider(ILogger logger) : IHashListProvider
     {
-        private readonly ILogger logger = PipelineLoggerFactory.Create<Md5HashListProvider>();
+        private readonly ILogger logger = logger;
         private readonly ConcurrentDictionary<int, string> hashesDictionary = new();
         public const int HashListItemBlockSizeInBytes = BlobSizeUtils.BlockSizeIncrementUnitInBytes;
 
@@ -43,7 +43,7 @@ namespace Tes.Runner.Transfer
 
             var rootHash = CreateBlockMd5CheckSumValue(data, 0, data.Length);
 
-            logger.LogInformation($"Root Hash: {rootHash} set in property: {BlobApiHttpUtils.RootHashMetadataName}");
+            logger.LogInformation("Root Hash: {RootHash} set in property: {MetadataName}", rootHash, BlobApiHttpUtils.RootHashMetadataName);
 
             return rootHash;
         }
@@ -51,11 +51,10 @@ namespace Tes.Runner.Transfer
 
         private static string CreateBlockMd5CheckSumValue(byte[] buffer, int offset, int length)
         {
-            using var md5Provider = MD5.Create();
-            return BitConverter.ToString(md5Provider.ComputeHash(buffer, offset, length)).Replace("-", "").ToLowerInvariant();
+            return BitConverter.ToString(MD5.HashData(buffer.AsSpan(offset, length))).Replace("-", string.Empty).ToLowerInvariant();
         }
 
-        private string CreateBufferHashList(PipelineBuffer pipelineBuffer)
+        private static string CreateBufferHashList(PipelineBuffer pipelineBuffer)
         {
             var stringBuilder = new StringBuilder();
             for (var i = 0; i < pipelineBuffer.Length; i += BlobSizeUtils.BlockSizeIncrementUnitInBytes)

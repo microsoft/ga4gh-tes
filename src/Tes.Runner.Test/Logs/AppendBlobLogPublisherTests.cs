@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Azure.Storage.Blobs;
+using Microsoft.Extensions.Logging.Abstractions;
 using Tes.Runner.Logs;
 using Tes.Runner.Transfer;
 
@@ -11,7 +12,6 @@ namespace Tes.Runner.Test.Logs
     public class AppendBlobLogPublisherTests
     {
         private AppendBlobLogPublisher publisher = null!;
-        private readonly string targetUrl = "https://test.blob.core.windows.net/cont?sig=signature";
         private readonly string logNamePrefix = "prefix";
 
         [DataTestMethod]
@@ -20,9 +20,10 @@ namespace Tes.Runner.Test.Logs
         [DataRow(2 * BlobSizeUtils.MaxBlobBlocksCount + 1, "prefix_stdout", "prefix_stdout_2.txt")]
         public void GetUriAndBlobNameFromCurrentState_InitialState_ReturnsExpectedUrl(int currentBlockCount, string baseLogName, string expectedBlobName)
         {
-            publisher = new AppendBlobLogPublisher(targetUrl, logNamePrefix);
+            Uri targetUrl = new("https://test.blob.core.windows.net/cont?sig=signature");
+            publisher = new AppendBlobLogPublisher(targetUrl, logNamePrefix, NullLogger<AppendBlobLogPublisher>.Instance);
 
-            var blobBuilder = new BlobUriBuilder(new Uri(targetUrl)) { BlobName = expectedBlobName };
+            var blobBuilder = new BlobUriBuilder(targetUrl) { BlobName = expectedBlobName };
 
             var uri = publisher.GetUriAndBlobNameFromCurrentState(currentBlockCount, baseLogName, out var blobLogName);
             Assert.AreEqual(blobBuilder.ToUri().ToString(), uri.ToString());
@@ -32,10 +33,10 @@ namespace Tes.Runner.Test.Logs
         [TestMethod]
         public void GetUriAndBlobNameFromCurrentState_TargetUrlWithSegments_ReturnsUrlWithSegmentsAndBlobName()
         {
-            var targetUrlWithSegments = "https://test.blob.core.windows.net/cont/seg1/seg2?sig=signature";
-            publisher = new AppendBlobLogPublisher(targetUrlWithSegments, logNamePrefix);
+            Uri targetUrlWithSegments = new("https://test.blob.core.windows.net/cont/seg1/seg2?sig=signature");
+            publisher = new AppendBlobLogPublisher(targetUrlWithSegments, logNamePrefix, NullLogger<AppendBlobLogPublisher>.Instance);
 
-            var blobBuilder = new BlobUriBuilder(new Uri(targetUrlWithSegments));
+            var blobBuilder = new BlobUriBuilder(targetUrlWithSegments);
             blobBuilder.BlobName += "/prefix_stdout.txt";
 
             var uri = publisher.GetUriAndBlobNameFromCurrentState(0, "prefix_stdout", out var blobLogName);

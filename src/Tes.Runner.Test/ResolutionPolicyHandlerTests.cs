@@ -1,8 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Moq;
 using Tes.Runner.Models;
-using Tes.Runner.Storage;
 
 
 namespace Tes.Runner.Test
@@ -17,7 +17,10 @@ namespace Tes.Runner.Test
         public void SetUp()
         {
             runtimeOptions = new RuntimeOptions();
-            resolutionPolicyHandler = new ResolutionPolicyHandler(runtimeOptions, Runner.Transfer.BlobPipelineOptions.DefaultApiVersion);
+            resolutionPolicyHandler = new ResolutionPolicyHandler(new(runtimeOptions, Runner.Transfer.BlobPipelineOptions.DefaultApiVersion,
+                new(() => new Mock<Runner.Storage.IUrlTransformationStrategy>().Object), new(() => new Mock<Runner.Storage.IUrlTransformationStrategy>().Object),
+                new(() => new Mock<Runner.Storage.IUrlTransformationStrategy>().Object), new(() => new Mock<Runner.Storage.IUrlTransformationStrategy>().Object),
+                new(() => new Mock<Runner.Storage.IUrlTransformationStrategy>().Object)), sinks => new Mock<Runner.Events.EventsPublisher>().Object);
         }
 
         [TestMethod]

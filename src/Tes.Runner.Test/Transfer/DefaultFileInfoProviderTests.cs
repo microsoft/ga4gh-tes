@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Castle.Core.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Test.Transfer
@@ -19,7 +21,7 @@ namespace Tes.Runner.Test.Transfer
             //this creates a directory structure like this: guid/dir1/dir2/dir3, with a file in each directory with the same prefix
             directoryInfo = RunnerTestUtils.CreateTempFilesInDirectory("dir1/dir2/dir3", TestFilePrefix);
             testFile = await RunnerTestUtils.CreateTempFileWithContentAsync(numberOfMiB: 1, extraBytes: 0);
-            fileInfoProvider = new DefaultFileInfoProvider();
+            fileInfoProvider = new DefaultFileInfoProvider(new NullLogger<DefaultFileInfoProvider>());
         }
 
         [TestMethod]
@@ -75,7 +77,7 @@ namespace Tes.Runner.Test.Transfer
         {
             var targetFile = directoryInfo.GetFiles().First();
             var rootFullName = targetFile.Directory!.Root.FullName;
-            var searchPattern = targetFile.FullName.Substring(rootFullName.Length);
+            var searchPattern = targetFile.FullName[rootFullName.Length..];
 
             var files = fileInfoProvider.GetFilesBySearchPattern(rootFullName, searchPattern);
 
@@ -91,7 +93,7 @@ namespace Tes.Runner.Test.Transfer
             var rootPathPair = fileInfoProvider.GetRootPathPair(targetFile.FullName);
 
             Assert.AreEqual(targetFile.Directory!.Root.Name, rootPathPair.Root);
-            Assert.AreEqual(targetFile.FullName.Substring(targetFile.Directory.Root.Name.Length), rootPathPair.RelativePath);
+            Assert.AreEqual(targetFile.FullName[targetFile.Directory.Root.Name.Length..], rootPathPair.RelativePath);
         }
 
         private static void AssertCountOfFilesReturned(IEnumerable<Object> files)

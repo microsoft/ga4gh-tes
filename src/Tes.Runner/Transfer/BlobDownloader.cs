@@ -11,17 +11,30 @@ namespace Tes.Runner.Transfer;
 /// </summary>
 public class BlobDownloader : BlobOperationPipeline
 {
-    public BlobDownloader(BlobPipelineOptions pipelineOptions, Channel<byte[]> memoryBufferPool) : base(pipelineOptions,
-        memoryBufferPool)
-    {
-    }
+    public BlobDownloader(
+        BlobPipelineOptions pipelineOptions,
+        Channel<byte[]> memoryBufferPool,
+        Func<IBlobPipeline, ProcessedPartsProcessor> processedPartsProcessorFactory,
+        Func<IBlobPipeline, BlobPipelineOptions, PartsProducer> partsProducerFactory,
+        Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsWriter> partsWriterFactory,
+        Func<IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy, PartsReader> partsReaderFactory,
+        ILogger<BlobDownloader> logger)
+        : base(pipelineOptions, memoryBufferPool, processedPartsProcessorFactory, partsProducerFactory, partsWriterFactory, partsReaderFactory, logger)
+    { }
 
     /// <summary>
     /// Parameter-less constructor for mocking
     /// </summary>
-    protected BlobDownloader() : base(new BlobPipelineOptions(), Channel.CreateUnbounded<byte[]>())
-    {
-    }
+    protected BlobDownloader()
+        : base(
+            new BlobPipelineOptions(),
+            Channel.CreateUnbounded<byte[]>(),
+            pipeLine => new ProcessedPartsProcessor(pipeLine, Microsoft.Extensions.Logging.Abstractions.NullLogger<ProcessedPartsProcessor>.Instance),
+            (pipeLine, pipelineOptions) => new PartsProducer(pipeLine, pipelineOptions, Microsoft.Extensions.Logging.Abstractions.NullLogger<PartsProducer>.Instance),
+            (pipeLine, pipelineOptions, memoryBuffer, scalingStrategy) => new PartsWriter(pipeLine, pipelineOptions, memoryBuffer, scalingStrategy, Microsoft.Extensions.Logging.Abstractions.NullLogger<PartsWriter>.Instance),
+            (pipeLine, pipelineOptions, memoryBuffer, scalingStrategy) => new PartsReader(pipeLine, pipelineOptions, memoryBuffer, scalingStrategy, Microsoft.Extensions.Logging.Abstractions.NullLogger<PartsReader>.Instance),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance)
+    { }
 
     /// <summary>
     /// Downloads a list of files from an HTTP source.
@@ -52,7 +65,7 @@ public class BlobDownloader : BlobOperationPipeline
 
         fileStream.Position = buffer.Offset;
 
-        await fileStream.WriteAsync(buffer.Data, 0, buffer.Length, cancellationToken);
+        await fileStream.WriteAsync(buffer.Data.AsMemory(0, buffer.Length), cancellationToken);
 
         await buffer.FileHandlerPool.Writer.WriteAsync(fileStream, cancellationToken);
 
@@ -107,7 +120,7 @@ public class BlobDownloader : BlobOperationPipeline
     /// <returns></returns>
     public override Task OnCompletionAsync(long length, Uri? blobUrl, string fileName, string? rootHash)
     {
-        Logger.LogInformation($"Completed download. Total bytes: {length:n0} Filename: {fileName}");
+        Logger.LogInformation("Completed download. Total bytes: {FileSize:n0} Filename: {FileName}", length, fileName);
 
         return Task.CompletedTask;
     }

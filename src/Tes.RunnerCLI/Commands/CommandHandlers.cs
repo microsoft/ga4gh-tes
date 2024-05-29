@@ -2,18 +2,23 @@
 // Licensed under the MIT License.
 
 using System.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Tes.Runner;
 using Tes.Runner.Docker;
 using Tes.Runner.Events;
-using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands
 {
-    internal class CommandHandlers
+    internal class CommandHandlers(ILogger logger, Runner.Models.NodeTask nodeTask, [FromKeyedServices(Executor.ApiVersion)] string apiVersion, Executor executor, CommandLauncher commandLauncher, Func<Uri, DockerExecutor> dockerExecutor, Lazy<Task<EventsPublisher>> eventsPublisher)
     {
-        private static readonly NodeTaskResolver nodeTaskUtils = new();
-        private static readonly ILogger Logger = PipelineLoggerFactory.Create<CommandHandlers>();
+        private readonly ILogger Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        private readonly Runner.Models.NodeTask nodeTask = nodeTask ?? throw new ArgumentNullException(nameof(nodeTask));
+        private readonly string apiVersion = apiVersion ?? throw new ArgumentNullException(nameof(apiVersion));
+        private readonly Executor executor = executor ?? throw new ArgumentNullException(nameof(executor));
+        private readonly CommandLauncher commandLauncher = commandLauncher ?? throw new ArgumentNullException(nameof(commandLauncher));
+        private readonly Func<Uri, DockerExecutor> dockerExecutor = dockerExecutor ?? throw new ArgumentNullException(nameof(dockerExecutor));
+        private readonly Task<EventsPublisher> eventsPublisher = eventsPublisher.Value;
 
         /// <summary>
         /// Root command of the CLI. Executes all operations (download, executor, upload) as sub-processes.
@@ -37,29 +42,44 @@ namespace Tes.RunnerCLI.Commands
             string apiVersion,
             Uri dockerUri)
         {
+            var duration = Stopwatch.StartNew();
+
+            var nodeTask = await NodeTaskResolverFactory.NodeTaskResolver.Value.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
+            file ??= new(CommandFactory.DefaultTaskDefinitionFile);
+
+            return await Services.BuildAndRunAsync<CommandHandlers, int>(
+                handler => handler.ExecuteRootCommandImplAsync(fileUri, file, blockSize, writers, readers, bufferCapacity, dockerUri, duration),
+                Services.ConfigureParameters(nodeTask, apiVersion));
+        }
+
+        private async Task<int> ExecuteRootCommandImplAsync(
+            Uri? fileUri,
+            FileInfo file,
+            int blockSize,
+            int writers,
+            int readers,
+            int bufferCapacity,
+            Uri dockerUri,
+            Stopwatch duration)
+        {
             try
             {
-                var duration = Stopwatch.StartNew();
-
-                var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
-                file ??= new(CommandFactory.DefaultTaskDefinitionFile);
-
-                await using var eventsPublisher = await EventsPublisher.CreateEventsPublisherAsync(nodeTask, apiVersion);
+                await using var publisher = await eventsPublisher;
 
                 try
                 {
-                    await eventsPublisher.PublishTaskCommencementEventAsync(nodeTask);
+                    await publisher.PublishTaskCommencementEventAsync(nodeTask);
 
                     await RootCommandNodeCleanupAsync(nodeTask, dockerUri);
 
                     await ExecuteAllOperationsAsSubProcessesAsync(nodeTask, file, blockSize, writers, readers, bufferCapacity, apiVersion, dockerUri);
 
-                    await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
+                    await publisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
                         EventsPublisher.SuccessStatus, errorMessage: string.Empty);
                 }
                 catch (Exception e)
                 {
-                    await eventsPublisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
+                    await publisher.PublishTaskCompletionEventAsync(nodeTask, duration.Elapsed,
                         EventsPublisher.FailedStatus, errorMessage: e.Message);
                     throw;
                 }
@@ -84,9 +104,9 @@ namespace Tes.RunnerCLI.Commands
             return (int)ProcessExitCode.Success;
         }
 
-        private static async Task RootCommandNodeCleanupAsync(Runner.Models.NodeTask nodeTask, Uri dockerUri)
+        private async Task RootCommandNodeCleanupAsync(Runner.Models.NodeTask nodeTask, Uri dockerUri)
         {
-            await new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new()));
+            await dockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new()));
             await Executor.RunnerHost.NodeCleanupAsync();
         }
 
@@ -101,15 +121,21 @@ namespace Tes.RunnerCLI.Commands
         /// <exception cref="InvalidOperationException"></exception>
         internal static async Task ExecuteExecCommandAsync(Uri? fileUri, FileInfo? file, string apiVersion, Uri dockerUri)
         {
+            var nodeTask = await NodeTaskResolverFactory.NodeTaskResolver.Value.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
+
+            await Services.BuildAndRunAsync<CommandHandlers>(
+                handler => handler.ExecuteExecCommandImplAsync(dockerUri),
+                Services.ConfigureParameters(nodeTask, apiVersion));
+        }
+
+
+        private async Task ExecuteExecCommandImplAsync(Uri dockerUri)
+        {
             try
             {
-                var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion);
-
                 Logger.LogDebug("Executing commands in container for Task ID: {NodeTaskId}", nodeTask.Id);
 
-                await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
-
-                var result = await executor.ExecuteNodeContainerTaskAsync(new DockerExecutor(dockerUri)) ?? throw new InvalidOperationException("The container task failed to return results");
+                var result = await executor.ExecuteNodeContainerTaskAsync(dockerExecutor(dockerUri)) ?? throw new InvalidOperationException("The container task failed to return results");
 
                 Logger.LogInformation("Docker container execution status code: {ContainerResultExitCode}", result.ContainerResult.ExitCode);
 
@@ -145,13 +171,24 @@ namespace Tes.RunnerCLI.Commands
             int bufferCapacity,
             string apiVersion)
         {
+            var nodeTask = await NodeTaskResolverFactory.NodeTaskResolver.Value.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
+
+            return await Services.BuildAndRunAsync<CommandHandlers, int>(
+                handler => handler.ExecuteUploadCommandImplAsync(blockSize, writers, readers, bufferCapacity),
+                Services.ConfigureParameters(nodeTask, apiVersion));
+        }
+
+        private async Task<int> ExecuteUploadCommandImplAsync(
+            int blockSize,
+            int writers,
+            int readers,
+            int bufferCapacity)
+        {
             var options = CommandLauncher.CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
             Logger.LogDebug("Starting upload operation.");
 
-            var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion);
-
-            return await ExecuteTransferTaskAsync(nodeTask, exec => exec.UploadOutputsAsync(options), apiVersion);
+            return await ExecuteTransferTaskAsync(exec => exec.UploadOutputsAsync(options));
         }
 
         /// <summary>
@@ -174,16 +211,27 @@ namespace Tes.RunnerCLI.Commands
             int bufferCapacity,
             string apiVersion)
         {
+            var nodeTask = await NodeTaskResolverFactory.NodeTaskResolver.Value.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
+
+            return await Services.BuildAndRunAsync<CommandHandlers, int>(
+                handler => handler.ExecuteDownloadCommandImplAsync(blockSize, writers, readers, bufferCapacity),
+                Services.ConfigureParameters(nodeTask, apiVersion));
+        }
+
+        private async Task<int> ExecuteDownloadCommandImplAsync(
+            int blockSize,
+            int writers,
+            int readers,
+            int bufferCapacity)
+        {
             var options = CommandLauncher.CreateBlobPipelineOptions(blockSize, writers, readers, bufferCapacity, apiVersion);
 
             Logger.LogDebug("Starting download operation.");
 
-            var nodeTask = await nodeTaskUtils.ResolveNodeTaskAsync(file, fileUri, apiVersion);
-
-            return await ExecuteTransferTaskAsync(nodeTask, exec => exec.DownloadInputsAsync(options), apiVersion);
+            return await ExecuteTransferTaskAsync(exec => exec.DownloadInputsAsync(options));
         }
 
-        private static async Task ExecuteAllOperationsAsSubProcessesAsync(Runner.Models.NodeTask nodeTask, FileInfo file, int blockSize, int writers, int readers, int bufferCapacity,
+        private async Task ExecuteAllOperationsAsSubProcessesAsync(Runner.Models.NodeTask nodeTask, FileInfo file, int blockSize, int writers, int readers, int bufferCapacity,
             string apiVersion, Uri dockerUri)
         {
             ArgumentNullException.ThrowIfNull(nodeTask);
@@ -198,20 +246,18 @@ namespace Tes.RunnerCLI.Commands
                 BlobPipelineOptionsConverter.ToBlobPipelineOptions(blockSize, writers, readers, bufferCapacity,
                     apiVersion);
 
-            await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.DownloadCommandName, nodeTask, file, options);
+            await commandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.DownloadCommandName, nodeTask, file, options);
 
-            await CommandLauncher.LaunchesExecutorCommandAsSubProcessAsync(nodeTask, file, apiVersion, dockerUri);
+            await commandLauncher.LaunchesExecutorCommandAsSubProcessAsync(nodeTask, file, apiVersion, dockerUri);
 
-            await CommandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.UploadCommandName, nodeTask, file, options);
+            await commandLauncher.LaunchTransferCommandAsSubProcessAsync(CommandFactory.UploadCommandName, nodeTask, file, options);
         }
 
-        private static async Task<int> ExecuteTransferTaskAsync(Runner.Models.NodeTask nodeTask, Func<Executor, Task<long>> transferOperation, string apiVersion)
+        private async Task<int> ExecuteTransferTaskAsync(Func<Executor, Task<long>> transferOperation)
         {
             try
             {
-                await using var executor = await Executor.CreateExecutorAsync(nodeTask, apiVersion);
-
-                await transferOperation(executor);
+                _ = await transferOperation(executor);
 
                 return (int)ProcessExitCode.Success;
             }

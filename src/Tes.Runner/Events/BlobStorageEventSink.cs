@@ -9,22 +9,13 @@ using static System.DateTime;
 
 namespace Tes.Runner.Events
 {
-    public class BlobStorageEventSink : EventSink
+    public class BlobStorageEventSink(Uri storageUrl, ILogger<BlobStorageEventSink> logger) : EventSink(logger)
     {
         const string EventTimeStampFormat = "HH-mm-ss.fff";
         // https://learn.microsoft.com/en-us/rest/api/storageservices/version-2023-05-03
         private const string ApiVersion = "2023-05-03";
-        private readonly Uri storageUrl;
-        private readonly ILogger logger = PipelineLoggerFactory.Create<BlobStorageEventSink>();
-        private readonly BlobApiHttpUtils blobApiHttpUtils = new();
-
-
-        public BlobStorageEventSink(Uri storageUrl)
-        {
-            ArgumentNullException.ThrowIfNull(storageUrl);
-
-            this.storageUrl = storageUrl;
-        }
+        private readonly Uri storageUrl = storageUrl ?? throw new ArgumentNullException(nameof(storageUrl));
+        private readonly BlobApiHttpUtils blobApiHttpUtils = new(logger);
 
         public override async Task HandleEventAsync(EventMessage eventMessage)
         {
@@ -38,7 +29,7 @@ namespace Tes.Runner.Events
             catch (Exception e)
             {
                 //failure to publish event to blob storage should not fail the execution of the node task
-                logger.LogError(e, "Failed to publish event {EventMessageId} to blob storage", eventMessage.Id);
+                Logger.LogError(e, "Failed to publish event {EventMessageId} to blob storage", eventMessage.Id);
             }
         }
 

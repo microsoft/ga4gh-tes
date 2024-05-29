@@ -5,14 +5,13 @@ using System.Text;
 using Docker.DotNet;
 using Microsoft.Extensions.Logging;
 using Tes.Runner.Logs;
-using Tes.Runner.Transfer;
 
 namespace Tes.Runner.Docker
 {
-    public abstract class StreamLogReader : IStreamLogReader
+    public abstract class StreamLogReader(ILogger logger) : IStreamLogReader
     {
         const int KiB = 1024;
-        private readonly ILogger logger = PipelineLoggerFactory.Create<StreamLogReader>();
+        protected readonly ILogger logger = logger ?? throw new ArgumentNullException(nameof(logger));
         protected Task? Reader;
 
         public abstract Task AppendStandardOutputAsync(string data);
