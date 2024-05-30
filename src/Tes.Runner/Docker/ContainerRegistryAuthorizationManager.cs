@@ -81,18 +81,14 @@ namespace Tes.Runner.Docker
 
         public async Task<ContainerRegistryContentClient> CreateContainerRegistryContentClientWithAcquireAuthTokenPolicyAsync(Uri endpoint, string repositoryName, RuntimeOptions runtimeOptions, Action<string> onCapture)
         {
-            // TODO we are replacing node identity ACR auth with action identity - should do both instead?
-
-            string? terraACRIdentity = await FetchTerraACRActionIdentityAsync(runtimeOptions);
-
-
             // Use a pipeline policy to get access to the ACR access token we will need to pass to Docker.
+            var terraACRIdentity = await FetchTerraACRActionIdentityIfPossibleAsync(runtimeOptions);
             var clientOptions = new ContainerRegistryClientOptions();
             clientOptions.AddPolicy(new AcquireDockerAuthTokenPipelinePolicy(onCapture), HttpPipelinePosition.PerCall);
             return new ContainerRegistryContentClient(endpoint, repositoryName, tokenCredentialsManager.GetTokenCredential(runtimeOptions, null, terraACRIdentity), clientOptions);
         }
 
-        private async Task<string?> FetchTerraACRActionIdentityAsync(RuntimeOptions runtimeOptions)
+        private async Task<string?> FetchTerraACRActionIdentityIfPossibleAsync(RuntimeOptions runtimeOptions)
         {
             // Return null if we don't have the config needed to get identity from Sam
             if (runtimeOptions.Terra is null || string.IsNullOrWhiteSpace(runtimeOptions.Terra.BillingProfileId) || string.IsNullOrWhiteSpace(runtimeOptions.Terra.SamApiHost))
@@ -112,14 +108,18 @@ namespace Tes.Runner.Docker
                 return null;
             }
 
-            
+            var samClient = TerraSamApiClient.CreateTerraSamApiClient(runtimeOptions.Terra.SamApiHost, tokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureEnvironmentConfig);
+            return await FetchTerraACRActionIdentityAsync(billingProfileId, samClient);
+        }
+
+        private async Task<string?> FetchTerraACRActionIdentityAsync(Guid billingProfileId, TerraSamApiClient samClient)
+        {            
             try
             {
-                var samClient = TerraSamApiClient.CreateTerraSamApiClient(runtimeOptions.Terra.SamApiHost, tokenCredentialsManager.GetTokenCredential(runtimeOptions), runtimeOptions.AzureEnvironmentConfig);
                 var response = await samClient.GetActionManagedIdentityForACRPullAsync(billingProfileId, CancellationToken.None);
                 if (response is null)
                 {
-                    logger.LogInformation("Found no ACR Pull action identity in Sam for {id}", billingProfileId);
+                    logger.LogInformation(@"Found no ACR Pull action identity in Sam for {id}", billingProfileId);
                     return null;
                 }
                 else 
