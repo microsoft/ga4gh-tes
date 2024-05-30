@@ -165,7 +165,8 @@ namespace TesApi.Web
                     }
                     catch (Exception exc)
                     {
-                        if (++tesTask.ErrorCount > 3) // TODO: Should we increment this for exceptions here (current behaviour) or the attempted executions on the batch?
+                        if (++tesTask.ErrorCount > 3 || // TODO: Should we increment this for exceptions here (current behavior) or the attempted executions on the batch?
+                            IsExceptionHttpConflictWhereTaskIsComplete(exc))
                         {
                             tesTask.State = TesState.SYSTEM_ERROR;
                             tesTask.EndTime = DateTimeOffset.UtcNow;
@@ -275,6 +276,17 @@ namespace TesApi.Web
             }
 
             Logger.LogDebug("OrchestrateTesTasksOnBatch({Poll}) for {TaskCount} {UnitsLabel} completed in {TotalSeconds:c}.", pollName, tesTasks.Where(task => task is not null).Count(), unitsLabel, DateTime.UtcNow.Subtract(startTime));
+
+            static bool IsExceptionHttpConflictWhereTaskIsComplete(Exception exc)
+            {
+                if (exc is Microsoft.Azure.Batch.Common.BatchException batchException)
+                {
+                    return System.Net.HttpStatusCode.Conflict.Equals(batchException.RequestInformation?.HttpStatusCode) &&
+                        Microsoft.Azure.Batch.Common.BatchErrorCodeStrings.TaskCompleted.Equals(batchException.RequestInformation?.BatchError?.Code, StringComparison.OrdinalIgnoreCase);
+                }
+
+                return false;
+            }
         }
     }
 }
