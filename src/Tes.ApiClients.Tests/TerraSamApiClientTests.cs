@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.
+﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 using Azure.Core;
@@ -39,7 +39,7 @@ namespace Tes.ApiClients.Tests
         public async Task GetActionManagedIdentityAsync_ValidRequest_ReturnsPayload()
         {
             cacheAndRetryHandler.Value.Setup(c => c.ExecuteWithRetryConversionAndCachingAsync(It.IsAny<string>(),
-                It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<SamActionManagedIdentityApiResponse>>>(), 
+                It.IsAny<Func<CancellationToken, Task<HttpResponseMessage>>>(), It.IsAny<Func<HttpResponseMessage, CancellationToken, Task<SamActionManagedIdentityApiResponse>>>(),
                 It.IsAny<CancellationToken>(), It.IsAny<string>())).ReturnsAsync(System.Text.Json.JsonSerializer.Deserialize<SamActionManagedIdentityApiResponse>(terraApiStubData.GetSamActionManagedIdentityApiResponseInJson())!);
 
             var apiResponse = await terraSamApiClient.GetActionManagedIdentityForACRPullAsync(terraApiStubData.BillingProfileId, CancellationToken.None);

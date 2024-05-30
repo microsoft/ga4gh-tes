@@ -33,7 +33,7 @@ public class TerraApiStubData
     public string BatchAccountId =>
         $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Batch/batchAccounts/{BatchAccountName}";
 
-    public string ManagedIdentityObjectId => 
+    public string ManagedIdentityObjectId =>
         $"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{TerraPetName}";
     public string PoolId => "poolId";
 
@@ -288,7 +288,7 @@ public class TerraApiStubData
 
     public string GetSamActionManagedIdentityApiResponseInJson()
     {
-      return $@"{{
+        return $@"{{
   ""id"": {{
     ""resourceId"": {{
       ""resourceTypeName"": ""private_azure_container_registry"",
