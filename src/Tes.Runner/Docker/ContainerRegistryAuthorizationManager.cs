@@ -22,7 +22,6 @@ namespace Tes.Runner.Docker
 
         private readonly ILogger logger = PipelineLoggerFactory.Create<ContainerRegistryAuthorizationManager>();
         private readonly CredentialsManager tokenCredentialsManager;
-        private readonly TerraSamApiClient? terraSamApiClient;
 
         public ContainerRegistryAuthorizationManager(CredentialsManager tokenCredentialsManager)
         {
