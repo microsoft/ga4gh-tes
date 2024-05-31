@@ -57,8 +57,8 @@ namespace Tes.ApiClients
 
             try
             {
-                return await HttpGetRequestAsync(url, setAuthorizationHeader: true, cacheResults: true, 
-                    SamActionManagedIdentityApiResponseContext.Default.SamActionManagedIdentityApiResponse, cancellationToken); 
+                return await HttpGetRequestAsync(url, setAuthorizationHeader: true, cacheResults: true,
+                    SamActionManagedIdentityApiResponseContext.Default.SamActionManagedIdentityApiResponse, cancellationToken);
             }
             catch (HttpRequestException e)
             {
@@ -68,7 +68,7 @@ namespace Tes.ApiClients
                 {
                     return null;
                 }
-                else 
+                else
                 {
                     throw;
                 }

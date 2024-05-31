@@ -112,7 +112,7 @@ namespace Tes.Runner.Docker
         }
 
         private async Task<string?> FetchTerraACRActionIdentityAsync(Guid billingProfileId, TerraSamApiClient samClient)
-        {            
+        {
             try
             {
                 var response = await samClient.GetActionManagedIdentityForACRPullAsync(billingProfileId, CancellationToken.None);
@@ -121,7 +121,7 @@ namespace Tes.Runner.Docker
                     logger.LogInformation(@"Found no ACR Pull action identity in Sam for {id}", billingProfileId);
                     return null;
                 }
-                else 
+                else
                 {
                     logger.LogInformation(@"Successfully fetched ACR action identity from Sam: {ObjectId}", response.ObjectId);
                     return response.ObjectId;
