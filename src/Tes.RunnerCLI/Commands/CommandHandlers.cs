@@ -10,7 +10,7 @@ using Tes.Runner.Events;
 
 namespace Tes.RunnerCLI.Commands
 {
-    internal class CommandHandlers(ILogger logger, Runner.Models.NodeTask nodeTask, [FromKeyedServices(Executor.ApiVersion)] string apiVersion, Executor executor, CommandLauncher commandLauncher, Func<Uri, DockerExecutor> dockerExecutor, Lazy<Task<EventsPublisher>> eventsPublisher)
+    internal class CommandHandlers(Runner.Models.NodeTask nodeTask, [FromKeyedServices(Executor.ApiVersion)] string apiVersion, Executor executor, CommandLauncher commandLauncher, Func<Uri, DockerExecutor> dockerExecutor, Lazy<Task<EventsPublisher>> eventsPublisher, ILogger<CommandHandlers> logger)
     {
         private readonly ILogger Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         private readonly Runner.Models.NodeTask nodeTask = nodeTask ?? throw new ArgumentNullException(nameof(nodeTask));
@@ -18,7 +18,7 @@ namespace Tes.RunnerCLI.Commands
         private readonly Executor executor = executor ?? throw new ArgumentNullException(nameof(executor));
         private readonly CommandLauncher commandLauncher = commandLauncher ?? throw new ArgumentNullException(nameof(commandLauncher));
         private readonly Func<Uri, DockerExecutor> dockerExecutor = dockerExecutor ?? throw new ArgumentNullException(nameof(dockerExecutor));
-        private readonly Task<EventsPublisher> eventsPublisher = eventsPublisher.Value;
+        private readonly Task<EventsPublisher> eventsPublisher = (eventsPublisher ?? throw new ArgumentNullException(nameof(eventsPublisher))).Value;
 
         /// <summary>
         /// Root command of the CLI. Executes all operations (download, executor, upload) as sub-processes.
