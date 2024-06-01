@@ -188,8 +188,8 @@ namespace Tes.Runner.Docker
         {
             return await dockerClient.Containers.AttachContainerAsync(
                 containerId,
-                false,
-                new ContainerAttachParameters
+                tty: false,
+                parameters: new()
                 {
                     Stream = true,
                     Stdout = true,
