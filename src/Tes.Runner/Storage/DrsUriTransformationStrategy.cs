@@ -22,7 +22,7 @@ namespace Tes.Runner.Storage
         private readonly DrsHubApiClient drsHubApiClient;
         private const string DrsScheme = "drs";
 
-        public DrsUriTransformationStrategy(DrsHubApiClient drsHubApiClient)
+        internal DrsUriTransformationStrategy(DrsHubApiClient drsHubApiClient)
         {
             ArgumentNullException.ThrowIfNull(drsHubApiClient);
 
@@ -30,14 +30,15 @@ namespace Tes.Runner.Storage
             this.logger = NullLogger.Instance;
         }
 
-        public DrsUriTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<DrsUriTransformationStrategy> logger)
+        public DrsUriTransformationStrategy(RuntimeOptions runtimeOptions, Func<RuntimeOptions, TokenCredential> tokenCredentialFactory, AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<DrsUriTransformationStrategy> logger)
         {
-            ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
-            ArgumentNullException.ThrowIfNull(tokenCredential);
-            ArgumentException.ThrowIfNullOrEmpty(terraRuntimeOptions.DrsHubApiHost, nameof(terraRuntimeOptions.DrsHubApiHost));
+            ArgumentNullException.ThrowIfNull(runtimeOptions);
+            ArgumentNullException.ThrowIfNull(runtimeOptions.Terra, nameof(runtimeOptions.Terra));
+            ArgumentNullException.ThrowIfNull(tokenCredentialFactory);
+            ArgumentException.ThrowIfNullOrEmpty(runtimeOptions.Terra!.DrsHubApiHost, nameof(runtimeOptions.Terra.DrsHubApiHost));
             ArgumentNullException.ThrowIfNull(logger);
 
-            drsHubApiClient = DrsHubApiClient.CreateDrsHubApiClient(terraRuntimeOptions.DrsHubApiHost, tokenCredential, azureCloudIdentityConfig);
+            drsHubApiClient = DrsHubApiClient.CreateDrsHubApiClient(runtimeOptions.Terra!.DrsHubApiHost, tokenCredentialFactory(runtimeOptions), azureCloudIdentityConfig);
             this.logger = logger;
         }
 

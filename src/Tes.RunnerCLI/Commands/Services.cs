@@ -22,6 +22,8 @@ namespace Tes.RunnerCLI.Commands
 
         internal static void ConfigureConsoleLogger(ILoggingBuilder builder)
         {
+            builder.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Error);
+
             var logLevel = LogLevel.Information;
 
             if (Enum.TryParse<LogLevel>(Environment.GetEnvironmentVariable(LogLevelEnvVariableName), out var userLevel))
@@ -37,17 +39,29 @@ namespace Tes.RunnerCLI.Commands
             }).SetMinimumLevel(logLevel);
         }
 
-        internal static Action<IHostApplicationBuilder> ConfigureParameters(Runner.Models.NodeTask nodeTask, string apiVersion)
-            => new(builder => builder.Services
-                .AddSingleton(nodeTask)
-                .AddSingleton(nodeTask.RuntimeOptions)
+        private static void ConfigureParametersCore(IHostApplicationBuilder builder, Runner.Models.RuntimeOptions runtimeOptions, string apiVersion)
+            => builder.Services
+                .AddSingleton(runtimeOptions)
                 .AddKeyedSingleton(Executor.ApiVersion, apiVersion)
-                .AddSingleton(nodeTask.RuntimeOptions.Terra ?? new())
-                .AddSingleton(nodeTask.RuntimeOptions.AzureEnvironmentConfig ?? new())
-            );
+                .AddSingleton(runtimeOptions.Terra ?? new())
+                .AddSingleton(runtimeOptions.AzureEnvironmentConfig ?? new())
+            ;
 
-        internal static Task BuildAndRunAsync<TService>(Func<TService, Task> task, Action<IHostApplicationBuilder>? configure = default) where TService : notnull
-            => BuildAndRunImplAsync(async provider => { await task(provider.GetRequiredService<TService>()); return false; }, configure);
+        internal static Action<IHostApplicationBuilder> ConfigureParameters(Runner.Models.RuntimeOptions runtimeOptions, string apiVersion)
+            => new(builder => ConfigureParametersCore(builder, runtimeOptions, apiVersion));
+
+        internal static Action<IHostApplicationBuilder> ConfigureParameters(Runner.Models.NodeTask nodeTask, string apiVersion)
+            => new(builder =>
+            {
+                builder.Services
+                    .AddSingleton(nodeTask)
+                ;
+
+                ConfigureParametersCore(builder, nodeTask.RuntimeOptions, apiVersion);
+            });
+
+        internal static T Create<T>(Func<ILogger<T>, T> factory)
+            => factory(LoggerFactory.Create(ConfigureConsoleLogger).CreateLogger<T>());
 
         internal static Task<TResult> BuildAndRunAsync<TService, TResult>(Func<TService, Task<TResult>> task, Action<IHostApplicationBuilder>? configure = default) where TService : notnull
             => BuildAndRunImplAsync(provider => task(provider.GetRequiredService<TService>()), configure);
@@ -91,69 +105,81 @@ namespace Tes.RunnerCLI.Commands
         {
             services
                 .AddSingleton(GetFactory<AppendBlobLogPublisher, Uri, string>())
-                //.AddTransient<AppendBlobLogPublisher>()
                 .AddSingleton(GetFactory<BlobDownloader, BlobPipelineOptions, Channel<byte[]>>())
-                //.AddTransient<BlobDownloader>()
                 .AddSingleton(GetFactory<BlobStorageEventSink, Uri>())
-                //.AddTransient<BlobStorageEventSink>()
                 .AddSingleton(GetFactory<BlobUploader, BlobPipelineOptions, Channel<byte[]>>())
-                //.AddTransient<BlobUploader>()
                 .AddSingleton(GetFactory<DockerExecutor, Uri>())
-                //.AddTransient<DockerExecutor>()
                 .AddSingleton(GetFactory<EventsPublisher, IList<IEventSink>>())
-                //.AddTransient<EventsPublisher>()
+                .AddSingleton(GetFactory<NodeTaskResolver.NodeTaskDownloader, ILogger>())
                 .AddSingleton(GetFactory<PartsProducer, IBlobPipeline, BlobPipelineOptions>())
-                //.AddTransient<PartsProducer>()
                 .AddSingleton(GetFactory<PartsWriter, IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy>())
-                //.AddTransient<PartsWriter>()
                 .AddSingleton(GetFactory<ProcessedPartsProcessor, IBlobPipeline>())
-                //.AddTransient<ProcessedPartsProcessor>()
                 .AddSingleton(GetFactory<ProcessLauncher, IStreamLogReader>())
-                //.AddTransient<ProcessLauncher>()
 
-                .AddSingleton<ArmUrlTransformationStrategy>()
-                .AddSingleton<CloudProviderSchemeConverter>()
+                .AddSingleton<Func<Runner.Models.RuntimeOptions, string, ResolutionPolicyHandler>>(provider =>
+                    new((runtime, version) => ActivatorUtilities.CreateFactory<ResolutionPolicyHandler>([typeof(UrlTransformationStrategyFactory)])
+                        .Invoke(provider, [ActivatorUtilities.CreateFactory<UrlTransformationStrategyFactory>([typeof(Runner.Models.RuntimeOptions), typeof(string)])
+                            .Invoke(provider, [runtime, version])])))
+                .AddSingleton<Func<Runner.Models.RuntimeOptions, Azure.Core.TokenCredential>>(provider =>
+                    new(runtimeOptions => provider.GetRequiredService<CredentialsManager>().GetTokenCredential(runtimeOptions)))
+                .AddSingleton<Func<Runner.Models.RuntimeOptions, string, Azure.Core.TokenCredential>>(provider =>
+                    new((runtimeOptions, tokenScope) => provider.GetRequiredService<CredentialsManager>().GetTokenCredential(runtimeOptions, tokenScope)))
+
                 .AddSingleton<CommandLauncher>()
                 .AddSingleton<CommandHandlers>()
-                .AddSingleton<ConsoleStreamLogPublisher>()
                 .AddSingleton<ContainerRegistryAuthorizationManager>()
                 .AddSingleton<CredentialsManager>()
-                .AddSingleton<DrsUriTransformationStrategy>()
                 .AddSingleton<Executor>()
                 .AddSingleton<IFileInfoProvider, DefaultFileInfoProvider>()
                 .AddSingleton<FileOperationResolver>()
                 .AddSingleton<LogPublisher>()
                 .AddSingleton<NetworkUtility>()
-                .AddSingleton<PassThroughUrlTransformationStrategy>()
-                .AddSingleton<PipelineOptionsOptimizer>()
                 .AddSingleton<ProcessLauncherFactory>()
-                .AddSingleton<ResolutionPolicyHandler>()
                 .AddSingleton<ISystemInfoProvider, LinuxSystemInfoProvider>()
-                .AddSingleton<TerraUrlTransformationStrategy>()
                 .AddSingleton<ITransferOperationFactory, TransferOperationFactory>()
                 .AddSingleton<UrlTransformationStrategyFactory>()
                 .AddSingleton<VolumeBindingsGenerator>()
 
+                .AddSingleton(LazyFactory(provider =>
+                    provider.GetRequiredService<ConsoleStreamLogPublisher>(),
+                    LazyThreadSafetyMode.PublicationOnly))
+                .AddTransient<ConsoleStreamLogPublisher>()
+                .AddSingleton(LazyFactory(provider =>
+                    provider.GetRequiredService<NodeTaskResolver>(),
+                    LazyThreadSafetyMode.PublicationOnly))
+                .AddTransient<NodeTaskResolver>()
                 .AddSingleton(LazyFactory(provider =>
                     provider.GetRequiredService<ResolutionPolicyHandler>()
                     .CreateEventsPublisherAsync(
                         provider.GetRequiredService<Runner.Models.NodeTask>(),
                         provider.GetRequiredService<Func<Uri, BlobStorageEventSink>>()),
                     LazyThreadSafetyMode.ExecutionAndPublication))
+                .AddSingleton<ResolutionPolicyHandler>()
                 .AddSingleton(LazyFactory(provider =>
                     provider.GetRequiredService<PipelineOptionsOptimizer>(),
                     LazyThreadSafetyMode.PublicationOnly))
+                .AddTransient<PipelineOptionsOptimizer>()
 
-                .AddKeyedSingleton(UrlTransformationStrategyFactory.CloudProvider,
-                    LazyKeyedFactory(provider => (IUrlTransformationStrategy)provider.GetRequiredService<CloudProviderSchemeConverter>(), LazyThreadSafetyMode.PublicationOnly))
-                .AddKeyedSingleton(UrlTransformationStrategyFactory.PassThroughUrl,
-                    LazyKeyedFactory(provider => (IUrlTransformationStrategy)provider.GetRequiredService<PassThroughUrlTransformationStrategy>(), LazyThreadSafetyMode.PublicationOnly))
-                .AddKeyedSingleton(UrlTransformationStrategyFactory.ArmUrl,
-                    LazyKeyedFactory(provider => (IUrlTransformationStrategy)provider.GetRequiredService<ArmUrlTransformationStrategy>(), LazyThreadSafetyMode.PublicationOnly))
-                .AddKeyedSingleton(UrlTransformationStrategyFactory.TerraUrl,
-                    LazyKeyedFactory(provider => (IUrlTransformationStrategy)provider.GetRequiredService<TerraUrlTransformationStrategy>(), LazyThreadSafetyMode.PublicationOnly))
-                .AddKeyedSingleton(UrlTransformationStrategyFactory.DrsUrl,
-                    LazyKeyedFactory(provider => (IUrlTransformationStrategy)provider.GetRequiredService<DrsUriTransformationStrategy>(), LazyThreadSafetyMode.PublicationOnly))
+                .AddKeyedSingleton(UrlTransformationStrategyFactory.CloudProvider, LazyKeyedFactory(provider =>
+                    (IUrlTransformationStrategy)provider.GetRequiredService<CloudProviderSchemeConverter>(),
+                    LazyThreadSafetyMode.PublicationOnly))
+                .AddTransient<CloudProviderSchemeConverter>()
+                .AddKeyedSingleton(UrlTransformationStrategyFactory.PassThroughUrl, LazyKeyedFactory(provider =>
+                    (IUrlTransformationStrategy)provider.GetRequiredService<PassThroughUrlTransformationStrategy>(),
+                    LazyThreadSafetyMode.PublicationOnly))
+                .AddTransient<PassThroughUrlTransformationStrategy>()
+                .AddKeyedSingleton(UrlTransformationStrategyFactory.ArmUrl, LazyKeyedFactory(provider =>
+                    (IUrlTransformationStrategy)provider.GetRequiredService<ArmUrlTransformationStrategy>(),
+                    LazyThreadSafetyMode.PublicationOnly))
+                .AddTransient<ArmUrlTransformationStrategy>()
+                .AddKeyedSingleton(UrlTransformationStrategyFactory.TerraUrl, LazyKeyedFactory(provider =>
+                    (IUrlTransformationStrategy)provider.GetRequiredService<TerraUrlTransformationStrategy>(),
+                    LazyThreadSafetyMode.PublicationOnly))
+                .AddTransient<TerraUrlTransformationStrategy>()
+                .AddKeyedSingleton(UrlTransformationStrategyFactory.DrsUrl, LazyKeyedFactory(provider =>
+                    (IUrlTransformationStrategy)provider.GetRequiredService<DrsUriTransformationStrategy>(),
+                    LazyThreadSafetyMode.PublicationOnly))
+                .AddTransient<DrsUriTransformationStrategy>()
                 ;
         }
     }

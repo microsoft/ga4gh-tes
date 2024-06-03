@@ -41,8 +41,8 @@ namespace Tes.Runner.Docker
 
         const int LogStreamingMaxWaitTimeInSeconds = 30;
 
-        public DockerExecutor(Uri dockerHost, ConsoleStreamLogPublisher streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager, NetworkUtility networkUtility, ILogger<DockerExecutor> logger)
-            : this(new DockerClientConfiguration(dockerHost).CreateClient(), streamLogReader, containerRegistryAuthorizationManager, Executor.RunnerHost, networkUtility, logger)
+        public DockerExecutor(Uri dockerHost, Lazy<ConsoleStreamLogPublisher> streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager, NetworkUtility networkUtility, ILogger<DockerExecutor> logger)
+            : this(new DockerClientConfiguration(dockerHost).CreateClient(), (streamLogReader ?? throw new ArgumentNullException(nameof(streamLogReader))).Value, containerRegistryAuthorizationManager, Executor.RunnerHost, networkUtility, logger)
         { }
 
         // Retry for ~91s for ACR 1-minute throttle window
@@ -52,7 +52,7 @@ namespace Tes.Runner.Docker
             ExponentialBackOffExponent = 2
         };
 
-        public DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager, Host.IRunnerHost runnerHost, NetworkUtility networkUtility, ILogger logger)
+        internal DockerExecutor(IDockerClient dockerClient, IStreamLogReader streamLogReader, ContainerRegistryAuthorizationManager containerRegistryAuthorizationManager, Host.IRunnerHost runnerHost, NetworkUtility networkUtility, ILogger logger)
         {
             ArgumentNullException.ThrowIfNull(dockerClient);
             ArgumentNullException.ThrowIfNull(streamLogReader);

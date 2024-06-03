@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Polly.Retry;
 
 namespace Tes.Runner.Transfer;
+
 /// <summary>
 /// A class containing the logic to create and make the HTTP requests for the blob block API.
 /// </summary>
@@ -94,6 +95,7 @@ public class BlobApiHttpUtils(HttpClient httpClient, Func<ILogger, AsyncRetryPol
     {
         return new Uri($"{baseUri?.AbsoluteUri}&comp=block&blockid={ToBlockId(ordinal)}");
     }
+
     public static Uri ParsePutAppendBlockUrl(Uri? baseUri)
     {
         ArgumentNullException.ThrowIfNull(baseUri);
@@ -170,6 +172,7 @@ public class BlobApiHttpUtils(HttpClient httpClient, Func<ILogger, AsyncRetryPol
 
         return !string.IsNullOrWhiteSpace(blobBuilder?.Sas?.Signature);
     }
+
     private async Task<HttpResponseMessage> ExecuteHttpRequestImplAsync(Func<HttpRequestMessage> request, CancellationToken cancellationToken)
     {
         HttpResponseMessage? response = null;

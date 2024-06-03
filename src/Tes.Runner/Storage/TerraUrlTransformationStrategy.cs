@@ -27,11 +27,11 @@ namespace Tes.Runner.Storage
         private static IMemoryCache memoryCache = new MemoryCache(new MemoryCacheOptions());
         private readonly int cacheExpirationInSeconds;
 
-        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TokenCredential tokenCredential, AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<TerraUrlTransformationStrategy> logger, int cacheExpirationInSeconds = TerraConfigConstants.CacheExpirationInSeconds)
-            : this(terraRuntimeOptions, TerraWsmApiClient.CreateTerraWsmApiClient(terraRuntimeOptions.WsmApiHost, tokenCredential, azureCloudIdentityConfig), logger, cacheExpirationInSeconds)
+        public TerraUrlTransformationStrategy(RuntimeOptions runtimeOptions, Func<RuntimeOptions, TokenCredential> tokenCredentialFactory, AzureEnvironmentConfig azureCloudIdentityConfig, ILogger<TerraUrlTransformationStrategy> logger, int cacheExpirationInSeconds = TerraConfigConstants.CacheExpirationInSeconds)
+            : this(runtimeOptions.Terra!, TerraWsmApiClient.CreateTerraWsmApiClient(runtimeOptions.Terra!.WsmApiHost, tokenCredentialFactory(runtimeOptions), azureCloudIdentityConfig), logger, cacheExpirationInSeconds)
         { }
 
-        public TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TerraWsmApiClient terraWsmApiClient, ILogger logger, int cacheExpirationInSeconds = TerraConfigConstants.CacheExpirationInSeconds)
+        internal TerraUrlTransformationStrategy(TerraRuntimeOptions terraRuntimeOptions, TerraWsmApiClient terraWsmApiClient, ILogger logger, int cacheExpirationInSeconds = TerraConfigConstants.CacheExpirationInSeconds)
         {
             ArgumentNullException.ThrowIfNull(terraRuntimeOptions);
             ArgumentNullException.ThrowIfNull(terraWsmApiClient);

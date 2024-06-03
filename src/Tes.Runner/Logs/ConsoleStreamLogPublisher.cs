@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Tes.Runner.Logs;
 
-public class ConsoleStreamLogPublisher(ILogger logger) : StreamLogReader(logger)
+public class ConsoleStreamLogPublisher(ILogger<ConsoleStreamLogPublisher> logger) : StreamLogReader(logger)
 {
     public override async Task AppendStandardOutputAsync(string data)
     {

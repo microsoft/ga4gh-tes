@@ -14,7 +14,7 @@ namespace Tes.Runner.Storage
         public const string PassThroughUrl = "pass-through-url";
         public const string CloudProvider = "cloud-provider";
         public const string ArmUrl = "arm-url";
-        public const string TerraUrl = "arm-url";
+        public const string TerraUrl = "terra-url";
         public const string DrsUrl = "drs-url";
 
 

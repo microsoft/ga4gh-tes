@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Azure.Core;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
@@ -26,9 +25,9 @@ namespace Tes.Runner.Storage
         private readonly RuntimeOptions runtimeOptions;
         private readonly string storageHostSuffix;
 
-        public ArmUrlTransformationStrategy(TokenCredential tokenCredential, RuntimeOptions runtimeOptions, [FromKeyedServices(Executor.ApiVersion)] string apiVersion, ILogger<ArmUrlTransformationStrategy> logger)
+        public ArmUrlTransformationStrategy(Func<RuntimeOptions, string, Azure.Core.TokenCredential> tokenCredentialFactory, RuntimeOptions runtimeOptions, [FromKeyedServices(Executor.ApiVersion)] string apiVersion, ILogger<ArmUrlTransformationStrategy> logger)
         {
-            ArgumentNullException.ThrowIfNull(tokenCredential);
+            ArgumentNullException.ThrowIfNull(tokenCredentialFactory);
             ArgumentNullException.ThrowIfNull(runtimeOptions);
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentException.ThrowIfNullOrWhiteSpace(apiVersion);
@@ -37,10 +36,10 @@ namespace Tes.Runner.Storage
             storageHostSuffix = BlobUrlPrefix + this.runtimeOptions!.AzureEnvironmentConfig!.StorageUrlSuffix;
             this.logger = logger;
 
-            this.blobServiceClientFactory = UrlTransformationStrategyFactory.GetBlobServiceClientFactory(tokenCredential, apiVersion);
+            this.blobServiceClientFactory = UrlTransformationStrategyFactory.GetBlobServiceClientFactory(tokenCredentialFactory(runtimeOptions, "https://storage.azure.com/"), apiVersion);
         }
 
-        public ArmUrlTransformationStrategy(Func<Uri, BlobServiceClient> blobServiceClientFactory, RuntimeOptions runtimeOptions)
+        internal ArmUrlTransformationStrategy(Func<Uri, BlobServiceClient> blobServiceClientFactory, RuntimeOptions runtimeOptions, ILogger? logger = default)
         {
             ArgumentNullException.ThrowIfNull(blobServiceClientFactory);
             ArgumentNullException.ThrowIfNull(runtimeOptions);
@@ -48,7 +47,7 @@ namespace Tes.Runner.Storage
             this.blobServiceClientFactory = blobServiceClientFactory;
             this.runtimeOptions = runtimeOptions;
             storageHostSuffix = BlobUrlPrefix + this.runtimeOptions!.AzureEnvironmentConfig!.StorageUrlSuffix;
-            this.logger = NullLogger.Instance;
+            this.logger = logger ?? NullLogger.Instance;
         }
 
         public async Task<Uri> TransformUrlWithStrategyAsync(string sourceUrl, BlobSasPermissions blobSasPermissions)

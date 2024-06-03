@@ -44,7 +44,8 @@ namespace Tes.RunnerCLI.Commands
         {
             var duration = Stopwatch.StartNew();
 
-            var nodeTask = await NodeTaskResolverFactory.NodeTaskResolver.Value.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
+            var nodeTask = await Services.Create<NodeTaskResolver>(logger => new(logger))
+                .ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
             file ??= new(CommandFactory.DefaultTaskDefinitionFile);
 
             return await Services.BuildAndRunAsync<CommandHandlers, int>(
@@ -119,17 +120,18 @@ namespace Tes.RunnerCLI.Commands
         /// <param name="dockerUri">Local docker engine endpoint</param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        internal static async Task ExecuteExecCommandAsync(Uri? fileUri, FileInfo? file, string apiVersion, Uri dockerUri)
+        internal static async Task<long> ExecuteExecCommandAsync(Uri? fileUri, FileInfo? file, string apiVersion, Uri dockerUri)
         {
-            var nodeTask = await NodeTaskResolverFactory.NodeTaskResolver.Value.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
+            var nodeTask = await Services.Create<NodeTaskResolver>(logger => new(logger))
+                .ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
 
-            await Services.BuildAndRunAsync<CommandHandlers>(
+            return await Services.BuildAndRunAsync<CommandHandlers, long>(
                 handler => handler.ExecuteExecCommandAsync(dockerUri),
                 Services.ConfigureParameters(nodeTask, apiVersion));
         }
 
 
-        private async Task ExecuteExecCommandAsync(Uri dockerUri)
+        private async Task<long> ExecuteExecCommandAsync(Uri dockerUri)
         {
             try
             {
@@ -143,6 +145,8 @@ namespace Tes.RunnerCLI.Commands
                 {
                     Logger.LogInformation("Docker container result error: {ContainerResultError}", result.ContainerResult.Error);
                 }
+
+                return result.ContainerResult.ExitCode;
             }
             catch (Exception e)
             {
@@ -171,7 +175,8 @@ namespace Tes.RunnerCLI.Commands
             int bufferCapacity,
             string apiVersion)
         {
-            var nodeTask = await NodeTaskResolverFactory.NodeTaskResolver.Value.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
+            var nodeTask = await Services.Create<NodeTaskResolver>(logger => new(logger))
+                .ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
 
             return await Services.BuildAndRunAsync<CommandHandlers, int>(
                 handler => handler.ExecuteUploadCommandAsync(blockSize, writers, readers, bufferCapacity),
@@ -211,7 +216,8 @@ namespace Tes.RunnerCLI.Commands
             int bufferCapacity,
             string apiVersion)
         {
-            var nodeTask = await NodeTaskResolverFactory.NodeTaskResolver.Value.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
+            var nodeTask = await Services.Create<NodeTaskResolver>(logger => new(logger))
+                .ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
 
             return await Services.BuildAndRunAsync<CommandHandlers, int>(
                 handler => handler.ExecuteDownloadCommandAsync(blockSize, writers, readers, bufferCapacity),

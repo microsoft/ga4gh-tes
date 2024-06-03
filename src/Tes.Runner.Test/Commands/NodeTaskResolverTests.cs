@@ -69,12 +69,24 @@ namespace Tes.Runner.Test.Commands
         {
             resolutionPolicyFactory ??= new(GetResolutionPolicyHandler);
 
-            nodeTaskResolver = new(
-                resolutionPolicyFactory,
-                NullLogger<NodeTaskResolver>.Instance,
-                () => new BlobApiHttpUtils(new(new MockableHttpMessageHandler(sendAsync)),
-                    logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger, MaxRetryCount),
-                    NullLogger.Instance));
+            Mock<NodeTaskResolver> resolver = new();
+
+            RuntimeOptions runtimeOptions = null!;
+            string apiVersion = null!;
+            resolver.SetupGet(x => x.ConfigureServicesParameters).Returns((options, version) => new Action<Microsoft.Extensions.Hosting.IHostApplicationBuilder>(_ => { runtimeOptions = options; apiVersion = version; }));
+
+            resolver.SetupGet(x => x.GetNodeTaskDownloader).Returns((Func<Func<Microsoft.Extensions.Logging.ILogger, NodeTaskResolver.NodeTaskDownloader>, Task<NodeTask>> task, Action<Microsoft.Extensions.Hosting.IHostApplicationBuilder>? configure) =>
+            {
+                configure?.Invoke(new Mock<Microsoft.Extensions.Hosting.IHostApplicationBuilder>().Object);
+
+                return task(new(logger => new NodeTaskResolver.NodeTaskDownloader(
+                resolver.Object,
+                resolutionPolicyFactory(runtimeOptions, apiVersion),
+                logger,
+                () => new BlobApiHttpUtils(new(new MockableHttpMessageHandler(sendAsync)), logger => HttpRetryPolicyDefinition.DefaultAsyncRetryPolicy(logger), logger))));
+            });
+
+            nodeTaskResolver = resolver.Object;
         }
 
         private static ResolutionPolicyHandler GetResolutionPolicyHandler(RuntimeOptions options, string apiVersion) => new(

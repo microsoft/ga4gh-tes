@@ -28,9 +28,9 @@ namespace Tes.Runner.Test.Storage
 
             urlTransformationStrategyFactory = new(runtimeOptions, Runner.Transfer.BlobPipelineOptions.DefaultApiVersion,
                 new(() => new PassThroughUrlTransformationStrategy()), new(() => new CloudProviderSchemeConverter()),
-                new(() => new ArmUrlTransformationStrategy(tokenCredentialMock.Object, runtimeOptions, Runner.Transfer.BlobPipelineOptions.DefaultApiVersion, NullLogger<ArmUrlTransformationStrategy>.Instance)),
-                new(() => new TerraUrlTransformationStrategy(runtimeOptions.Terra!, tokenCredentialMock.Object, runtimeOptions.AzureEnvironmentConfig!, NullLogger<TerraUrlTransformationStrategy>.Instance)),
-                new(() => new DrsUriTransformationStrategy(runtimeOptions.Terra!, tokenCredentialMock.Object, runtimeOptions.AzureEnvironmentConfig!, NullLogger<DrsUriTransformationStrategy>.Instance)));
+                new(() => new ArmUrlTransformationStrategy((_, _) => tokenCredentialMock.Object, runtimeOptions, Runner.Transfer.BlobPipelineOptions.DefaultApiVersion, NullLogger<ArmUrlTransformationStrategy>.Instance)),
+                new(() => new TerraUrlTransformationStrategy(runtimeOptions, _ => tokenCredentialMock.Object, runtimeOptions.AzureEnvironmentConfig!, NullLogger<TerraUrlTransformationStrategy>.Instance)),
+                new(() => new DrsUriTransformationStrategy(runtimeOptions, _ => tokenCredentialMock.Object, runtimeOptions.AzureEnvironmentConfig!, NullLogger<DrsUriTransformationStrategy>.Instance)));
         }
 
         [TestMethod]

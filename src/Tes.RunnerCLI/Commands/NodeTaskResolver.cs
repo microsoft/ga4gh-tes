@@ -5,10 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Tes.Runner;
-using Tes.Runner.Authentication;
-using Tes.Runner.Events;
 using Tes.Runner.Models;
-using Tes.Runner.Storage;
 using Tes.Runner.Transfer;
 
 namespace Tes.RunnerCLI.Commands;
@@ -19,11 +16,14 @@ namespace Tes.RunnerCLI.Commands;
 public partial class NodeTaskContext : JsonSerializerContext
 { }
 
-public class NodeTaskResolver(Func<RuntimeOptions, string, ResolutionPolicyHandler> resolutionPolicyHandlerFactory, ILogger<NodeTaskResolver> logger, Func<BlobApiHttpUtils>? blobApiHttpUtilsFactory = default)
+public class NodeTaskResolver(ILogger<NodeTaskResolver> logger)
 {
     private readonly ILogger Logger = logger;
-    private readonly Lazy<BlobApiHttpUtils> blobApiHttpUtils = new(blobApiHttpUtilsFactory ?? (() => new(logger)));
-    private readonly Func<RuntimeOptions, string, ResolutionPolicyHandler> resolutionPolicyHandlerFactory = resolutionPolicyHandlerFactory;
+
+    /// <summary>
+    /// Parameter-less constructor for mocking
+    /// </summary>
+    protected NodeTaskResolver() : this(Microsoft.Extensions.Logging.Abstractions.NullLogger<NodeTaskResolver>.Instance) { }
 
     private static T DeserializeJson<T>(ReadOnlySpan<byte> json, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo)
     {
@@ -88,44 +88,62 @@ public class NodeTaskResolver(Func<RuntimeOptions, string, ResolutionPolicyHandl
         ArgumentNullException.ThrowIfNull(options);
         ArgumentException.ThrowIfNullOrWhiteSpace(apiVersion);
 
-        try
+        return await GetNodeTaskDownloader(
+            downloader => downloader(Logger).ResolveNodeTaskAsync(file, uri, apiVersion, saveDownload, options),
+            ConfigureServicesParameters(
+                options.Value.RuntimeOptions ?? throw new InvalidOperationException($"Environment variable '{nameof(NodeTaskResolverOptions)}' is missing the '{nameof(NodeTaskResolverOptions.RuntimeOptions)}' property."),
+                apiVersion));
+    }
+
+    public virtual Func<Func<Func<ILogger, NodeTaskDownloader>, Task<NodeTask>>, Action<Microsoft.Extensions.Hosting.IHostApplicationBuilder>?, Task<NodeTask>> GetNodeTaskDownloader => Services.BuildAndRunAsync;
+    public virtual Func<RuntimeOptions, string, Action<Microsoft.Extensions.Hosting.IHostApplicationBuilder>> ConfigureServicesParameters => Services.ConfigureParameters;
+
+    public class NodeTaskDownloader(NodeTaskResolver parent, ResolutionPolicyHandler resolutionPolicy, ILogger logger, Func<BlobApiHttpUtils>? blobApiHttpUtilsFactory = default)
+    {
+        private readonly NodeTaskResolver parent = parent ?? throw new ArgumentNullException(nameof(parent));
+        private readonly ILogger logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        private readonly ResolutionPolicyHandler resolutionPolicy = resolutionPolicy ?? throw new ArgumentNullException(nameof(resolutionPolicy));
+        private readonly Lazy<BlobApiHttpUtils> blobApiHttpUtils = new(blobApiHttpUtilsFactory ?? (() => new(logger ?? throw new ArgumentNullException(nameof(logger)))));
+
+        internal async Task<NodeTask> ResolveNodeTaskAsync(FileInfo? file, Uri? uri, string apiVersion, bool saveDownload, Lazy<NodeTaskResolverOptions> options)
         {
-            var resolutionPolicy = resolutionPolicyHandlerFactory(options.Value.RuntimeOptions ?? throw new InvalidOperationException($"Environment variable '{nameof(NodeTaskResolverOptions)}' is missing the '{nameof(NodeTaskResolverOptions.RuntimeOptions)}' property."), apiVersion);
-
-            List<FileInput> sources = [new() { TransformationStrategy = options.Value.TransformationStrategy, SourceUrl = uri.AbsoluteUri, Path = (file ?? new(CommandFactory.DefaultTaskDefinitionFile)).FullName }];
-            var blobUri = (await resolutionPolicy.ApplyResolutionPolicyAsync(sources) ?? []).FirstOrDefault()?.SourceUrl ?? throw new InvalidOperationException("The JSON data blob URL could not be resolved.");
-
-            var responseLength = (await blobApiHttpUtils.Value.ExecuteHttpRequestAsync(() => GetRequest(HttpMethod.Head, blobUri, apiVersion))).Content.Headers.ContentLength ?? 0;
-            PipelineBuffer buffer = new() { Length = (int)responseLength, Data = new byte[responseLength], FileName = file?.Name ?? CommandFactory.DefaultTaskDefinitionFile };
-
-            _ = await blobApiHttpUtils.Value.ExecuteHttpRequestAndReadBodyResponseAsync(buffer, () => GetRequest(HttpMethod.Get, blobUri, apiVersion));
-            var nodeTask = DeserializeJson(buffer.Data, NodeTaskContext.Default.NodeTask) ?? throw new InvalidOperationException("Failed to deserialize task JSON file.");
-
-            AddDefaultValuesIfMissing(nodeTask);
-
-            if (saveDownload)
+            try
             {
-                await SerializeNodeTaskAsync(nodeTask, file ?? new(CommandFactory.DefaultTaskDefinitionFile));
-                file?.Refresh();
+                List<FileInput> sources = [new() { TransformationStrategy = options.Value.TransformationStrategy, SourceUrl = uri?.AbsoluteUri, Path = (file ?? new(CommandFactory.DefaultTaskDefinitionFile)).FullName }];
+                var blobUri = (await resolutionPolicy.ApplyResolutionPolicyAsync(sources) ?? []).FirstOrDefault()?.SourceUrl ?? throw new InvalidOperationException("The JSON data blob URL could not be resolved.");
+
+                var responseLength = (await blobApiHttpUtils.Value.ExecuteHttpRequestAsync(() => GetRequest(HttpMethod.Head, blobUri, apiVersion))).Content.Headers.ContentLength ?? 0;
+                PipelineBuffer buffer = new() { Length = (int)responseLength, Data = new byte[responseLength], FileName = file?.Name ?? CommandFactory.DefaultTaskDefinitionFile };
+
+                _ = await blobApiHttpUtils.Value.ExecuteHttpRequestAndReadBodyResponseAsync(buffer, () => GetRequest(HttpMethod.Get, blobUri, apiVersion));
+                var nodeTask = DeserializeJson(buffer.Data, NodeTaskContext.Default.NodeTask) ?? throw new InvalidOperationException("Failed to deserialize task JSON file.");
+
+                AddDefaultValuesIfMissing(nodeTask);
+
+                if (saveDownload)
+                {
+                    await parent.SerializeNodeTaskAsync(nodeTask, file ?? new(CommandFactory.DefaultTaskDefinitionFile));
+                    file?.Refresh();
+                }
+
+                return nodeTask;
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to download or deserialize task JSON file.");
+                throw;
             }
 
-            return nodeTask;
-        }
-        catch (Exception e)
-        {
-            Logger.LogError(e, "Failed to download or deserialize task JSON file.");
-            throw;
-        }
-
-        static HttpRequestMessage GetRequest(HttpMethod method, Uri uri, string apiVersion)
-        {
-            HttpRequestMessage request = new(method, uri);
-            BlobApiHttpUtils.AddBlobServiceHeaders(request, apiVersion);
-            return request;
+            static HttpRequestMessage GetRequest(HttpMethod method, Uri uri, string apiVersion)
+            {
+                HttpRequestMessage request = new(method, uri);
+                BlobApiHttpUtils.AddBlobServiceHeaders(request, apiVersion);
+                return request;
+            }
         }
     }
 
-    private Lazy<NodeTaskResolverOptions> GetNodeTaskResolverOptions()
+    private static Lazy<NodeTaskResolverOptions> GetNodeTaskResolverOptions()
     {
         var optionsValue = Environment.GetEnvironmentVariable(nameof(NodeTaskResolverOptions));
 
@@ -138,30 +156,4 @@ public class NodeTaskResolver(Func<RuntimeOptions, string, ResolutionPolicyHandl
     {
         nodeTask.RuntimeOptions ??= new();
     }
-}
-
-internal static class NodeTaskResolverFactory
-{
-    internal static readonly Lazy<NodeTaskResolver> NodeTaskResolver = new(() =>
-    {
-        var loggerFactory = LoggerFactory.Create(Services.ConfigureConsoleLogger);
-        return new(ResolutionPolicyHandlerFactoryFactory(loggerFactory), LoggerFactory.Create(Services.ConfigureConsoleLogger).CreateLogger<NodeTaskResolver>());
-    });
-
-    private static Func<RuntimeOptions, string, ResolutionPolicyHandler> ResolutionPolicyHandlerFactoryFactory(ILoggerFactory loggerFactory)
-        => new((runtimeOptions, apiVersion) =>
-        {
-            var token = new CredentialsManager(loggerFactory.CreateLogger<CredentialsManager>()).GetTokenCredential(runtimeOptions);
-
-            return new(
-                        new(
-                            runtimeOptions,
-                            apiVersion,
-                            new(() => new PassThroughUrlTransformationStrategy()),
-                            new(() => new CloudProviderSchemeConverter()),
-                            new(() => new ArmUrlTransformationStrategy(token, runtimeOptions, apiVersion, loggerFactory.CreateLogger<ArmUrlTransformationStrategy>())),
-                            new(() => new TerraUrlTransformationStrategy(runtimeOptions.Terra!, token, runtimeOptions.AzureEnvironmentConfig!, loggerFactory.CreateLogger<TerraUrlTransformationStrategy>())),
-                            new(() => new DrsUriTransformationStrategy(runtimeOptions.Terra!, token, runtimeOptions.AzureEnvironmentConfig!, loggerFactory.CreateLogger<DrsUriTransformationStrategy>()))),
-                        sinks => new(sinks, loggerFactory.CreateLogger<EventsPublisher>()));
-        });
 }
