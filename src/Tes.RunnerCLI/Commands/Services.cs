@@ -78,77 +78,29 @@ namespace Tes.RunnerCLI.Commands
         private static Func<IServiceProvider, object?, Lazy<T>> LazyKeyedFactory<T>(Func<IServiceProvider, T> factory, LazyThreadSafetyMode mode)
             => (provider, _) => new Lazy<T>(() => factory(provider), mode);
 
-        private static ObjectFactory<TService> GetImplementationFactory<TService, TArgA>()
-            => ActivatorUtilities.CreateFactory<TService>([typeof(TArgA)]);
+        private static Func<IServiceProvider, Func<TArgA, TService>> GetFactory<TService, TArgA>() =>
+            new(provider => new((argA) => ActivatorUtilities.CreateFactory<TService>([typeof(TArgA)])(provider, [argA])));
 
-        private static Func<IServiceProvider, Func<TArgA, TService>> GetFactory<TService, TArgA>(ObjectFactory<TService> objectFactory)
-            => new(provider => new((argA) => objectFactory(provider, [argA])));
+        private static Func<IServiceProvider, Func<TArgA, TArgB, TService>> GetFactory<TService, TArgA, TArgB>() =>
+            new(provider => new((argA, argB) => ActivatorUtilities.CreateFactory<TService>([typeof(TArgA), typeof(TArgB)])(provider, [argA, argB])));
 
-        private static ObjectFactory<TService> GetImplementationFactory<TService, TArgA, TArgB>() =>
-            ActivatorUtilities.CreateFactory<TService>([typeof(TArgA), typeof(TArgB)]);
-
-        private static Func<IServiceProvider, Func<TArgA, TArgB, TService>> GetFactory<TService, TArgA, TArgB>(ObjectFactory<TService> objectFactory)
-            => new(provider => new((argA, argB) => objectFactory(provider, [argA, argB])));
-
-        private static ObjectFactory<TService> GetImplementationFactory<TService, TArgA, TArgB, TArgC, TArgD>() =>
-            ActivatorUtilities.CreateFactory<TService>([typeof(TArgA), typeof(TArgB), typeof(TArgC), typeof(TArgD)]);
-
-        private static Func<IServiceProvider, Func<TArgA, TArgB, TArgC, TArgD, TService>> GetFactory<TService, TArgA, TArgB, TArgC, TArgD>(ObjectFactory<TService> objectFactory)
-            => new(provider => new((argA, argB, argC, argD) => objectFactory(provider, [argA, argB, argC, argD])));
+        private static Func<IServiceProvider, Func<TArgA, TArgB, TArgC, TArgD, TService>> GetFactory<TService, TArgA, TArgB, TArgC, TArgD>() =>
+            new(provider => new((argA, argB, argC, argD) => ActivatorUtilities.CreateFactory<TService>([typeof(TArgA), typeof(TArgB), typeof(TArgC), typeof(TArgD)])(provider, [argA, argB, argC, argD])));
 
         private static void Configure(IServiceCollection services, IConfigurationManager configuration)
         {
-            {
-                var factory = GetImplementationFactory<AppendBlobLogPublisher, Uri, string>();
-                services.AddSingleton(GetFactory<AppendBlobLogPublisher, Uri, string>(factory));
-            }
-
-            {
-                var factory = GetImplementationFactory<BlobDownloader, BlobPipelineOptions, Channel<byte[]>>();
-                services.AddSingleton(GetFactory<BlobDownloader, BlobPipelineOptions, Channel<byte[]>>(factory));
-            }
-
-            {
-                var factory = GetImplementationFactory<BlobStorageEventSink, Uri>();
-                services.AddSingleton(GetFactory<BlobStorageEventSink, Uri>(factory));
-            }
-
-            {
-                var factory = GetImplementationFactory<BlobUploader, BlobPipelineOptions, Channel<byte[]>>();
-                services.AddSingleton(GetFactory<BlobUploader, BlobPipelineOptions, Channel<byte[]>>(factory));
-            }
-
-            {
-                var factory = GetImplementationFactory<DockerExecutor, Uri>();
-                services.AddSingleton(GetFactory<DockerExecutor, Uri>(factory));
-            }
-
-            {
-                var factory = GetImplementationFactory<EventsPublisher, IList<IEventSink>>();
-                services.AddSingleton(GetFactory<EventsPublisher, IList<IEventSink>>(factory));
-            }
-
-            {
-                var factory = GetImplementationFactory<PartsProducer, IBlobPipeline, BlobPipelineOptions>();
-                services.AddSingleton(GetFactory<PartsProducer, IBlobPipeline, BlobPipelineOptions>(factory));
-            }
-
-            {
-                var factory = GetImplementationFactory<PartsWriter, IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy>();
-                services.AddSingleton(GetFactory<PartsWriter, IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy>(factory));
-            }
-
-            {
-                var factory = GetImplementationFactory<ProcessedPartsProcessor, IBlobPipeline>();
-                services.AddSingleton(GetFactory<ProcessedPartsProcessor, IBlobPipeline>(factory));
-            }
-
-            {
-                var factory = GetImplementationFactory<ProcessLauncher, IStreamLogReader>();
-                services.AddSingleton(GetFactory<ProcessLauncher, IStreamLogReader>(factory));
-            }
-
             services
+                .AddSingleton(GetFactory<AppendBlobLogPublisher, Uri, string>())
+                .AddSingleton(GetFactory<BlobDownloader, BlobPipelineOptions, Channel<byte[]>>())
+                .AddSingleton(GetFactory<BlobStorageEventSink, Uri>())
+                .AddSingleton(GetFactory<BlobUploader, BlobPipelineOptions, Channel<byte[]>>())
+                .AddSingleton(GetFactory<DockerExecutor, Uri>())
+                .AddSingleton(GetFactory<EventsPublisher, IList<IEventSink>>())
+                .AddSingleton(GetFactory<PartsProducer, IBlobPipeline, BlobPipelineOptions>())
+                .AddSingleton(GetFactory<PartsWriter, IBlobPipeline, BlobPipelineOptions, Channel<byte[]>, IScalingStrategy>())
+                .AddSingleton(GetFactory<ProcessedPartsProcessor, IBlobPipeline>())
+                .AddSingleton(GetFactory<ProcessLauncher, IStreamLogReader>())
+
                 .AddSingleton<ArmUrlTransformationStrategy>()
                 .AddSingleton<CloudProviderSchemeConverter>()
                 .AddSingleton<CommandHandlers>()
@@ -168,6 +120,7 @@ namespace Tes.RunnerCLI.Commands
                 .AddSingleton<ISystemInfoProvider, LinuxSystemInfoProvider>()
                 .AddSingleton<TerraUrlTransformationStrategy>()
                 .AddSingleton<ITransferOperationFactory, TransferOperationFactory>()
+                .AddSingleton<UrlTransformationStrategyFactory>()
                 .AddSingleton<VolumeBindingsGenerator>()
 
                 .AddSingleton(LazyFactory(provider =>

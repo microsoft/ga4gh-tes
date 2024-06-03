@@ -48,11 +48,11 @@ namespace Tes.RunnerCLI.Commands
             file ??= new(CommandFactory.DefaultTaskDefinitionFile);
 
             return await Services.BuildAndRunAsync<CommandHandlers, int>(
-                handler => handler.ExecuteRootCommandImplAsync(fileUri, file, blockSize, writers, readers, bufferCapacity, dockerUri, duration),
+                handler => handler.ExecuteRootCommandAsync(fileUri, file, blockSize, writers, readers, bufferCapacity, dockerUri, duration),
                 Services.ConfigureParameters(nodeTask, apiVersion));
         }
 
-        private async Task<int> ExecuteRootCommandImplAsync(
+        private async Task<int> ExecuteRootCommandAsync(
             Uri? fileUri,
             FileInfo file,
             int blockSize,
@@ -124,12 +124,12 @@ namespace Tes.RunnerCLI.Commands
             var nodeTask = await NodeTaskResolverFactory.NodeTaskResolver.Value.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
 
             await Services.BuildAndRunAsync<CommandHandlers>(
-                handler => handler.ExecuteExecCommandImplAsync(dockerUri),
+                handler => handler.ExecuteExecCommandAsync(dockerUri),
                 Services.ConfigureParameters(nodeTask, apiVersion));
         }
 
 
-        private async Task ExecuteExecCommandImplAsync(Uri dockerUri)
+        private async Task ExecuteExecCommandAsync(Uri dockerUri)
         {
             try
             {
@@ -174,11 +174,11 @@ namespace Tes.RunnerCLI.Commands
             var nodeTask = await NodeTaskResolverFactory.NodeTaskResolver.Value.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
 
             return await Services.BuildAndRunAsync<CommandHandlers, int>(
-                handler => handler.ExecuteUploadCommandImplAsync(blockSize, writers, readers, bufferCapacity),
+                handler => handler.ExecuteUploadCommandAsync(blockSize, writers, readers, bufferCapacity),
                 Services.ConfigureParameters(nodeTask, apiVersion));
         }
 
-        private async Task<int> ExecuteUploadCommandImplAsync(
+        private async Task<int> ExecuteUploadCommandAsync(
             int blockSize,
             int writers,
             int readers,
@@ -214,11 +214,11 @@ namespace Tes.RunnerCLI.Commands
             var nodeTask = await NodeTaskResolverFactory.NodeTaskResolver.Value.ResolveNodeTaskAsync(file, fileUri, apiVersion, saveDownload: true);
 
             return await Services.BuildAndRunAsync<CommandHandlers, int>(
-                handler => handler.ExecuteDownloadCommandImplAsync(blockSize, writers, readers, bufferCapacity),
+                handler => handler.ExecuteDownloadCommandAsync(blockSize, writers, readers, bufferCapacity),
                 Services.ConfigureParameters(nodeTask, apiVersion));
         }
 
-        private async Task<int> ExecuteDownloadCommandImplAsync(
+        private async Task<int> ExecuteDownloadCommandAsync(
             int blockSize,
             int writers,
             int readers,
