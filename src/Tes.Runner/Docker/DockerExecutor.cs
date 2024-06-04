@@ -211,7 +211,13 @@ namespace Tes.Runner.Docker
                         AutoRemove = true,
                         Binds = volumeBindings,
                         DeviceRequests = gpus.GetValueOrDefault()
-                            ? [new() { Driver = "nvidia", Count = -1, Capabilities = [["gpu"]], Options = new Dictionary<string, string>() }]
+                            ? [new()
+                            {
+                                Driver = "nvidia",
+                                Count = -1,
+                                Capabilities = [["compute", "utility", "gpu"]],
+                                Options = new Dictionary<string, string>()
+                            }]
                             : []
                     }
                 });
