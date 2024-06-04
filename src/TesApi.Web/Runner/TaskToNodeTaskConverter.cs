@@ -105,6 +105,11 @@ namespace TesApi.Web.Runner
                     .WithDrsHubUrl(nodeTaskConversionOptions.DrsHubApiHost)
                     .WithMetricsFile(MetricsFileName);
 
+                if (nodeTaskConversionOptions.VmFamilyGroup == BatchScheduler.VmFamilySeries.standardNFamily)
+                {
+                    builder.WithContainerFlag("gpu");
+                }
+
                 if (terraOptions is not null && !string.IsNullOrEmpty(terraOptions.WsmApiHost))
                 {
                     logger.LogInformation("Setting up Terra as the runtime environment for the runner");
@@ -464,6 +469,7 @@ namespace TesApi.Web.Runner
     /// <param name="DefaultStorageAccountName"></param>
     /// <param name="GlobalManagedIdentity"></param>
     /// <param name="DrsHubApiHost"></param>
+    /// <param name="VmFamilyGroup"></param>
     public record NodeTaskConversionOptions(IList<TesInput> AdditionalInputs = default, string DefaultStorageAccountName = default,
-        string GlobalManagedIdentity = default, string DrsHubApiHost = default);
+        string GlobalManagedIdentity = default, string DrsHubApiHost = default, BatchScheduler.VmFamilySeries VmFamilyGroup = default);
 }

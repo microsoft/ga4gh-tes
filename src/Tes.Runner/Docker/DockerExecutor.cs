@@ -156,7 +156,8 @@ namespace Tes.Runner.Docker
 
             await ConfigureNetworkAsync();
 
-            var createResponse = await CreateContainerAsync(imageWithTag, executionOptions.CommandsToExecute, executionOptions.VolumeBindings, executionOptions.WorkingDir);
+            var createResponse = await CreateContainerAsync(imageWithTag, executionOptions.CommandsToExecute, executionOptions.VolumeBindings, executionOptions.WorkingDir,
+                executionOptions.ContainerFlags?.Contains("gpu", StringComparer.OrdinalIgnoreCase));
             _ = await dockerClient.Containers.InspectContainerAsync(createResponse.ID);
 
             var logs = await StartContainerWithStreamingOutput(createResponse);
@@ -193,22 +194,25 @@ namespace Tes.Runner.Docker
         }
 
         private async Task<CreateContainerResponse> CreateContainerAsync(string imageWithTag,
-            List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir)
+            List<string> commandsToExecute, List<string>? volumeBindings, string? workingDir, bool? gpus = default)
         {
             logger.LogInformation(@"Creating container with image name: {ImageWithTag}", imageWithTag);
 
             var createResponse = await dockerClient.Containers.CreateContainerAsync(
-                new CreateContainerParameters
+                new()
                 {
                     Image = imageWithTag,
                     Cmd = commandsToExecute,
                     AttachStdout = true,
                     AttachStderr = true,
                     WorkingDir = workingDir,
-                    HostConfig = new HostConfig
+                    HostConfig = new()
                     {
                         AutoRemove = true,
-                        Binds = volumeBindings
+                        Binds = volumeBindings,
+                        DeviceRequests = gpus.GetValueOrDefault()
+                            ? [new() { Driver = "nvidia", Count = -1, Capabilities = [["gpu"]], Options = new Dictionary<string, string>() }]
+                            : []
                     }
                 });
 
@@ -272,5 +276,5 @@ namespace Tes.Runner.Docker
     }
 
     public record ExecutionOptions(string? ImageName, string? Tag, List<string>? CommandsToExecute,
-        List<string>? VolumeBindings, string? WorkingDir, RuntimeOptions RuntimeOptions);
+        List<string>? VolumeBindings, string? WorkingDir, RuntimeOptions RuntimeOptions, List<string>? ContainerFlags);
 }

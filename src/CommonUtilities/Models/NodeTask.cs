@@ -12,6 +12,7 @@ namespace Tes.Runner.Models
         public string? WorkflowId { get; set; }
         public string? ImageTag { get; set; }
         public string? ImageName { get; set; }
+        public List<string>? ContainerFlags { get; set; }
         public string? ContainerWorkDir { get; set; }
         public List<string>? CommandsToExecute { get; set; }
         public List<FileInput>? Inputs { get; set; }

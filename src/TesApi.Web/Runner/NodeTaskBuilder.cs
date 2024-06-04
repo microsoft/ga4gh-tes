@@ -194,6 +194,20 @@ namespace TesApi.Web.Runner
         }
 
         /// <summary>
+        /// Docker container feature flags.
+        /// </summary>
+        /// <param name="flag">The flag.</param>
+        public void WithContainerFlag(string flag)
+        {
+            nodeTask.ContainerFlags ??= [];
+
+            if (!nodeTask.ContainerFlags.Contains(flag))
+            {
+                nodeTask.ContainerFlags.Add(flag);
+            }
+        }
+
+        /// <summary>
         /// Sets Terra as runtime environment and enables the Terra transformation strategy for URLs in inputs and outputs.
         /// </summary>
         /// <param name="wsmApiHost"></param>

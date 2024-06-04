@@ -86,7 +86,7 @@ namespace Tes.RunnerCLI.Commands
 
         private static async Task RootCommandNodeCleanupAsync(Runner.Models.NodeTask nodeTask, Uri dockerUri)
         {
-            await new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new()));
+            await new DockerExecutor(dockerUri).NodeCleanupAsync(new(nodeTask.ImageName, nodeTask.ImageTag, default, default, default, new(), default));
             await Executor.RunnerHost.NodeCleanupAsync();
         }
 
