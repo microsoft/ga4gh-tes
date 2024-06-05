@@ -1150,9 +1150,9 @@ namespace TesApi.Web
             switch (vmFamilySeries)
             {
                 case VmFamilySeries.standardNFamily:
+                    // https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/hpccompute-gpu-linux
                     extensions = extensions.Append(new(name: "gpu", publisher: "Microsoft.HpcCompute", type: "NvidiaGpuDriverLinux", autoUpgradeMinorVersion: true) { TypeHandlerVersion = "1.6" });
                     break;
-
             }
 
             if (globalStartTaskConfigured)
