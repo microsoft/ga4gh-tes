@@ -80,6 +80,10 @@ namespace Tes.SDK
             ArgumentException.ThrowIfNullOrEmpty(password);
         }
 
+        public TesClient(string scheme, TesCredentials tesCredentials)
+            : this(new($"{scheme}://{tesCredentials.TesHostname}"), tesCredentials.TesUsername, tesCredentials.TesPassword)
+        { }
+
         private void SetAuthorizationHeader(HttpRequestMessage request)
         {
             if (!string.IsNullOrWhiteSpace(_username) && !string.IsNullOrEmpty(_password))
