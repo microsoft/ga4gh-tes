@@ -1018,7 +1018,7 @@ namespace TesApi.Web
 
         internal static VmFamilySeries GetVmFamily(string vmFamily)
         {
-            return _vmFamilyParseData.Keys.FirstOrDefault(key => VmFamilyMatches(key, vmFamily));
+            return _vmFamilyParseData.Keys.FirstOrDefault(key => VmFamilyMatches(key, vmFamily.Replace(" ", string.Empty)));
 
             static bool VmFamilyMatches(VmFamilySeries startScriptVmFamily, string vmFamily)
             {
